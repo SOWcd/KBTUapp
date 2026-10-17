@@ -255,7 +255,7 @@
     {#if detail?.ratings}
       {@const r = detail.ratings}
       <section class="rsum">
-        <div class="rs-top"><span class="avg num">{fmtNum(r.avg)}</span><span><b>{t('rate.title')}</b><i class="t-foot">{tn('rate.count', r.count)}</i></span></div>
+        <div class="rs-top">{#if r.avg != null}<span class="avg num">{fmtNum(r.avg)}</span>{/if}<span><b>{t('rate.title')}</b><i class="t-foot">{tn('rate.count', r.count)}{r.avg == null ? ' · ' + t('rate.few') : ''}</i></span></div>
         {#each [...r.dist].reverse() as n, i (i)}
           <div class="rs-row"><span class="rf"><Emoji name={FACES[4 - i]} size={18} /></span><span class="rbar"><span style="width:{r.count ? (n / r.count) * 100 : 0}%"></span></span><span class="rn num">{n}</span></div>
         {/each}
@@ -432,7 +432,14 @@
       <h3 class="t-cap sec">{t('event.about')}</h3>
       <p class="t-body desc selectable">{about}</p>
     {/if}
-    {#if detail && !preview && !cancelled && (detail.commentsOn || detail.comments)}
+    {#if detail?.discuss && !preview && !cancelled}
+      <!-- the talk lives under the channel post, with Telegram's replies and reactions (owner, Oct 17) -->
+      <button class="talk" onclick={() => openLink(detail!.discuss!)}>
+        <span class="fi"><MessageCircle size={18} /></span>
+        <span class="tk"><b>{t('cm.titleEvent')}</b><i>{t('cm.inTelegram')}</i></span>
+        <ArrowUpRight size={18} />
+      </button>
+    {:else if detail && !preview && !cancelled && (detail.commentsOn || detail.comments)}
       <button class="talk" onclick={() => (session.me?.student ? sheets.comments('event', id, e.title, (n) => { if (detail) detail = { ...detail, comments: n }; }) : sheets.login())}>
         <span class="fi"><MessageCircle size={18} /></span>
         <span class="tk"><b>{t('cm.titleEvent')}</b><i>{detail.comments ? tn('cm.count', detail.comments) : t('cm.askNudge')}</i></span>

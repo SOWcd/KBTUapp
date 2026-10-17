@@ -382,6 +382,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER history_out AFTER DELETE ON org_members BEGIN
       UPDATE org_history SET until = CAST(strftime('%s', 'now') AS INTEGER) WHERE user_id = OLD.user_id AND org_id = OLD.org_id AND until IS NULL;
     END;"""),
+    # an event's talk lives under its channel post in Telegram (owner, Oct 17): the link to the bot's first comment there
+    (48, "ALTER TABLE events ADD COLUMN channel_link TEXT;"),
 ]
 
 

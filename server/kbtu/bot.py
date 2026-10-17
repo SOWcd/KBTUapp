@@ -291,12 +291,12 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
         return
     api = f"https://api.telegram.org/bot{cfg.bot_token}"
     root = Path(cfg.db_path).resolve().parent / "media"
-    for e, text, cover, sig in logic.channel_due(con):
-        keys = {"inline_keyboard": [[{"text": texts.CHANNEL_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{e['id']}"}]]}
+    # no button under the post: Telegram hides the comments then (owner, Oct 17); an edit without one takes the old one off
+    for e, text, cover, sig in logic.channel_due(con, cfg.bot_username):
         jpg = root / f"{cover}.jpg" if cover else None
         if e["channel_msg"]:  # the post is there: its words (and the cover, when it was posted with one) change
             how = "editMessageCaption" if e["channel_photo"] else "editMessageText"
-            body = {"chat_id": cfg.events_channel, "message_id": e["channel_msg"], "parse_mode": "HTML", "reply_markup": keys,
+            body = {"chat_id": cfg.events_channel, "message_id": e["channel_msg"], "parse_mode": "HTML",
                     **({"caption": text} if e["channel_photo"] else {"text": text})}
             r = (await http.post(f"{api}/{how}", json=body)).json()
             if not r.get("ok") and "not modified" not in str(r.get("description")):
@@ -306,10 +306,10 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
             con.execute("UPDATE events SET channel_sig = ? WHERE id = ?", (sig, e["id"]))
             continue
         if jpg and jpg.exists():
-            r = (await http.post(f"{api}/sendPhoto", data={"chat_id": cfg.events_channel, "caption": text, "parse_mode": "HTML",
-                                                           "reply_markup": json.dumps(keys)}, files={"photo": jpg.read_bytes()})).json()
+            r = (await http.post(f"{api}/sendPhoto", data={"chat_id": cfg.events_channel, "caption": text, "parse_mode": "HTML"},
+                                 files={"photo": jpg.read_bytes()})).json()
         else:
-            r = (await http.post(f"{api}/sendMessage", json={"chat_id": cfg.events_channel, "text": text, "parse_mode": "HTML", "reply_markup": keys,
+            r = (await http.post(f"{api}/sendMessage", json={"chat_id": cfg.events_channel, "text": text, "parse_mode": "HTML",
                                                              "link_preview_options": {"is_disabled": True}})).json()
         if not r.get("ok"):  # the bot isn't the channel's admin, or a flood wait: next round
             log.warning("channel post %d: %s", e["id"], str(r.get("description"))[:200])
@@ -487,6 +487,29 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     await http.post(f"{api}/sendMessage", json={"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=e["title"])})
 
 
+async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
+    """The channel's discussion group: Telegram forwards each post there by itself, and the comments are replies to that
+    copy. Under an event's post the bot writes the first comment, the rules and "Sign up", and keeps its link for the
+    app's "Discuss" (owner, Oct 17). True: the message was such a copy. Needs the bot in that group, as an admin
+    (a bot that isn't one doesn't see the group's messages)."""
+    channel = cfg.events_channel.lstrip("@").lower()
+    if not channel or not msg.get("is_automatic_forward") or str((msg.get("sender_chat") or {}).get("username") or "").lower() != channel:
+        return False
+    post = (msg.get("forward_origin") or {}).get("message_id") or msg.get("forward_from_message_id")
+    e = logic.channel_discussion(con, int(post or 0))
+    if not e:
+        return True
+    keys = {"inline_keyboard": [[{"text": texts.CHANNEL_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{e['id']}"}]]}
+    r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage", json={
+        "chat_id": msg["chat"]["id"], "text": texts.CHANNEL_RULES, "reply_markup": keys,
+        "reply_parameters": {"message_id": msg["message_id"]}})).json()
+    if not r.get("ok"):
+        log.warning("discussion %d: %s", e["id"], str(r.get("description"))[:200])
+        return True
+    con.execute("UPDATE events SET channel_link = ? WHERE id = ?", (f"https://t.me/{channel}/{e['channel_msg']}?comment={r['result']['message_id']}", e["id"]))
+    return True
+
+
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
     """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined."""
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
@@ -523,7 +546,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _join(cfg, http, con, upd["chat_join_request"])
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
-                    await _group(cfg, http, con, msg)
+                    if not await _discussion(cfg, http, con, msg):
+                        await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)
                 body = await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)

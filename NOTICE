@@ -7,6 +7,8 @@ Third-party materials in this repository are not covered by LICENSE and keep the
   web/public/map/u1/, web/src/assets/map/uniq-tiles.json, web/src/assets/map/uniq-rooms.json.
 - Microsoft Fluent Emoji 3D (MIT License, Copyright (c) Microsoft Corporation):
   web/public/emoji/ and the emoji images elsewhere in web/.
+- The GitHub mark from GitHub Octicons (MIT License, Copyright (c) GitHub Inc.): web/src/ui/GitHubMark.svelte.
+  The 2GIS mark (web/src/ui/TwoGisMark.svelte) belongs to 2GIS. Both only link to those services.
 - KBTU school logos (server/kbtu/schools/) belong to JSC Kazakh-British Technical University.
   KBTU App is not an official KBTU service.
 - npm and PyPI packages (web/package.json, server/requirements.txt) under their own licenses.

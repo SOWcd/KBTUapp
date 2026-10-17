@@ -90,7 +90,9 @@
   const memoDue = $derived(may(m, 'memo') && nextWeek > 0 && ((dayNow + 3) % 7 === 1 || wednesday));
   const fresh = $derived(waiting + (round?.counts?.new ?? 0));
   const askRecruit = $derived(vice && !recruiting && !round && termJustStarted());
-  const todo = $derived(fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
+  // the club's creator alone in it, often not its President (owner, Oct 17): invite them, then hand it over in Team
+  const alone = $derived(m?.role === 'president' && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
+  const todo = $derived(alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
 
@@ -111,6 +113,9 @@
     {#if todo}
       <h2 class="t-cap cap">{t('studio.todo')}</h2>
       <div class="todo surface">
+        {#if alone}
+          <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>
+        {/if}
         {#if fresh}
           <button onclick={openRecruit}><UserPlus size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoApps')}</b></span><b class="count">{fresh}</b><ChevronRight size={18} /></button>
         {/if}

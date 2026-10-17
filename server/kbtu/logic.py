@@ -304,6 +304,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     return {**card(con, v, e), "description": e["description"], "payToName": e["pay_to_name"], "payPhone": e["pay_phone"], "meetingTag": e["meeting_tag"],
             "memo": json.loads(e["memo"]) if head and e["memo"] else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
+            "discuss": e["channel_link"],  # its post's comments in Telegram (owner, Oct 17: the talk is there, not here)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
@@ -425,20 +426,28 @@ def chat_join(con, chat_id: int, tg_id: int) -> bool | None:
 # any of that edits the post, a cancel marks it. A few a round, so the first run fills the channel without a flood.
 # ponytail: one post per event; a morning digest when there are many a day.
 
-def channel_due(con, limit: int = 3) -> list[tuple[sqlite3.Row, str, str | None, str]]:
-    """Posts to make or fix: (event, caption, the cover's path or None, its signature)."""
+def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, str, str | None, str]]:
+    """Posts to make or fix: (event, caption, the cover's path or None, its signature). bot: our bot's username, for
+    the sign-up link in the text."""
     out = []
     for e in rows(con, """SELECT e.*, o.name AS org_name, f.path AS cover FROM events e JOIN orgs o ON o.id = e.org_id
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.starts_at > ?
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) ORDER BY e.published_at""", now()):
-        text = texts.channel_post(e["title"], e["org_name"], e["starts_at"], e["place"], e["price"], e["status"] == "cancelled")
+        text = texts.channel_post(e["title"], e["org_name"], e["starts_at"], e["place"], e["price"], e["status"] == "cancelled",
+                                  f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "")
         sig = hashlib.sha256(f"{text}|{e['cover']}".encode()).hexdigest()[:16]
         if sig != e["channel_sig"]:
             out.append((e, text, e["cover"], sig))
         if len(out) >= limit:
             break
     return out
+
+
+def channel_discussion(con, post: int) -> sqlite3.Row | None:
+    """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
+    and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
+    return one(con, "SELECT * FROM events WHERE channel_msg = ? AND channel_link IS NULL", post)
 
 
 # ------------------------------------------------------------ videos (video.py)
@@ -3142,17 +3151,21 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
+RATE_SHOW = 3          # the club sees the ratings from this many on, so a small club can't tell who wrote what
 
 
 def _rating_view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
     """What the event sheet shows about ratings: mine (and whether I may still give one: checked in, ended, within 7
-    days), and for the club's Head+ the anonymous summary — average, the five counts, the comments, no names."""
+    days), and for the club's Head+ the anonymous summary — average, the five counts, the comments, no names; under
+    RATE_SHOW of them, only how many."""
     mine = one(con, "SELECT score FROM event_ratings WHERE event_id = ? AND user_id = ?", e["id"], v.id) if v.student else None
     came = v.student and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id)
     out = {"myRating": mine["score"] if mine else None, "canRate": bool(came) and end_of(e) <= now() <= end_of(e) + RATE_FOR, "ratings": None}
     if head:
         rs = rows(con, "SELECT score, comment, created_at FROM event_ratings WHERE event_id = ? ORDER BY created_at DESC", e["id"])
-        if rs:
+        if 0 < len(rs) < RATE_SHOW:  # so few the club could tell who wrote what: the count alone (owner, Oct 17)
+            out["ratings"] = {"avg": None, "count": len(rs), "dist": [], "comments": []}
+        elif rs:
             out["ratings"] = {"avg": round(sum(r["score"] for r in rs) / len(rs), 1), "count": len(rs),
                               "dist": [sum(1 for r in rs if r["score"] == s) for s in range(1, 6)],
                               "comments": [{"score": r["score"], "body": r["comment"], "at": r["created_at"]} for r in rs if r["comment"]][:50]}

@@ -10,7 +10,7 @@
   import Crown from '@lucide/svelte/icons/crown';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
-  import CodeXml from '@lucide/svelte/icons/code-xml';
+  import GitHubMark from '../../ui/GitHubMark.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
@@ -103,7 +103,7 @@
     <button class="r" onclick={() => openLink(TG_TALK)}><span class="ic"><MessagesSquare size={20} /></span>
       <span class="lb">{t('me.tgTalk')}<i class="sub">{t('me.tgTalkSub')}</i></span><ChevronRight size={18} /></button>
     <!-- the open code (owner, Oct 17): anyone can read it and send a change -->
-    <button class="r" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic"><CodeXml size={20} /></span>
+    <button class="r" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic"><GitHubMark size={20} /></span>
       <span class="lb">GitHub<i class="sub">{t('me.githubSub')}</i></span><ChevronRight size={18} /></button>
   </div>
   <FeedbackCard />

@@ -233,13 +233,14 @@ export interface EventFull extends EventCard {
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
   comments: number;             // questions and comments under the event (§4.10)
   commentsOn: boolean;
+  discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one (Oct 17)
   myRating: number | null;      // 1..5, my one-tap rating after the event
   canRate: boolean;             // checked in, the event is over, within 7 days
   ratings: RatingSummary | null; // the club's Head+ only: anonymous
 }
 
 /** How attendees rated an event (Head+ only, anonymous): average, counts for 1..5, comments without names. */
-export interface RatingSummary { avg: number; count: number; dist: number[]; comments: { score: number; body: string; at: Ts }[] }
+export interface RatingSummary { avg: number | null; count: number; dist: number[]; comments: { score: number; body: string; at: Ts }[] }
 
 /** An organizer's update on an event (Head+ post it; the bot only says there is one). */
 export interface EventUpdate { id: Id; body: string; at: Ts; canDelete: boolean }

@@ -3,6 +3,7 @@ event, students register, the waitlist moves, the door scans tickets. Run from s
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -946,7 +947,7 @@ def test_event_updates(env):
 
 def test_ratings(env):
     """One tap after the event (Oct 4): only people checked in, from the end until 7 days later; anonymous to the club
-    (average, counts, comments without names); the bot asks an hour after the end unless reminders are off."""
+    (average, counts, comments without names; from three ratings on, Oct 17); the bot asks an hour after the end unless reminders are off."""
     c, cfg = env
     pres, ali, zhan = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan")
     con = db.connect(cfg.db_path)
@@ -970,7 +971,11 @@ def test_ratings(env):
     e = c.put("/api/events/1/rating", headers=A, json={"score": 4, "comment": "Great jury"}).json()
     assert e["myRating"] == 4 and e["ratings"] is None                                    # a student never sees the summary
     s = c.get("/api/events/1", headers=P).json()["ratings"]
-    assert s == {"avg": 4.0, "count": 1, "dist": [0, 0, 0, 1, 0], "comments": [{"score": 4, "body": "Great jury", "at": s["comments"][0]["at"]}]}
+    assert s == {"avg": None, "count": 1, "dist": [], "comments": []}                  # under three: how many, nothing more
+    for uid in (pres["id"], zhan["id"]):                                                  # two more (straight in: the rules are above)
+        con.execute("INSERT INTO event_ratings (event_id, user_id, score, comment, created_at) VALUES (1, ?, 5, '', 0)", (uid,))
+    s = c.get("/api/events/1", headers=P).json()["ratings"]
+    assert s == {"avg": 4.7, "count": 3, "dist": [0, 0, 0, 1, 2], "comments": [{"score": 4, "body": "Great jury", "at": s["comments"][0]["at"]}]}
     assert "name" not in json.dumps(s) if (json := __import__("json")) else True        # anonymous
     m = {"kind": "rate", "ref": "rate:1", "lang": "en", "user_id": ali["id"]}
     assert bot._render(con, m) is None                                                    # rated already: no question
@@ -2892,6 +2897,27 @@ def test_events_channel(env):
     assert logic.channel_due(con) == []
     c.patch(f"/api/events/{e['id']}", headers=tma(20), json={**ev, "place": "Hall"})
     assert "Hall" in logic.channel_due(con)[0][1]
+    assert 'startapp=ev_%d">' % e["id"] in logic.channel_due(con, "KBTUappBot")[0][1]           # sign up: a link, not a button
+    con.execute("UPDATE events SET channel_msg = 7 WHERE id = ?", (e["id"],))
+    # Telegram's copy of post 7 in the discussion group: the bot comments the rules under it, the app links that comment
+    import httpx
+    cfg2 = dataclasses.replace(cfg, events_channel="@KBTUevents")
+    copy = {"message_id": 70, "chat": {"id": -100, "type": "supergroup"}, "is_automatic_forward": True,
+            "sender_chat": {"id": -200, "type": "channel", "username": "KBTUevents"}, "forward_origin": {"type": "channel", "message_id": 7}}
+    sent = []
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/getUpdates"):
+            return httpx.Response(200, json={"ok": True, "result": [{"update_id": 1, "message": copy}, {"update_id": 2, "message": copy}]})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 71}})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            return await bot.hear(cfg2, http, 0)
+    asyncio.run(go())
+    assert len(sent) == 1 and sent[0]["chat_id"] == -100 and sent[0]["reply_parameters"] == {"message_id": 70}  # once
+    assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["discuss"] == "https://t.me/kbtuevents/7?comment=71"
     c.post(f"/api/events/{e['id']}/cancel", headers=tma(20))
     assert logic.channel_due(con)[0][1].startswith("❌")
 
