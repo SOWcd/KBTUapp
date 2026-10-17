@@ -136,8 +136,8 @@
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
-  const capTitle = $derived(capOf?.title ?? null);
-  const capIcon = $derived(capOf?.icon ?? null);
+  const capTitle = $derived(ui.busy || capOf?.title || null);
+  const capIcon = $derived(ui.busy ? null : capOf?.icon ?? null);
   // over the Feed the nav and capsule turn into tinted dark glass (chrome.ts): at once on a tab switch,
   // and in step with the finger while the Events pager moves
   $effect(() => { feedChrome(ui.tab === 'afisha' && ui.page.afisha === 0 ? 1 : 0, 'opacity 220ms ease'); });

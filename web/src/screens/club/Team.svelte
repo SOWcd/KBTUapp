@@ -260,7 +260,7 @@
     background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface); }
   .icons { display: flex; gap: 8px; flex: none; }
   .ic { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
-  .ic:active { transform: scale(0.9); }
+  .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows (owner, Oct 17) */
   .hd { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .org > span { min-width: 0; }

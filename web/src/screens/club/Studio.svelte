@@ -29,7 +29,6 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Mail from '@lucide/svelte/icons/mail';
   import Button from '../../ui/Button.svelte';
-  import LinkIcon from '@lucide/svelte/icons/link';
   import Crown from '@lucide/svelte/icons/crown';
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
@@ -106,8 +105,12 @@
           {/each}
         </div>
       {/if}
-      <h1 class="t-h1 ellipsis">{m.org.name}</h1>
-      <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}</p>
+      <div class="title">
+        <span class="name"><h1 class="t-h1 ellipsis">{m.org.name}</h1>
+          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}</p></span>
+        <!-- the club's page, edited from up here (owner, Oct 17: the row of buttons below said nothing) -->
+        {#if vice}<button class="ic" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} /></button>{/if}
+      </div>
     </header>
 
     {#if todo}
@@ -172,13 +175,12 @@
       <button class="add" onclick={() => sheets.editor(m.org.id)}><Plus size={20} />{t('studio.new')}</button>
     {/if}
 
-    <!-- small actions, each a few times a term; recruitment only while it runs (closed: a "To do" at a term's start) -->
-    {#if may(m, 'memo') || vice || casting}
+    <!-- the memo to DMP, and recruitment while it runs (closed: a "To do" at a term's start); inviting lives on Team,
+         editing the club up top (owner, Oct 17) -->
+    {#if may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="chips">
-        {#if may(m, 'memo')}<button onclick={() => sheets.memo(m.org.id)}><Mail size={17} />{t('memo.card')}</button>{/if}
-        {#if (vice && recruiting) || (casting && round)}<button onclick={openRecruit}><UserPlus size={17} />{t('cast.card')}</button>{/if}
-        {#if vice}<button onclick={() => shareInvite(m.org)}><LinkIcon size={17} />{t('studio.invite')}</button>{/if}
-        {#if vice}<button onclick={() => sheets.clubEdit(m.org.id)}><Pencil size={17} />{t('ce.title')}</button>{/if}
+        {#if may(m, 'memo')}<button onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={17} />{t('memo.card')}</button>{/if}
+        {#if (vice && recruiting) || (casting && round)}<button onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={17} />{t('cast.card')}</button>{/if}
       </div>
     {/if}
 
@@ -199,6 +201,12 @@
   .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
   .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
+  .title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .name { min-width: 0; }
+  .ic { width: 38px; height: 38px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text);
+    transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+  /* a press glows (owner, Oct 17: a tap must show it was seen) */
+  .ic:active, .chips button:active { transform: scale(0.92); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); }
   .role { display: flex; align-items: center; gap: 5px; }
   .role :global(svg) { color: #FFB23D; }
   .orgs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
@@ -214,9 +222,8 @@
   .todo .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
   .chips button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border-radius: var(--r-full);
-    background: var(--surface); color: var(--text); font: 620 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
+    background: var(--surface); color: var(--text); font: 620 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
   .chips button > :global(svg) { color: var(--accent-text); }
-  .chips button:active { transform: scale(0.95); }
   .count.warn { background: var(--warning-text); color: var(--bg); }
   .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
   .cap { margin: 0 2px 8px; }

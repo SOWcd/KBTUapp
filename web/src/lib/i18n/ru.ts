@@ -269,6 +269,7 @@ const ru = {
   'team.left': "Готово, ты больше не в клубе",
   'team.presLeave': "Президент не может уйти: сначала передай клуб",
   'team.inviteTitle': "Пригласить по ссылке",
+  'invite.making': "Готовлю ссылку…",
   'team.share': "Поделиться",
   'team.inviteMsg': "Вступай в «{club}» в KBTU App",
   'join.linkAsk': "Вступить в «{club}»?",

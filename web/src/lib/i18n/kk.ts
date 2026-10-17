@@ -268,6 +268,7 @@ const kk: Dict = {
   'team.left': "Дайын, сен енді клубта емессің",
   'team.presLeave': "Президент кете алмайды: алдымен клубты бер",
   'team.inviteTitle': "Сілтеме арқылы шақыру",
+  'invite.making': "Сілтеме дайындалуда…",
   'team.share': "Бөлісу",
   'team.inviteMsg': "KBTU App-та «{club}» клубына қосыл",
   'join.linkAsk': "«{club}» клубына қосыласың ба?",

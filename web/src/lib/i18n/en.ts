@@ -268,6 +268,7 @@ const en: Dict = {
   'team.left': "Done, you've left the club",
   'team.presLeave': "A President can't leave: hand the club over first",
   'team.inviteTitle': "Invite by link",
+  'invite.making': "Making the link…",
   'team.share': "Share",
   'team.inviteMsg': "Join {club} in KBTU App",
   'join.linkAsk': "Join {club}?",

@@ -23,6 +23,7 @@ export const ui = $state({
   navMini: false,          // bottom nav shrinks to icons while scrolling down
   awake: 0,                // bumps on interaction: the capsule shows the page switcher for a moment
   club: null as number | null, // tab 2: the club picked in Studio, the same on Team (null = the top one)
+  busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; owner, Oct 17: no sign otherwise)
 });
 
 export function persistNav(): void {

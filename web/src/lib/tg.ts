@@ -139,15 +139,18 @@ export function shareMessage(preparedId: string): Promise<boolean> {
  *  prepares it from its own templates (savePreparedInlineMessage, initData-checked), then Telegram shows the chat
  *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
  *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */
-export async function shareCard(card: Record<string, string>, link: string, text: string): Promise<boolean> {
+/** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
+export async function shareCard(card: Record<string, string>, link: string, text: string, ready?: () => void): Promise<boolean> {
   if (inTelegram && can('8.0') && W?.shareMessage) {
     // the server reads initData from the header like every API call; the dev server still reads it from the body
     const r = await fetch('/api/share', { method: 'POST', headers: { Authorization: `tma ${W.initData}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...card, initData: W.initData }) });
     const { id } = await r.json();
     if (!id) throw new Error('share');
+    ready?.();
     return await shareMessage(id); // true once the user picked a chat
   }
+  ready?.();
   openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
   return false; // the link opens Telegram's own picker: we never learn whether it was sent
 }
