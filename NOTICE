@@ -1,0 +1,12 @@
+KBTU App
+Copyright (c) 2026 Nurmatov Sukhrab Rustamzhanovich. Licensed under the Business Source License 1.1 (see LICENSE).
+
+Third-party materials in this repository are not covered by LICENSE and keep their own terms:
+
+- Campus floor plans by UNI-Q (https://uni-q.almv.kz), used with credit:
+  web/public/map/u1/, web/src/assets/map/uniq-tiles.json, web/src/assets/map/uniq-rooms.json.
+- Microsoft Fluent Emoji 3D (MIT License, Copyright (c) Microsoft Corporation):
+  web/public/emoji/ and the emoji images elsewhere in web/.
+- KBTU school logos (server/kbtu/schools/) belong to JSC Kazakh-British Technical University.
+  KBTU App is not an official KBTU service.
+- npm and PyPI packages (web/package.json, server/requirements.txt) under their own licenses.

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>KBTU App</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- deferred: parsing and the first paint don't wait for telegram.org; it still runs before the app module -->
+<script defer src="https://telegram.org/js/telegram-web-app.js?59"></script>
+<script>
+// A blank screen is the worst failure: nobody can tell whether the app arrived at all.
+// Errors before and during start are printed right on the page.
+(function () {
+  function show(msg) {
+    var el = document.getElementById('app') || document.body;
+    el.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;padding:16px;margin:0;' +
+      'font:13px/1.5 ui-monospace,monospace;color:#ff9d8a;background:#07080F;min-height:100vh">' +
+      'KBTU App не запустился\n\n' + String(msg).replace(/[<>&]/g, '') + '</pre>';
+  }
+  window.addEventListener('error', function (e) {
+    // telegram-web-app.js comes from another origin: its failures arrive as a bare "Script error."
+    // that can't be fixed or told apart from ad-blocker noise. Not worth covering a working app.
+    if ((e.message || '') === 'Script error.' && !e.filename) return;
+    if (window.__kbStarted) return; // after start, errors go to the console only
+    show((e.message || e.error) + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    if (window.__kbStarted) return;
+    show('promise: ' + (e.reason && e.reason.message || e.reason));
+  });
+  setTimeout(function () {
+    var a = document.getElementById('app');
+    if (a && !a.children.length) show('модуль загрузился, но ничего не отрисовалось');
+  }, 6000);
+})();
+</script>
+</head>
+<body><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+</html>

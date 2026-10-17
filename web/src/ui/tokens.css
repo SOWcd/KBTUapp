@@ -1,0 +1,123 @@
+/* Design tokens: the only place where colours, type, spacing, radii, layers and motion are defined.
+   Components and screens use these variables, never raw values. SPEC §8.1. */
+
+:root {
+  /* type: one family, Inter (variable wght + opsz). Big sizes switch to its Display cut by themselves
+     (font-optical-sizing: auto). Covers Kazakh, ₸ and tabular digits. */
+  --font-display: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --font-text: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* spacing: 4-pt grid */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --gutter: 16px;
+
+  /* radii */
+  --r-xs: 8px; --r-s: 12px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
+
+  /* motion: transform and opacity only */
+  --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
+  --ease-spring: cubic-bezier(.32, .72, 0, 1);   /* sheets, iOS-like settle */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --t-fast: 120ms; --t-base: 220ms; --t-slow: 380ms;
+
+  /* layers */
+  --z-sticky: 10; --z-nav: 30; --z-capsule: 40; --z-sheet: 50; --z-toast: 60; --z-ask: 70;
+
+  /* brand (same in both themes) */
+  --accent: #3B6BFF;
+  --accent-2: #7C4DFF;
+  --on-accent: #FFFFFF;
+  --grad-accent: linear-gradient(135deg, #3B6BFF, #7C4DFF);
+  --success: #2FBF71;
+  --warning: #FFB23D;
+  --danger: #F0524A;
+  --gold: #F5B13D;
+
+  /* tap targets */
+  --tap: 44px;
+  --btn-l: 52px; --btn-m: 42px; --btn-s: 32px;
+
+  /* Safe areas. Telegram (fullscreen) sets --tg-* on <html>; env() covers a plain browser.
+     --tg-content-safe-area-inset-top is the row with Telegram's own Close / ⋯ buttons. */
+  --safe-top: var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --tg-head: var(--tg-content-safe-area-inset-top, 0px);
+  --top: calc(var(--safe-top) + var(--tg-head));
+  --nav-h: 64px;
+  --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
+}
+
+:root,
+:root[data-theme='dark'],
+.theme-dark {
+  color-scheme: dark;
+  --switch-on: rgba(59, 107, 255, 0.32);
+  --switch-knob: #3B6BFF;
+  --bg: #07080F;
+  --bg-raised: #0D0F19;
+  --surface: #11131E;
+  --surface-2: #191C29;
+  --surface-3: #222637;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --text: #F4F6FF;
+  --text-2: rgba(232, 236, 255, 0.66);
+  --text-3: rgba(232, 236, 255, 0.52); /* 4.8:1 or more on every dark surface (was 3.9; owner asked about the dark colours, Oct 6) */
+  --accent-text: #8FA8FF;
+  --accent-soft: rgba(59, 107, 255, 0.18);
+  --success-text: #5FD99A;
+  --success-soft: rgba(47, 191, 113, 0.16);
+  --danger-text: #FF8A80;
+  --danger-soft: rgba(240, 82, 74, 0.16);
+  --warning-text: #FFC66B;
+  --warning-soft: rgba(255, 178, 61, 0.16);
+  --glass-bg: rgba(24, 28, 44, 0.6);
+  --glass-pill-bg: rgba(24, 28, 44, 0.6);
+  --glass-clear: rgba(255, 255, 255, 0.1);
+  --glass-solid: rgba(24, 28, 44, 0.96);
+  --glass-bloom: rgba(255, 255, 255, 0.5);
+  --glass-sheen: rgba(255, 255, 255, 0.32);
+  --glass-rim: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 22px 44px -14px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  --chrome-ink: rgba(255, 255, 255, 0.85);
+  --shadow-card: none;
+  --scrim: rgba(3, 4, 10, 0.62);
+  --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.26), transparent 70%);
+}
+
+:root[data-theme='light'],
+.theme-light {
+  color-scheme: light;
+  --switch-on: #3B6BFF;
+  --switch-knob: #FFFFFF;
+  --bg: #F3F5FB;
+  --bg-raised: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #ECEFF6;
+  --surface-3: #E1E5EF;
+  --line: rgba(11, 20, 51, 0.07);
+  --line-2: rgba(11, 20, 51, 0.13);
+  --text: #0B1433;
+  --text-2: rgba(11, 20, 51, 0.62);
+  --text-3: rgba(11, 20, 51, 0.54); /* 3.8:1 (was 2.7); AA's 4.5 would make it text-2 */
+  --accent-text: #2A57E6;
+  --accent-soft: rgba(59, 107, 255, 0.12);
+  --success-text: #117640; /* the chips' text: 4.6:1 on their own soft colour (was 3.4-3.9) */
+  --success-soft: rgba(47, 191, 113, 0.14);
+  --danger-text: #BA342E;
+  --danger-soft: rgba(240, 82, 74, 0.12);
+  --warning-text: #965A00;
+  --warning-soft: rgba(255, 178, 61, 0.18);
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-pill-bg: rgba(255, 255, 255, 0.5); /* a pill is clearer than a sheet: there is little to read on it */
+  --glass-clear: rgba(255, 255, 255, 0.42);
+  --glass-solid: rgba(255, 255, 255, 0.97);
+  --glass-bloom: rgba(255, 255, 255, 0.95);
+  --glass-sheen: rgba(255, 255, 255, 0.32);
+  --glass-rim: rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
+  --chrome-ink: #4A5680;
+  --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
+  --scrim: rgba(11, 20, 51, 0.32);
+  --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.13), transparent 70%);
+}

@@ -1,0 +1,208 @@
+/* Reset, type scale and the two materials. Everything here reads tokens.css. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 450 15px/1.45 var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.selectable, input, textarea { user-select: text; -webkit-user-select: text; }
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; touch-action: manipulation; text-align: inherit; }
+a { color: inherit; text-decoration: none; }
+input, textarea { font: inherit; color: inherit; border: 0; outline: 0; background: none; }
+img, svg { display: block; }
+img { max-width: 100%; }
+
+/* The app box is fixed to the window: on iPhone position:fixed is measured from a layout viewport
+   that can be shorter than the screen. Children position inside it. */
+#app { position: fixed; inset: 0; overflow: hidden; }
+/* a computer's wide window (or a tablet): the phone layout stays a phone-wide column in the middle instead of stretching
+   (Oct 11); the transform makes the column the frame of everything fixed inside the app (bars, sheets, toasts) */
+@media (min-width: 600px) { #app { left: 50%; right: auto; width: 480px; transform: translateX(-50%); } }
+
+/* ---- type scale ---- */
+.t-hero { font: 800 34px/1.04 var(--font-display); letter-spacing: -0.035em; }
+.t-h1 { font: 800 27px/1.08 var(--font-display); letter-spacing: -0.03em; }
+.t-h2 { font: 780 21px/1.14 var(--font-display); letter-spacing: -0.025em; }
+.t-h3 { font: 750 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
+.t-title { font: 640 16px/1.28 var(--font-text); letter-spacing: -0.01em; }
+.t-body { font: 450 15px/1.45 var(--font-text); }
+.t-callout { font: 550 14px/1.35 var(--font-text); }
+.t-foot { font: 500 13px/1.35 var(--font-text); color: var(--text-2); }
+.t-cap { font: 650 11px/1.2 var(--font-text); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.num { font-variant-numeric: tabular-nums; }
+.dim { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- materials ----
+   Glass: ONLY for things that float above content (nav, capsule, sheets, toasts). Pages are solid.
+   Liquid glass, the recipe approved in the prototype: a clear body (blur + saturation of what's
+   behind); a sheen spot and a bright rim whose angle follow the phone's tilt (--gx/--gy from
+   glass.ts); a specular top edge; faint warm/cool fringes left and right; a soft inner bevel.
+   Static paint: nothing repaints unless the phone moves. A glass element must be positioned.
+   Variants: .glass-pill (capsule, toasts: lighter blur, one clean rim), .glass-sheet (big surfaces:
+   no light spot, it read as a flashlight). */
+.glass {
+  isolation: isolate;
+  background-color: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(24px) saturate(190%);
+  box-shadow: var(--glass-shadow);
+}
+.glass::before, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.glass::before {
+  z-index: -1;
+  background: radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.25),
+    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.28),
+    inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.32),
+    inset 0 -10px 18px -10px rgba(0, 0, 0, 0.18),
+    inset 0 10px 22px -12px rgba(255, 255, 255, 0.45),
+    inset 0 0 18px rgba(255, 255, 255, 0.12);
+}
+.glass::after {
+  padding: 1px;
+  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.08) 28%, transparent 50%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0.55));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.glass-pill {
+  background-color: var(--glass-pill-bg);
+  -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
+  backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
+  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.glass-pill::before { box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.75), inset 0 0 12px rgba(255, 255, 255, 0.08); }
+.glass-sheet::before { background: none; box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.6); }
+/* Light theme (owner, Oct 5 and again Oct 6: "in the light theme there's no glass at all"): white rims vanish on a
+   white page and a milky body over white cards reads as plastic, so here the glass is clearer (what scrolls under it
+   shows through, a lighter blur, no brightening) and shows by its edge: a hairline bright at the lit top that turns to
+   a faint ink at the bottom, a deeper lower bevel, a white inner ring, the colour fringes stronger, an ink outline.
+   .theme-light / .theme-dark: a part of the page in a theme of its own (the map's switch), the same glass there. */
+.theme-light, .theme-dark { color: var(--text); }
+:root[data-theme='light'], .theme-light { --glass-clear: rgba(255, 255, 255, 0.14); }
+:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { -webkit-backdrop-filter: blur(8px) saturate(190%); backdrop-filter: var(--refract, blur(8px) saturate(190%)); }
+:root[data-theme='light'] .glass::after, .theme-light .glass::after {
+  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), #fff, rgba(255, 255, 255, 0.35) 28%, rgba(11, 20, 51, 0.05) 50%, rgba(11, 20, 51, 0.1) 72%, rgba(11, 20, 51, 0.18));
+}
+:root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before {
+  box-shadow:
+    inset 0 1.5px 1px #fff,
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+    inset 0 -1px 1px rgba(11, 20, 51, 0.1),
+    inset 2px 0 2px -1px rgba(255, 120, 200, 0.45),
+    inset -2px 0 2px -1px rgba(90, 190, 255, 0.5),
+    inset 0 -10px 16px -10px rgba(11, 20, 51, 0.18);
+}
+:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { box-shadow: 0 12px 30px -12px rgba(24, 36, 90, 0.4), 0 1px 3px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.16); }
+/* a dark part on a light page: the dark glass back */
+:root[data-theme='light'] .theme-dark .glass::after {
+  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.08) 28%, transparent 50%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0.55));
+}
+:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.75), inset 0 0 12px rgba(255, 255, 255, 0.08); }
+:root[data-theme='light'] .theme-dark .glass-pill { box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06); backdrop-filter: blur(10px) saturate(200%) brightness(1.06); }
+:root[data-theme='light'] .theme-dark { --glass-clear: rgba(255, 255, 255, 0.1); }
+/* the touch bloom (glass.ts): sits over the sheen, under the content */
+.glass-bloom {
+  position: absolute; z-index: -1; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glass-bloom), transparent); pointer-events: none; opacity: 0;
+}
+/* power saving (state/power.svelte.ts sets .lowfx): no live blur anywhere (it is what costs the GPU most, redrawn
+   whenever what's behind moves), glass with an almost solid body; the rim and sheen stay, they are static paint.
+   The components stop their own endless motion under html.lowfx. */
+html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } /* over the themes' own blurs */
+:root.lowfx, :root.lowfx[data-theme], .lowfx .theme-light, .lowfx .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+/* "Reduce transparency" in the system's settings: solid glass, power saving or not (Chromium reports it: Android,
+   Windows; Safari doesn't, for fingerprinting) */
+@media (prefers-reduced-transparency: reduce) {
+  .glass { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+}
+.surface { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-card); }
+
+/* form field: caption above the input on a soft tile; 16px text keeps iOS from zooming on focus */
+.field { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: var(--r-m); background: var(--surface-2); }
+.field input, .field textarea { font: 550 16px/1.3 var(--font-text); padding: 2px 0; width: 100%; min-width: 0; }
+.field textarea { resize: none; min-height: 72px; }
+.field ::placeholder { color: var(--text-3); }
+.field.bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
+/* on/off row: caption and hint on the left, the switch on the right (editor, applications inbox) */
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
+.switch > span { display: flex; flex-direction: column; gap: 2px; }
+.switch b { font: 600 15px/1.3 var(--font-text); }
+.switch i { font-style: normal; }
+.switch input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; border-radius: 15px;
+  background: var(--line-2); transition: background-color var(--t-base); }
+.switch input::after { content: ''; position: absolute; left: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform var(--t-base) var(--ease); }
+/* on: the owner's pick from real screenshots (Oct 10): light, a solid blue track and a white knob; dark, a soft blue
+   track and a blue knob (tokens.css --switch-on, --switch-knob) */
+.switch input:checked { background: var(--switch-on); }
+.switch input:checked::after { transform: translateX(20px); background: var(--switch-knob); }
+
+/* the app's mark in the middle of a profile QR (the badge's corner, the full QR): a rounded square in the
+   brand gradient, the shape of the badge photo */
+.appmark { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; border-radius: 26%; color: #fff;
+  background: linear-gradient(135deg, #2A4FD6, #5B2BC0); box-shadow: 0 0 0 2px #fff; }
+.appmark svg { width: 64%; height: auto; }
+
+/* segmented switch (Clubs: all / mine; Studio: upcoming / drafts / past) */
+.seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--r-full); background: var(--surface); }
+.seg button { height: 32px; padding: 0 14px; border-radius: var(--r-full); font: 620 13px/1 var(--font-text); color: var(--text-2); white-space: nowrap; transition: background-color var(--t-base), color var(--t-base); }
+@media (max-width: 359px) { .seg button { padding: 0 10px; } } /* Studio's three Russian labels fit a 320-px phone */
+.seg button.on { background: var(--text); color: var(--bg); }
+
+/* the two background layers of the nav and the capsule, cross-faded over the Feed (chrome.ts) */
+.tone-base, .tone-feed { position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none; will-change: opacity; }
+.tone-feed { opacity: 0; }
+
+/* emoji burst layer (burst.ts): above everything, never catches touches */
+.burst { position: fixed; inset: 0; z-index: 80; overflow: hidden; pointer-events: none; }
+.burst img { position: absolute; will-change: transform, opacity; }
+
+/* ---- helpers ---- */
+.scroll { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.hscroll { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+.hscroll::-webkit-scrollbar { display: none; }
+.press { transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease); }
+.press:active { transform: scale(0.97); }
+/* every button answers a press (owner, Oct 13: "buttons don't react at all"): a small give, zero specificity, so a
+   component's own :active, transform or transition always wins */
+:where(button:not(:disabled), [role='button']) { transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease); }
+:where(button:not(:disabled), [role='button']):active { transform: scale(0.96); opacity: 0.85; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* the theme switch (theme.svelte.ts): the circle is drawn by script on the new snapshot, so both snapshots sit still
+   and the old one simply gets covered; without a circle (Telegram changed the scheme) the default fade runs.
+   The new look's glass is solid under it (vt-solid): the live snapshot can't draw a backdrop on iOS, the old glass
+   showed through and snapped over at the end (owner, Oct 6). Once it's over the glass clears up: the glass colours are
+   typed so they can glide, and they glide only on the way back (adding vt-solid is instant). */
+@property --glass-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --glass-pill-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --glass-clear { syntax: '<color>'; inherits: true; initial-value: transparent; }
+:root.vt-solid, .vt-solid .theme-light, .vt-solid .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+:root:not(.vt-solid), :root:not(.vt-solid) .theme-light, :root:not(.vt-solid) .theme-dark {
+  transition: --glass-bg 360ms ease, --glass-pill-bg 360ms ease, --glass-clear 360ms ease;
+}
+.vt-circle::view-transition-old(root), .vt-circle::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

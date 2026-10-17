@@ -1,0 +1,10 @@
+.git
+.env
+*.db
+*.db-*
+**/__pycache__
+server/.venv
+server/tests
+web/node_modules
+web/dist
+tmp-serve

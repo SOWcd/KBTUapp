@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+  <linearGradient id="bg" x1="0.15" y1="0" x2="0.55" y2="1">
+    <stop offset="0" stop-color="#2B4CD0"/><stop offset="0.55" stop-color="#1A2A7A"/><stop offset="1" stop-color="#0C1230"/>
+  </linearGradient>
+  <radialGradient id="violet" cx="0.2" cy="0.02" r="0.78"><stop offset="0" stop-color="#8A5CFF" stop-opacity="0.75"/><stop offset="0.6" stop-color="#7C4DFF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="cool" cx="0.95" cy="1.02" r="0.62"><stop offset="0" stop-color="#3BC8FF" stop-opacity="0.22"/><stop offset="1" stop-color="#3BC8FF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="bloom" cx="0.5" cy="0.47" r="0.4"><stop offset="0" stop-color="#BFD0FF" stop-opacity="0.22"/><stop offset="1" stop-color="#BFD0FF" stop-opacity="0"/></radialGradient>
+  <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.75"><stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.32"/></radialGradient>
+  <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D6DEFF"/></linearGradient>
+  <filter id="markGlow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="30" result="b"/>
+    <feFlood flood-color="#C9D6FF" flood-opacity="0.45"/><feComposite in2="b" operator="in" result="g"/>
+    <feGaussianBlur in="SourceAlpha" stdDeviation="20" result="s0"/><feOffset in="s0" dy="18" result="s1"/>
+    <feFlood flood-color="#050818" flood-opacity="0.45"/><feComposite in2="s1" operator="in" result="s"/>
+    <feMerge><feMergeNode in="s"/><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs><rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#violet)"/><rect width="1024" height="1024" fill="url(#cool)"/><rect width="1024" height="1024" fill="url(#bloom)"/><rect width="1024" height="1024" fill="url(#vignette)"/><g filter="url(#markGlow)"><g fill="url(#ink)" transform="translate(162.00,212.00) scale(25.0000)"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/><rect x="2" y="7" width="3" height="11" rx="1.5"/><rect x="7.25" y="7" width="3" height="11" rx="1.5"/><rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/><rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></g></svg>

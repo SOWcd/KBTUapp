@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.db
+*.db-*
+tmp-serve/
+
+# server virtualenv
+server/.venv/
+server/media/

@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- The memo's way into the Outlook APP (owner, Oct 13). Telegram's openLink takes https only, so the web compose opened
+     in Telegram's browser, signed out. This page gets the letter in the #fragment (never sent to the server, so never in
+     a log), opens ms-outlook://compose at once and keeps two buttons: the app again, or the web compose. Labels come in
+     the fragment too, in the app's language. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Outlook</title>
+<style>
+  :root { color-scheme: dark light; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 24px; box-sizing: border-box; background: #0B0F1F; color: #fff; font: 600 16px/1.3 -apple-system, system-ui, sans-serif; }
+  a { display: block; width: 100%; max-width: 340px; padding: 16px; border-radius: 16px; text-align: center; text-decoration: none; box-sizing: border-box; }
+  #app { background: #0F6CBD; color: #fff; }
+  #web { color: #A9C0FF; font-weight: 550; }
+</style>
+</head>
+<body>
+<a id="app" href="#">Outlook</a>
+<a id="web" href="#">outlook.office.com</a>
+<script>
+  var p = new URLSearchParams(location.hash.slice(1));
+  var q = 'to=' + encodeURIComponent(p.get('to') || '') + '&subject=' + encodeURIComponent(p.get('subject') || '') + '&body=' + encodeURIComponent(p.get('body') || '');
+  var app = 'ms-outlook://compose?' + q, web = 'https://outlook.office.com/mail/deeplink/compose?' + q;
+  var a = document.getElementById('app'), w = document.getElementById('web');
+  a.href = app; w.href = web;
+  if (p.get('b')) a.textContent = p.get('b');
+  if (p.get('w')) w.textContent = p.get('w');
+  location.href = app; // iOS may ask "Open in Outlook?"; if it doesn't, the button is one tap
+</script>
+</body>
+</html>
