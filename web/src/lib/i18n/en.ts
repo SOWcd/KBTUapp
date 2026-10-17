@@ -895,6 +895,7 @@ const en: Dict = {
   'me.tgNewsSub': "News and updates of the app",
   'me.tgTalk': "KBTU App group",
   'me.tgTalkSub': "Chat, bugs, ideas, questions",
+  'me.githubSub': "Open code: read it, suggest changes",
   'me.deleteData': "Delete account",
   'set.notifyLead': "The bot messages you in Telegram. What to send:",
   'set.remind': "Event reminders",

@@ -896,6 +896,7 @@ const ru = {
   'me.tgNewsSub': "Новости и обновления приложения",
   'me.tgTalk': "Группа KBTU App",
   'me.tgTalkSub': "Общение, баги, идеи, вопросы",
+  'me.githubSub': "Открытый код: смотри и предлагай",
   'me.deleteData': "Удалить аккаунт",
   'set.notifyLead': "Бот присылает сообщения в Telegram. Что присылать:",
   'set.remind': "Напоминания о событиях",
