@@ -4,6 +4,7 @@
   // academic calendar and the psychological service, the app's channel and group, "still in development". Every setting
   // is behind the gear in the corner (PrefsSheet); the admin's panel is a row here.
   import Settings2 from '@lucide/svelte/icons/settings';
+  import Pencil from '@lucide/svelte/icons/pencil';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
@@ -47,13 +48,20 @@
   // the app's own Telegram (owner, Oct 5): news in the channel, talk in the topics group (BUGS / IDEAS / QUESTIONS)
   const TG_NEWS = 'https://t.me/KBTUappNews', TG_TALK = 'https://t.me/KBTUappTop';
 
+  let page = $state<HTMLDivElement>();
+  function look() { haptic.tap(); page?.scrollTo({ top: 0, behavior: 'smooth' }); sheets.look(); }
+
   async function keepAccount() {
     try { session.me = await api.keepMe(); haptic.ok(); say(t('del.kept'), 'raising_hands_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
 </script>
 
-<div class="page scroll">
+<div class="page scroll" bind:this={page}>
+  {#if me?.student}
+    <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below (owner, Oct 17) -->
+    <button class="gear edit" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
+  {/if}
   <button class="gear" class:in={!me?.student} onclick={() => { haptic.tap(); sheets.prefs(); }} aria-label={t('me.settings')}>
     <Settings2 size={20} /></button>
   {#if me?.student}
@@ -134,6 +142,7 @@
   .gear { position: absolute; top: calc(var(--top) + 50px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
   .gear:active { transform: scale(0.92); }
+  .gear.edit { right: calc(var(--gutter) + 44px); }
   .gear.in { top: calc(var(--top) + 70px); right: calc(var(--gutter) + 14px); background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
   .cnt { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12.5px/22px var(--font-text); text-align: center; }
   .tail { flex: none; height: calc(var(--bottom) + 12px); }

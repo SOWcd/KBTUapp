@@ -12,7 +12,6 @@
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import Avatar from '../../ui/Avatar.svelte';
   import { skinned } from '../../lib/awards';
   import { byRank } from '../../lib/perms';
 
@@ -62,14 +61,13 @@
   }
 </script>
 
-<Sheet {overlay} title={t('look.title')}>
+<!-- under my lanyard, which stays in sight above and changes as I pick (owner, Oct 17): so no big photo here -->
+<Sheet {overlay} see title={t('look.title')}>
   <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => upload(e.currentTarget.files?.[0])} />
-  <div class="pic">
-    <Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={112} tappable={false} />
-    <button class="cam" onclick={() => file?.click()} disabled={!!busy} aria-label={t('look.upload')}><Camera size={18} /></button>
+  <div class="up">
+    <Button kind="secondary" size="m" loading={busy === 'photo'} onclick={() => file?.click()}>{#snippet icon()}<Camera size={18} />{/snippet}{me.photo.own ? t('look.change') : t('look.upload')}</Button>
+    {#if me.photo.own}<button class="drop" disabled={!!busy} onclick={dropPhoto}>{t('look.dropPhoto')}</button>{/if}
   </div>
-  <div class="up"><Button kind="secondary" size="m" loading={busy === 'photo'} onclick={() => file?.click()}>{me.photo.own ? t('look.change') : t('look.upload')}</Button></div>
-  {#if me.photo.own}<button class="drop" disabled={!!busy} onclick={dropPhoto}>{t('look.dropPhoto')}</button>{/if}
   <label class="switch">
     <span><b>{t('look.tg')}</b><i class="t-foot">{t('look.tgHint')}</i></span>
     <input type="checkbox" role="switch" checked={me.photo.telegram} disabled={!!busy} onchange={(e) => switchTg(e.currentTarget)} />
@@ -104,12 +102,8 @@
 </Sheet>
 
 <style>
-  .pic { position: relative; width: 112px; margin: 6px auto 12px; }
-  .cam { position: absolute; right: -2px; bottom: -2px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 3px var(--bg-raised); transition: transform var(--t-fast) var(--ease); }
-  .cam:active { transform: scale(0.9); }
-  .up { display: flex; justify-content: center; margin-bottom: 14px; }
-  .drop { display: block; margin: -6px auto 14px; padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
+  .up { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
+  .drop { padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
   .nick { flex-direction: row; align-items: center; }
   .x { flex: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--text-2); }
   .cap { margin: 18px 2px 8px; }

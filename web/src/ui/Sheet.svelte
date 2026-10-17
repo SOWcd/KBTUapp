@@ -14,8 +14,10 @@
   // title: what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it (settings)
   // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
   // Without one, text typed here and not sent asks before a hand closes it (owner, Oct 17: a pull lost a club's application).
-  type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', icon, tint = null, tall = false, children, footer, hold, onhold }: Props = $props();
+  // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above
+  // (my lanyard while I dress it, owner Oct 17)
+  type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; see?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
+  let { overlay, title = '', icon, tint = null, tall = false, see = false, children, footer, hold, onhold }: Props = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let panel: HTMLDivElement;
@@ -105,8 +107,8 @@
   });
 </script>
 
-<div class="scrim" bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
+<div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
+<div class="sheet glass glass-sheet" use:glass class:tall class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   <div class="grip" aria-hidden="true"></div>
   <div class="body scroll" bind:this={body}>{@render children()}</div>
@@ -125,6 +127,8 @@
     will-change: transform;
   }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
+  .scrim.clear { background: transparent; }
+  .see { max-height: 56%; }
   .tint {
     position: absolute; inset: 0 0 auto; height: 320px; pointer-events: none;
     background: linear-gradient(180deg, var(--tint), transparent);
