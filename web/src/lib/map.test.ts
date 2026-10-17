@@ -1,7 +1,7 @@
 // floorOf: a main-building room at the start of a place gives its floor; street addresses and other numbers never do.
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
-import { floorOf, nearRooms, roomOf } from './map';
+import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf } from './map';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -38,4 +38,17 @@ describe('nearRooms', () => {
     expect(nearRooms(floor, '445', 1).map(([k]) => k)).toEqual(['450']); // 436 is 9 below, 450 5 above, far apart: the nearer
     expect(nearRooms(floor, '470', 1)).toEqual([]);
   });
+});
+
+// the second building (owner, Oct 17): its 312 is not the main one's; it opens 2GIS with its own number
+it('the second building', () => {
+  const p = '312 (\u041a\u043e\u0440\u043f\u0443\u0441 \u21162, \u0443\u043b. \u0422\u043e\u043b\u0435 \u0431\u0438)'; // "312 (Korpus No2, Tole bi st.)"
+  expect(atBldg2(p)).toBe(true);
+  expect(roomOf(p)).toBe(null);
+  expect(floorOf(p)).toBe(null);
+  expect(bldg2Room(p)).toBe('312');
+  expect(atBldg2('2 \u043a\u043e\u0440\u043f\u0443\u0441, 105')).toBe(true);
+  expect(atBldg2('\u041a\u043e\u0440\u043f\u0443\u0441 \u211612')).toBe(false); // building 12 is another
+  expect(atBldg2('312')).toBe(false);
+  expect(roomOf('312')).toBe('312');
 });

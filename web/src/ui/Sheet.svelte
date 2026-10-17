@@ -7,10 +7,13 @@
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
+  import { sheets } from '../lib/state/sheets';
+  import { t } from '../lib/i18n/index.svelte';
   import { glass } from './glass';
 
   // title: what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it (settings)
-  // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first)
+  // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
+  // Without one, text typed here and not sent asks before a hand closes it (owner, Oct 17: a pull lost a club's application).
   type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
   let { overlay, title = '', icon, tint = null, tall = false, children, footer, hold, onhold }: Props = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
@@ -30,14 +33,27 @@
     a.onfinish = () => removeOverlay(overlay.id);
   }
 
+  // each text field's value when first focused: a changed one is unsent text (a sent draft is cleared, so it doesn't ask);
+  // a search field never counts
+  const was = new Map<HTMLInputElement | HTMLTextAreaElement, string>();
+  function focusin(e: FocusEvent) {
+    const el = e.target;
+    const text = el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && /^(text|url|email|tel|number|)$/.test(el.getAttribute('type') ?? '') && el.enterKeyHint !== 'search');
+    if (text && !was.has(el)) was.set(el, el.value);
+  }
+  const typed = () => !!overlay.byUser && [...was].some(([el, v]) => el.isConnected && el.value.trim() !== v.trim());
+  async function askLeave() {
+    if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) close(overlay.id);
+  }
+
   $effect(() => {
     if (!overlay.closing) return;
-    if (hold?.()) {
+    if (hold ? hold() : typed()) {
       overlay.closing = false;
       panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
       panel.style.transform = 'translate3d(0,0,0)';
       currentY = 0;
-      onhold?.();
+      (hold ? onhold : askLeave)?.();
       return;
     }
     leave(currentY);
@@ -73,7 +89,7 @@
     if (!dragging) return;
     dragging = false;
     if (!decided) return;
-    if (currentY > 120 || v > 0.6) { haptic.soft(); close(overlay.id); return; }
+    if (currentY > 120 || v > 0.6) { haptic.soft(); close(overlay.id, true); return; }
     panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
     panel.style.transform = 'translate3d(0,0,0)';
     currentY = 0;
@@ -84,11 +100,12 @@
     panel.addEventListener('touchmove', onMove, { passive: false });
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
+    panel.addEventListener('focusin', focusin);
     return hideChrome();
   });
 </script>
 
-<div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
+<div class="scrim" bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
 <div class="sheet glass glass-sheet" use:glass class:tall class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   <div class="grip" aria-hidden="true"></div>

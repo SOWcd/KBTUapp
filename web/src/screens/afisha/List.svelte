@@ -12,7 +12,7 @@
   import type { ClassItem, EventCard } from '../../lib/api';
   import EventRow from '../../ui/EventRow.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { floorOf, atDorm, DORM_2GIS } from '../../lib/map';
+  import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
   import { openLink } from '../../lib/tg';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -101,6 +101,7 @@
             {#if hours > 1}<span class="cl-x num">×{hours}</span>{/if}
             {#if skipped.has(it.key)}<span class="cl-no">{t('skip.tag')}</span>{/if}
             {#if floorOf(it.c.room) != null}<button class="cl-r on" onclick={() => sheets.map(it.c.room!)}><span class="ellipsis">{it.c.room}</span><MapIcon size={13} /></button>
+            {:else if atBldg2(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(BLDG2_2GIS)}><span class="ellipsis">{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</span><TwoGisMark size={14} /></button>
             {:else if atDorm(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(DORM_2GIS)}>{t('list.dorm')}<TwoGisMark size={14} /></button>
             {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
           </div>

@@ -323,6 +323,7 @@ const en: Dict = {
   'list.moreSoonText': "Clubs are only arriving in KBTU App. Follow yours: the bot writes as soon as there's something new.",
   'list.toClubs': "To clubs",
   'list.dorm': "Dorm",
+  'list.bldg2': "B2",
   'list.freeDay': 'Free day',
   'list.nothing': 'No events this day',
 

@@ -20,7 +20,7 @@
   $effect(() => { if (overlay.closing && !answered) { answered = true; done(false, ''); } });
 </script>
 
-<Sheet {overlay}>
+<Sheet {overlay} hold={() => false}><!-- a dialog: its few words never ask "leave?" over itself -->
   <h2 class="t-h3 q">{title}</h2>
   {#if text}<p class="t-body dim">{text}</p>{/if}
   {#if input}<label class="field say"><textarea bind:value={written} rows="3" maxlength={input.max} placeholder={input.placeholder}></textarea></label>{/if}

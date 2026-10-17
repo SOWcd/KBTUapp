@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { attach, openAt, routes, type Graph } from './route';
+import plan from '../../../server/kbtu/map_graph.json';
 
 // two floors: a corridor on each, the main stairs (g 1) at the left end, a backup-free side stairs (g 2) at the right, a lift (g 3)
 const g: Graph = { ver: 0, e: [[1, 2], [2, 3], [11, 12], [12, 13], [3, 4], [13, 14], [2, 5], [12, 15]], n: [
@@ -31,5 +32,13 @@ describe('routes', () => {
     expect(openAt(n, new Date(2026, 9, 18, 12, 0))).toBe(false); // Sunday
     expect(openAt(night, new Date(2026, 9, 15, 23, 30))).toBe(true);
     expect(openAt(night, new Date(2026, 9, 16, 6, 0))).toBe(true);
+  });
+  it('the nearest exit from 424 is down the central stairs and across the yard (owner, Oct 17)', () => {
+    const real = plan as unknown as Graph, ar = 2965 / 3307, p = { f: 4, u: 0.503, v: 0.4385 };
+    const a = { at: attach(real, p, ar, '424'), pt: p };
+    const exits = real.n.filter((x) => x.k === 'x' && !x.b).map((x) => ({ x, r: routes(real, ar, a, { at: [[x.id, 0]] })[0] }));
+    const best = exits.sort((p, q) => p.r.secs - q.r.secs)[0];
+    expect(best.x.id).toBe(414); // Kazybek bi, not Panfilov's by the east stairs
+    expect(best.r.via[0]).toBe(8);
   });
 });

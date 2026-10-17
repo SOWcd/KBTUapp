@@ -324,6 +324,7 @@ const ru = {
   'list.moreSoonText': "Клубы только приходят в KBTU App. Подпишись на свои — бот напишет, как только появится новое.",
   'list.toClubs': "К клубам",
   'list.dorm': "Общага",
+  'list.bldg2': "К2",
   'list.freeDay': 'Свободный день',
   'list.nothing': 'В этот день событий нет',
 

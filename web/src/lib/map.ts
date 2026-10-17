@@ -43,6 +43,7 @@ const HALLS: [RegExp, string][] = [[/\u043a\u0443\u043d\u0430\u0435\u0432|\u049b
  *  short number in an address ("12 mkr") never counts; a leading zero is dropped ("045" → "45"). */
 const BASEMENT = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)\.?\s*\u2116?\s*)?0?([1-9]\d?[a-g\u0430-\u0433]?)$/i;
 export function roomOf(place: string | null | undefined): string | null {
+  if (atBldg2(place)) return null; // "312" there is not the main building's 312
   const p = place?.trim() ?? '', m = p.match(ROOM), b = p.match(BASEMENT);
   if (m) return normRoom(m[1] + (m[2] ?? ''));
   if (b) return normRoom(b[1]);
@@ -60,6 +61,15 @@ export function floorOf(place: string | null | undefined): number | null {
  *  since Oct 7 the official card of KBTU's Dorm No. 3, the link he sent). The escapes are the Russian letters of DMiS. */
 export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
 export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
+
+/** KBTU's second building, away from the main one (owner, Oct 17): the portal writes "312 (Korpus No. 2 ...)". It has no
+ *  map here, so its rooms never open the main one; the schedule shows "312 · B2" that opens it in 2GIS (the link he sent).
+ *  The escape is "korpus", in Russian and Kazakh alike. */
+export const BLDG2_2GIS = 'https://2gis.kz/almaty/geo/70000001117579717/76.909355,43.253443';
+export const atBldg2 = (place: string | null | undefined): boolean =>
+  !!place && /(?:\u043a\u043e\u0440\u043f\u0443\u0441|building)\s*(?:\u2116|no\.?)?\s*2(?!\d)|(?<!\d)2\s*-?\s*\u043a\u043e\u0440\u043f\u0443\u0441/i.test(place);
+/** Its room as the schedule shows it: the number before the building ("312 (Korpus No. 2)" → "312"), or none */
+export const bldg2Room = (place: string): string | null => place.trim().match(/^\d+[^\s(,]*/)?.[0] ?? null;
 
 /** The main map's tiles: public/map/u1, next to index.html */
 export const TILES = `${import.meta.env.BASE_URL}map/u1/`;

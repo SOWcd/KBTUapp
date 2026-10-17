@@ -474,7 +474,7 @@
   .pin.end { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(59, 107, 255, 0.25); }
   .pin.me { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 15px; display: grid; place-items: center; background: var(--accent); color: #fff;
     font: 750 14px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 0 0 5px rgba(59, 107, 255, 0.28), 0 4px 12px rgba(0, 0, 0, 0.4); }
-  .pin.me-tag { transform: translate(-50%, calc(-100% - 22px)); }
+  .pin.tag.me-tag { transform: translate(-50%, calc(-100% - 26px)); } /* over the badge and its 5px ring; .pin.tag below used to win and sat it on the number (owner, Oct 17) */
   .pin.tag { transform: translate(-50%, calc(-100% - 8px)); padding: 4px 8px; border-radius: 9px; background: var(--text); color: var(--bg); font: 700 12px/1 var(--font-text); white-space: nowrap; }
   .pin.end-tag { transform: translate(-50%, calc(-100% - 14px)); background: var(--accent); color: #fff; }
   .pin.badge { transform: translate(-50%, -130%); padding: 3px 7px; border-radius: 9px; background: var(--accent); color: #fff; font: 700 12px/1 var(--font-text); }

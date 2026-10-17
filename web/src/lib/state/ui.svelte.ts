@@ -39,8 +39,9 @@ export function goTab(tab: Tab): void {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 /** `title`: what the capsule says while this overlay is on top (SPEC §8.2); '' = the one below speaks. `theme`: the
  *  capsule's then, when the overlay has one of its own (the map's switch; the dark QR and ticket). `icon`: a small mark
- *  before the title for a full-screen mode (owner, Oct 7: the QR, the map, the scanner, settings). */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any> }
+ *  before the title for a full-screen mode (owner, Oct 7: the QR, the map, the scanner, settings). `byUser`: the close came
+ *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any> }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
@@ -50,10 +51,10 @@ export function open<P extends Record<string, unknown>>(component: Component<P>,
   return id;
 }
 
-/** Ask the overlay to leave: it plays its exit animation, then calls removeOverlay(). */
-export function close(id?: number): void {
+/** Ask the overlay to leave: it plays its exit animation, then calls removeOverlay(). No id: the top one, by a hand. */
+export function close(id?: number, byUser = id == null): void {
   const o = id == null ? [...overlays].reverse().find((x) => !x.closing) : overlays.find((x) => x.id === id);
-  if (o) o.closing = true;
+  if (o) { o.byUser = byUser; o.closing = true; }
 }
 
 /** While any sheet or full-screen overlay is up the nav hides; the capsule stays above it, says the top overlay's

@@ -323,6 +323,7 @@ const kk: Dict = {
   'list.moreSoonText': "Клубтар KBTU App-қа енді келіп жатыр. Өз клубтарыңа жазыл — жаңасы шыққанда бот жазады.",
   'list.toClubs': "Клубтарға",
   'list.dorm': "Жатақхана",
+  'list.bldg2': "К2",
   'list.freeDay': 'Бос күн',
   'list.nothing': 'Бұл күні іс-шара жоқ',
 
