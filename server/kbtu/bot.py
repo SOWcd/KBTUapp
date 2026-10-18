@@ -16,6 +16,7 @@ import fcntl
 import logging
 import os
 import re
+import sqlite3
 import time
 from pathlib import Path
 
@@ -77,9 +78,11 @@ async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, fil
         return await (http.post(url, data=b, files=files) if files else http.post(url, json=b))
     r = await post(fancy)
     if fancy is not body and fancy[key] != body[key] and r.status_code == 400 and re.search(r"emoji|entit", str(r.json().get("description")), re.I):
-        log.warning("emoji pack refused: %s", str(r.json().get("description"))[:200])
-        _custom_re = None
+        why = str(r.json().get("description"))[:200]
         r = await post(body)
+        if r.status_code == 200:  # it was the emoji: the pack goes off (broken HTML fails plain too and leaves it on)
+            log.warning("emoji pack refused: %s", why)
+            _custom_re = None
     return r
 
 
@@ -307,6 +310,8 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
             r = (await http.post(f"{api}/deleteMessage", json={"chat_id": chat, "message_id": int(mid)})).json()
             if not r.get("ok"):
                 log.warning("channel delete %s/%s: %s", chat, mid, str(r.get("description"))[:200])
+                if r.get("error_code") != 400:  # a flood wait, Telegram down, no right yet: the next round tries again
+                    return
         con.execute("DELETE FROM meta WHERE key = ?", (f"channel_gone:{post}",))
     # no button under the post: Telegram hides the comments then (owner, Oct 17); an edit without one takes the old one off
     for e, text, cover, sig in logic.channel_due(con, cfg.bot_username):
@@ -344,8 +349,15 @@ def backup_day(cfg: Config, con) -> None:
     root = Path(cfg.db_path).resolve().parent / "backups"
     root.mkdir(exist_ok=True)
     out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
-    out.unlink(missing_ok=True)  # VACUUM INTO won't overwrite
-    con.execute("VACUUM INTO ?", (str(out),))
+    tmp = out.with_suffix(".tmp")  # a copy cut short (a full disk) never counts among the 14
+    tmp.unlink(missing_ok=True)  # VACUUM INTO won't overwrite
+    try:
+        con.execute("VACUUM INTO ?", (str(tmp),))
+    except sqlite3.Error as exc:
+        log.warning("backup failed: %s", exc)
+        tmp.unlink(missing_ok=True)
+        return
+    tmp.replace(out)
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)

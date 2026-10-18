@@ -64,7 +64,7 @@
       // receipts are the only record of money that changed hands: only the creator deletes such an event (owner,
       // Oct 18: say why, and a way to ask him, with the message already written)
       if (await sheets.ask({ title: t('studio.deletePaid'), text: t('studio.deletePaidText'), ok: t('studio.deletePaidAsk'), cancel: t('common.close') }))
-        openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e!.title }))}`);
+        openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
   }
     async function cancelEvent() {

@@ -90,7 +90,7 @@ export const haptic = {
 export function hapticTaps(): void {
   document.addEventListener('click', (e) => {
     const el = (e.target as Element | null)?.closest?.('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], label, summary');
-    if (!el || el.closest('[data-nohaptic]') || (el as HTMLButtonElement).disabled || performance.now() - felt < 120) return;
+    if (!el || el.closest('[data-nohaptic]') || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true' || performance.now() - felt < 120) return;
     haptic.tap();
   });
 }

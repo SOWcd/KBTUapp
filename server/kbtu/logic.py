@@ -2224,7 +2224,8 @@ def card_no(con, uid: int) -> None:
         WHERE id = ? AND card_no IS NULL AND is_founder = 0
         AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff') RETURNING card_no""", (uid,)).fetchone()
     if n:
-        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('card_last', ?)", (str(n[0]),))
+        con.execute("""INSERT INTO meta (key, value) VALUES ('card_last', ?)
+            ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))""", (str(n[0]),))
 
 
 def first_fifty(con, uid: int) -> None:
