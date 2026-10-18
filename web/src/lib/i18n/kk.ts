@@ -459,7 +459,7 @@ const kk: Dict = {
   'look.dropPhoto': "Менің фотомды жою",
   'look.photoGone': "Фото жойылды, Telegram фотосы қайтты",
   'look.dropNick': "Никті алып тастау",
-  'look.upload': "Фото жүктеу",
+  'look.other': "Басқа фото",
   'look.change': "Фотоны ауыстыру",
   'look.tg': "Telegram-дағы фото",
   'look.tgHint': "Telegram-да фотоны ауыстырсаң, мұнда да өзі жаңарады",

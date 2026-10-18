@@ -459,7 +459,7 @@ const en: Dict = {
   'look.dropPhoto': "Delete my photo",
   'look.photoGone': "Photo deleted: Telegram's is back",
   'look.dropNick': "Remove the nick",
-  'look.upload': "Upload a photo",
+  'look.other': "Other photo",
   'look.change': "Change photo",
   'look.tg': "Photo from Telegram",
   'look.tgHint': "Updates by itself when you change it in Telegram",

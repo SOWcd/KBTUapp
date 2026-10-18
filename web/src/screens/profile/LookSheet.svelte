@@ -64,14 +64,17 @@
 <!-- under my lanyard, which stays in sight above and changes as I pick (owner, Oct 17): so no big photo here -->
 <Sheet {overlay} see title={t('look.title')}>
   <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => upload(e.currentTarget.files?.[0])} />
-  <div class="up">
-    <Button kind="secondary" size="m" loading={busy === 'photo'} onclick={() => file?.click()}>{#snippet icon()}<Camera size={18} />{/snippet}{me.photo.own ? t('look.change') : t('look.upload')}</Button>
-    {#if me.photo.own}<button class="drop" disabled={!!busy} onclick={dropPhoto}>{t('look.dropPhoto')}</button>{/if}
+  <!-- one block (owner, Oct 18): a square "other photo" on the left (my own photo in it once I have one), the switch
+       on the right -->
+  <div class="photo">
+    <button class="sq" class:own={!!me.photo.own} class:busy={busy === 'photo'} disabled={!!busy} onclick={() => file?.click()} style={me.photo.own ? `background-image:url(${me.photo.own})` : ''}>
+      {#if !me.photo.own}<Camera size={22} />{/if}<i>{me.photo.own ? t('look.change') : t('look.other')}</i></button>
+    {#if me.photo.own}<button class="drop" disabled={!!busy} onclick={dropPhoto} aria-label={t('look.dropPhoto')}><X size={14} /></button>{/if}
+    <label class="switch">
+      <span><b>{t('look.tg')}</b><i class="t-foot">{t('look.tgHint')}</i></span>
+      <input type="checkbox" role="switch" checked={me.photo.telegram} disabled={!!busy} onchange={(e) => switchTg(e.currentTarget)} />
+    </label>
   </div>
-  <label class="switch">
-    <span><b>{t('look.tg')}</b><i class="t-foot">{t('look.tgHint')}</i></span>
-    <input type="checkbox" role="switch" checked={me.photo.telegram} disabled={!!busy} onchange={(e) => switchTg(e.currentTarget)} />
-  </label>
 
   {#if skins.length || me.founder}
     <h3 class="t-cap cap">{t('look.skin')}</h3>
@@ -102,8 +105,19 @@
 </Sheet>
 
 <style>
-  .up { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
-  .drop { padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
+  .photo { position: relative; display: flex; gap: 8px; margin: 4px 0 0; }
+  .photo .switch { flex: 1; min-width: 0; }
+  .sq { flex: none; width: 84px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border-radius: var(--r-m);
+    background: var(--surface-2) center / cover; color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
+  .sq:active { transform: scale(0.95); }
+  .sq i { font: 620 12px/1.15 var(--font-text); font-style: normal; text-align: center; padding: 0 4px; }
+  /* over my photo the caption sits on a dark strip at the bottom */
+  .sq.own { justify-content: flex-end; overflow: hidden; }
+  .sq.own i { width: 100%; padding: 5px 4px; background: rgba(0, 0, 0, 0.5); color: #fff; }
+  .sq.busy { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+  .drop { position: absolute; left: 66px; top: -6px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--danger); color: #fff; box-shadow: 0 0 0 2px var(--bg); }
   .nick { flex-direction: row; align-items: center; }
   .x { flex: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--text-2); }
   .cap { margin: 18px 2px 8px; }

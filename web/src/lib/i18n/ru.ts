@@ -460,7 +460,7 @@ const ru = {
   'look.dropPhoto': "Удалить моё фото",
   'look.photoGone': "Фото удалено, вернулось фото из Telegram",
   'look.dropNick': "Убрать ник",
-  'look.upload': "Загрузить фото",
+  'look.other': "Другое фото",
   'look.change': "Сменить фото",
   'look.tg': "Фото из Telegram",
   'look.tgHint': "Обновляется само, когда меняешь фото в Telegram",
