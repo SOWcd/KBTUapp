@@ -304,7 +304,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     return {**card(con, v, e), "description": e["description"], "payToName": e["pay_to_name"], "payPhone": e["pay_phone"], "meetingTag": e["meeting_tag"],
             "memo": json.loads(e["memo"]) if head and e["memo"] else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
-            "discuss": e["channel_link"],  # its post's comments in Telegram (owner, Oct 17: the talk is there, not here)
+            "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (owner, Oct 17: the talk is there)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],

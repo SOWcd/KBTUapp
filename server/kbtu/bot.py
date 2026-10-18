@@ -297,7 +297,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
         if e["channel_msg"]:  # the post is there: its words (and the cover, when it was posted with one) change
             how = "editMessageCaption" if e["channel_photo"] else "editMessageText"
             body = {"chat_id": cfg.events_channel, "message_id": e["channel_msg"], "parse_mode": "HTML",
-                    **({"caption": text} if e["channel_photo"] else {"text": text})}
+                    **({"caption": text} if e["channel_photo"] else {"text": text, "link_preview_options": {"is_disabled": True}})}
             r = (await http.post(f"{api}/{how}", json=body)).json()
             if not r.get("ok") and "not modified" not in str(r.get("description")):
                 log.warning("channel edit %d: %s", e["id"], str(r.get("description"))[:200])
@@ -495,9 +495,16 @@ async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> b
     channel = cfg.events_channel.lstrip("@").lower()
     if not channel or not msg.get("is_automatic_forward") or str((msg.get("sender_chat") or {}).get("username") or "").lower() != channel:
         return False
-    post = (msg.get("forward_origin") or {}).get("message_id") or msg.get("forward_from_message_id")
-    e = logic.channel_discussion(con, int(post or 0))
-    if not e:
+    post = int((msg.get("forward_origin") or {}).get("message_id") or msg.get("forward_from_message_id") or 0)
+    # the copy can come before post_channel, running beside us, has stored the post's id: give it a moment
+    # ponytail: a channel post that is no event's waits these 3 s too; a few a week
+    for wait in (0, 1, 2):
+        await asyncio.sleep(wait)
+        if e := logic.channel_discussion(con, post):
+            break
+        if one(con, "SELECT 1 FROM events WHERE channel_msg = ?", post):
+            return True  # commented already
+    else:
         return True
     keys = {"inline_keyboard": [[{"text": texts.CHANNEL_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{e['id']}"}]]}
     r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage", json={
