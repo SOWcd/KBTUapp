@@ -58,7 +58,14 @@
   async function removeEvent() {
     if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.deleteEvent(id); studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); }
-    catch (x) { haptic.error(); say(t(x instanceof ApiErr && x.message === 'paid' ? 'studio.deletePaid' : 'common.error'), 'pleading_face_3d'); }
+    catch (x) {
+      haptic.error();
+      if (!(x instanceof ApiErr && x.message === 'paid')) { say(t('common.error'), 'pleading_face_3d'); return; }
+      // receipts are the only record of money that changed hands: only the creator deletes such an event (owner,
+      // Oct 18: say why, and a way to ask him, with the message already written)
+      if (await sheets.ask({ title: t('studio.deletePaid'), text: t('studio.deletePaidText'), ok: t('studio.deletePaidAsk'), cancel: t('common.close') }))
+        openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e!.title }))}`);
+    }
   }
     async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;

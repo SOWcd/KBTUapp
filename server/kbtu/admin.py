@@ -109,6 +109,7 @@ def main(args: list[str]) -> None:
             con.execute("DELETE FROM achievement_grants WHERE user_id = ? AND code = 'first50'", (u["id"],))
             if no:
                 con.execute("UPDATE users SET card_no = card_no - 1 WHERE card_no > ?", (no,))
+                con.execute("UPDATE meta SET value = CAST(value AS INTEGER) - 1 WHERE key = 'card_last'")  # the counter moves down too
         print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} given back, the later ones moved down one")
     elif cmd == "stats":  # people are students only: staff aren't counted
         real = "user_id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')"

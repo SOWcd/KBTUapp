@@ -73,15 +73,27 @@ export const tg = {
   can,
 };
 
+let felt = 0; // when the last haptic fired: the app-wide tap below stays quiet when a handler already gave one
+const buzz = (fn: (h: NonNullable<WebApp['HapticFeedback']>) => void) => { felt = performance.now(); tgTry((w) => fn(w.HapticFeedback)); };
 export const haptic = {
-  tap: () => tgTry((w) => w.HapticFeedback.impactOccurred('light')),
-  soft: () => tgTry((w) => w.HapticFeedback.impactOccurred('soft')),
-  rigid: () => tgTry((w) => w.HapticFeedback.impactOccurred('rigid')),
-  select: () => tgTry((w) => w.HapticFeedback.selectionChanged()),
-  ok: () => tgTry((w) => w.HapticFeedback.notificationOccurred('success')),
-  warn: () => tgTry((w) => w.HapticFeedback.notificationOccurred('warning')),
-  error: () => tgTry((w) => w.HapticFeedback.notificationOccurred('error')),
+  tap: () => buzz((h) => h.impactOccurred('light')),
+  soft: () => buzz((h) => h.impactOccurred('soft')),
+  rigid: () => buzz((h) => h.impactOccurred('rigid')),
+  select: () => buzz((h) => h.selectionChanged()),
+  ok: () => buzz((h) => h.notificationOccurred('success')),
+  warn: () => buzz((h) => h.notificationOccurred('warning')),
+  error: () => buzz((h) => h.notificationOccurred('error')),
 };
+
+/** Every tap on something tappable is felt (owner, Oct 18: "the app should feel alive"), one listener instead of a
+ *  haptic in every handler; a handler's own haptic (ok, error, select...) wins, data-nohaptic opts a part out. */
+export function hapticTaps(): void {
+  document.addEventListener('click', (e) => {
+    const el = (e.target as Element | null)?.closest?.('button, a[href], [role="button"], [role="tab"], [role="switch"], [role="radio"], label, summary');
+    if (!el || el.closest('[data-nohaptic]') || (el as HTMLButtonElement).disabled || performance.now() - felt < 120) return;
+    haptic.tap();
+  });
+}
 
 /** Start-up: full screen, no swipe-to-close while scrolling, colours that match the theme. */
 export function boot(bg: string): void {

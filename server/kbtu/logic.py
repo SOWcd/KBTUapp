@@ -444,6 +444,11 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     return out
 
 
+def channel_gone(con) -> list[tuple[int, str]]:
+    """Channel posts of deleted events, still to delete: (the post's id, "chat_id message_id" of its discussion copy or "")."""
+    return [(int(k.split(":")[1]), v) for k, v in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'channel_gone:%'")]
+
+
 def channel_discussion(con, post: int) -> sqlite3.Row | None:
     """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
     and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
@@ -2213,8 +2218,13 @@ FIRST_N = 500  # cards 1-500; the code stays "first50": it was 50 until launch d
 def card_no(con, uid: int) -> None:
     """A student's number on the card (§4.4): the order of first KBTU sign-in, kept for good, so a deleted account never
     frees it. The Creator's card shows 00000 and takes no number, staff none at all: the numbers count students."""
-    con.execute("""UPDATE users SET card_no = (SELECT COALESCE(MAX(card_no), 0) + 1 FROM users) WHERE id = ? AND card_no IS NULL AND is_founder = 0
-        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')""", (uid,))
+    # the last number given lives in meta: MAX + 1 alone gave the last card's number again once its account was purged
+    n = con.execute("""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
+            (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last'))
+        WHERE id = ? AND card_no IS NULL AND is_founder = 0
+        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff') RETURNING card_no""", (uid,)).fetchone()
+    if n:
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('card_last', ?)", (str(n[0]),))
 
 
 def first_fifty(con, uid: int) -> None:
@@ -3057,8 +3067,14 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             WHERE r.event_id = ?""", eid)]
         pics = [r[0] for r in rows(con, """SELECT file_id FROM event_photos WHERE event_id = ?
             UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL""", eid, eid)]
+        post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
+        # its channel post goes too (owner, Oct 18: it stayed), with the copy in the discussion group: the bot's next
+        # round deletes them (bot.post_channel), the event's row is gone by then
+        thread = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"thread:{eid}")
+        if post and post[0]:
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{post[0]}", thread[0] if thread else ""))
         receipts = [p for f in paid for p in _drop_photo(con, f)]
         photos = [p for f in pics if not con.execute("""SELECT 1 FROM users WHERE avatar_file_id = :f UNION ALL SELECT 1 FROM orgs
             WHERE logo_file_id = :f UNION ALL SELECT 1 FROM events WHERE cover_file_id = :f UNION ALL SELECT 1 FROM receipts WHERE

@@ -37,24 +37,26 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
 # (Oct 14), loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
 # rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
-EMOJI_PACK = "AnimatedAsianEmoji"
+# the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks)
+EMOJI_PACKS = ("NewsEmoji", "AnimatedAsianEmoji")
 _custom: dict[str, str] = {}   # plain emoji (no variation selector) -> custom_emoji_id
 _custom_re: re.Pattern | None = None
 
 
 async def load_pack(cfg: Config, http: httpx.AsyncClient) -> None:
     global _custom_re
-    try:
-        answer = (await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getStickerSet", params={"name": EMOJI_PACK})).json()
-    except (httpx.HTTPError, ValueError) as exc:
-        log.warning("emoji pack: %s", type(exc).__name__)
-        return
-    stickers = (answer.get("result") or {}).get("stickers") or []
-    for st in stickers:  # the first sticker for an emoji wins
-        if st.get("custom_emoji_id") and st.get("emoji"):
-            _custom.setdefault(st["emoji"].replace("\ufe0f", ""), st["custom_emoji_id"])
+    for pack in EMOJI_PACKS:
+        try:
+            answer = (await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getStickerSet", params={"name": pack})).json()
+        except (httpx.HTTPError, ValueError) as exc:
+            log.warning("emoji pack %s: %s", pack, type(exc).__name__)
+            continue
+        stickers = (answer.get("result") or {}).get("stickers") or []
+        for st in stickers:  # the first sticker for an emoji wins
+            if st.get("custom_emoji_id") and st.get("emoji"):
+                _custom.setdefault(st["emoji"].replace("\ufe0f", ""), st["custom_emoji_id"])
+        log.warning("emoji pack %s: %d in all so far%s", pack, len(_custom), "" if answer.get("ok") else f" ({answer.get('description')})")
     _custom_re = re.compile("|".join(re.escape(e) + "\ufe0f?" for e in sorted(_custom, key=len, reverse=True))) if _custom else None
-    log.warning("emoji pack: %d of %s", len(_custom), EMOJI_PACK if answer.get("ok") else answer.get("description"))
 
 
 def premium(text: str) -> str:
@@ -64,16 +66,25 @@ def premium(text: str) -> str:
     return _custom_re.sub(lambda m: f'<tg-emoji emoji-id="{_custom[m.group(0).replace(chr(0xFE0F), "")]}">{m.group(0)}</tg-emoji>', text)
 
 
-async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Response:
-    """sendMessage with the pack's emoji; refused for them (400), once more plain, and the pack is off until a restart."""
+async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict | None = None) -> httpx.Response:
+    """A Telegram call whose text or caption (HTML) gets the pack's emoji (owner, Oct 18: everywhere the bot writes, the
+    channel and groups too); refused for them (400), once more plain, and the pack is off until a restart."""
     global _custom_re
-    fancy = premium(body["text"])
-    r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage", json={**body, "text": fancy})
-    if fancy != body["text"] and r.status_code == 400 and re.search(r"emoji|entit", str(r.json().get("description")), re.I):
+    url, key = f"https://api.telegram.org/bot{cfg.bot_token}/{method}", "caption" if "caption" in body else "text"
+    fancy = {**body, key: premium(body[key])} if body.get(key) and body.get("parse_mode") == "HTML" else body
+
+    async def post(b: dict) -> httpx.Response:
+        return await (http.post(url, data=b, files=files) if files else http.post(url, json=b))
+    r = await post(fancy)
+    if fancy is not body and fancy[key] != body[key] and r.status_code == 400 and re.search(r"emoji|entit", str(r.json().get("description")), re.I):
         log.warning("emoji pack refused: %s", str(r.json().get("description"))[:200])
         _custom_re = None
-        r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage", json=body)
+        r = await post(body)
     return r
+
+
+async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Response:
+    return await _tg(cfg, http, "sendMessage", body)
 
 
 def _render(con, m) -> tuple[str, str | None, str] | None:
@@ -291,6 +302,12 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
         return
     api = f"https://api.telegram.org/bot{cfg.bot_token}"
     root = Path(cfg.db_path).resolve().parent / "media"
+    for post, thread in logic.channel_gone(con):  # deleted events: their posts go (one Telegram refuses, e.g. too old,
+        for chat, mid in ((cfg.events_channel, post), *([thread.split()] if thread else [])):  # stays and is logged)
+            r = (await http.post(f"{api}/deleteMessage", json={"chat_id": chat, "message_id": int(mid)})).json()
+            if not r.get("ok"):
+                log.warning("channel delete %s/%s: %s", chat, mid, str(r.get("description"))[:200])
+        con.execute("DELETE FROM meta WHERE key = ?", (f"channel_gone:{post}",))
     # no button under the post: Telegram hides the comments then (owner, Oct 17); an edit without one takes the old one off
     for e, text, cover, sig in logic.channel_due(con, cfg.bot_username):
         jpg = root / f"{cover}.jpg" if cover else None
@@ -298,7 +315,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
             how = "editMessageCaption" if e["channel_photo"] else "editMessageText"
             body = {"chat_id": cfg.events_channel, "message_id": e["channel_msg"], "parse_mode": "HTML",
                     **({"caption": text} if e["channel_photo"] else {"text": text, "link_preview_options": {"is_disabled": True}})}
-            r = (await http.post(f"{api}/{how}", json=body)).json()
+            r = (await _tg(cfg, http, how, body)).json()
             if not r.get("ok") and "not modified" not in str(r.get("description")):
                 log.warning("channel edit %d: %s", e["id"], str(r.get("description"))[:200])
                 if "not found" not in str(r.get("description")):
@@ -306,16 +323,32 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
             con.execute("UPDATE events SET channel_sig = ? WHERE id = ?", (sig, e["id"]))
             continue
         if jpg and jpg.exists():
-            r = (await http.post(f"{api}/sendPhoto", data={"chat_id": cfg.events_channel, "caption": text, "parse_mode": "HTML"},
-                                 files={"photo": jpg.read_bytes()})).json()
+            r = (await _tg(cfg, http, "sendPhoto", {"chat_id": cfg.events_channel, "caption": text, "parse_mode": "HTML"},
+                           files={"photo": jpg.read_bytes()})).json()
         else:
-            r = (await http.post(f"{api}/sendMessage", json={"chat_id": cfg.events_channel, "text": text, "parse_mode": "HTML",
-                                                             "link_preview_options": {"is_disabled": True}})).json()
+            r = (await _tg(cfg, http, "sendMessage", {"chat_id": cfg.events_channel, "text": text, "parse_mode": "HTML",
+                                                      "link_preview_options": {"is_disabled": True}})).json()
         if not r.get("ok"):  # the bot isn't the channel's admin, or a flood wait: next round
             log.warning("channel post %d: %s", e["id"], str(r.get("description"))[:200])
             return
         con.execute("UPDATE events SET channel_msg = ?, channel_photo = ?, channel_sig = ? WHERE id = ?",
                     (r["result"]["message_id"], int(bool(jpg and jpg.exists())), sig, e["id"]))
+
+
+def backup_day(cfg: Config, con) -> None:
+    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (owner, Oct 18:
+    there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
+    local = int(time.time()) + 5 * 3600
+    if local % 86400 < 4 * 3600 or not logic._once(con, "backup_day", str(local // 86400)):
+        return
+    root = Path(cfg.db_path).resolve().parent / "backups"
+    root.mkdir(exist_ok=True)
+    out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
+    out.unlink(missing_ok=True)  # VACUUM INTO won't overwrite
+    con.execute("VACUUM INTO ?", (str(out),))
+    for old in sorted(root.glob("kbtu-*.db"))[:-14]:
+        old.unlink()
+    log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
@@ -327,6 +360,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
         casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
         purge(cfg, con)       # accounts whose week to change their mind ran out
+        backup_day(cfg, con)  # a nightly copy of the database, 14 kept
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
@@ -459,8 +493,7 @@ async def _picked(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
         return
     body = await _receipt(cfg, http, con, orig, int(data[3:]))
     if body:  # the question turns into the answer
-        await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageText",
-                        json={**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
+        await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
 
 async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
@@ -476,15 +509,15 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     e = logic.chat_claim(con, words[1][3:], int((msg.get("from") or {}).get("id") or 0), chat["id"])
     api = f"https://api.telegram.org/bot{cfg.bot_token}"
     if not e:
-        await http.post(f"{api}/sendMessage", json={"chat_id": chat["id"], "text": texts.CHAT_BAD})
+        await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_BAD, "parse_mode": "HTML"})
         return
     r = (await http.post(f"{api}/createChatInviteLink", json={"chat_id": chat["id"], "name": e["title"][:32], "creates_join_request": True})).json()
     if not r.get("ok"):  # the bot isn't an admin that may invite: say what to fix
         log.warning("chat link: %s", str(r.get("description"))[:200])
-        await http.post(f"{api}/sendMessage", json={"chat_id": chat["id"], "text": texts.CHAT_NO_RIGHTS})
+        await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_NO_RIGHTS, "parse_mode": "HTML"})
         return
     con.execute("UPDATE events SET chat_link = ? WHERE id = ?", (r["result"]["invite_link"], e["id"]))
-    await http.post(f"{api}/sendMessage", json={"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=e["title"])})
+    await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=html.escape(e["title"])), "parse_mode": "HTML"})
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
@@ -507,13 +540,15 @@ async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> b
     else:
         return True
     keys = {"inline_keyboard": [[{"text": texts.CHANNEL_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{e['id']}"}]]}
-    r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendMessage", json={
-        "chat_id": msg["chat"]["id"], "text": texts.CHANNEL_RULES, "reply_markup": keys,
+    r = (await _send(cfg, http, {
+        "chat_id": msg["chat"]["id"], "text": texts.CHANNEL_RULES, "parse_mode": "HTML", "reply_markup": keys,
         "reply_parameters": {"message_id": msg["message_id"]}})).json()
     if not r.get("ok"):
         log.warning("discussion %d: %s", e["id"], str(r.get("description"))[:200])
         return True
     con.execute("UPDATE events SET channel_link = ? WHERE id = ?", (f"https://t.me/{channel}/{e['channel_msg']}?comment={r['result']['message_id']}", e["id"]))
+    # where the post's copy sits in the group: deleting the event deletes it too (logic.delete_event)
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"thread:{e['id']}", f"{msg['chat']['id']} {msg['message_id']}"))
     return True
 
 

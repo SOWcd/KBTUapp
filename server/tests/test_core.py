@@ -2930,6 +2930,17 @@ def test_events_channel(env, monkeypatch):
     con.execute("UPDATE events SET comments_on = 1 WHERE id = ?", (e["id"],))
     c.post(f"/api/events/{e['id']}/cancel", headers=tma(20))
     assert logic.channel_due(con)[0][1].startswith("❌")
+    # deleting the cancelled event deletes its post and the post's copy in the group (owner, Oct 18: it stayed)
+    assert c.delete(f"/api/events/{e['id']}", headers=tma(20)).status_code == 204
+    assert logic.channel_gone(con) == [(7, "-100 70")]
+    sent.clear()
+
+    async def drop():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            await bot.post_channel(cfg2, http, con)
+    asyncio.run(drop())
+    gone = [(x["chat_id"], x["message_id"]) for x in sent if "text" not in x and "caption" not in x]
+    assert gone == [("@KBTUevents", 7), ("-100", 70)] and logic.channel_gone(con) == []
 
 
 def test_map_graph(env):
@@ -2953,3 +2964,54 @@ def test_exit_link(env):
     assert out["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp=exit")
     msg["text"] = "/start"
     assert bot._welcome(con, cfg, msg)["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp")
+
+
+def test_premium_emoji_everywhere(env, monkeypatch):
+    """The pack's emoji in every HTML text the bot sends, channel and groups too (owner, Oct 18); refused: once more plain."""
+    import httpx
+    _, cfg = env
+    monkeypatch.setattr(bot, "_custom", {"💬": "42"})
+    monkeypatch.setattr(bot, "_custom_re", re.compile("💬️?"))
+    got = []
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        b = json.loads(request.content)
+        got.append(b["text"])
+        return httpx.Response(400 if "tg-emoji" in b["text"] and len(got) > 2 else 200, json={"ok": False, "description": "custom emoji not allowed"})
+
+    async def go(body):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            return await bot._tg(cfg, http, "sendMessage", body)
+    asyncio.run(go({"chat_id": 1, "text": "💬 hi", "parse_mode": "HTML"}))
+    asyncio.run(go({"chat_id": 1, "text": "💬 plain"}))                         # no HTML: left as it is
+    assert got == ['<tg-emoji emoji-id="42">💬</tg-emoji> hi', "💬 plain"]
+    asyncio.run(go({"chat_id": 1, "text": "💬 again", "parse_mode": "HTML"}))    # refused: plain, and the pack goes off
+    assert got[2:] == ['<tg-emoji emoji-id="42">💬</tg-emoji> again', "💬 again"] and bot._custom_re is None
+
+
+def test_card_number_never_given_twice(env):
+    """Card numbers (owner, Oct 18): the last card's account purged, the next student still gets a new number."""
+    c, cfg = env
+    for tg in (31, 32):
+        login(c, tg, f"s{tg}")
+    con = db.connect(cfg.db_path)
+    no = dict(con.execute("SELECT tg_id, card_no FROM users WHERE tg_id IN (31, 32)").fetchall())
+    assert no[32] == no[31] + 1
+    con.execute("DELETE FROM users WHERE tg_id = 32")
+    login(c, 33, "s33")
+    assert con.execute("SELECT card_no FROM users WHERE tg_id = 33").fetchone()[0] == no[32] + 1
+
+
+def test_nightly_backup(env, monkeypatch):
+    """A copy of the database each night after 04:00 Almaty, once, the last 14 kept (owner, Oct 18: there were none)."""
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    day0 = 20000 * 86400 - 5 * 3600                                    # 00:00 Almaty
+    for d in range(16):
+        for hour in (3, 5, 6):                                         # before 04:00 nothing; after, once
+            monkeypatch.setattr(bot.time, "time", lambda: day0 + d * 86400 + hour * 3600)
+            bot.backup_day(cfg, con)
+    kept = sorted((Path(cfg.db_path).resolve().parent / "backups").glob("kbtu-*.db"))
+    assert len(kept) == 14 and kept[-1].name == "kbtu-2024-10-19.db"
+    copy = db.connect(str(kept[-1]))
+    assert copy.execute("SELECT COUNT(*) FROM users").fetchone()[0] == con.execute("SELECT COUNT(*) FROM users").fetchone()[0]

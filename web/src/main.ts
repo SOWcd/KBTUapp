@@ -3,7 +3,7 @@ import './ui/tokens.css';
 import './ui/base.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { boot, tg } from './lib/tg';
+import { boot, hapticTaps, tg } from './lib/tg';
 import { i18n } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
@@ -28,6 +28,7 @@ window.addEventListener('vite:preloadError', (e) => {
 // WebKit (every iPhone, Telegram's webview too) applies :active only when a touch listener sits on the element or above
 // it; without one, buttons outside the swipeable tabs and sheets didn't react to a press at all (owner, Oct 13).
 document.addEventListener('touchstart', () => {}, { passive: true });
+hapticTaps();
 
 mount(App, { target: document.getElementById('app')! });
 window.__kbStarted = true;
