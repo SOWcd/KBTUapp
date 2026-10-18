@@ -48,6 +48,9 @@ it('the second building', () => {
   expect(floorOf(p)).toBe(null);
   expect(bldg2Room(p)).toBe('312');
   expect(atBldg2('2 \u043a\u043e\u0440\u043f\u0443\u0441, 105')).toBe(true);
+  expect(bldg2Room('2 \u043a\u043e\u0440\u043f\u0443\u0441, 105')).toBe('105');            // the room, not the building's 2
+  expect(bldg2Room('\u041a\u043e\u0440\u043f\u0443\u0441 \u21162, 312')).toBe('312');
+  expect(bldg2Room('\u041a\u043e\u0440\u043f\u0443\u0441 \u21162, \u0443\u043b. \u0422\u043e\u043b\u0435 \u0431\u0438 59')).toBe(null); // a street's number is no room
   expect(atBldg2('\u041a\u043e\u0440\u043f\u0443\u0441 \u211612')).toBe(false); // building 12 is another
   expect(atBldg2('312')).toBe(false);
   expect(roomOf('312')).toBe('312');

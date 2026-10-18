@@ -2877,7 +2877,7 @@ def test_event_chat(env):
     assert c.get(f"/api/events/{e['id']}", headers=tma(22)).json()["chat"] is None
 
 
-def test_events_channel(env):
+def test_events_channel(env, monkeypatch):
     """The events channel (owner, Oct 15): a published public event is due once; an edit makes it due again; a cancel
     marks its post; a team-only one never goes."""
     c, cfg = env
@@ -2898,8 +2898,15 @@ def test_events_channel(env):
     c.patch(f"/api/events/{e['id']}", headers=tma(20), json={**ev, "place": "Hall"})
     assert "Hall" in logic.channel_due(con)[0][1]
     assert 'startapp=ev_%d">' % e["id"] in logic.channel_due(con, "KBTUappBot")[0][1]           # sign up: a link, not a button
-    con.execute("UPDATE events SET channel_msg = 7 WHERE id = ?", (e["id"],))
-    # Telegram's copy of post 7 in the discussion group: the bot comments the rules under it, the app links that comment
+    con.execute("UPDATE events SET channel_msg = NULL WHERE id = ?", (e["id"],))
+    # Telegram's copy of post 7 in the discussion group: the bot comments the rules under it, the app links that comment.
+    # The copy comes before post_channel has stored the post's id: the bot waits for it
+    real_sleep = asyncio.sleep
+
+    async def sleep(s):
+        con.execute("UPDATE events SET channel_msg = 7 WHERE id = ?", (e["id"],))
+        await real_sleep(0)
+    monkeypatch.setattr(bot.asyncio, "sleep", sleep)
     import httpx
     cfg2 = dataclasses.replace(cfg, events_channel="@KBTUevents")
     copy = {"message_id": 70, "chat": {"id": -100, "type": "supergroup"}, "is_automatic_forward": True,
@@ -2918,6 +2925,9 @@ def test_events_channel(env):
     asyncio.run(go())
     assert len(sent) == 1 and sent[0]["chat_id"] == -100 and sent[0]["reply_parameters"] == {"message_id": 70}  # once
     assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["discuss"] == "https://t.me/kbtuevents/7?comment=71"
+    con.execute("UPDATE events SET comments_on = 0 WHERE id = ?", (e["id"],))
+    assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["discuss"] is None              # comments off: no talk
+    con.execute("UPDATE events SET comments_on = 1 WHERE id = ?", (e["id"],))
     c.post(f"/api/events/{e['id']}/cancel", headers=tma(20))
     assert logic.channel_due(con)[0][1].startswith("❌")
 

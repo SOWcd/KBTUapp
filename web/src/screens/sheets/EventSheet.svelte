@@ -439,7 +439,9 @@
         <span class="tk"><b>{t('cm.titleEvent')}</b><i>{t('cm.inTelegram')}</i></span>
         <ArrowUpRight size={18} />
       </button>
-    {:else if detail && !preview && !cancelled && (detail.commentsOn || detail.comments)}
+    {/if}
+    <!-- what was asked here before the Telegram talk stays readable -->
+    {#if detail && !preview && !cancelled && ((detail.commentsOn && !detail.discuss) || detail.comments)}
       <button class="talk" onclick={() => (session.me?.student ? sheets.comments('event', id, e.title, (n) => { if (detail) detail = { ...detail, comments: n }; }) : sheets.login())}>
         <span class="fi"><MessageCircle size={18} /></span>
         <span class="tk"><b>{t('cm.titleEvent')}</b><i>{detail.comments ? tn('cm.count', detail.comments) : t('cm.askNudge')}</i></span>
