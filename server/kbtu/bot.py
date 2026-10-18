@@ -299,6 +299,12 @@ async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
                     (root / f"{old}{ext}").unlink(missing_ok=True)
 
 
+def _refused(r: dict) -> bool:
+    """Telegram refused this message for what it is (a caption too long, bad HTML), not for the channel (no rights, no
+    such chat) or the moment (flood wait): sending it again won't help, and it mustn't hold up the posts after it."""
+    return r.get("error_code") == 400 and not re.search(r"rights|chat not found|not a member|admin", str(r.get("description")), re.I)
+
+
 async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The events channel (logic.channel_due): a new post with the cover (or text without one), or the old one edited."""
     if not cfg.events_channel:
@@ -323,7 +329,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
             r = (await _tg(cfg, http, how, body)).json()
             if not r.get("ok") and "not modified" not in str(r.get("description")):
                 log.warning("channel edit %d: %s", e["id"], str(r.get("description"))[:200])
-                if "not found" not in str(r.get("description")):
+                if "not found" not in str(r.get("description")) and not _refused(r):
                     return  # try again next round
             con.execute("UPDATE events SET channel_sig = ? WHERE id = ?", (sig, e["id"]))
             continue
@@ -335,6 +341,9 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
                                                       "link_preview_options": {"is_disabled": True}})).json()
         if not r.get("ok"):  # the bot isn't the channel's admin, or a flood wait: next round
             log.warning("channel post %d: %s", e["id"], str(r.get("description"))[:200])
+            if _refused(r):  # this post itself can't go (too long...): skipped until the event changes, the rest go on
+                con.execute("UPDATE events SET channel_sig = ? WHERE id = ?", (sig, e["id"]))
+                continue
             return
         con.execute("UPDATE events SET channel_msg = ?, channel_photo = ?, channel_sig = ? WHERE id = ?",
                     (r["result"]["message_id"], int(bool(jpg and jpg.exists())), sig, e["id"]))

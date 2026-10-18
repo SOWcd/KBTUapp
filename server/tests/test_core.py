@@ -3015,3 +3015,38 @@ def test_nightly_backup(env, monkeypatch):
     assert len(kept) == 14 and kept[-1].name == "kbtu-2024-10-19.db"
     copy = db.connect(str(kept[-1]))
     assert copy.execute("SELECT COUNT(*) FROM users").fetchone()[0] == con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+
+
+def test_channel_refused_post_skipped(env):
+    """A post Telegram refuses for itself (a caption too long) is skipped, so the ones after it still go (review, Oct 18);
+    no rights stops the round instead, every post waits."""
+    import httpx
+    c, cfg = env
+    login(c, 20, "pres")
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], oid, "president", "test")
+    ev = {"place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
+    ids = [c.post(f"/api/orgs/{oid}/events", headers=tma(20), json={**ev, "title": t}).json()["id"] for t in ("Long", "Fine")]
+    for i in ids:
+        c.post(f"/api/events/{i}/publish", headers=tma(20))
+    con.execute("UPDATE events SET published_at = published_at - 60 WHERE id = ?", (ids[0],))  # Long goes first
+    cfg2 = dataclasses.replace(cfg, events_channel="@KBTUevents")
+    why = {"Long": "Bad Request: message is too long"}
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        text = json.loads(request.content)["text"]
+        for k, d in why.items():
+            if k in text:
+                return httpx.Response(400, json={"ok": False, "error_code": 400, "description": d})
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 9}})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            await bot.post_channel(cfg2, http, con)
+    why["Fine"] = "Bad Request: not enough rights to send text messages to the chat"
+    asyncio.run(go())
+    assert len(logic.channel_due(con, cfg.bot_username)) == 1           # no rights: Fine waits, Long was skipped
+    del why["Fine"]
+    asyncio.run(go())
+    assert logic.channel_due(con, cfg.bot_username) == [] and con.execute("SELECT channel_msg FROM events WHERE id = ?", (ids[1],)).fetchone()[0] == 9
