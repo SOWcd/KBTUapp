@@ -4,6 +4,11 @@ A Telegram Mini App for students of KBTU (Kazakh-British Technical University, A
 news, friends, the class timetable and a campus map. It runs at [@KBTUappBot](https://t.me/KBTUappBot).
 An unofficial student project, not a service of the university.
 
+## Author
+
+Made by Sukhrab Nurmatov (**SOWER**), a KBTU student. Questions, ideas, bugs or just hello:
+Telegram [@Sowers](https://t.me/Sowers) · GitHub [@SOWcd](https://github.com/SOWcd) · [sow.kz](https://sow.kz).
+
 ## The code is open, running a copy is not
 
 The source is published under the [Business Source License 1.1](LICENSE): **read it, fork it, run it locally
