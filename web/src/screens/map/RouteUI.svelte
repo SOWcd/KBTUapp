@@ -18,6 +18,7 @@
   import Shuffle from '@lucide/svelte/icons/shuffle';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import Delete from '@lucide/svelte/icons/delete';
+  import MapPin from '@lucide/svelte/icons/map-pin';
   import Undo from '@lucide/svelte/icons/undo-2';
   import Move from '@lucide/svelte/icons/move';
   import Trash from '@lucide/svelte/icons/trash';
@@ -42,6 +43,8 @@
   // our own keypad (owner, Oct 19: the keyboard must be there at once; iOS shows the system one only after a tap) and
   // the places without a number beside it: a button puts the place's name in, a digit after it starts a number again
   const spotName = (k: string) => t(`route.spot.${k}` as 'route.spot.canteen');
+  let spotsFor = $state<'from' | 'dest' | null>(null); // "from/to": the places without a number, under the field asked
+  function setSpot(k: string) { if (spotsFor === 'from') from = spotName(k); else dest = spotName(k); spotsFor = null; }
   function key(k: string) {
     const typed = spotOf(from) ? '' : from;
     from = k === 'del' ? typed.slice(0, -1) : typed.length < 4 ? typed + k : typed;
@@ -230,8 +233,13 @@
     <div class="top"><b>{t('route.title')}</b>
       {#if onedit}<button class="ed" onclick={() => { haptic.tap(); onedit(); }}><Pencil size={15} />{t('route.edit')}</button>{/if}
       <button onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
-    <label class="ft"><span class="dot"></span><input bind:value={from} placeholder={t('route.from')} enterkeyhint="next" autocomplete="off" /></label>
-    <label class="ft"><span class="dot end"></span><input bind:value={dest} placeholder={t('route.to')} enterkeyhint="go" autocomplete="off" /></label>
+    {#each [['from', 'route.from'], ['dest', 'route.to']] as const as [f, ph] (f)}
+      <div class="ft"><span class="dot" class:end={f === 'dest'}></span>
+        {#if f === 'from'}<input bind:value={from} placeholder={t(ph)} enterkeyhint="next" autocomplete="off" />
+        {:else}<input bind:value={dest} placeholder={t(ph)} enterkeyhint="go" autocomplete="off" />{/if}
+        <button type="button" class="pin" class:on={spotsFor === f} onclick={() => (spotsFor = spotsFor === f ? null : f)} aria-label={t('route.places')}><MapPin size={18} /></button></div>
+      {#if spotsFor === f}<div class="spots">{#each SPOTS as s (s.k)}<button type="button" onclick={() => setSpot(s.k)}>{spotName(s.k)}</button>{/each}</div>{/if}
+    {/each}
     <div class="opts">
       {#each options as o, i (i)}
         {@const Icon = ICON[o.route.mode]}
@@ -259,6 +267,8 @@
   .top button { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-2); }
   .ft { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 14px; padding: 0 12px; height: 44px; margin-top: 6px; }
   .ft input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--text); font: 600 16px/1 var(--font-text); }
+  .pin { flex: none; width: 34px; height: 34px; margin-right: -6px; border-radius: 10px; display: grid; place-items: center; color: var(--text-3); }
+  .pin.on { color: var(--accent-text); background: var(--accent-soft); }
   .ft input::placeholder { color: var(--text-3); font-weight: 500; }
   .dot { width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--accent); flex: none; }
   .dot.end { background: var(--accent); }
