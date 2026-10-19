@@ -2928,3 +2928,51 @@ def test_manual_sign_in(env, monkeypatch):
     assert me["student"]["manual"] is False and me["no"] is not None
     for gone in ("/api/kbtu/login", "/api/kbtu/status"):                                  # the password sign-in is gone
         assert c.post(gone, headers=tma(21), json={"login": "a", "password": "b"}).status_code in (404, 405)
+
+
+def test_offsite_backup(env, monkeypatch):
+    """The off-site copy (PLAN item 22): SigV4 as AWS's own example signs it; after the night's copy, it and the receipts
+    go up once (Sundays the media too), a failure is tried again an hour later, never while one is running."""
+    from kbtu import offsite
+    auth = offsite.sign("GET", "https://examplebucket.s3.amazonaws.com/test.txt",
+                        {"range": "bytes=0-9", "x-amz-content-sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                         "x-amz-date": "20130524T000000Z"}, "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", "20130524T000000Z")
+    assert auth.endswith("Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41")
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    sent, fail = [], [True]
+    def up(paths, name, work):
+        if fail[0]:
+            raise RuntimeError("R2 503")
+        sent.append((name, [p.name for p in paths]))
+        return 1024
+    monkeypatch.setattr(offsite, "ready", lambda: True)
+    monkeypatch.setattr(offsite, "upload", up)
+    sunday = 20002 * 86400                                              # 05:00 Almaty, Sunday 2024-10-06
+    clock = [sunday]
+    monkeypatch.setattr(bot.time, "time", lambda: clock[0])
+    monkeypatch.setattr(logic, "now", lambda: clock[0])
+    monkeypatch.setattr(bot, "now", lambda: clock[0])
+    jobs = []
+    class Loop:
+        def create_task(self, coro):
+            coro.close()
+            return None
+    monkeypatch.setattr(bot.asyncio, "get_running_loop", lambda: Loop())
+    monkeypatch.setattr(bot.asyncio, "to_thread", lambda fn, *a: (jobs.append(a), fn(*a), _noop())[2])
+    bot.backup_day(cfg, con)
+    bot.offsite_round(cfg, con)                                         # the first try fails
+    assert sent == [] and len(jobs) == 1
+    fail[0] = False
+    bot.offsite_round(cfg, con)                                         # within the hour: not again
+    assert len(jobs) == 1
+    clock[0] += 3600
+    bot.offsite_round(cfg, con)
+    assert [n.split("/")[0] for n, _ in sent] == ["db", "media"] and sent[0][1] == ["kbtu-2024-10-06.db", "receipts"]
+    clock[0] += 3600
+    bot.offsite_round(cfg, con)                                         # done for the day
+    assert len(sent) == 2
+
+
+async def _noop():
+    return None

@@ -14,8 +14,9 @@ FROM python:3.14-slim
 # curl isn't for the app but for Coolify's healthcheck: the slim image has no curl or wget, and without one
 # the container reads as unhealthy and the deploy rolls back. Tesseract reads Kaspi receipts (server/kbtu/receipt.py):
 # Debian's rus and kaz models are the "fast" ones the reading was tested with (Oct 11). ffmpeg compresses event videos
-# (server/kbtu/video.py; Debian's build has x264 and zimg for the HDR tone mapping)
-RUN apt-get update && apt-get install -y --no-install-recommends curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg \
+# (server/kbtu/video.py; Debian's build has x264 and zimg for the HDR tone mapping). age encrypts the off-site backups
+# (server/kbtu/offsite.py)
+RUN apt-get update && apt-get install -y --no-install-recommends curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server
 COPY server/requirements.txt ./

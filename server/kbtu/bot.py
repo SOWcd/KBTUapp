@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import casting, db, logic, media, receipt, texts, video
+from . import casting, db, logic, media, offsite, receipt, texts, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -372,6 +372,47 @@ def backup_day(cfg: Config, con) -> None:
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
+_offsite: asyncio.Task | None = None  # the upload running in its thread; one at a time
+
+
+def offsite_round(cfg: Config, con) -> None:
+    """After the nightly copy (backup_day): it and the receipts to R2, on Sundays the media too (offsite.py). In a thread,
+    so the postman isn't held; a day counts only after R2's 200, tried again hourly until then. Each object is named
+    with its time: the bucket's lock refuses to overwrite one that a lost answer left behind."""
+    global _offsite
+    if not offsite.ready() or (_offsite and not _offsite.done()):
+        return
+    local = int(time.time()) + 5 * 3600
+    if local % 86400 < 4 * 3600:
+        return
+    date, home = time.strftime("%Y-%m-%d", time.gmtime(local)), Path(cfg.db_path).resolve().parent
+    stamp, done = time.strftime("%Y-%m-%d-%H%M", time.gmtime(local)), lambda key: one(con, "SELECT 1 FROM meta WHERE key = ? AND value = ?", key, date)
+    copy = home / "backups" / f"kbtu-{date}.db"
+    jobs = [("offsite_db", [copy, home / "receipts"], f"db/{stamp}.tar.age")] if copy.exists() and not done("offsite_db") else []
+    if time.gmtime(local).tm_wday == 6 and not done("offsite_media"):
+        jobs.append(("offsite_media", [home / "media"], f"media/{stamp}.tar.age"))
+    last = one(con, "SELECT value FROM meta WHERE key = 'offsite_try'")
+    if not jobs or (last and now() - int(last["value"]) < 3600):
+        return
+    con.execute("INSERT INTO meta (key, value) VALUES ('offsite_try', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(now()),))
+    _offsite = asyncio.get_running_loop().create_task(asyncio.to_thread(_offsite_run, cfg.db_path, home, date, jobs))
+
+
+def _offsite_run(db_path: str, home: Path, date: str, jobs: list) -> None:
+    for key, paths, name in jobs:
+        try:
+            size = offsite.upload(paths, name, home)
+        except Exception as exc:  # a failed night is tried again in an hour; the log shows why
+            log.warning("offsite %s failed: %s", name, exc)
+            return
+        con = db.connect(db_path)
+        try:
+            con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, date))
+        finally:
+            con.close()
+        log.warning("offsite: %s, %d KB", name, size // 1024)
+
+
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
     con = db.connect(cfg.db_path)
     try:
@@ -382,6 +423,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
         purge(cfg, con)       # accounts whose week to change their mind ran out
         backup_day(cfg, con)  # a nightly copy of the database, 14 kept
+        offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
