@@ -616,7 +616,8 @@ def me(con, v: Viewer) -> dict:
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
     own = one(con, "SELECT path FROM files WHERE id = ?", u["avatar_file_id"]) if u["avatar_file_id"] else None
     # signed in while the previous version still ran (a deploy); staff (kbtu.admin staff) take none: it's the students' order
-    if s and u["card_no"] is None and not u["is_founder"] and s["consent_version"] != "staff":
+    # typed in by hand: no number (nor First 500) until the KBTU account is confirmed (owner, Oct 19)
+    if s and u["card_no"] is None and not u["is_founder"] and s["consent_version"] != "staff" and not s["manual"]:
         first_fifty(con, v.id)  # the number and, with it, "First 500"
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
@@ -625,7 +626,7 @@ def me(con, v: Viewer) -> dict:
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": u["tg_photo_url"], "own": f"media/{own['path']}.t.webp" if own else None},
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "email": s["email"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
-                    "manual": bool(s["manual"])} if s else None,  # typed in while the portal was down: asks for a real sign-in
+                    "manual": bool(s["manual"])} if s else None,  # typed in by the student, not confirmed yet
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -806,7 +807,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         for t in ("students", "schedule_classes", "org_members", "join_requests", "club_applications", "subscriptions",
                   "registrations", "saved_events", "post_reactions", "post_reads", "friend_links", "achievement_grants",
                   "achievement_levels", "chat_opens", "bot_outbox", "event_ratings", "member_tags", "strikes", "removal_requests", "comment_reads",
-                  "login_fails", "org_history"):  # org_history after org_members: its trigger closes the rows first
+                  "org_history"):  # org_history after org_members: its trigger closes the rows first
             con.execute(f"DELETE FROM {t} WHERE user_id = ?", (v.id,))
         for t, c in (("strikes", "by_id"), ("strikes", "cleared_by"), ("removal_requests", "by_id"), ("removal_requests", "decided_by"), ("org_bans", "by_id")):
             con.execute(f"UPDATE {t} SET {c} = NULL WHERE {c} = ?", (v.id,))
@@ -2222,7 +2223,7 @@ def card_no(con, uid: int) -> None:
     n = con.execute("""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
             (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last'))
         WHERE id = ? AND card_no IS NULL AND is_founder = 0
-        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff') RETURNING card_no""", (uid,)).fetchone()
+        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff' OR manual = 1) RETURNING card_no""", (uid,)).fetchone()
     if n:
         con.execute("""INSERT INTO meta (key, value) VALUES ('card_last', ?)
             ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))""", (str(n[0]),))

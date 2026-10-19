@@ -1,4 +1,4 @@
-"""The core loop through the HTTP layer: sign in with KBTU (the portal is faked), a president creates and publishes an
+"""The core loop through the HTTP layer: a KBTU student (written into the database), a president creates and publishes an
 event, students register, the waitlist moves, the door scans tickets. Run from server/: .venv/bin/pytest -q"""
 from __future__ import annotations
 
@@ -10,12 +10,13 @@ import os
 import re
 import shutil
 import time
+import types
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import casting, app as server, auth, bot, config, db, logic, media, portal, receipt, texts, video
+from kbtu import casting, app as server, auth, bot, config, db, logic, media, receipt, texts, video
 
 BOT = "123:test"
 
@@ -45,38 +46,31 @@ def env(tmp_path, monkeypatch):
     (dist / "map" / "u1" / "o.webp").write_bytes(b"RIFF")
     cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=str(tmp_path / "t.db"), web_dist=str(dist), background=False, seed=False)
 
-    async def sign_in(login, password):  # login "ali" + password "right" → a portal account "ali"
-        if password != "right":
-            raise portal.BadCredentials()
-        return portal.Tokens("access-" + login, "refresh-" + login)
-
-    async def sign_out(refresh):
-        signed_out.append(refresh)
-        return True
-
-    async def profile(access, lang="ru"):
-        login = access.removeprefix("access-")
-        return portal.Profile(student_id="24B" + login, first_name=login.title(), last_name="Testov", middle_name=None,
-                              email=None, phone=None, course=2, school="SITE", program=None)
-
-    async def schedule(access, lang="ru"):
-        return [portal.Lesson(1, "09:00", "09:50", "Calculus", "MATH101", "lecture", "305", None)]
-
-    signed_out = []  # every KBTU session the server ended (the client carries it: c.signed_out)
-    monkeypatch.setattr(portal, "sign_in", sign_in)
-    monkeypatch.setattr(portal, "sign_out", sign_out)
-    monkeypatch.setattr(portal, "profile", profile)
-    monkeypatch.setattr(portal, "schedule", schedule)
-    monkeypatch.setattr(portal, "reachable", lambda: asyncio.sleep(0, True))  # up: test_manual_sign_in turns it off
     monkeypatch.setattr(logic, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
+    DB[:] = [cfg.db_path]
     client = TestClient(server.create(cfg))
-    client.signed_out = signed_out
     return client, cfg
 
 
+DB: list[str] = []  # the env's database (login() writes students straight into it)
+
+
 def login(c, uid: int, name: str):
-    r = c.post("/api/kbtu/login", headers=tma(uid, name.title()), json={"login": name, "password": "right", "consentVersion": "1"})
+    """A confirmed KBTU student "<name>": student ID 24B<name>, <Name> Testov, year 2, SITE, a Monday Calculus class.
+    Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19)."""
+    me = c.get("/api/me", headers=tma(uid, name.title())).json()
+    con = db.connect(DB[0])
+    with db.tx(con):
+        con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, school, consent_version, consent_at,
+                verified_at, synced_at) VALUES (?, ?, ?, 'Testov', 2, 'SITE', '1', ?, ?, ?)
+            ON CONFLICT (user_id) DO UPDATE SET student_id = excluded.student_id, first_name = excluded.first_name, manual = 0""",
+                    (me["id"], "24B" + name, name.title(), *[logic.now()] * 3))
+        logic.save_schedule(con, me["id"], [types.SimpleNamespace(weekday=1, begins="09:00", ends="09:50", subject="Calculus",
+                                                                  code="MATH101", kind="lecture", room="305", teacher=None)])
+        logic.first_fifty(con, me["id"])
+    con.close()
+    r = c.get("/api/me", headers=tma(uid))
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -91,7 +85,6 @@ def test_core_loop(env):
     assert me["student"]["studentId"] == "24Bali" and me["name"] == "Ali T."
     assert c.get("/api/me/schedule", headers=tma(10)).json()[0]["subject"] == "Calculus"
     con = db.connect(cfg.db_path)
-    assert c.signed_out == ["refresh-ali"]                          # the KBTU session ended within the request
 
     # a president (set by hand for the pilot) creates and publishes an event with one seat
     pres = login(c, 20, "pres")
@@ -136,15 +129,6 @@ def test_core_loop(env):
 def test_sign_in_rules(env, monkeypatch, capsys):
     c, cfg = env
     login(c, 10, "ali")
-    # one KBTU account ↔ one Telegram account; the bound one hears about the attempt
-    r = c.post("/api/kbtu/login", headers=tma(11), json={"login": "ali", "password": "right", "consentVersion": "1"})
-    assert r.status_code == 409 and r.json()["message"] == "linked"
-    con = db.connect(cfg.db_path)
-    assert con.execute("SELECT 1 FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE u.tg_id = 10 AND b.kind = 'link_attempt'").fetchone()
-    # and a bound Telegram takes only its own KBTU account: someone else's login on this phone changes nothing (owner, Oct 6)
-    r = c.post("/api/kbtu/login", headers=tma(10), json={"login": "bek", "password": "right", "consentVersion": "1"})
-    assert r.status_code == 409 and r.json()["message"] == "other_student"
-    assert c.get("/api/me", headers=tma(10)).json()["student"]["studentId"] == "24Bali"
     # a changed student ID: the admin unlinks it by hand, then the next sign-in links afresh
     from kbtu import admin
     monkeypatch.setattr(config, "load", lambda: cfg)
@@ -172,17 +156,7 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     assert nos() == [1, None, 2]
     login(c, 14, "it")
     assert nos() == [1, None, 2]
-    # the hand-made stand-in (13) gets a KBTU login later: the first real sign-in makes a student with the next card,
-    # the same account (owner, Oct 14: staff accounts are temporary until their logins come)
-    sid13 = c.get("/api/me", headers=tma(13)).json()["id"]
-    real = login(c, 13, "late")
-    assert real["id"] == sid13 and real["no"] == 3 and real["student"]["studentId"] != f"staff{sid13}"
-    # five wrong passwords, then a pause
-    wrong = lambda: c.post("/api/kbtu/login", headers=tma(12), json={"login": "x", "password": "nope", "consentVersion": "1"})
-    assert [wrong().status_code for _ in range(6)] == [400] * 5 + [429]
-    # a malformed body never comes back in the answer (it may hold a password)
-    r = c.post("/api/kbtu/login", headers=tma(12), json=["secret-password"])
-    assert r.status_code == 400 and "secret" not in r.text
+
 
 
 def test_frontend(env):
@@ -286,48 +260,14 @@ def test_postman(env, monkeypatch):
     assert len(sent) == 1
 
 
-def test_portal_schedule_skips_sunday(monkeypatch):
-    import asyncio
-    async def fake_get(access, path, lang):
-        cls = lambda week, subject: {"weekId": week, "beginTime": "14:00:00", "endTime": "15:00:00", "semesterSubjectName": subject, "room": "UniX"}
-        return {"scheduleHidden": False, "schedules": [cls(1, "Calculus"), cls(7, "Computer Architecture")]}
-    monkeypatch.setattr(portal, "_get", fake_get)
-    assert [x.subject for x in asyncio.run(portal.schedule("token"))] == ["Calculus"]
 
 
-def test_portal_schedule_three_languages(monkeypatch):
-    """Oct 11 (the owner switched the app to English, his classes stayed Russian): the subjects come in ru, kk and en,
-    from one answer when the portal gives all three, else from two more asks; a failed ask leaves what came."""
-    import asyncio
-    said = {"ru": "Base", "kk": "Negiz", "en": "Basics"}
-    def answer(name):
-        return {"scheduleHidden": False, "schedules": [{"weekId": 1, "beginTime": "09:00:00", "endTime": "10:00:00", "semesterSubjectName": name,
-                                                        "subjectCode": "CS101", "room": "305"}]}
-    async def plain(access, path, lang):
-        if lang == "kk":
-            raise portal.PortalError("down")
-        return answer(said[lang])
-    monkeypatch.setattr(portal, "_get", plain)
-    assert asyncio.run(portal.schedule("token", "ru"))[0].names == {"ru": "Base", "en": "Basics"}
-    async def localized(access, path, lang):
-        return answer(dict(said))
-    monkeypatch.setattr(portal, "_get", localized)
-    assert asyncio.run(portal.schedule("token", "en"))[0].names == said
 
 
 def test_workers_share_state(env):
-    """Several worker processes are several apps over one database file: the wrong-password limit (§4.1) counts across
-    them, and the "To calendar" link's key comes from the env, so a link signed by one opens on another."""
-    c, cfg = env
-    other = TestClient(server.create(cfg))                                      # a second worker: same env, same file
-    A = tma(80, "Ali")
-    try_login = lambda client, pw: client.post("/api/kbtu/login", headers=A, json={"login": "ali", "password": pw, "consentVersion": "1"}).json()
-    for client in (c, other, c, other, c):
-        assert try_login(client, "nope")["message"] == "credentials"
-    assert try_login(other, "right")["error"] == "rate_limited"
-    con = db.connect(cfg.db_path)
-    con.execute("UPDATE login_fails SET at = at - 15 * 60")                     # the window passes
-    assert try_login(other, "right")["student"]["studentId"] == "24Bali"
+    """Several worker processes are several apps over one database file: the "To calendar" link's key comes from the
+    env, so a link signed by one opens on another."""
+    _, cfg = env
     key = logic.ICS_KEY
     server.create(cfg)
     assert logic.ICS_KEY == key
@@ -335,33 +275,6 @@ def test_workers_share_state(env):
     assert logic.ICS_KEY != key
 
 
-def test_portal_session_signs_out(monkeypatch):
-    """The real sign-out: when the block ends, even by an error, Keycloak's logout gets the session's refresh token."""
-    import urllib.parse
-    import httpx
-    seen = []
-
-    def keycloak(r):
-        seen.append((r.url.path, dict(urllib.parse.parse_qsl(r.content.decode()))))
-        return httpx.Response(204)
-
-    async def sign_in(login, password):
-        return portal.Tokens("acc", "ref")
-
-    async def block():
-        async with portal.session("ali", "pw") as access:
-            assert access == "acc"
-            raise portal.PortalError("profile")
-    monkeypatch.setattr(portal, "_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(keycloak)))
-    monkeypatch.setattr(portal, "sign_in", sign_in)
-    with pytest.raises(portal.PortalError):
-        asyncio.run(block())
-    assert seen == [("/realms/uninet/protocol/openid-connect/logout", {"client_id": "uninet-frontend", "refresh_token": "ref"})]
-
-    def down(r):
-        raise httpx.ConnectError("down")
-    monkeypatch.setattr(portal, "_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(down)))
-    assert asyncio.run(portal.sign_out("ref")) is False
 
 
 def test_photos(env):
@@ -584,29 +497,6 @@ def test_legal_pages(env):
     assert 'href="privacy?lang=en"' in c.get("/terms?lang=en").text and c.get("/privacy?lang=xx").text.count('lang="ru"') == 1
 
 
-def test_manual_sign_in(env, monkeypatch):
-    """While the portal is out of reach (owner, Oct 16), a student types their name, ID and year in; marked manual, the
-    first real sign-in replaces it, and the real owner of a typed-in ID takes it back."""
-    c, _ = env
-    login(c, 20, "ali")  # a real one: "24Bali"
-    body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": "1"}
-    manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)
-    assert manual(21).json()["message"] == "portal_up"                                   # works: no typing then
-    monkeypatch.setattr(portal, "reachable", lambda: asyncio.sleep(0, False))
-    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"course": 9}, {"consentVersion": ""}):
-        assert manual(21, {**body, **bad}).status_code == 400
-    me = manual(21).json()["student"]
-    assert (me["studentId"], me["firstName"], me["course"], me["manual"]) == ("24B031234", "\u041c\u0430\u0433\u0430", 2, True)
-    assert manual(21, {**body, "course": 3}).json()["student"]["course"] == 3             # a typo fixed
-    assert manual(22, body).json()["message"] == "linked"                                 # someone else's ID
-    assert manual(20, body).json()["message"] == "verified"                               # signed in for real already
-    # the real owner of 24B031234 signs in: the ID is theirs, the typed-in one keeps an unchecked self
-    r = c.post("/api/kbtu/login", headers=tma(23), json={"login": "031234", "password": "right", "consentVersion": "1"})
-    assert r.status_code == 200 and r.json()["student"]["studentId"] == "24B031234"
-    assert c.get("/api/me", headers=tma(21)).json()["student"]["studentId"] == "self" + str(c.get("/api/me", headers=tma(21)).json()["id"])
-    # and the manual one's own first real sign-in replaces everything
-    me = c.post("/api/kbtu/login", headers=tma(21), json={"login": "magaa", "password": "right", "consentVersion": "1"}).json()["student"]
-    assert (me["studentId"], me["firstName"], me["manual"]) == ("24Bmagaa", "Magaa", False)
 
 
 def test_admin_clubs(env):
@@ -618,8 +508,7 @@ def test_admin_clubs(env):
     who = lambda uid, first, username: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": first, "username": username}, BOT)}
     A, P = who(20, "Owner", "owner"), who(21, "Pres", "pres_kbtu")
     c.get("/api/me", headers=A)
-    r = c.post("/api/kbtu/login", headers=P, json={"login": "pres", "password": "right", "consentVersion": "1"})
-    assert r.status_code == 200
+    login(c, 21, "pres")
     assert c.get("/api/admin/orgs", headers=P).status_code == 403
     assert c.post("/api/admin/orgs", headers=P, json={"name": "Chess", "short": "C", "emoji": "trophy_3d"}).status_code == 403
     assert c.post("/api/admin/orgs", headers=A, json={"name": "X", "short": "X", "emoji": "trophy_3d"}).status_code == 400
@@ -1674,28 +1563,6 @@ def test_club_profile(env):
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'org_edit'").fetchone()[0] == 3
 
 
-def test_kbtu_session_never_kept(env, monkeypatch):
-    """SPEC §4.1: the KBTU session ends within the request, also when reading the portal fails; signing in again is
-    the schedule's "Refresh". Nothing of the session is kept: there is no table for it."""
-    c, cfg = env
-    A = tma(61, "Ali")
-    login(c, 61, "ali")
-
-    async def week(access, lang="ru"):
-        return [portal.Lesson(2, "10:00", "10:50", "Physics", "PHYS101", "lecture", "251", None)]
-    monkeypatch.setattr(portal, "schedule", week)
-    login(c, 61, "ali")                                                          # "Refresh" = sign in again
-    assert [x["subject"] for x in c.get("/api/me/schedule", headers=A).json()] == ["Physics"]
-    assert c.signed_out == ["refresh-ali", "refresh-ali"]
-
-    async def broken(access, lang="ru"):
-        raise portal.PortalError("HTTP 500")
-    monkeypatch.setattr(portal, "profile", broken)
-    assert c.post("/api/kbtu/login", headers=A, json={"login": "ali", "password": "right", "consentVersion": "1"}).json()["message"] == "portal"
-    assert len(c.signed_out) == 3                                                # ended even though nothing was read
-    assert c.post("/api/kbtu/sync", headers=A).status_code in (404, 405)
-    con = db.connect(cfg.db_path)
-    assert not con.execute("SELECT 1 FROM sqlite_master WHERE name = 'portal_sessions'").fetchone()
 
 
 def test_meetings(env):
@@ -1899,21 +1766,6 @@ def test_add_seats(env):
     assert e["seats"] == 2 and [st(zhan["id"]), st(dana["id"])] == ["going", "waitlist"]          # in order
 
 
-def test_portal_profile_live_keys(monkeypatch, caplog):
-    """The portal's student profile with the key names it answered with on Oct 5 (values made up): the program is
-    specialityName, there is no school, the course comes from the entrance year, and nothing is logged."""
-    raw = {"code": "24B000001", "firstName": "Test", "lastName": "Testov", "firstNameEn": "Test", "lastNameEn": "Testov",
-           "email": "t_testov@kbtu.kz", "phone": None, "entranceYearValue": 2024, "specialityName": "Computer Systems and Software",
-           "levelName": "Bachelor", "categoryName": "", "creditTypeName": "", "educationTypeName": "", "hasPhoto": False, "id": 1,
-           "iin": "000000000000", "locked": False, "login": "t_testov", "resident": True, "sexName": "", "statusName": ""}
-
-    async def get(access, path, lang):
-        return raw
-    monkeypatch.setattr(portal, "_get", get)
-    with caplog.at_level(logging.WARNING, logger="kbtu.portal"):
-        p = asyncio.run(portal.profile("a.b.c"))
-    assert (p.student_id, p.program, p.school) == ("24B000001", "Computer Systems and Software", None)
-    assert p.course is not None and p.course >= 1 and not caplog.records
 
 
 def test_paid_events(env):
@@ -3050,3 +2902,24 @@ def test_channel_refused_post_skipped(env):
     del why["Fine"]
     asyncio.run(go())
     assert logic.channel_due(con, cfg.bot_username) == [] and con.execute("SELECT channel_msg FROM events WHERE id = ?", (ids[1],)).fetchone()[0] == 9
+
+
+
+
+def test_manual_sign_in(env):
+    """The only sign-in since Oct 19 (KBTU blocked the portal-password one, now gone): a student types their name,
+    student ID and year; marked manual, no card number nor First 500 until the KBTU account is confirmed."""
+    c, _ = env
+    login(c, 20, "ali")  # confirmed: "24Bali"
+    body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": "1"}
+    manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)
+    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"course": 9}, {"consentVersion": ""}):
+        assert manual(21, {**body, **bad}).status_code == 400
+    me = manual(21).json()
+    assert (me["student"]["studentId"], me["student"]["firstName"], me["student"]["course"], me["student"]["manual"]) == ("24B031234", "\u041c\u0430\u0433\u0430", 2, True)
+    assert me["no"] is None                                                               # no number until confirmed
+    assert manual(21, {**body, "course": 3}).json()["student"]["course"] == 3             # a typo fixed
+    assert manual(22, body).json()["message"] == "linked"                                 # someone else's ID
+    assert manual(20, body).json()["message"] == "verified"                               # confirmed already
+    for gone in ("/api/kbtu/login", "/api/kbtu/status"):                                  # the password sign-in is gone
+        assert c.post(gone, headers=tma(21), json={"login": "a", "password": "b"}).status_code in (404, 405)

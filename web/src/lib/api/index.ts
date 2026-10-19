@@ -11,8 +11,6 @@ export { ApiErr } from './errors';
 
 export interface Api {
   me(): Promise<Me>;
-  login(login: string, password: string, consentVersion: string): Promise<Me>;
-  kbtuStatus(): Promise<{ portal: boolean }>;  // is the portal answering us (owner, Oct 16: KBTU blocked our sign-in)
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
   updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null }): Promise<Me>;
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off

@@ -74,10 +74,6 @@
       <Button kind="primary" size="l" full onclick={() => sheets.login()}>{t('guest.button')}</Button>
     </section>
   {/if}
-  {#if me?.student?.manual}
-    <!-- signed in by hand while the portal was down (owner, Oct 16): the way to a real sign-in, always in sight -->
-    <button class="verify surface" onclick={() => { haptic.tap(); sheets.login(); }}><span class="tx"><b>{t('me.verify')}</b><i class="t-foot">{t('me.verifyNote')}</i></span><ChevronRight size={18} /></button>
-  {/if}
   {#if me?.deleteAt}
     <!-- the week to change my mind (DeleteSheet), with the way back -->
     <div class="soon surface"><span>{t('del.soon', { date: dayMonth(me.deleteAt) })}</span>
@@ -146,8 +142,4 @@
   .gear.in { top: calc(var(--top) + 70px); right: calc(var(--gutter) + 14px); background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
   .cnt { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12.5px/22px var(--font-text); text-align: center; }
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
-  .verify { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; margin-bottom: 12px; border-radius: var(--r-l); text-align: left; box-shadow: inset 0 0 0 1.5px var(--warning); }
-  .verify .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-  .verify b { font: 650 16px/1.25 var(--font-text); }
-  .verify i { font-style: normal; }
 </style>

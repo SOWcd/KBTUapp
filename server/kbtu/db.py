@@ -384,6 +384,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;"""),
     # an event's talk lives under its channel post in Telegram (owner, Oct 17): the link to the bot's first comment there
     (48, "ALTER TABLE events ADD COLUMN channel_link TEXT;"),
+    # the KBTU-password sign-in is gone (owner, Oct 19): its wrong-password counter with it
+    (49, "DROP TABLE IF EXISTS login_fails;"),
 ]
 
 

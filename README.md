@@ -24,8 +24,8 @@ This is "source-available", not open source in the OSI sense. Third-party materi
 - One Docker image (`Dockerfile`) serves both.
 
 What the app stores and who sees it: the privacy policy at [kbtu.sow.kz/privacy](https://kbtu.sow.kz/privacy)
-(the texts are in `server/kbtu/i18n/legal/`). The KBTU portal password is never stored: it is used once to sign in
-and read the profile (`server/kbtu/portal.py`).
+(the texts are in `server/kbtu/i18n/legal/`). The app never asks for the KBTU portal password: students type their
+name, student ID and year, marked unconfirmed until the KBTU account is confirmed.
 
 ## Running it locally
 

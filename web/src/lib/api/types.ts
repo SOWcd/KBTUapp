@@ -128,7 +128,7 @@ export interface StudentProfile {
   school: string | null;
   program: string | null;
   syncedAt: Ts;
-  manual: boolean; // typed in while the portal was down: a real sign-in replaces it
+  manual: boolean; // typed in by the student, not confirmed yet (no card number until it is)
 }
 
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */

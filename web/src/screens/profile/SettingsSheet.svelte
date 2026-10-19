@@ -18,7 +18,7 @@
   const s = $derived(session.me?.settings);
 
   const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
-  // what comes from the portal first: the sign-in sheet's "What we store" opens this (§4.1 consent)
+  // what we keep about a student first: the sign-in sheet's "What we store" opens this (§4.1 consent)
   const SEES = [['set.portal', 'set.portalText'], ['set.allSee', 'set.allSeeText'], ['set.orgSee', 'set.orgSeeText'],
     ['set.teamSee', 'set.teamSeeText'], ['set.youSee', 'set.youSeeText'], ['set.never', 'set.neverText']] as const;
 

@@ -65,8 +65,6 @@ async function uploadVideo(file: Blob, progress: (done: number) => void): Promis
 
 export const server: Api = {
   me: () => call('GET', '/me'),
-  login: (login, password, consentVersion) => call('POST', '/kbtu/login', { login, password, consentVersion }),
-  kbtuStatus: () => call('GET', '/kbtu/status'),
   manualLogin: (i, consentVersion) => call('POST', '/kbtu/manual', { ...i, consentVersion }),
   updateMe: (patch) => call('PATCH', '/me', patch),
   uploadMyPhoto: (file) => call('POST', '/me/photo', file),

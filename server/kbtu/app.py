@@ -4,7 +4,7 @@ cards, and the built frontend with an SPA fallback.
 Run from server/:  .venv/bin/uvicorn kbtu.app:create --factory --port 8080
 Routes cover what the frontend's Api interface calls (web/src/lib/api/index.ts); the rest of SPEC §6 comes
 with the screens that need it. Handlers that only touch SQLite are plain functions (FastAPI runs them in its
-thread pool); the two that wait on the network (KBTU portal, Telegram) are async."""
+thread pool); those that wait on the network (Telegram) are async."""
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +29,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, portal, psych, receipt, texts, video
+from . import auth, bot, casting, config, db, logic, media, psych, receipt, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -37,8 +37,7 @@ log = logging.getLogger("kbtu.app")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
-LOGIN_FAILS, LOGIN_WINDOW = 5, 15 * 60   # wrong KBTU passwords per Telegram account (SPEC §4.1)
-# typed in by hand while the portal is down: a name in any alphabet (hyphen, apostrophe, space), and a student ID like
+# typed in by the student (the KBTU-password sign-in is gone since Oct 19): a name in any alphabet (hyphen, apostrophe, space), and a student ID like
 # 24B031234 (year, a letter or two for the degree, the number)
 NAME = re.compile(r"[^\W\d_](?:[^\W\d_]|[-' ]){0,39}")
 STUDENT_ID = re.compile(r"\d{2}[A-Z]{1,2}\d{5,7}")
@@ -89,11 +88,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
-
-    def failed(con, uid: int) -> None:
-        t = logic.now()
-        con.execute("DELETE FROM login_fails WHERE at < ?", (t - LOGIN_WINDOW,))
-        con.execute("INSERT INTO login_fails (user_id, at) VALUES (?, ?)", (uid, t))
 
     # ------------------------------------------------------------ errors
 
@@ -163,34 +157,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def patch_me(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.update_me(con, v, body)
 
-    async def portal_check(con, v: Viewer, login: str, password: str, schedule: bool = False):
-        """The KBTU login and password against the portal (sign-in, and again to delete the account): attempts per
-        person are limited, and the password lives only in this call — never logged, never stored, never echoed.
-        (profile, the week's classes or None); the portal session is over before this returns (SPEC §4.1)."""
-        login = login.strip()
-        if not login or not password or len(login) > 64 or len(password) > 256:
-            raise ApiError("bad_input")
-        if logic.one(con, "SELECT COUNT(*) FROM login_fails WHERE user_id = ? AND at > ?", v.id, logic.now() - LOGIN_WINDOW)[0] >= LOGIN_FAILS:
-            raise ApiError("rate_limited")
-        lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0]
-        try:
-            async with portal.session(login, password) as access:
-                prof, lessons = await portal.profile(access, lang), None
-                if schedule:
-                    try:
-                        lessons = await portal.schedule(access, lang)
-                    except portal.PortalError as exc:  # the profile is enough to sign in; the schedule comes with the next one
-                        log.warning("KBTU schedule: %s", exc)
-            return prof, lessons
-        except portal.BadCredentials:
-            failed(con, v.id)
-            raise ApiError("bad_input", "credentials") from None
-        except portal.TwoFactor:
-            raise ApiError("forbidden", "two_factor") from None
-        except portal.PortalError as exc:
-            log.warning("KBTU sign-in failed: %s", exc)
-            raise ApiError("unavailable", "portal") from None
-
     @app.post("/api/me/delete")
     def ask_delete(con=Depends(conn), v: Viewer = Depends(viewer)):
         """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
@@ -226,66 +192,17 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_set_role(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.admin_set_role(con, v, oid, body)
 
-    @app.post("/api/kbtu/login")
-    async def kbtu_login(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        """SPEC §4.1, also the schedule's "Refresh" (a verified student signs in again). The password lives only in
-        this call: never logged, never stored, never echoed; nothing of the portal session outlives it."""
-        consent = str(body.get("consentVersion") or "")
-        if not consent or len(consent) > 16:
-            raise ApiError("bad_input")
-        prof, lessons = await portal_check(con, v, str(body.get("login") or ""), str(body.get("password") or ""), schedule=True)
-        # one KBTU account ↔ one Telegram account: the bound one is told, the admin moves it by hand. Typed in by hand
-        # (manual) is only a word: the real owner's sign-in takes the ID back, the other keeps their unchecked self
-        other = logic.one(con, "SELECT user_id, manual FROM students WHERE student_id = ?", prof.student_id)
-        if other and other[0] != v.id and other[1]:
-            con.execute("UPDATE students SET student_id = ? WHERE user_id = ?", (f"self{other[0]}", other[0]))
-            other = None
-        if other and other[0] != v.id:
-            logic.notify(con, other[0], "link_attempt", f"link:{v.id}:{logic.now() // LOGIN_WINDOW}")
-            raise ApiError("conflict", "linked")
-        now = logic.now()
-        with db.tx(con):
-            # and this way too: signing in again (the timetable's Refresh) takes only the KBTU account this Telegram is
-            # bound to, so someone else's login on this phone changes nothing (owner, Oct 6: a friend signed in on his
-            # phone and the friend's name and timetable replaced his). A changed student ID: `kbtu.admin unlink`.
-            mine = logic.one(con, "SELECT student_id, manual FROM students WHERE user_id = ?", v.id)
-            # a stand-in made by hand (`kbtu.admin staff <who> <first> <last>`, student ID "staff<id>") for someone without
-            # a KBTU login yet becomes a student on their first real sign-in, clubs and roles kept (owner, Oct 14)
-            stand_in = bool(mine and (mine[0].startswith("staff") or mine[1]))  # or typed in while the portal was down
-            if mine and mine[0] != prof.student_id and not stand_in:
-                raise ApiError("conflict", "other_student")
-            con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, middle_name, email, phone, course, school, program,
-                    consent_version, consent_at, verified_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (user_id) DO UPDATE SET student_id = excluded.student_id, first_name = excluded.first_name, last_name = excluded.last_name,
-                    middle_name = excluded.middle_name, email = excluded.email, phone = excluded.phone, course = excluded.course, school = excluded.school,
-                    program = excluded.program, manual = 0,  -- a student made staff (kbtu.admin staff <who>) stays staff: no card back
-                    consent_version = CASE WHEN students.consent_version = 'staff' AND students.student_id NOT LIKE 'staff%' THEN 'staff'
-                        ELSE excluded.consent_version END, consent_at = excluded.consent_at, synced_at = excluded.synced_at""",
-                        (v.id, prof.student_id, prof.first_name, prof.last_name, prof.middle_name, prof.email, prof.phone, prof.course, prof.school,
-                         prof.program, consent, now, now, now))
-            if lessons is not None:
-                logic.save_schedule(con, v.id, lessons)
-            logic.first_fifty(con, v.id)
-        return logic.me(con, Viewer(v.id, v.role, True))
-
-    @app.get("/api/kbtu/status")
-    async def kbtu_status(_: Viewer = Depends(viewer)):
-        """Is the portal answering us? While it isn't, the sign-in sheet offers typing the data in (owner, Oct 16)."""
-        return {"portal": await portal.reachable()}
-
     @app.post("/api/kbtu/manual")
-    async def kbtu_manual(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        """Sign in by typing one's name, student ID and year, only while the portal is out of reach (owner, Oct 16: people
-        want in now). Marked manual: the first real sign-in replaces it all with the portal's data, roles and clubs kept,
-        and a real owner of the same student ID takes it back (kbtu_login). Again while still manual: fixes a typo."""
+    def kbtu_manual(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        """Sign in by typing one's name, student ID and year (owner, Oct 19: KBTU blocked the portal-password sign-in and
+        it is gone for good). Marked manual: no card number nor First 500 until the KBTU account is confirmed (PLAN
+        item 25). Again while still manual: fixes a typo."""
         consent = str(body.get("consentVersion") or "")
         first, last = (" ".join(str(body.get(k) or "").split()) for k in ("firstName", "lastName"))
         sid, course = str(body.get("studentId") or "").strip().upper(), body.get("course")
         if not (consent and len(consent) <= 16 and all(NAME.fullmatch(x) for x in (first, last)) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
             raise ApiError("bad_input")
-        if await portal.reachable():
-            raise ApiError("conflict", "portal_up")  # the real sign-in works: no unchecked data then
         mine = logic.one(con, "SELECT manual FROM students WHERE user_id = ?", v.id)
         if mine and not mine[0]:
             raise ApiError("conflict", "verified")  # signed in for real already: nothing to type

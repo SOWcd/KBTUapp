@@ -9,7 +9,6 @@
   import Trash from '@lucide/svelte/icons/trash-2';
   import Settings2 from '@lucide/svelte/icons/settings';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import CalendarSync from '@lucide/svelte/icons/calendar-sync';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
@@ -20,7 +19,6 @@
   import { t, i18n, setLang, LANGS, LANG_NAMES } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
-  import { ago } from '../../lib/time';
   import { haptic, openLink, tg } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
 
@@ -68,9 +66,6 @@
 
     {#if me?.student}
       <div class="rows">
-        <!-- "Refresh" (§4.11) is signing in again: the app keeps no KBTU session to pull it with (§4.1) -->
-        <button class="r" onclick={() => sheets.login()}><span class="ic"><RefreshCw size={20} /></span>
-          <span class="lb">{t('me.schedule')}<i class="sub">{t('me.syncedAgo', { ago: ago(me.student.syncedAt) })}</i></span><ChevronRight size={18} /></button>
         <button class="r" onclick={subscribe}><span class="ic"><CalendarSync size={20} /></span><span class="lb">{t('me.calendar')}</span><ChevronRight size={18} /></button>
         <button class="r" onclick={() => sheets.settings('privacy')}><span class="ic"><Lock size={20} /></span><span class="lb">{t('me.privacy')}</span><ChevronRight size={18} /></button>
       </div>
