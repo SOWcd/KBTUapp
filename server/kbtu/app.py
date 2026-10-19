@@ -1202,38 +1202,66 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
 
 
-MS_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KBTU App</title><style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;font:500 17px/1.4 -apple-system,system-ui,sans-serif;color:#fff;
- background:radial-gradient(70% 45% at 0% 0%,rgba(138,92,255,.55),transparent 60%),linear-gradient(165deg,#2B4CD0,#1A2A7A 50%,#0C1230)}
-main{width:min(360px,calc(100% - 32px));text-align:center}img{width:84px;height:84px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-p{margin:22px 0 26px}a{display:block;padding:16px;border-radius:16px;background:#fff;color:#1A2A7A;font-weight:700;text-decoration:none}
-a[hidden],button[hidden]{display:none}button{display:block;width:100%;margin:0 0 12px;padding:16px;border:0;border-radius:16px;
- background:#34c77b;color:#fff;font:700 17px/1.2 inherit}.spin{width:28px;height:28px;margin:0 auto;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:s 1s linear infinite}
-@keyframes s{to{transform:rotate(1turn)}}</style></head><body><main><img src="/apple-touch-icon.png" alt="">
-<p id="m"></p><div class="spin" id="w"></div><button id="y" hidden></button><a id="b" hidden href="https://t.me/__BOT__?startapp=ms"></a></main><script>
+MS_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101633"><title>KBTU App</title><style>
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;color:#fff;
+ font:500 16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+ background:radial-gradient(90% 55% at 15% 0%,rgba(124,77,255,.55),transparent 60%),radial-gradient(70% 45% at 100% 100%,rgba(59,200,255,.18),transparent 60%),
+ linear-gradient(165deg,#2443B8,#16205a 55%,#0b1029)}
+.card{width:100%;max-width:380px;padding:28px 22px 22px;border-radius:30px;text-align:center;background:rgba(255,255,255,.08);
+ -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.25),inset 0 0 0 1px rgba(255,255,255,.1),0 30px 60px -20px rgba(0,0,0,.6)}
+.icon{position:relative;width:76px;height:76px;margin:0 auto 18px}
+.icon img{width:76px;height:76px;border-radius:21px;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+.badge{position:absolute;right:-8px;bottom:-8px;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+ box-shadow:0 0 0 4px #1b2566;font:800 18px/1 system-ui}
+.badge.ok{background:#2FBF71}.badge.bad{background:#E5484D}.badge[hidden]{display:none}
+h1{font:750 26px/1.15 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,sans-serif;letter-spacing:-.02em;margin-bottom:8px}
+p{color:rgba(255,255,255,.78);margin-bottom:22px}
+p b{color:#fff;font-weight:650}
+.btn{display:block;width:100%;height:54px;border:0;border-radius:16px;font:650 17px/54px -apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;
+ text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s}
+.btn:active{transform:scale(.97)}
+.main{color:#fff;background:radial-gradient(120% 90% at 30% 0%,#7f9dff,#3B6BFF 55%,#2448d8);box-shadow:0 10px 24px -8px rgba(59,107,255,.8),inset 0 1px 0 rgba(255,255,255,.5)}
+.ghost{margin-top:8px;color:rgba(255,255,255,.75);background:none}
+.btn[hidden]{display:none}
+.spin{width:30px;height:30px;margin:4px auto 6px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s .9s linear infinite}
+.spin[hidden]{display:none}@keyframes s{to{transform:rotate(1turn)}}
+</style></head><body><main class="card">
+<div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
+<h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
+<button class="btn main" id="yes" hidden></button><button class="btn ghost" id="no" hidden></button>
+<a class="btn ghost" id="open" hidden href="tg://"></a></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
-const m = document.getElementById("m"), b = document.getElementById("b");
-m.textContent = L.wait; b.textContent = L.back;
+const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
-function done(text) { m.textContent = text; document.getElementById("w").remove(); b.hidden = false; }
+function show([h, t], mark) { $("h").textContent = h; $("t").textContent = t; $("w").hidden = !!mark || mark === "";
+  if (mark) { $("badge").textContent = mark === "ok" ? "\u2713" : "!"; $("badge").className = "badge " + mark; $("badge").hidden = false; } }
+function end(state, mark) { show(L[state], mark); $("yes").hidden = $("no").hidden = true; $("open").textContent = L.open; $("open").hidden = false; }
+show(L.wait);
 (async () => {
   const code = q.get("code"), state = q.get("state");
-  if (!code || !state) return done(L.fail);
+  if (!code || !state) return end("fail", "bad");
   const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : null);
-  if (!v) return done(L.fail);
+  if (!v) return end("fail", "bad");
   const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
-  if (!tok.access_token) return done(L.fail);
+  if (!tok.access_token) return end("fail", "bad");
   // whose Telegram this goes to, asked first: a sign-in link someone else sent must not tie your account to them
-  document.getElementById("w").hidden = true;
-  m.textContent = L.ask.replace("{name}", v.tg + (v.username ? " (@" + v.username + ")" : ""));
-  const y = document.getElementById("y"); y.textContent = L.yes; y.hidden = false; b.hidden = false;
-  await new Promise((ok) => (y.onclick = ok));
-  y.remove(); b.hidden = true; document.getElementById("w").hidden = false; m.textContent = L.wait;
+  const who = v.tg + (v.username ? " (@" + v.username + ")" : "");
+  show([L.ask[0], L.ask[1].replace("{name}", who)], "");
+  $("yes").textContent = L.yes; $("no").textContent = L.no; $("yes").hidden = $("no").hidden = false;
+  const go = await new Promise((ok) => { $("yes").onclick = () => ok(true); $("no").onclick = () => ok(false); });
+  $("yes").hidden = $("no").hidden = true;
+  if (!go) return end("nope", "");
+  show(L.wait);
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
-  done(r.ok ? (j.student ? L.ok : L.okNew) : j.message === "linked" ? L.linked : j.message === "other_ms" ? L.otherMs : L.fail);
-})().catch(() => done(L.fail));
+  // back to Telegram by itself: "tg://" only switches to the app, the Mini App left open there is still open
+  // (owner, Oct 20: a t.me link opened it anew)
+  if (r.ok) { end(j.student ? "ok" : "okNew", "ok"); setTimeout(() => { location.href = "tg://"; }, 900); return; }
+  end(j.message === "linked" ? "linked" : j.message === "other_ms" ? "otherMs" : "fail", "bad");
+})().catch(() => end("fail", "bad"));
 </script></body></html>"""

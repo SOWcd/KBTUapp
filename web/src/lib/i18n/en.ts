@@ -847,6 +847,8 @@ const en: Dict = {
   'me.qrHint': "Show it: it opens your profile in KBTU App",
   'me.myData': "My student details",
   'me.msSub': "Confirm your KBTU account with Microsoft",
+  'me.msTitle': "Confirm your KBTU account",
+  'me.msText': "One Microsoft sign-in and your profile is the real thing",
   'me.myDataSub': "Not confirmed · confirm with Microsoft",
   'me.notifications': "Notifications",
   'me.calendar': "My events in the calendar",

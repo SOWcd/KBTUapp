@@ -847,6 +847,8 @@ const kk: Dict = {
   'me.qrHint': "Көрсет — ол арқылы KBTU App-та профилің ашылады",
   'me.myData': "Студенттік деректерім",
   'me.msSub': "ҚБТУ аккаунтын Microsoft арқылы раста",
+  'me.msTitle': "ҚБТУ аккаунтын раста",
+  'me.msText': "Microsoft арқылы бір кіру — профиль нақты болады",
   'me.myDataSub': "Расталмаған · Microsoft арқылы раста",
   'me.notifications': "Хабарландырулар",
   'me.calendar': "Іс-шараларым күнтізбеде",

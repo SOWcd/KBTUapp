@@ -74,6 +74,12 @@
       <Button kind="primary" size="l" full onclick={() => sheets.login()}>{t('guest.button')}</Button>
     </section>
   {/if}
+  {#if me?.student && !me.student.ms}
+    <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings (owner, Oct 20) -->
+    <button class="confirm surface" onclick={() => { haptic.tap(); sheets.login(); }}>
+      <svg viewBox="0 0 21 21" width="26" height="26" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
+      <span class="lb">{t('me.msTitle')}<i class="sub">{t('me.msText')}</i></span><ChevronRight size={18} /></button>
+  {/if}
   {#if me?.deleteAt}
     <!-- the week to change my mind (DeleteSheet), with the way back -->
     <div class="soon surface"><span>{t('del.soon', { date: dayMonth(me.deleteAt) })}</span>
@@ -120,6 +126,9 @@
   .page > :global(*) { flex-shrink: 0; }
 
   .sec { margin-top: 10px; }
+  .confirm { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--text-3);
+    box-shadow: inset 0 0 0 1.5px var(--accent-soft), var(--shadow-card); }
+  .confirm:active { transform: scale(0.98); }
   .soon { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-l); box-shadow: inset 0 0 0 1.5px var(--danger-soft); font: 600 14.5px/1.3 var(--font-text); }
   .soon span { flex: 1; }
 
