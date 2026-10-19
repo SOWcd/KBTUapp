@@ -389,6 +389,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the KBTU Microsoft account a student signed in with (msauth.py): one account, one student
     (50, """ALTER TABLE students ADD COLUMN ms_oid TEXT;
         CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;"""),
+    # everything Microsoft gives about the student, as it came (owner, Oct 20: "keep all we get, it's free"; the way
+    # from typing it in to signing up by itself)
+    (51, "ALTER TABLE students ADD COLUMN ms_profile TEXT;"),
 ]
 
 

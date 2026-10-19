@@ -610,10 +610,10 @@ def ms_link(con, uid: int, who: dict) -> None:
     """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
     names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is); the old portal's
     names stay (they came from KBTU already)"""
-    con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?,
+    con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?, ms_profile = ?,
         first_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), first_name) ELSE first_name END,
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
-                (who["oid"], who["email"], now(), who["first"], who["last"], uid))
+                (who["oid"], who["email"], now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
 
 

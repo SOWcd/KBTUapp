@@ -22,7 +22,10 @@ log = logging.getLogger("kbtu.ms")
 CLIENT = "7487a9a6-fe85-4d01-882b-ac48b42f45e4"   # "KBTU App" in the owner's directory
 KBTU = "57081b5e-e66a-4993-8eaf-15b0b309293f"     # kbtu.kz's directory: the only one let in
 SCOPE = "openid profile email User.Read"
-TTL = 15 * 60                                     # a link is good for 15 minutes
+TTL = 15 * 60
+# all of the signed-in user's own profile that User.Read lets us read; we keep whatever KBTU filled in (ms_profile)
+FIELDS = ("id,displayName,givenName,surname,mail,userPrincipalName,userType,employeeId,employeeType,department,jobTitle,"
+          "companyName,officeLocation,city,country,mobilePhone,businessPhones,preferredLanguage,usageLocation,createdDateTime")                                     # a link is good for 15 minutes
 
 
 def _b64(b: bytes) -> str:
@@ -74,7 +77,7 @@ async def identity(token: str) -> dict | None:
     try:
         async with httpx.AsyncClient(timeout=15) as http:
             r = await http.get("https://graph.microsoft.com/v1.0/me", headers={"authorization": f"Bearer {token}"},
-                               params={"$select": "id,givenName,surname,mail,userPrincipalName,userType,employeeId"})
+                               params={"$select": FIELDS})
         if r.status_code != 200:
             log.warning("ms: graph %s", r.status_code)
             return None
@@ -87,7 +90,8 @@ async def identity(token: str) -> dict | None:
         if why:
             log.warning("ms: refused (%s)", why)  # which check, never who
             return None
-        return {"oid": me["id"], "email": email, "first": (me.get("givenName") or "").strip(), "last": (me.get("surname") or "").strip(),
+        profile = {k: v for k, v in me.items() if not k.startswith("@") and v not in (None, "", [])}
+        return {"profile": profile, "oid": me["id"], "email": email, "first": (me.get("givenName") or "").strip(), "last": (me.get("surname") or "").strip(),
                 "employeeId": (me.get("employeeId") or "").strip().upper()}
     except Exception as exc:  # a timeout, a malformed token: no sign-in, never a 500
         log.warning("ms: %s", type(exc).__name__)
