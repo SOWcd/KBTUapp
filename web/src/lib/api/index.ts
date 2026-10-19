@@ -11,6 +11,7 @@ export { ApiErr } from './errors';
 
 export interface Api {
   me(): Promise<Me>;
+  msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
   updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null }): Promise<Me>;
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off

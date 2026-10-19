@@ -386,6 +386,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     (48, "ALTER TABLE events ADD COLUMN channel_link TEXT;"),
     # the KBTU-password sign-in is gone (owner, Oct 19): its wrong-password counter with it
     (49, "DROP TABLE IF EXISTS login_fails;"),
+    # the KBTU Microsoft account a student signed in with (msauth.py): one account, one student
+    (50, """ALTER TABLE students ADD COLUMN ms_oid TEXT;
+        CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;"""),
 ]
 
 

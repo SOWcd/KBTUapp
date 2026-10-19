@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import html
 import hmac
+import json
 import logging
 import re
 import time
@@ -29,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, psych, receipt, texts, video
+from . import auth, bot, casting, config, db, logic, media, msauth, psych, receipt, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -203,20 +204,71 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not (consent and len(consent) <= 16 and all(NAME.fullmatch(x) for x in (first, last)) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
             raise ApiError("bad_input")
-        mine = logic.one(con, "SELECT manual FROM students WHERE user_id = ?", v.id)
-        if mine and not mine[0]:
-            raise ApiError("conflict", "verified")  # signed in for real already: nothing to type
-        taken = logic.one(con, "SELECT user_id FROM students WHERE student_id = ?", sid)
-        if taken and taken[0] != v.id:
-            raise ApiError("conflict", "linked")
         now = logic.now()
         with db.tx(con):
+            mine = logic.one(con, "SELECT manual FROM students WHERE user_id = ?", v.id)
+            if mine and not mine[0]:
+                raise ApiError("conflict", "verified")  # signed in for real already: nothing to type
+            taken = logic.one(con, "SELECT user_id FROM students WHERE student_id = ?", sid)
+            if taken and taken[0] != v.id:
+                raise ApiError("conflict", "linked")
+            # came through Microsoft first: the account is KBTU's, only the ID and year were typed; unless that account
+            # got linked to someone else meanwhile (review, Oct 19: the unique index would have made it a 500)
+            ms = logic.ms_pending(con, v.id)
+            if ms and logic.one(con, "SELECT 1 FROM students WHERE ms_oid = ? AND user_id != ?", ms["oid"], v.id):
+                ms = None
+            if ms and STUDENT_ID.fullmatch(ms["employeeId"]) and ms["employeeId"] != sid:
+                raise ApiError("conflict", "sid_mismatch")  # KBTU's own record of the ID says otherwise
             con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
                     synced_at, manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT (user_id) DO UPDATE SET student_id = excluded.student_id, first_name = excluded.first_name,
                     last_name = excluded.last_name, course = excluded.course, consent_version = excluded.consent_version, synced_at = excluded.synced_at""",
                         (v.id, sid, first, last, course, consent, now, now, now))
+            if ms:
+                logic.ms_link(con, v.id, ms)
         return logic.me(con, Viewer(v.id, v.role, True))
+
+    @app.post("/api/ms/start")
+    def ms_start(v: Viewer = Depends(viewer)):
+        """The Microsoft sign-in link for me (msauth.py); the Mini App opens it outside Telegram"""
+        return {"url": msauth.link(cfg.token_key, v.id, cfg.domain)}
+
+    @app.get("/api/ms/verifier")
+    def ms_verifier(state: str, con=Depends(conn)):
+        """The PKCE verifier, and whose Telegram this is: /ms.html asks "link to <name>?" before anything happens, so a
+        sign-in link someone else sent can't tie your KBTU account to their Telegram (review, Oct 19)"""
+        uid = msauth.state_uid(cfg.token_key, state)
+        u = logic.one(con, "SELECT tg_first_name, tg_username FROM users WHERE id = ?", uid) if uid else None
+        if not u:
+            raise ApiError("not_found")
+        return {"verifier": msauth.verifier(cfg.token_key, state), "tg": u["tg_first_name"] or "", "username": u["tg_username"] or ""}
+
+    @app.post("/api/ms/finish")
+    async def ms_finish(body: dict = Body(...)):
+        """/ms.html's last step: the state says who asked, the token who signed in. A student already in the app is
+        confirmed; someone new is remembered until they type their student ID and year (kbtu_manual)."""
+        state = str(body.get("state") or "")
+        uid = msauth.state_uid(cfg.token_key, state)
+        who = await msauth.identity(str(body.get("token") or "")) if uid else None
+        if not who:
+            raise ApiError("forbidden", "ms")
+        return await run_in_threadpool(_ms_finish, uid, who, state)
+
+    def _ms_finish(uid: int, who: dict, state: str) -> dict:
+        with pool.conn() as con, db.tx(con):
+            if not logic._once(con, f"ms_used:{state[-16:]}", "1"):
+                raise ApiError("forbidden", "ms")  # each link once
+            other = logic.one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
+            if other and other[0] != uid:
+                raise ApiError("conflict", "linked")  # this Microsoft account is someone else's student already
+            mine = logic.one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
+            if mine and mine[0] and mine[0] != who["oid"]:
+                raise ApiError("conflict", "other_ms")  # already confirmed with another KBTU account: no silent swap
+            if mine:
+                logic.ms_link(con, uid, who)
+                return {"ok": True, "student": True}
+            logic.ms_remember(con, uid, who)
+            return {"ok": True, "student": False}
 
     @app.get("/api/me/schedule")
     def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -1064,6 +1116,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """kbtu.sow.kz/exit: the short "help me get out" link for posters and chats (owner, Oct 15)."""
         return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp=exit")
 
+    @app.get("/ms.html")
+    def ms_page():
+        """Where Microsoft sends a student back (msauth.py): the code is traded in this browser (a single-page app's must
+        be), the token goes to /api/ms/finish, then back to Telegram"""
+        return Response(MS_HTML.replace("__T__", json.dumps(texts.MS_PAGE, ensure_ascii=False)).replace("__CLIENT__", msauth.CLIENT)
+                        .replace("__TENANT__", msauth.KBTU).replace("__BOT__", cfg.bot_username), media_type="text/html",
+                        headers={"cache-control": "no-store", "referrer-policy": "no-referrer"})
+
     legal = Path(__file__).with_name("i18n") / "legal"
     LEGAL_NAMES = {"privacy": {"ru": "\u041f\u043e\u043b\u0438\u0442\u0438\u043a\u0430", "kk": "\u0421\u0430\u044f\u0441\u0430\u0442", "en": "Privacy"},
                    "terms": {"ru": "\u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435", "kk": "\u041a\u0435\u043b\u0456\u0441\u0456\u043c", "en": "Terms"}}
@@ -1140,3 +1200,40 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     return app
 
+
+
+MS_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KBTU App</title><style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;font:500 17px/1.4 -apple-system,system-ui,sans-serif;color:#fff;
+ background:radial-gradient(70% 45% at 0% 0%,rgba(138,92,255,.55),transparent 60%),linear-gradient(165deg,#2B4CD0,#1A2A7A 50%,#0C1230)}
+main{width:min(360px,calc(100% - 32px));text-align:center}img{width:84px;height:84px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+p{margin:22px 0 26px}a{display:block;padding:16px;border-radius:16px;background:#fff;color:#1A2A7A;font-weight:700;text-decoration:none}
+a[hidden],button[hidden]{display:none}button{display:block;width:100%;margin:0 0 12px;padding:16px;border:0;border-radius:16px;
+ background:#34c77b;color:#fff;font:700 17px/1.2 inherit}.spin{width:28px;height:28px;margin:0 auto;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(1turn)}}</style></head><body><main><img src="/apple-touch-icon.png" alt="">
+<p id="m"></p><div class="spin" id="w"></div><button id="y" hidden></button><a id="b" hidden href="https://t.me/__BOT__?startapp=ms"></a></main><script>
+const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.search);
+const m = document.getElementById("m"), b = document.getElementById("b");
+m.textContent = L.wait; b.textContent = L.back;
+history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
+function done(text) { m.textContent = text; document.getElementById("w").remove(); b.hidden = false; }
+(async () => {
+  const code = q.get("code"), state = q.get("state");
+  if (!code || !state) return done(L.fail);
+  const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : null);
+  if (!v) return done(L.fail);
+  const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
+    client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
+    scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
+  if (!tok.access_token) return done(L.fail);
+  // whose Telegram this goes to, asked first: a sign-in link someone else sent must not tie your account to them
+  document.getElementById("w").hidden = true;
+  m.textContent = L.ask.replace("{name}", v.tg + (v.username ? " (@" + v.username + ")" : ""));
+  const y = document.getElementById("y"); y.textContent = L.yes; y.hidden = false; b.hidden = false;
+  await new Promise((ok) => (y.onclick = ok));
+  y.remove(); b.hidden = true; document.getElementById("w").hidden = false; m.textContent = L.wait;
+  const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
+  const j = await r.json().catch(() => ({}));
+  done(r.ok ? (j.student ? L.ok : L.okNew) : j.message === "linked" ? L.linked : j.message === "other_ms" ? L.otherMs : L.fail);
+})().catch(() => done(L.fail));
+</script></body></html>"""

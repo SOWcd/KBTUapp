@@ -606,6 +606,27 @@ SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents
             "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
 
 
+def ms_link(con, uid: int, who: dict) -> None:
+    """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
+    names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is)"""
+    con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?,
+        first_name = COALESCE(NULLIF(?, ''), first_name), last_name = COALESCE(NULLIF(?, ''), last_name) WHERE user_id = ?""",
+                (who["oid"], who["email"], now(), who["first"], who["last"], uid))
+    con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
+
+
+def ms_remember(con, uid: int, who: dict) -> None:
+    """Signed in with Microsoft before typing the student ID and year: kept a day for kbtu_manual"""
+    con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (f"ms:{uid}", json.dumps({**who, "at": now()})))
+
+
+def ms_pending(con, uid: int) -> dict | None:
+    r = one(con, "SELECT value FROM meta WHERE key = ?", f"ms:{uid}")
+    who = json.loads(r[0]) if r else None
+    return who if who and who["at"] > now() - 86400 else None
+
+
 def me(con, v: Viewer) -> dict:
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
@@ -626,7 +647,9 @@ def me(con, v: Viewer) -> dict:
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": u["tg_photo_url"], "own": f"media/{own['path']}.t.webp" if own else None},
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "email": s["email"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
-                    "manual": bool(s["manual"])} if s else None,  # typed in by the student, not confirmed yet
+                    "manual": bool(s["manual"]), "ms": s["ms_oid"] is not None} if s else None,  # manual: typed in, not confirmed yet
+        # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
+        "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and (p := ms_pending(con, v.id)) else None,
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),

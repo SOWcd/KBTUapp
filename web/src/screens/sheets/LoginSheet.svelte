@@ -1,16 +1,17 @@
 <script lang="ts">
-  // KBTU sign-in (SPEC §4.1). The portal-password way is off since Oct 19 (KBTU blocked it and made its students
-  // change their passwords): a student types their name, student ID and year, marked manual (no card number nor
-  // First 500 until the KBTU account is confirmed, PLAN item 25). Consent is mandatory.
-  import Info from '@lucide/svelte/icons/info';
+  // KBTU sign-in (SPEC §4.1). The portal-password way is gone since Oct 19 (KBTU blocked it). The KBTU Microsoft
+  // account first (PLAN item 44, owner: "one big button"): it opens outside Telegram, comes back by /ms.html, and
+  // the app reloads me when it's in sight again; then the student ID and year are typed (Microsoft doesn't know
+  // them). Typing everything by hand stays as the other way, marked manual until Microsoft confirms. Consent is mandatory.
+  import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import { api, ApiErr } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, loadMe } from '../../lib/state/session.svelte';
   import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
-  import { haptic, requestWriteAccess, openLink } from '../../lib/tg';
+  import { haptic, requestWriteAccess, openLink, on } from '../../lib/tg';
 
   let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
 
@@ -20,6 +21,25 @@
   let agree = $state(!!st);
   let busy = $state(false);
   let error = $state('');
+
+  // Microsoft: away in the browser; back in sight, ask who I am now (confirmed, or the account's names to fill in)
+  let away = $state(false);
+  const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
+  async function microsoft() {
+    haptic.tap(); error = '';
+    try { const { url } = await api.msStart(); away = true; openLink(url); }
+    catch { haptic.error(); error = t('common.error'); }
+  }
+  $effect(() => {
+    if (!away) return;
+    const back = () => { if (!document.hidden) void loadMe(); };
+    document.addEventListener('visibilitychange', back);
+    const off = on('activated', back);
+    return () => { document.removeEventListener("visibilitychange", back); off(); };
+  });
+  // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
+  $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; } });
+  $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); } });
 
   let m = $state({ lastName: st?.lastName ?? '', firstName: st?.firstName ?? '', studentId: st?.manual ? st.studentId : '', course: st?.course ?? 0 });
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
@@ -39,20 +59,29 @@
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? e.message || e.code : '';
-      error = why === 'bad_input' ? t('login.badManual') : why === 'linked' ? t('login.sidTaken') : t('common.error');
+      error = why === 'bad_input' ? t('login.badManual') : why === 'linked' ? t('login.sidTaken') : why === 'sid_mismatch' ? t('login.sidMismatch') : t('common.error');
     } finally { busy = false; }
   }
 </script>
 
 <Sheet {overlay} title={t('login.title')}>
   <form class="wrap" onsubmit={submitManual}>
-    <div class="down"><Info size={20} /><span><b>{t('login.offTitle')}</b><i class="t-foot">{t('login.offText')}</i></span></div>
+    {#if pending}
+      <div class="ok"><CircleCheck size={20} /><span><b>{t('login.msOk')}</b><i class="t-foot">{pending.email} · {t('login.msOkText')}</i></span></div>
+    {:else}
+      <!-- Microsoft's own sign-in button look (their branding: the four squares, "Sign in with Microsoft") -->
+      <button type="button" class="ms" onclick={microsoft}>
+        <svg viewBox="0 0 21 21" width="21" height="21" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
+        <span>{st ? t('login.msConfirm') : t('login.ms')}</span></button>
+      <p class="t-foot dim center">{away ? t('login.msAway') : t('login.msNote')}</p>
+      <div class="or t-foot"><span>{t('login.orHand')}</span></div>
+    {/if}
 
     <label class="field"><span class="t-cap">{t('login.lastName')}</span>
-      <input bind:value={m.lastName} autocomplete="family-name" autocapitalize="words" enterkeyhint="next" maxlength="40" />
+      <input bind:value={m.lastName} readonly={!!pending?.last} autocomplete="family-name" autocapitalize="words" enterkeyhint="next" maxlength="40" />
     </label>
     <label class="field"><span class="t-cap">{t('login.firstName')}</span>
-      <input bind:value={m.firstName} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" />
+      <input bind:value={m.firstName} readonly={!!pending?.first} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" />
     </label>
     <label class="field"><span class="t-cap">{t('login.sid')}</span>
       <input bind:value={m.studentId} placeholder="24B031234" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
@@ -85,11 +114,17 @@
   .box { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--line-2); flex: none; transition: background-color var(--t-fast), border-color var(--t-fast); }
   .agree input:checked + .box { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/16px no-repeat; border-color: var(--accent); }
   .err { color: var(--danger-text); }
-  .down { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--r-l); background: var(--warning-soft); }
-  .down :global(svg) { flex: none; margin-top: 2px; color: var(--warning-text); }
-  .down span { display: flex; flex-direction: column; gap: 4px; }
-  .down b { font: 680 16px/1.25 var(--font-text); }
-  .down i { font-style: normal; }
+  .ms { display: flex; align-items: center; justify-content: center; gap: 12px; height: 56px; border-radius: var(--r-l); background: #fff; color: #1b1b1b;
+    font: 650 17px/1 var(--font-text); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), var(--shadow-card); }
+  .ms:active { transform: scale(0.98); }
+  .center { text-align: center; margin-top: -4px; }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--text-3); margin: 4px 0; }
+  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .ok { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--r-l); background: var(--success-soft); }
+  .ok :global(svg) { flex: none; margin-top: 2px; color: var(--success); }
+  .ok span { display: flex; flex-direction: column; gap: 4px; }
+  .ok b { font: 680 16px/1.25 var(--font-text); }
+  .ok i { font-style: normal; }
   .years { display: flex; gap: 6px; }
   .years button { flex: 1; height: 40px; border-radius: 12px; text-align: center; background: var(--surface-3); font: 650 17px/1 var(--font-text); color: var(--text); transition: background-color var(--t-fast), color var(--t-fast); }
   .years button.on { background: var(--accent); color: #fff; }

@@ -624,3 +624,20 @@ def phone_line(phone: str | None) -> str | None:
 def place_or_tba(place: str, lang: str) -> str:
     """An event's place in a bot message; empty while it's to be confirmed (a room asked of DMP by memo)."""
     return place or {"ru": "место уточняется", "kk": "орны нақтыланады", "en": "place to be confirmed"}.get(lang, "место уточняется")
+
+
+# /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set
+MS_PAGE = {
+    "ru": {"wait": "Проверяем аккаунт КБТУ…", "ok": "Готово! Аккаунт КБТУ подтверждён.", "okNew": "Аккаунт КБТУ подтверждён. Вернись в Telegram и введи номер студенческого.",
+           "fail": "Не получилось войти. Вернись в Telegram и попробуй ещё раз.", "linked": "Этот аккаунт КБТУ уже привязан к другому Telegram.",
+           "back": "Вернуться в Telegram", "ask": "Привязать твой аккаунт КБТУ к Telegram {name}? Если вход начинал не ты — просто закрой страницу.",
+           "yes": "Да, это мой Telegram", "otherMs": "Твой профиль уже подтверждён другим аккаунтом КБТУ."},
+    "kk": {"wait": "ҚБТУ аккаунты тексеріліп жатыр…", "ok": "Дайын! ҚБТУ аккаунты расталды.", "okNew": "ҚБТУ аккаунты расталды. Telegram-ға оралып, студенттік нөміріңді енгіз.",
+           "fail": "Кіру сәтсіз аяқталды. Telegram-ға оралып, қайта көр.", "linked": "Бұл ҚБТУ аккаунты басқа Telegram-ға байланған.",
+           "back": "Telegram-ға оралу", "ask": "ҚБТУ аккаунтыңды {name} Telegram-ына байлау керек пе? Кіруді сен бастамасаң — бетті жап.",
+           "yes": "Иә, бұл менің Telegram-ым", "otherMs": "Профилің басқа ҚБТУ аккаунтымен расталған."},
+    "en": {"wait": "Checking your KBTU account…", "ok": "Done! Your KBTU account is confirmed.", "okNew": "Your KBTU account is confirmed. Go back to Telegram and type your student ID.",
+           "fail": "Couldn't sign in. Go back to Telegram and try again.", "linked": "This KBTU account is already linked to another Telegram.",
+           "back": "Back to Telegram", "ask": "Link your KBTU account to the Telegram of {name}? If you didn't start this sign-in, just close this page.",
+           "yes": "Yes, that's my Telegram", "otherMs": "Your profile is already confirmed with another KBTU account."},
+}

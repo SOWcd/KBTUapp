@@ -128,7 +128,8 @@ export interface StudentProfile {
   school: string | null;
   program: string | null;
   syncedAt: Ts;
-  manual: boolean; // typed in by the student, not confirmed yet (no card number until it is)
+  manual: boolean; // typed in by the student, not confirmed with the KBTU account yet
+  ms: boolean;     // signed in with the KBTU Microsoft account
 }
 
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */
@@ -145,6 +146,7 @@ export interface Me {
   nick: string | null;
   photo: { telegram: boolean /* "Photo from Telegram" */; tg: string | null; own: string | null };
   student: StudentProfile | null; // null = guest
+  msPending?: { first: string; last: string; email: string } | null; // signed in with Microsoft, the student ID still to type
   role: PlatformRole;
   founder: boolean;
   mark?: 'idea' | null;

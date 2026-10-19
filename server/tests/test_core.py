@@ -2976,3 +2976,55 @@ def test_offsite_backup(env, monkeypatch):
 
 async def _noop():
     return None
+
+
+def test_ms_sign_in(env, monkeypatch):
+    """The KBTU Microsoft sign-in (PLAN item 44): a link whose state only this server signs; the verifier for it; a
+    token Graph accepts but issued elsewhere is refused; a typed-in student is confirmed; someone new types only the
+    ID and year after; one Microsoft account never links to two Telegram users."""
+    import base64
+    import httpx
+    from kbtu import msauth
+    c, cfg = env
+    login(c, 20, "ali")
+    r = c.post("/api/kbtu/manual", headers=tma(21), json={"consentVersion": "v2", "firstName": "Bek", "lastName": "Typed", "studentId": "24B099001", "course": 2})
+    assert r.status_code == 200, r.text
+    url = c.post("/api/ms/start", headers=tma(21)).json()["url"]
+    state = re.search(r"state=([^&]+)", url).group(1).replace("%2E", ".").replace("%3D", "=")
+    assert msauth.KBTU in url and "code_challenge=" in url
+    v = c.get("/api/ms/verifier", params={"state": state}).json()
+    assert v["verifier"] == msauth.verifier(cfg.token_key, state) and v["tg"] == "Test"   # /ms.html asks "link to Test?"
+    assert c.get("/api/ms/verifier", params={"state": "1.2.\u00e9"}).status_code == 404      # not a 500
+    assert c.get("/api/ms/verifier", params={"state": state[:-2] + "xx"}).status_code == 404
+
+    def token(tid=msauth.KBTU, app=msauth.CLIENT):
+        part = base64.urlsafe_b64encode(json.dumps({"tid": tid, "appid": app}).encode()).decode().rstrip("=")
+        return f"h.{part}.s"
+    graph = {"id": "oid-1", "givenName": "Bek", "surname": "Real", "mail": "B_REAL@kbtu.kz"}
+    async def get(self, url, **kw):
+        return httpx.Response(200, json=graph)
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    uid = lambda tg: c.get("/api/me", headers=tma(tg)).json()["id"]  # noqa: E731 (states carry our user id, not Telegram's)
+    finish = lambda tg, tok, st=None: c.post("/api/ms/finish", json={"state": st or msauth.state_for(cfg.token_key, uid(tg)), "token": tok})  # noqa: E731
+    assert finish(21, token(tid="other-tenant")).status_code == 403           # someone else's directory
+    assert finish(21, token(app="other-app")).status_code == 403              # a token made for another app
+    assert finish(21, token(), st="21.1.x.bad").status_code == 403              # a state we never signed
+    graph["mail"] = "bek@gmail.com"
+    assert finish(21, token()).status_code == 403                             # a guest's outside address
+    graph["mail"] = "B_REAL@kbtu.kz"
+    st = msauth.state_for(cfg.token_key, uid(21))
+    assert finish(21, token(), st=st).json() == {"ok": True, "student": True}
+    assert finish(21, token(), st=st).status_code == 403                      # each link once
+    me = c.get("/api/me", headers=tma(21)).json()
+    assert me["student"]["ms"] and not me["student"]["manual"] and me["student"]["email"] == "b_real@kbtu.kz"
+    assert me["student"]["lastName"] == "Real"                                # the account's names over typed ones
+    graph["id"] = "oid-9"
+    assert finish(21, token()).json()["message"] == "other_ms"                # no silent swap to another account
+    graph["id"] = "oid-1"
+    assert finish(22, token()).json()["message"] == "linked"                  # the same account, another Telegram
+    graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "mail": "d_new@kbtu.kz"}
+    assert finish(22, token()).json() == {"ok": True, "student": False}       # new: remembered for the form
+    assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
+    c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
+    me = c.get("/api/me", headers=tma(22)).json()
+    assert me["student"]["ms"] and not me["student"]["manual"] and me["msPending"] is None and me["no"]
