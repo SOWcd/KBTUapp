@@ -831,6 +831,8 @@ const en: Dict = {
   'jr.declineText': "The bot will let them know gently. They can apply again in 30 days.",
   'me.qr': "My QR",
   'me.qrHint': "Show it: it opens your profile in KBTU App",
+  'me.myData': "My student details",
+  'me.myDataSub': "Not confirmed · you can fix them",
   'me.notifications': "Notifications",
   'me.calendar': "My events in the calendar",
   'me.privacy': "Privacy",

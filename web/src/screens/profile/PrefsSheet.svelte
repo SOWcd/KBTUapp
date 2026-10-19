@@ -5,6 +5,7 @@
   import SunMoon from '@lucide/svelte/icons/sun-moon';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import Bell from '@lucide/svelte/icons/bell';
+  import IdCard from '@lucide/svelte/icons/id-card';
   import Lock from '@lucide/svelte/icons/lock';
   import Trash from '@lucide/svelte/icons/trash-2';
   import Settings2 from '@lucide/svelte/icons/settings';
@@ -66,6 +67,11 @@
 
     {#if me?.student}
       <div class="rows">
+        {#if me.student.manual}
+          <!-- typed in, not confirmed yet: fixing a typo is signing in by hand again (review, Oct 19) -->
+          <button class="r" onclick={() => sheets.login()}><span class="ic"><IdCard size={20} /></span>
+            <span class="lb">{t('me.myData')}<i class="sub">{t('me.myDataSub')}</i></span><ChevronRight size={18} /></button>
+        {/if}
         <button class="r" onclick={subscribe}><span class="ic"><CalendarSync size={20} /></span><span class="lb">{t('me.calendar')}</span><ChevronRight size={18} /></button>
         <button class="r" onclick={() => sheets.settings('privacy')}><span class="ic"><Lock size={20} /></span><span class="lb">{t('me.privacy')}</span><ChevronRight size={18} /></button>
       </div>

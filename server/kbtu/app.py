@@ -216,7 +216,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 ON CONFLICT (user_id) DO UPDATE SET student_id = excluded.student_id, first_name = excluded.first_name,
                     last_name = excluded.last_name, course = excluded.course, consent_version = excluded.consent_version, synced_at = excluded.synced_at""",
                         (v.id, sid, first, last, course, consent, now, now, now))
-            logic.first_fifty(con, v.id)
         return logic.me(con, Viewer(v.id, v.role, True))
 
     @app.get("/api/me/schedule")

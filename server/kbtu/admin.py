@@ -10,11 +10,13 @@
   .venv/bin/python -m kbtu.admin unlink <@username | telegram id>           the KBTU account off this Telegram (a changed student ID,
                                                                          someone else's sign-in): the next sign-in links afresh
   .venv/bin/python -m kbtu.admin staff <@username | telegram id> <first> <last> [<unit>]
-                                staff, not students (DMP, KBTU's IT testing the app): verified by hand instead of the portal,
+                                staff, not students (DMP, KBTU's IT testing the app): verified by hand,
                                 they act as students but take no card number and aren't counted in stats; `unlink` takes it back
   .venv/bin/python -m kbtu.admin staff <@username | telegram id>
                                 one already signed in as a student turns staff: its card number goes back and every card
                                 after it moves down one, so the numbers count students only (owner, Oct 13: KBTU's IT testers)
+  .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
+                                student card): confirmed, gets the card number and First 500 (until a KBTU sign-in exists)
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
@@ -26,7 +28,7 @@ import re
 import sys
 
 from . import config, db
-from .logic import RANK, create_org, find_user, now, one, rows, set_role
+from .logic import RANK, create_org, find_user, first_fifty, now, one, rows, set_role
 
 
 def _user(con, who: str):
@@ -90,6 +92,13 @@ def main(args: list[str]) -> None:
             n = con.execute("DELETE FROM students WHERE user_id = ?", (u["id"],)).rowcount
             con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (u["id"],))
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("unlinked, signing in with KBTU links again" if n else "wasn't linked"))
+    elif cmd == "confirm" and len(args) == 2:
+        u = _user(con, args[1])
+        with db.tx(con):
+            n = con.execute("UPDATE students SET manual = 0, verified_at = ? WHERE user_id = ? AND manual = 1", (now(), u["id"])).rowcount
+            if n:
+                first_fifty(con, u["id"])
+        print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
     elif cmd == "staff" and len(args) in (4, 5):  # SPEC §1: the student ID can't be a real one, so a KBTU sign-in is refused
         u, t = _user(con, args[1]), now()
         if one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
