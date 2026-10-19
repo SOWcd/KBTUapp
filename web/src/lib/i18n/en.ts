@@ -846,6 +846,7 @@ const en: Dict = {
   'me.qr': "My QR",
   'me.qrHint': "Show it: it opens your profile in KBTU App",
   'me.myData': "My student details",
+  'me.msSub': "Confirm your KBTU account with Microsoft",
   'me.myDataSub': "Not confirmed · confirm with Microsoft",
   'me.notifications': "Notifications",
   'me.calendar': "My events in the calendar",

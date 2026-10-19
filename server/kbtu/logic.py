@@ -608,9 +608,11 @@ SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents
 
 def ms_link(con, uid: int, who: dict) -> None:
     """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
-    names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is)"""
+    names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is); the old portal's
+    names stay (they came from KBTU already)"""
     con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?,
-        first_name = COALESCE(NULLIF(?, ''), first_name), last_name = COALESCE(NULLIF(?, ''), last_name) WHERE user_id = ?""",
+        first_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), first_name) ELSE first_name END,
+        last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], now(), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
 

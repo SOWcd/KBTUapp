@@ -66,7 +66,14 @@
 
 <Sheet {overlay} title={t('login.title')}>
   <form class="wrap" onsubmit={submitManual}>
-    {#if pending}
+    {#if st && !st.manual}
+      <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
+      <button type="button" class="ms" onclick={microsoft}>
+        <svg viewBox="0 0 21 21" width="21" height="21" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
+        <span>{t('login.msConfirm')}</span></button>
+      <p class="t-foot dim center">{away ? t('login.msAway') : t('login.msNote')}</p>
+      {#if error}<p class="err t-callout">{error}</p>{/if}
+    {:else if pending}
       <div class="ok"><CircleCheck size={20} /><span><b>{t('login.msOk')}</b><i class="t-foot">{pending.email} · {t('login.msOkText')}</i></span></div>
     {:else}
       <!-- Microsoft's own sign-in button look (their branding: the four squares, "Sign in with Microsoft") -->
@@ -77,6 +84,7 @@
       <div class="or t-foot"><span>{t('login.orHand')}</span></div>
     {/if}
 
+    {#if !st || st.manual}
     <label class="field"><span class="t-cap">{t('login.lastName')}</span>
       <input bind:value={m.lastName} readonly={!!pending?.last} autocomplete="family-name" autocapitalize="words" enterkeyhint="next" maxlength="40" />
     </label>
@@ -104,6 +112,7 @@
 
     {#if error}<p class="err t-callout">{error}</p>{/if}
     <Button kind="primary" size="l" full type="submit" disabled={!mReady} loading={busy}>{st?.manual ? t('login.manualAgain') : t('login.submit')}</Button>
+    {/if}
   </form>
 </Sheet>
 

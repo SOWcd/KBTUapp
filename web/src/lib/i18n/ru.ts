@@ -847,6 +847,7 @@ const ru = {
   'me.qr': "Мой QR",
   'me.qrHint': "Покажи его — по нему откроется твой профиль в KBTU App",
   'me.myData': "Мои данные студента",
+  'me.msSub': "Подтверди аккаунт КБТУ через Microsoft",
   'me.myDataSub': "Не подтверждены · подтверди через Microsoft",
   'me.notifications': "Уведомления",
   'me.calendar': "Мои события в календаре",
