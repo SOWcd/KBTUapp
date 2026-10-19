@@ -1212,7 +1212,7 @@ a[hidden],button[hidden]{display:none}button{display:block;width:100%;margin:0 0
  background:#34c77b;color:#fff;font:700 17px/1.2 inherit}.spin{width:28px;height:28px;margin:0 auto;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:s 1s linear infinite}
 @keyframes s{to{transform:rotate(1turn)}}</style></head><body><main><img src="/apple-touch-icon.png" alt="">
 <p id="m"></p><div class="spin" id="w"></div><button id="y" hidden></button><a id="b" hidden href="https://t.me/__BOT__?startapp=ms"></a></main><script>
-const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.search);
+const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const m = document.getElementById("m"), b = document.getElementById("b");
 m.textContent = L.wait; b.textContent = L.back;
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once

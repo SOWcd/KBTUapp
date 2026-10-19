@@ -3000,7 +3000,7 @@ def test_ms_sign_in(env, monkeypatch):
     def token(tid=msauth.KBTU, app=msauth.CLIENT):
         part = base64.urlsafe_b64encode(json.dumps({"tid": tid, "appid": app}).encode()).decode().rstrip("=")
         return f"h.{part}.s"
-    graph = {"id": "oid-1", "givenName": "Bek", "surname": "Real", "mail": "B_REAL@kbtu.kz"}
+    graph = {"id": "oid-1", "givenName": "Bek", "surname": "Real", "mail": "bek@gmail.com", "userPrincipalName": "B_REAL@kbtu.kz"}
     async def get(self, url, **kw):
         return httpx.Response(200, json=graph)
     monkeypatch.setattr(httpx.AsyncClient, "get", get)
@@ -3009,9 +3009,9 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token(tid="other-tenant")).status_code == 403           # someone else's directory
     assert finish(21, token(app="other-app")).status_code == 403              # a token made for another app
     assert finish(21, token(), st="21.1.x.bad").status_code == 403              # a state we never signed
-    graph["mail"] = "bek@gmail.com"
-    assert finish(21, token()).status_code == 403                             # a guest's outside address
-    graph["mail"] = "B_REAL@kbtu.kz"
+    graph["userPrincipalName"] = "bek@gmail.com"
+    assert finish(21, token()).status_code == 403                             # not a kbtu.kz sign-in name
+    graph["userPrincipalName"] = "B_REAL@kbtu.kz"                             # "mail" may be a gmail: the sign-in name counts
     st = msauth.state_for(cfg.token_key, uid(21))
     assert finish(21, token(), st=st).json() == {"ok": True, "student": True}
     assert finish(21, token(), st=st).status_code == 403                      # each link once
@@ -3022,7 +3022,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token()).json()["message"] == "other_ms"                # no silent swap to another account
     graph["id"] = "oid-1"
     assert finish(22, token()).json()["message"] == "linked"                  # the same account, another Telegram
-    graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "mail": "d_new@kbtu.kz"}
+    graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "userPrincipalName": "d_new@kbtu.kz"}
     assert finish(22, token()).json() == {"ok": True, "student": False}       # new: remembered for the form
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})

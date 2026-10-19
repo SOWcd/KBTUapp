@@ -10,11 +10,14 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from urllib.parse import urlencode
 
 import httpx
+
+log = logging.getLogger("kbtu.ms")
 
 CLIENT = "7487a9a6-fe85-4d01-882b-ac48b42f45e4"   # "KBTU App" in the owner's directory
 KBTU = "57081b5e-e66a-4993-8eaf-15b0b309293f"     # kbtu.kz's directory: the only one let in
@@ -55,7 +58,8 @@ def link(key: bytes, uid: int, domain: str) -> str:
     challenge = _b64(hashlib.sha256(verifier(key, state).encode()).digest())
     return f"https://login.microsoftonline.com/{KBTU}/oauth2/v2.0/authorize?" + urlencode({
         "client_id": CLIENT, "response_type": "code", "redirect_uri": f"https://{domain}/ms.html", "scope": SCOPE,
-        "state": state, "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "select_account"})
+        "state": state, "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "select_account",
+        "response_mode": "fragment"})  # after "#": the code never reaches this server's logs
 
 
 def claims(token: str) -> dict:
@@ -72,12 +76,19 @@ async def identity(token: str) -> dict | None:
             r = await http.get("https://graph.microsoft.com/v1.0/me", headers={"authorization": f"Bearer {token}"},
                                params={"$select": "id,givenName,surname,mail,userPrincipalName,userType,employeeId"})
         if r.status_code != 200:
+            log.warning("ms: graph %s", r.status_code)
             return None
         c, me = claims(token), r.json()
-        email = (me.get("mail") or me.get("userPrincipalName") or "").lower()
-        if c.get("tid") != KBTU or c.get("appid", c.get("azp")) != CLIENT or me.get("userType", "Member") != "Member" or not email.endswith("@kbtu.kz"):
+        # the sign-in name is always the directory's own (s_nurmatov@kbtu.kz); "mail" can be a student's own outside
+        # address (owner's test, Oct 20: refused because of it)
+        email = (me.get("userPrincipalName") or "").lower()
+        why = ("tenant" if c.get("tid") != KBTU else "app" if c.get("appid", c.get("azp")) != CLIENT
+               else "guest" if me.get("userType", "Member") != "Member" else "domain" if not email.endswith("@kbtu.kz") else "")
+        if why:
+            log.warning("ms: refused (%s)", why)  # which check, never who
             return None
         return {"oid": me["id"], "email": email, "first": (me.get("givenName") or "").strip(), "last": (me.get("surname") or "").strip(),
                 "employeeId": (me.get("employeeId") or "").strip().upper()}
-    except Exception:  # a timeout, a malformed token: no sign-in, never a 500
+    except Exception as exc:  # a timeout, a malformed token: no sign-in, never a 500
+        log.warning("ms: %s", type(exc).__name__)
         return None
