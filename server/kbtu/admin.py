@@ -16,7 +16,7 @@
                                 one already signed in as a student turns staff: its card number goes back and every card
                                 after it moves down one, so the numbers count students only (owner, Oct 13: KBTU's IT testers)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
-                                student card): confirmed, gets the card number and First 500 (until a KBTU sign-in exists)
+                                student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to

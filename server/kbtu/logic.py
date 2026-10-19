@@ -616,8 +616,8 @@ def me(con, v: Viewer) -> dict:
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
     own = one(con, "SELECT path FROM files WHERE id = ?", u["avatar_file_id"]) if u["avatar_file_id"] else None
     # signed in while the previous version still ran (a deploy); staff (kbtu.admin staff) take none: it's the students' order
-    # typed in by hand: no number (nor First 500) until the KBTU account is confirmed (owner, Oct 19)
-    if s and u["card_no"] is None and not u["is_founder"] and s["consent_version"] != "staff" and not s["manual"]:
+    # typed in by hand counts too (owner, Oct 19: "give the number at once"; the Microsoft sign-in confirms them later)
+    if s and u["card_no"] is None and not u["is_founder"] and s["consent_version"] != "staff":
         first_fifty(con, v.id)  # the number and, with it, "First 500"
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
@@ -2223,7 +2223,7 @@ def card_no(con, uid: int) -> None:
     n = con.execute("""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
             (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last'))
         WHERE id = ? AND card_no IS NULL AND is_founder = 0
-        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff' OR manual = 1) RETURNING card_no""", (uid,)).fetchone()
+        AND id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff') RETURNING card_no""", (uid,)).fetchone()
     if n:
         con.execute("""INSERT INTO meta (key, value) VALUES ('card_last', ?)
             ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))""", (str(n[0]),))

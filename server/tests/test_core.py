@@ -2908,7 +2908,7 @@ def test_channel_refused_post_skipped(env):
 
 def test_manual_sign_in(env, monkeypatch):
     """The only sign-in since Oct 19 (KBTU blocked the portal-password one, now gone): a student types their name,
-    student ID and year; marked manual, no card number nor First 500 until the KBTU account is confirmed."""
+    student ID and year; marked manual, yet numbered at once (owner, Oct 19); the admin can still confirm one by hand."""
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     login(c, 20, "ali")  # confirmed: "24Bali"
@@ -2918,7 +2918,7 @@ def test_manual_sign_in(env, monkeypatch):
         assert manual(21, {**body, **bad}).status_code == 400
     me = manual(21).json()
     assert (me["student"]["studentId"], me["student"]["firstName"], me["student"]["course"], me["student"]["manual"]) == ("24B031234", "\u041c\u0430\u0433\u0430", 2, True)
-    assert me["no"] is None                                                               # no number until confirmed
+    assert me["no"] is not None                                                           # numbered at once
     assert manual(21, {**body, "course": 3}).json()["student"]["course"] == 3             # a typo fixed
     assert manual(22, body).json()["message"] == "linked"                                 # someone else's ID
     assert manual(20, body).json()["message"] == "verified"                               # confirmed already

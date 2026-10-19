@@ -516,7 +516,7 @@ const en: Dict = {
   'event.placeTba': "Place to be confirmed",
   'event.ticket': "Ticket",
   'login.offTitle': "Signing in with the KBTU portal is off",
-  'login.offText': "Type your details in. The number on your card appears once we can confirm your KBTU account.",
+  'login.offText': "Type your details in: your card number comes at once.",
   'login.title': "Sign in with KBTU",
   'login.consent': "I accept the terms and agree to the processing of my personal data",
   'login.consentLink': "Privacy Policy",

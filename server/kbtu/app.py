@@ -195,8 +195,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/kbtu/manual")
     def kbtu_manual(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         """Sign in by typing one's name, student ID and year (owner, Oct 19: KBTU blocked the portal-password sign-in and
-        it is gone for good). Marked manual: no card number nor First 500 until the KBTU account is confirmed (PLAN
-        item 25). Again while still manual: fixes a typo."""
+        it is gone for good). Marked manual (not confirmed) but numbered at once with First 500 like anyone (owner, Oct 19);
+        the Microsoft sign-in (PLAN item 25) confirms. Again while still manual: fixes a typo."""
         consent = str(body.get("consentVersion") or "")
         first, last = (" ".join(str(body.get(k) or "").split()) for k in ("firstName", "lastName"))
         sid, course = str(body.get("studentId") or "").strip().upper(), body.get("course")
