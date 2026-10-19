@@ -17,7 +17,7 @@
   import Accessibility from '@lucide/svelte/icons/accessibility';
   import Shuffle from '@lucide/svelte/icons/shuffle';
   import DoorOpen from '@lucide/svelte/icons/door-open';
-  import Pointer from '@lucide/svelte/icons/pointer';
+  import Delete from '@lucide/svelte/icons/delete';
   import Undo from '@lucide/svelte/icons/undo-2';
   import Move from '@lucide/svelte/icons/move';
   import Trash from '@lucide/svelte/icons/trash';
@@ -26,7 +26,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
-  import { roomOf, floorOf, nearRooms } from '../../lib/map';
+  import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
 
@@ -37,22 +37,20 @@
 
   // ---- finding the way ----
   let from = $state(''), dest = $state(untrack(() => to ?? '')), leaving = $state(untrack(() => out)); // leaving: "Help me get out"
-  let box = $state<HTMLInputElement>(), focused = $state(false);
   // a hint: any room of the building, not always 305 (owner, Oct 15)
   const all = untrack(() => rooms.flatMap((r) => Object.keys(r)).filter((r) => /^\d{3}$/.test(r))), hint = all[Math.floor(Math.random() * all.length)] ?? '305';
-  // iOS brings the keyboard up only for focus in a tap: try at once (Android), else the first tap anywhere does it
-  // (owner, Oct 15: the link should open the keyboard straight away)
-  $effect(() => {
-    if (!leaving || !box) return;
-    const input = box;
-    input.focus();
-    const tapped = (e: Event) => { if (!from && !(e.target as Element).closest('button')) input.focus(); };
-    window.addEventListener('click', tapped, true);
-    return () => window.removeEventListener('click', tapped, true);
-  });
+  // our own keypad (owner, Oct 19: the keyboard must be there at once; iOS shows the system one only after a tap) and
+  // the places without a number beside it: a button puts the place's name in, a digit after it starts a number again
+  const spotName = (k: string) => t(`route.spot.${k}` as 'route.spot.canteen');
+  function key(k: string) {
+    const typed = spotOf(from) ? '' : from;
+    from = k === 'del' ? typed.slice(0, -1) : typed.length < 4 ? typed + k : typed;
+  }
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
    *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {
+    const s = spotOf(text);
+    if (s?.f != null) return { f: s.f, u: s.u!, v: s.v!, room: spotName(s.k) };
     const r = roomOf(text), f = floorOf(r);
     if (!r || f == null) return null;
     const at = rooms[f]?.[r]?.[0], door = rt.graph?.n.find((n) => n.r?.includes(r));
@@ -98,7 +96,7 @@
     }
     const p = chosen?.exit ? null : place(dest);
     return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : p?.near ? t('route.toNear', { room: p.near, near: p.room })
-      : t('route.toRoom', { room: roomOf(dest)! })) + via;
+      : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: p?.room ?? dest })) + via;
   }
   /** which stairs: the room whose door is nearest to them, "the stairs by 384" (a friend's note, Oct 16: a floor has several) */
   function nearRoom(leg: Leg): string {
@@ -215,10 +213,10 @@
     <div class="top"><span></span><button type="button" onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
     <h2>{t('route.helpTitle')}</h2>
     <p class="ask">{t('route.helpAsk')}</p>
-    <input class="big" class:wait={!focused && !from} bind:this={box} bind:value={from} placeholder={hint} inputmode="text" enterkeyhint="go" autocomplete="off" aria-label={t('route.helpAsk')}
-           onfocus={() => (focused = true)} onblur={() => (focused = false)} />
-    <!-- iOS opens the keyboard only for a tap: until then the box glows and asks for one (owner, Oct 15) -->
-    {#if !focused && !from}<button type="button" class="tap" onclick={() => box?.focus()}><Pointer size={15} />{t('route.tapHint')}</button>{/if}
+    <div class="big" class:wait={!from} class:word={!!spotOf(from)} role="status" aria-label={t('route.helpAsk')}>{from || hint}</div>
+    <div class="spots">{#each SPOTS as s (s.k)}<button type="button" class:on={spotOf(from) === s} onclick={() => (from = spotName(s.k))}>{spotName(s.k)}</button>{/each}</div>
+    <div class="pad">{#each ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', '0', 'del'] as k (k)}
+      <button type="button" onclick={() => key(k)} aria-label={k === 'del' ? t('route.erase') : k}>{#if k === 'del'}<Delete size={22} />{:else}{k}{/if}</button>{/each}</div>
     {#if options[0]?.exit}
       {@const o = options[0]}
       <p class="ans"><DoorOpen size={16} />{o.exit!.name} · {t('route.openTill', { time: hours(o.exit!) })} · {t('route.min', { n: mins(o.route.secs) })}</p>
@@ -277,16 +275,21 @@
   .link { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; height: 34px; font: 650 14px/1 var(--font-text); color: var(--accent-text); }
   .help h2 { font: 800 28px/1.15 var(--font-display); margin: 0 0 6px; }
   .help .ask { font: 550 16px/1.3 var(--font-text); color: var(--text-2); margin: 0 0 14px; }
-  .help .big { width: 100%; height: 72px; border: 0; border-radius: 18px; background: var(--surface); color: var(--text); outline: none;
-    text-align: center; font: 800 40px/1 var(--font-display); letter-spacing: 0.04em; }
-  .help .big::placeholder { color: var(--text-3); opacity: 0.5; }
+  .help .big { display: grid; place-items: center; width: 100%; height: 64px; border-radius: 18px; background: var(--surface); color: var(--text);
+    font: 800 38px/1 var(--font-display); letter-spacing: 0.04em; overflow: hidden; white-space: nowrap; }
+  .help .big.wait { color: var(--text-3); opacity: 0.7; }
+  .help .big.word { font-size: 24px; letter-spacing: 0; }
+  .spots { display: flex; gap: 6px; overflow-x: auto; margin: 10px -14px 0; padding: 0 14px; scrollbar-width: none; }
+  .spots::-webkit-scrollbar { display: none; }
+  .spots button { flex: none; height: 34px; padding: 0 12px; border-radius: 17px; background: var(--surface); font: 620 14px/1 var(--font-text); color: var(--text); }
+  .spots button.on { background: var(--accent); color: #fff; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .pad button { height: 48px; border-radius: 14px; background: var(--surface); display: grid; place-items: center; font: 700 22px/1 var(--font-display); color: var(--text); }
+  .pad button:active { background: var(--surface-2); transform: scale(0.96); }
   .help .big.wait { animation: ask 1.6s ease-in-out infinite; }
   @keyframes ask { 0%, 100% { box-shadow: 0 0 0 0 rgba(59, 107, 255, 0), inset 0 0 0 1.5px rgba(59, 107, 255, 0.35); }
     50% { box-shadow: 0 0 0 6px rgba(59, 107, 255, 0.18), inset 0 0 0 1.5px rgba(59, 107, 255, 0.9); } }
-  .help .tap { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; font: 600 14px/1 var(--font-text);
-    color: var(--accent-text); animation: blink 1.6s ease-in-out infinite; }
-  @keyframes blink { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .help .big.wait, .help .tap { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .help .big.wait { animation: none; } }
   .help .ans { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 12px 0 0; font: 600 14px/1.3 var(--font-text); color: var(--text-2); text-align: center; }
   .help .go { display: grid; place-items: center; width: 100%; height: 54px; margin-top: 12px; border-radius: 16px; background: #34c77b; color: #fff; font: 750 18px/1 var(--font-text); }
   .txt { flex: 1; min-width: 0; font: 650 16px/1.3 var(--font-text); margin: 0; }

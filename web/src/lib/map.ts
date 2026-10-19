@@ -38,7 +38,22 @@ export const normRoom = (s: string): string =>
  *  an address, never a hall: Kunaev is a street in Almaty too. The escapes: Kunaev in Russian and in Kazakh. */
 const HALLS: [RegExp, string][] = [[/\u043a\u0443\u043d\u0430\u0435\u0432|\u049b\u043e\u043d\u0430\u0435\u0432|kunaye?v/i, '400a'],
   // Independence Hall (owner, Oct 15): its big room, 726. The escapes: "nezavisim" in Russian, "tauelsiz" in Kazakh.
-  [/\u043d\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043c|\u0442\u04d9\u0443\u0435\u043b\u0441\u0456\u0437|independence/i, '726']];
+  [/\u043d\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043c|\u0442\u04d9\u0443\u0435\u043b\u0441\u0456\u0437|independence/i, '726'],
+  // Al-Farabi Hall (owner, Oct 19): 470. The escape: "farabi" in Russian and Kazakh.
+  [/\u0444\u0430\u0440\u0430\u0431\u0438|farabi/i, '470']];
+/** Places people know by name, buttons on "Help me get out" and words in "from/to" (owner, Oct 19): a hall is its room;
+ *  the canteen and Halyk Co-working have no number, so a point on the main map's plan (read off it). The escapes: the
+ *  Russian and Kazakh for canteen, the Russian for co-working and Halyk. */
+export type Spot = { k: 'canteen' | 'cowork' | 'kunaev' | 'farabi' | 'indep'; re: RegExp; room?: string; f?: number; u?: number; v?: number };
+export const SPOTS: Spot[] = [
+  { k: 'canteen', re: /\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|canteen|cafeteria/i, f: 0, u: 0.552, v: 0.602 },
+  { k: 'cowork', re: /\u043a\u043e\u0432\u043e\u0440\u043a|\u0445\u0430\u043b\u044b\u043a|co-?work|halyk/i, f: 1, u: 0.496, v: 0.457 },
+  { k: 'kunaev', re: HALLS[0][0], room: '400a' },
+  { k: 'farabi', re: HALLS[2][0], room: '470' },
+  { k: 'indep', re: HALLS[1][0], room: '726' },
+];
+/** The named place a text means: "Canteen", "halyk co-working"; a number in it is a room or an address, never a spot */
+export const spotOf = (text: string): Spot | null => (/\d/.test(text) ? null : SPOTS.find((s) => s.re.test(text)) ?? null);
 /** A basement room (owner, Oct 7: "45 in the basement doesn't work"): 1-99, maybe with a letter, as the whole place, so a
  *  short number in an address ("12 mkr") never counts; a leading zero is dropped ("045" → "45"). */
 const BASEMENT = /^(?:(?:\u0430\u0443\u0434(?:\u0438\u0442\u043e\u0440\u0438\u044f)?|\u043a\u0430\u0431(?:\u0438\u043d\u0435\u0442)?|room)\.?\s*\u2116?\s*)?0?([1-9]\d?[a-g\u0430-\u0433]?)$/i;

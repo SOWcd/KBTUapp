@@ -1,7 +1,7 @@
 // floorOf: a main-building room at the start of a place gives its floor; street addresses and other numbers never do.
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
-import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf } from './map';
+import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf } from './map';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -19,6 +19,9 @@ it('finds the floor of a room, never of an address', () => {
   // Independence Hall's wing is 7xx on floor 2 (owner, Oct 15), by number or by name; the basement's 70 stays below
   expect(floorOf('728')).toBe(2);
   expect(roomOf('Independence Hall')).toBe('726');
+  expect(roomOf('Al-Farabi Hall')).toBe('470');
+  expect(spotOf('Halyk Co-working')?.f).toBe(1);
+  expect(spotOf('Canteen 5')).toBe(null);
   expect(floorOf('70')).toBe(0);
   // a hall by its name (the Kunaev hall, Russian and Kazakh), never the street of the same name
   expect(roomOf('\u0438\u043c. \u0414.\u0410. \u041a\u0443\u043d\u0430\u0435\u0432\u0430')).toBe('400a');
