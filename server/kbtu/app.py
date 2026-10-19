@@ -1205,7 +1205,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 MS_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101633"><title>KBTU App</title><style>
 *{box-sizing:border-box;margin:0}
-body{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;color:#fff;
+html{background:#0b1029;color-scheme:dark}  /* Safari paints its bars with this, not body's (owner, Oct 20: white strips) */
+body{background-attachment:fixed;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;color:#fff;
  font:500 16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
  background:radial-gradient(90% 55% at 15% 0%,rgba(124,77,255,.55),transparent 60%),radial-gradient(70% 45% at 100% 100%,rgba(59,200,255,.18),transparent 60%),
  linear-gradient(165deg,#2443B8,#16205a 55%,#0b1029)}
