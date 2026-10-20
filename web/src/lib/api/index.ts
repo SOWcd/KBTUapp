@@ -192,7 +192,7 @@ export interface Api {
   teamSetup(org: Id): Promise<TeamSetup>;
   saveRole(org: Id, input: { name: string; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup>;  // conflict/'taken'
   deleteRole(org: Id, id: Id): Promise<TeamSetup>;
-  saveTag(org: Id, input: { name: string; color: string }, id?: Id): Promise<TeamSetup>;
+  saveTag(org: Id, input: { name: string; color: string; department?: boolean }, id?: Id): Promise<TeamSetup>;
   deleteTag(org: Id, id: Id): Promise<TeamSetup>;
   updateMember(org: Id, user: Id, patch: MemberPatch): Promise<TeamMember[]>;
   strikes(org: Id, user: Id): Promise<Strike[]>;         // mine, or anyone's as the club's Head+

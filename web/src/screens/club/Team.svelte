@@ -40,6 +40,24 @@
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
   const shown = $derived((list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))));
+  // departments (PLAN 47, a club president's ask): the whole list grouped by them, highest role first in each, then
+  // those in none; filtered, a plain list
+  const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
+  const groups = $derived(filter == null && depts.length
+    ? [...depts.map((g) => ({ id: g.id as number | null, name: g.name, color: g.color, people: shown.filter((x) => x.dept === g.id) })),
+       { id: null, name: t('team.noDept'), color: '', people: shown.filter((x) => x.dept == null) }].filter((g) => g.people.length)
+    : [{ id: null, name: '', color: '', people: shown }]);
+  // who may put this person in a department: a Vice+ anyone; a Head those below them, in or out of the Head's own
+  const myDept = $derived((list ?? []).find((x) => x.person.id === me)?.dept ?? null);
+  const deptChoices = (x: TeamMember) => {
+    if (!depts.length || !may(m, 'people')) return [];
+    if (RANK[m?.role ?? 'member'] >= RANK.vice) return depts;
+    if (x.person.id === me || !isAbove(m, x.role) || myDept == null || (x.dept != null && x.dept !== myDept)) return [];
+    return depts.filter((g) => g.id === myDept);
+  };
+  const setDept = (x: TeamMember, d: number | null) =>
+    run(() => api.updateMember(org(), x.person.id, { dept: d }),
+      d == null ? t('team.deptNone', { name: x.person.name }) : t('team.deptSet', { name: x.person.name, dept: tagOf.get(d)?.name ?? '' }), 'raising_hands_3d_default');
 
   // the strikes of whoever's actions are out (or mine), fetched when opened
   let strikesOf = $state<{ user: number; items: Strike[] } | null>(null);
@@ -52,7 +70,7 @@
   // no "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
   function tap(x: TeamMember, ev: MouseEvent) {
     const self = x.person.id === me;
-    if ((ev.target as HTMLElement).closest('.av') || (self ? !x.probation && !ownLevel.length : !isAbove(m, x.role))) { sheets.person(x.person.id); return; }
+    if ((ev.target as HTMLElement).closest('.av') || (self ? !x.probation && !ownLevel.length && !deptChoices(x).length : !isAbove(m, x.role) && !deptChoices(x).length)) { sheets.person(x.person.id); return; }
     open = open === x.person.id ? null : x.person.id;
     strikesOf = null;
     if (open != null && x.probation) void loadStrikes(x.person.id);
@@ -114,6 +132,19 @@
     void loadMe();
   }
 </script>
+
+{#snippet deptRow(x: TeamMember)}
+  {@const choices = deptChoices(x)}
+  {#if choices.length}
+    <span class="t-cap">{t('team.dept')}</span>
+    <div class="ar">
+      {#each choices as g (g.id)}
+        <button class="pill" class:on={x.dept === g.id} disabled={busy || x.dept === g.id} onclick={() => setDept(x, g.id)}><span class="dot" style="--c:{g.color}"></span>{g.name}</button>
+      {/each}
+      <button class="pill" class:on={x.dept == null} disabled={busy || x.dept == null} onclick={() => setDept(x, null)}>{t('team.noDept')}</button>
+    </div>
+  {/if}
+{/snippet}
 
 {#snippet strikeList(x: TeamMember, canClear: boolean)}
   <div class="strikes">
@@ -184,7 +215,9 @@
         </div>
       {/if}
       <div class="list">
-        {#each shown as x (x.person.id)}
+        {#each groups as grp (grp.id ?? 'none')}
+        {#if grp.name}<h2 class="t-cap grp">{#if grp.color}<span class="dot" style="--c:{grp.color}"></span>{/if}{grp.name}<span class="num">{grp.people.length}</span></h2>{/if}
+        {#each grp.people as x (x.person.id)}
           {@const manage = x.person.id !== me && canManage(m, x.role)}
           <div class="row" class:out={open === x.person.id}>
             <button class="who" onclick={(ev) => tap(x, ev)}>
@@ -203,12 +236,15 @@
             {#if open === x.person.id}
               <div class="acts">
                 {#if x.person.id === me}
+                  {@render deptRow(x)}
                   {@render strikeList(x, false)}
                   {#if ownLevel.length}
                     <span class="t-cap">{t('team.roleLabel')}</span>
                     <div class="ar">{#each ownLevel as r (r.id)}<button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{r.name}</button>{/each}</div>
                   {/if}
                 {:else}
+                  {@render deptRow(x)}
+                  {#if isAbove(m, x.role)}
                   {#if manage}
                     <span class="t-cap">{t('team.roleLabel')}</span>
                     <div class="ar">
@@ -234,13 +270,14 @@
                     {#if m.role === 'president'}<Button kind="secondary" size="s" disabled={busy} onclick={() => handOver(x)}>{t('team.transfer')}</Button>{/if}
                     <Button kind="danger" size="s" disabled={busy} onclick={() => removeOrAsk(x)}>{manage ? t('team.remove') : t('team.askRemove')}</Button>
                   </div>
+                  {/if}
                 {/if}
               </div>
             {/if}
           </div>
-        {:else}
-          <p class="t-foot empty">{t('clubs.nothing')}</p>
         {/each}
+        {/each}
+        {#if !shown.length}<p class="t-foot empty">{t('clubs.nothing')}</p>{/if}
       </div>
       <button class="leave" onclick={leave}>{t('team.leave')}</button>
     {:else}
@@ -280,6 +317,8 @@
   .filters .num { flex: none; font-weight: 700; opacity: 0.6; }
 
   .list { display: flex; flex-direction: column; gap: 8px; }
+  .grp { display: flex; align-items: center; gap: 7px; margin: 8px 2px 0; color: var(--text-2); }
+  .grp .num { margin-left: auto; opacity: 0.6; }
   .row { border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
   .who { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; }
   .who:active { background: var(--surface-2); }

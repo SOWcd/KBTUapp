@@ -394,6 +394,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     (51, "ALTER TABLE students ADD COLUMN ms_profile TEXT;"),
     # a chat any student suggests through the bot waits for the admins (PLAN item 45, owner Oct 20); added_by is who
     (52, "ALTER TABLE chats ADD COLUMN status TEXT NOT NULL DEFAULT 'live';"),
+    # departments (PLAN item 47, owner Oct 20): a tag marked as a department, one per person; a club's latest casting
+    # round names its real ones (older rounds may hold tags that were never departments)
+    (53, """ALTER TABLE org_tags ADD COLUMN department INTEGER NOT NULL DEFAULT 0;
+        UPDATE org_tags SET department = 1 WHERE id IN (SELECT d.tag_id FROM round_departments d JOIN rounds r ON r.id = d.round_id
+            WHERE r.id = (SELECT MAX(x.id) FROM rounds x WHERE x.org_id = r.org_id));"""),
 ]
 
 

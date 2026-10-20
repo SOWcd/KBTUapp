@@ -2009,6 +2009,48 @@ def test_deadline_and_free_first(env):
     assert (late["error"], late["message"]) == ("closed", "deadline")
 
 
+def test_departments(env):
+    """Departments (PLAN item 47): a tag marked department, one per person or none. A Vice+ puts anyone anywhere; a
+    Head moves those below them into or out of their own department only, never themselves; plain tags leave the
+    department alone."""
+    c, cfg = env
+    for tg, name in ((20, "pres"), (21, "vic"), (22, "hed"), (23, "hed2"), (10, "ann"), (11, "bob")):
+        login(c, tg, name)
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    for tg, role in ((20, "president"), (21, "vice"), (22, "head"), (23, "head"), (10, "member"), (11, "member")):
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, ?, 0 FROM users WHERE tg_id = ?", (role, tg))
+    uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (20, 21, 22, 23, 10, 11)}
+    put = lambda by, tg, body: c.patch(f"/api/orgs/1/members/{uid[tg]}", headers=tma(by), json=body)  # noqa: E731
+    dept = lambda tg: next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[tg])["dept"]  # noqa: E731
+    tags = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": True}).json()["tags"]
+    smm = tags[0]["id"]
+    assert tags[0]["department"] is True
+    dev = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "Dev", "color": "#2FBF71", "department": True}).json()["tags"][1]["id"]
+    star = c.post("/api/orgs/1/tags", headers=tma(21), json={"name": "Star", "color": "#FFB23D"}).json()["tags"][2]["id"]
+    assert put(21, 22, {"dept": smm}).status_code == 200 and put(21, 23, {"dept": dev}).status_code == 200
+    assert put(21, 10, {"dept": star}).status_code == 400                       # a plain tag isn't a department
+    assert put(22, 10, {"dept": smm}).status_code == 200 and dept(10) == smm     # a Head: into their own
+    assert put(22, 10, {"dept": dev}).status_code == 403                        # not into another's
+    assert put(23, 10, {"dept": None}).status_code == 403                       # not out of another's
+    assert put(22, 22, {"dept": None}).status_code == 403                       # not themselves
+    assert put(22, 23, {"dept": smm}).status_code == 403                        # not a peer
+    assert put(21, 10, {"dept": dev}).status_code == 200 and dept(10) == dev     # a Vice+: anywhere, one at a time
+    assert con.execute("SELECT COUNT(*) FROM member_tags WHERE user_id = ?", (uid[10],)).fetchone()[0] == 1
+    assert put(21, 10, {"tags": [star]}).status_code == 200 and dept(10) == dev  # tags leave the department alone
+    assert put(23, 10, {"dept": None}).status_code == 200 and dept(10) is None   # out of the Head's own
+    assert put(22, 11, {"dept": smm}).status_code == 200
+    assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM", "color": "#18A9DB", "department": False}).status_code == 403  # Vice+ only
+    assert c.post("/api/orgs/1/tags", headers=tma(22), json={"name": "Mine", "color": "#18A9DB", "department": True}).status_code == 403
+    assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM team", "color": "#18A9DB", "department": True}).status_code == 200  # a rename is fine
+    con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (dev, uid[11]))  # two departments from before
+    assert put(22, 11, {"dept": None}).status_code == 200                       # the Head takes out of their own only
+    assert dept(11) == dev
+    c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": False})
+    put(21, 11, {"dept": None}); con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (smm, uid[11]))
+    assert dept(11) is None and smm in next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[11])["tags"]
+
+
 def test_team_two(env):
     """Team 2.0 (§2b): the club's own roles are a name on a level (Vice+, strictly below their own); tags are groups
     (Head+); probation strikes (Head+ give them, the person and Head+ see them, three ask the President or Vice, a Vice+

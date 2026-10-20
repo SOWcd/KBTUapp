@@ -3665,12 +3665,13 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
     found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, t.name AS title, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
         (SELECT COUNT(*) FROM strikes x WHERE x.org_id = m.org_id AND x.user_id = u.id AND x.cleared_at IS NULL) AS strikes,
-        (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags
+        (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
+        (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
         WHERE m.org_id = ?""", oid)
     return sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "username": p["tg_username"],
                     "role": p["role"], "roleId": p["role_id"], "title": p["title"], "titleColor": p["title_color"],
-                    "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "joinedAt": p["joined_at"],
+                    "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < now() - QUIET_FOR,
                     **({"probation": bool(p["probation"]), "strikes": p["strikes"]} if head or p["id"] == v.id else {})}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
@@ -3685,6 +3686,13 @@ def _below(con, v: Viewer, oid: int, uid: int, right: str) -> str:
     if not can(con, v, oid, right) or RANK[mine] <= RANK[theirs["role"]]:
         raise ApiError("forbidden")
     return mine
+
+
+def dept_of(con, oid: int, uid: int) -> int | None:
+    """Their department in the club: a tag marked department (one per person; several from before: the first)"""
+    r = one(con, """SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
+        WHERE g.org_id = ? AND mt.user_id = ? AND g.department = 1""", oid, uid)
+    return r[0] if r else None
 
 
 def _manage(con, v: Viewer, oid: int, uid: int) -> str:
@@ -3764,7 +3772,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
                    "count": r["n"], "fixed": bool(r["fixed"])} for r in rows(con, """SELECT r.*,
             (SELECT COUNT(*) FROM org_members m WHERE m.role_id = r.id) AS n FROM org_roles r WHERE r.org_id = ?
             ORDER BY r.fixed DESC, r.fixed AND r.level = 'head', r.id""", oid)],
-        "tags": [{"id": g["id"], "name": g["name"], "color": g["color"], "count": g["n"]} for g in rows(con, """SELECT g.*,
+        "tags": [{"id": g["id"], "name": g["name"], "color": g["color"], "count": g["n"], "department": bool(g["department"])} for g in rows(con, """SELECT g.*,
             (SELECT COUNT(*) FROM member_tags mt JOIN org_members m ON m.user_id = mt.user_id AND m.org_id = g.org_id WHERE mt.tag_id = g.id) AS n
             FROM org_tags g WHERE g.org_id = ? ORDER BY g.id""", oid)],
     }
@@ -3841,9 +3849,16 @@ def delete_role(con, v: Viewer, oid: int, rid: int) -> dict:
 
 
 def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> dict:
-    """Head+ make the club's tags (SMM, Design, ...): a name and a colour."""
+    """Head+ make the club's tags (SMM, Design, ...): a name and a colour; `department` marks it a department (PLAN 47:
+    one per person, Team groups by it). Unmarking leaves the people tagged."""
     _may(con, v, oid, "people")
     name, color = _named(body)
+    dept = body.get("department")
+    if dept is not None and not isinstance(dept, bool):
+        raise ApiError("bad_input")
+    was = one(con, "SELECT department FROM org_tags WHERE id = ? AND org_id = ?", tid, oid) if tid is not None else None
+    if dept is not None and bool(dept) != bool(was and was[0]) and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
+        raise ApiError("forbidden")  # a Head unmarking a department would sidestep its rules (review): Vice+ only
     with tx(con):
         if tid is None and one(con, "SELECT COUNT(*) FROM org_tags WHERE org_id = ?", oid)[0] >= 30:
             raise ApiError("conflict", "many")
@@ -3851,9 +3866,10 @@ def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> di
             raise ApiError("not_found")
         try:
             if tid is None:
-                con.execute("INSERT INTO org_tags (org_id, name, color, created_at) VALUES (?, ?, ?, ?)", (oid, name, color, now()))
+                con.execute("INSERT INTO org_tags (org_id, name, color, department, created_at) VALUES (?, ?, ?, ?, ?)", (oid, name, color, int(bool(dept)), now()))
             else:
-                con.execute("UPDATE org_tags SET name = ?, color = ? WHERE id = ?", (name, color, tid))
+                con.execute("UPDATE org_tags SET name = ?, color = ?, department = COALESCE(?, department) WHERE id = ?",
+                            (name, color, None if dept is None else int(dept), tid))
         except sqlite3.IntegrityError:
             raise ApiError("conflict", "taken") from None
     return team_setup(con, v, oid)
@@ -3870,9 +3886,11 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
     level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights: owner,
     Oct 12); `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power: owner, Oct 12, the
-    President and the Vice tag each other); `probation` — Head+ put someone
+    President and the Vice tag each other; departments in it are left as they are); `dept` — the department (a tag
+    marked so) or null for none (PLAN 47): Vice+ on anyone; a Head on those below them, only into or out of the Head's
+    own department, never their own; `probation` — Head+ put someone
     below them on it, only the President or Vice take it off (passed: the strikes go, the bot congratulates)."""
-    if not body or not set(body) <= {"role", "roleId", "tags", "probation"}:
+    if not body or not set(body) <= {"role", "roleId", "tags", "dept", "probation"}:
         raise ApiError("bad_input")
     with tx(con):
         if "role" in body or "roleId" in body:
@@ -3908,8 +3926,28 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
                 raise ApiError("bad_input")
             if len(set(tags)) != one(con, f"SELECT COUNT(*) FROM org_tags WHERE org_id = ? AND id IN ({','.join('?' * len(set(tags))) or 'NULL'})", oid, *set(tags))[0]:
                 raise ApiError("bad_input")
-            con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ?)", (uid, oid))
-            con.executemany("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", [(t, uid) for t in set(tags)])
+            depts = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ? AND department = 1", oid)}
+            con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ? AND department = 0)", (uid, oid))
+            con.executemany("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", [(t, uid) for t in set(tags) - depts])
+        if "dept" in body:
+            d = body["dept"]
+            depts = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ? AND department = 1", oid)}
+            if d is not None and (not isinstance(d, int) or isinstance(d, bool) or d not in depts):
+                raise ApiError("bad_input")
+            if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"]:
+                if not can(con, v, oid, "people") or not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
+                    raise ApiError("forbidden")
+            else:  # a Head: their own department's people only, and not themselves
+                if uid == v.id:
+                    raise ApiError("forbidden")
+                _below(con, v, oid, uid, "people")
+                own = dept_of(con, oid, v.id)
+                if own is None or dept_of(con, oid, uid) not in (None, own) or d not in (None, own):
+                    raise ApiError("forbidden")
+            gone = depts if RANK[role_in(con, v, oid) or "member"] >= RANK["vice"] else {own}  # a Head touches their own only
+            con.execute(f"DELETE FROM member_tags WHERE user_id = ? AND tag_id IN ({','.join('?' * len(gone)) or 'NULL'})", (uid, *gone))
+            if d is not None:
+                con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (d, uid))
         if "probation" in body:
             on = body["probation"]
             if not isinstance(on, bool):

@@ -38,11 +38,13 @@
   let fcolor = $state(TEAM_COLORS[0]);
   let frights = $state<Right[]>([]);
   let ffixed = $state<ClubLevel | null>(null); // an official role: its name and level stay, rights up to the level
+  let fdept = $state(false); // a tag that is a department (PLAN 47)
   let busy = $state(false);
   function edit(k: 'role' | 'tag', x?: ClubRole | ClubTag) {
     kind = k; fid = x?.id ?? null; fname = x?.name ?? ''; fcolor = x?.color ?? TEAM_COLORS[(setup?.[k === 'role' ? 'roles' : 'tags'].length ?? 0) % TEAM_COLORS.length];
     frights = x && 'rights' in x ? [...x.rights] : ['door'];
     ffixed = x && 'fixed' in x && x.fixed ? x.level : null;
+    fdept = !!(x && 'department' in x && x.department);
     haptic.select();
   }
   const done = (x: TeamSetup) => { setup = x; kind = null; haptic.ok(); onchange?.(); };
@@ -53,7 +55,7 @@
   async function save() {
     if (!kind || busy || !fname.trim()) return;
     busy = true;
-    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor }, fid ?? undefined)); }
+    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); }
     catch (e) { oops(e); } finally { busy = false; }
   }
   async function drop() {
@@ -75,10 +77,14 @@
   $effect(() => { if (kind === 'tag' && fid != null && !data.team[org]) void loadTeam(org); });
   const mayTag = (x: TeamMember) => x.person.id === session.me?.id ? head : head && (RANK[mine ?? 'member'] >= RANK.vice || isAbove(m, x.role));
   let tagging = $state<Id | null>(null);
+  // a department: one per person, so ticking moves them here (a Head moves people in their own one, in Team's card)
+  const mayDept = $derived(head && RANK[mine ?? 'member'] >= RANK.vice);
   async function tagPerson(x: TeamMember, tag: Id, on: boolean) {
     tagging = x.person.id; haptic.select();
     try {
-      data.team[org] = await api.updateMember(org, x.person.id, { tags: on ? [...(x.tags ?? []), tag] : (x.tags ?? []).filter((g) => g !== tag) });
+      const saved = !!setup?.tags.find((g) => g.id === tag)?.department; // as the server has it, not the unsaved switch
+      data.team[org] = await api.updateMember(org, x.person.id, saved ? { dept: on ? tag : null }
+        : { tags: on ? [...(x.tags ?? []), tag] : (x.tags ?? []).filter((g) => g !== tag) });
       void load(); onchange?.();
     } catch (e) { oops(e); } finally { tagging = null; }
   }
@@ -104,13 +110,17 @@
         {/each}
       </div>
       {#if TOGGLES.some((r) => !givable(r))}<p class="t-foot">{t('ts.locked')}</p>{/if}
-    {:else if fid != null}
+    {:else}
+      <label class="switch"><span><b>{t('ts.isDept')}</b><i class="t-foot">{t('ts.isDeptSub')}</i></span>
+        <input type="checkbox" role="switch" bind:checked={fdept} disabled={!mayDept} /></label>
+    {/if}
+    {#if kind === 'tag' && fid != null}
       {@const tag = fid}
       <span class="t-cap">{t('ts.tagPeople')}</span>
       <div class="ppl">
         {#each team as x (x.person.id)}{@const on = !!x.tags?.includes(tag)}
           <label class="pp" class:locked={!mayTag(x)}><Avatar person={x.person} size={30} /><b class="ellipsis">{withNick(x.fullName, x.person)}</b>
-            <input type="checkbox" checked={on} disabled={!mayTag(x) || tagging === x.person.id} onchange={() => tagPerson(x, tag, !on)} /></label>
+            <input type="checkbox" checked={on} disabled={fdept !== !!setup?.tags.find((g) => g.id === tag)?.department || !(fdept ? mayDept : mayTag(x)) || tagging === x.person.id} onchange={() => tagPerson(x, tag, !on)} /></label>
         {/each}
       </div>
     {/if}
@@ -159,7 +169,7 @@
       {#each setup?.tags ?? [] as g (g.id)}
         {#if kind === 'tag' && fid === g.id}{@render form()}
         {:else}
-          <button class="it" disabled={!head} onclick={() => edit('tag', g)}><span class="dot" style="--c:{g.color}"></span><b class="ellipsis">{g.name}</b><span class="n num">{g.count}</span></button>
+          <button class="it" disabled={!head} onclick={() => edit('tag', g)}><span class="dot" style="--c:{g.color}"></span><b class="ellipsis">{g.name}</b>{#if g.department}<i>{t('ts.deptMark')}</i>{/if}<span class="n num">{g.count}</span></button>
         {/if}
       {/each}
       {#if kind === 'tag' && fid === null}{@render form()}
@@ -183,7 +193,7 @@
 
 <style>
   .rights { display: grid; gap: 6px; }
-  .rights .switch { padding: 10px 12px; background: var(--surface); }
+  .rights .switch, .form > .switch { padding: 10px 12px; background: var(--surface); }
   .rights .switch i { margin-top: 1px; }
   .rights .locked { opacity: 0.45; }
   .rn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; }

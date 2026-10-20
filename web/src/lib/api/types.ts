@@ -352,19 +352,20 @@ export interface TeamMember {
   quiet?: boolean;              // Vice+: 60 days without a check-in
   roleId?: Id | null; title?: string | null; titleColor?: string | null; // the club's own role (§2b)
   tags?: Id[];                  // the club's tags on them
+  dept?: Id | null;             // their department: one of those tags marked department (PLAN 47)
   probation?: boolean; strikes?: number; // for the club's Head+ and the person: on probation, active strikes (of 3)
 }
 
 /** Team 2.0 (§2b): the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */
 export type ClubLevel = 'member' | 'head' | 'vice';
 export interface ClubRole { id: Id; name: string; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
-export interface ClubTag { id: Id; name: string; color: string; count: number }
+export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null /* null: the third strike */; ban: boolean; note: string; strikes: number; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }
 export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; removals?: RemovalRequest[]; bans?: ClubBan[] }
 export interface Strike { id: Id; reason: 'meeting' | 'event' | 'other'; note: string; at: Ts; by: PersonRef | null; clearedAt: Ts | null }
 /** One person in Team, only what is sent: a level or a club role (Vice+), tags (Head+), probation (on: Head+, off: Vice+). */
-export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; probation?: boolean }
+export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; dept?: Id | null; probation?: boolean }
 
 export interface JoinRequest { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null; createdAt: Ts }
 
