@@ -53,6 +53,7 @@
   import X from '@lucide/svelte/icons/x';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets } from '../../lib/state/sheets';
+  import { focusPos } from '../../lib/photo';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   let { overlay, id, preview, from }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null } = $props();
@@ -62,6 +63,7 @@
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
+  let pic = $state(0); // which of the header's photos is on screen
   let hero = $state<HTMLDivElement>();
   let land = () => {};
   onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
@@ -72,6 +74,10 @@
   const going = $derived(st === 'going');
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
+  // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver (PLAN 32)
+  const wv = $derived(e && 'wideVideo' in e ? (e as EventFull).wideVideo : null);
+  const wide = $derived(wv?.url && !cancelled && !document.documentElement.classList.contains('lowfx')
+    && !(navigator as { connection?: { saveData?: boolean } }).connection?.saveData ? wv.url : null);
   const pct = $derived(e && e.seats ? Math.min(100, Math.round((e.taken / e.seats) * 100)) : 0);
   const started = $derived(!!e && e.startsAt <= nowTs());
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
@@ -230,7 +236,21 @@
   {#if e}
     {#if preview}<p class="pv"><Eye size={15} />{t('event.preview')}</p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>
-      <Poster item={e} big play radius={22} dim={cancelled} />
+      <!-- the header (PLAN 32/33): the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
+      {#if wide}
+        <Poster item={e} big radius={22} />
+        <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
+      {:else if !e.video?.url && e.cover && e.slides?.length}
+        <div class="strip" data-noswipe onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
+          {#each [e.cover, ...e.slides] as p, i (p.id)}
+            <button class="pic" onclick={() => sheets.photos([e.cover!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
+              <img src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>
+          {/each}
+        </div>
+        <span class="dots" aria-hidden="true">{#each [e.cover, ...e.slides] as _, k (k)}<i class:on={k === pic}></i>{/each}</span>
+      {:else}
+        <Poster item={e} big play radius={22} dim={cancelled} />
+      {/if}
       <button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>
       {#if e.meeting}<span class="tag"><Chip tone="onphoto">{t('event.meeting')}</Chip></span>{:else if e.visibility === 'members'}<span class="tag"><Chip tone="onphoto">{t('event.teamOnly')}</Chip></span>{:else if e.visibility === 'leaders'}<span class="tag"><Chip tone="onphoto">{t('event.leaders')}</Chip></span>{:else if e.firstYear}<span class="tag"><Chip tone="warning">{t('event.firstYear')}</Chip></span>{/if}
     </div>
@@ -542,6 +562,14 @@
   .pv { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: 0 auto 10px; padding: 6px 12px;
     border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 630 13px/1.2 var(--font-text); }
   .hero { position: relative; height: 210px; margin: 4px 0 16px; border-radius: 22px; overflow: hidden; }
+  .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .pic { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
+  .dots i.on { background: #fff; transform: scale(1.25); }
   .org { position: absolute; left: 12px; top: 12px; }
   .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: 12.5px; gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
   .tag { position: absolute; right: 12px; top: 12px; }

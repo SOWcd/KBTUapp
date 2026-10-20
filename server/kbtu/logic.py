@@ -271,7 +271,11 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
                 AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?) ORDER BY r.id""", *ids, v.id, v.id):
             friends.setdefault(p["ev"], []).append(person_ref(p))
     orgs = _by_id(con, "orgs", (e["org_id"] for e in evs))
-    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in orgs.values())])
+    slides: dict[int, list] = {}
+    for r in rows(con, f"SELECT event_id, file_id FROM event_slides WHERE event_id IN ({q}) ORDER BY pos", *ids):
+        slides.setdefault(r["event_id"], []).append(r["file_id"])
+    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in orgs.values()),
+                                  *(i for s in slides.values() for i in s)])
     videos = _by_id(con, "videos", (e["video_id"] for e in evs))
     out = []
     for e in evs:
@@ -287,6 +291,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
             "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "status": e["status"], "title": e["title"],
             "startsAt": e["starts_at"], "endsAt": e["ends_at"], "publishedAt": e["published_at"], "place": e["place"], "placeUrl": e["place_url"],
             "cover": _event_cover(con, e, files),
+            "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
             "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
             "firstYear": bool(e["first_year"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "price": e["price"], "my": my, "visibility": e["visibility"],
             "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
@@ -310,6 +315,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
             **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head),
             "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
+            "wideVideo": video_shape(x) if (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)
             **({"video": video_shape(x)} if head and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["video_id"])) else {})}
 
@@ -465,13 +471,14 @@ def video_shape(x: sqlite3.Row) -> dict:
                        "blur": "", "color": x["color"]} if ready else None, "error": x["error"]}
 
 
-def new_video(con, v: Viewer, size) -> dict:
-    """An upload starts (Head+, as a cover): its size is said up front, the pieces follow (PUT, app.py)."""
+def new_video(con, v: Viewer, size, wide: object = False) -> dict:
+    """An upload starts (Head+, as a cover): its size is said up front, the pieces follow (PUT, app.py). `wide`: for the
+    sheet's background (PLAN 32), compressed for it."""
     if not organizes(con, v):
         raise ApiError("forbidden")
     if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= video.MAX_BYTES:
         raise ApiError("bad_input", "too_big")
-    vid = con.execute("INSERT INTO videos (owner_id, status, size, created_at) VALUES (?, 'uploading', ?, ?)", (v.id, size, now())).lastrowid
+    vid = con.execute("INSERT INTO videos (owner_id, status, size, created_at, wide) VALUES (?, 'uploading', ?, ?, ?)", (v.id, size, now(), int(wide is True))).lastrowid
     return {"id": vid, "at": 0}
 
 
@@ -512,19 +519,23 @@ def stale_videos(con) -> list[tuple[int, str | None]]:
     rows go; the caller deletes the files. (id, path)."""
     with tx(con):
         old = rows(con, """SELECT id, path FROM videos WHERE created_at < ? AND status != 'working'
-            AND id NOT IN (SELECT video_id FROM events WHERE video_id IS NOT NULL)""", now() - 86400)
+            AND id NOT IN (SELECT video_id FROM events WHERE video_id IS NOT NULL
+                           UNION SELECT wide_video_id FROM events WHERE wide_video_id IS NOT NULL)""", now() - 86400)
         con.executemany("DELETE FROM videos WHERE id = ?", [(r["id"],) for r in old])
-    return [(r["id"], r["path"]) for r in old]
+        # files are named by their content: the same clip kept by another row keeps its files
+        return [(r["id"], None if r["path"] and one(con, "SELECT 1 FROM videos WHERE path = ?", r["path"]) else r["path"]) for r in old]
 
 
-def _video(con, v: Viewer, body: dict, keep: int | None) -> int | None:
-    """The editor's videoId, like coverId: absent keeps, null takes it off, an id must be my own upload that didn't fail."""
-    if "videoId" not in body:
+def _video(con, v: Viewer, body: dict, keep: int | None, key: str = "videoId") -> int | None:
+    """The editor's videoId (wideVideoId: the sheet's background), like coverId: absent keeps, null takes it off, an id
+    must be my own upload for that slot that didn't fail."""
+    if key not in body:
         return keep
-    if body["videoId"] is None:
+    if body[key] is None:
         return None
     try:
-        x = one(con, "SELECT id FROM videos WHERE id = ? AND owner_id = ? AND status != 'failed'", int(body["videoId"]), v.id)
+        x = one(con, "SELECT id FROM videos WHERE id = ? AND owner_id = ? AND status != 'failed' AND wide = ?",
+                int(body[key]), v.id, int(key == "wideVideoId"))
     except (TypeError, ValueError):
         x = None
     if not x:
@@ -3059,10 +3070,32 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org)}
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
     f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None)
-    f["video_id"] = _video(con, v, body, None)
-    cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
-        VALUES (?, 'draft', {', '.join('?' * len(f))}, ?, ?, ?, ?)""", (oid, *f.values(), shade(f["color"]), v.id, now(), now()))
-    return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", cur.lastrowid))
+    f["video_id"], f["wide_video_id"] = _video(con, v, body, None), _video(con, v, body, None, "wideVideoId")
+    with tx(con):  # bad slides leave no draft behind
+        cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
+            VALUES (?, 'draft', {', '.join('?' * len(f))}, ?, ?, ?, ?)""", (oid, *f.values(), shade(f["color"]), v.id, now(), now()))
+        e = one(con, "SELECT * FROM events WHERE id = ?", cur.lastrowid)
+        _slides(con, v, body, e, f["cover_file_id"])
+    return full(con, v, e)
+
+
+SLIDES = 9   # photos after the cover (PLAN 33): ten in all, as an Instagram or TikTok photo post
+
+
+def _slides(con, v: Viewer, body: dict, e: sqlite3.Row, cover: int | None) -> None:
+    """The editor's slideIds: absent keeps, [] clears; each one already on this event (a co-organizer's) or my own upload."""
+    if "slideIds" not in body:
+        return
+    ids = body["slideIds"]
+    if not isinstance(ids, list) or len(ids) > SLIDES or len(set(ids)) != len(ids) \
+            or any(not isinstance(i, int) or isinstance(i, bool) for i in ids) or (cover is not None and cover in ids):
+        raise ApiError("bad_input")
+    for i in ids:
+        if not one(con, """SELECT 1 FROM event_slides WHERE event_id = ? AND file_id = ?
+                UNION ALL SELECT 1 FROM files WHERE id = ? AND kind = 'event_cover' AND owner_id = ?""", e["id"], i, i, v.id):
+            raise ApiError("bad_input")
+    con.execute("DELETE FROM event_slides WHERE event_id = ?", (e["id"],))
+    con.executemany("INSERT INTO event_slides (event_id, pos, file_id) VALUES (?, ?, ?)", [(e["id"], n, i) for n, i in enumerate(ids)])
 
 
 def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
@@ -3077,7 +3110,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"])
-        f["video_id"] = _video(con, v, body, e["video_id"])
+        f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
+        _slides(con, v, body, e, f["cover_file_id"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):
             f["memo_sent_at"] = f["memo_sent_by"] = None  # changed requests go to DMP again
         con.execute(f"UPDATE events SET {', '.join(k + ' = ?' for k in f)}, tint = ?, updated_at = ? WHERE id = ?",
@@ -3182,7 +3216,8 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
             WHERE r.event_id = ?""", eid)]
         pics = [r[0] for r in rows(con, """SELECT file_id FROM event_photos WHERE event_id = ?
-            UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL""", eid, eid)]
+            UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL
+            UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
@@ -3194,7 +3229,8 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
         receipts = [p for f in paid for p in _drop_photo(con, f)]
         photos = [p for f in pics if not con.execute("""SELECT 1 FROM users WHERE avatar_file_id = :f UNION ALL SELECT 1 FROM orgs
             WHERE logo_file_id = :f UNION ALL SELECT 1 FROM events WHERE cover_file_id = :f UNION ALL SELECT 1 FROM receipts WHERE
-            file_id = :f UNION ALL SELECT 1 FROM event_photos WHERE file_id = :f UNION ALL SELECT 1 FROM posts WHERE photo_file_id = :f""",
+            file_id = :f UNION ALL SELECT 1 FROM event_photos WHERE file_id = :f UNION ALL SELECT 1 FROM posts WHERE photo_file_id = :f
+            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f""",
             {"f": f}).fetchone() for p in _drop_photo(con, f)]
     return receipts, photos
 

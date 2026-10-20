@@ -26,6 +26,7 @@ log = logging.getLogger("kbtu.video")
 MAX_BYTES = 500 * 1024 * 1024   # a minute of 4K from an iPhone is ~400 MB
 PIECE = 8 * 1024 * 1024         # the client's piece; the server takes up to twice that
 MAX_SECONDS = 60
+WIDE_SECONDS = 20
 FORMATS = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm"   # ffmpeg's names: what phones and video editors write
 SAFE_IN = ["-protocol_whitelist", "file", "-format_whitelist", FORMATS]
 HDR = {"smpte2084", "arib-std-b67"}   # PQ (Dolby Vision, HDR10) and HLG
@@ -47,8 +48,9 @@ async def _run(*cmd: str, timeout: int = 900) -> bytes:
     return out
 
 
-async def probe(src: Path) -> dict:
-    """The first video stream and the length; anything that isn't a video of 1-60 s is BadVideo."""
+async def probe(src: Path, wide: bool = False) -> dict:
+    """The first video stream and the length; anything that isn't a video of 1-60 s is BadVideo (the wide slot takes a
+    longer one and keeps its first 20 s)."""
     raw = await _run("ffprobe", "-v", "error", *SAFE_IN, "-show_entries",
                      "stream=codec_type,width,color_transfer:format=duration", "-of", "json", str(src), timeout=60)
     info = json.loads(raw)
@@ -57,30 +59,35 @@ async def probe(src: Path) -> dict:
         dur = float(info["format"]["duration"])
     except (KeyError, ValueError):
         dur = 0
-    if not v or not v.get("width") or not 1 <= dur <= MAX_SECONDS + 1:
+    if not v or not v.get("width") or not 1 <= dur <= (1e6 if wide else MAX_SECONDS + 1):
         raise BadVideo("too_long" if dur > MAX_SECONDS + 1 else "not_a_video")
     return {"duration": dur, "hdr": v.get("color_transfer") in HDR, "transfer": v.get("color_transfer")}
 
 
 def args(src: Path, dst: Path, info: dict) -> list[str]:
-    fit = "scale=w='min(720,iw)':h='min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+    # 720 on the short side, whichever way the clip stands (ffmpeg has turned it upright by now; probe's width hasn't)
+    fit = ("scale=w='if(gt(iw,ih),min(1280,iw),min(720,iw))':h='if(gt(iw,ih),min(720,ih),min(1280,ih))'"
+           ":force_original_aspect_ratio=decrease:force_divisible_by=2")
+    # the wide slot plays muted behind the event's sheet in a loop: no sound, 20 s, a lower cap (PLAN 32: data cost)
+    wide = info.get("wide")
+    sound = ["-an"] if wide else ["-c:a", "aac", "-b:a", "96k", "-ac", "2"]
     # HDR to SDR: to linear light, BT.709 primaries, Hable's curve, back to BT.709 (zimg; the input's own transfer named,
     # as phones don't always tag primaries and matrix)
     tone = (f"zscale=tin={info['transfer']}:pin=bt2020:min=bt2020nc:t=linear:npl=203,format=gbrpf32le,zscale=p=bt709,"
             "tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,") if info["hdr"] else ""
     return ["ffmpeg", "-v", "error", "-y", *SAFE_IN, "-i", str(src),
-            "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_chapters", "-1", "-sn", "-dn",
+            "-map", "0:v:0", *([] if wide else ["-map", "0:a:0?"]), "-map_metadata", "-1", "-map_chapters", "-1", "-sn", "-dn",
             "-vf", f"{tone}format=yuv420p,{fit}", "-fpsmax", "30",
-            "-c:v", "libx264", "-preset", "slow", "-crf", "26", "-maxrate", "2500k", "-bufsize", "5000k", "-profile:v", "high",
+            "-c:v", "libx264", "-preset", "slow", "-crf", "26", "-maxrate", "1500k" if wide else "2500k", "-bufsize", "5000k", "-profile:v", "high",
             "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
-            "-c:a", "aac", "-b:a", "96k", "-ac", "2", "-t", str(MAX_SECONDS), "-fs", "60M", "-threads", "3",
+            *sound, "-t", str(WIDE_SECONDS if wide else MAX_SECONDS), "-fs", "60M", "-threads", "3",
             "-movflags", "+faststart", str(dst)]
 
 
-async def compress(src: Path, root: Path) -> dict:
+async def compress(src: Path, root: Path, wide: bool = False) -> dict:
     """The upload at src becomes root/<2 hex>/<sha256>.mp4 with its poster as a photo of the same name (media.store:
     .webp, .t.webp, .jpg); returns what the videos table keeps. The original stays where it is (the caller deletes it)."""
-    info = await probe(src)
+    info = {**await probe(src, wide), "wide": wide}
     tmp = src.with_suffix(".out.mp4")
     try:
         await _run(*args(src, tmp, info))

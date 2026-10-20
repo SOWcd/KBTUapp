@@ -763,7 +763,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/videos")
     def new_video(body: dict, con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.new_video(con, v, body.get("size"))
+        return logic.new_video(con, v, body.get("size"), body.get("wide", False))
 
     @app.put("/api/videos/{vid}")
     async def video_piece(vid: int, at: int, request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):

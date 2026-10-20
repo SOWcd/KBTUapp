@@ -49,6 +49,7 @@
   // an event's video plays on the slide on screen, muted as in every feed, and loops; the next and the previous one
   // load ahead, the rest are their poster only. The sound, once turned on, stays on for the following videos.
   let sound = $state(false);
+  const pic: Record<number, number> = $state({}); // which photo of a slide's strip is on screen
   // only while the Feed is what's on screen: not under a sheet, not from another page or tab
   const shown = $derived(ui.tab === 'afisha' && ui.page.afisha === 0 && !overlays.length);
   function playing(el: HTMLVideoElement, on: boolean) {
@@ -76,12 +77,21 @@
         {#if e.video?.url && Math.abs(i - cur) <= 1}
           <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload="auto" use:playing={i === cur && shown}></video>
         {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
+        {:else if e.cover && e.slides?.length}
+          <!-- the cover and its photos, swiped sideways like a TikTok photo post (PLAN 33); at the last one the swipe turns the page -->
+          <div class="strip" data-edge onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
+            <img src={e.cover.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(e.cover)} />
+            {#each e.slides as p (p.id)}<img src={p.url} alt="" decoding="async" loading="lazy" />{/each}
+          </div>
         {:else if e.cover}<img src={e.cover.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(e.cover)} />
         {:else}<span class="art"><Emoji name={e.emoji ?? 'sparkles_3d'} size={170} /></span>{/if}
       </div>
       <div class="shade"></div>
 
       <div class="info">
+        {#if !e.video?.url && e.cover && e.slides?.length}
+          <span class="dots" aria-hidden="true">{#each [e.cover, ...e.slides] as _, k (k)}<i class:on={k === (pic[e.id] ?? 0)}></i>{/each}</span>
+        {/if}
         <span class="org"><OrgTag org={e.org} /></span>
         <h2 class="title">{e.title}</h2>
         <p class="meta">{whenLine(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</p>
@@ -139,7 +149,13 @@
   .bg { position: absolute; inset: 0; }
   .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); }
   .bg video, .bg .still { width: 100%; height: 100%; object-fit: cover; transform: none; }
-  .cur .bg img:not(.still) { animation: kb 14s ease-in-out infinite alternate; }
+  .cur .bg > img:not(.still) { animation: kb 14s ease-in-out infinite alternate; }
+  .strip { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip img { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; transform: none; }
+  .dots { display: flex; gap: 5px; align-self: center; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.45); transition: background-color var(--t-fast), transform var(--t-fast); }
+  .dots i.on { background: #fff; transform: scale(1.25); }
   .art { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-bottom: 18vh;
     background: radial-gradient(90% 60% at 50% 30%, rgba(255, 255, 255, 0.22), transparent 60%), var(--tint); }
   .cur .art :global(img) { animation: float 5s ease-in-out infinite alternate; }

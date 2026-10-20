@@ -51,7 +51,7 @@
   let saved = $state<EventFull | null>(null); // the server's copy when editing
   // a new event starts on a random emoji and colour (owner, Oct 13): fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
-  const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, videoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
+  const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
     end: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null,
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, regDate: '', regTime: '18:00',
@@ -150,20 +150,23 @@
     f.cover = null; photoColor = null;
   }
 
-  // a short vertical video (server video.py): sent in pieces with a progress bar, then compressed on the server while
-  // the form stays usable; its status lives beside the form (f has only the id), so the polling doesn't make it dirty
-  let vid = $state<Video | null>(null);
-  let vUp = $state(-1); // the upload's share done, -1 when none is running
-  async function pickVideo(ev: Event) {
+  // the event's videos (server video.py): the vertical one plays in the Feed, the horizontal one behind the event's
+  // sheet (PLAN 32). Sent in pieces with a progress bar, then compressed on the server while the form stays usable;
+  // their status lives beside the form (f has only the ids), so the polling doesn't make it dirty
+  type Slot = 'tall' | 'wide';
+  const KEY = { tall: 'videoId', wide: 'wideVideoId' } as const;
+  let vids = $state<Record<Slot, Video | null>>({ tall: null, wide: null });
+  let vUp = $state<Record<Slot, number>>({ tall: -1, wide: -1 }); // the upload's share done, -1 when none is running
+  async function pickVideo(ev: Event, slot: Slot) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
     if (!file) return;
     if (file.size > 500 * 1024 * 1024) { say(t('ed.videoBig'), 'pleading_face_3d'); return; }
-    if ((await seconds(file)) > 60.5) { haptic.error(); say(t('ed.videoLong'), 'pleading_face_3d'); return; }
-    vUp = 0;
-    try { vid = await api.uploadVideo(file, (d) => (vUp = d)); f.videoId = vid.id; haptic.ok(); }
+    if (slot === 'tall' && (await seconds(file)) > 60.5) { haptic.error(); say(t('ed.videoLong'), 'pleading_face_3d'); return; }
+    vUp[slot] = 0;
+    try { const x = await api.uploadVideo(file, (d) => (vUp[slot] = d), slot === 'wide'); vids[slot] = x; f[KEY[slot]] = x.id; haptic.ok(); }
     catch { haptic.error(); say(t('ed.videoBad'), 'pleading_face_3d'); }
-    finally { vUp = -1; }
+    finally { vUp[slot] = -1; }
   }
   // the length before sending hundreds of megabytes (0 when the webview can't read it: the server checks again)
   function seconds(file: Blob): Promise<number> {
@@ -177,13 +180,36 @@
       v.src = url;
     });
   }
-  $effect(() => {
-    if (!vid || !['queued', 'working', 'uploading'].includes(vid.status)) return;
-    const id = vid.id, timer = setInterval(() => api.video(id).then((x) => { if (vid?.id === id) vid = x; }).catch(() => {}), 3000);
-    return () => clearInterval(timer);
-  });
-  $effect(() => { if (vid?.status === 'failed') { say(t(vid.error === 'too_long' ? 'ed.videoLong' : 'ed.videoBad'), 'pleading_face_3d'); vid = null; f.videoId = null; } });
-  function dropVideo() { vid = null; f.videoId = null; }
+  for (const slot of ['tall', 'wide'] as const) {
+    $effect(() => {
+      const x = vids[slot];
+      if (!x || !['queued', 'working', 'uploading'].includes(x.status)) return;
+      const id = x.id, timer = setInterval(() => api.video(id).then((y) => { if (vids[slot]?.id === id) vids[slot] = y; }).catch(() => {}), 3000);
+      return () => clearInterval(timer);
+    });
+    $effect(() => { const x = vids[slot]; if (x?.status === 'failed') { say(t(x.error === 'too_long' ? 'ed.videoLong' : 'ed.videoBad'), 'pleading_face_3d'); vids[slot] = null; f[KEY[slot]] = null; } });
+  }
+  function dropVideo(slot: Slot) { vids[slot] = null; f[KEY[slot]] = null; }
+
+  // more photos after the cover, swiped sideways in the Feed and the sheet (PLAN 33): nine at most, in the order picked
+  const SLIDES = 9;
+  let slidesUp = $state(0); // how many are being sent
+  async function pickSlides(ev: Event) {
+    const el = ev.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, SLIDES - f.slides.length);
+    el.value = '';
+    if (!files.length) return;
+    slidesUp = files.length;
+    for (const file of files) {
+      try {
+        if (file.size > 30 * 1024 * 1024) say(t('ed.photoBig'), 'pleading_face_3d');
+        // the same picture twice is the same upload: kept once, and never the cover again
+        else { const p = await api.uploadPhoto(await shrink(file)); if (p.id !== f.cover?.id && !f.slides.some((x) => x.id === p.id)) f.slides = [...f.slides, p]; }
+      }
+      catch { haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d'); }
+      slidesUp--;
+    }
+    haptic.ok();
+  }
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
   let panel: HTMLDivElement;
@@ -194,8 +220,8 @@
     if (id) {
       api.event(id).then(async (e) => {
         saved = e;
-        vid = e.video ?? null;
-        f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, videoId: e.video?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
+        vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
+        f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: e.endsAt ? time(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null,
@@ -240,6 +266,8 @@
     ...(f.cover?.id !== saved?.cover?.id || !f.cover !== !saved?.cover ? { coverId: f.cover?.id ?? null } : {}),
     ...(String(f.cover?.focus ?? '') !== String(saved?.cover?.focus ?? '') ? { coverFocus: f.cover?.focus ?? null } : {}),
     ...(f.videoId !== (saved?.video?.id ?? null) ? { videoId: f.videoId } : {}),
+    ...(f.wideVideoId !== (saved?.wideVideo?.id ?? null) ? { wideVideoId: f.wideVideoId } : {}),
+    ...(String(f.cover ? f.slides.map((x) => x.id) : []) !== String((saved?.slides ?? []).map((x) => x.id)) ? { slideIds: f.cover ? f.slides.map((x) => x.id!) : [] } : {}),
     // the price only from those who may set it: left out, the server keeps it
     ...(canPrice ? f.paid && !isMeeting ? { price: +f.price, payToName: f.payTo.trim(), payPhone: f.payPhone.trim(), freeFirst: +(f.freeFirst || 0) || null } : { price: null } : {}),
   });
@@ -252,7 +280,7 @@
     sheets.preview({
       ...i, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
-      cover: f.cover, tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: saved?.externalUrl ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
+      cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: saved?.externalUrl ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
     });
   }
@@ -260,7 +288,7 @@
   async function submit(kind: 'publish' | 'draft' | 'save') {
     tried = true;
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
-    if (vUp >= 0) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
+    if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
     busy = kind;
     try {
@@ -318,6 +346,16 @@
       </div>
       {#if f.cover}
         <CoverFocus cover={f.cover} onpick={(p) => { f.cover = { ...f.cover!, focus: p }; void readColor(false); }} />
+        <div class="slides">
+          {#each f.slides as p, k (p.id)}
+            <span class="sl"><img src={p.thumb} alt="" /><button onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
+          {/each}
+          {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
+          {#if f.slides.length + slidesUp < SLIDES}
+            <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple onchange={pickSlides} disabled={slidesUp > 0} /></label>
+          {/if}
+        </div>
+        <p class="hint">{t('ed.slidesHint')}</p>
         <p class="hint tintnote">{t('ed.tint')}</p>
       {:else}
         <p class="hint">{t('ed.coverTip')}</p>
@@ -331,18 +369,25 @@
 
     <section class="cover">
       <h2 class="t-cap">{t('ed.video')}</h2>
-      {#if vid}
-        <div class="vid surface">
-          <span class="vthumb">{#if vid.poster}<img src={vid.poster.thumb} alt="" />{:else}<Clapperboard size={20} />{/if}</span>
-          <span class="vtx"><b>{vid.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}</b>{#if vid.duration}<i class="t-foot">{mmss(vid.duration)}</i>{/if}</span>
-          <button class="vx" onclick={dropVideo} aria-label={t('ed.photoRemove')}><X size={18} /></button>
-        </div>
-      {:else}
-        <label class="pbtn" class:busy={vUp >= 0}><Clapperboard size={18} />{vUp >= 0 ? t('ed.videoUp', { n: Math.round(vUp * 100) }) : t('ed.videoAdd')}
-          {#if vUp >= 0}<i class="bar" style:width="{vUp * 100}%"></i>{/if}
-          <input type="file" accept="video/*" onchange={pickVideo} disabled={vUp >= 0} /></label>
-        <p class="hint">{t('ed.videoHint')}</p>
-      {/if}
+      <!-- two real tiles shaped like their videos (owner, Oct 19: the old button looked like a thin line) -->
+      <div class="vslots">
+        {#each ['tall', 'wide'] as const as slot (slot)}
+          {@const x = vids[slot]}
+          <div class="vslot {slot}">
+            {#if x}
+              <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
+                <button class="vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
+              <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
+            {:else}
+              <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
+                {#if vUp[slot] >= 0}<i class="bar" style:width="{vUp[slot] * 100}%"></i>{/if}
+                <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
+              <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
+            {/if}
+            <i class="t-foot">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
+          </div>
+        {/each}
+      </div>
     </section>
 
     <label class="field" class:bad={tried && err.title}><span class="t-cap">{t('ed.title')}</span>
@@ -524,11 +569,31 @@
   .pbtn.busy { opacity: 0.6; }
   .pdel { background: var(--surface-2); color: var(--text-2); }
   .pbtn .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width 300ms linear; }
-  .vid { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--r-m); }
-  .vthumb { flex: none; width: 44px; height: 64px; border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--surface-2); color: var(--text-3); }
-  .vthumb img { width: 100%; height: 100%; object-fit: cover; }
-  .vtx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font: 630 15px/1.2 var(--font-text); }
-  .vx { flex: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+  .vslots { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; align-items: end; }
+  .vslot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .vslot b { font: 630 13.5px/1.2 var(--font-text); }
+  .vslot .t-foot { font-style: normal; line-height: 1.3; }
+  .vframe { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: 14px;
+    background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
+  .tall .vframe { aspect-ratio: 9 / 14; }
+  .wide .vframe { aspect-ratio: 16 / 10; }
+  .vframe.add { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .vframe.add:active { transform: scale(0.97); }
+  .vframe.busy { opacity: 0.7; }
+  .vframe input { position: absolute; inset: 0; opacity: 0; }
+  .vframe img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .vframe .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width 300ms linear; }
+  .vx { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 22, 32, 0.55); color: #fff; }
+  .slides { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sl { position: relative; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: var(--surface-2); flex: none; }
+  .sl img { width: 100%; height: 100%; object-fit: cover; }
+  .sl button { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 22, 32, 0.6); color: #fff; }
+  .sl.add { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+  .sl.add input { position: absolute; inset: 0; opacity: 0; }
+  .sl.wait { animation: sl-wait 1.1s ease-in-out infinite; }
+  @keyframes sl-wait { 50% { opacity: 0.5; } }
   .pbtn:active, .pdel:active { transform: scale(0.97); }
   .hint { margin: -4px 4px 0; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
   .tintnote { margin-top: 6px; }

@@ -194,6 +194,7 @@ export interface EventCard {
   placeUrl: string | null;      // 2GIS link for off-campus places
   cover: Media | null;          // photo or poster; null → emoji + colour
   video?: Video | null;         // a short vertical video the Feed plays (ready ones only; the editor also sees one being compressed)
+  slides: Media[];              // photos after the cover, swiped sideways (PLAN 33)
   emoji: string | null;
   color: string | null;
   tint: string;                 // sheet tint
@@ -230,6 +231,7 @@ export interface EventFull extends EventCard {
   memo?: MemoAsks | null;       // the club's Head+: what this event asks DMP for in the weekly memo
   badgeName: string | null;
   photos: AlbumPhoto[];          // the guests' album (students only), in the order added
+  wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)
   canAddPhotos: boolean;        // came (checked in) or the team, from the start until a week after the end, room left
   albumOpen?: boolean;          // "Photos from participants": off = only the team adds (absent for non-students)
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
@@ -320,6 +322,10 @@ export interface EventInput {
   coverId?: Id | null;
   /** A video from uploadVideo, like coverId. */
   videoId?: Id | null;
+  /** The sheet's horizontal background clip (uploadVideo with wide). */
+  wideVideoId?: Id | null;
+  /** Photos after the cover, in order (at most 9); absent keeps them. */
+  slideIds?: Id[];
   /** The cover's focus, [x, y] from 0 to 1; null = the middle; left out keeps it. */
   coverFocus?: [number, number] | null;
   /** Paid (§4.3): tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's

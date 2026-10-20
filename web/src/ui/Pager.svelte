@@ -81,7 +81,7 @@
   });
 
   // ---- touch ----
-  let tz: null | { x: number; y: number; lock: '' | 'x'; ox: number; dx: number; hist: [number, number][] } = null;
+  let tz: null | { x: number; y: number; lock: '' | 'x'; ox: number; dx: number; hist: [number, number][]; strip: HTMLElement | null } = null;
   function blocked(t: EventTarget | null) {
     const el = t as HTMLElement | null;
     return !!el?.closest?.('[data-noswipe], input, textarea, .hscroll');
@@ -90,7 +90,8 @@
     if (e.touches.length !== 1 || blocked(e.target)) { tz = null; return; }
     if (busy) commit(); // a touch during the settle finishes it at once instead of being ignored
     const t = e.touches[0];
-    tz = { x: t.clientX, y: t.clientY, lock: '', ox: 0, dx: 0, hist: [] };
+    // a sideways strip (data-edge: a Feed slide's photos) scrolls itself; at its end the swipe moves the pages, as on TikTok
+    tz = { x: t.clientX, y: t.clientY, lock: '', ox: 0, dx: 0, hist: [], strip: (e.target as HTMLElement | null)?.closest?.('[data-edge]') ?? null };
   }
   function move(e: TouchEvent) {
     if (!tz) return;
@@ -99,6 +100,8 @@
     let dx = t.clientX - tz.x; const dy = t.clientY - tz.y;
     if (!tz.lock) {
       if (dx * dx + dy * dy < 25) return;
+      const st = tz.strip;
+      if (st && (dx < 0 ? st.scrollLeft + st.clientWidth < st.scrollWidth - 2 : st.scrollLeft > 2)) { tz = null; return; }
       if (Math.abs(dx) > Math.abs(dy) * 0.7 && count > 1) { tz.lock = 'x'; tz.ox = dx > 0 ? 3 : -3; }
       else { tz = null; return; }
     }

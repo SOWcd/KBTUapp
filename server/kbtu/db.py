@@ -401,6 +401,16 @@ MIGRATIONS: list[tuple[int, str]] = [
             WHERE r.id = (SELECT MAX(x.id) FROM rounds x WHERE x.org_id = r.org_id));"""),
     # a member link may put the newcomer straight into a department (PLAN 47: one who came by link landed in none)
     (54, "ALTER TABLE org_invites ADD COLUMN dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;"),
+    # an event's photos after the cover, swiped sideways (PLAN 33; event_photos is the guests' album), and a horizontal
+    # video behind the event's sheet (PLAN 32): an upload says which slot it is for, so it is compressed for it
+    (55, """CREATE TABLE event_slides (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      pos      INTEGER NOT NULL,
+      file_id  INTEGER NOT NULL REFERENCES files(id),
+      PRIMARY KEY (event_id, pos)
+    ) STRICT;
+    ALTER TABLE events ADD COLUMN wide_video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL;
+    ALTER TABLE videos ADD COLUMN wide INTEGER NOT NULL DEFAULT 0;"""),
 ]
 
 

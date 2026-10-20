@@ -797,7 +797,7 @@ async def _videos(cfg: Config) -> None:
                 continue
             src = root / "uploads" / str(x["id"])
             try:
-                logic.video_done(con, x["id"], await video.compress(src, root / "media"))
+                logic.video_done(con, x["id"], await video.compress(src, root / "media", bool(x["wide"])))
             except (video.BadVideo, OSError) as exc:
                 log.warning("video %d: %s", x["id"], str(exc)[-200:])
                 logic.video_done(con, x["id"], None, "too_long" if str(exc) == "too_long" else "not_a_video")

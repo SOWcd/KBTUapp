@@ -6,7 +6,7 @@ import { tg } from '../tg';
 
 export interface Snapshot { me: Me | null; events: EventCard[]; orgs: Org[]; schedule: ClassItem[]; posts: Post[]; friends?: Friends | null; myCard?: PersonCard | null; news?: { casts: Post[]; posts: Post[] } | null;
   studio?: Record<number, EventCard[]>; team?: Record<number, TeamMember[]> }
-const VERSION = 1, MAX_AGE = 7 * 86400 * 1000;
+const VERSION = 2, MAX_AGE = 7 * 86400 * 1000;
 const key = () => (tg.user ? `kb-cache-${tg.user.id}` : null);
 
 export function readCache(): Snapshot | null {

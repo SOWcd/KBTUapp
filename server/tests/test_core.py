@@ -313,6 +313,30 @@ def test_photos(env):
     assert kept["cover"] is not None and kept["cover"]["focus"] == [0.25, 0.8]                         # absent keeps both
     gone = c.patch(f"/api/events/{ev['id']}", headers=tma(20), json={**body, "coverId": None}).json()
     assert gone["cover"] is None
+    # PLAN 33: photos after the cover, swiped sideways; a co-organizer keeps the others' when saving
+    login(c, 21, "vic")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'vice', 0 FROM users WHERE tg_id = 21")
+    def pic(tg, rgb):
+        b = io.BytesIO(); Image.new("RGB", (40, 30), rgb).save(b, "PNG")
+        return c.post("/api/photos", headers=tma(tg), content=b.getvalue()).json()["id"]
+    a, b2, mine = pic(20, (1, 2, 3)), pic(20, (4, 5, 6)), pic(21, (7, 8, 9))
+    plain = {k: v for k, v in body.items() if k != "coverId"}   # the editor sends coverId only when it changes
+    put = lambda tg, ids: c.patch(f"/api/events/{ev['id']}", headers=tma(tg), json={**plain, "slideIds": ids})  # noqa: E731
+    assert [x["id"] for x in put(20, [b2, a]).json()["slides"]] == [b2, a]                              # in the order picked
+    for bad in ([a, a], [True], "1", [a] * 10, [mine]):                                                 # the last: someone else's upload
+        assert put(20, bad).status_code == 400
+    assert c.patch(f"/api/events/{ev['id']}", headers=tma(20), json={**body, "slideIds": [up["id"]]}).status_code == 400  # not the cover again
+    assert [x["id"] for x in put(21, [a, mine]).json()["slides"]] == [a, mine]                          # the Vice keeps the President's
+    c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
+    assert [x["id"] for x in c.get("/api/events", headers=tma(30)).json()[0]["slides"]] == [a, mine]
+    assert c.patch(f"/api/events/{ev['id']}", headers=tma(20), json=body).json()["slides"] != []        # absent keeps
+    assert put(20, []).json()["slides"] == []
+    put(20, [a, b2])
+    other = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "slideIds": [a]}).json()       # the same photo on two events
+    c.post(f"/api/events/{ev['id']}/cancel", headers=tma(20), json={"reason": "x"})
+    assert c.delete(f"/api/events/{ev['id']}", headers=tma(20)).status_code == 204
+    assert con.execute("SELECT 1 FROM files WHERE id = ?", (a,)).fetchone() and not con.execute("SELECT 1 FROM files WHERE id = ?", (b2,)).fetchone()
+    assert [x["id"] for x in c.get(f"/api/events/{other['id']}", headers=tma(20)).json()["slides"]] == [a]
     assert c.get("/media/..%2Ft.db").status_code == 404 and "SQLite" not in c.get("/media/../t.db").text   # never leaves media/
 
 
@@ -368,6 +392,26 @@ def test_videos(env, tmp_path):
     x = logic.next_video(con)
     with pytest.raises(video.BadVideo):
         asyncio.run(video.compress(Path(cfg.db_path).parent / "uploads" / str(x["id"]), Path(cfg.db_path).parent / "media"))
+    # PLAN 32: a horizontal clip behind the sheet: 720 on the short side, muted, 20 s at most; only in its own slot
+    wsrc = tmp_path / "wide.mov"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=2", "-f", "lavfi", "-i", "sine=d=2",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", str(wsrc)], check=True)
+    wraw = wsrc.read_bytes()
+    wid = c.post("/api/videos", headers=P, json={"size": len(wraw), "wide": True}).json()["id"]
+    c.put(f"/api/videos/{wid}?at=0", headers=P, content=wraw)
+    c.post(f"/api/videos/{wid}/done", headers=P)
+    assert c.patch(f"/api/events/{ev['id']}", headers=P, json={**body, "videoId": wid}).status_code == 400   # not the Feed's slot
+    assert c.patch(f"/api/events/{ev['id']}", headers=P, json={**body, "videoId": None, "wideVideoId": vid}).status_code == 400
+    assert c.patch(f"/api/events/{ev['id']}", headers=P, json={**body, "videoId": None, "wideVideoId": wid}).json()["wideVideo"]["status"] == "queued"
+    assert c.get(f"/api/events/{ev['id']}", headers=tma(30)).json()["wideVideo"] is None                # students: only once ready
+    wx = logic.next_video(con)
+    assert wx["id"] == wid
+    logic.video_done(con, wid, asyncio.run(video.compress(Path(cfg.db_path).parent / "uploads" / str(wid), Path(cfg.db_path).parent / "media", True)))
+    wide = c.get(f"/api/events/{ev['id']}", headers=tma(30)).json()["wideVideo"]
+    assert wide["poster"]["w"] == 1280 and wide["poster"]["h"] == 720
+    wmeta = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(Path(cfg.db_path).parent / wide["url"])],
+                           capture_output=True, text=True).stdout.split()
+    assert wmeta == ["video"]                                                                            # no sound track
     con.execute("UPDATE videos SET created_at = 0")
     assert sorted(i for i, _ in logic.stale_videos(con)) == [vid] and not con.execute("SELECT 1 FROM videos WHERE id = ?", (vid,)).fetchone()
 

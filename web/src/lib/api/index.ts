@@ -176,7 +176,7 @@ export interface Api {
   addAlbumPhoto(id: Id, file: Blob): Promise<EventFull>;        // the guests' album (canAddPhotos); re-encoded like a cover
   removeAlbumPhoto(id: Id, photo: Id): Promise<EventFull>;      // mine, or any as the club's Head+
   uploadPhoto(file: Blob): Promise<Media>;                       // Head+; re-encoded by the server, use its id as coverId
-  uploadVideo(file: Blob, progress: (done: number) => void): Promise<Video>; // Head+; in pieces, then compressed: use its id as videoId
+  uploadVideo(file: Blob, progress: (done: number) => void, wide?: boolean): Promise<Video>; // Head+; in pieces, then compressed: its id as videoId (wide: wideVideoId)
   video(id: Id): Promise<Video>;                                 // my upload, while it is compressed
   // Vice+: applications and whether the club takes them
   joinRequests(org: Id): Promise<JoinRequest[]>;
