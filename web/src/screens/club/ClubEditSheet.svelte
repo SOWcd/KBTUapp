@@ -5,7 +5,7 @@
   import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import ImagePlus from '@lucide/svelte/icons/image-plus';
-  import { api, ApiErr, type Id, type Org, type OrgPatch } from '../../lib/api';
+  import { api, ApiErr, original, type Id, type Org, type OrgPatch } from '../../lib/api';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
@@ -27,7 +27,7 @@
   let logo = $state<{ id?: Id; url: string } | null>(null);
   let f = $state({ name: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[] });
   $effect(() => {
-    api.org(id).then((x) => { o = x; f = { name: x.name, emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft) }; logo = x.logo ? { url: x.logo } : null; })
+    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft) }; logo = x.logo ? { url: x.logo } : null; })
       .catch(() => { say(t('common.error'), 'pleading_face_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
@@ -102,12 +102,14 @@
       {#if logo}<button class="pill off" onclick={() => (logo = null)}><X size={16} />{t('ce.logoRemove')}</button>{/if}
     </div>
     <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" /></label>
+    <p class="t-foot note">{t('ce.nameHint')}</p>
     {#if !logo}
       <p class="t-foot note">{t('ce.logoOr')}</p>
       <div class="covers">{#each COVERS as c, i (i)}<button class:on={f.cover === i} style="background:{c}" onclick={() => (f.cover = i)} aria-label={String(i + 1)}></button>{/each}</div>
       <div class="ep"><EmojiPick bind:value={f.emoji} size={26} /></div>
     {/if}
     <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="3" placeholder={t('nc.aboutPh')} use:grow></textarea></label>
+    <p class="t-foot note">{t('ce.aboutHint')}</p>
 
     <h3 class="t-cap cap">{t('ce.links')}</h3>
     <p class="t-foot note">{t('ce.linksNote')}</p>

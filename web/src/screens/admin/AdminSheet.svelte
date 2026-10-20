@@ -114,6 +114,7 @@
         {#each slots as d (d.day)}<span class:none={d.n == null} style="height:{d.n == null ? 4 : Math.max(6, (d.n / peak) * 100)}%" title={d.n == null ? '' : String(d.n)}></span>{/each}
       </div>
       <div class="foot"><i>{t('st.chart')}</i><i>{t('st.peak', { n: peak })}</i></div>
+      {#if stats.ai}<p class="foot ai"><i>{stats.ai.on ? t('st.aiOn', { n: stats.ai.today }) : t('st.aiOff')}{stats.ai.error ? ' · ' + stats.ai.error : ''}</i></p>{/if}
     </section>
   {/if}
 
@@ -212,6 +213,7 @@
   .chart span.none { background: var(--line); }
   .foot { display: flex; justify-content: space-between; gap: 8px; margin-top: -6px; }
   .foot i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .foot.ai { margin-top: 4px; }
 
   .todo { display: flex; flex-direction: column; gap: 8px; }
   .capp { display: flex; flex-direction: column; overflow: hidden; }

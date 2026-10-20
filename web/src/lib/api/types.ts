@@ -42,7 +42,9 @@ export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
 export interface TakenDown { target: 'comment' | 'post' | 'event'; id: Id; text: string; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number;
-  days: { day: number; active: number; new: number; students: number }[] }
+  days: { day: number; active: number; new: number; students: number }[];
+  /** the translator (PLAN 9): Cloudflare's keys set, translated today (UTC), the last error */
+  ai?: { on: boolean; today: number; error: string | null } }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
 export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>; at: Ts }
@@ -72,7 +74,8 @@ export interface Media {
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
   abbr?: string /* a school's short name, set by api/client.ts from i18n */;
-  i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */ }
+  i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */;
+  orig?: Record<string, string> /* the fields as typed, before api/client.ts showed a translation */ }
 
 /** A club as the admin sees it (pilot): its leaders by Telegram name, and how many members it has. `student`: signed in
  *  with KBTU — a role counts only then. */
@@ -183,6 +186,8 @@ export interface MyRegistration {
 }
 
 export interface EventCard {
+  /** the other languages (ai.py), applied by api/client.ts; `orig`: the text as typed */
+  i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; description?: string }>>; orig?: Record<string, string>;
   id: Id;
   org: OrgRef;
   status: 'draft' | 'published' | 'cancelled';

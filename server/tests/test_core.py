@@ -3224,3 +3224,90 @@ def test_suggest_chat(env, monkeypatch):
     assert say(30, text="@kbtu_news") == texts.bot_message("ru", "chat_exists")[0]   # live now
     keys = bot._welcome(con, cfg, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "/start chat"})["reply_markup"]["keyboard"]
     assert [k[0]["request_chat"]["chat_is_channel"] for k in keys] == [True, False] and keys[0][0]["request_chat"]["chat_has_username"]
+
+
+def test_translations(env):
+    """PLAN 9 (ai.py): the source language from the letters; the model's answer parsed or refused; only public published
+    events and active clubs are sent; an edit of the text (not of the time) translates again; a translation never
+    overwrites an edit made meanwhile; 3 failures leave it; cards carry titles, the club's description only its page."""
+    import httpx
+    from kbtu import ai
+    assert (ai.lang_of("\u049a\u043e\u0448 \u043a\u0435\u043b\u0434\u0456\u04a3"), ai.lang_of("\u041f\u0440\u0438\u0432\u0435\u0442, \u043c\u0438\u0440"), ai.lang_of("KBTU Open 2026")) == ("kk", "ru", "en")
+    L = {"title": 80, "description": 2000}
+    good = 'Sure!\n```json\n{"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456"}, "en": {"title": "Hack night"}}\n```'
+    assert ai.parse(good, {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430"}, "ru", L) == {"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456"}, "en": {"title": "Hack night"}}
+    for bad in (None, "", "no json here", '{"kk": {"title": "x"}}', '{"kk": {"title": "x"}, "en": {"title": 5}}', '{"kk": {}, "en": {}}'):
+        with pytest.raises(ai.Failed):
+            ai.parse(bad, {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)
+    assert ai.parse('{"kk": {"title": "' + "\u0430" * 300 + '"}, "en": {"title": "b"}}', {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)["kk"]["title"] == "\u0430" * 80
+
+    def call(answer: httpx.Response):
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: answer)) as http:
+                return await ai.translate(http, "acc", "tok", {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
+        return asyncio.run(go())
+    ok = {"result": {"choices": [{"finish_reason": "stop", "message": {"content": '{"kk": {"title": "\u0422"}, "en": {"title": "N"}}'}}]}}
+    assert call(httpx.Response(200, json=ok)) == ("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}})  # the empty description isn't sent
+    with pytest.raises(ai.Busy):
+        call(httpx.Response(429, json={"errors": []}))                    # a minute's rate limit: wait, no try counted
+    with pytest.raises(ai.Busy):
+        call(httpx.Response(502, text="<html>bad gateway</html>", headers={"content-type": "application/json"}))
+    with pytest.raises(ai.Limit):
+        call(httpx.Response(400, json={"errors": [{"code": 4006, "message": "daily free allocation"}]}))
+    with pytest.raises(ai.Failed):
+        call(httpx.Response(200, json={"result": {"choices": [{"finish_reason": "length", "message": {"content": None}}]}}))
+
+    c, cfg = env
+    pres = login(c, 20, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '')")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    start = int(time.time()) + 3600
+    body = {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
+            "emoji": "laptop_3d", "color": "#3B6BFF"}
+    ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
+    assert logic.ai_next(con) is None                                     # a draft stays home; a club with no description too
+    c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
+    kind, rid, was = logic.ai_next(con)
+    assert (kind, rid, was) == ("event", ev["id"], {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430"})
+    tr = {"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456", "description": "\u0422\u0430\u04a3\u0493\u0430 \u0434\u0435\u0439\u0456\u043d"}, "en": {"title": "Hack night", "description": "Code till dawn"}}
+    logic.ai_save(con, kind, rid, was, "ru", tr)
+    assert logic.ai_next(con) is None
+    full = c.get(f"/api/events/{rid}", headers=tma(20)).json()
+    assert full["i18n"]["en"] == {"title": "Hack night", "description": "Code till dawn"}
+    assert logic.cards(con, logic.Viewer(pres["id"], "student", True), [logic.one(con, "SELECT * FROM events WHERE id = ?", rid)])[0]["i18n"] == \
+        {"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456"}, "en": {"title": "Hack night"}}
+    post = logic.channel_due(con, "bot")[0][1]
+    assert "<i>\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456</i>" in post and "<i>Hack night</i>" in post
+
+    c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "place": "306"})   # not the text: the translation stays
+    assert logic.ai_next(con) is None
+    c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "title": "\u041d\u043e\u0447\u044c \u043a\u043e\u0434\u0430"})
+    kind, rid, was = logic.ai_next(con)
+    c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "title": "\u041d\u043e\u0447\u044c \u043a\u043e\u0434\u0430 2"})  # edited while the model thought
+    logic.ai_save(con, kind, rid, was, "ru", {"kk": {"title": "x", "description": "x"}, "en": {"title": "x", "description": "x"}})
+    assert one_val(con, "SELECT i18n FROM events WHERE id = ?", rid) is None and logic.ai_next(con)[2]["title"] == "\u041d\u043e\u0447\u044c \u043a\u043e\u0434\u0430 2"
+    for _ in range(3):
+        logic.ai_failed(con, "event", rid, "bad")
+    assert logic.ai_next(con) is None and logic.ai_state(con)["error"].endswith("event %d: bad" % rid)
+
+    c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "title": "\u0421\u0431\u043e\u0440 \u043a\u043e\u043c\u0430\u043d\u0434\u044b", "visibility": "members"})
+    assert logic.ai_next(con) is None                                     # a team-only event never goes out
+
+    # the club: its description, kept apart from the name; cards don't carry it
+    c.patch("/api/orgs/1", headers=tma(20), json={"description": "\u041c\u044b \u0434\u0435\u043b\u0430\u0435\u043c \u0432\u0435\u0449\u0438."})
+    con.execute("UPDATE orgs SET i18n = ? WHERE id = 1", (json.dumps({"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b"}}),))
+    kind, oid, was = logic.ai_next(con)
+    assert (kind, oid, was) == ("org", 1, {"description": "\u041c\u044b \u0434\u0435\u043b\u0430\u0435\u043c \u0432\u0435\u0449\u0438."})
+    logic.ai_save(con, kind, oid, was, "ru", {"kk": {"description": "\u0411\u0456\u0437 \u0436\u0430\u0441\u0430\u0439\u043c\u044b\u0437."}, "en": {"description": "We build things."}})
+    assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b", "description": "\u0411\u0456\u0437 \u0436\u0430\u0441\u0430\u0439\u043c\u044b\u0437."},
+                                                                             "en": {"description": "We build things."}}
+    assert "description" not in logic.org_ref(con, logic.one(con, "SELECT * FROM orgs WHERE id = 1"))["i18n"]["kk"]
+    assert logic.ai_state(con)["today"] == 2
+    c.patch("/api/orgs/1", headers=tma(20), json={"description": "\u041d\u043e\u0432\u043e\u0435."})
+    assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b"}} and logic.ai_next(con)[0] == "org"
+    con.close()
+
+
+def one_val(con, sql: str, *args):
+    return logic.one(con, sql, *args)[0]

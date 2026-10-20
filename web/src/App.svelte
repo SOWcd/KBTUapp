@@ -10,10 +10,10 @@
   import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { sheets } from './lib/state/sheets';
-  import { t, subjectOf } from './lib/i18n/index.svelte';
+  import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { backButton, haptic, onComputer, tg } from './lib/tg';
-  import { api } from './lib/api';
+  import { api, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
   import Nav from './ui/Nav.svelte';
@@ -240,6 +240,9 @@
     keepTimer = setTimeout(() => writeCache($state.snapshot(snap)), 1000);
   });
 
+  // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
+  $effect(() => { void i18n.lang; untrack(() => { localize(data); localize(session.me); }); });
+
   // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
   let booted = $state(false), wasStudent = false;
@@ -329,6 +332,7 @@
     if (snap) {
       session.me = snap.me; session.ready = true;
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
+      localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);

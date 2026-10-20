@@ -14,7 +14,7 @@
   import Clapperboard from '@lucide/svelte/icons/clapperboard';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Eye from '@lucide/svelte/icons/eye';
-  import { api, ApiErr, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
+  import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, studioChanged, phrase } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -218,7 +218,8 @@
   onMount(() => {
     panel.animate([{ transform: 'translate3d(0,100%,0)' }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (id) {
-      api.event(id).then(async (e) => {
+      api.event(id).then(async (got) => {
+        const e = original(got); // the text as typed, never a translation (PLAN 9)
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
@@ -422,6 +423,7 @@
 
     <label class="field"><span class="t-cap">{t('ed.about')}</span>
       <textarea bind:value={f.description} maxlength="2000" rows="4" placeholder={t('ed.aboutPh')}></textarea></label>
+    {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
 
     {#if !isMeeting}
     <label class="field" class:bad={tried && err.seats}><span class="t-cap">{t('ed.seats')}</span>

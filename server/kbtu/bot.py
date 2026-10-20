@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import casting, db, logic, media, offsite, receipt, texts, video
+from . import ai, casting, db, logic, media, offsite, receipt, texts, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -30,6 +30,7 @@ log = logging.getLogger("kbtu.bot")
 
 POLL = 2                    # seconds between outbox checks
 GAP = 0.05                  # ≤ 20 messages a second (Telegram allows about 30)
+AI_GAP = 10                 # seconds between translations (ai.py): a backlog drains without a burst
 LEASE = 60                  # a taken message is free again after this, if its postman died or the network was down
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened (before Oct 7)
@@ -807,6 +808,47 @@ async def _videos(cfg: Config) -> None:
             await asyncio.sleep(30)
 
 
+async def _translator(cfg: Config) -> None:
+    """Event and club texts into the other two languages (ai.py), one every few seconds; off without Cloudflare's keys.
+    The day's free neurons spent: back after Cloudflare's midnight (UTC)."""
+    on = bool(cfg.cf_account_id and cfg.cf_ai_token)
+    log.warning("ai translation: %s", "on" if on else "off (no CF_ACCOUNT_ID / CF_AI_TOKEN)")
+    try:  # never let the translator take the postman down with it (asyncio.gather)
+        con = db.connect(cfg.db_path)
+        logic.ai_note(con, on=on)
+    except Exception:  # noqa: BLE001
+        log.exception("translator start")
+        return
+    if not on:
+        return
+    async with httpx.AsyncClient(timeout=120) as http:
+        while True:
+            try:
+                job = logic.ai_next(con)
+                if job:
+                    kind, rid, was = job
+                    try:
+                        src, tr = await ai.translate(http, cfg.cf_account_id, cfg.cf_ai_token, was,
+                                                     logic.AI_LIMITS if kind == "event" else logic.AI_ORG_LIMITS)
+                        logic.ai_save(con, kind, rid, was, src, tr)
+                    except ai.Limit:
+                        logic.ai_note(con, error="daily limit")
+                        await asyncio.sleep(86400 - time.time() % 86400 + 300)
+                    except ai.Busy as exc:
+                        logic.ai_note(con, error=f"busy: {exc}")
+                        await asyncio.sleep(300)
+                    except ai.Failed as exc:
+                        log.warning("ai %s %d: %s", kind, rid, exc)
+                        logic.ai_failed(con, kind, rid, str(exc))
+                    except Exception as exc:  # noqa: BLE001 - a surprise counts a try, so one row never blocks the rest
+                        log.exception("ai %s %d", kind, rid)
+                        logic.ai_failed(con, kind, rid, type(exc).__name__)
+                await asyncio.sleep(AI_GAP)
+            except Exception:  # noqa: BLE001 - the loop must outlive one bad answer
+                log.exception("translator")
+                await asyncio.sleep(30)
+
+
 async def run(cfg: Config) -> None:
     """Forever, in one process: every worker (and, during a deploy, the other container) waits on a lock file next to
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
@@ -823,4 +865,4 @@ async def run(cfg: Config) -> None:
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
-            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg))
+            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg))

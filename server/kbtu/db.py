@@ -411,6 +411,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     ALTER TABLE events ADD COLUMN wide_video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL;
     ALTER TABLE videos ADD COLUMN wide INTEGER NOT NULL DEFAULT 0;"""),
+    # texts in three languages by AI (PLAN 9, ai.py): i18n holds the other two languages, lang the source's (NULL: to
+    # translate), ai_tries the failed calls since the last edit; schools have official translations (schools.json)
+    (56, """ALTER TABLE events ADD COLUMN i18n TEXT;
+    ALTER TABLE events ADD COLUMN lang TEXT;
+    ALTER TABLE events ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE orgs ADD COLUMN lang TEXT;
+    ALTER TABLE orgs ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
+    UPDATE orgs SET lang = 'ru' WHERE kind = 'school';"""),
 ]
 
 

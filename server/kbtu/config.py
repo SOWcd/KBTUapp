@@ -21,6 +21,8 @@ class Config:
     admins: frozenset[int] = frozenset()  # Telegram IDs that get the platform admin role
     old_dir: str | None = None  # the old prototype at /old/, kept for the pitch (dev: tmp-serve/)
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
+    cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
+    cf_ai_token: str = ""
     seed: bool = True           # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -48,4 +50,6 @@ def load() -> Config:
         admins=frozenset(int(x) for x in env.get("ADMIN_TG_IDS", "").replace(",", " ").split()),
         old_dir=env.get("OLD_DIR") or None,
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
+        cf_account_id=env.get("CF_ACCOUNT_ID", "").strip(),
+        cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
     )

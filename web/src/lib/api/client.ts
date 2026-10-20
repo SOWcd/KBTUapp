@@ -24,19 +24,31 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return localize(data) as T;
 }
 
-// a club's name, description and short name (a school's SITE) in the viewer's language when it has them (KBTU's schools, from kbtu.edu.kz)
-function localize(x: unknown): unknown {
+// what the server has in the viewer's language (PLAN 9): a school's name, description and short name (kbtu.edu.kz), a
+// club's description and an event's title and description (ai.py). The text as typed stays in `orig`, so a second pass
+// (another language, a copy from the cache) starts from it and the editors save it, never a translation.
+const SHOWN = ['name', 'title', 'description'] as const;
+export function localize(x: unknown): unknown {
   if (Array.isArray(x)) x.forEach(localize);
   else if (x && typeof x === 'object') {
     const o = x as Record<string, unknown>;
-    const tr = (o.i18n as Record<string, { name?: string; description?: string; abbr?: string }> | undefined)?.[i18n.lang];
-    if (tr?.name) o.name = tr.name;
-    if (tr?.abbr) o.abbr = tr.abbr;
-    if (tr?.description && 'description' in o) o.description = tr.description;
-    Object.values(o).forEach(localize);
+    if (o.i18n && typeof o.i18n === 'object') {
+      const orig = (o.orig ??= Object.fromEntries(SHOWN.filter((k) => typeof o[k] === 'string').map((k) => [k, o[k]]))) as Record<string, string>;
+      const tr = (o.i18n as Record<string, Record<string, string> | undefined>)[i18n.lang] ?? {};
+      for (const k of SHOWN) if (k in orig) o[k] = tr[k] || orig[k];
+      if (tr.abbr) o.abbr = tr.abbr;
+    }
+    for (const [k, v] of Object.entries(o)) if (k !== 'orig' && k !== 'i18n' && v && typeof v === 'object') localize(v);
   }
   return x;
 }
+
+/** The object as its author typed it (an editor's starting point). */
+export const original = <T extends object>(x: T): T => ({ ...x, ...((x as { orig?: object }).orig ?? {}) });
+
+/** Whether the viewer sees this field translated by AI (the "Show original" line). */
+export const translated = (x: { orig?: Record<string, string>; title?: string; description?: string | null }, k: 'title' | 'description'): boolean =>
+  !!x.orig && typeof x.orig[k] === 'string' && x[k] !== x.orig[k];
 
 const query = (q: Record<string, number | undefined>) => {
   const s = Object.entries(q).filter(([, v]) => v != null).map(([k, v]) => `${k}=${v}`).join('&');

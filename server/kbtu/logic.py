@@ -97,7 +97,8 @@ def org_ref(con, o: sqlite3.Row, files: dict | None = None) -> dict:
     logo = media_shape(files[o["logo_file_id"]]) if files and o["logo_file_id"] in files else photo(con, o["logo_file_id"])
     return {"id": o["id"], "slug": o["slug"], "name": o["name"], "short": o["short"], "emoji": o["emoji"],
             "cover": o["cover"], "kind": o["kind"], "official": bool(o["official"]), "logo": logo["thumb"] if logo else None,
-            **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {})}  # the app shows the viewer's language (api/client.ts)
+            # the app shows the viewer's language (api/client.ts); a club's description only where it shows (org_shape)
+            **({"i18n": {k: {a: b for a, b in x.items() if a != "description"} for k, x in json.loads(o["i18n"]).items()}} if o["i18n"] else {})}
 
 
 def _org(con, oid: int) -> sqlite3.Row:
@@ -300,13 +301,14 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
             "saved": e["id"] in saved,
             "friends": friends.get(e["id"], []),
             "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
+            **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
         })
     return out
 
 
 def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     head = v.role == "admin" or can(con, v, e["org_id"], "events")
-    return {**card(con, v, e), "description": e["description"], "payToName": e["pay_to_name"], "payPhone": e["pay_phone"], "meetingTag": e["meeting_tag"],
+    return {**card(con, v, e), **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"], "payToName": e["pay_to_name"], "payPhone": e["pay_phone"], "meetingTag": e["meeting_tag"],
             "memo": json.loads(e["memo"]) if head and e["memo"] else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (owner, Oct 17: the talk is there)
@@ -440,8 +442,10 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.starts_at > ?
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) ORDER BY e.published_at""", now()):
+        tr = json.loads(e["i18n"]) if e["i18n"] else {}  # the channel is everyone's: the other languages' titles under it (PLAN 9)
+        also = [x for k in ("kk", "ru", "en") if (x := tr.get(k, {}).get("title")) and x.strip().lower() != e["title"].strip().lower()]
         text = texts.channel_post(e["title"], e["org_name"], e["starts_at"], e["place"], e["price"], e["status"] == "cancelled",
-                                  f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "")
+                                  f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "", also)
         sig = hashlib.sha256(f"{text}|{e['cover']}".encode()).hexdigest()[:16]
         if sig != e["channel_sig"]:
             out.append((e, text, e["cover"], sig))
@@ -459,6 +463,79 @@ def channel_discussion(con, post: int) -> sqlite3.Row | None:
     """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
     and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
     return one(con, "SELECT * FROM events WHERE channel_msg = ? AND channel_link IS NULL", post)
+
+
+# ------------------------------------------------------------ translations (ai.py, PLAN 9)
+# The postman's translator takes one text at a time: an upcoming public event (never drafts, team-only ones or
+# meetings: only what anyone may read goes to Cloudflare, as the privacy policy says), else an active club's
+# description. An edit clears lang (update_event, update_org), so the row comes back; 3 failed calls leave it as typed.
+
+AI_TRIES = 3
+AI_LIMITS = {"title": 80, "description": 2000}
+AI_ORG_LIMITS = {"description": 600}
+
+
+def ai_next(con) -> tuple[str, int, dict[str, str]] | None:
+    """("event" | "org", id, its texts as they are now), or None."""
+    e = one(con, """SELECT e.id, e.title, e.description FROM events e JOIN orgs o ON o.id = e.org_id
+        WHERE e.lang IS NULL AND e.ai_tries < ? AND e.status = 'published' AND e.visibility = 'public' AND e.meeting = 0
+          AND e.hidden_at IS NULL AND o.status = 'active' AND COALESCE(e.ends_at, e.starts_at) > ? ORDER BY e.updated_at DESC LIMIT 1""", AI_TRIES, now())
+    if e:
+        return "event", e["id"], {"title": e["title"], "description": e["description"]}
+    o = one(con, "SELECT id, description FROM orgs WHERE lang IS NULL AND ai_tries < ? AND status = 'active' AND trim(description) != '' ORDER BY id DESC LIMIT 1", AI_TRIES)
+    return ("org", o["id"], {"description": o["description"]}) if o else None
+
+
+def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[str, dict[str, str]]) -> None:
+    """The translations, unless the text was edited meanwhile (then the edit's own turn comes)."""
+    with tx(con):
+        if kind == "event":
+            n = con.execute("UPDATE events SET i18n = ?, lang = ? WHERE id = ? AND title = ? AND description = ? AND lang IS NULL",
+                        (json.dumps({k: {"title": x.get("title", was["title"]), "description": x.get("description", "")} for k, x in tr.items()}, ensure_ascii=False),
+                         src, rid, was["title"], was["description"])).rowcount
+            if not n:
+                return
+        else:
+            o = one(con, "SELECT i18n FROM orgs WHERE id = ? AND description = ? AND lang IS NULL", rid, was["description"])
+            if not o:
+                return
+            have = json.loads(o["i18n"]) if o["i18n"] else {}
+            have = {k: {a: b for a, b in x.items() if a != "description"} for k, x in have.items()}  # a name or a school's abbr stays
+            for k, x in tr.items():
+                have.setdefault(k, {})["description"] = x["description"]
+            con.execute("UPDATE orgs SET i18n = ?, lang = ? WHERE id = ?", (json.dumps({k: x for k, x in have.items() if x}, ensure_ascii=False), src, rid))
+        _ai_note(con, done=True)
+
+
+def ai_failed(con, kind: str, rid: int, why: str) -> None:
+    with tx(con):
+        con.execute(f"UPDATE {'events' if kind == 'event' else 'orgs'} SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))  # the table from the two above
+        _ai_note(con, error=f"{kind} {rid}: {why}"[:200])
+
+
+def _ai_note(con, done: bool = False, error: str | None = None, on: bool | None = None) -> None:
+    """What the admin panel shows (admin_stats): on or off, translated today (UTC, Cloudflare's day), the last error."""
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    if done:
+        n = one(con, "SELECT value FROM meta WHERE key = 'ai:done'")
+        count = int(n[0].split()[1]) + 1 if n and n[0].startswith(day) else 1
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ai:done', ?)", (f"{day} {count}",))
+    if error is not None:
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ai:error', ?)", (f"{day} {error}",))
+    if on is not None:
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('ai:on', ?)", ("1" if on else "0",))
+
+
+def ai_note(con, error: str | None = None, on: bool | None = None) -> None:
+    with tx(con):
+        _ai_note(con, error=error, on=on)
+
+
+def ai_state(con) -> dict:
+    meta = dict(rows(con, "SELECT key, value FROM meta WHERE key LIKE 'ai:%'"))
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    done = meta.get("ai:done", "")
+    return {"on": meta.get("ai:on") == "1", "today": int(done.split()[1]) if done.startswith(day) else 0, "error": meta.get("ai:error")}
 
 
 # ------------------------------------------------------------ videos (video.py)
@@ -1204,6 +1281,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         AND r.status != 'done' AND a.stage != 'withdrawn'""", v.id, *ids)} if v.student and live else set()
     return [{
         **org_ref(con, o, files), "description": o["description"], "links": json.loads(o["links"]),
+        **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
         "round": {"id": live[o["id"]]["id"], "closesAt": live[o["id"]]["closes_at"], "applied": o["id"] in applied} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
         "recruiting": bool(o["recruiting"]), "myRequest": _request_state(asked.get(o["id"])),
@@ -1346,9 +1424,11 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
         con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
+        if "description" in sets and sets["description"] != before["description"]:
+            con.execute("UPDATE orgs SET lang = NULL, ai_tries = 0 WHERE id = ?", (oid,))  # translated again (ai.py)
         if before["i18n"] and (gone := {k for k in ("name", "description") if k in sets and sets[k] != before[k]}):
             # a field edited by hand (in Russian, or whatever was typed) is shown as typed in every language
-            tr = {lang: {k: x for k, x in f.items() if k not in gone} for lang, f in json.loads(before["i18n"]).items()}
+            tr = {lang: g for lang, f in json.loads(before["i18n"]).items() if (g := {k: x for k, x in f.items() if k not in gone})}
             con.execute("UPDATE orgs SET i18n = ? WHERE id = ?", (json.dumps(tr, ensure_ascii=False), oid))
     if sets.keys() - {"recruiting"}:
         con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'org_edit', ?, ?, ?)",
@@ -2989,6 +3069,7 @@ def admin_stats(con, v: Viewer) -> dict:
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users")[0], "students": one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
+            "ai": ai_state(con),
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}
                      for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}
 
@@ -3114,6 +3195,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         _slides(con, v, body, e, f["cover_file_id"])
         if (f["memo"], f["starts_at"], f["ends_at"]) != (e["memo"], e["starts_at"], e["ends_at"]):
             f["memo_sent_at"] = f["memo_sent_by"] = None  # changed requests go to DMP again
+        if (f["title"], f["description"]) != (e["title"], e["description"]):
+            f["i18n"], f["lang"], f["ai_tries"] = None, None, 0  # translated again (ai.py)
         con.execute(f"UPDATE events SET {', '.join(k + ' = ?' for k in f)}, tint = ?, updated_at = ? WHERE id = ?",
                     (*f.values(), shade(f["color"]), now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)
@@ -3599,7 +3682,11 @@ def seed_schools(con, root: Path) -> None:
                                                                           saved["path"], now(), saved["color"])).lastrowid
             # a later version brings new translations (the short names, Oct 14) and leaves what the school typed
             tr = {"ru": {"abbr": s["ru"]["abbr"]}, **{k: s[k] for k in ("kk", "en")}}
-            con.execute("UPDATE orgs SET i18n = ?, logo_file_id = ?, official = 1 WHERE id = ?", (json.dumps(tr, ensure_ascii=False), logo, o["id"]))
+            own = done and o["description"] != s["ru"]["description"]  # the school's own text: the AI translates it (ai.py), not the site's
+            if own:
+                tr = {k: {a: b for a, b in x.items() if a != "description"} for k, x in tr.items()}
+            con.execute("UPDATE orgs SET i18n = ?, logo_file_id = ?, official = 1, lang = ? WHERE id = ?",
+                        (json.dumps(tr, ensure_ascii=False), logo, None if own else "ru", o["id"]))
             if not done:
                 con.execute("UPDATE orgs SET name = ?, description = ? WHERE id = ?", (s["ru"]["name"], s["ru"]["description"], o["id"]))
         con.execute("INSERT INTO meta (key, value) VALUES ('schools', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (SCHOOLS_VERSION,))

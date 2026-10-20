@@ -458,10 +458,12 @@ MEMO2_DENSITY = ("70-100", "110-150", "200-250")   # "Плотность бум�
 MEMO2_FILM = "Разрешить съёмку в студии КБТУ:"     # then "Дата:", "Время:", "Примечание:" as the other requests
 MEMO2_BLANK = "Студенческая организация «{org}» просит Вас:"  # the memo with nothing from the events: the sender writes it
 MEMO2_DATES = "Даты: {dates}"
-def channel_post(title: str, org: str, starts: int, place: str, price: int | None, cancelled: bool, link: str = "") -> str:
-    """A public event's post in the events channel (HTML), in Russian: the channel's language. Signing up is a link in
+def channel_post(title: str, org: str, starts: int, place: str, price: int | None, cancelled: bool, link: str = "",
+                 also: list[str] = ()) -> str:
+    """A public event's post in the events channel (HTML), in Russian: the channel's language; `also`: the title in the
+    other languages (ai.py), in italics under it. Signing up is a link in
     the text, not a button: Telegram hides a post's comments under a button (owner, Oct 17)."""
-    lines = [f"<b>{html.escape(title)}</b>", html.escape(org), "", f"📅 {when(starts, 'ru')}", f"📍 {html.escape(place_or_tba(place, 'ru'))}",
+    lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "", f"📅 {when(starts, 'ru')}", f"📍 {html.escape(place_or_tba(place, 'ru'))}",
              f"💳 {price} ₸" if price else "🎟 Бесплатно"]
     if link and not cancelled:
         lines += ["", f'👉 <a href="{html.escape(link)}">Записаться в KBTU App</a>']

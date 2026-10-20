@@ -13,7 +13,7 @@
   import EventRow from '../../ui/EventRow.svelte';
   import Button from '../../ui/Button.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
-  import { api, type EventCard, type Id, type Org } from '../../lib/api';
+  import { api, translated, type EventCard, type Id, type Org } from '../../lib/api';
   import { data, toggleJoin, toggleSub } from '../../lib/state/data.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -31,6 +31,7 @@
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id) : null));
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
+  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   $effect(() => {
     api.org(id).then((x) => (fetched = x)).catch(() => {});
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
@@ -56,7 +57,8 @@
     </div>
 
     {#if o.myRole}<p class="role">{t('club.myRole', { role: roleName(o.myRole, o.myTitle) })}</p>{/if}
-    {#if o.description}<p class="t-body about selectable">{o.description}</p>{/if}
+    {#if o.description}<p class="t-body about selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
+      {#if translated(o, 'description')}<button class="trn" onclick={() => (raw = !raw)}>{raw ? t('ai.showTr') : t('ai.translated')}</button>{/if}{/if}
     {#if o.round && !o.myRole}<p class="rnd">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</p>
     {:else if joinable && !o.myRole && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t('join.closed')}</p>{/if}
 
@@ -102,6 +104,7 @@
 </Sheet>
 
 <style>
+  .trn { margin-top: 6px; padding: 2px 0; font: 600 12.5px/1.2 var(--font-text); color: var(--text-3); }
   .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 8px 0 4px; }
   .lg { position: relative; transition: transform var(--t-fast) var(--ease); }
   .lg:active { transform: scale(0.95); }

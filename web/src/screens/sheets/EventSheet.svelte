@@ -42,7 +42,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf } from '../../lib/map';
-  import { api, ApiErr, type AlbumPhoto, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
+  import { api, ApiErr, translated, type AlbumPhoto, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -69,6 +69,8 @@
   onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
+  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
+  const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
   const st = $derived(e?.my?.status);
   const route = $derived(t('event.route').split(' ')); // the ↗ sticks to the last word, never wraps alone
   const going = $derived(st === 'going');
@@ -450,7 +452,8 @@
 
     {#if about}
       <h3 class="t-cap sec">{t('event.about')}</h3>
-      <p class="t-body desc selectable">{about}</p>
+      <p class="t-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
+      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}>{raw ? t('ai.showTr') : t('ai.translated')}</button>{/if}
     {/if}
     {#if detail?.discuss && !preview && !cancelled}
       <!-- the talk lives under the channel post, with Telegram's replies and reactions (owner, Oct 17) -->
@@ -527,6 +530,7 @@
 </Sheet>
 
 <style>
+  .trn { align-self: flex-start; margin-top: 6px; padding: 2px 0; font: 600 12.5px/1.2 var(--font-text); color: var(--text-3); }
   .rnote { display: flex; align-items: center; gap: 7px; margin: 10px 2px 0; font: 600 13.5px/1.3 var(--font-text); color: var(--text-2); }
   .mg { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
   .mg > b { color: var(--text-2); }
