@@ -2618,6 +2618,13 @@ def test_badge_skin(env):
     con.execute("DELETE FROM org_members WHERE org_id = 1")
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] is None
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (3, 'kn', 'club', 'KBTU Knights', 'KN', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (3, ?, 'member', 0)", (pres["id"],))
+    con.commit()
+    assert c.patch("/api/me", headers=P, json={"skin": 3}).json()["skin"] == 3  # Knights have one too (Oct 20)
+    con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
+    con.commit()
+    assert c.get("/api/me", headers=P).json()["skin"] == 3                        # and it comes by itself
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
     con.commit()
     assert c.get("/api/me", headers=A).json()["skin"] == "sower"

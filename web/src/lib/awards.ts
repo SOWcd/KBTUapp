@@ -85,6 +85,11 @@ export function hero(p: PersonCard): HeroData {
   };
 }
 
-/** Clubs with a badge of their own (made by hand per official club, PLAN "Club badge"): only StudEx so far.
- *  ponytail: one look, a boolean; a map name -> look when the second club gets one */
-export const skinned = (o?: OrgRef | null) => !!o && o.official && /studex/i.test(o.name);
+/** Clubs with a badge of their own (made by hand per official club, PLAN "Club badge"), told by name as on the server
+ *  (logic.SKINNED): StudEx; Cheerleading and Knights since Oct 20. */
+export type Skin = 'studex' | 'cheer' | 'knights';
+const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['knights', /knight/i]];
+export const skinOf = (o?: OrgRef | null): Skin | null => (o?.official && SKINS.find(([, re]) => re.test(o.name))?.[0]) || null;
+export const skinned = (o?: OrgRef | null) => !!skinOf(o);
+/** the word on each one's strap */
+export const STRAP: Record<Skin | 'sower' | 'kbtu', string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };

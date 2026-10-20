@@ -2,12 +2,12 @@
   // Who puts an event on, on a photo (the Feed, the event sheet's header): the club's own mark and name; StudEx as its
   // wordmark, the one on its lanyard (owner, Oct 13: a microphone emoji isn't StudEx).
   import type { OrgRef } from '../lib/api';
-  import { skinned } from '../lib/awards';
+  import { skinOf } from '../lib/awards';
   import OrgLogo from './OrgLogo.svelte';
   let { org }: { org: OrgRef } = $props();
 </script>
 
-{#if skinned(org)}<span class="tag sx" aria-label={org.name}><b><i>STUD</i>EX</b></span>
+{#if skinOf(org) === 'studex'}<span class="tag sx" aria-label={org.name}><b><i>STUD</i>EX</b></span>
 {:else}<span class="tag"><OrgLogo {org} size={20} /><span class="ellipsis">{org.name}</span></span>{/if}
 
 <style>

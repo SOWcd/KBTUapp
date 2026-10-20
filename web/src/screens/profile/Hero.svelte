@@ -16,7 +16,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import { QR_TONE, skinned } from '../../lib/awards';
+  import { QR_TONE, skinOf, STRAP } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
 
@@ -26,7 +26,7 @@
   const h = $derived(hero(p));
   // the club badge they picked (a skin, owner Oct 13; picked in LookSheet), else the KBTU one
   const sower = $derived(p.skin === 'sower'); // the creator's own (owner, Oct 13)
-  const studex = $derived(!sower && skinned(p.clubs.find((m) => m.org.id === p.skin)?.org));
+  const look = $derived(sower ? 'sower' : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org) ?? 'kbtu'); // the class and the strap's word
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
@@ -65,8 +65,8 @@
 </script>
 
 <section class="h">
-<div class="hang" class:studex class:sower>
-  <div class="strap" aria-hidden="true"><span>{sower ? 'SOWER' : studex ? 'STUDEX' : 'KBTU'}</span></div>
+<div class="hang {look}">
+  <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
   <div class="clip" aria-hidden="true"></div>
   <div class="swing" bind:this={swing}>
     <div class="badge" use:glass>
@@ -83,7 +83,7 @@
           <span class="meta">{h.line}</span>
         </span>
       </div>
-      <div class="holo">{#if sower}<span class="sw">SOWER</span>{:else if studex}<span class="sx"><i>STUD</i>EX</span>{:else}<span>KBTU APP</span>{/if}<span>№ {h.no}</span></div>
+      <div class="holo">{#if look === 'sower'}<span class="sw">SOWER</span>{:else if look === 'studex'}<span class="sx"><i>STUD</i>EX</span>{:else if look === 'cheer'}<span class="ch">CHEERLEADING</span>{:else if look === 'knights'}<span class="kn">KNIGHTS</span>{:else}<span>KBTU APP</span>{/if}<span>№ {h.no}</span></div>
     </div>
   </div>
 </div>
@@ -153,9 +153,9 @@
   /* + the logo's arrow, a faint watermark on the navy */
   .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,
     linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
-  .studex .photo { background: #fff; }
-  .studex .role { color: rgba(255, 255, 255, 0.92); }
-  .studex .meta { color: rgba(255, 255, 255, 0.8); }
+  .studex .photo, .cheer .photo, .knights .photo { background: #fff; }
+  .studex .role, .cheer .role, .knights .role { color: rgba(255, 255, 255, 0.92); }
+  .studex .meta, .cheer .meta, .knights .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .holo { background-image: linear-gradient(100deg, #fff 25%, #FFE1E6 40%, #E2E9FF 52%, #E6FFF4 60%, #fff 75%); color: #173064; } /* white, a pale shimmer on tilt */
   /* SOWER, the creator's alone (owner, Oct 13; Oct 14 after four drafts: "the rings from the corner, like a thrown
      stone"): black, rings spreading from behind the QR's corner, no stripe (the old white cut was StudEx's); the strap
@@ -173,6 +173,18 @@
   .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; color: #0A0A0A; }
   .sx { font: 900 13px/1 var(--font-display); letter-spacing: -0.02em; color: #173064; }
   .sx i { font-style: normal; color: #CF3428; }
+  .ch { font: 700 11.5px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.2em; color: #2E3258; }
+  .kn { font: italic 900 14px/1 var(--font-display); letter-spacing: 0.06em; color: #1C4C94; }
+  /* Cheerleading (Oct 20): its logo's navy fading to the panther's black, three claw marks as the watermark */
+  .cheer .strap { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
+  .cheer .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='white' fill-opacity='0.1'%3E%3Cpath d='M22 6Q48 48 26 96Q36 48 22 6Z'/%3E%3Cpath d='M44 2Q70 46 48 98Q58 46 44 2Z'/%3E%3Cpath d='M66 8Q90 50 70 94Q80 50 66 8Z'/%3E%3C/g%3E%3C/svg%3E") right -14px bottom -36px / 180px no-repeat,
+    radial-gradient(120% 110% at 0% 0%, #454B88, #2E3258 38%, #0A0B14 92%); }
+  .cheer .holo { background-image: linear-gradient(100deg, #fff 25%, #E4E6F5 40%, #fff 52%, #DADCEC 62%, #fff 75%); color: #2E3258; }
+  /* Knights (Oct 20): the logo's royal blue, the main building's windows along the bottom as the watermark */
+  .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
+  .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
+  .knights .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44'%3E%3Cdefs%3E%3Cpattern id='w' width='7' height='7' patternUnits='userSpaceOnUse'%3E%3Crect x='1.5' y='2' width='4' height='4' fill='white' fill-opacity='0.07'/%3E%3C/pattern%3E%3C/defs%3E%3Cpath d='M0 44V16h62v-6h76v6h62v28Z' fill='url(%23w)'/%3E%3C/svg%3E") left bottom / 100% auto no-repeat, linear-gradient(160deg, #2E6AD1, #1C4C94 45%, #0B1F48); }
+  .knights .holo { background-image: linear-gradient(100deg, #fff 25%, #DCE8FF 40%, #fff 52%, #E2ECFF 62%, #fff 75%); color: #1C4C94; }
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
   /* the award shelf: six places, the empty ones dashed */

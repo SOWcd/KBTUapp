@@ -784,7 +784,8 @@ def me(con, v: Viewer) -> dict:
 
 
 # the clubs with a badge of their own (web: awards.ts `skinned`)
-SKINNED = "o.official = 1 AND o.status = 'active' AND lower(o.name) LIKE '%studex%'"
+SKINNED = ("o.official = 1 AND o.status = 'active' AND (lower(o.name) LIKE '%studex%' OR lower(o.name) LIKE '%cheer%'"
+           " OR lower(o.name) LIKE '%knight%')")
 
 
 def _skin(con, uid: int) -> int | str | None:

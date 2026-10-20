@@ -12,7 +12,7 @@
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import { skinned } from '../../lib/awards';
+  import { skinOf, skinned, STRAP } from '../../lib/awards';
   import { byRank } from '../../lib/perms';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -82,7 +82,7 @@
          the row scrolls) -->
     <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
       {#each [...(me.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
-              ...skins.map((o) => ({ id: o.id, kind: 'studex', name: o.name, word: 'STUDEX' })),
+              ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: o.name, word: STRAP[skinOf(o)!] })),
               { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }] as k (k.id ?? 'kbtu')}
         <button class="ly {k.kind}" role="radio" aria-checked={me.skin === k.id} class:on={me.skin === k.id} disabled={!!busy} onclick={() => { haptic.select(); void pickSkin(k.id); }}>
           <span class="st"><i>{k.word}</i></span><span class="cl"></span>
@@ -142,6 +142,11 @@
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   .ly.studex .cd { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 31%, #1D3B7A 31%, #0F2350); }
   .ly.studex .hl { background: #fff; }
+  .ly.cheer .st { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
+  .ly.cheer .cd { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='white' fill-opacity='0.1'%3E%3Cpath d='M22 6Q48 48 26 96Q36 48 22 6Z'/%3E%3Cpath d='M44 2Q70 46 48 98Q58 46 44 2Z'/%3E%3Cpath d='M66 8Q90 50 70 94Q80 50 66 8Z'/%3E%3C/g%3E%3C/svg%3E") right -2px bottom -6px / 44px no-repeat, radial-gradient(120% 110% at 0% 0%, #454B88, #2E3258 38%, #0A0B14 92%); }
+  .ly.cheer .hl, .ly.knights .hl { background: #fff; }
+  .ly.knights .st { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
+  .ly.knights .cd { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44'%3E%3Cdefs%3E%3Cpattern id='w' width='7' height='7' patternUnits='userSpaceOnUse'%3E%3Crect x='1.5' y='2' width='4' height='4' fill='white' fill-opacity='0.07'/%3E%3C/pattern%3E%3C/defs%3E%3Cpath d='M0 44V16h62v-6h76v6h62v28Z' fill='url(%23w)'/%3E%3C/svg%3E") left bottom 10px / 100% auto no-repeat, linear-gradient(160deg, #2E6AD1, #1C4C94 45%, #0B1F48); }
   .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .ly.sower .st i { color: #000; }
   .ly.sower .cd { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
