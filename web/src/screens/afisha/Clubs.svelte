@@ -30,14 +30,14 @@
   function tapChat(c: Chat) {
     void openChat(c).then(() => { if (chats) chats = { forYou: chats.forYou.map((x) => (x.id === c.id ? { ...x, opened: true } : x)), all: chats.all.map((x) => (x.id === c.id ? { ...x, opened: true } : x)) }; });
   }
-  // clubs come first; KBTU's eleven schools have their own tab (owner, Oct 14: "schools matter less than clubs"), and a
-  // search or my subscriptions show both, clubs on top
-  let view = $state<'all' | 'mine' | 'schools'>('all');
+  // clubs come first; KBTU's eleven schools after them under their own heading, no tab of their own (owner, Oct 14:
+  // "schools matter less than clubs"; Oct 20: "there, but not up front")
+  let view = $state<'all' | 'mine'>('all');
   const norm = (s: string) => s.toLowerCase().replace(/\u0451/g, '\u0435'); // Russian yo → ye, so both spellings match
   const hit = (o: (typeof data.orgs)[number]) => [o.name, o.abbr ?? ''].some((x) => norm(x).includes(norm(q.trim())));
   const list = $derived(data.orgs.filter((o) => (view !== 'mine' || o.subscribed) && (!q.trim() || hit(o))));
-  const clubs = $derived(view === 'schools' && !q.trim() ? [] : list.filter((o) => o.kind !== 'school'));
-  const schools = $derived(view === 'all' && !q.trim() ? [] : list.filter((o) => o.kind === 'school'));
+  const clubs = $derived(list.filter((o) => o.kind !== 'school'));
+  const schools = $derived(list.filter((o) => o.kind === 'school'));
   const subsCount = $derived(data.orgs.filter((o) => o.subscribed).length);
   const soon = $derived.by(() => {
     const subs = new Set(data.orgs.filter((o) => o.subscribed).map((o) => o.id));
@@ -80,10 +80,9 @@
   <div class="seg" role="tablist">
     <button class:on={view === 'all'} onclick={() => (view = 'all')}>{t('clubs.clubs')}</button>
     <button class:on={view === 'mine'} onclick={() => (view = 'mine')}>{t('clubs.mine')}{subsCount ? ' · ' + subsCount : ''}</button>
-    <button class:on={view === 'schools'} onclick={() => (view = 'schools')}>{t('clubs.schools')}</button>
   </div>
 
-  <!-- KBTU's schools first, as their own block (owner, Oct 13); the clubs under them, headed only when both show -->
+  <!-- the clubs, then KBTU's schools under a heading (only when both show) -->
   {#each [clubs, schools] as group, gi (gi)}
   {#if group.length && clubs.length && schools.length}<h2 class="grp t-h3">{t(gi ? 'clubs.schools' : 'clubs.clubs')}</h2>{/if}
   {#if group.length || (gi && !clubs.length && !schools.length)}

@@ -10,15 +10,19 @@
   import CreateClubCard from '../../ui/CreateClubCard.svelte';
   import { dayMonth } from '../../lib/time';
 
-  // a recruitment round first (soonest deadline first), then clubs taking one-tap applications
+  // a recruitment round first (soonest deadline first), then clubs taking one-tap applications; KBTU's schools after
+  // the clubs under their own heading (owner, Oct 20: joinable, but not up front)
   const open = $derived(data.orgs.filter((o) => (o.round || o.recruiting) && !o.myRole)
     .sort((a, b) => (a.round ? a.round.closesAt : Infinity) - (b.round ? b.round.closesAt : Infinity)));
+  const groups = $derived([open.filter((o) => o.kind !== 'school'), open.filter((o) => o.kind === 'school')]);
 </script>
 
 <div class="page scroll">
   <header class="hd"><h1 class="t-h1">{t('join.title')}</h1><p class="t-foot">{t('join.sub')}</p></header>
   <div class="list">
-    {#each open as o (o.id)}
+    {#each groups as group, gi (gi)}
+    {#if gi && group.length}<h2 class="grp t-h3">{t('clubs.schools')}</h2>{/if}
+    {#each group as o (o.id)}
       <article class="club surface">
         <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
         <div class="top">
@@ -38,6 +42,7 @@
         </div>
       </article>
     {/each}
+    {/each}
     <CreateClubCard />
   </div>
   <div class="tail"></div>
@@ -48,6 +53,7 @@
   .hd { margin-bottom: 16px; }
   .hd p { margin-top: 4px; }
   .list { display: flex; flex-direction: column; gap: 10px; }
+  .grp { margin: 10px 2px 0; }
   .club { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
   .open { position: absolute; inset: 0; border-radius: inherit; }
   .top { display: flex; align-items: center; gap: 12px; }

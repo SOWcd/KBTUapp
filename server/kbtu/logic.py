@@ -3971,7 +3971,7 @@ def president_link(con, v: Viewer, oid: int) -> dict:
     """The admin makes a new club's President with a link (§2): one person, once, within 7 days — no need for them to
     have opened the app before. A new link ends the unused old one."""
     _admin(v)
-    o = one(con, "SELECT * FROM orgs WHERE id = ? AND kind IN ('club', 'school') AND status = 'active'", oid)
+    o = one(con, "SELECT * FROM orgs WHERE id = ? AND kind IN ('club', 'school', 'council') AND status = 'active'", oid)
     if not o:
         raise ApiError("not_found")
     token = secrets.token_hex(12)

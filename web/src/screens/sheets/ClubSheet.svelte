@@ -35,7 +35,7 @@
     api.org(id).then((x) => (fetched = x)).catch(() => {});
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
   });
-  const joinable = $derived(o?.kind === 'club' || o?.kind === 'council');
+  const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club (owner, Oct 20)
   const contact = $derived(o?.links.find((u) => social(u).kind === 'telegram') ?? o?.links[0]);
   // the second button: apply, the pending application, or "write to the club" once it's closed
   const join = $derived(!!o && joinable && !!(o.round || o.myRequest || o.recruiting || contact));
