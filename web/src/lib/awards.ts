@@ -98,5 +98,5 @@ export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
 /** the word on each one's strap */
 export type Look = Skin | 'sower' | 'kbtu';
 export const STRAP: Record<Look, string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };
-/** the looks with an art band on top (ui/LanyardBand): owner, Oct 20, StudEx, KBTU and SOWER keep their own cards */
+/** the looks with their own art (ui/LanyardBand): owner, Oct 20, StudEx, KBTU and SOWER keep their own cards */
 export const banded = (look: Look) => look === 'cheer' || look === 'knights';

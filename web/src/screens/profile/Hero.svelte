@@ -71,7 +71,7 @@
   <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
   <div class="clip" aria-hidden="true"></div>
   <div class="swing" bind:this={swing}>
-    <div class="badge" class:banded={banded(look)} use:glass>
+    <div class="badge" use:glass>
       {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
@@ -131,12 +131,8 @@
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
-  /* with an art band (LanyardBand): the photo overlaps its bottom edge, the name starts below it */
-  .banded { padding-top: 0; }
-  .banded .top { align-items: flex-start; margin-top: -30px; }
-  .banded .id { margin-top: 34px; }
-  .banded .qr { top: 96px; }
-  .foot { display: block; margin: 16px 18px 0; }
+  /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
+  .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
   .top.mine .id { padding-right: 62px; } /* the name never runs under the QR */
   .top.mine .nm { font-size: 20px; }
   .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
@@ -144,8 +140,7 @@
 
   .qr:active { transform: scale(0.92); }
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
-  .banded .photo, .studex .photo, .sower .photo { background: #fff; }
-  .banded .photo { box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.6); }
+  .cheer .photo, .knights .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
   .id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
@@ -159,12 +154,9 @@
      LanyardHolo) */
   .role { color: var(--role, #A9C0FF); }
   .cheer { --role: #FFC83D; }
-  .cheer .badge { background: linear-gradient(180deg, #1D2042, #0A0B17); }
   .cheer .strap { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
   .cheer .strap span { color: #FFC83D; }
   .knights { --role: #9CC2FF; }
-  .knights .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 140'%3E%3Cg fill='none' stroke='white' stroke-opacity='.07' stroke-width='2'%3E%3Cpath d='M-20 140A145 145 0 0 1 270 140'/%3E%3Cpath d='M70 140V80H180V140'/%3E%3C/g%3E%3C/svg%3E") center bottom / 100% auto no-repeat,
-    linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
   /* StudEx (owner, Oct 13; kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
