@@ -1,6 +1,9 @@
 // A card the app only partly knows yet (opened from a friend row before the server answers) shows no numbers rather
 // than wrong zeros; the full card shows all three.
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+
+// awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
+vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
 import { hero } from './awards';
 import type { PersonCard } from './api';
 
