@@ -1617,16 +1617,19 @@ def chats(con, v: Viewer) -> dict:
     tick once I've opened one (an honest nudge, the bot checks nothing yet)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
-    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats ORDER BY sort, course IS NULL DESC, course, title")]
+    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY sort, course IS NULL DESC, course, title")]
     fits = lambda c: (c["school"] in (None, st["school"])) and (c["course"] in (None, st["course"]))  # noqa: E731
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last
     mine = sorted((c for c in everything if st and fits(c)), key=lambda c: -aim(c))
-    return {"forYou": mine if st else [c for c in everything if c["school"] is None and c["course"] is None], "all": everything}
+    out = {"forYou": mine if st else [c for c in everything if c["school"] is None and c["course"] is None], "all": everything}
+    if v.role in ("admin", "moderator"):  # the suggestions waiting for a look, newest first
+        out["pending"] = [{**_chat(c, set()), "at": c["created_at"]} for c in rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")]
+    return out
 
 
 def chat_opened(con, v: Viewer, cid: int) -> None:
     need_student(v)
-    if not one(con, "SELECT 1 FROM chats WHERE id = ?", cid):
+    if not one(con, "SELECT 1 FROM chats WHERE id = ? AND status = 'live'", cid):
         raise ApiError("not_found")
     con.execute("INSERT OR IGNORE INTO chat_opens (user_id, chat_id, opened_at) VALUES (?, ?, ?)", (v.id, cid, now()))
 
@@ -1670,10 +1673,64 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
     return c["photo"] if c["photo"] and c["photo"] != photo else None
 
 
-def delete_chat(con, v: Viewer, cid: int) -> None:
+# A chat any student suggests (PLAN item 45, owner Oct 20: "as Telegram-native as possible"): picked in the bot's own
+# chat picker or sent to it as @name or a t.me link; public chats only (an invite link would publish a closed group).
+HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
+
+
+def chat_handle(text: str) -> str | None:
+    """A public chat's @name from "@name" or a t.me link, lowercased; None for anything else (an invite link too)."""
+    m = HANDLE.fullmatch(text.strip())
+    return m.group(1).lower() if m else None
+
+
+def suggest_check(con, uid: int, name: str, tg_chat: int | None) -> None:
+    """Before the server looks the chat up on t.me: 10 suggestions a day (owner, Oct 20: a club head with several chats
+    mustn't hit it), nothing twice: "already in the catalog" or "already waiting" (owner, Oct 20)."""
+    if c := one(con, "SELECT status FROM chats WHERE rtrim(lower(url), '/') = ? OR (tg_chat_id IS NOT NULL AND tg_chat_id = ?)", f"https://t.me/{name}", tg_chat):
+        raise ApiError("conflict", c["status"])  # live | pending
+    if one(con, "SELECT COUNT(*) FROM chats WHERE added_by = ? AND created_at > ?", uid, now() - 86400)[0] >= 10:
+        raise ApiError("rate_limited")
+
+
+def suggest_chat(con, uid: int, name: str, kind: str, tg_chat: int | None, peek: dict) -> str:
+    """The suggestion, waiting; the admins and moderators hear of it once a day at most. Its title."""
+    title = " ".join(str(peek.get("title") or "").split())[:80] or "@" + name
+    with tx(con):
+        suggest_check(con, uid, name, tg_chat)  # again inside the write: two taps at once
+        con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, photo, members, added_by, created_at, status)
+            VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'pending')""", (title, kind, f"https://t.me/{name}", tg_chat, peek.get("photo"), peek.get("members"), uid, now()))
+        for (aid,) in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')"):
+            notify(con, aid, "chat_suggested", f"cs:{(now() + 5 * 3600) // 86400}")
+    return title
+
+
+def approve_chat(con, v: Viewer, cid: int) -> dict:
+    """A suggested chat goes into the catalog; whoever suggested it hears so."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
+    with tx(con):
+        c = one(con, "SELECT * FROM chats WHERE id = ? AND status = 'pending'", cid)
+        if not c:
+            raise ApiError("not_found")
+        con.execute("UPDATE chats SET status = 'live' WHERE id = ?", (cid,))
+        if c["added_by"]:
+            notify(con, c["added_by"], "chat_approved", f"ca:{cid}")
+    return _chat(one(con, "SELECT * FROM chats WHERE id = ?", cid), set())
+
+
+def delete_chat(con, v: Viewer, cid: int) -> str | None:
+    """A chat out of the catalog, or a suggestion declined; its avatar's path when nothing else shows it (to remove)."""
+    if v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+    c = one(con, "SELECT photo FROM chats WHERE id = ?", cid)
     con.execute("DELETE FROM chats WHERE id = ?", (cid,))
+    return c["photo"] if c and c["photo"] and photo_free(con, c["photo"]) else None
+
+
+def photo_free(con, path: str) -> bool:
+    """No chat and no file record shows this picture any more (pictures are named by their content: shared)."""
+    return not one(con, "SELECT 1 FROM chats WHERE photo = ?", path) and not one(con, "SELECT 1 FROM files WHERE path = ?", path)
 
 
 # ---------------------------------------------------------------- the clubs registry for DMP (§4.13)

@@ -392,6 +392,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # everything Microsoft gives about the student, as it came (owner, Oct 20: "keep all we get, it's free"; the way
     # from typing it in to signing up by itself)
     (51, "ALTER TABLE students ADD COLUMN ms_profile TEXT;"),
+    # a chat any student suggests through the bot waits for the admins (PLAN item 45, owner Oct 20); added_by is who
+    (52, "ALTER TABLE chats ADD COLUMN status TEXT NOT NULL DEFAULT 'live';"),
 ]
 
 

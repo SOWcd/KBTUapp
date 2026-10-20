@@ -32,7 +32,8 @@
   let schoolsN = $state(0);
   $effect(() => { api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
   let chatsN = $state<number | null>(null);
-  $effect(() => { api.chats().then((c) => (chatsN = c.all.length)).catch(() => {}); });
+  let chatsP = $state(0); // suggested, waiting for a look
+  $effect(() => { api.chats().then((c) => { chatsN = c.all.length; chatsP = c.pending?.length ?? 0; }).catch(() => {}); });
   // ---- the numbers (PLAN "Admin stats"): no per-person logs, counts only; the chart is the nightly rows ----
   let stats = $state<AdminStats | null>(null);
   $effect(() => { api.adminStats().then((s) => (stats = s)).catch(() => {}); });
@@ -170,7 +171,7 @@
   <div class="rows surface">
     <button class="r" onclick={() => sheets.adminClubs()}><span class="ic"><Building size={20} /></span><span class="lb">{t('adm.clubs')}{#if clubsN != null}<i>{tn('reg.clubs', clubsN)} · {tn('adm.schools', schoolsN)}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
-    <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}</i>{/if}</span><ChevronRight size={18} /></button>
+    <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.registry()}><span class="ic"><BookUser size={20} /></span><span class="lb">{t('reg.title')}<i>{t('reg.sub')}</i></span><ChevronRight size={18} /></button>
     {#if down?.length}
       <button class="r" aria-expanded={downOpen} onclick={() => (downOpen = !downOpen)}><span class="ic"><EyeOff size={20} /></span><span class="lb">{t('adm.undoTitle')}</span><i class="n num">{down.length}</i><span class="chev"><ChevronRight size={18} /></span></button>

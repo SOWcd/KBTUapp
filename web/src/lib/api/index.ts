@@ -160,7 +160,8 @@ export interface Api {
   chats(): Promise<Chats>;                                // the chats directory (§4.11)
   chatOpened(id: Id): Promise<void>;                      // the tick
   addChat(input: { title: string; url: string; kind: Chat['kind']; school: string | null; course: number | null }): Promise<Chat>; // moderators, admin
-  deleteChat(id: Id): Promise<void>;
+  deleteChat(id: Id): Promise<void>;                      // a suggestion declined too
+  approveChat(id: Id): Promise<Chat>;                     // a suggested chat into the catalog
   registry(back?: number): Promise<RegistryOrg[]>;       // DMP Head+ and the admin (§4.13); a month `back` months ago (0–12)
   registryRoster(org: Id): Promise<RosterMember[]>;
   /** DMP Head+ (and the admin) give a club the ✓ or take it back; its President hears it from the bot */

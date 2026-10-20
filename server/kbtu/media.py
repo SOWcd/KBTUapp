@@ -82,19 +82,22 @@ def poster_jpg(color: str, emoji: Path) -> bytes:
 
 
 _OG = re.compile(r'<meta property="og:(title|image)" content="([^"]*)"')
-_EXTRA = re.compile(r'class="tgme_page_extra">\s*([\d\s]+)\s+(?:subscribers?|members?)')
+_EXTRA = re.compile(r'class="tgme_page_extra">\s*([\d\s]+)\s+(subscribers?|members?)')
 
 
 async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
     """A Telegram chat's public face from its t.me page (works for public links and invite links alike): title, avatar
     bytes, members. Empty fields when the page has none or Telegram is unreachable; the caller keeps what it had."""
-    out: dict = {"title": None, "image": None, "members": None}
+    out: dict = {"title": None, "image": None, "members": None, "ok": False}
     try:
-        page = (await http.get(url, follow_redirects=True)).text
+        r = await http.get(url, follow_redirects=True)
+        out["ok"] = r.status_code == 200  # False: Telegram didn't answer (a timeout, a 429), not "no such chat"
+        page = r.text
         og = {k: html.unescape(v) for k, v in _OG.findall(page)}
         out["title"] = og.get("title") or None
         if m := _EXTRA.search(page):
             out["members"] = int(re.sub(r"\D", "", m.group(1)))
+            out["channel"] = m.group(2).startswith("subscriber")  # a channel counts subscribers, a group members
         img = og.get("image", "")
         # Telegram's own placeholder (a chat without a picture) is its logo from telegram.org: not an avatar
         if re.match(r"https://[a-z0-9.-]+\.(?:telesco\.pe|cdn-telegram\.org)/file/", img):

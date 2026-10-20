@@ -6,7 +6,7 @@
   import { api, ApiErr, type Chat } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
@@ -14,7 +14,17 @@
   let busy = $state(false);
   // ---- the chats directory (§4.11): t.me links for everyone, or for a school and/or a course ----
   let chats = $state<Chat[] | null>(null);
-  $effect(() => { api.chats().then((c) => (chats = c.all)).catch(() => (chats = [])); });
+  // suggested by students through the bot (PLAN item 45): Add puts it in the catalog, the cross declines it
+  let pending = $state<Chat[]>([]);
+  $effect(() => { api.chats().then((c) => { chats = c.all; pending = c.pending ?? []; }).catch(() => (chats = [])); });
+  async function approve(c: Chat) {
+    try { const x = await api.approveChat(c.id); pending = pending.filter((p) => p.id !== c.id); chats = [...(chats ?? []), x]; haptic.ok(); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
+  async function decline(c: Chat) {
+    try { await api.deleteChat(c.id); pending = pending.filter((p) => p.id !== c.id); haptic.soft(); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
   let chatForm = $state(false);
   let nch = $state({ title: '', url: '', kind: 'group' as Chat['kind'], school: '', course: 0 });
   async function addChat(ev: Event) {
@@ -37,6 +47,16 @@
 <Sheet {overlay} tall title={t('adm.chats')}>
   <h2 class="t-h2 hd">{t('adm.chats')}</h2>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
+  {#if pending.length}
+    <h3 class="t-cap gh">{t('adm.chatPending')} · {pending.length}</h3>
+    <div class="chl surface">{#each pending as c (c.id)}<div class="chr">
+      <span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span>
+      <!-- the link itself, so a look tells a real chat from a stray one -->
+      <button class="pv ellipsis" onclick={() => openLink(c.url)}>{c.title}<i>{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></button>
+      <Button kind="primary" size="s" onclick={() => approve(c)}>{t('adm.chatApprove')}</Button>
+      <button onclick={() => decline(c)} aria-label={t('cm.delete')}><X size={16} /></button>
+    </div>{/each}</div>
+  {/if}
   {#if chats?.length}
     <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{c.school ?? ''}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span><button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
   {/if}
@@ -80,4 +100,7 @@
   .chr i { margin-left: 6px; font-style: normal; font-weight: 500; color: var(--text-3); }
   .chr button { flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-3); }
   .addchat { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 44px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
+  .gh { margin: 4px 2px 8px; }
+  .pv { flex: 1; min-width: 0; text-align: left; font: 600 14.5px/1.3 var(--font-text); color: var(--text); }
+  .pv i { display: block; margin: 2px 0 0; }
 </style>

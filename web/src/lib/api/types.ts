@@ -20,7 +20,7 @@ export interface ClubApplicationInput { name: string; short: string; description
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean }
-export interface Chats { forYou: Chat[]; all: Chat[] }
+export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 
 /** DMP's view of a club member (§3, §4.13): contacts only of Presidents and Vices. */
 export interface DmpPerson { person: PersonRef; fullName: string; studentId: string; course: number | null; school: string | null; username: string | null; email: string | null; phone: string | null }

@@ -217,6 +217,7 @@ export const server: Api = {
   chatOpened: (id) => call('POST', `/chats/${id}/opened`),
   addChat: (input) => call('POST', '/admin/chats', input),
   deleteChat: (id) => call('DELETE', `/admin/chats/${id}`),
+  approveChat: (id) => call('POST', `/admin/chats/${id}/approve`),
   registry: (back = 0) => call('GET', `/registry/orgs?back=${back}`),
   registryRoster: (org) => call('GET', `/registry/orgs/${org}/members`),
   setOfficial: (org, on) => call('POST', `/registry/orgs/${org}/official`, { on }),

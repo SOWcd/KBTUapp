@@ -999,9 +999,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 pass
         return logic.add_chat(con, v, body, peek)
 
+    @app.post("/api/admin/chats/{cid}/approve")
+    def approve_chat(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.approve_chat(con, v, cid)
+
     @app.delete("/api/admin/chats/{cid}", status_code=204)
     def delete_chat(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        logic.delete_chat(con, v, cid)
+        if old := logic.delete_chat(con, v, cid):
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (photos / f"{old}{ext}").unlink(missing_ok=True)
 
     # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
 

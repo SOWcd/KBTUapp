@@ -198,6 +198,7 @@
     if (tg.startParam === 'friends') { ui.tab = 'profile'; ui.page.profile = 0; return; }
     if (tg.startParam === 'me') { ui.tab = 'profile'; ui.page.profile = 1; return; }   // the bot: "keep my account"
     if (tg.startParam === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
+    if (tg.startParam === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
     if (tg.startParam === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
     const ph = tg.startParam.match(/^ph_(\d+)$/); // the bot's "photos are in the album": the event, the album open over it
     if (ph) { const id = Number(ph[1]); sheets.event(id); api.event(id).then((e) => { if (e.photos.length) sheets.photos(e.photos, 0); }).catch(() => {}); return; }

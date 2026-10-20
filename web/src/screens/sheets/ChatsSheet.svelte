@@ -7,7 +7,7 @@
   import type { Chat } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { openChat, compact } from '../../lib/chats';
+  import { openChat, compact, suggestChat } from '../../lib/chats';
   import Sheet from '../../ui/Sheet.svelte';
 
   let { overlay, chats }: { overlay: Overlay; chats: Chat[] } = $props();
@@ -37,6 +37,7 @@
       {/each}
     </div>
   {/each}
+  <button class="sug" onclick={suggestChat}>{t('chats.suggest')}</button>
 </Sheet>
 
 <style>
@@ -56,4 +57,5 @@
   .tx b { font: 640 15px/1.25 var(--font-text); }
   .tx i { font: 500 12.5px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
   .tick { flex: none; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--success); color: #fff; }
+  .sug { display: block; width: 100%; height: 44px; margin-top: 14px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
 </style>

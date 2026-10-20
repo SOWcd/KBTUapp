@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Plus from '@lucide/svelte/icons/plus';
   // Events → Clubs: subscribe to a club to hear about its new events (the bell; the Feed and List show
   // everything anyway). Search on top (a catalog of 50–100 clubs is unusable by scrolling), then what's
   // coming up from subscriptions, then the catalog with a "my subscriptions" filter.
@@ -20,7 +21,7 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { api, type Chat, type Chats } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { openChat, compact } from '../../lib/chats';
+  import { openChat, compact, suggestChat } from '../../lib/chats';
 
 
   let q = $state('');
@@ -61,9 +62,9 @@
     </section>
   {/if}
 
-  {#if chats?.all.length && !q.trim()}
+  {#if chats && (chats.all.length || session.me?.student) && !q.trim()}
     <section class="chats">
-      <div class="ch-h"><h2 class="t-h3">{t('chats.title')}</h2><button class="ch-all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button></div>
+      <div class="ch-h"><h2 class="t-h3">{t('chats.title')}</h2>{#if chats.all.length}<button class="ch-all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
       <div class="ch-row hscroll" data-noswipe>
         {#each chats.forYou as c (c.id)}
           <button class="chat surface" onclick={() => tapChat(c)}>
@@ -73,6 +74,10 @@
             <i>{c.members ? compact(c.members) + ' · ' : ''}{t(`chats.${c.kind}`)}</i>
           </button>
         {/each}
+        <!-- any student brings a chat in: the bot opens Telegram's own chat picker (owner, Oct 20) -->
+        <button class="chat surface add" onclick={suggestChat}>
+          <span class="ci"><Plus size={20} /></span><b class="clamp-2">{t('chats.suggest')}</b><i>{t('chats.suggestSub')}</i>
+        </button>
       </div>
     </section>
   {/if}
@@ -129,6 +134,7 @@
   .ch-row { gap: 8px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 6px; }
   .chat { flex: none; width: 148px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px; text-align: left; }
   .chat:active { transform: scale(0.97); }
+  .chat.add { background: none; box-shadow: inset 0 0 0 1.5px var(--line); }
   .chat b { font: 640 14px/1.25 var(--font-text); min-height: 2.5em; }
   .chat i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
   .ci { position: relative; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }

@@ -3039,3 +3039,55 @@ def test_ms_sign_in(env, monkeypatch):
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
     assert me["student"]["ms"] and not me["student"]["manual"] and me["msPending"] is None and me["no"]
+
+
+def test_suggest_chat(env, monkeypatch):
+    """Any student suggests a chat through the bot (PLAN item 45): picked in Telegram's picker or sent as @name; public
+    only, a person or a bot refused, nothing twice, 3 a day; waiting it shows nowhere but the admin's list; approved,
+    it joins the catalog and its suggester hears so."""
+    from kbtu import media
+    c, cfg = env
+    ali = login(c, 30, "ali")
+    adm = c.get("/api/me", headers=tma(31)).json()
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (adm["id"],))  # an admin's role comes from the config
+    assert [logic.chat_handle(x) for x in ("@KBTU_news", "https://t.me/kbtu_news/", "t.me/s/Kbtu_news", "https://t.me/+AbCdEf", "hi")] \
+        == ["kbtu_news", "kbtu_news", "kbtu_news", None, None]
+    pages = {"https://t.me/kbtu_news": {"title": "KBTU News", "image": None, "members": 4900, "channel": True},
+             "https://t.me/some_person": {"title": "Some Person", "image": None, "members": None}}
+    async def peek(http, url):
+        return {"ok": True, **(pages.get(url) or {"title": "Chat", "image": None, "members": 10, "channel": False})}
+    monkeypatch.setattr(media, "chat_peek", peek)
+    def say(tg, **m):  # each a while after the last (one t.me look per 10 s per student)
+        con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+        return asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": tg, "type": "private"}, "date": logic.now(), **m}))["text"]
+    picked = {"chat_shared": {"request_id": 1, "chat_id": -100777, "username": "KBTU_news", "title": "KBTU News"}}
+    assert say(99, **picked) == texts.bot_message("ru", "chat_signin")[0]          # not a student
+    assert say(30, **picked) == texts.bot_message("ru", "chat_sent", title="KBTU News")[0]
+    assert say(30, text="@kbtu_news") == texts.bot_message("ru", "chat_waiting")[0]  # same chat, typed: already waiting
+    assert say(30, text="@some_person") == texts.bot_message("ru", "chat_notchat")[0]
+    assert say(30, text="https://t.me/+AbCdEf") == texts.bot_message("ru", "chat_private")[0]
+    assert say(30, text="@second_chat").startswith("✅") and say(30, text="@third_chat").startswith("✅")
+    assert asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
+        == texts.bot_message("ru", "chat_later")[0]                                    # within 10 s of the last
+    for i in range(7):
+        assert say(30, text=f"@more_chat_{i}").startswith("✅")
+    assert say(30, text="@eleventh_chat") == texts.bot_message("ru", "chat_limit")[0]  # 10 a day
+    assert c.get("/api/chats", headers=tma(30)).json()["all"] == []                  # waiting: nowhere to see
+    assert "pending" not in c.get("/api/chats", headers=tma(30)).json()
+    waiting = c.get("/api/chats", headers=tma(31)).json()["pending"]
+    assert [x["kind"] for x in waiting][-3:] == ["group", "group", "channel"] and len(waiting) == 10
+    ping = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_suggested'").fetchall()
+    assert len(ping) == 1 and bot._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
+    news = waiting[-1]["id"]
+    assert c.post(f"/api/chats/{news}/opened", headers=tma(30)).status_code == 404
+    assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(30)).status_code == 403
+    assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(31)).json()["title"] == "KBTU News"
+    assert [x["title"] for x in c.get("/api/chats", headers=tma(30)).json()["all"]] == ["KBTU News"]
+    told = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_approved' AND user_id = ?", (ali["id"],)).fetchone()
+    assert bot._render(con, {**dict(told), "lang": "ru"})[2] == "clubs"
+    assert c.delete(f"/api/admin/chats/{waiting[0]['id']}", headers=tma(31)).status_code == 204   # declined
+    assert len(c.get("/api/chats", headers=tma(31)).json()["pending"]) == 8
+    assert say(30, text="@kbtu_news") == texts.bot_message("ru", "chat_exists")[0]   # live now
+    keys = bot._welcome(con, cfg, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "/start chat"})["reply_markup"]["keyboard"]
+    assert [k[0]["request_chat"]["chat_is_channel"] for k in keys] == [True, False] and keys[0][0]["request_chat"]["chat_has_username"]

@@ -128,6 +128,12 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         if not p or not one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", int(ref[1]), m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, name=logic.shown_name(p)), "friends")
+    if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
+        n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
+        return (*texts.bot_message(lang, kind, n=n), "achats") if n else None
+    if kind == "chat_approved":  # ca:<chat>, to whoever suggested it, while it is still in the catalog
+        c = one(con, "SELECT title FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
+        return (*texts.bot_message(lang, kind, title=c["title"]), "clubs") if c else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
@@ -486,10 +492,70 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
     arg = words[1] if len(words) == 2 and words[0] == "/start" and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", words[1]) else ""
     if words[:1] == ["/exit"]:
         arg = "exit"
+    if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "suggest a chat": Telegram's own chat picker (PLAN item 45)
+        return _chat_picker(con, cfg, msg)
     # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat (owner, Oct 15)
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
     return {"chat_id": chat["id"], "text": text, "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
+
+
+def _lang(con, msg: dict) -> str:
+    u = one(con, "SELECT lang FROM users WHERE tg_id = ?", (msg.get("chat") or {}).get("id"))
+    return u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
+
+
+def _chat_picker(con, cfg: Config, msg: dict) -> dict:
+    """Two buttons that open Telegram's own list of the student's chats: channels, groups; only public ones are listed
+    (chat_has_username), so the catalog never gets a closed group's invite. A student only."""
+    chat, lang = msg["chat"], _lang(con, msg)
+    if not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", chat["id"]):
+        return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
+    channel, group = texts.bot_message(lang, "chat_buttons")
+    pick = lambda rid, label: [{"text": label, "request_chat": {"request_id": rid, "chat_is_channel": rid == 1, "chat_has_username": True,  # noqa: E731
+                                                              "request_title": True, "request_username": True}}]
+    return {"chat_id": chat["id"], "text": texts.bot_message(lang, "chat_pick")[0], "parse_mode": "HTML",
+            "reply_markup": {"keyboard": [pick(1, channel), pick(2, group)], "resize_keyboard": True, "one_time_keyboard": True}}
+
+
+async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
+    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link: checked, looked up on t.me (a person or
+    a bot has no members line there), then waiting for the admins. The answer to send."""
+    chat = msg.get("chat") or {}
+    if chat.get("type") != "private" or now() - int(msg.get("date") or 0) > FRESH:
+        return None
+    lang, shared = _lang(con, msg), msg.get("chat_shared") or {}
+    done = lambda kind, **f: {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML",  # noqa: E731
+                               "reply_markup": {"remove_keyboard": True}}
+    u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", chat["id"])
+    if not u:
+        return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
+    name = str(shared.get("username") or "").lower() if shared else logic.chat_handle(str(msg.get("text") or ""))
+    if not name:
+        return done("chat_private")
+    tg_chat = shared.get("chat_id") if shared else None
+    root, peek = Path(cfg.db_path).resolve().parent / "media", {}
+    try:
+        logic.suggest_check(con, u["id"], name, tg_chat)
+        if not logic._once(con, f"suggest_at:{u['id']}", str(now() // 10)):  # one look at t.me per 10 s per student
+            return done("chat_later")
+        peek = await media.chat_peek(http, f"https://t.me/{name}")
+        if not peek["ok"]:
+            return done("chat_later")
+        if peek["members"] is None:
+            return done("chat_notchat")
+        if peek["image"]:
+            try:
+                peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
+            except (media.BadImage, OSError):
+                pass
+        kind = "channel" if shared.get("request_id") == 1 or (not shared and peek.get("channel")) else "group"
+        return done("chat_sent", title=logic.suggest_chat(con, u["id"], name, kind, tg_chat, peek))
+    except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
+        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (root / f"{peek['photo']}{ext}").unlink(missing_ok=True)
+        return done(("chat_waiting" if exc.message == "pending" else "chat_exists") if exc.code == "conflict" else "chat_limit")
 
 
 def _file(msg: dict) -> dict | None:
@@ -662,7 +728,14 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)
-                body = await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)
+                if msg.get("chat_shared") or logic.chat_handle(str(msg.get("text") or "")):
+                    try:
+                        body = await _suggest(cfg, http, con, msg)
+                    except Exception:  # a full disk, a broken picture: answer nothing, but never get stuck on this update
+                        log.exception("suggest")
+                        body = None
+                else:
+                    body = await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
                     await _send(cfg, http, body)
