@@ -6,7 +6,7 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_TONE, lookOf, STRAP } from '../../lib/awards';
+  import { hero, QR_TONE, lookOf, STRAP, banded } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -71,9 +71,9 @@
   <div class="stage {look}">
     <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
     <div class="clip" aria-hidden="true"></div>
-    <div class="pass" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
+    <div class="pass" class:banded={banded(look)} bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
-      <LanyardBand {look} />
+      {#if banded(look)}<LanyardBand {look} />{/if}
       <span class="slot" aria-hidden="true"></span>
       <div class="who">
         <span class="ph"><Avatar person={h.person} size={46} tappable={false} /></span>
@@ -116,8 +116,8 @@
 
   /* the badge's own material, seen from the back */
   .pass {
-    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 420px)); padding-bottom: 16px; /* the band made it taller: a short phone narrows it (the QR stays ~180 px) */ border-radius: 26px; color: #fff;
-    background: linear-gradient(180deg, #1A2A78, #0E1438);
+    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 420px)); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it (the QR stays ~180 px) */ border-radius: 26px; color: #fff;
+    background: radial-gradient(110% 70% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(160deg, #2A4FD6, #121A3D 70%);
     box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.75), 0 10px 24px -12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
     transform: rotateX(calc(var(--gy, 0) * -7deg + var(--py, 0) * 5deg)) rotateY(calc(var(--gx, 0) * 9deg - var(--px, 0) * 5deg)) scale(var(--ps, 1));
     transition: transform 160ms ease-out;
@@ -128,9 +128,12 @@
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
 
-  .who { position: relative; display: flex; align-items: center; gap: 12px; margin: 14px 18px 0; }
+  .who { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 18px; }
+  .banded { padding-top: 0; } /* the art band on top (LanyardBand) */
+  .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
-  .ph { flex: none; padding: 2px; border-radius: 15px; background: #fff; }
+  .ph { flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }
+  .banded .ph, .studex .ph, .sower .ph { background: #fff; }
   .ph :global(.av), .ph :global(.av img), .ph :global(.ini) { border-radius: 13px; }
   .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 6px; font: 780 19px/1.15 var(--font-display); letter-spacing: -0.02em; }
@@ -148,11 +151,13 @@
   .knights .pass { background: linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
-  .studex { --role: #FF8A80; }
-  .studex .pass { background: linear-gradient(90deg, #CF3428 0 6px, transparent 6px), linear-gradient(180deg, #14306A, #0A1838); }
+  .studex { --role: rgba(255, 255, 255, 0.92); }
+  .studex .pass { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   .sower { --role: rgba(255, 255, 255, 0.92); }
-  .sower .pass { background: #000; }
+  .sower .pass { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .sower .pass::before { content: ''; position: absolute; right: -130px; top: -130px; width: 340px; height: 340px; border-radius: 50%; pointer-events: none;
+    background: repeating-radial-gradient(circle, transparent 0 18px, rgba(255, 255, 255, 0.12) 18px 19.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
   .sower .plate :global(.appmark) { background: #0A0A0A; }

@@ -2,7 +2,6 @@
   // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (owner,
   // Oct 20: "the bottom is the same on every card"). The shimmer follows the tilt (--gx, set by `glass` above it).
   import type { Look } from '../lib/awards';
-  import KbtuMark from './KbtuMark.svelte';
 
   let { look, no }: { look: Look; no: string } = $props();
 </script>
@@ -12,7 +11,7 @@
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
   {:else if look === 'cheer'}<b class="w ch">✦ CHEERLEADING</b>
   {:else if look === 'knights'}<b class="w kn">KNIGHTS</b>
-  {:else}<b class="w"><KbtuMark size={16} />KBTU APP</b>{/if}
+  {:else}<b class="w">KBTU APP</b>{/if}
   <span>№ {no}</span>
 </div>
 

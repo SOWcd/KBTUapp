@@ -18,7 +18,7 @@
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { QR_TONE, lookOf, STRAP } from '../../lib/awards';
+  import { QR_TONE, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
 
@@ -71,8 +71,8 @@
   <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
   <div class="clip" aria-hidden="true"></div>
   <div class="swing" bind:this={swing}>
-    <div class="badge" use:glass>
-      <LanyardBand {look} wide />
+    <div class="badge" class:banded={banded(look)} use:glass>
+      {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
         <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
@@ -119,8 +119,8 @@
   .swing { width: min(340px, 100%); transform-origin: 50% -16px; }
 
   .badge {
-    position: relative; overflow: hidden; padding-bottom: 14px; border-radius: 22px; color: #fff;
-    background: linear-gradient(180deg, #1A2A78, #0E1438);
+    position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;
+    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(155deg, #2A4FD6, #121A3D 72%);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), 0 10px 22px -14px rgba(16, 22, 51, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.28);
     transform: rotateX(calc(var(--gy, 0) * -6deg)) rotateY(calc(var(--gx, 0) * 8deg));
     transition: transform 160ms ease-out;
@@ -130,17 +130,22 @@
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
-  /* the photo overlaps the band's bottom edge; the name starts below the band */
-  .top { position: relative; display: flex; gap: 14px; align-items: flex-start; margin-top: -34px; padding: 0 18px; }
-  .id { margin-top: 42px; }
+  .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
+  /* with an art band (LanyardBand): the photo overlaps its bottom edge, the name starts below it */
+  .banded { padding-top: 0; }
+  .banded .top { align-items: flex-start; margin-top: -34px; }
+  .banded .id { margin-top: 42px; }
+  .banded .qr { top: 126px; }
   .foot { display: block; margin: 16px 18px 0; }
   .top.mine .id { padding-right: 62px; } /* the name never runs under the QR */
   .top.mine .nm { font-size: 20px; }
-  .qr { position: absolute; z-index: 1; top: 126px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
+  .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
     box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(10, 15, 36, 0.06); transition: transform var(--t-fast) var(--ease); }
 
   .qr:active { transform: scale(0.92); }
-  .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: #fff; box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.6); }
+  .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
+  .banded .photo, .studex .photo, .sower .photo { background: #fff; }
+  .banded .photo { box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.6); }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
   .id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
@@ -162,12 +167,18 @@
     linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
-  .studex { --role: #FF8A80; }
-  .studex .badge { background: linear-gradient(90deg, #CF3428 0 6px, transparent 6px), linear-gradient(180deg, #14306A, #0A1838); } /* a red edge, the band's cut running down */
+  /* StudEx (owner, Oct 13; kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
+  .studex { --role: rgba(255, 255, 255, 0.92); }
+  .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,
+    linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
+  .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone (owner, Oct 13-14): black, the strap white with black letters */
+  /* SOWER, the creator's alone (owner, Oct 13; Oct 14 after four drafts: "the rings from the corner, like a thrown
+     stone"): black, rings spreading from behind the QR's corner; the strap white with black letters */
   .sower { --role: rgba(255, 255, 255, 0.92); }
-  .sower .badge { background: #000; }
+  .sower .badge { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .sower .badge::before { content: ''; position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none;
+    background: repeating-radial-gradient(circle, transparent 0 17px, rgba(255, 255, 255, 0.12) 17px 18.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
   .sower .qr :global(.appmark) { background: #0A0A0A; }

@@ -136,7 +136,7 @@
   .ly .st i { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 4.5px/12px var(--font-text); font-style: normal; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.85); white-space: nowrap; }
   .ly .cl { width: 18px; height: 7px; margin-bottom: -4px; z-index: 1; border-radius: 3px; background: linear-gradient(180deg, #F4F6FB, #9AA4B8); }
   .ly .cd { position: relative; width: 74px; height: 48px; padding: 9px 7px 6px; border-radius: 9px; display: grid; grid-template-columns: 16px 1fr; grid-template-rows: 6px 6px 1fr; gap: 3px 5px; overflow: hidden;
-    background: linear-gradient(180deg, #6C4BF0, #2A4FD6 40%, #1A2A78 40%, #0E1438); } /* the band on top, the body below (LanyardBand) */
+    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
   .ly .ph { grid-row: 1 / 3; width: 16px; height: 16px; border-radius: 5px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln.s { width: 60%; opacity: 0.6; }
@@ -144,9 +144,10 @@
   .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); }
   .ly .ph { z-index: 1; }
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  .ly.studex .cd { background: linear-gradient(180deg, transparent 40%, #14306A 40%, #0A1838), linear-gradient(104deg, #E2402F 50%, #fff 50% 54%, #1D3B7A 54%); }
-  .ly.studex .hl { background: linear-gradient(90deg, #CF3428 50%, #173064 50%) center / 40% 3px no-repeat, #fff; }
+  .ly.studex .cd { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 31%, #1D3B7A 31%, #0F2350); }
+  .ly.studex .hl { background: #fff; }
   .ly.cheer .st { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
+  /* Cheerleading and Knights: their art band on top, the body below (LanyardBand) */
   .ly.cheer .cd { background: linear-gradient(180deg, #5560C2, #2E3258 40%, #1D2042 40%, #0A0B17); }
   .ly.cheer .hl { background: linear-gradient(100deg, #FFE7A3, #FFC6E0, #FFE7A3); }
   .ly.knights .st { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
@@ -154,8 +155,8 @@
   .ly.knights .hl { background: linear-gradient(90deg, #1C4C94, #2F6BD0); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
   .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .ly.sower .st i { color: #000; }
-  .ly.sower .cd { background: radial-gradient(90% 60% at 0% 0%, #26262B, #000 62%); }
-  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -40px; width: 76px; height: 76px; border-radius: 50%;
+  .ly.sower .cd { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 76px; height: 76px; border-radius: 50%;
     background: repeating-radial-gradient(circle, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 5.6px); }
   .ly.sower .hl { background: #fff; }
 </style>
