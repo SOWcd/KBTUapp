@@ -806,8 +806,9 @@ def _skin(con, uid: int) -> int | str | None:
 
 
 def _skin_ok(con, uid: int, oid: int):
-    return one(con, """SELECT 1 FROM org_members m JOIN orgs o ON o.id = m.org_id
-        WHERE m.user_id = ? AND m.org_id = ? AND o.official = 1 AND o.status = 'active'""", uid, oid)
+    """Any club's lanyard can be tried on, member or not (owner, Oct 20: "let everyone try on another club's"); the
+    creator's own stays his. ponytail: uid unused while it's open to all; a membership check comes back if he closes it."""
+    return one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND {SKINNED}", oid)
 
 
 def _qr_code(con, uid: int) -> str:
@@ -833,7 +834,7 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         need_student(v)
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
-    if "skin" in patch:  # my pick: an official club I'm in, "sower" for the creator, null = the KBTU one (`_skin`)
+    if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
         need_student(v)
         val = patch["skin"]
         if val is None:

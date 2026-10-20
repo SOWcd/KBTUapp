@@ -4,6 +4,7 @@ import type { Achievement, Badge, Id, OrgRef, PersonCard } from './api';
 import { t, tn } from './i18n/index.svelte';
 import { RANK, roleName } from './perms';
 import { dayMonth } from './time';
+import { data } from './state/data.svelte';
 
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
@@ -91,5 +92,8 @@ export type Skin = 'studex' | 'cheer' | 'knights';
 const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['knights', /knight/i]];
 export const skinOf = (o?: OrgRef | null): Skin | null => (o?.official && SKINS.find(([, re]) => re.test(o.name))?.[0]) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
+/** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on, Oct 20) */
+export const lookOf = (p: PersonCard): Skin | 'sower' | 'kbtu' => p.skin === 'sower' ? 'sower'
+  : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
 /** the word on each one's strap */
 export const STRAP: Record<Skin | 'sower' | 'kbtu', string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };

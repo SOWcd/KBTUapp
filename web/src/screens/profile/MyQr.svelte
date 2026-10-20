@@ -6,7 +6,7 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_TONE, skinOf, STRAP } from '../../lib/awards';
+  import { hero, QR_TONE, lookOf, STRAP } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -21,7 +21,7 @@
   const h = $derived(hero(p));
   // the back of the badge I wear: the same skin, its strap and clip on top (owner, Oct 14: it stayed in the old blue)
   const sower = $derived(p.skin === 'sower');
-  const look = $derived(sower ? 'sower' : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org) ?? 'kbtu'); // the class and the strap's word
+  const look = $derived(lookOf(p)); // the class and the strap's word
   // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look it was dark
   // text on a darkened glass (owner, Oct 7)
   $effect(() => { overlay.title = t('me.qr'); overlay.icon = QrCode; overlay.theme = 'dark'; });

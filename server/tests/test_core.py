@@ -2597,8 +2597,8 @@ def test_saved_tomorrow(env, monkeypatch):
 
 def test_badge_skin(env):
     """Badge skins (owner, Oct 13): I show the badge of an official club I'm in, or the KBTU one; never picked, a club
-    with a badge shows by itself; my pick holds, leaving the club takes it back, and others see it. The creator's own
-    is his alone."""
+    with a badge shows by itself; my pick holds, and others see it. Since Oct 20 anyone may try on any club's; the
+    creator's own is his alone."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
     con = db.connect(cfg.db_path)
@@ -2612,12 +2612,17 @@ def test_badge_skin(env):
     assert c.patch("/api/me", headers=P, json={"skin": None}).json()["skin"] is None  # picked KBTU: it holds
     for bad in (2, 3, "1", True, "sower"):  # not official, not a club, not an id, not the creator
         assert c.patch("/api/me", headers=P, json={"skin": bad}).status_code == 400
-    assert c.patch("/api/me", headers=A, json={"skin": 1}).status_code == 400  # not in it
+    assert c.patch("/api/me", headers=A, json={"skin": 1}).json()["skin"] == 1  # not in it: tried on all the same (Oct 20)
+    con.execute("UPDATE users SET skin_pick = NULL, skin_org = NULL WHERE id = ?", (ali["id"],))
+    con.commit()
     assert c.patch("/api/me", headers=P, json={"skin": 1}).json()["skin"] == 1
     assert c.get(f"/api/users/{pres['id']}", headers=A).json()["skin"] == 1
     con.execute("DELETE FROM org_members WHERE org_id = 1")
     con.commit()
-    assert c.get("/api/me", headers=P).json()["skin"] is None
+    assert c.get("/api/me", headers=P).json()["skin"] == 1  # a pick holds after leaving: anyone may wear it (Oct 20)
+    con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
+    con.commit()
+    assert c.get("/api/me", headers=P).json()["skin"] is None  # never picked: only a club I'm in comes by itself
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (3, 'kn', 'club', 'KBTU Knights', 'KN', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (3, ?, 'member', 0)", (pres["id"],))
     con.commit()

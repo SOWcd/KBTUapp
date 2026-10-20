@@ -7,6 +7,7 @@
   import X from '@lucide/svelte/icons/x';
   import { api, ApiErr, type Me } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
+  import { data } from '../../lib/state/data.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -22,7 +23,9 @@
   let busy = $state<'' | 'photo' | 'tg' | 'nick' | 'skin'>('');
   // badges as skins (owner, Oct 13): KBTU's, or that of a club I'm in that has one. In order of weight (owner, Oct 13:
   // "no chaos"): my own first, then my clubs by my role in them, KBTU's, the standard one, last
-  const skins = $derived([...me.memberships].sort(byRank).map((m) => m.org).filter(skinned));
+  const mine = $derived([...me.memberships].sort(byRank).map((m) => m.org).filter(skinned));
+  // then every other club's, to try on (owner, Oct 20)
+  const skins = $derived([...mine, ...data.orgs.filter((o) => skinned(o) && !mine.some((x) => x.id === o.id))]);
   async function pickSkin(id: number | 'sower' | null) {
     if (busy || id === me.skin) return;
     busy = 'skin';

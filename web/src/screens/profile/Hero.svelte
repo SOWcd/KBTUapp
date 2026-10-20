@@ -16,7 +16,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import { QR_TONE, skinOf, STRAP } from '../../lib/awards';
+  import { QR_TONE, lookOf, STRAP } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
 
@@ -26,7 +26,7 @@
   const h = $derived(hero(p));
   // the club badge they picked (a skin, owner Oct 13; picked in LookSheet), else the KBTU one
   const sower = $derived(p.skin === 'sower'); // the creator's own (owner, Oct 13)
-  const look = $derived(sower ? 'sower' : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org) ?? 'kbtu'); // the class and the strap's word
+  const look = $derived(lookOf(p)); // the class and the strap's word
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
