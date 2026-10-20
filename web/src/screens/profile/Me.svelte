@@ -18,7 +18,7 @@
   import { say, ui } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, type PersonCard } from '../../lib/api';
-  import { nextUp, nameOf, whenOf, PSYCHOLOGIST } from '../../lib/academic';
+  import { nextUp, nameOf, whenOf } from '../../lib/academic';
   import { inner } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, relDay, whenLine } from '../../lib/time';
@@ -102,7 +102,7 @@
   <div class="rows surface">
     <button class="r" onclick={() => sheets.academic()}><span class="ic"><CalendarDays size={20} /></span>
       <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
-    <button class="r" onclick={() => openLink(PSYCHOLOGIST)}><span class="ic"><HeartHandshake size={20} /></span>
+    <button class="r" onclick={() => sheets.psych()}><span class="ic"><HeartHandshake size={20} /></span>
       <span class="lb">{t('me.psych')}<i class="sub">{psych ? t('me.psychNext', { when: whenLine(psych) }) : t('me.psychSub')}</i></span><ChevronRight size={18} /></button>
   </div>
 

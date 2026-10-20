@@ -17,7 +17,7 @@ LEAD = timedelta(hours=2)  # the page's minimumLeadTime
 LONG = timedelta(minutes=50)  # a consultation
 log = logging.getLogger(__name__)
 
-_cache: dict = {"at": 0.0, "next": None}
+_cache: dict = {"at": 0.0, "next": None, "ok": False}  # ok: the last ask got an answer
 _busy = False
 
 
@@ -51,10 +51,10 @@ async def _refresh() -> None:
                 "startDateTime": {"dateTime": now.strftime(fmt), "timeZone": "UTC"},
                 "endDateTime": {"dateTime": (now + timedelta(days=11)).strftime(fmt), "timeZone": "UTC"}})
             slot = first_slot(r.json()["staffAvailabilityResponse"], now)
-        _cache.update(at=time.time(), next=int(slot.timestamp()) if slot else None)
+        _cache.update(at=time.time(), next=int(slot.timestamp()) if slot else None, ok=True)
     except Exception as e:  # their page changed or is down: the row just shows no time
         log.warning("psych: %s", e)
-        _cache["at"] = time.time() - FRESH + 120  # try again in two minutes
+        _cache.update(at=time.time() - FRESH + 120, ok=False)  # try again in two minutes
     finally:
         _busy = False
 
@@ -66,6 +66,11 @@ def nearest() -> int | None:
         _busy = True
         asyncio.get_running_loop().create_task(_refresh())
     return _cache["next"] if _cache["next"] and _cache["next"] > time.time() + LEAD.total_seconds() else None
+
+
+def full() -> bool:
+    """Bookings answered lately and had no free hour in the next 11 days: every psychologist is busy."""
+    return _cache["ok"] and _cache["next"] is None and time.time() - _cache["at"] < 2 * FRESH
 
 
 if __name__ == "__main__":  # the slot rule's check

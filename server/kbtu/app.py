@@ -289,7 +289,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/psych")
     async def psych_next(_: Viewer = Depends(viewer)):  # the psychologist's nearest free hour, or null (psych.py)
-        return {"next": psych.nearest() if cfg.background else None}
+        return {"next": psych.nearest(), "full": psych.full()} if cfg.background else {"next": None, "full": False}
 
     @app.get("/api/me/tickets")
     def my_tickets(con=Depends(conn), v: Viewer = Depends(viewer)):

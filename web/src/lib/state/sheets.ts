@@ -68,6 +68,8 @@ export const sheets = {
   createClub: () => {},
   /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
   academic: () => {},
+  /** the psychological service's page of support (PLAN 20) */
+  psych: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
   /** the creator's own awards (the admin panel): a QR scanner each, "Bug hunter" a one-time link */

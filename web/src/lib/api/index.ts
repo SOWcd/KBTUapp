@@ -35,7 +35,7 @@ export interface Api {
   setSaved(id: Id, on: boolean): Promise<void>;
   tickets(): Promise<EventCard[]>;
   /** the psychologist's nearest free hour (unix seconds), null when unknown */
-  psych(): Promise<{ next: number | null }>;
+  psych(): Promise<{ next: number | null; full?: boolean }>; // full: no free hour in the next 11 days
 
   orgs(): Promise<Org[]>;
   // admin (pilot): clubs and their teams; who = @username or a Telegram ID of someone who opened the app once
