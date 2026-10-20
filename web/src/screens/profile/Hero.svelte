@@ -16,6 +16,8 @@
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import LanyardBand from '../../ui/LanyardBand.svelte';
+  import LanyardHolo from '../../ui/LanyardHolo.svelte';
   import { QR_TONE, lookOf, STRAP } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
@@ -70,6 +72,7 @@
   <div class="clip" aria-hidden="true"></div>
   <div class="swing" bind:this={swing}>
     <div class="badge" use:glass>
+      <LanyardBand {look} wide />
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
         <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
@@ -83,7 +86,7 @@
           <span class="meta">{h.line}</span>
         </span>
       </div>
-      <div class="holo">{#if look === 'sower'}<span class="sw">SOWER</span>{:else if look === 'studex'}<span class="sx"><i>STUD</i>EX</span>{:else if look === 'cheer'}<span class="ch">CHEERLEADING</span>{:else if look === 'knights'}<span class="kn">KNIGHTS</span>{:else}<span>KBTU APP</span>{/if}<span>№ {h.no}</span></div>
+      <span class="foot"><LanyardHolo {look} no={h.no} /></span>
     </div>
   </div>
 </div>
@@ -116,8 +119,8 @@
   .swing { width: min(340px, 100%); transform-origin: 50% -16px; }
 
   .badge {
-    position: relative; overflow: hidden; padding: 26px 18px 14px; border-radius: 22px; color: #fff;
-    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(155deg, #2A4FD6, #121A3D 72%);
+    position: relative; overflow: hidden; padding-bottom: 14px; border-radius: 22px; color: #fff;
+    background: linear-gradient(180deg, #1A2A78, #0E1438);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), 0 10px 22px -14px rgba(16, 22, 51, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.28);
     transform: rotateX(calc(var(--gy, 0) * -6deg)) rotateY(calc(var(--gx, 0) * 8deg));
     transition: transform 160ms ease-out;
@@ -125,66 +128,50 @@
   /* a sheen that slides with the tilt */
   .badge::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.13) 46%, transparent 60%);
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
-  .slot { position: absolute; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
+  .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
-  .top { position: relative; display: flex; gap: 14px; align-items: center; }
+  /* the photo overlaps the band's bottom edge; the name starts below the band */
+  .top { position: relative; display: flex; gap: 14px; align-items: flex-start; margin-top: -34px; padding: 0 18px; }
+  .id { margin-top: 42px; }
+  .foot { display: block; margin: 16px 18px 0; }
   .top.mine .id { padding-right: 62px; } /* the name never runs under the QR */
   .top.mine .nm { font-size: 20px; }
-  .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
+  .qr { position: absolute; z-index: 1; top: 126px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
     box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(10, 15, 36, 0.06); transition: transform var(--t-fast) var(--ease); }
 
   .qr:active { transform: scale(0.92); }
-  .photo { flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
+  .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: #fff; box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.6); }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
   .id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
   .nm :global(svg) { flex: none; }
   .seal { flex: none; display: inline-flex; padding: 10px; margin: -10px; transition: transform var(--t-fast) var(--ease); } /* a 39 px target */
   .seal:active { transform: scale(0.88); }
-  .role { font: 760 11px/1.25 var(--font-text); letter-spacing: 0.13em; text-transform: uppercase; color: #A9C0FF; }
+  .role { font: 760 11px/1.25 var(--font-text); letter-spacing: 0.13em; text-transform: uppercase; }
   .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
-  .holo { position: relative; display: flex; align-items: center; justify-content: space-between; height: 28px; margin-top: 16px; padding: 0 12px; border-radius: 9px;
-    background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A, #FFA6DA); background-size: 320% 100%;
-    background-position: calc(50% + var(--gx, 0) * 60%) 0; color: rgba(14, 20, 48, 0.72); font: 800 10.5px/1 var(--font-text); letter-spacing: 0.16em; }
 
-  /* StudEx: its logo's red and navy throughout, not the app's blues; the strip is white with the wordmark */
-  .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* owner, Oct 13: the whole card in the club's colours, not blue with a red touch: red, a white cut, navy (as the logo) */
-  /* + the logo's arrow, a faint watermark on the navy */
-  .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,
-    linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
-  .studex .photo, .cheer .photo, .knights .photo { background: #fff; }
-  .studex .role, .cheer .role, .knights .role { color: rgba(255, 255, 255, 0.92); }
-  .studex .meta, .cheer .meta, .knights .meta { color: rgba(255, 255, 255, 0.8); }
-  .studex .holo { background-image: linear-gradient(100deg, #fff 25%, #FFE1E6 40%, #E2E9FF 52%, #E6FFF4 60%, #fff 75%); color: #173064; } /* white, a pale shimmer on tilt */
-  /* SOWER, the creator's alone (owner, Oct 13; Oct 14 after four drafts: "the rings from the corner, like a thrown
-     stone"): black, rings spreading from behind the QR's corner, no stripe (the old white cut was StudEx's); the strap
-     is white with black letters */
-  .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
-  .sower .strap span { color: #000; }
-  .sower .badge { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
-  .sower .badge::before { content: ''; position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none;
-    background: repeating-radial-gradient(circle, transparent 0 17px, rgba(255, 255, 255, 0.12) 17px 18.5px); }
-  .sower .photo { background: #fff; }
-  .sower .qr :global(.appmark) { background: #0A0A0A; }
-  .sower .role { color: rgba(255, 255, 255, 0.92); }
-  .sower .meta { color: rgba(255, 255, 255, 0.66); }
-  .sower .holo { background-image: linear-gradient(100deg, #fff 25%, #D9D9DE 40%, #fff 52%, #C9C9CF 62%, #fff 75%); color: #0A0A0A; }
-  .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; color: #0A0A0A; }
-  .sx { font: 900 13px/1 var(--font-display); letter-spacing: -0.02em; color: #173064; }
-  .sx i { font-style: normal; color: #CF3428; }
-  .ch { font: 700 11.5px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.2em; color: #2E3258; }
-  .kn { font: italic 900 14px/1 var(--font-display); letter-spacing: 0.06em; color: #1C4C94; }
-  /* Cheerleading (Oct 20): its logo's navy fading to the panther's black, three claw marks as the watermark */
+  /* below the band, each look's own body and role colour; the strap's colours (the band and the strip: LanyardBand,
+     LanyardHolo) */
+  .role { color: var(--role, #A9C0FF); }
+  .cheer { --role: #FFC83D; }
+  .cheer .badge { background: linear-gradient(180deg, #1D2042, #0A0B17); }
   .cheer .strap { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
-  .cheer .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='white' fill-opacity='0.1'%3E%3Cpath d='M22 6Q48 48 26 96Q36 48 22 6Z'/%3E%3Cpath d='M44 2Q70 46 48 98Q58 46 44 2Z'/%3E%3Cpath d='M66 8Q90 50 70 94Q80 50 66 8Z'/%3E%3C/g%3E%3C/svg%3E") right -14px bottom -36px / 180px no-repeat,
-    radial-gradient(120% 110% at 0% 0%, #454B88, #2E3258 38%, #0A0B14 92%); }
-  .cheer .holo { background-image: linear-gradient(100deg, #fff 25%, #E4E6F5 40%, #fff 52%, #DADCEC 62%, #fff 75%); color: #2E3258; }
-  /* Knights (Oct 20): the logo's royal blue, the main building's windows along the bottom as the watermark */
+  .cheer .strap span { color: #FFC83D; }
+  .knights { --role: #9CC2FF; }
+  .knights .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 250 140'%3E%3Cg fill='none' stroke='white' stroke-opacity='.07' stroke-width='2'%3E%3Cpath d='M-20 140A145 145 0 0 1 270 140'/%3E%3Cpath d='M70 140V80H180V140'/%3E%3C/g%3E%3C/svg%3E") center bottom / 100% auto no-repeat,
+    linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
-  .knights .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44'%3E%3Cdefs%3E%3Cpattern id='w' width='7' height='7' patternUnits='userSpaceOnUse'%3E%3Crect x='1.5' y='2' width='4' height='4' fill='white' fill-opacity='0.07'/%3E%3C/pattern%3E%3C/defs%3E%3Cpath d='M0 44V16h62v-6h76v6h62v28Z' fill='url(%23w)'/%3E%3C/svg%3E") left bottom / 100% auto no-repeat, linear-gradient(160deg, #2E6AD1, #1C4C94 45%, #0B1F48); }
-  .knights .holo { background-image: linear-gradient(100deg, #fff 25%, #DCE8FF 40%, #fff 52%, #E2ECFF 62%, #fff 75%); color: #1C4C94; }
+  .studex { --role: #FF8A80; }
+  .studex .badge { background: linear-gradient(90deg, #CF3428 0 6px, transparent 6px), linear-gradient(180deg, #14306A, #0A1838); } /* a red edge, the band's cut running down */
+  .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
+  /* SOWER, the creator's alone (owner, Oct 13-14): black, the strap white with black letters */
+  .sower { --role: rgba(255, 255, 255, 0.92); }
+  .sower .badge { background: #000; }
+  .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
+  .sower .strap span { color: #000; }
+  .sower .qr :global(.appmark) { background: #0A0A0A; }
+  .sower .meta { color: rgba(255, 255, 255, 0.66); }
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
   /* the award shelf: six places, the empty ones dashed */

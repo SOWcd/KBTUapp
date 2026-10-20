@@ -136,24 +136,26 @@
   .ly .st i { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 4.5px/12px var(--font-text); font-style: normal; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.85); white-space: nowrap; }
   .ly .cl { width: 18px; height: 7px; margin-bottom: -4px; z-index: 1; border-radius: 3px; background: linear-gradient(180deg, #F4F6FB, #9AA4B8); }
   .ly .cd { position: relative; width: 74px; height: 48px; padding: 9px 7px 6px; border-radius: 9px; display: grid; grid-template-columns: 16px 1fr; grid-template-rows: 6px 6px 1fr; gap: 3px 5px; overflow: hidden;
-    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
+    background: linear-gradient(180deg, #6C4BF0, #2A4FD6 40%, #1A2A78 40%, #0E1438); } /* the band on top, the body below (LanyardBand) */
   .ly .ph { grid-row: 1 / 3; width: 16px; height: 16px; border-radius: 5px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln.s { width: 60%; opacity: 0.6; }
   .ly .hl { grid-column: 1 / 3; align-self: end; height: 7px; border-radius: 3px; background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A); }
   .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); }
+  .ly .ph { z-index: 1; }
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  .ly.studex .cd { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 31%, #1D3B7A 31%, #0F2350); }
-  .ly.studex .hl { background: #fff; }
+  .ly.studex .cd { background: linear-gradient(180deg, transparent 40%, #14306A 40%, #0A1838), linear-gradient(104deg, #E2402F 50%, #fff 50% 54%, #1D3B7A 54%); }
+  .ly.studex .hl { background: linear-gradient(90deg, #CF3428 50%, #173064 50%) center / 40% 3px no-repeat, #fff; }
   .ly.cheer .st { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
-  .ly.cheer .cd { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='white' fill-opacity='0.1'%3E%3Cpath d='M22 6Q48 48 26 96Q36 48 22 6Z'/%3E%3Cpath d='M44 2Q70 46 48 98Q58 46 44 2Z'/%3E%3Cpath d='M66 8Q90 50 70 94Q80 50 66 8Z'/%3E%3C/g%3E%3C/svg%3E") right -2px bottom -6px / 44px no-repeat, radial-gradient(120% 110% at 0% 0%, #454B88, #2E3258 38%, #0A0B14 92%); }
-  .ly.cheer .hl, .ly.knights .hl { background: #fff; }
+  .ly.cheer .cd { background: linear-gradient(180deg, #5560C2, #2E3258 40%, #1D2042 40%, #0A0B17); }
+  .ly.cheer .hl { background: linear-gradient(100deg, #FFE7A3, #FFC6E0, #FFE7A3); }
   .ly.knights .st { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
-  .ly.knights .cd { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44'%3E%3Cdefs%3E%3Cpattern id='w' width='7' height='7' patternUnits='userSpaceOnUse'%3E%3Crect x='1.5' y='2' width='4' height='4' fill='white' fill-opacity='0.07'/%3E%3C/pattern%3E%3C/defs%3E%3Cpath d='M0 44V16h62v-6h76v6h62v28Z' fill='url(%23w)'/%3E%3C/svg%3E") left bottom 10px / 100% auto no-repeat, linear-gradient(160deg, #2E6AD1, #1C4C94 45%, #0B1F48); }
+  .ly.knights .cd { background: linear-gradient(180deg, #3A7BEA, #1C4C94 40%, #0F2B66 40%, #071631); }
+  .ly.knights .hl { background: linear-gradient(90deg, #1C4C94, #2F6BD0); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
   .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .ly.sower .st i { color: #000; }
-  .ly.sower .cd { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
-  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 76px; height: 76px; border-radius: 50%;
+  .ly.sower .cd { background: radial-gradient(90% 60% at 0% 0%, #26262B, #000 62%); }
+  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -40px; width: 76px; height: 76px; border-radius: 50%;
     background: repeating-radial-gradient(circle, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 5.6px); }
   .ly.sower .hl { background: #fff; }
 </style>

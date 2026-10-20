@@ -93,7 +93,8 @@ const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['k
 export const skinOf = (o?: OrgRef | null): Skin | null => (o?.official && SKINS.find(([, re]) => re.test(o.name))?.[0]) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on, Oct 20) */
-export const lookOf = (p: PersonCard): Skin | 'sower' | 'kbtu' => p.skin === 'sower' ? 'sower'
+export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
 /** the word on each one's strap */
-export const STRAP: Record<Skin | 'sower' | 'kbtu', string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };
+export type Look = Skin | 'sower' | 'kbtu';
+export const STRAP: Record<Look, string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };
