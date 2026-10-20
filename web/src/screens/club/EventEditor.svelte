@@ -31,7 +31,7 @@
   import { PICK_EMOJI } from '../../lib/emoji';
   import EmojiPick from '../../ui/EmojiPick.svelte';
   import Button from '../../ui/Button.svelte';
-  import { may } from '../../lib/perms';
+  import { may, RANK } from '../../lib/perms';
 
   let { overlay, org, id }: { overlay: Overlay; org: Id; id?: Id } = $props();
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
@@ -72,7 +72,10 @@
   // a club meeting (§2b): team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
   const isMeeting = $derived(f.teamOnly && f.meeting);
   let tags = $state<import('../../lib/api').ClubTag[]>([]);
-  $effect(() => { if (isMeeting && !tags.length) api.teamSetup(org).then((s) => (tags = s.tags)).catch(() => {}); });
+  // a Head with a department calls only their department (PLAN 35): that one is picked, the rest aren't offered
+  let ownDept = $state<Id | null>(null);
+  const deptOnly = $derived(ownDept != null && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
+  $effect(() => { if (isMeeting && !tags.length) api.teamSetup(org).then((s) => { tags = s.tags; ownDept = s.myDept ?? null; if (deptOnly && !saved) f.meetingTag = ownDept; }).catch(() => {}); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
   // one end time: earlier than the start means the next day (a night hackathon)
@@ -460,8 +463,8 @@
       {#if isMeeting && tags.length}
         <div class="who">
           <span class="t-cap">{t('ed.meetingWho')}</span>
-          <div class="mtags"><button class:on={f.meetingTag == null} onclick={() => (f.meetingTag = null)}>{t('ed.meetingAll')}</button>
-            {#each tags as g (g.id)}<button class:on={f.meetingTag === g.id} style="--c:{g.color}" onclick={() => (f.meetingTag = g.id)}><i></i>{g.name}</button>{/each}</div>
+          <div class="mtags">{#if !deptOnly}<button class:on={f.meetingTag == null} onclick={() => (f.meetingTag = null)}>{t('ed.meetingAll')}</button>{/if}
+            {#each tags.filter((g) => !deptOnly || g.id === ownDept) as g (g.id)}<button class:on={f.meetingTag === g.id} style="--c:{g.color}" onclick={() => (f.meetingTag = g.id)}><i></i>{g.name}</button>{/each}</div>
         </div>
       {/if}
     {/if}

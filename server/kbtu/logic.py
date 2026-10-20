@@ -2982,10 +2982,15 @@ def admin_stats(con, v: Viewer) -> dict:
                      for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}
 
 
-def _meeting_ok(con, oid: int, f: dict, priced: bool) -> None:
-    """A meeting's tag is one of the club's own, and a meeting has no price."""
+def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None) -> None:
+    """A meeting's tag is one of the club's own, and a meeting has no price. A Head with a department calls only that
+    department (PLAN item 35, owner Oct 19); `was` (meeting, tag) before an edit: what someone else set stays as it is."""
     if f["meeting"] and (priced or f["meeting_tag"] and not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", f["meeting_tag"], oid)):
         raise ApiError("bad_input")
+    if f["meeting"] and (f["meeting"], f["meeting_tag"]) != was and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
+        own = dept_of(con, oid, v.id)
+        if own is not None and f["meeting_tag"] != own:
+            raise ApiError("forbidden", "dept")
 
 
 def _cover(con, v: Viewer, body: dict, keep: int | None) -> int | None:
@@ -3052,7 +3057,7 @@ def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
     f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org)}
-    _meeting_ok(con, oid, f, bool(f.get("price")))
+    _meeting_ok(con, v, oid, f, bool(f.get("price")))
     f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None)
     f["video_id"] = _video(con, v, body, None)
     cur = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(f)}, tint, created_by, created_at, updated_at)
@@ -3068,7 +3073,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         if e["status"] == "cancelled":
             raise ApiError("closed")
         f |= _pay(con, v, body, org, e)
-        _meeting_ok(con, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]))
+        _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"]))
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"])
@@ -3775,6 +3780,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
         "tags": [{"id": g["id"], "name": g["name"], "color": g["color"], "count": g["n"], "department": bool(g["department"])} for g in rows(con, """SELECT g.*,
             (SELECT COUNT(*) FROM member_tags mt JOIN org_members m ON m.user_id = mt.user_id AND m.org_id = g.org_id WHERE mt.tag_id = g.id) AS n
             FROM org_tags g WHERE g.org_id = ? ORDER BY g.id""", oid)],
+        "myDept": dept_of(con, oid, v.id),
     }
     if can(con, v, oid, "team"):
         asks = rows(con, f"""SELECT q.*, m.role, {PERSON_COLS} FROM removal_requests q JOIN org_members m ON m.org_id = q.org_id AND m.user_id = q.user_id

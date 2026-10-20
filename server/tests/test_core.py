@@ -2038,6 +2038,12 @@ def test_departments(env):
     assert put(21, 10, {"dept": dev}).status_code == 200 and dept(10) == dev     # a Vice+: anywhere, one at a time
     assert con.execute("SELECT COUNT(*) FROM member_tags WHERE user_id = ?", (uid[10],)).fetchone()[0] == 1
     assert put(21, 10, {"tags": [star]}).status_code == 200 and dept(10) == dev  # tags leave the department alone
+    meet = {"title": "SMM sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": None, "visibility": "members", "meeting": True}
+    assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": dev}).json().get("message") == "dept"  # PLAN 35
+    assert c.post("/api/orgs/1/events", headers=tma(22), json=meet).json().get("message") == "dept"                # not the whole club
+    assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": smm}).status_code == 200
+    assert c.post("/api/orgs/1/events", headers=tma(21), json=meet).status_code == 200                              # a Vice calls anyone
+    assert c.get("/api/orgs/1/team", headers=tma(22)).json()["myDept"] == smm
     assert put(23, 10, {"dept": None}).status_code == 200 and dept(10) is None   # out of the Head's own
     assert put(22, 11, {"dept": smm}).status_code == 200
     assert c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(22), json={"name": "SMM", "color": "#18A9DB", "department": False}).status_code == 403  # Vice+ only
