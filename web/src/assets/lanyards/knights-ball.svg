@@ -1,0 +1,10 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+<defs><clipPath id='b'><circle cx='50' cy='50' r='45'/></clipPath><clipPath id='l'><rect width='34' height='100'/></clipPath><clipPath id='m'><rect x='34' width='32' height='100'/></clipPath><clipPath id='r'><rect x='66' width='34' height='100'/></clipPath></defs>
+<g fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+<circle cx='50' cy='50' r='45' fill='white' fill-opacity='.08'/>
+<g clip-path='url(#b)'>
+<path d='M34 0V100M66 0V100' stroke-width='2.4'/>
+<g clip-path='url(#l)'><path d='M0 50H34M27 4Q8 50 27 96'/></g>
+<g clip-path='url(#m)' fill='white'><path d='M50.0 39.0L60.5 46.6L56.5 58.9L43.5 58.9L39.5 46.6ZM50.0 19.0L39.5 11.4L43.5 -0.9L56.5 -0.9L60.5 11.4ZM50.0 103.0L39.5 95.4L43.5 83.1L56.5 83.1L60.5 95.4Z'/><path d='M50.0 39.0L50 19M56.5 58.9L62.5 72.9M43.5 58.9L37.5 72.9M60.5 46.6L70 42.6M39.5 46.6L30 42.6' fill='none'/></g>
+<g clip-path='url(#r)'><path d='M66 28Q84 16 100 24M66 52Q86 38 100 48M66 76Q86 62 100 72'/></g>
+</g></g></svg>

@@ -133,9 +133,9 @@
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
   /* with an art band (LanyardBand): the photo overlaps its bottom edge, the name starts below it */
   .banded { padding-top: 0; }
-  .banded .top { align-items: flex-start; margin-top: -34px; }
-  .banded .id { margin-top: 42px; }
-  .banded .qr { top: 126px; }
+  .banded .top { align-items: flex-start; margin-top: -30px; }
+  .banded .id { margin-top: 34px; }
+  .banded .qr { top: 96px; }
   .foot { display: block; margin: 16px 18px 0; }
   .top.mine .id { padding-right: 62px; } /* the name never runs under the QR */
   .top.mine .nm { font-size: 20px; }
