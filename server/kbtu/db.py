@@ -399,6 +399,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (53, """ALTER TABLE org_tags ADD COLUMN department INTEGER NOT NULL DEFAULT 0;
         UPDATE org_tags SET department = 1 WHERE id IN (SELECT d.tag_id FROM round_departments d JOIN rounds r ON r.id = d.round_id
             WHERE r.id = (SELECT MAX(x.id) FROM rounds x WHERE x.org_id = r.org_id));"""),
+    # a member link may put the newcomer straight into a department (PLAN 47: one who came by link landed in none)
+    (54, "ALTER TABLE org_invites ADD COLUMN dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;"),
 ]
 
 

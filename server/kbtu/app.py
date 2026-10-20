@@ -647,8 +647,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.door(con, v, eid)
 
     @app.post("/api/orgs/{oid}/invites")
-    def invite(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.invite(con, v, oid)
+    def invite(oid: int, body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.invite(con, v, oid, body.get("dept") if isinstance(body, dict) else None)
 
     @app.post("/api/invites/{token}")
     def accept_invite(token: str, con=Depends(conn), v: Viewer = Depends(viewer)):

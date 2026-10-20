@@ -278,6 +278,8 @@ const en: Dict = {
   'invite.making': "Making the link…",
   'team.share': "Share",
   'team.inviteMsg': "Join {club} in KBTU App",
+  'team.inviteDeptMsg': "Join the {dept} team of {club} in KBTU App",
+  'team.inviteDept': "Invite to {dept}",
   'join.linkAsk': "Join {club}?",
   'join.linkText': "You were invited by the club's link — no application needed.",
   'join.linkOk': "Join",

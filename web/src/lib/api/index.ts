@@ -183,7 +183,7 @@ export interface Api {
   // the club's own team (SPEC §2, the rank rule): Vice+ manage people below them, the President hands the club over
   team(org: Id): Promise<TeamMember[]>;
   // the club's invite link (§4.5, Vice+): the same token until replaced; a student who opens it is a Member at once
-  invite(org: Id): Promise<{ token: string }>;
+  invite(org: Id, dept?: Id): Promise<{ token: string }>;   // dept: the newcomer lands in that department
   acceptInvite(token: string): Promise<Org>;
   changeRole(org: Id, user: Id, role: OrgRole): Promise<TeamMember[]>;
   removeMember(org: Id, user: Id): Promise<void>;          // my own id = leave; a President: conflict/'president'

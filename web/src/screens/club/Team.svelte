@@ -45,7 +45,7 @@
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
   const groups = $derived(filter == null && depts.length
     ? [...depts.map((g) => ({ id: g.id as number | null, name: g.name, color: g.color, people: shown.filter((x) => x.dept === g.id) })),
-       { id: null, name: t('team.noDept'), color: '', people: shown.filter((x) => x.dept == null) }].filter((g) => g.people.length)
+       { id: null, name: t('team.noDept'), color: '', people: shown.filter((x) => x.dept == null) }].filter((g) => g.people.length || (vice && g.id != null))
     : [{ id: null, name: '', color: '', people: shown }]);
   // who may put this person in a department: a Vice+ anyone; a Head those below them, in or out of the Head's own
   const myDept = $derived((list ?? []).find((x) => x.person.id === me)?.dept ?? null);
@@ -216,7 +216,7 @@
       {/if}
       <div class="list">
         {#each groups as grp (grp.id ?? 'none')}
-        {#if grp.name}<h2 class="t-cap grp">{#if grp.color}<span class="dot" style="--c:{grp.color}"></span>{/if}{grp.name}<span class="num">{grp.people.length}</span></h2>{/if}
+        {#if grp.name}<h2 class="t-cap grp">{#if grp.color}<span class="dot" style="--c:{grp.color}"></span>{/if}{grp.name}<span class="num">{grp.people.length}</span>{#if vice && grp.id != null}<button class="ic sm" onclick={() => shareInvite(m.org, { id: grp.id as number, name: grp.name })} aria-label={t('team.inviteDept', { dept: grp.name })}><LinkIcon size={16} /></button>{/if}</h2>{/if}
         {#each grp.people as x (x.person.id)}
           {@const manage = x.person.id !== me && canManage(m, x.role)}
           <div class="row" class:out={open === x.person.id}>
@@ -319,6 +319,7 @@
   .list { display: flex; flex-direction: column; gap: 8px; }
   .grp { display: flex; align-items: center; gap: 7px; margin: 8px 2px 0; color: var(--text-2); }
   .grp .num { margin-left: auto; opacity: 0.6; }
+  .grp .ic.sm { width: 28px; height: 28px; margin: -6px -4px -6px 0; }
   .row { border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
   .who { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; }
   .who:active { background: var(--surface-2); }

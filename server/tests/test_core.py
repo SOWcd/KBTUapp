@@ -2055,6 +2055,17 @@ def test_departments(env):
     c.patch(f"/api/orgs/1/tags/{smm}", headers=tma(21), json={"name": "SMM", "color": "#18A9DB", "department": False})
     put(21, 11, {"dept": None}); con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (smm, uid[11]))
     assert dept(11) is None and smm in next(m for m in c.get("/api/orgs/1/members", headers=tma(20)).json() if m["person"]["id"] == uid[11])["tags"]
+    login(c, 12, "cat"); login(c, 13, "dan")                                     # a link straight into a department
+    assert c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": star}).status_code == 400
+    assert c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": "x"}).status_code == 400
+    tok = c.post("/api/orgs/1/invites", headers=tma(21), json={"dept": dev}).json()["token"]
+    assert c.post(f"/api/invites/{tok}", headers=tma(12)).status_code == 200
+    uid[12] = con.execute("SELECT id FROM users WHERE tg_id = 12").fetchone()[0]
+    assert dept(12) == dev
+    tok = c.post("/api/orgs/1/invites", headers=tma(21)).json()["token"]                # no department, as before
+    assert c.post(f"/api/invites/{tok}", headers=tma(13)).status_code == 200
+    uid[13] = con.execute("SELECT id FROM users WHERE tg_id = 13").fetchone()[0]
+    assert dept(13) is None
 
 
 def test_team_two(env):

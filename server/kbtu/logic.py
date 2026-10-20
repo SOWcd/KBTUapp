@@ -4082,13 +4082,19 @@ def banned(con, oid: int, uid: int) -> bool:
 INVITE_TTL = 2 * 86400
 
 
-def invite(con, v: Viewer, oid: int) -> dict:
+def invite(con, v: Viewer, oid: int, dept: object = None) -> dict:
     """A fresh member link for one person (owner, Oct 14: sent in a DM, so it needn't live long; one that went
-    somewhere it shouldn't lets in one person at most). 96 random bits."""
+    somewhere it shouldn't lets in one person at most). 96 random bits. `dept`: the department the newcomer lands in;
+    below Vice, only one's own."""
     _may(con, v, oid, "team")
+    if dept is not None:
+        if not isinstance(dept, int) or isinstance(dept, bool) or not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ? AND department = 1", dept, oid):
+            raise ApiError("bad_input")
+        if RANK[role_in(con, v, oid) or "member"] < RANK["vice"] and dept != dept_of(con, oid, v.id):
+            raise ApiError("forbidden", "dept")
     token = secrets.token_hex(12)
-    con.execute("INSERT INTO org_invites (token, org_id, role, created_by, created_at, expires_at) VALUES (?, ?, 'member', ?, ?, ?)",
-                (token, oid, v.id, now(), now() + INVITE_TTL))
+    con.execute("INSERT INTO org_invites (token, org_id, role, created_by, created_at, expires_at, dept_id) VALUES (?, ?, 'member', ?, ?, ?, ?)",
+                (token, oid, v.id, now(), now() + INVITE_TTL, dept))
     return {"token": token}
 
 
@@ -4129,6 +4135,8 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
             raise ApiError("not_found")
         if member:
             con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (o["id"], v.id, now()))
+            if r["dept_id"] and dept_of(con, o["id"], v.id) is None:
+                con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) SELECT id, ? FROM org_tags WHERE id = ? AND department = 1", (v.id, r["dept_id"]))
         else:
             set_role(con, r["created_by"], v.id, o["id"], "president", "link")
         con.execute("UPDATE join_requests SET status = 'accepted', decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'", (now(), o["id"], v.id))

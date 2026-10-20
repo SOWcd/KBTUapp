@@ -279,6 +279,8 @@ const ru = {
   'invite.making': "Готовлю ссылку…",
   'team.share': "Поделиться",
   'team.inviteMsg': "Вступай в «{club}» в KBTU App",
+  'team.inviteDeptMsg': "Вступай в отдел «{dept}» клуба «{club}» в KBTU App",
+  'team.inviteDept': "Пригласить в «{dept}»",
   'join.linkAsk': "Вступить в «{club}»?",
   'join.linkText': "Тебя пригласили по ссылке клуба — заявка не нужна.",
   'join.linkOk': "Вступить",
