@@ -40,13 +40,11 @@
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
   const shown = $derived((list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))));
-  // departments (PLAN 47, a club president's ask): the whole list grouped by them, highest role first in each, then
-  // those in none; filtered, a plain list
+  // one list, highest role first (the server's order); departments are their own chips (owner, Oct 20: grouped, the
+  // President sat last under "no department" and the heads were scattered)
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
-  const groups = $derived(filter == null && depts.length
-    ? [...depts.map((g) => ({ id: g.id as number | null, name: g.name, color: g.color, people: shown.filter((x) => x.dept === g.id) })),
-       { id: null, name: t('team.noDept'), color: '', people: shown.filter((x) => x.dept == null) }].filter((g) => g.people.length || (vice && g.id != null))
-    : [{ id: null, name: '', color: '', people: shown }]);
+  const otherTags = $derived((setup?.tags ?? []).filter((g) => !g.department));
+  const dept = $derived(typeof filter === 'number' ? depts.find((g) => g.id === filter) ?? null : null);
   // who may put this person in a department: a Vice+ anyone; a Head those below them, in or out of the Head's own
   const myDept = $derived((list ?? []).find((x) => x.person.id === me)?.dept ?? null);
   const deptChoices = (x: TeamMember) => {
@@ -194,20 +192,28 @@
 
     {#if list}
       {#if setup?.tags.length || onProbation}
+        {#if depts.length}
+          <div class="filters depts">
+            <button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>
+            {#each depts as g (g.id)}
+              <button class:on={filter === g.id} onclick={() => (filter = filter === g.id ? null : g.id)}><span class="dot" style="--c:{g.color}"></span>{g.name}<span class="num">{list.filter((x) => x.dept === g.id).length}</span></button>
+            {/each}
+          </div>
+        {/if}
         <!-- one row whatever the count: the tags sit behind one chip that opens the phone's own list, and the chosen
              one shows on it (owner, Oct 13: long department names in a scrolling row hid the chosen one; wrapped,
              six of them took half the screen and stood ragged) -->
         <div class="filters">
-          <button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>
-          {#if setup?.tags.length}
-            {@const g = typeof filter === 'number' ? tagOf.get(filter) : null}
+          {#if !depts.length}<button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>{/if}
+          {#if otherTags.length}
+            {@const g = typeof filter === 'number' && !dept ? tagOf.get(filter) : null}
             <label class="pick" class:on={!!g}>
               {#if g}<span class="dot" style="--c:{g.color}"></span><span class="ellipsis">{g.name}</span><span class="num">{list.filter((x) => x.tags?.includes(g.id)).length}</span>
               {:else}<span>{t('team.tagsLabel')}</span>{/if}
               <ChevronDown size={16} />
               <select value={g ? String(g.id) : ''} onchange={(e) => { const v = e.currentTarget.value; filter = v ? Number(v) : null; }} aria-label={t('team.tagsLabel')}>
                 <option value="">{t('common.all')} · {list.length}</option>
-                {#each setup.tags as x (x.id)}<option value={String(x.id)}>{x.name} · {list.filter((y) => y.tags?.includes(x.id)).length}</option>{/each}
+                {#each otherTags as x (x.id)}<option value={String(x.id)}>{x.name} · {list.filter((y) => y.tags?.includes(x.id)).length}</option>{/each}
               </select>
             </label>
           {/if}
@@ -215,9 +221,8 @@
         </div>
       {/if}
       <div class="list">
-        {#each groups as grp (grp.id ?? 'none')}
-        {#if grp.name}<h2 class="t-cap grp">{#if grp.color}<span class="dot" style="--c:{grp.color}"></span>{/if}{grp.name}<span class="num">{grp.people.length}</span>{#if vice && grp.id != null}<button class="ic sm" onclick={() => shareInvite(m.org, { id: grp.id as number, name: grp.name })} aria-label={t('team.inviteDept', { dept: grp.name })}><LinkIcon size={16} /></button>{/if}</h2>{/if}
-        {#each grp.people as x (x.person.id)}
+        {#if dept && vice}<button class="deptinv" onclick={() => shareInvite(m.org, { id: dept.id, name: dept.name })}><LinkIcon size={16} />{t('team.inviteDept', { dept: dept.name })}</button>{/if}
+        {#each shown as x (x.person.id)}
           {@const manage = x.person.id !== me && canManage(m, x.role)}
           <div class="row" class:out={open === x.person.id}>
             <button class="who" onclick={(ev) => tap(x, ev)}>
@@ -276,7 +281,6 @@
             {/if}
           </div>
         {/each}
-        {/each}
         {#if !shown.length}<p class="t-foot empty">{t('clubs.nothing')}</p>{/if}
       </div>
       <button class="leave" onclick={leave}>{t('team.leave')}</button>
@@ -317,9 +321,10 @@
   .filters .num { flex: none; font-weight: 700; opacity: 0.6; }
 
   .list { display: flex; flex-direction: column; gap: 8px; }
-  .grp { display: flex; align-items: center; gap: 7px; margin: 8px 2px 0; color: var(--text-2); }
-  .grp .num { margin-left: auto; opacity: 0.6; }
-  .grp .ic.sm { width: 28px; height: 28px; margin: -6px -4px -6px 0; }
+  .depts { overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
+  .depts::-webkit-scrollbar { display: none; }
+  .deptinv { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
   .row { border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
   .who { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; }
   .who:active { background: var(--surface-2); }

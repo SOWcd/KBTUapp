@@ -419,7 +419,7 @@
   </div>
   </div>
   <!-- from one room to another for everyone, in sight (owner, Oct 19: "routes matter a lot", it had no button left) -->
-  <button class="way glass glass-pill" class:away={searching || routing || rt.edit} inert={searching || routing || rt.edit} use:glass
+  <button class="goto glass glass-pill" class:away={searching || routing || rt.edit} inert={searching || routing || rt.edit} use:glass
           onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={18} />{t('route.title')}</button>
   <p class="note" class:away={searching || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')}</p>
   {#if routing || rt.edit}
@@ -503,8 +503,8 @@
   .row { transition: opacity 0.2s ease; }
   .row.away { opacity: 0; }
   .shut { flex: none; width: 32px; height: 32px; margin-right: -8px; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
-  .floors, .note, .way { transition: opacity 0.2s ease, translate 0.3s var(--ease-spring); }
-  .floors.away, .note.away, .way.away { opacity: 0; translate: 0 24px; pointer-events: none; }
+  .floors, .note, .goto { transition: opacity 0.2s ease, translate 0.3s var(--ease-spring); }
+  .floors.away, .note.away, .goto.away { opacity: 0; translate: 0 24px; pointer-events: none; }
   .find input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--text);
     font: 600 16px/1 var(--font-text); -webkit-appearance: none; appearance: none; }
   .find input::placeholder { color: var(--text-3); }
@@ -523,7 +523,7 @@
     transition: background-color var(--t-fast), color var(--t-fast), transform var(--t-fast) var(--ease); }
   .ver button.on { background: var(--text); color: var(--bg); }
   .ver button:active { transform: scale(0.94); }
-  .way { position: absolute; z-index: 2; left: 50%; bottom: calc(var(--safe-bottom) + 100px); transform: translateX(-50%); height: 44px; padding: 0 18px;
+  .goto { position: absolute; z-index: 2; left: 50%; bottom: calc(var(--safe-bottom) + 100px); transform: translateX(-50%); height: 44px; padding: 0 18px;
     border-radius: var(--r-full); display: flex; align-items: center; gap: 8px; font: 650 15px/1 var(--font-text); color: var(--text); white-space: nowrap; }
   .note { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 76px); text-align: center; pointer-events: none;
     font: 550 12px/1.3 var(--font-text); color: var(--text-3); }
