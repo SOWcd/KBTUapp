@@ -2972,6 +2972,17 @@ def test_offsite_backup(env, monkeypatch):
     clock[0] += 3600
     bot.offsite_round(cfg, con)                                         # done for the day
     assert len(sent) == 2
+    con.execute("INSERT INTO users (tg_id, role, created_at, seen_at) VALUES (9001, 'admin', 0, 0)")
+    alerts = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'backup_failed'").fetchone()[0]  # noqa: E731
+    fail[0] = True
+    clock[0] = sunday + 86400 + 6 * 3600                                # Monday 11:00, failing: Sunday's copy is there
+    bot.offsite_round(cfg, con)
+    assert alerts() == 0
+    clock[0] += 86400                                                   # Tuesday 11:00: two nights without one
+    bot.offsite_round(cfg, con)
+    clock[0] += 3600
+    bot.offsite_round(cfg, con)                                         # once a day
+    assert alerts() == 1
 
 
 async def _noop():

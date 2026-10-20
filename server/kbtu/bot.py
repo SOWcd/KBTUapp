@@ -95,6 +95,8 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
     if kind == "link_attempt":
         return (*texts.bot_message(lang, kind), "")
+    if kind == "backup_failed":  # bf:<day>, to the admins: no copy reached R2 last night nor the night before
+        return (*texts.bot_message(lang, kind), "")
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
         return (*texts.bot_message(lang, kind, when=texts.when(at, lang).split(",")[0]), "me") if at else None
@@ -388,6 +390,11 @@ def offsite_round(cfg: Config, con) -> None:
     date, home = time.strftime("%Y-%m-%d", time.gmtime(local)), Path(cfg.db_path).resolve().parent
     stamp, done = time.strftime("%Y-%m-%d-%H%M", time.gmtime(local)), lambda key: one(con, "SELECT 1 FROM meta WHERE key = ? AND value = ?", key, date)
     copy = home / "backups" / f"kbtu-{date}.db"
+    yday = time.strftime("%Y-%m-%d", time.gmtime(local - 86400))
+    if local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
+        # two nights without a copy off the server (six tries tonight already): the admins hear it once a day
+        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin'"):
+            logic.notify(con, uid, "backup_failed", f"bf:{date}")
     jobs = [("offsite_db", [copy, home / "receipts"], f"db/{stamp}.tar.age")] if copy.exists() and not done("offsite_db") else []
     if time.gmtime(local).tm_wday == 6 and not done("offsite_media"):
         jobs.append(("offsite_media", [home / "media"], f"media/{stamp}.tar.age"))
