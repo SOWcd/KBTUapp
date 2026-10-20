@@ -3,6 +3,8 @@ fastapi==0.142.2
 starlette==1.7.0
 pydantic==2.13.5
 uvicorn==0.54.0
+uvloop==0.23.0      # uvicorn picks both up by itself: a faster event loop and HTTP parser (owner yes, Oct 20)
+httptools==0.9.0
 httpx==0.28.1
 pillow==12.3.0
 pypdfium2==5.14.0
