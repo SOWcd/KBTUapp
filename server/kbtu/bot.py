@@ -93,8 +93,18 @@ async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Respo
 def _render(con, m) -> tuple[str, str | None, str] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
-    if kind == "link_attempt":
-        return (*texts.bot_message(lang, kind), "")
+    if kind == "id_clash":  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
+        who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
+            FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
+        if not all(who):
+            return None
+        f, held = {}, json.loads(m["payload"] or "{}")  # the holder as they were when it happened
+        for k, p in zip("ab", who):
+            f[k + "name"] = (k == "b" and held.get("name")) or " ".join(x for x in (p["first_name"], p["last_name"]) if x) or p["tg_first_name"]
+            f[k + "mail"] = (k == "b" and held.get("email")) or p["email"] or "—"
+            f[k + "tg"] = "@" + p["tg_username"] if p["tg_username"] else p["tg_first_name"]
+            f[k + "id"] = p["tg_id"]
+        return (*texts.bot_message(lang, kind, sid=ref[1], **f), "")
     if kind == "backup_failed":  # bf:<day>, to the admins: no copy reached R2 last night nor the night before
         return (*texts.bot_message(lang, kind), "")
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
@@ -435,6 +445,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
         casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
         purge(cfg, con)       # accounts whose week to change their mind ran out
+        logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
         backup_day(cfg, con)  # a nightly copy of the database, 14 kept
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
@@ -509,7 +520,7 @@ def _chat_picker(con, cfg: Config, msg: dict) -> dict:
     """Two buttons that open Telegram's own list of the student's chats: channels, groups; only public ones are listed
     (chat_has_username), so the catalog never gets a closed group's invite. A student only."""
     chat, lang = msg["chat"], _lang(con, msg)
-    if not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", chat["id"]):
+    if not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"]):
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     channel, group = texts.bot_message(lang, "chat_buttons")
     pick = lambda rid, label: [{"text": label, "request_chat": {"request_id": rid, "chat_is_channel": rid == 1, "chat_has_username": True,  # noqa: E731
@@ -527,7 +538,7 @@ async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict
     lang, shared = _lang(con, msg), msg.get("chat_shared") or {}
     done = lambda kind, **f: {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML",  # noqa: E731
                                "reply_markup": {"remove_keyboard": True}}
-    u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", chat["id"])
+    u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
     if not u:
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     name = str(shared.get("username") or "").lower() if shared else logic.chat_handle(str(msg.get("text") or ""))
@@ -580,7 +591,7 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
         return None
-    u = one(con, "SELECT u.id, u.role, u.lang FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id = ?", chat["id"])
+    u = one(con, "SELECT u.id, u.role, u.lang FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
     lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
     if not u:

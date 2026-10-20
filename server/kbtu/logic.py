@@ -618,20 +618,45 @@ def ms_link(con, uid: int, who: dict) -> None:
 
 
 def ms_remember(con, uid: int, who: dict) -> None:
-    """Signed in with Microsoft before typing the student ID and year: kept a day for kbtu_manual"""
+    """Signed in with Microsoft before typing the student ID and year: kept a week (MS_KEEP) for kbtu_manual"""
     con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
                 (f"ms:{uid}", json.dumps({**who, "at": now()})))
+
+
+MS_KEEP = 7 * 86400  # a Microsoft sign-in waits a week for the student ID and year (review 3: a day was too short)
 
 
 def ms_pending(con, uid: int) -> dict | None:
     r = one(con, "SELECT value FROM meta WHERE key = ?", f"ms:{uid}")
     who = json.loads(r[0]) if r else None
-    return who if who and who["at"] > now() - 86400 else None
+    return who if who and who["at"] > now() - MS_KEEP else None
+
+
+def ms_sweep(con) -> None:
+    """Each bot round: Microsoft sign-ins never finished (they hold the Graph profile) and the used-link marks"""
+    con.execute("DELETE FROM meta WHERE key LIKE 'ms:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (now() - MS_KEEP,))
+    con.execute("DELETE FROM meta WHERE key LIKE 'ms_used:%' AND CAST(value AS INTEGER) < ?", (now() - 86400,))
+
+
+def id_clash(con, sid: str, new: int, old: int) -> None:
+    """Someone signed in with Microsoft typed a student ID another account holds: every admin hears, with both
+    people's contacts, and asks them (owner, Oct 20). Once per pair, 3 a day per person (review: no admin spam). The
+    holder's name and email are kept in the message: their row may be gone by the time it's sent."""
+    day = now() // 86400
+    if one(con, "SELECT COUNT(DISTINCT ref) FROM bot_outbox WHERE kind = 'id_clash' AND ref LIKE ? AND send_after >= ?",
+           f"ic:%:{new}:%", day * 86400)[0] >= 3:
+        return
+    h = one(con, "SELECT first_name, last_name, email FROM students WHERE user_id = ?", old)
+    held = json.dumps({"name": " ".join(x for x in (h["first_name"], h["last_name"]) if x), "email": h["email"]} if h else {})
+    for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin'"):
+        notify(con, uid, "id_clash", f"ic:{sid}:{new}:{old}", held)
 
 
 def me(con, v: Viewer) -> dict:
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
+    relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms (owner, Oct 20)
+    s = None if relink else s
     members = rows(con, """SELECT m.role, t.name AS title, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
@@ -649,9 +674,10 @@ def me(con, v: Viewer) -> dict:
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": u["tg_photo_url"], "own": f"media/{own['path']}.t.webp" if own else None},
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "email": s["email"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
-                    "manual": bool(s["manual"]), "ms": s["ms_oid"] is not None} if s else None,  # manual: typed in, not confirmed yet
+                    "ms": s["ms_oid"] is not None} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
-        "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and (p := ms_pending(con, v.id)) else None,
+        "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
+        "relink": relink,
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -665,7 +691,7 @@ def me(con, v: Viewer) -> dict:
                      "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role in ("admin", "moderator") else 0},
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
-        "deleteAt": u["delete_at"] if s else None,
+        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too (review)
     }
 
 
@@ -836,6 +862,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             con.execute(f"DELETE FROM {t} WHERE user_id = ?", (v.id,))
         for t, c in (("strikes", "by_id"), ("strikes", "cleared_by"), ("removal_requests", "by_id"), ("removal_requests", "decided_by"), ("org_bans", "by_id")):
             con.execute(f"UPDATE {t} SET {c} = NULL WHERE {c} = ?", (v.id,))
+        con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
         con.execute("DELETE FROM comments WHERE user_id = ? AND as_org = 0", (v.id,))
         con.execute("DELETE FROM friendships WHERE a = ? OR b = ?", (v.id, v.id))
         for t in ("friend_requests", "friend_invites"):

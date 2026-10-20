@@ -128,7 +128,6 @@ export interface StudentProfile {
   school: string | null;
   program: string | null;
   syncedAt: Ts;
-  manual: boolean; // typed in by the student, not confirmed with the KBTU account yet
   ms: boolean;     // signed in with the KBTU Microsoft account
 }
 
@@ -147,6 +146,7 @@ export interface Me {
   photo: { telegram: boolean /* "Photo from Telegram" */; tg: string | null; own: string | null };
   student: StudentProfile | null; // null = guest
   msPending?: { first: string; last: string; email: string } | null; // signed in with Microsoft, the student ID still to type
+  relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   founder: boolean;
   mark?: 'idea' | null;

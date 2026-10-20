@@ -146,7 +146,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
         if u["banned_at"]:
             raise ApiError("forbidden", "banned")
-        return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]) is not None)
+        # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (owner, Oct 20: Microsoft only)
+        return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
 
     # ------------------------------------------------------------ me and sign-in
 
@@ -195,37 +196,46 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/kbtu/manual")
     def kbtu_manual(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        """Sign in by typing one's name, student ID and year (owner, Oct 19: KBTU blocked the portal-password sign-in and
-        it is gone for good). Marked manual (not confirmed) but numbered at once with First 500 like anyone (owner, Oct 19);
-        the Microsoft sign-in (PLAN item 25) confirms. Again while still manual: fixes a typo."""
+        """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
+        empty, measured Oct 20), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
+        (owner, Oct 20): no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
+        to the Microsoft one; held by a Microsoft-confirmed one, it's refused; the admins hear of both (id_clash)."""
         consent = str(body.get("consentVersion") or "")
-        first, last = (" ".join(str(body.get(k) or "").split()) for k in ("firstName", "lastName"))
         sid, course = str(body.get("studentId") or "").strip().upper(), body.get("course")
-        if not (consent and len(consent) <= 16 and all(NAME.fullmatch(x) for x in (first, last)) and STUDENT_ID.fullmatch(sid)
+        ms = logic.ms_pending(con, v.id)
+        # the account's names when Microsoft has them (ms_link writes them anyway); typed only where it has none
+        names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
+                 for m, k in (("first", "firstName"), ("last", "lastName"))]
+        first, last = (mine or typed for mine, typed in names)
+        if not (consent and len(consent) <= 16 and all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
             raise ApiError("bad_input")
+        if not ms:
+            raise ApiError("forbidden", "ms_first")
+        if STUDENT_ID.fullmatch(ms.get("employeeId") or "") and ms["employeeId"] != sid:
+            raise ApiError("conflict", "sid_mismatch")  # empty at KBTU today (measured Oct 20); kept for the day they fill it
         now = logic.now()
         with db.tx(con):
-            mine = logic.one(con, "SELECT manual FROM students WHERE user_id = ?", v.id)
-            if mine and not mine[0]:
-                raise ApiError("conflict", "verified")  # signed in for real already: nothing to type
-            taken = logic.one(con, "SELECT user_id FROM students WHERE student_id = ?", sid)
-            if taken and taken[0] != v.id:
-                raise ApiError("conflict", "linked")
-            # came through Microsoft first: the account is KBTU's, only the ID and year were typed; unless that account
-            # got linked to someone else meanwhile (review, Oct 19: the unique index would have made it a 500)
+            if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):
+                raise ApiError("conflict", "verified")  # a row already: Microsoft confirms it, nothing to type
             ms = logic.ms_pending(con, v.id)
-            if ms and logic.one(con, "SELECT 1 FROM students WHERE ms_oid = ? AND user_id != ?", ms["oid"], v.id):
-                ms = None
-            if ms and STUDENT_ID.fullmatch(ms["employeeId"]) and ms["employeeId"] != sid:
-                raise ApiError("conflict", "sid_mismatch")  # KBTU's own record of the ID says otherwise
-            con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
-                    synced_at, manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                ON CONFLICT (user_id) DO UPDATE SET student_id = excluded.student_id, first_name = excluded.first_name,
-                    last_name = excluded.last_name, course = excluded.course, consent_version = excluded.consent_version, synced_at = excluded.synced_at""",
-                        (v.id, sid, first, last, course, consent, now, now, now))
-            if ms:
+            if not ms:
+                raise ApiError("forbidden", "ms_first")
+            if logic.one(con, "SELECT 1 FROM students WHERE ms_oid = ?", ms["oid"]):
+                raise ApiError("conflict", "linked")  # that Microsoft account got linked to another Telegram meanwhile
+            taken = logic.one(con, "SELECT user_id, manual, ms_oid FROM students WHERE student_id = ?", sid)
+            if taken:
+                logic.id_clash(con, sid, v.id, taken["user_id"])
+            held = taken and not (taken["manual"] and taken["ms_oid"] is None)
+            if taken and not held:
+                for t in ("students", "schedule_classes"):  # typed in, never confirmed: gives way (as admin.py unlink)
+                    con.execute(f"DELETE FROM {t} WHERE user_id = ?", (taken["user_id"],))
+            if not held:
+                con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
+                        synced_at, manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""", (v.id, sid, first, last, course, consent, now, now, now))
                 logic.ms_link(con, v.id, ms)
+        if held:  # after the commit: the admins' message stays
+            raise ApiError("conflict", "sid_taken")  # someone with a real account holds it: the admin sorts it out
         return logic.me(con, Viewer(v.id, v.role, True))
 
     @app.post("/api/ms/start")
@@ -240,7 +250,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         uid = msauth.state_uid(cfg.token_key, state)
         u = logic.one(con, "SELECT tg_first_name, tg_username FROM users WHERE id = ?", uid) if uid else None
         if not u:
-            raise ApiError("not_found")
+            raise ApiError("not_found")  # a stale link: ms.html says "expired"
+        # the @username too: a first name alone is anyone's to fake (review, Oct 20)
         return {"verifier": msauth.verifier(cfg.token_key, state), "tg": u["tg_first_name"] or "", "username": u["tg_username"] or ""}
 
     @app.post("/api/ms/finish")
@@ -250,13 +261,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         state = str(body.get("state") or "")
         uid = msauth.state_uid(cfg.token_key, state)
         who = await msauth.identity(str(body.get("token") or "")) if uid else None
-        if not who:
+        if not who or who.get("refused") == "app":
             raise ApiError("forbidden", "ms")
+        if who.get("refused"):
+            raise ApiError("forbidden", "not_kbtu")  # a guest in KBTU's directory, or no @kbtu.kz login
         return await run_in_threadpool(_ms_finish, uid, who, state)
 
     def _ms_finish(uid: int, who: dict, state: str) -> dict:
         with pool.conn() as con, db.tx(con):
-            if not logic._once(con, f"ms_used:{state[-16:]}", "1"):
+            if not con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"ms_used:{state[-16:]}", str(logic.now()))).rowcount:
                 raise ApiError("forbidden", "ms")  # each link once
             other = logic.one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
             if other and other[0] != uid:
@@ -1249,16 +1262,20 @@ function end(state, mark) { show(L[state], mark); $("yes").hidden = $("no").hidd
 show(L.wait);
 (async () => {
   const code = q.get("code"), state = q.get("state");
+  // Microsoft's own refusals come back as error=: a cancel, or an account from outside KBTU (AADSTS50020 a personal or
+  // another directory's account, 50034 no such user in KBTU's)
+  const nope = (e, d) => /AADSTS500(20|34)/.test(d || "") ? "notKbtu" : e === "access_denied" ? "nope" : "fail";
+  if (q.get("error")) return end(nope(q.get("error"), q.get("error_description")), "bad");
   if (!code || !state) return end("fail", "bad");
-  const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : null);
+  const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : r.status === 404 ? 404 : null);
+  if (v === 404) return end("expired", "bad");  // the link is older than 15 minutes (or not ours)
   if (!v) return end("fail", "bad");
   const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
-  if (!tok.access_token) return end("fail", "bad");
+  if (!tok.access_token) return end(nope(tok.error, tok.error_description), "bad");
   // whose Telegram this goes to, asked first: a sign-in link someone else sent must not tie your account to them
-  const who = v.tg + (v.username ? " (@" + v.username + ")" : "");
-  show([L.ask[0], L.ask[1].replace("{name}", who)], "");
+  show([L.ask[0], L.ask[1].replace("{name}", v.tg + (v.username ? " (@" + v.username + ")" : ""))], "");
   $("yes").textContent = L.yes; $("no").textContent = L.no; $("yes").hidden = $("no").hidden = false;
   const go = await new Promise((ok) => { $("yes").onclick = () => ok(true); $("no").onclick = () => ok(false); });
   $("yes").hidden = $("no").hidden = true;
@@ -1269,6 +1286,6 @@ show(L.wait);
   // back to Telegram by itself: "tg://" only switches to the app, the Mini App left open there is still open
   // (owner, Oct 20: a t.me link opened it anew)
   if (r.ok) { end(j.student ? "ok" : "okNew", "ok"); setTimeout(() => { location.href = "tg://"; }, 900); return; }
-  end(j.message === "linked" ? "linked" : j.message === "other_ms" ? "otherMs" : "fail", "bad");
+  end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

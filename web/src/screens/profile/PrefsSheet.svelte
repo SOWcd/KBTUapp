@@ -68,10 +68,9 @@
     {#if me?.student}
       <div class="rows">
         {#if !me.student.ms}
-          <!-- not confirmed with the KBTU Microsoft account yet: typed in (a typo can be fixed there too), or signed in
-               through the old portal (owner, Oct 20: he had no button) -->
+          <!-- signed in through the old portal, not confirmed with the KBTU Microsoft account yet (owner, Oct 20: he had no button) -->
           <button class="r" onclick={() => sheets.login()}><span class="ic"><IdCard size={20} /></span>
-            <span class="lb">{t('me.myData')}<i class="sub">{me.student.manual ? t('me.myDataSub') : t('me.msSub')}</i></span><ChevronRight size={18} /></button>
+            <span class="lb">{t('me.myData')}<i class="sub">{t('me.msSub')}</i></span><ChevronRight size={18} /></button>
         {/if}
         <button class="r" onclick={subscribe}><span class="ic"><CalendarSync size={20} /></span><span class="lb">{t('me.calendar')}</span><ChevronRight size={18} /></button>
         <button class="r" onclick={() => sheets.settings('privacy')}><span class="ic"><Lock size={20} /></span><span class="lb">{t('me.privacy')}</span><ChevronRight size={18} /></button>

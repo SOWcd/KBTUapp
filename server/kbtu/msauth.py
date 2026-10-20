@@ -72,7 +72,7 @@ def claims(token: str) -> dict:
 
 
 async def identity(token: str) -> dict | None:
-    """Who the token is for, when Graph accepts it, it was issued to our app in KBTU's directory, and it is a KBTU
+    """Who the token is for ({"refused": why} for a token of the wrong kind), when Graph accepts it, it was issued to our app in KBTU's directory, and it is a KBTU
     member with a @kbtu.kz address (a guest in KBTU's directory carries its own outside address: review, Oct 19)"""
     try:
         async with httpx.AsyncClient(timeout=15) as http:
@@ -89,7 +89,7 @@ async def identity(token: str) -> dict | None:
                else "guest" if me.get("userType", "Member") != "Member" else "domain" if not email.endswith("@kbtu.kz") else "")
         if why:
             log.warning("ms: refused (%s)", why)  # which check, never who
-            return None
+            return {"refused": why}
         profile = {k: v for k, v in me.items() if not k.startswith("@") and v not in (None, "", [])}
         return {"profile": profile, "oid": me["id"], "email": email, "first": (me.get("givenName") or "").strip(), "last": (me.get("surname") or "").strip(),
                 "employeeId": (me.get("employeeId") or "").strip().upper()}

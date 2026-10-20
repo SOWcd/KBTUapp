@@ -2907,25 +2907,54 @@ def test_channel_refused_post_skipped(env):
 
 
 def test_manual_sign_in(env, monkeypatch):
-    """The only sign-in since Oct 19 (KBTU blocked the portal-password one, now gone): a student types their name,
-    student ID and year; marked manual, yet numbered at once (owner, Oct 19); the admin can still confirm one by hand."""
+    """Microsoft only (owner, Oct 20): the ID and year are typed only after a Microsoft sign-in; a row typed in before
+    acts as nobody until Microsoft confirms it; an ID held by such a row goes to the Microsoft one, held by a confirmed
+    one it's refused; the admins hear of both with both contacts. The admin adds someone with no Microsoft by hand."""
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     login(c, 20, "ali")  # confirmed: "24Bali"
     body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": "1"}
-    manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)
+    manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)  # noqa: E731
     for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"course": 9}, {"consentVersion": ""}):
         assert manual(21, {**body, **bad}).status_code == 400
-    me = manual(21).json()
-    assert (me["student"]["studentId"], me["student"]["firstName"], me["student"]["course"], me["student"]["manual"]) == ("24B031234", "\u041c\u0430\u0433\u0430", 2, True)
-    assert me["no"] is not None                                                           # numbered at once
-    assert manual(21, {**body, "course": 3}).json()["student"]["course"] == 3             # a typo fixed
-    assert manual(22, body).json()["message"] == "linked"                                 # someone else's ID
-    assert manual(20, body).json()["message"] == "verified"                               # confirmed already
-    from kbtu import admin                                                                # the admin checks by hand
-    admin.main(["confirm", "21"])
-    me = c.get("/api/me", headers=tma(21)).json()
-    assert me["student"]["manual"] is False and me["no"] is not None
+    assert manual(21).json()["message"] == "ms_first"                                     # no Microsoft, no account
+    assert manual(20).json()["message"] == "ms_first"                                     # confirmed already: nothing to type either
+    ids = {tg: c.get("/api/me", headers=tma(tg)).json()["id"] for tg in (21, 22, 23, 24, 25)}
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'admin', tg_username = 'squat' WHERE id = ?", (ids[25],))
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
+        synced_at, manual) VALUES (?, '24B031234', 'Squat', 'Ter', 2, '1', 0, 0, 0, 1)""", (ids[23],))  # typed in before Oct 20
+    me = c.get("/api/me", headers=tma(23)).json()
+    assert me["student"] is None and me["relink"] and me["msPending"] is None              # signed out until Microsoft
+    assert c.post("/api/friends/link", headers=tma(23)).json()["error"] == "need_student"
+    who = lambda n: {"oid": f"oid-{n}", "email": f"s_{n}@kbtu.kz", "first": "Maga", "last": f"N{n}", "employeeId": "", "profile": {}}  # noqa: E731
+    for tg in (21, 22, 24):
+        logic.ms_remember(con, ids[tg], who(tg))
+    me = manual(21).json()                                                                 # the ID held by a typed-in row: it gives way
+    assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is not None
+    assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (ids[23],)).fetchone()
+    r = manual(22)                                                                         # held by a Microsoft one: refused
+    assert r.status_code == 409 and r.json()["message"] == "sid_taken"
+    assert c.get("/api/me", headers=tma(22)).json()["msPending"]                           # can type another
+    out = con.execute("SELECT * FROM bot_outbox WHERE kind = 'id_clash' ORDER BY id").fetchall()
+    assert [m["ref"] for m in out] == [f"ic:24B031234:{ids[21]}:{ids[23]}", f"ic:24B031234:{ids[22]}:{ids[21]}"]
+    text = bot._render(con, {**dict(out[0]), "lang": "ru"})[0]                             # the holder, though their row is gone
+    assert "Squat Ter" in text
+    text = bot._render(con, {**dict(out[1]), "lang": "ru"})[0]
+    assert "s_21@kbtu.kz" in text and f"tg://user?id=22" in text and "Maga N21" in text    # both, to write to
+    for i in range(5):                                                                     # 3 clash messages a day per person
+        logic.id_clash(con, f"24B00000{i}", ids[24], ids[21])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'id_clash' AND ref LIKE ?", (f"ic:%:{ids[24]}:%",)).fetchone()[0] == 3
+    assert manual(22, {**body, "studentId": "24B031235", "firstName": "x1"}).json()["student"]["firstName"] == "Maga"  # Microsoft's names win
+    logic.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
+    assert not con.execute("SELECT 1 FROM meta WHERE key = ?", (f"ms:{ids[24]}",)).fetchone()
+    con.execute("INSERT INTO meta (key, value) VALUES ('ms:999', ?), ('ms_used:abc', '1')", (json.dumps({"at": 1}),))
+    logic.ms_sweep(con)
+    assert not con.execute("SELECT 1 FROM meta WHERE key IN ('ms:999', 'ms_used:abc')").fetchone()
+    from kbtu import admin                                                                # no Microsoft account: by hand
+    admin.main(["student", "23", "24B031299", "Squat", "Ter", "3"])
+    me = c.get("/api/me", headers=tma(23)).json()
+    assert me["student"]["studentId"] == "24B031299" and me["no"] is not None and not me["relink"]
     for gone in ("/api/kbtu/login", "/api/kbtu/status"):                                  # the password sign-in is gone
         assert c.post(gone, headers=tma(21), json={"login": "a", "password": "b"}).status_code in (404, 405)
 
@@ -2998,8 +3027,9 @@ def test_ms_sign_in(env, monkeypatch):
     from kbtu import msauth
     c, cfg = env
     login(c, 20, "ali")
-    r = c.post("/api/kbtu/manual", headers=tma(21), json={"consentVersion": "v2", "firstName": "Bek", "lastName": "Typed", "studentId": "24B099001", "course": 2})
-    assert r.status_code == 200, r.text
+    con = db.connect(cfg.db_path)  # typed in before Oct 20 (Microsoft only since): confirmed by Microsoft below
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
+        synced_at, manual) VALUES (?, '24B099001', 'Bek', 'Typed', 2, 'v2', 0, 0, 0, 1)""", (c.get("/api/me", headers=tma(21)).json()["id"],))
     url = c.post("/api/ms/start", headers=tma(21)).json()["url"]
     state = re.search(r"state=([^&]+)", url).group(1).replace("%2E", ".").replace("%3D", "=")
     assert msauth.KBTU in url and "code_challenge=" in url
@@ -3027,7 +3057,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token(), st=st).json() == {"ok": True, "student": True}
     assert finish(21, token(), st=st).status_code == 403                      # each link once
     me = c.get("/api/me", headers=tma(21)).json()
-    assert me["student"]["ms"] and not me["student"]["manual"] and me["student"]["email"] == "b_real@kbtu.kz"
+    assert me["student"]["ms"] and me["student"]["email"] == "b_real@kbtu.kz"
     assert me["student"]["lastName"] == "Real"                                # the account's names over typed ones
     graph["id"] = "oid-9"
     assert finish(21, token()).json()["message"] == "other_ms"                # no silent swap to another account
@@ -3038,7 +3068,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
-    assert me["student"]["ms"] and not me["student"]["manual"] and me["msPending"] is None and me["no"]
+    assert me["student"]["ms"] and me["msPending"] is None and me["no"]
 
 
 def test_suggest_chat(env, monkeypatch):

@@ -17,6 +17,9 @@
                                 after it moves down one, so the numbers count students only (owner, Oct 13: KBTU's IT testers)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
                                 student card): marked confirmed (the number and First 500 come at sign-in already)
+  .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
+                                a student with no KBTU Microsoft account, checked by hand (their student card): the only
+                                way in besides Microsoft (owner, Oct 20)
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
@@ -120,6 +123,17 @@ def main(args: list[str]) -> None:
                 con.execute("UPDATE users SET card_no = card_no - 1 WHERE card_no > ?", (no,))
                 con.execute("UPDATE meta SET value = CAST(value AS INTEGER) - 1 WHERE key = 'card_last'")  # the counter moves down too
         print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} given back, the later ones moved down one")
+    elif cmd == "student" and len(args) == 6:
+        u, sid, t = _user(con, args[1]), args[2].upper(), now()
+        if not re.fullmatch(r"\d{2}[A-Z]{1,2}\d{5,7}", sid) or args[5] not in "123456" or len(args[5]) != 1:
+            sys.exit("student id like 24B031234; course 1-6")
+        if one(con, "SELECT 1 FROM students WHERE user_id = ? OR student_id = ?", u["id"], sid):
+            sys.exit("this person or this student ID is linked already: unlink first")
+        with db.tx(con):
+            con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at,
+                verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)""", (u["id"], sid, args[3], args[4], int(args[5]), t, t, t))
+            first_fifty(con, u["id"])
+        print(f"@{u['tg_username'] or u['tg_id']}: student {sid}")
     elif cmd == "stats":  # people are students only: staff aren't counted
         real = "user_id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')"
         for name, sql in (("opened the app", "SELECT count(*) FROM users"),
