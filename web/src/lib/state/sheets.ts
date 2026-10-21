@@ -74,6 +74,10 @@ export const sheets = {
   adminChats: () => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
+  /** the AI page in Admin: the translator's state and work (owner, Oct 21) */
+  adminAi: () => {},
+  /** suggest any chat for the catalog: paste @name or a link (owner, Oct 21) */
+  suggestChat: () => {},
   registry: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
   comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},

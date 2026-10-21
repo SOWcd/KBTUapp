@@ -106,6 +106,8 @@
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
+  sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
+  sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
   sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
   sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange });

@@ -518,21 +518,48 @@ def _lang(con, msg: dict) -> str:
 
 
 def _chat_picker(con, cfg: Config, msg: dict) -> dict:
-    """Two buttons that open Telegram's own list of the student's chats: channels, groups; only public ones are listed
-    (chat_has_username), so the catalog never gets a closed group's invite. A student only."""
+    """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them (owner, Oct 21:
+    "any group, any channel"); a closed one then needs its invite link, since we can't make one. A student only."""
     chat, lang = msg["chat"], _lang(con, msg)
     if not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"]):
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     channel, group = texts.bot_message(lang, "chat_buttons")
-    pick = lambda rid, label: [{"text": label, "request_chat": {"request_id": rid, "chat_is_channel": rid == 1, "chat_has_username": True,  # noqa: E731
+    pick = lambda rid, label: [{"text": label, "request_chat": {"request_id": rid, "chat_is_channel": rid == 1,  # noqa: E731
                                                               "request_title": True, "request_username": True}}]
     return {"chat_id": chat["id"], "text": texts.bot_message(lang, "chat_pick")[0], "parse_mode": "HTML",
             "reply_markup": {"keyboard": [pick(1, channel), pick(2, group)], "resize_keyboard": True, "one_time_keyboard": True}}
 
 
+async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, url: str, tg_chat: int | None = None, channel: bool | None = None) -> tuple[str, str]:
+    """A chat suggested by a student (the bot's picker, a message to the bot, or the app's sheet): checked, looked up on
+    t.me (a person or a bot has no members line there), then waiting for the admins. (outcome, title): sent, waiting,
+    exists, limit, later (Telegram didn't answer), slow (within 10 s of the last), notchat."""
+    root, peek = Path(cfg.db_path).resolve().parent / "media", {}
+    try:
+        logic.suggest_check(con, uid, url, tg_chat)
+        if not logic._once(con, f"suggest_at:{uid}", str(now() // 10)):  # one look at t.me per 10 s per student
+            return "slow", ""
+        peek = await media.chat_peek(http, url)
+        if not peek["ok"]:
+            return "later", ""
+        if peek["members"] is None:
+            return "notchat", ""
+        if peek["image"]:
+            try:
+                peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
+            except (media.BadImage, OSError):
+                pass
+        kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
+        return "sent", logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
+    except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
+        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (root / f"{peek['photo']}{ext}").unlink(missing_ok=True)
+        return (("waiting" if exc.message == "pending" else "exists") if exc.code == "conflict" else "limit"), ""
+
+
 async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
-    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link: checked, looked up on t.me (a person or
-    a bot has no members line there), then waiting for the admins. The answer to send."""
+    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private" or now() - int(msg.get("date") or 0) > FRESH:
         return None
@@ -542,32 +569,13 @@ async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict
     u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
     if not u:
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
-    name = str(shared.get("username") or "").lower() if shared else logic.chat_handle(str(msg.get("text") or ""))
-    if not name:
+    if shared and not shared.get("username"):
+        return done("chat_invite")  # a closed chat from the picker: its invite link, please
+    url = f"https://t.me/{str(shared['username']).lower()}" if shared else logic.chat_link(str(msg.get("text") or ""))
+    if not url:
         return done("chat_private")
-    tg_chat = shared.get("chat_id") if shared else None
-    root, peek = Path(cfg.db_path).resolve().parent / "media", {}
-    try:
-        logic.suggest_check(con, u["id"], name, tg_chat)
-        if not logic._once(con, f"suggest_at:{u['id']}", str(now() // 10)):  # one look at t.me per 10 s per student
-            return done("chat_later")
-        peek = await media.chat_peek(http, f"https://t.me/{name}")
-        if not peek["ok"]:
-            return done("chat_later")
-        if peek["members"] is None:
-            return done("chat_notchat")
-        if peek["image"]:
-            try:
-                peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
-            except (media.BadImage, OSError):
-                pass
-        kind = "channel" if shared.get("request_id") == 1 or (not shared and peek.get("channel")) else "group"
-        return done("chat_sent", title=logic.suggest_chat(con, u["id"], name, kind, tg_chat, peek))
-    except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
-        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (root / f"{peek['photo']}{ext}").unlink(missing_ok=True)
-        return done(("chat_waiting" if exc.message == "pending" else "chat_exists") if exc.code == "conflict" else "chat_limit")
+    out, title = await suggest(cfg, http, con, u["id"], url, shared.get("chat_id") if shared else None, shared.get("request_id") == 1 if shared else None)
+    return done(f"chat_{'later' if out == 'slow' else out}", title=title)
 
 
 def _file(msg: dict) -> dict | None:

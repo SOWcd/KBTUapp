@@ -11,16 +11,19 @@
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
-  import { api, ApiErr, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown } from '../../lib/api';
+  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { openLink, haptic } from '../../lib/tg';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { loadAfisha } from '../../lib/state/data.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
-  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { t, tn, i18n } from '../../lib/i18n/index.svelte';
   import { withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -37,13 +40,31 @@
   // ---- the numbers (PLAN "Admin stats"): no per-person logs, counts only; the chart is the nightly rows ----
   let stats = $state<AdminStats | null>(null);
   $effect(() => { api.adminStats().then((s) => (stats = s)).catch(() => {}); });
-  const peak = $derived(Math.max(1, ...(stats?.days ?? []).map((d) => d.active)));
-  // always 30 slots ending yesterday (the nightly row's day; Almaty days), so two days of history aren't two fat bars
+  const peak = $derived(Math.max(1, stats?.today ?? 0, ...(stats?.days ?? []).map((d) => d.active)));
+  // 30 slots: 29 nightly rows ending yesterday (Almaty days), then today so far (the visits log)
+  const today = Math.floor((Date.now() / 1000 + 5 * 3600) / 86400);
   const slots = $derived.by(() => {
     const by = new Map((stats?.days ?? []).map((d) => [d.day, d.active]));
-    const end = Math.max(Math.floor((Date.now() / 1000 + 5 * 3600) / 86400) - 1, ...by.keys());
-    return Array.from({ length: 30 }, (_, i) => ({ day: end - 29 + i, n: by.get(end - 29 + i) }));
+    if (stats?.today != null) by.set(today, stats.today);
+    return Array.from({ length: 30 }, (_, i) => ({ day: today - 29 + i, n: by.get(today - 29 + i) }));
   });
+  // a day tapped on the chart (owner, Oct 21): how many and who came in
+  let picked = $state<AdminDay | null>(null), pickedDay = $state<number | null>(null);
+  async function pickDay(day: number, toggle = true) {
+    if (pickedDay === day && !toggle) return;
+    haptic.select();
+    if (pickedDay === day) { pickedDay = null; picked = null; return; }
+    pickedDay = day; picked = null;
+    try { const d = await api.adminDay(day); if (pickedDay === day) picked = d; } catch { say(t('common.error'), 'pleading_face_3d'); }
+  }
+  // a bar is ~8 px wide: the finger picks by where it is along the chart, and slides from day to day
+  let scrub = false;
+  function at(e: PointerEvent, toggle: boolean) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const i = Math.min(slots.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * slots.length)));
+    void pickDay(slots[i].day, toggle);
+  }
+  const dayName = (day: number) => new Intl.DateTimeFormat(i18n.lang, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(day * 864e5));
 
   // ---- reports: one row per reported thing still up ----
   let reports = $state<ReportItem[] | null>(null);
@@ -97,8 +118,8 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('me.admin')}>
-  <h2 class="t-h2 hd">{t('me.admin')}</h2>
+<!-- the title is the capsule's, with the shield (owner, Oct 21: not twice) -->
+<Sheet {overlay} tall title={t('me.admin')} icon={ShieldCheck}>
   {#if stats}
     <section class="stats surface">
       <div class="top">
@@ -110,11 +131,26 @@
           <span><b class="num">{n}</b><i>{t(k as 'st.online')}</i></span>
         {/each}
       </div>
-      <div class="chart" aria-label={t('st.chart')}>
-        {#each slots as d (d.day)}<span class:none={d.n == null} style="height:{d.n == null ? 4 : Math.max(6, (d.n / peak) * 100)}%" title={d.n == null ? '' : String(d.n)}></span>{/each}
+      <div class="chart" role="group" aria-label={t('st.chart')} onpointerdown={(e) => { scrub = true; at(e, true); }} onpointermove={(e) => scrub && at(e, false)}
+        onpointerup={() => (scrub = false)} onpointercancel={() => (scrub = false)}>
+        <!-- the buttons are for the keyboard and screen readers (a pointer tap is handled by the chart: e.detail is 0 only for keys) -->
+        {#each slots as d (d.day)}<button class:none={d.n == null} class:on={pickedDay === d.day} class:now={d.day === today} onclick={(e) => e.detail === 0 && pickDay(d.day)}
+          aria-label={`${dayName(d.day)}: ${d.n ?? 0}`}><span style="height:{d.n == null ? 4 : Math.max(6, (d.n / peak) * 100)}%"></span></button>{/each}
       </div>
       <div class="foot"><i>{t('st.chart')}</i><i>{t('st.peak', { n: peak })}</i></div>
-      {#if stats.ai}<p class="foot ai"><i>{stats.ai.on ? t('st.aiOn', { n: stats.ai.today }) : t('st.aiOff')}{stats.ai.error ? ' · ' + stats.ai.error : ''}</i></p>{/if}
+      {#if pickedDay != null}
+        <div class="dayv" transition:fold>
+          <p class="dh"><b>{dayName(pickedDay)}</b>{#if picked}<span class="num">{tn('st.dayCame', picked.active)}{picked.new ? ' · ' + tn('st.dayNew', picked.new) : ''}</span>{/if}</p>
+          {#if picked?.people}
+            <div class="who">
+              {#each picked.people as p (p.id)}
+                <button onclick={() => sheets.person(p.id)}><Avatar person={{ id: p.id, name: p.name }} size={28} tappable={false} /><span class="ellipsis">{p.name}</span>
+                  {#if p.username}<i class="ellipsis">@{p.username}</i>{/if}{#if p.new}<em>{t('st.newOne')}</em>{/if}</button>
+              {/each}
+            </div>
+          {:else if picked}<p class="t-foot">{t('st.dayOld')}</p>{/if}
+        </div>
+      {/if}
     </section>
   {/if}
 
@@ -173,6 +209,8 @@
     <button class="r" onclick={() => sheets.adminClubs()}><span class="ic"><Building size={20} /></span><span class="lb">{t('adm.clubs')}{#if clubsN != null}<i>{tn('reg.clubs', clubsN)} · {tn('adm.schools', schoolsN)}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
+    <!-- the AI page (owner, Oct 21): what the translator does, what failed -->
+    <button class="r" onclick={() => sheets.adminAi()}><span class="ic"><Sparkles size={20} /></span><span class="lb">{t('ai.title')}{#if stats?.ai}<i>{stats.ai.on ? `${t('ai.on')} · ${stats.ai.today} ${t('ai.today')}` : t('ai.off')}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.registry()}><span class="ic"><BookUser size={20} /></span><span class="lb">{t('reg.title')}<i>{t('reg.sub')}</i></span><ChevronRight size={18} /></button>
     {#if down?.length}
       <button class="r" aria-expanded={downOpen} onclick={() => (downOpen = !downOpen)}><span class="ic"><EyeOff size={20} /></span><span class="lb">{t('adm.undoTitle')}</span><i class="n num">{down.length}</i><span class="chev"><ChevronRight size={18} /></span></button>
@@ -186,7 +224,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 14px; }
   .sh { display: flex; align-items: center; gap: 8px; margin: 20px 2px 8px; }
   .cnt { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font: 700 12px/20px var(--font-text); text-align: center; letter-spacing: 0; }
   .clear { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--text-2); font: 600 14.5px/1.3 var(--font-text); }
@@ -208,12 +245,24 @@
   .nums span { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); }
   .nums b { font: 750 19px/1.1 var(--font-display, var(--font-text)); }
   .nums i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
-  .chart { display: flex; align-items: flex-end; gap: 3px; height: 64px; }
-  .chart span { flex: 1; min-width: 0; border-radius: 2px; background: linear-gradient(to top, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent)); }
-  .chart span.none { background: var(--line); }
+  .chart { display: flex; align-items: stretch; gap: 3px; height: 64px; touch-action: pan-y; }
+  .chart button { flex: 1; min-width: 0; display: flex; align-items: flex-end; padding: 0; }
+  .chart span { width: 100%; border-radius: 2px; background: linear-gradient(to top, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent)); transition: opacity .2s; }
+  .chart .none span { background: var(--line); }
+  .chart .now span { background: linear-gradient(to top, color-mix(in srgb, var(--success) 55%, transparent), var(--success)); } /* today, still counting */
+  .chart:has(.on) button:not(.on) span { opacity: 0.4; }
+  .dayv { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+  .dh { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 8px 0 0; }
+  .dh b { font: 700 var(--fs-body)/1.2 var(--font-text); }
+  .dh span { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .who { display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; margin: 0 -4px; }
+  .who button { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px; border-radius: 10px; text-align: left; }
+  .who button:active { background: var(--surface-2); }
+  .who span { flex: 0 1 auto; min-width: 0; font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .who i { flex: 1; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .who em { flex: none; padding: 3px 8px; border-radius: var(--r-full); background: var(--success-soft); color: var(--success-text); font: 650 var(--fs-micro)/1 var(--font-text); font-style: normal; }
   .foot { display: flex; justify-content: space-between; gap: 8px; margin-top: -6px; }
   .foot i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .foot.ai { margin-top: 4px; }
 
   .todo { display: flex; flex-direction: column; gap: 8px; }
   .capp { display: flex; flex-direction: column; overflow: hidden; }

@@ -30,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, msauth, psych, receipt, texts, video
+from . import auth, bot, casting, config, db, logic, media, msauth, receipt, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -135,14 +135,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (tg["id"], *fresh, lang if lang in ("ru", "kk", "en") else "ru",
                                                          "admin" if tg["id"] in cfg.admins else "user", dm, t, t))
             u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
+            logic.visit(con, u["id"], t)
         else:
             # the admin role follows ADMIN_TG_IDS; moderators are set by hand and kept
             role = "admin" if tg["id"] in cfg.admins else "user" if u["role"] == "admin" else u["role"]
             dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
             if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
-                    or t - u["seen_at"] > SEEN_EVERY:
+                    or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
                 con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
                     WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
+                logic.visit(con, u["id"], t)
                 u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
         if u["banned_at"]:
             raise ApiError("forbidden", "banned")
@@ -287,9 +289,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.schedule(con, v)
 
-    @app.get("/api/psych")
-    async def psych_next(_: Viewer = Depends(viewer)):  # the psychologist's nearest free hour, or null (psych.py)
-        return {"next": psych.nearest(), "full": psych.full()} if cfg.background else {"next": None, "full": False}
 
     @app.get("/api/me/tickets")
     def my_tickets(con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -964,6 +963,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def list_chats(con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.chats(con, v)
 
+    @app.post("/api/chats/suggest")
+    async def suggest_chat(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        """A chat suggested from the app's own sheet (owner, Oct 21: not through the bot's chat): @name, a t.me link or an
+        invite link. {status: sent | waiting | exists | limit | later | slow | notchat | bad, title}."""
+        if not v.student:
+            raise logic.ApiError("forbidden")
+        url = logic.chat_link(str(body.get("link") or "")[:200])
+        if not url:
+            return {"status": "bad", "title": ""}
+        async with httpx.AsyncClient(timeout=10) as http:
+            status, title = await bot.suggest(cfg, http, con, v.id, url)
+        return {"status": status, "title": title}
+
     @app.post("/api/chats/{cid}/opened", status_code=204)
     def chat_opened(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         logic.chat_opened(con, v, cid)
@@ -999,6 +1011,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/admin/grants/{gid}", status_code=204)
     def ungrant(gid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         logic.ungrant(con, v, gid)
+
+    @app.get("/api/admin/stats/{day}")
+    def admin_day(day: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.admin_day(con, v, day)
+
+    @app.get("/api/admin/ai")
+    def admin_ai(con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.admin_ai(con, v)
+
+    @app.post("/api/admin/ai/retry", status_code=204)
+    def admin_ai_retry(con=Depends(conn), v: Viewer = Depends(viewer)):
+        logic.ai_retry(con, v)
 
     @app.post("/api/admin/chats")
     async def add_chat(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):

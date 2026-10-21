@@ -947,7 +947,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM files WHERE owner_id = ? AND kind = 'receipt'", (v.id,))
         for t in ("students", "schedule_classes", "org_members", "join_requests", "club_applications", "subscriptions",
                   "registrations", "saved_events", "post_reactions", "post_reads", "friend_links", "achievement_grants",
-                  "achievement_levels", "chat_opens", "bot_outbox", "event_ratings", "member_tags", "strikes", "removal_requests", "comment_reads",
+                  "achievement_levels", "chat_opens", "bot_outbox", "event_ratings", "member_tags", "strikes", "removal_requests", "comment_reads", "visits",
                   "org_history"):  # org_history after org_members: its trigger closes the rows first
             con.execute(f"DELETE FROM {t} WHERE user_id = ?", (v.id,))
         for t, c in (("strikes", "by_id"), ("strikes", "cleared_by"), ("removal_requests", "by_id"), ("removal_requests", "decided_by"), ("org_bans", "by_id")):
@@ -1737,7 +1737,9 @@ def chats(con, v: Viewer) -> dict:
     tick once I've opened one (an honest nudge, the bot checks nothing yet)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
-    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY sort, course IS NULL DESC, course, title")]
+    # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (owner, Oct 21: any chat)
+    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY sort, course IS NULL DESC, course, title")
+                  if v.student or "/+" not in c["url"]]
     fits = lambda c: (c["school"] in (None, st["school"])) and (c["course"] in (None, st["course"]))  # noqa: E731
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last
     mine = sorted((c for c in everything if st and fits(c)), key=lambda c: -aim(c))
@@ -1794,7 +1796,8 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
 
 
 # A chat any student suggests (PLAN item 45, owner Oct 20: "as Telegram-native as possible"): picked in the bot's own
-# chat picker or sent to it as @name or a t.me link; public chats only (an invite link would publish a closed group).
+# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21 (owner: "any group, any channel"): a closed
+# one by its invite link, which only signed-in students then see (chats()) and the admin sees marked before approving.
 HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
 
 
@@ -1804,22 +1807,35 @@ def chat_handle(text: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
-def suggest_check(con, uid: int, name: str, tg_chat: int | None) -> None:
+INVITE = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:\+|joinchat/)([A-Za-z0-9_-]{8,64})/?", re.I)
+
+
+def chat_link(text: str) -> str | None:
+    """Any chat a student can name (owner, Oct 21: "any group, any channel"): a public one by @name or its t.me link,
+    a closed one by its invite link (t.me/+…, t.me/joinchat/…); its t.me address, or None."""
+    if name := chat_handle(text):
+        return f"https://t.me/{name}"
+    m = INVITE.fullmatch(text.strip())
+    return f"https://t.me/+{m.group(1)}" if m else None
+
+
+def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
     """Before the server looks the chat up on t.me: 10 suggestions a day (owner, Oct 20: a club head with several chats
     mustn't hit it), nothing twice: "already in the catalog" or "already waiting" (owner, Oct 20)."""
-    if c := one(con, "SELECT status FROM chats WHERE rtrim(lower(url), '/') = ? OR (tg_chat_id IS NOT NULL AND tg_chat_id = ?)", f"https://t.me/{name}", tg_chat):
+    # a public name in any case; an invite hash is case-sensitive
+    if c := one(con, "SELECT status FROM chats WHERE (rtrim(lower(url), '/') = lower(?) AND url NOT LIKE '%/+%') OR rtrim(url, '/') = ? OR (tg_chat_id IS NOT NULL AND tg_chat_id = ?)", url, url, tg_chat):
         raise ApiError("conflict", c["status"])  # live | pending
     if one(con, "SELECT COUNT(*) FROM chats WHERE added_by = ? AND created_at > ?", uid, now() - 86400)[0] >= 10:
         raise ApiError("rate_limited")
 
 
-def suggest_chat(con, uid: int, name: str, kind: str, tg_chat: int | None, peek: dict) -> str:
+def suggest_chat(con, uid: int, url: str, kind: str, tg_chat: int | None, peek: dict) -> str:
     """The suggestion, waiting; the admins and moderators hear of it once a day at most. Its title."""
-    title = " ".join(str(peek.get("title") or "").split())[:80] or "@" + name
+    title = " ".join(str(peek.get("title") or "").split())[:80] or url.replace("https://t.me/", "@")
     with tx(con):
-        suggest_check(con, uid, name, tg_chat)  # again inside the write: two taps at once
+        suggest_check(con, uid, url, tg_chat)  # again inside the write: two taps at once
         con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, photo, members, added_by, created_at, status)
-            VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'pending')""", (title, kind, f"https://t.me/{name}", tg_chat, peek.get("photo"), peek.get("members"), uid, now()))
+            VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'pending')""", (title, kind, url, tg_chat, peek.get("photo"), peek.get("members"), uid, now()))
         for (aid,) in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')"):
             notify(con, aid, "chat_suggested", f"cs:{(now() + 5 * 3600) // 86400}")
     return title
@@ -3047,6 +3063,16 @@ def tba_day(con) -> None:
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
 
 
+def day_of(ts: int) -> int:
+    """The Almaty day number of a moment."""
+    return (ts + 5 * 3600) // 86400
+
+
+def visit(con, uid: int, t: int) -> None:
+    """Someone opened the app today (the admin's chart, admin_day); written with seen_at, at most every 10 minutes."""
+    con.execute("INSERT OR IGNORE INTO visits (day, user_id) VALUES (?, ?)", (day_of(t), uid))
+
+
 def stats_day(con) -> None:
     """Just after midnight (Almaty), once: yesterday's row for the admin's chart. seen_at is the last time someone opened
     the app, so seen_at >= yesterday's start counts exactly who opened it since (a few minutes of today included)."""
@@ -3059,6 +3085,7 @@ def stats_day(con) -> None:
                 (day, one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", lo)[0],
                  one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", lo, hi)[0],
                  one(con, "SELECT COUNT(*) FROM students WHERE verified_at < ? AND consent_version != 'staff'", hi)[0]))
+    con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
 
 
 def admin_stats(con, v: Viewer) -> dict:
@@ -3071,9 +3098,52 @@ def admin_stats(con, v: Viewer) -> dict:
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users")[0], "students": one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
-            "ai": ai_state(con),
+            "ai": ai_state(con), "today": one(con, "SELECT COUNT(*) FROM visits WHERE day = ?", day_of(t))[0],
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}
                      for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}
+
+
+def admin_day(con, v: Viewer, day: int) -> dict:
+    """One day of the chart (owner, Oct 21): how many opened the app and who, the newcomers marked. `people` is None for
+    a day before the visits were kept (or past their 30 days): only the nightly count is known."""
+    _admin(v)
+    lo = day * 86400 - 5 * 3600
+    who = rows(con, """SELECT u.id, u.tg_first_name, u.tg_last_name, u.tg_username, u.nick, u.created_at >= ? AS new, s.user_id IS NOT NULL AS student
+        FROM visits x JOIN users u ON u.id = x.user_id LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0
+        WHERE x.day = ? ORDER BY u.created_at DESC""", lo, day)
+    kept = day <= day_of(now()) and one(con, "SELECT 1 FROM visits WHERE day <= ? LIMIT 1", day) is not None
+    row = one(con, "SELECT active, new FROM stats_days WHERE day = ?", day)
+    return {"day": day, "active": len(who) if kept else (row["active"] if row else 0), "new": sum(r["new"] for r in who) if kept else (row["new"] if row else 0),
+            "people": [{"id": r["id"], "name": r["nick"] or " ".join(x for x in (r["tg_first_name"], r["tg_last_name"]) if x) or "—",
+                        "username": r["tg_username"], "new": bool(r["new"]), "student": bool(r["student"])} for r in who] if kept else None}
+
+
+# what the translator works on (ai_next's own conditions): what the AI page counts and its retry resets
+_AI_EVENTS = """FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.status = 'published' AND e.visibility = 'public' AND e.meeting = 0
+        AND e.hidden_at IS NULL AND o.status = 'active' AND COALESCE(e.ends_at, e.starts_at) > ?"""
+_AI_ORGS = "FROM orgs WHERE status = 'active' AND trim(description) != ''"
+
+
+def admin_ai(con, v: Viewer) -> dict:
+    """The AI page in Admin (owner, Oct 21): the translator's state, what it has done and what waits or failed."""
+    _admin(v)
+    from . import ai  # the model's name; ai.py doesn't import logic
+    ev, og = _AI_EVENTS, _AI_ORGS
+    count = lambda sql, *a: one(con, "SELECT COUNT(*) " + sql, *a)[0]  # noqa: E731
+    failed = [{"kind": "event", "id": r["id"], "title": r["title"]} for r in rows(con, f"SELECT e.id, e.title {ev} AND e.lang IS NULL AND e.ai_tries >= ?", now(), AI_TRIES)] \
+        + [{"kind": "org", "id": r["id"], "title": r["name"]} for r in rows(con, f"SELECT id, name {og} AND lang IS NULL AND ai_tries >= ?", AI_TRIES)]
+    return {**ai_state(con), "model": ai.MODEL,
+            "events": {"done": count(f"{ev} AND e.lang IS NOT NULL", now()), "waiting": count(f"{ev} AND e.lang IS NULL AND e.ai_tries < ?", now(), AI_TRIES)},
+            "clubs": {"done": count(f"{og} AND lang IS NOT NULL"), "waiting": count(f"{og} AND lang IS NULL AND ai_tries < ?", AI_TRIES)},
+            "failed": failed}
+
+
+def ai_retry(con, v: Viewer) -> None:
+    """What failed three times gets three more tries."""
+    _admin(v)
+    with tx(con):
+        con.execute(f"UPDATE events SET ai_tries = 0 WHERE lang IS NULL AND ai_tries >= ? AND id IN (SELECT e.id {_AI_EVENTS})", (AI_TRIES, now()))
+        con.execute(f"UPDATE orgs SET ai_tries = 0 WHERE lang IS NULL AND ai_tries >= ? AND id IN (SELECT id {_AI_ORGS})", (AI_TRIES,))
 
 
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None) -> None:

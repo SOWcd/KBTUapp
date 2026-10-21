@@ -419,6 +419,13 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE orgs ADD COLUMN lang TEXT;
     ALTER TABLE orgs ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
     UPDATE orgs SET lang = 'ru' WHERE kind = 'school';"""),
+    # who opened the app on which day, for the admin's chart (owner, Oct 21: "tap a day, see who came in"); 30 days, then
+    # gone (stats_day); the privacy policy says so
+    (57, """CREATE TABLE visits (
+      day     INTEGER NOT NULL,   -- Almaty day number
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (day, user_id)
+    ) WITHOUT ROWID;"""),
 ]
 
 

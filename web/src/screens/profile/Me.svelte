@@ -2,8 +2,8 @@
   // Profile → Me (owner, Oct 13: Friends | Me; Oct 21: Friends | Me | Settings, mockup v24). Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), then what's coming up for me (tickets and saved; nothing
   // when there's nothing), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
-  // under it (their own booking page, the nearest free hour from psych.py; the crisis lines always in sight), and the
-  // app's card: channel, group, code, a word to the creator. The admin panel is the shield next to the pencil.
+  // under it (one row, a small button to their own booking page), and the app's card: channel, group, code on glass
+  // tiles, and a long pill to write to the creator. The admin panel is the shield next to the pencil.
   import Pencil from '@lucide/svelte/icons/pencil';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -21,9 +21,11 @@
   import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
   import { inner } from '../../lib/perms';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
-  import { dateInput, dayMonth, nowTs, relDay, whenLine } from '../../lib/time';
+  import { dateInput, dayMonth, nowTs, relDay } from '../../lib/time';
   import { onMount } from 'svelte';
-  import { writeOwner } from '../../lib/feedback';
+  import { writeOwner, OWNER } from '../../lib/feedback';
+  import { glass } from '../../ui/glass';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
   import Button from '../../ui/Button.svelte';
@@ -36,9 +38,6 @@
   const up = $derived(nextUp(today)), sem = $derived(semester(today));
   // the strip's month under its first week, in the app's language
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
-  // the psychologist's nearest free hour (server: psych.py, cached; the first ask after a while may come back empty)
-  let psych = $state<number | null>(null), full = $state(false);
-  $effect(() => { if (ui.tab === 'profile') untrack(() => api.psych().then((r) => { psych = r.next; full = !!r.full; }, () => {})); });
   const me = $derived(session.me);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { if (ui.tab === 'profile' && ui.page.profile >= 1 && me?.student) void untrack(loadMyCard); });
@@ -100,8 +99,7 @@
   {/if}
 
   <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it (owner, Oct 7); out of term the row
-       names what comes next. Under it KBTU's psychologist (owner, Oct 5; Oct 21: their own booking page, no page of
-       ours) and the crisis lines, never behind a tap -->
+       names what comes next. Under it KBTU's psychologist (owner, Oct 5) -->
   <div class="term surface">
     {#if sem}
       <button class="sem" onclick={() => sheets.academic()}>
@@ -117,14 +115,9 @@
       <button class="r" onclick={() => sheets.academic()}>
         <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
     {/if}
-    <button class="r psy" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>
-      <span class="pi"><MessageCircleHeart size={22} /></span>
-      <span class="lb">{t('psy.kbtu')}<i class="sub">{t(full && !psych ? 'me.psychFull' : 'me.psychSub')}</i></span>
-      {#if psych}<span class="pt"><i class="sub">{t('me.psychSoon')}</i><b class="num">{whenLine(psych)}</b></span>{/if}
-      <ArrowUpRight size={18} /></button>
-    <!-- 150 the youth line, 1303 Almaty's mental-health centre, 111 the family line, 112 emergencies (checked at their
-         sources Oct 20: telephone150.kz, cpzalmaty.kz, adilet.zan.kz) -->
-    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}{' · '}{/if}<a href="tel:{n}" onclick={() => haptic.tap()}><b class="num">{n}</b>{#if n === '150' || n === '112'}{' ' + t(`sos.${n}`)}{/if}</a>{/each}</p>
+    <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (owner, Oct 21: nothing else) -->
+    <div class="r psy"><span class="pi"><MessageCircleHeart size={20} /></span><span class="lb">{t('psy.kbtu')}</span>
+      <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
   </div>
 
   <!-- the app itself (mockup v24: three tiles, small actions): its channel, its group, the open code (owner, Oct 17),
@@ -132,11 +125,12 @@
   <div class="appc surface">
     <div class="ap-h"><span class="mk"><KbtuMark size={22} /></span><span><b>KBTU App</b><i class="sub">{t('fb.text')}</i></span></div>
     <div class="ap-t">
-      <button class="apt" onclick={() => openLink(TG_NEWS)}><Megaphone size={22} /><b>{t('app.channel')}</b><small>{t('app.channelSub')}</small><span class="go">{t('app.subscribe')}</span></button>
-      <button class="apt" onclick={() => openLink(TG_TALK)}><UsersRound size={22} /><b>{t('app.group')}</b><small>{t('app.groupSub')}</small><span class="go">{t('app.join')}</span></button>
-      <button class="apt" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><GitHubMark size={22} /><b>GitHub</b><small>{t('app.codeSub')}</small><span class="go">{t('app.look')}</span></button>
+      <button class="apt" use:glass={{ bloom: true }} onclick={() => openLink(TG_NEWS)}><Megaphone size={22} /><b>{t('app.channel')}</b><small>{t('app.channelSub')}</small><span class="go">{t('app.subscribe')}</span></button>
+      <button class="apt" use:glass={{ bloom: true }} onclick={() => openLink(TG_TALK)}><UsersRound size={22} /><b>{t('app.group')}</b><small>{t('app.groupSub')}</small><span class="go">{t('app.join')}</span></button>
+      <button class="apt" use:glass={{ bloom: true }} onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><GitHubMark size={22} /><b>GitHub</b><small>{t('app.codeSub')}</small><span class="go">{t('app.look')}</span></button>
     </div>
-    <button class="write" onclick={writeOwner}>{t('fb.write')}</button>
+    <!-- a word straight to the creator: its own long pill, his @username on it (owner, Oct 21) -->
+    <button class="write" use:glass={{ bloom: true }} onclick={writeOwner}><TelegramMark size={18} /><span>{t('fb.write')}</span><b>@{OWNER}</b></button>
   </div>
   <div class="tail"></div>
 </div>
@@ -191,15 +185,13 @@
   .sem-l span:nth-child(2) { position: absolute; translate: -10% 0; color: var(--warning-text); }
   .sem-l span:last-child { color: var(--danger-text); }
   .term .r { box-shadow: inset 0 1px 0 var(--line); }
-  .psy { min-height: 64px; }
+  .psy { min-height: 56px; }
+  .book { position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 10px 0 12px; border-radius: var(--r-full);
+    background: color-mix(in srgb, var(--psy) 16%, transparent); color: var(--psy); font: 650 var(--fs-sub)/1 var(--font-text); }
+  .book:active { transform: scale(0.94); }
   .term { --psy: #FF8FB8; }
   :global(:root[data-theme='light']) .term, :global(.theme-light) .term { --psy: #C2185B; } /* 5.6:1 on white */
   .pi { display: flex; color: var(--psy); }
-  .pt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-  .pt b { font: 750 var(--fs-body)/1.1 var(--font-text); color: var(--psy); white-space: nowrap; }
-  .sos { margin: 0; padding: 0 16px 14px 50px; font: 500 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
-  .sos a { color: var(--text-2); white-space: nowrap; }
-  .sos b { font-weight: 700; }
 
   /* the app's card: three tiles, small actions (mockup v14/v24) */
   .appc { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
@@ -208,11 +200,25 @@
   .mk { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
   .ap-t { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   @media (max-width: 359px) { .apt .go { display: none; } } /* a 320-px phone: the tile is the button, "Subscribe" doesn't fit */
-  .apt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 10px 10px; border-radius: 14px; text-align: left; color: var(--accent-text);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 100%, transparent), var(--surface-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px var(--line); }
+  /* glass tiles (mockup v14): no live blur (they scroll), a lit sheen that follows the phone's tilt (glass.ts) and a
+     gradient rim, bright at the top */
+  .apt { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 10px 10px;
+    border-radius: 16px; text-align: left; color: var(--accent-text); background: linear-gradient(160deg, color-mix(in srgb, var(--text) 9%, transparent), color-mix(in srgb, var(--text) 3%, transparent));
+    box-shadow: 0 10px 22px -16px rgba(0, 0, 0, 0.6); }
+  .apt::before, .write::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(120% 80% at calc(30% + var(--gx, 0) * 60%) calc(-20% + var(--gy, 0) * 40%), color-mix(in srgb, #fff 16%, transparent), transparent 60%); }
+  .apt::after, .write::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(170deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.06) 40%, rgba(255, 255, 255, 0.14));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+  :global(:root[data-theme='light']) .apt::after, :global(:root[data-theme='light']) .write::after { background: linear-gradient(170deg, rgba(255, 255, 255, 0.95), rgba(11, 20, 51, 0.08) 45%, rgba(11, 20, 51, 0.12)); }
   .apt b { margin-top: 8px; font: 650 var(--fs-body)/1.15 var(--font-text); color: var(--text); }
   .apt small { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
   .apt .go { margin-top: 8px; font: 650 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); }
-  .write { align-self: flex-start; padding: 2px 4px; font: 620 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
+  .write { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 18px; border-radius: var(--r-full);
+    background: linear-gradient(160deg, color-mix(in srgb, #2AABEE 22%, transparent), color-mix(in srgb, #2AABEE 8%, transparent)); color: #2AABEE; }
+  .write span { flex: 1; text-align: left; font: 650 var(--fs-body)/1 var(--font-text); color: var(--text); }
+  .write b { font: 650 var(--fs-sub)/1 var(--font-text); color: #2AABEE; }
+  .write:active, .apt:active { transform: scale(0.97); }
+  :global(:root[data-theme='light']) .write { color: #0F6E9F; } :global(:root[data-theme='light']) .write b { color: #0F6E9F; } /* 4.9:1 on the tint */
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

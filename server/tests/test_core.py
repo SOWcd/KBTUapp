@@ -1409,7 +1409,7 @@ def test_grant_scanner(env):
     B, A = tma(60, "Boss"), tma(61, "Ali")
     qr = "https://t.me/kbtu_bot/app?startapp=u_" + c.get("/api/me", headers=A).json()["qr"]
     scan = lambda code, raw=qr, h=B: c.post("/api/admin/grants/scan", headers=h, json={"qr": raw, "code": code})  # noqa: E731
-    assert scan("bugs", h=A).status_code == 403 and scan("bugs", raw=qr[:-1] + "Q").status_code == 404 and scan("first50").status_code == 400
+    assert scan("bugs", h=A).status_code == 403 and scan("bugs", raw=qr[:-1] + ("Q" if qr[-1] != "Q" else "R")).status_code == 404 and scan("first50").status_code == 400
     one_ = scan("bugs").json()
     assert one_["person"]["id"] == ali["id"] and scan("bugs").status_code == 200                 # one per scan
     assert scan("creator_found").status_code == 200 and scan("creator_found").status_code == 409
@@ -3211,17 +3211,28 @@ def test_suggest_chat(env, monkeypatch):
     assert say(30, **picked) == texts.bot_message("ru", "chat_sent", title="KBTU News")[0]
     assert say(30, text="@kbtu_news") == texts.bot_message("ru", "chat_waiting")[0]  # same chat, typed: already waiting
     assert say(30, text="@some_person") == texts.bot_message("ru", "chat_notchat")[0]
-    assert say(30, text="https://t.me/+AbCdEf") == texts.bot_message("ru", "chat_private")[0]
+    assert say(30, text="hello") == texts.bot_message("ru", "chat_private")[0]
+    assert say(30, **{"chat_shared": {"request_id": 2, "chat_id": -100555, "title": "Closed"}}) == texts.bot_message("ru", "chat_invite")[0]
+    assert [logic.chat_link(x) for x in ("@A_chat", "t.me/+AbCdEf12", "https://t.me/joinchat/AbCdEf12", "t.me/+x")] \
+        == ["https://t.me/a_chat", "https://t.me/+AbCdEf12", "https://t.me/+AbCdEf12", None]
+    assert say(30, text="https://t.me/+AbCdEf12").startswith("✅")                  # a closed chat by its invite link (owner, Oct 21)
+    con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+    assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "t.me/joinchat/AbCdEf12"}).json()["status"] == "waiting"  # the app's sheet
+    assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "nope"}).json()["status"] == "bad"
+    assert c.post("/api/chats/suggest", headers=tma(99), json={"link": "@x_chat"}).status_code == 403
+    assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_once"}).json()["status"] == "sent"
+    assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_fast"}).json()["status"] == "slow"  # within 10 s of the last
+    con.execute("DELETE FROM chats WHERE url = 'https://t.me/typed_once'")
     assert say(30, text="@second_chat").startswith("✅") and say(30, text="@third_chat").startswith("✅")
     assert asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
         == texts.bot_message("ru", "chat_later")[0]                                    # within 10 s of the last
-    for i in range(7):
+    for i in range(6):
         assert say(30, text=f"@more_chat_{i}").startswith("✅")
     assert say(30, text="@eleventh_chat") == texts.bot_message("ru", "chat_limit")[0]  # 10 a day
     assert c.get("/api/chats", headers=tma(30)).json()["all"] == []                  # waiting: nowhere to see
     assert "pending" not in c.get("/api/chats", headers=tma(30)).json()
     waiting = c.get("/api/chats", headers=tma(31)).json()["pending"]
-    assert [x["kind"] for x in waiting][-3:] == ["group", "group", "channel"] and len(waiting) == 10
+    assert [x["kind"] for x in waiting][-3:] == ["group", "group", "channel"] and len(waiting) == 10  # newest first
     ping = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_suggested'").fetchall()
     assert len(ping) == 1 and bot._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
     news = waiting[-1]["id"]
@@ -3234,8 +3245,12 @@ def test_suggest_chat(env, monkeypatch):
     assert c.delete(f"/api/admin/chats/{waiting[0]['id']}", headers=tma(31)).status_code == 204   # declined
     assert len(c.get("/api/chats", headers=tma(31)).json()["pending"]) == 8
     assert say(30, text="@kbtu_news") == texts.bot_message("ru", "chat_exists")[0]   # live now
+    inv = next(x for x in c.get("/api/chats", headers=tma(31)).json()["pending"] if "/+" in x["url"])
+    c.post(f"/api/admin/chats/{inv['id']}/approve", headers=tma(31))
+    assert inv["url"] in [x["url"] for x in c.get("/api/chats", headers=tma(30)).json()["all"]]       # a student sees the invite
+    assert inv["url"] not in [x["url"] for x in c.get("/api/chats", headers=tma(99)).json()["all"]]   # a guest doesn't
     keys = bot._welcome(con, cfg, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "/start chat"})["reply_markup"]["keyboard"]
-    assert [k[0]["request_chat"]["chat_is_channel"] for k in keys] == [True, False] and keys[0][0]["request_chat"]["chat_has_username"]
+    assert [k[0]["request_chat"]["chat_is_channel"] for k in keys] == [True, False] and "chat_has_username" not in keys[0][0]["request_chat"]  # any chat
 
 
 def test_translations(env):
@@ -3323,3 +3338,23 @@ def test_translations(env):
 
 def one_val(con, sql: str, *args):
     return logic.one(con, sql, *args)[0]
+
+
+def test_admin_day_and_ai(env):
+    """The admin's chart opens a day: who came in, newcomers marked (owner, Oct 21). The AI page counts
+    what was translated, what waits and what failed, and gives the failed three more tries."""
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({1}))))
+    adm = c.get("/api/me", headers=tma(1)).json()
+    ali = login(c, 30, "ali")
+    con = db.connect(cfg.db_path)
+    today = logic.day_of(logic.now())
+    assert c.get(f"/api/admin/stats/{today}", headers=tma(30)).status_code == 403
+    day = c.get(f"/api/admin/stats/{today}", headers=tma(1)).json()
+    assert {p["id"] for p in day["people"]} >= {adm["id"], ali["id"]} and day["active"] == len(day["people"])
+    assert c.get("/api/admin/stats", headers=tma(1)).json()["today"] == day["active"]
+    assert c.get(f"/api/admin/stats/{today - 400}", headers=tma(1)).json()["people"] is None   # before the log
+    ai = c.get("/api/admin/ai", headers=tma(1)).json()
+    assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
+    assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403
+    assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204

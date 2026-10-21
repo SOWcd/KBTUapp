@@ -44,7 +44,13 @@ export interface TakenDown { target: 'comment' | 'post' | 'event'; id: Id; text:
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number;
   days: { day: number; active: number; new: number; students: number }[];
   /** the translator (PLAN 9): Cloudflare's keys set, translated today (UTC), the last error */
-  ai?: { on: boolean; today: number; error: string | null } }
+  ai?: { on: boolean; today: number; error: string | null };
+  today?: number /* opened the app today so far (the visits log) */ }
+/** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
+export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean }[] | null }
+/** The AI page in Admin: the translator's state and work. */
+export interface AdminAi { on: boolean; today: number; error: string | null; model: string; events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
+  failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
 export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>; at: Ts }
