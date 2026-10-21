@@ -1,16 +1,16 @@
 <script lang="ts">
-  // Profile → Me (owner, Oct 13: two pages, Friends | Me). Guest: the sign-in card. Student: my badge (the same hero
-  // as everyone else sees), then what's coming up for me (tickets and saved; nothing when there's nothing), the
-  // academic calendar and the psychological service, the app's channel and group, "still in development". Every setting
-  // is behind the gear in the corner (PrefsSheet); the admin's panel is a row here.
-  import Settings2 from '@lucide/svelte/icons/settings';
+  // Profile → Me (owner, Oct 13: Friends | Me; Oct 21: Friends | Me | Settings, mockup v24). Guest: the sign-in card.
+  // Student: my badge (the same hero as everyone else sees), then what's coming up for me (tickets and saved; nothing
+  // when there's nothing), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
+  // under it (their own booking page, the nearest free hour from psych.py; the crisis lines always in sight), and the
+  // app's card: channel, group, code, a word to the creator. The admin panel is the shield next to the pencil.
   import Pencil from '@lucide/svelte/icons/pencil';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
-  import CalendarDays from '@lucide/svelte/icons/calendar-days';
-  import Crown from '@lucide/svelte/icons/crown';
+  import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import UsersRound from '@lucide/svelte/icons/users-round';
   import GitHubMark from '../../ui/GitHubMark.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
@@ -18,18 +18,20 @@
   import { say, ui } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, type PersonCard } from '../../lib/api';
-  import { nextUp, nameOf, whenOf } from '../../lib/academic';
+  import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
   import { inner } from '../../lib/perms';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, tn, i18n } from '../../lib/i18n/index.svelte';
   import { dayMonth, relDay, whenLine } from '../../lib/time';
+  import { writeOwner } from '../../lib/feedback';
   import { haptic, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
   import Button from '../../ui/Button.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import FeedbackCard from '../../ui/FeedbackCard.svelte';
 
-  const up = nextUp();
+  const up = nextUp(), sem = semester();
+  // the strip's month under its first week, in the app's language
+  const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   // the psychologist's nearest free hour (server: psych.py, cached; the first ask after a while may come back empty)
   let psych = $state<number | null>(null);
   $effect(() => { if (ui.tab === 'profile') untrack(() => api.psych().then((r) => (psych = r.next), () => {})); });
@@ -60,10 +62,12 @@
 <div class="page scroll" bind:this={page}>
   {#if me?.student}
     <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below (owner, Oct 17) -->
-    <button class="gear edit" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
+    <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
+    {#if me.role === 'admin'}
+      <!-- the admin panel (owner, Oct 14), with what waits for it -->
+      <button class="gear adm" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
+    {/if}
   {/if}
-  <button class="gear" class:in={!me?.student} onclick={() => { haptic.tap(); sheets.prefs(); }} aria-label={t('me.settings')}>
-    <Settings2 size={20} /></button>
   {#if me?.student}
     {#if shown}<Hero p={shown} qr={me.qr} live={ui.tab === 'profile'} />{/if}
   {:else if session.ready}
@@ -86,37 +90,48 @@
       <Button kind="secondary" size="s" onclick={keepAccount}>{t('del.keep')}</Button></div>
   {/if}
 
-  {#if me?.role === 'admin'}
-    <!-- the admin panel on the main screen (owner, Oct 14): the rest of my app looks like anyone's -->
-    <div class="rows surface"><button class="r" onclick={() => sheets.admin()}><span class="ic"><Crown size={20} /></span>
-      <span class="lb">{t('me.admin')}</span>{#if asks}<b class="cnt num">{asks}</b>{/if}<ChevronRight size={18} /></button></div>
-  {/if}
-
   {#if me?.student && soon.length}
     <h2 class="sec t-h3">{t('me.upcoming')}</h2>
     <div class="list">{#each soon as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={e.my?.status === 'going' ? () => sheets.ticket(e.id) : undefined} />{/each}</div>
   {/if}
 
-  <!-- the university's: its academic calendar, what's next under it (owner, Oct 7), and the psychological service
-       (owner, Oct 5): quiet, but there for whoever needs it -->
-  <div class="rows surface">
-    <button class="r" onclick={() => sheets.academic()}><span class="ic"><CalendarDays size={20} /></span>
-      <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
-    <button class="r" onclick={() => sheets.psych()}><span class="ic"><HeartHandshake size={20} /></span>
-      <span class="lb">{t('me.psych')}<i class="sub">{psych ? t('me.psychNext', { when: whenLine(psych) }) : t('me.psychSub')}</i></span><ChevronRight size={18} /></button>
+  <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it (owner, Oct 7); out of term the row
+       names what comes next. Under it KBTU's psychologist (owner, Oct 5; Oct 21: their own booking page, no page of
+       ours) and the crisis lines, never behind a tap -->
+  <div class="term surface">
+    {#if sem}
+      <button class="sem" onclick={() => sheets.academic()}>
+        <span class="sem-h"><span><b>{t('sem.week', { n: sem.week, of: sem.weeks })}</b><i class="sub">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</i></span>
+          {#if up}<span class="chip">{nameOf(up)} · {whenOf(up)}</span>{/if}</span>
+        <span class="strip" style="--n:{sem.weeks}" aria-hidden="true">
+          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={i + 1 === sem.week}>{#if i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
+          <i class="ex"></i>
+        </span>
+        <span class="sem-l"><span>{semFrom}</span><span style="left:calc(({sem.mid[0]} - 0.5) / ({sem.weeks} + 1) * 100%)">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
+      </button>
+    {:else}
+      <button class="r" onclick={() => sheets.academic()}>
+        <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
+    {/if}
+    <button class="r psy" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>
+      <span class="pi"><MessageCircleHeart size={22} /></span>
+      <span class="lb">{t('psy.kbtu')}<i class="sub">{t('me.psychSub')}</i></span>
+      {#if psych}<span class="pt"><i class="sub">{t('me.psychSoon')}</i><b class="num">{whenLine(psych)}</b></span>{/if}
+      <ArrowUpRight size={18} /></button>
+    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}<span class="sep">·</span>{/if}<a href="tel:{n}" class="num" onclick={() => haptic.tap()}>{n}</a>{/each}</p>
   </div>
 
-  <!-- the app's own channel and group, and "still in development": out of the settings onto the main screen (owner, Oct 14) -->
-  <div class="rows surface">
-    <button class="r" onclick={() => openLink(TG_NEWS)}><span class="ic"><Megaphone size={20} /></span>
-      <span class="lb">{t('me.tgNews')}<i class="sub">{t('me.tgNewsSub')}</i></span><ChevronRight size={18} /></button>
-    <button class="r" onclick={() => openLink(TG_TALK)}><span class="ic"><MessagesSquare size={20} /></span>
-      <span class="lb">{t('me.tgTalk')}<i class="sub">{t('me.tgTalkSub')}</i></span><ChevronRight size={18} /></button>
-    <!-- the open code (owner, Oct 17): anyone can read it and send a change -->
-    <button class="r" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic"><GitHubMark size={20} /></span>
-      <span class="lb">GitHub<i class="sub">{t('me.githubSub')}</i></span><ChevronRight size={18} /></button>
+  <!-- the app itself (mockup v24: three tiles, small actions): its channel, its group, the open code (owner, Oct 17),
+       and a word straight to the creator (owner, Oct 5) -->
+  <div class="appc surface">
+    <div class="ap-h"><span class="mk"><KbtuMark size={22} /></span><span><b>KBTU App</b><i class="sub">{t('fb.text')}</i></span></div>
+    <div class="ap-t">
+      <button class="apt" onclick={() => openLink(TG_NEWS)}><Megaphone size={22} /><b>{t('app.channel')}</b><small>{t('app.channelSub')}</small><span class="go">{t('app.subscribe')}</span></button>
+      <button class="apt" onclick={() => openLink(TG_TALK)}><UsersRound size={22} /><b>{t('app.group')}</b><small>{t('app.groupSub')}</small><span class="go">{t('app.join')}</span></button>
+      <button class="apt" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><GitHubMark size={22} /><b>GitHub</b><small>{t('app.codeSub')}</small><span class="go">{t('app.look')}</span></button>
+    </div>
+    <button class="write" onclick={writeOwner}>{t('fb.write')}</button>
   </div>
-  <FeedbackCard />
   <div class="tail"></div>
 </div>
 
@@ -136,19 +151,57 @@
   .guest p { color: rgba(255, 255, 255, 0.82); }
   .mark { color: #fff; width: 64px; height: 64px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 
-  .rows { display: flex; flex-direction: column; padding: 2px 0; overflow: hidden; }
-  .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 14px; text-align: left; color: var(--text-3); }
-  .r + .r { box-shadow: inset 0 1px 0 var(--line); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 16px; text-align: left; color: var(--text-3); }
   button.r:active { background: var(--surface-2); }
-  .ic { display: flex; color: var(--accent-text); }
   .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
   .list { display: flex; flex-direction: column; gap: 8px; }
   /* the gear (PrefsSheet): in the lanyard's gap right of its strap; on a guest's card, inside its corner */
   .gear { position: absolute; top: calc(var(--top) + 50px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
   .gear:active { transform: scale(0.92); }
-  .gear.edit { right: calc(var(--gutter) + 44px); }
-  .gear.in { top: calc(var(--top) + 70px); right: calc(var(--gutter) + 14px); background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
-  .cnt { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12.5px/22px var(--font-text); text-align: center; }
+  .gear.adm { right: calc(var(--gutter) + 44px); }
+  .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
+
+  /* the term card: the strip of weeks, then the psychologist (mockup v24) */
+  .term { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
+  .sem { display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 12px; text-align: left; }
+  .sem-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .sem-h b { font: 700 var(--fs-card)/1.2 var(--font-text); color: var(--text); }
+  .chip { flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font: 650 var(--fs-cap)/1 var(--font-text); white-space: nowrap; }
+  .strip { position: relative; display: grid; grid-template-columns: repeat(calc(var(--n) + 1), 1fr); gap: 3px; height: 30px; align-items: center; }
+  .strip i { height: 8px; border-radius: 3px; background: var(--surface-3); }
+  .strip i.past { background: linear-gradient(90deg, var(--accent), #6E8FFF); }
+  .strip i.mid { background: color-mix(in srgb, var(--gold) 40%, var(--surface-3)); }
+  .strip i.mid.past { background: linear-gradient(90deg, #6E8FFF, var(--gold)); }
+  .strip i.ex { background: color-mix(in srgb, var(--danger) 70%, var(--surface-3)); }
+  /* this week: a lens with its number, sitting on the strip */
+  .strip i.now { position: relative; background: var(--accent); }
+  .strip i.now b { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 35% 30%, #fff, #E6ECFF); color: #1A2C80; font: 800 13px/1 var(--font-text); font-style: italic;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 14px -4px rgba(0, 0, 0, 0.5); }
+  .sem-l { position: relative; display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
+  .sem-l span:nth-child(2) { position: absolute; translate: -10% 0; color: var(--warning-text); }
+  .sem-l span:last-child { color: var(--danger-text); }
+  .term .r { box-shadow: inset 0 1px 0 var(--line); }
+  .psy { min-height: 64px; }
+  .pi { display: flex; color: #FF8FB8; }
+  .pt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .pt b { font: 750 var(--fs-body)/1.1 var(--font-text); color: #FF8FB8; white-space: nowrap; }
+  .sos { margin: 0; padding: 0 16px 14px 50px; font: 500 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
+  .sos a { color: var(--text-2); font-weight: 700; }
+  .sep { margin: 0 6px; }
+
+  /* the app's card: three tiles, small actions (mockup v14/v24) */
+  .appc { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
+  .ap-h { display: flex; gap: 12px; align-items: center; }
+  .ap-h b { font: 700 var(--fs-card)/1.2 var(--font-text); }
+  .mk { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+  .ap-t { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .apt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 10px 10px; border-radius: 14px; text-align: left; color: var(--accent-text);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 100%, transparent), var(--surface-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px var(--line); }
+  .apt b { margin-top: 8px; font: 650 var(--fs-body)/1.15 var(--font-text); color: var(--text); }
+  .apt small { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
+  .apt .go { margin-top: 8px; font: 650 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); }
+  .write { align-self: flex-start; padding: 2px 4px; font: 620 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

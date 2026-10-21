@@ -50,6 +50,25 @@ export function whenOf(r: Row): string { const [a, b] = span(r); return r.at.sta
 export const nextUp = (today = dateInput(nowTs())): Row | undefined =>
   TERMS.flatMap((x) => x.rows).filter((r) => !r.who && r.key !== 'study' && span(r)[1] >= today).sort((a, b) => span(a)[0].localeCompare(span(b)[0]))[0];
 
+const days = (a: string, b: string): number => (Date.parse(b) - Date.parse(a)) / 864e5;
+/** Where today is in a fall or spring term, for the strip in Me: teaching weeks (Monday to Sunday, week 1 holds the first
+ *  day of "study"), the midterm weeks, how many weeks to the exams; from the first day of study to the last day of exams. */
+export function semester(today = dateInput(nowTs())) {
+  for (const x of TERMS) {
+    if (x.key === 'summer') continue;
+    const row = (k: string) => x.rows.find((r) => r.key === k && !r.who);
+    const study = row('study'), exams = row('exams'), mid = row('midterm');
+    if (!study || !exams || !mid) continue;
+    const [a, b] = span(study), [ea, eb] = span(exams), [ma, mb] = span(mid);
+    if (today < a || today > eb) continue;
+    const mon = (Date.parse(a) / 864e5 - (new Date(a).getUTCDay() + 6) % 7) * 864e5; // the Monday of the first week
+    const wk = (d: string) => Math.floor((Date.parse(d) - mon) / 864e5 / 7) + 1, weeks = wk(b);
+    return { week: Math.min(weeks, wk(today)), weeks, mid: [wk(ma), wk(mb)] as [number, number], midEnd: mb,
+      toExams: Math.max(0, Math.ceil(days(today, ea) / 7)), start: a };
+  }
+  return null;
+}
+
 // KBTU's psychological service: its Microsoft Bookings page, no sign-in (Me, and quietly under "Delete account")
 export const PSYCHOLOGIST = 'https://outlook.office365.com/book/Bookings7@kbtu.kz/';
 

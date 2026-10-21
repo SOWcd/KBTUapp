@@ -2,7 +2,7 @@
   import type { Component } from 'svelte';
   export type Live = { kind: 'event' | 'class'; title: string; at: number; until?: number; emoji: string; tint: string; label: string; onopen?: () => void };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type CapPage = { label: string; icon: Component<any> };
+  export type CapPage = { label: string; icon: Component<any>; dot?: boolean };
 </script>
 
 <script lang="ts">
@@ -115,7 +115,7 @@
     <span class="pill" bind:this={pill} aria-hidden="true"><span class="blob" bind:this={blob}></span></span>
     {#each pages as p, i (p.label)}
       <button class:on={i === lit} aria-label={p.label} aria-pressed={i === index} onclick={() => { haptic.select(); onpick(i); wake(); }}>
-        <p.icon size={18} strokeWidth={2} />
+        <p.icon size={18} strokeWidth={2} />{#if p.dot}<i class="dot" aria-hidden="true"></i>{/if}
       </button>
     {/each}
   </div>
@@ -167,6 +167,8 @@
   .sw button:active { transform: scale(0.94); transition-duration: 150ms, 80ms; }
   .sw button + button { margin-left: 2px; }
   .sw button.on { color: var(--bg); }
+  /* something waits on that page (Friends: a request), as on the bottom bar */
+  .sw .dot { position: absolute; top: 6px; left: calc(50% + 4px); width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--glass-solid); }
   /* a tab switch brings another set of pages: their icons grow in like an iOS symbol swap */
   .sw button > :global(svg) { animation: symIn 340ms cubic-bezier(.3, 1.35, .5, 1) backwards; }
   @keyframes symIn { from { opacity: 0; transform: scale(0.5); } }

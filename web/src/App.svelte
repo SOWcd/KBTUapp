@@ -30,6 +30,7 @@
   import Users from '@lucide/svelte/icons/users';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
+  import Settings2 from '@lucide/svelte/icons/settings';
   import Toast from './ui/Toast.svelte';
   import { feedChrome } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
@@ -38,6 +39,7 @@
   import Join from './screens/club/Join.svelte';
   import Me from './screens/profile/Me.svelte';
   import Friends from './screens/profile/Friends.svelte';
+  import Settings from './screens/profile/Settings.svelte';
   import EventSheet from './screens/sheets/EventSheet.svelte';
   import ClubSheet from './screens/sheets/ClubSheet.svelte';
   import PersonSheet from './screens/sheets/PersonSheet.svelte';
@@ -98,7 +100,6 @@
   sheets.composer = (org, post) => lazy(() => import('./screens/club/PostComposer.svelte'), { org, post });
   sheets.createClub = () => lazy(() => import('./screens/sheets/CreateClubSheet.svelte'), {});
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
-  sheets.psych = () => lazy(() => import('./screens/profile/PsychPage.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
@@ -111,7 +112,6 @@
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
-  sheets.prefs = () => lazy(() => import('./screens/profile/PrefsSheet.svelte'), {});
   sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
   setLoginHook((after) => sheets.login(after));
 
@@ -131,7 +131,7 @@
       : follower
       ? [{ label: t('page.news'), icon: Newspaper }, { label: t('tab.join'), icon: DoorOpen }]
       : [{ label: t('tab.join'), icon: DoorOpen }],
-    profile: [{ label: t('page.friends'), icon: UsersRound }, { label: t('page.me'), icon: IdCardLanyard }],
+    profile: [{ label: t('page.friends'), icon: UsersRound, dot: (session.me?.counters.friendRequests ?? 0) > 0 }, { label: t('page.me'), icon: IdCardLanyard }, { label: t('me.settings'), icon: Settings2 }],
   });
   // a non-member's tab 2 has one page (two for a follower: News, Join): clamp where it's used, so the saved page (Studio by default) comes
   // back by itself after sign-in
@@ -376,7 +376,7 @@
             {:else if session.me?.oversee}{#if i === 1}{#await registryPage() then m}<m.default />{/await}{:else}{#await studioPage() then m}<m.default />{/await}{/if}
             {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
           {:else}
-            {#if i === 0}<Friends />{:else}<Me />{/if}
+            {#if i === 0}<Friends />{:else if i === 1}<Me />{:else}<Settings />{/if}
           {/if}
         {/snippet}
       </Pager>

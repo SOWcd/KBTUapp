@@ -46,10 +46,8 @@ export const sheets = {
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
   /** my nickname and photo (Telegram's or my own), from Me and my badge's photo */
   look: () => {},
-  /** Profile's gear: every setting in one sheet */
-  prefs: () => {},
-  /** behind the settings rows: what the bot sends, who sees what, power saving */
-  settings: (_kind: 'notify' | 'privacy' | 'power') => {},
+  /** behind the Settings page's rows: About the app (who sees what), power saving */
+  settings: (_kind: 'privacy' | 'power') => {},
   /** the admin panel (pilot): clubs and their teams */
   admin: () => {},
   /** the campus map, on a floor (step 1: the 2023 plans) */
@@ -68,8 +66,6 @@ export const sheets = {
   createClub: () => {},
   /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
   academic: () => {},
-  /** the psychological service's page of support (PLAN 20) */
-  psych: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
   /** the creator's own awards (the admin panel): a QR scanner each, "Bug hunter" a one-time link */
