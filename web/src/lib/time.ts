@@ -87,8 +87,8 @@ export function soon(ts: number, now = nowTs()): string {
   const s = ts - now;
   if (s <= 0) return t('soon.now');
   if (s < 3600) return t('cap.inMin', { n: Math.ceil(s / 60) });
-  if (dayNo(ts) === dayNo(now)) return t('soon.h', { n: Math.round(s / 3600) });
-  return relDay(ts, now).toLowerCase();
+  if (dayNo(ts) === dayNo(now)) return t('soon.h', { n: Math.floor(s / 3600) });
+  return dayNo(ts) - dayNo(now) === 1 ? t('common.tomorrow').toLowerCase() : relDay(ts, now);
 }
 
 /** "Today · 18:00" — the usual event line. */

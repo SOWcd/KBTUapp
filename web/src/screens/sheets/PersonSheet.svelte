@@ -111,10 +111,10 @@
          show"): achievements with their level, then badges; what they haven't earned yet stays on their own Awards page -->
     {@const earned = p.awards.achievements.filter((a) => a.level > 0)}
     {#if p.going.length}
-      <h3 class="t-cap sec">{t('person.goes')}</h3>
+      <h3 class="sec">{t('person.goes')}</h3>
       <div class="going">{#each p.going as e (e.id)}<EventRow {e} />{/each}</div>
     {/if}
-    <h3 class="t-cap sec">{t('person.awards')}{earned.length + p.awards.badges.length ? ' · ' + (earned.length + p.awards.badges.length) : ''}</h3>
+    <h3 class="sec">{t('person.awards')}{earned.length + p.awards.badges.length ? ' · ' + (earned.length + p.awards.badges.length) : ''}</h3>
     {#if earned.length + p.awards.badges.length}
       <div class="grid">
         {#each earned as a (a.code)}
@@ -128,7 +128,7 @@
       <p class="t-foot none">{t('person.noAwards')}</p>
     {/if}
     {#if p.clubs.length}
-      <h3 class="t-cap sec">{t('person.clubs')}</h3>
+      <h3 class="sec">{t('person.clubs')}</h3>
       <div class="clubs">
         {#each p.clubs as m (m.org.id)}
           <span class="club"><OrgLogo org={m.org} size={20} /><b>{m.org.name}</b>{#if m.role}<i>{roleName(m.role, m.title)}</i>{/if}</span>
@@ -137,7 +137,7 @@
     {/if}
     {#if p.past?.length}
       <!-- where they were before, written down by itself (a club leader, Oct 16: "ex-head of X, Oct 25 - May 26") -->
-      <h3 class="t-cap sec">{t('person.past')}</h3>
+      <h3 class="sec">{t('person.past')}</h3>
       <div class="past">
         {#each p.past as h, i (i)}
           <div class="was"><OrgLogo org={h.org} size={28} /><span class="tx"><b class="ellipsis">{h.org.name}</b>
@@ -178,7 +178,8 @@
   .why { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
   .why button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); }
   .friends { text-align: center; color: var(--text-2); }
-  .sec { margin: 18px 0 8px; }
+  /* section titles in the type scale of mockup v24 (sentence case, not the old caps caption) */
+  .sec { margin: 26px 2px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; text-transform: none; color: var(--text); }
   .clubs { display: flex; flex-wrap: wrap; gap: 6px; }
   .club { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: var(--r-full); background: var(--surface-2); }
   .club b { font: 620 13px/1 var(--font-text); }

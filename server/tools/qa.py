@@ -59,7 +59,8 @@ def seed(path: str) -> None:
             VALUES (2, ?, 'going', ?, ?, ?)""", (uid, f"QA-T{uid}", now, now))
     # Ali has today's timetable (made up), so the List's live stack shows its class card: one on now, two after it
     t0 = time.gmtime(now + 5 * 3600)  # Almaty, UTC+5
-    hm = lambda m: f"{(t0.tm_hour * 60 + t0.tm_min + m) // 60 % 24:02d}:{(t0.tm_hour * 60 + t0.tm_min + m) % 60:02d}"
+    base = min(max(t0.tm_hour * 60 + t0.tm_min, 20), 24 * 60 - 180)  # late at night the day still fits (classes end 23:59 at most)
+    hm = lambda m: f"{(base + m) // 60:02d}:{(base + m) % 60:02d}"
     for b, e, subj, kind, room, who in ((-20, 30, "Algorithms and Data Structures", "practice", "403", "Kim D."),
                                        (40, 90, "Physics", "lab", "162a", None), (120, 170, "Linear Algebra", "lecture", "256", None)):
         con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room, teacher) VALUES (2, ?, ?, ?, ?, ?, ?, ?)",

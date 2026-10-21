@@ -12,9 +12,8 @@
   import { data, toggleSub } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { nowTs, time, weekdayShort } from '../../lib/time';
+  import { dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Hash from '@lucide/svelte/icons/hash';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import CreateClubCard from '../../ui/CreateClubCard.svelte';
@@ -46,7 +45,7 @@
   const next = $derived.by(() => {
     const m = new Map<number, string>(), now = nowTs();
     for (const e of [...data.events].sort((a, b) => a.startsAt - b.startsAt))
-      if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id)) m.set(e.org.id, `${weekdayShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
+      if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id)) m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
     return m;
   });
   // a chat without a picture: its letters on a colour of its own
@@ -117,11 +116,13 @@
     <div class="sec"><h2>{t('clubs.schools')}</h2></div>
     <div class="schools surface">
       {#each schools as o (o.id)}
-        <button class="school" onclick={() => sheets.club(o.id)}>
+        <div class="school">
+          <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
           <OrgLogo org={o} size={40} />
           <span class="txt"><b>{o.abbr ?? o.name}</b>{#if o.abbr}<small class="ellipsis">{o.name}</small>{/if}</span>
-          {#if o.subscribed}<span class="on" title={t('clubs.subscribed')}><BellCheck size={16} /></span>{/if}<ChevronRight size={18} />
-        </button>
+          <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
+            {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
+        </div>
       {/each}
     </div>
   {/if}
@@ -160,7 +161,7 @@
   /* clubs: tiles, two a row; the club's emoji as a faint ghost in the corner; the bell its own button */
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .club { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px; border-radius: var(--r-l); overflow: hidden; }
-  .club:active { transform: scale(0.98); }
+  .club:active:not(:has(.bell:active)) { transform: scale(0.98); }
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .ghost { position: absolute; right: -18px; bottom: -22px; opacity: 0.1; transform: rotate(-12deg); pointer-events: none; }
   .bell { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
@@ -177,12 +178,13 @@
 
   /* schools: one list */
   .schools { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .school { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 14px 8px 10px; text-align: left; color: var(--text-3); }
+  .school { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 12px 8px 10px; text-align: left; color: var(--text-3); }
+  .school .bell { position: relative; top: auto; right: auto; z-index: 2; flex: none; }
+  .school .txt { pointer-events: none; }
   .school + .school { box-shadow: inset 0 1px 0 var(--line); }
   .school:active { background: var(--surface-2); }
   .school .txt b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
   .school .txt { flex: 1; }
-  .school .on { display: flex; color: var(--success-text); }
   .cta { margin-top: 24px; }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>
