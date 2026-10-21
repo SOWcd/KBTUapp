@@ -3,7 +3,7 @@ Entra directory (not KBTU's), as a single-page app with PKCE and no secret. The 
 opens it outside Telegram; Microsoft sends the student back to /ms.html, which takes this server's PKCE verifier for
 the state, trades the code for tokens in the browser (Microsoft redeems a single-page app's code only from a browser)
 and hands the access token to finish(). We check it by calling Graph with it (Graph checks the signature, so no crypto
-package here), then that it was issued to our app in KBTU's directory. We keep the account's id and email only."""
+package here), then that it was issued to our app in KBTU's directory. We keep the fields below (ms_profile)."""
 from __future__ import annotations
 
 import base64
@@ -22,10 +22,11 @@ log = logging.getLogger("kbtu.ms")
 CLIENT = "7487a9a6-fe85-4d01-882b-ac48b42f45e4"   # "KBTU App" in the owner's directory
 KBTU = "57081b5e-e66a-4993-8eaf-15b0b309293f"     # kbtu.kz's directory: the only one let in
 SCOPE = "openid profile email User.Read"
-TTL = 15 * 60
-# all of the signed-in user's own profile that User.Read lets us read; we keep whatever KBTU filled in (ms_profile)
-FIELDS = ("id,displayName,givenName,surname,mail,userPrincipalName,userType,employeeId,employeeType,department,jobTitle,"
-          "companyName,officeLocation,city,country,mobilePhone,businessPhones,preferredLanguage,usageLocation,createdDateTime")                                     # a link is good for 15 minutes
+TTL = 15 * 60  # a link is good for 15 minutes
+# exactly what the privacy policy lists and KBTU fills in (all 35 profiles on Oct 22): companyName is the account type
+# ("student"), for roles later. Asking for more (phone, department...) would collect what the policy doesn't name the
+# day KBTU fills it: a new field goes into the policy first
+FIELDS = "id,displayName,givenName,surname,mail,userPrincipalName,userType,companyName,usageLocation,createdDateTime"
 
 
 def _b64(b: bytes) -> str:
