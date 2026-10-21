@@ -226,7 +226,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
                  for m, k in (("first", "firstName"), ("last", "lastName"))]
         first, last = (mine or typed for mine, typed in names)
-        if not (consent and len(consent) <= 16 and all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
+        if consent != logic.CONSENT:
+            raise ApiError("bad_input", "consent")  # an app opened before the policy changed: it says to reopen
+        if not (all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
             raise ApiError("bad_input")
         if not ms:

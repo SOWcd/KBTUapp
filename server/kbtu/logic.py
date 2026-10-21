@@ -4136,7 +4136,8 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
                     "role": p["role"], "roleId": p["role_id"], "title": p["title"], "titleColor": p["title_color"],
                     "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < now() - QUIET_FOR,
-                    **({"probation": bool(p["probation"]), "strikes": p["strikes"]} if head or p["id"] == v.id else {})}
+                    # theirs, and Head+ strictly above them (the rank rule; audit L10: a Head saw the Vice's)
+                    **({"probation": bool(p["probation"]), "strikes": p["strikes"]} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
 
 
@@ -4470,8 +4471,10 @@ def add_strike(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
 
 def strikes(con, v: Viewer, oid: int, uid: int) -> list[dict]:
     """A person's strikes in the club, newest first, cleared ones too: for them and the club's Head+."""
-    if uid != v.id and not can(con, v, oid, "people"):
-        raise ApiError("forbidden")
+    if uid != v.id and v.role != "admin":
+        if not can(con, v, oid, "people"):
+            raise ApiError("forbidden")  # before _below: an outsider learns nothing about who is in the club
+        _below(con, v, oid, uid, "people")  # only those above them by the rank rule (audit L10: a Head saw the Vice's)
     if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
         raise ApiError("not_found")
     found = rows(con, "SELECT * FROM strikes WHERE org_id = ? AND user_id = ? ORDER BY id DESC", oid, uid)

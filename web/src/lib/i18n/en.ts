@@ -544,6 +544,7 @@ const en: Dict = {
   'login.codeExpired': "The code expired. Sign in with Microsoft again",
   'login.msTaken': "This KBTU account is linked to another Telegram. Write to @Sowers if that's a mistake",
   'login.msOther': "Your profile is already confirmed with another KBTU account",
+  'login.reopen': "The app was updated: close it and open it again",
   'login.ms': "Sign in with Microsoft",
   'login.msConfirm': "Confirm with Microsoft",
   'login.msNote': "Your KBTU account (@kbtu.kz): a browser opens, we never see the password",

@@ -32,4 +32,4 @@ ENV DB_PATH=/var/lib/kbtu/kbtu.db DB_MUST_EXIST=1 SQLITE_TMPDIR=/var/lib/kbtu WE
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
 # secrets come from the environment (Coolify): BOT_TOKEN, TOKEN_KEY, ADMIN_TG_IDS, DOMAIN
-CMD ["uvicorn", "kbtu.app:create", "--factory", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "kbtu.app:create", "--factory", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*", "--no-access-log"]

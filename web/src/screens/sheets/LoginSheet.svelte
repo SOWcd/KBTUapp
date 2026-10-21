@@ -78,7 +78,7 @@
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? e.message || e.code : '';
-      error = why === 'bad_input' ? t('login.badManual') : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
+      error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual') : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
       if (why === 'ms_first') void loadMe(); // the Microsoft sign-in ran out: the button again
     } finally { busy = false; }
   }

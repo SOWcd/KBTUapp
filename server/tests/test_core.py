@@ -2378,6 +2378,10 @@ def test_team_two(env):
     assert (member(22, 11)["probation"], member(22, 11)["strikes"]) == (True, 1)
     assert member(11, 11)["strikes"] == 1 and "strikes" not in member(12, 11)                          # theirs and the leaders' only
     assert c.get(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(12)).status_code == 403
+    assert c.get(f"/api/orgs/1/members/{uid[21]}/strikes", headers=tma(22)).status_code == 403    # a Head can't read the Vice's (L10)
+    assert "strikes" not in member(22, 21) and "strikes" in member(21, 22)                        # nor see the count in the team
+    assert c.get(f"/api/orgs/1/members/{uid[22]}/strikes", headers=tma(21)).status_code == 200    # the Vice reads the Head's
+    assert texts._cell("\t=1+1") == "'\t=1+1" and texts._cell("\r@x")[0] == "'"                  # CSV: no formula behind a tab (L4)
     sid = c.get(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(11)).json()[0]["id"]
     st = con.execute("SELECT ref, user_id FROM bot_outbox WHERE kind = 'strike'").fetchone()
     text, _, link = bot._render(con, {"kind": "strike", "ref": st[0], "lang": "en", "user_id": st[1]})
@@ -3212,9 +3216,9 @@ def test_manual_sign_in(env, monkeypatch):
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     login(c, 20, "ali")  # confirmed: "24Bali"
-    body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": "1"}
+    body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": logic.CONSENT}
     manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)  # noqa: E731
-    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"studentId": "99B031234"}, {"consentVersion": ""}):  # the year: from the ID (M3), never ahead
+    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"studentId": "99B031234"}, {"consentVersion": ""}, {"consentVersion": "v1"}):  # the year: from the ID (M3), never ahead
         assert manual(21, {**body, **bad}).status_code == 400
     assert manual(21).json()["message"] == "ms_first"                                     # no Microsoft, no account
     assert manual(20).json()["message"] == "ms_first"                                     # confirmed already: nothing to type either
@@ -3371,7 +3375,7 @@ def test_ms_sign_in(env, monkeypatch):
     graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "userPrincipalName": "d_new@kbtu.kz"}
     assert confirm(22, finish(22, token()).json()["code"]).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}  # new: for the form
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
-    c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
+    c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": logic.CONSENT, "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
     assert me["student"]["ms"] and me["msPending"] is None and me["no"] is None
     assert me["student"]["course"] == logic.course_of("24B099002") != 1                 # the ID's year, not the typed 1 (M3)

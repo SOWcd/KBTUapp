@@ -381,9 +381,10 @@ CSV_CAPTION = {"ru": "Участники: {title}", "kk": "Қатысушыла�
 
 
 def _cell(v) -> str:
-    """A cell a spreadsheet would run as a formula (= + - @) gets a leading quote; a phone number shows the same."""
+    """A cell a spreadsheet would run as a formula (= + - @, or a tab or CR before one) gets a leading quote; a phone
+    number shows the same."""
     s = "" if v is None else str(v)
-    return "'" + s if s[:1] in ("=", "+", "-", "@") else s
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
 REGISTRY_HEAD = {

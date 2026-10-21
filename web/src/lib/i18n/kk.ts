@@ -544,6 +544,7 @@ const kk: Dict = {
   'login.codeExpired': "Кодтың мерзімі өтті. Microsoft арқылы қайта кір",
   'login.msTaken': "Бұл ҚБТУ аккаунты басқа Telegram-ға байланған. Қате болса, @Sowers-ке жаз",
   'login.msOther': "Профилің басқа ҚБТУ аккаунтымен расталған",
+  'login.reopen': "Қолданба жаңарды: оны жауып, қайта аш",
   'login.ms': "Microsoft арқылы кіру",
   'login.msConfirm': "Microsoft арқылы растау",
   'login.msNote': "ҚБТУ аккаунты (@kbtu.kz) — браузер ашылады, құпиясөзді біз көрмейміз",

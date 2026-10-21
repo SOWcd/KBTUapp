@@ -545,6 +545,7 @@ const ru = {
   'login.codeExpired': "Код устарел. Войди через Microsoft ещё раз",
   'login.msTaken': "Этот аккаунт КБТУ уже привязан к другому Telegram. Напиши @Sowers, если это ошибка",
   'login.msOther': "Твой профиль уже подтверждён другим аккаунтом КБТУ",
+  'login.reopen': "Приложение обновилось: закрой его и открой снова",
   'login.ms': "Войти через Microsoft",
   'login.msConfirm': "Подтвердить через Microsoft",
   'login.msNote': "Аккаунт КБТУ (@kbtu.kz) — откроется браузер, пароль мы не видим",
