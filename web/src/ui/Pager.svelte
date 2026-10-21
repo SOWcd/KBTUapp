@@ -7,7 +7,8 @@
   //  - settle 180–300 ms, its curve starting at the finger's speed; rubber band + rigid haptic at the edges
   // During a drag only transforms are written (no reactive state per frame); `index` changes once,
   // after the settle. Pages mount on first visit (the neighbours of the page on screen a moment after it shows,
-  // so a first swipe never builds a page under the finger) and stay alive.
+  // so a first swipe never builds a page under the finger) and stay alive. A tab never shown builds nothing: at start
+  // only the open tab's page (the hidden tabs were ~1400 of 1900 nodes and 40 % of the blocking time).
   import type { Snippet } from 'svelte';
   import { onMount, untrack } from 'svelte';
   import { haptic } from '../lib/tg';
@@ -18,6 +19,8 @@
   let root: HTMLDivElement;
   const els: HTMLDivElement[] = [];
   let visited = $state<boolean[]>([]);
+  let shown = $state(false);
+  $effect(() => { if (active && !shown) shown = true; });
   $effect(() => { if (!visited[index]) visited[index] = true; });
 
   let cur = 0;            // what the DOM shows right now (index can lag until the settle commits); set on mount
@@ -26,7 +29,10 @@
   let timer: ReturnType<typeof setTimeout> | undefined;
   function commit() { clearTimeout(timer); cur = target; busy = false; layout(0); onchange(cur); }
 
-  const W = () => root.getBoundingClientRect().width || innerWidth;
+  // measured once per resize, not per frame (a forced layout on every frame of a drag); not innerWidth: from 600 px
+  // the app is a 480 px column
+  let w0 = 0;
+  const W = () => w0 || (w0 = root.clientWidth || innerWidth);
   // position of page i when the strip is shifted by v px (v < 0 = moving to the next page)
   function place(i: number, v: number, w: number) {
     const el = els[i]; if (!el) return;
@@ -148,7 +154,7 @@
     root.addEventListener('touchmove', move, { passive: false });
     root.addEventListener('touchend', end);
     root.addEventListener('touchcancel', end);
-    const onResize = () => layout(0);
+    const onResize = () => { w0 = 0; layout(0); };
     addEventListener('resize', onResize);
     return () => removeEventListener('resize', onResize);
   });
@@ -157,7 +163,7 @@
 <div class="pager" bind:this={root}>
   {#each { length: count } as _, i}
     <div class="pg" bind:this={els[i]}>
-      {#if visited[i] || i === index}{@render page(i)}{/if}
+      {#if shown && (visited[i] || i === index)}{@render page(i)}{/if}
     </div>
   {/each}
 </div>

@@ -77,6 +77,8 @@
   const teamPage = () => import('./screens/club/Team.svelte');
   const newsPage = () => import('./screens/club/News.svelte');
   const registryPage = () => import('./screens/dmp/Registry.svelte');
+  // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
+  const warmClub = () => { if (!session.me) return; void newsPage(); void studioPage(); void teamPage(); if (session.me.oversee) void registryPage(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
@@ -336,7 +338,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

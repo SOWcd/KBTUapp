@@ -21,6 +21,7 @@
   import { QR_TONE, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
+  import { ui } from '../../lib/state/ui.svelte';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
@@ -60,7 +61,7 @@
       else { swing.style.rotate = ''; th = om = vs = raf = lastT = 0; }
     };
     // the pager speaks when a drag moves and when a settle starts (≤ 360 ms): keep watching that long
-    const kick = () => { until = performance.now() + 450; if (!raf) raf = requestAnimationFrame(step); };
+    const kick = () => { if (ui.tab !== 'profile') return; until = performance.now() + 450; if (!raf) raf = requestAnimationFrame(step); };
     addEventListener('kb:pager', kick);
     return () => { removeEventListener('kb:pager', kick); cancelAnimationFrame(raf); };
   });
