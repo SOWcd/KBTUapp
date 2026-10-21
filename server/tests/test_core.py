@@ -297,6 +297,17 @@ def test_photos(env):
     clear = io.BytesIO()
     Image.new("RGBA", (64, 64), (0, 0, 0, 0)).save(clear, "PNG")
     assert c.post("/api/photos", headers=tma(20), content=clear.getvalue()).json()["color"] == "#ffffff"  # a logo's transparency: white
+    bomb = io.BytesIO()
+    Image.new("1", (8000, 5000)).save(bomb, "PNG")                     # ~100 KB that would unpack into hundreds of MB
+    assert c.post("/api/photos", headers=tma(20), content=bomb.getvalue()).json()["message"] == "not_an_image"
+    tiff = io.BytesIO()
+    Image.new("RGB", (40, 30)).save(tiff, "TIFF")                      # only the five formats are ever parsed
+    assert c.post("/api/photos", headers=tma(20), content=tiff.getvalue()).json()["message"] == "not_an_image"
+    for size in ((8064, 6048), (6000, 4000), (4284, 5712), (6001, 4001)):   # 48 MP, a 24 MP camera, a 24 MP iPhone portrait, a crop: read smaller, not refused
+        huge = io.BytesIO()
+        Image.new("RGB", size, (10, 90, 200)).save(huge, "JPEG")
+        r = c.post("/api/photos", headers=tma(20), content=huge.getvalue()).json()
+        assert max(r["w"], r["h"]) == 1600
     served = c.get("/" + up["url"])
     assert served.headers["content-type"] == "image/webp" and "immutable" in served.headers["cache-control"]
     assert not Image.open(io.BytesIO(served.content)).getexif()                                        # no EXIF, no GPS

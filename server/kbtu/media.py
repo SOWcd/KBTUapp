@@ -9,15 +9,23 @@ import hashlib
 import html
 import io
 import re
+import threading
 from pathlib import Path
 
 import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 MAX_BYTES = 15 * 1024 * 1024
-MAX_PIXELS = 40_000_000          # 15 MB of PNG can still unpack into gigabytes
+MAX_PIXELS = 50_000_000          # what a header may claim (Pillow refuses past twice this, warns between): a 48 MP iPhone JPEG, read smaller below (draft)
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
-FORMATS = {"JPEG", "MPO", "PNG", "WEBP", "GIF"}   # MPO: how Pillow reads some iPhone JPEGs
+DECODED = 16_000_000             # what is actually unpacked: 126 KB of PNG claiming 40 MP took ~460 MB (audit, Oct 21)
+JPEG_SIDE = 2400                 # a JPEG is decoded at 1/2, 1/4 or 1/8 straight from the file, keeping both sides at
+                                 # least this (the receipt's OCR reads 2400 px; photos keep 1600) unless that would
+                                 # still be over DECODED (a 24 MP 6000x4000 photo goes to 3000x2000)
+FORMATS = ("JPEG", "PNG", "WEBP", "GIF")   # the only parsers that see the bytes; JPEG's opens iPhone MPO files too
+# two pictures at a time at most: each can take a few hundred MB while it is unpacked, and a burst of uploads
+# shouldn't take the whole app (and its bot) down with it
+_busy = threading.BoundedSemaphore(2)
 
 
 class BadImage(ValueError):
@@ -31,19 +39,36 @@ def _fit(im: Image.Image, side: int) -> Image.Image:
 
 
 def save(data: bytes, root: Path) -> dict:
-    return store(decode(data), data, root)
+    with _busy:
+        return store(_decode(data), data, root)
 
 
 def decode(data: bytes) -> Image.Image:
     """The picture in an upload, upright, as RGB; anything else is BadImage."""
+    with _busy:
+        return _decode(data)
+
+
+def _decode(data: bytes) -> Image.Image:
     try:
-        with Image.open(io.BytesIO(data)) as probe:
+        # formats=: no other parser (TIFF, EPS, PSD...) ever reads the bytes, not even to say no
+        with Image.open(io.BytesIO(data), formats=FORMATS) as probe:
             probe.verify()
-        im = Image.open(io.BytesIO(data))
-        if im.format not in FORMATS or im.width * im.height > MAX_PIXELS:
+        im = Image.open(io.BytesIO(data), formats=FORMATS)
+        if im.format in ("JPEG", "MPO"):   # iPhone photos with a depth map open as MPO
+            w, h, k = im.width, im.height, 1
+            while k < 8 and (min(w, h) // (2 * k) >= JPEG_SIDE or (w // k) * (h // k) > DECODED):
+                k *= 2
+            im.draft("RGB", (w // k, h // k))   # draft takes one call only: the scale is chosen up front (rounded up, 6001 px wouldn't halve)
+        if im.width * im.height > DECODED:
             raise BadImage(f"{im.format} {im.width}x{im.height}")
-        # transparent parts (a club's PNG logo) go white, not black
-        return Image.alpha_composite(Image.new("RGBA", im.size, "white"), ImageOps.exif_transpose(im).convert("RGBA")).convert("RGB")
+        im = ImageOps.exif_transpose(im)
+        if im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info):
+            # transparent parts (a club's PNG logo) go white, not black
+            return Image.alpha_composite(Image.new("RGBA", im.size, "white"), im.convert("RGBA")).convert("RGB")
+        return im.convert("RGB")
+    except BadImage:
+        raise
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise BadImage(type(exc).__name__) from None
 

@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import anyio
 import httpx
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.datastructures import Default, DefaultPlaceholder
@@ -36,6 +37,13 @@ from .logic import ApiError, Viewer
 log = logging.getLogger("kbtu.app")
 # httpx logs every request URL at INFO, and Telegram's URL carries the bot token
 logging.getLogger("httpx").setLevel(logging.WARNING)
+# pictures queue here for one of two threads, not in the shared pool: a burst of uploads waiting on media's lock
+# inside pool threads would hold all 40 and stall every other request
+_imgs = anyio.CapacityLimiter(2)
+
+
+async def _img(fn, *args):
+    return await anyio.to_thread.run_sync(fn, *args, limiter=_imgs)
 
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
 # typed in by the student (the KBTU-password sign-in is gone since Oct 19): a name in any alphabet (hyphen, apostrophe, space), and a student ID like
@@ -751,7 +759,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not logic.organizes(con, v):  # before the work, not only after it
             raise ApiError("forbidden")
         try:
-            saved = await run_in_threadpool(media.save, data, photos)
+            saved = await _img(media.save, data, photos)
         except media.BadImage:
             raise ApiError("bad_input", "not_an_image") from None
         return logic.add_photo(con, v, saved)
@@ -805,7 +813,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         logic.need_student(v)  # before the work, not only after it
         try:
-            saved = await run_in_threadpool(media.save, data, photos)
+            saved = await _img(media.save, data, photos)
         except media.BadImage:
             raise ApiError("bad_input", "not_an_image") from None
         for rel in logic.set_photo(con, v, saved):
@@ -819,7 +827,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         logic.receipt_open(con, v, eid)  # before the work, not only after it
         try:  # Kaspi's PDF or a screenshot; read by OCR (~0.5 s) right here, no queue
-            saved, read = await run_in_threadpool(receipt.take, data, receipts)
+            saved, read = await _img(receipt.take, data, receipts)
         except media.BadImage:
             raise ApiError("bad_input", "not_an_image") from None
         except receipt.NotReceipt:
@@ -904,7 +912,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not logic.can_add_album_photo(con, v, eid):  # before the work, not only after it
             raise ApiError("forbidden")
         try:
-            saved = await run_in_threadpool(media.save, data, photos)
+            saved = await _img(media.save, data, photos)
         except media.BadImage:
             raise ApiError("bad_input", "not_an_image") from None
         return logic.add_album_photo(con, v, eid, saved)
@@ -1031,7 +1039,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             peek = await media.chat_peek(http, url)
         if peek["image"]:
             try:
-                peek["photo"] = (await run_in_threadpool(media.save, peek["image"], photos))["path"]
+                peek["photo"] = (await _img(media.save, peek["image"], photos))["path"]
             except media.BadImage:
                 pass
         return logic.add_chat(con, v, body, peek)
