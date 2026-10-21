@@ -63,8 +63,9 @@ export function semester(today = dateInput(nowTs())) {
     if (today < a || today > eb) continue;
     const mon = (Date.parse(a) / 864e5 - (new Date(a).getUTCDay() + 6) % 7) * 864e5; // the Monday of the first week
     const wk = (d: string) => Math.floor((Date.parse(d) - mon) / 864e5 / 7) + 1, weeks = wk(b);
-    return { week: Math.min(weeks, wk(today)), weeks, mid: [wk(ma), wk(mb)] as [number, number], midEnd: mb,
-      toExams: Math.max(0, Math.ceil(days(today, ea) / 7)), start: a };
+    // whole weeks left: the weekend before the exams already says "exams"
+    return { week: Math.min(weeks, wk(today)), weeks, mid: [wk(ma), wk(mb)] as [number, number], exams: today >= ea,
+      toExams: Math.max(0, Math.floor(days(today, ea) / 7)), start: a };
   }
   return null;
 }

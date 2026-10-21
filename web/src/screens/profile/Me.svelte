@@ -21,20 +21,24 @@
   import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
   import { inner } from '../../lib/perms';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
-  import { dayMonth, relDay, whenLine } from '../../lib/time';
+  import { dateInput, dayMonth, nowTs, relDay, whenLine } from '../../lib/time';
+  import { onMount } from 'svelte';
   import { writeOwner } from '../../lib/feedback';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
   import Button from '../../ui/Button.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
-  const up = nextUp(), sem = semester();
+  // today: Me stays mounted and the app can stay open for days, so it moves on when the app comes back
+  let today = $state(dateInput(nowTs()));
+  onMount(() => on('activated', () => (today = dateInput(nowTs()))));
+  const up = $derived(nextUp(today)), sem = $derived(semester(today));
   // the strip's month under its first week, in the app's language
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   // the psychologist's nearest free hour (server: psych.py, cached; the first ask after a while may come back empty)
-  let psych = $state<number | null>(null);
-  $effect(() => { if (ui.tab === 'profile') untrack(() => api.psych().then((r) => (psych = r.next), () => {})); });
+  let psych = $state<number | null>(null), full = $state(false);
+  $effect(() => { if (ui.tab === 'profile') untrack(() => api.psych().then((r) => { psych = r.next; full = !!r.full; }, () => {})); });
   const me = $derived(session.me);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { if (ui.tab === 'profile' && ui.page.profile >= 1 && me?.student) void untrack(loadMyCard); });
@@ -104,8 +108,8 @@
         <span class="sem-h"><span><b>{t('sem.week', { n: sem.week, of: sem.weeks })}</b><i class="sub">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</i></span>
           {#if up}<span class="chip">{nameOf(up)} · {whenOf(up)}</span>{/if}</span>
         <span class="strip" style="--n:{sem.weeks}" aria-hidden="true">
-          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={i + 1 === sem.week}>{#if i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
-          <i class="ex"></i>
+          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={!sem.exams && i + 1 === sem.week}>{#if !sem.exams && i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
+          <i class="ex" class:now={sem.exams}></i>
         </span>
         <span class="sem-l"><span>{semFrom}</span><span style="left:calc(({sem.mid[0]} - 0.5) / ({sem.weeks} + 1) * 100%)">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
       </button>
@@ -115,10 +119,12 @@
     {/if}
     <button class="r psy" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>
       <span class="pi"><MessageCircleHeart size={22} /></span>
-      <span class="lb">{t('psy.kbtu')}<i class="sub">{t('me.psychSub')}</i></span>
+      <span class="lb">{t('psy.kbtu')}<i class="sub">{t(full && !psych ? 'me.psychFull' : 'me.psychSub')}</i></span>
       {#if psych}<span class="pt"><i class="sub">{t('me.psychSoon')}</i><b class="num">{whenLine(psych)}</b></span>{/if}
       <ArrowUpRight size={18} /></button>
-    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}<span class="sep">·</span>{/if}<a href="tel:{n}" class="num" onclick={() => haptic.tap()}>{n}</a>{/each}</p>
+    <!-- 150 the youth line, 1303 Almaty's mental-health centre, 111 the family line, 112 emergencies (checked at their
+         sources Oct 20: telephone150.kz, cpzalmaty.kz, adilet.zan.kz) -->
+    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}<span class="sep">·</span>{/if}<a href="tel:{n}" onclick={() => haptic.tap()}><b class="num">{n}</b>{#if n === '150' || n === '112'} {t(`sos.${n}`)}{/if}</a>{/each}</p>
   </div>
 
   <!-- the app itself (mockup v24: three tiles, small actions): its channel, its group, the open code (owner, Oct 17),
@@ -155,7 +161,7 @@
   button.r:active { background: var(--surface-2); }
   .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
   .list { display: flex; flex-direction: column; gap: 8px; }
-  /* the gear (PrefsSheet): in the lanyard's gap right of its strap; on a guest's card, inside its corner */
+  /* the pencil and the shield: in the lanyard's gap right of its strap */
   .gear { position: absolute; top: calc(var(--top) + 50px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
   .gear:active { transform: scale(0.92); }
@@ -188,7 +194,8 @@
   .pt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
   .pt b { font: 750 var(--fs-body)/1.1 var(--font-text); color: #FF8FB8; white-space: nowrap; }
   .sos { margin: 0; padding: 0 16px 14px 50px; font: 500 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
-  .sos a { color: var(--text-2); font-weight: 700; }
+  .sos a { color: var(--text-2); white-space: nowrap; }
+  .sos b { font-weight: 700; }
   .sep { margin: 0 6px; }
 
   /* the app's card: three tiles, small actions (mockup v14/v24) */

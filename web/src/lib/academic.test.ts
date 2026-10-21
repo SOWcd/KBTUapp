@@ -12,9 +12,10 @@ test('academic calendar: spans, and what comes next', () => {
 });
 
 test('semester strip: week of the term, midterm weeks, weeks to the exams', () => {
-  expect(semester('2026-09-01')).toMatchObject({ week: 1, weeks: 15, mid: [7, 8], toExams: 15 });
-  expect(semester('2026-10-21')).toMatchObject({ week: 8, toExams: 8 });
-  expect(semester('2026-12-20')).toMatchObject({ week: 15, toExams: 0 }); // exams: the last week, nothing to go
+  expect(semester('2026-09-01')).toMatchObject({ week: 1, weeks: 15, mid: [7, 8], toExams: 14 });
+  expect(semester('2026-10-21')).toMatchObject({ week: 8, toExams: 7 });
+  expect(semester('2026-12-13')).toMatchObject({ week: 15, toExams: 0, exams: false }); // the Sunday before
+  expect(semester('2026-12-20')).toMatchObject({ week: 15, toExams: 0, exams: true });
   expect(semester('2027-01-10')).toBeNull();                               // the break
   expect(semester('2027-01-18')).toMatchObject({ week: 1, weeks: 15 });    // spring
 });

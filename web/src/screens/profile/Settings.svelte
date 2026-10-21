@@ -26,12 +26,12 @@
     haptic.tap();
     me.settings[k] = on;
     try { session.me = await api.updateMe({ [k]: on }); }
-    catch { me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); }
+    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); } // the one on screen now
   }
 
   // my events in the phone's calendar: Apple through our page that hands webcal:// over, the rest through Google
-  let cal = $state<{ page: string; feed: string } | null>(null);
-  $effect(() => { if (me?.student && !cal) api.calendarFeed().then((x) => (cal = x)).catch(() => {}); });
+  let cal = $state<{ page: string; feed: string } | null>(null), asked = false;
+  $effect(() => { if (me?.student && !asked) { asked = true; api.calendarFeed().then((x) => (cal = x)).catch(() => (asked = false)); } });
   function subscribe() {
     if (!cal) { say(t('common.error'), 'pleading_face_3d'); return; }
     haptic.tap();
