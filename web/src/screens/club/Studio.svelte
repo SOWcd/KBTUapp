@@ -3,7 +3,8 @@
   // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
   // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state
   // (owner, Oct 15). Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
-  // (EventManage: money, people, tools), the event sheet for Members.
+  // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24 (owner, Oct 21): the club's
+  // mark by its name, the next event with how full it is, the actions as tiles. "Link a channel" waits for its backend.
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -51,6 +52,7 @@
     else waiting = 0;
   });
   const recruiting = $derived(data.orgs.find((x) => x.id === m?.org.id)?.recruiting ?? true);
+  const members = $derived(data.orgs.find((x) => x.id === m?.org.id)?.members ?? 0);
 
   // kept per club and loaded with the app (the club in view), so Studio opens full; a visit or a change refreshes it
   const events = $derived((m && data.studio[m.org.id]) || []);
@@ -106,15 +108,16 @@
         </div>
       {/if}
       <div class="title">
-        <span class="name"><h1 class="t-h1 ellipsis">{m.org.name}</h1>
-          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}</p></span>
+        <OrgLogo org={m.org} size={46} />
+        <span class="name"><h1 class="ellipsis">{m.org.name}</h1>
+          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
         <!-- the club's page, edited from up here (owner, Oct 17: the row of buttons below said nothing) -->
         {#if vice}<button class="ic" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} /></button>{/if}
       </div>
     </header>
 
     {#if todo}
-      <h2 class="t-cap cap">{t('studio.todo')}</h2>
+      <h2 class="sec">{t('studio.todo')}</h2>
       <div class="todo surface">
         {#if alone}
           <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>
@@ -140,7 +143,7 @@
       </div>
     {/if}
 
-    <h2 class="t-cap cap">{t('studio.next')}</h2>
+    <h2 class="sec">{t('studio.next')}</h2>
     {#if next}
       <article class="hero surface">
         <button class="top" onclick={() => openRow(next)}>
@@ -148,9 +151,11 @@
           <span class="txt">
             <span class="t-foot when" class:now={today}>{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}</span>
             <b class="t-title clamp-2">{next.title}</b>
-            <span class="t-foot">{tn('event.going', next.taken)}{next.seats ? ' / ' + next.seats : ''}</span>
           </span>
         </button>
+        <!-- how full it is -->
+        <div class="seats"><span class="t-foot"><b class="num">{tn('event.going', next.taken)}</b>{next.seats ? ' / ' + next.seats : ''}</span>
+          {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
         <div class="acts">
           <Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>
           {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
@@ -171,16 +176,13 @@
       <p class="hero surface none t-callout">{t('studio.none')}</p>
     {/if}
 
-    {#if staff}
-      <button class="add" onclick={() => sheets.editor(m.org.id)}><Plus size={20} />{t('studio.new')}</button>
-    {/if}
-
-    <!-- the memo to DMP, and recruitment while it runs (closed: a "To do" at a term's start); inviting lives on Team,
-         editing the club up top (owner, Oct 17) -->
-    {#if may(m, 'memo') || (vice && recruiting) || (casting && round)}
-      <div class="chips">
-        {#if may(m, 'memo')}<button onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={17} />{t('memo.card')}</button>{/if}
-        {#if (vice && recruiting) || (casting && round)}<button onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={17} />{t('cast.card')}</button>{/if}
+    <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
+         the memo to DMP; inviting lives on Team, editing the club up top (owner, Oct 17) -->
+    {#if staff || may(m, 'memo') || (vice && recruiting) || (casting && round)}
+      <div class="qa">
+        {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
+        {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
+        {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></button>{/if}
       </div>
     {/if}
 
@@ -201,12 +203,13 @@
   .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
   .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
-  .title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .name { min-width: 0; }
+  .title { display: flex; align-items: center; gap: 12px; }
+  .name { flex: 1; min-width: 0; }
+  .name h1 { font: 800 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
   .ic { width: 38px; height: 38px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text);
     transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
   /* a press glows (owner, Oct 17: a tap must show it was seen) */
-  .ic:active, .chips button:active { transform: scale(0.92); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); }
+  .ic:active { transform: scale(0.92); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); }
   .role { display: flex; align-items: center; gap: 5px; }
   .role :global(svg) { color: #FFB23D; }
   .orgs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
@@ -220,14 +223,20 @@
   .todo button > :global(svg:first-child) { flex: none; color: var(--accent-text); }
   .todo .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .todo .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .chips button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border-radius: var(--r-full);
-    background: var(--surface); color: var(--text); font: 620 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
-  .chips button > :global(svg) { color: var(--accent-text); }
+  .qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; margin-top: 12px; }
+  .qt { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--accent-text); }
+  .qt:active { transform: scale(0.97); }
+  .qt b { margin-top: 10px; font: 680 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
+  .qt small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
+  .qd { position: absolute; top: 12px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); font-style: normal; text-align: center; }
+  .sec { margin: 26px 4px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
+  .seats { display: flex; flex-direction: column; gap: 6px; }
+  .seats b { color: var(--text); font-weight: 650; }
+  .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
   .count.warn { background: var(--warning-text); color: var(--bg); }
   .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
-  .cap { margin: 0 2px 8px; }
-  .hero { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+  .hero { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
   .top { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; }
   .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .when { font-weight: 620; }
@@ -238,9 +247,6 @@
   .moving .field { flex: 1; min-width: 0; }
   .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .none { padding: 18px 16px; color: var(--text-2); }
-  .add { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: var(--btn-l); margin-top: 10px;
-    border-radius: 16px; border: 1.5px dashed var(--line-2); color: var(--accent-text); font: 650 15px/1 var(--font-text); }
-  .add:active { transform: scale(0.98); }
   .seg { margin: 18px 0 12px; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .empty { padding: 16px 4px; }
