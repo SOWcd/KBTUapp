@@ -105,10 +105,10 @@
   <div class="term surface">
     {#if sem}
       <button class="sem" onclick={() => sheets.academic()}>
-        <span class="sem-h"><span><b>{t('sem.week', { n: sem.week, of: sem.weeks })}</b><i class="sub">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</i></span>
+        <span class="sem-h"><span><b>{sem.over ? t('sem.over') : t('sem.week', { n: sem.week, of: sem.weeks })}</b><i class="sub">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</i></span>
           {#if up}<span class="chip">{nameOf(up)} · {whenOf(up)}</span>{/if}</span>
         <span class="strip" style="--n:{sem.weeks}" aria-hidden="true">
-          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={!sem.exams && i + 1 === sem.week}>{#if !sem.exams && i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
+          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={!sem.over && i + 1 === sem.week}>{#if !sem.over && i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
           <i class="ex" class:now={sem.exams}></i>
         </span>
         <span class="sem-l"><span>{semFrom}</span><span style="left:calc(({sem.mid[0]} - 0.5) / ({sem.weeks} + 1) * 100%)">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
@@ -124,7 +124,7 @@
       <ArrowUpRight size={18} /></button>
     <!-- 150 the youth line, 1303 Almaty's mental-health centre, 111 the family line, 112 emergencies (checked at their
          sources Oct 20: telephone150.kz, cpzalmaty.kz, adilet.zan.kz) -->
-    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}<span class="sep">·</span>{/if}<a href="tel:{n}" onclick={() => haptic.tap()}><b class="num">{n}</b>{#if n === '150' || n === '112'} {t(`sos.${n}`)}{/if}</a>{/each}</p>
+    <p class="sos">{t('psy.now')}: {#each ['150', '1303', '111', '112'] as n, i (n)}{#if i}{' · '}{/if}<a href="tel:{n}" onclick={() => haptic.tap()}><b class="num">{n}</b>{#if n === '150' || n === '112'}{' ' + t(`sos.${n}`)}{/if}</a>{/each}</p>
   </div>
 
   <!-- the app itself (mockup v24: three tiles, small actions): its channel, its group, the open code (owner, Oct 17),
@@ -171,9 +171,11 @@
   /* the term card: the strip of weeks, then the psychologist (mockup v24) */
   .term { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .sem { display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 12px; text-align: left; }
-  .sem-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .sem-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+  .sem-h > span:first-child { flex: none; }
   .sem-h b { font: 700 var(--fs-card)/1.2 var(--font-text); color: var(--text); }
-  .chip { flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font: 650 var(--fs-cap)/1 var(--font-text); white-space: nowrap; }
+  /* long calendar names ("Registration for 2027–2028…") shrink with an ellipsis, the week never breaks */
+  .chip { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font: 650 var(--fs-cap)/26px var(--font-text); white-space: nowrap; }
   .strip { position: relative; display: grid; grid-template-columns: repeat(calc(var(--n) + 1), 1fr); gap: 3px; height: 30px; align-items: center; }
   .strip i { height: 8px; border-radius: 3px; background: var(--surface-3); }
   .strip i.past { background: linear-gradient(90deg, var(--accent), #6E8FFF); }
@@ -190,20 +192,22 @@
   .sem-l span:last-child { color: var(--danger-text); }
   .term .r { box-shadow: inset 0 1px 0 var(--line); }
   .psy { min-height: 64px; }
-  .pi { display: flex; color: #FF8FB8; }
+  .term { --psy: #FF8FB8; }
+  :global(:root[data-theme='light']) .term, :global(.theme-light) .term { --psy: #C2185B; } /* 5.6:1 on white */
+  .pi { display: flex; color: var(--psy); }
   .pt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-  .pt b { font: 750 var(--fs-body)/1.1 var(--font-text); color: #FF8FB8; white-space: nowrap; }
+  .pt b { font: 750 var(--fs-body)/1.1 var(--font-text); color: var(--psy); white-space: nowrap; }
   .sos { margin: 0; padding: 0 16px 14px 50px; font: 500 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
   .sos a { color: var(--text-2); white-space: nowrap; }
   .sos b { font-weight: 700; }
-  .sep { margin: 0 6px; }
 
   /* the app's card: three tiles, small actions (mockup v14/v24) */
   .appc { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
   .ap-h { display: flex; gap: 12px; align-items: center; }
   .ap-h b { font: 700 var(--fs-card)/1.2 var(--font-text); }
   .mk { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
-  .ap-t { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ap-t { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 359px) { .apt .go { display: none; } } /* a 320-px phone: the tile is the button, "Subscribe" doesn't fit */
   .apt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 10px 10px; border-radius: 14px; text-align: left; color: var(--accent-text);
     background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 100%, transparent), var(--surface-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px var(--line); }
   .apt b { margin-top: 8px; font: 650 var(--fs-body)/1.15 var(--font-text); color: var(--text); }

@@ -878,6 +878,8 @@ const en: Dict = {
   'sos.150': "helpline",
   'sos.112': "emergency",
   'sem.week': "Week {n} of {of}",
+  'sem.over': "Classes are over",
+  'cap.new': "something new",
   'sem.toExams': { one: "{n} week to exams", other: "{n} weeks to exams" },
   'sem.examsNow': "Exams: good luck!",
   'sem.mid': "midterm",

@@ -114,7 +114,7 @@
   <div class="layer sw" class:off={mode !== 'switch'} style="--n:{pages.length}">
     <span class="pill" bind:this={pill} aria-hidden="true"><span class="blob" bind:this={blob}></span></span>
     {#each pages as p, i (p.label)}
-      <button class:on={i === lit} aria-label={p.label} aria-pressed={i === index} onclick={() => { haptic.select(); onpick(i); wake(); }}>
+      <button class:on={i === lit} aria-label={p.dot ? `${p.label}, ${t('cap.new')}` : p.label} aria-pressed={i === index} onclick={() => { haptic.select(); onpick(i); wake(); }}>
         <p.icon size={18} strokeWidth={2} />{#if p.dot}<i class="dot" aria-hidden="true"></i>{/if}
       </button>
     {/each}
