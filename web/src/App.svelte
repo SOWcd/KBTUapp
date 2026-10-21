@@ -17,6 +17,7 @@
   import { api, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
+  import { CONSENT_VERSION } from './lib/legal';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Nav from './ui/Nav.svelte';
@@ -79,6 +80,11 @@
   const teamPage = () => import('./screens/club/Team.svelte');
   const newsPage = () => import('./screens/club/News.svelte');
   const registryPage = () => import('./screens/dmp/Registry.svelte');
+  // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
+  const askConsent = () => {
+    const s = session.me?.student;
+    if (s && !session.me?.deleteAt && !['staff', 'admin', CONSENT_VERSION].includes(s.consent) && !overlays.length) sheets.consent();
+  };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void newsPage(); void studioPage(); void teamPage(); if (session.me.oversee) void registryPage(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -100,6 +106,7 @@
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit });
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
+  sheets.consent = () => lazy(() => import('./screens/sheets/ConsentSheet.svelte'), {});
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
   sheets.clubEdit = (org) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org });
   sheets.composer = (org, post) => lazy(() => import('./screens/club/PostComposer.svelte'), { org, post });
@@ -341,7 +348,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

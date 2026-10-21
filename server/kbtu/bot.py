@@ -153,6 +153,9 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         if not a:
             return None
         return (*texts.bot_message(lang, "club_yes" if ref[2] == "yes" else "club_no", name=a["name"]), f"cl_{a['org_id']}" if ref[2] == "yes" and a["org_id"] else "newclub")
+    if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic._hand_over)
+        o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
+        return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
     if kind == "club_official":  # off:<org>, to the club's President: DMP gave the ✓ (said only while it still has it)
         o = one(con, "SELECT name, official FROM orgs WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o and o["official"] else None
@@ -371,10 +374,15 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
 def backup_day(cfg: Config, con) -> None:
     """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (owner, Oct 18:
     there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
+    db_path = Path(cfg.db_path).resolve()
+    # the copies db.py makes before a migration: two weeks, as the nightly ones (H2: deleted accounts must not outlive them)
+    for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
+        if bak.stat().st_mtime < time.time() - 14 * 86400:
+            bak.unlink(missing_ok=True)
     local = int(time.time()) + 5 * 3600
     if local % 86400 < 4 * 3600 or not logic._once(con, "backup_day", str(local // 86400)):
         return
-    root = Path(cfg.db_path).resolve().parent / "backups"
+    root = db_path.parent / "backups"
     root.mkdir(exist_ok=True)
     out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
     tmp = out.with_suffix(".tmp")  # a copy cut short (a full disk) never counts among the 14
@@ -388,6 +396,9 @@ def backup_day(cfg: Config, con) -> None:
     tmp.replace(out)
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
+    for old in root.glob("kbtu-*.db"):  # by age too: skipped nights mustn't stretch a deleted account's life past 30 days
+        if old.stat().st_mtime < time.time() - 15 * 86400:
+            old.unlink()
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
@@ -412,7 +423,9 @@ def offsite_round(cfg: Config, con) -> None:
         # two nights without a copy off the server (six tries tonight already): the admins hear it once a day
         for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin'"):
             logic.notify(con, uid, "backup_failed", f"bf:{date}")
-    jobs = [("offsite_db", [copy, home / "receipts"], f"db/{stamp}.tar.age")] if copy.exists() and not done("offsite_db") else []
+    # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
+    jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]
+            if copy.exists() and not done("offsite_db") else [])
     if time.gmtime(local).tm_wday == 6 and not done("offsite_media"):
         jobs.append(("offsite_media", [home / "media"], f"media/{stamp}.tar.age"))
     last = one(con, "SELECT value FROM meta WHERE key = 'offsite_try'")

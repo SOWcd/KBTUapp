@@ -13,14 +13,16 @@
                                 staff, not students (DMP, KBTU's IT testing the app): verified by hand,
                                 they act as students but take no card number and aren't counted in stats; `unlink` takes it back
   .venv/bin/python -m kbtu.admin staff <@username | telegram id>
-                                one already signed in as a student turns staff: its card number goes back and every card
-                                after it moves down one, so the numbers count students only (owner, Oct 13: KBTU's IT testers)
+                                one already signed in as a student turns staff: its card number is retired (a gap; until Oct 22
+                                the later cards moved down, but that would hand out a deleted account's burnt number)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
-                                student card): marked confirmed (the number and First 500 come at sign-in already)
+                                student card): marked confirmed (the number and First 500 come at the first real step)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft (owner, Oct 20)
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
+  .venv/bin/python -m kbtu.admin redelete                               after restoring a copy: the accounts deleted since
+                                (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
 the audit log. Prints Telegram names only, never the KBTU profile."""
@@ -31,7 +33,9 @@ import re
 import sys
 
 from . import config, db
-from .logic import RANK, create_org, find_user, first_fifty, now, one, rows, set_role
+from pathlib import Path
+
+from .logic import RANK, Viewer, create_org, delete_me, deletion_hash, find_user, now, one, rows, set_role
 
 
 def _user(con, who: str):
@@ -46,7 +50,7 @@ def main(args: list[str]) -> None:
     cmd = args[0] if args else ""
     if cmd == "users":
         for u in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, u.role, s.user_id IS NOT NULL AS student
-                FROM users u LEFT JOIN students s ON s.user_id = u.id ORDER BY u.created_at"""):
+                FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0 ORDER BY u.created_at"""):
             print(f"{u['tg_id']:>12}  @{u['tg_username'] or '-':<20} {u['tg_first_name']:<16} {'student' if u['student'] else 'guest':<8} {u['role']}")
     elif cmd == "orgs":
         for o in rows(con, "SELECT * FROM orgs ORDER BY id"):
@@ -99,8 +103,6 @@ def main(args: list[str]) -> None:
         u = _user(con, args[1])
         with db.tx(con):
             n = con.execute("UPDATE students SET manual = 0, verified_at = ? WHERE user_id = ? AND manual = 1", (now(), u["id"])).rowcount
-            if n:
-                first_fifty(con, u["id"])
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
     elif cmd == "staff" and len(args) in (4, 5):  # SPEC §1: the student ID can't be a real one, so a KBTU sign-in is refused
         u, t = _user(con, args[1]), now()
@@ -119,10 +121,8 @@ def main(args: list[str]) -> None:
             con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (u["id"],))
             con.execute("UPDATE users SET card_no = NULL WHERE id = ?", (u["id"],))
             con.execute("DELETE FROM achievement_grants WHERE user_id = ? AND code = 'first50'", (u["id"],))
-            if no:
-                con.execute("UPDATE users SET card_no = card_no - 1 WHERE card_no > ?", (no,))
-                con.execute("UPDATE meta SET value = CAST(value AS INTEGER) - 1 WHERE key = 'card_last'")  # the counter moves down too
-        print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} given back, the later ones moved down one")
+        # its number stays a gap (Oct 22): moving the later ones down would hand someone a deleted account's burnt number
+        print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} retired")
     elif cmd == "student" and len(args) == 6:
         u, sid, t = _user(con, args[1]), args[2].upper(), now()
         if not re.fullmatch(r"\d{2}[A-Z]{1,2}\d{5,7}", sid) or args[5] not in "123456" or len(args[5]) != 1:
@@ -132,11 +132,10 @@ def main(args: list[str]) -> None:
         with db.tx(con):
             con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at,
                 verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)""", (u["id"], sid, args[3], args[4], int(args[5]), t, t, t))
-            first_fifty(con, u["id"])
         print(f"@{u['tg_username'] or u['tg_id']}: student {sid}")
     elif cmd == "stats":  # people are students only: staff aren't counted
         real = "user_id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')"
-        for name, sql in (("opened the app", "SELECT count(*) FROM users"),
+        for name, sql in (("opened the app", "SELECT count(*) FROM users WHERE tg_id > 0"),
                           ("signed in with KBTU", f"SELECT count(*) FROM students WHERE {real}"),
                           ("staff (by hand)", "SELECT count(*) FROM students WHERE consent_version = 'staff'"),
                           ("clubs", "SELECT count(*) FROM orgs WHERE kind = 'club' AND status = 'active'"),
@@ -148,6 +147,34 @@ def main(args: list[str]) -> None:
                           ("posts", "SELECT count(*) FROM posts WHERE hidden_at IS NULL"),
                           ("first KBTU sign-in", f"SELECT date(min(verified_at), 'unixepoch', '+5 hours') FROM students WHERE {real}")):
             print(f"{one(con, sql)[0]!s:>10}  {name}")
+    elif cmd == "redelete":
+        home = Path(config.load().db_path).resolve().parent
+        log = home / "deletions.log"
+        if log.exists() and not (home / "deletions.salt").exists():
+            sys.exit("deletions.salt is missing: copy it back beside the database first (without it nothing matches)")
+        when: dict[str, int] = {}
+        want_photos: set[str] = set()
+        for line in log.read_text().splitlines() if log.exists() else []:
+            f = line.split()
+            if len(f) < 2 or not f[0].isdigit():
+                continue  # a line cut short
+            when[f[1]] = max(when.get(f[1], 0), int(f[0]))
+            if "photos" in f[2:]:
+                want_photos.add(f[1])
+        n = 0
+        for u in rows(con, "SELECT u.id, u.tg_id, u.role, s.verified_at FROM users u JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0"):
+            h = deletion_hash(home, u["tg_id"])
+            t = when.get(h)
+            if t and u["verified_at"] < t:  # signed in again after the deletion: that's a new account, it stays
+                if h in want_photos:  # "delete my photos too", asked after this copy was made
+                    con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"delphotos:{u['id']}",))
+                receipts, photos = delete_me(con, Viewer(u["id"], u["role"], True))
+                for root, rels in ((home / "receipts", receipts), (home / "media", photos)):
+                    for rel in rels:
+                        for ext in (".webp", ".t.webp", ".jpg"):
+                            (root / f"{rel}{ext}").unlink(missing_ok=True)
+                n += 1
+        print(f"{n} deleted again ({len(when)} in deletions.log)")
     else:
         sys.exit(__doc__)
 

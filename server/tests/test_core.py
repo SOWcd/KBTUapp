@@ -56,9 +56,10 @@ def env(tmp_path, monkeypatch):
 DB: list[str] = []  # the env's database (login() writes students straight into it)
 
 
-def login(c, uid: int, name: str):
+def login(c, uid: int, name: str, card: bool = True):
     """A confirmed KBTU student "<name>": student ID 24B<name>, <Name> Testov, year 2, SITE, a Monday Calculus class.
-    Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19)."""
+    Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19). `card`: with a
+    first real step done (the app opened on 3 days, logic._earned), so the card number comes."""
     me = c.get("/api/me", headers=tma(uid, name.title())).json()
     con = db.connect(DB[0])
     with db.tx(con):
@@ -68,7 +69,8 @@ def login(c, uid: int, name: str):
                     (me["id"], "24B" + name, name.title(), *[logic.now()] * 3))
         logic.save_schedule(con, me["id"], [types.SimpleNamespace(weekday=1, begins="09:00", ends="09:50", subject="Calculus",
                                                                   code="MATH101", kind="lecture", room="305", teacher=None)])
-        logic.first_fifty(con, me["id"])
+        if card:
+            con.executemany("INSERT OR IGNORE INTO visits (day, user_id) VALUES (?, ?)", [(logic.day_of(logic.now()) - d, me["id"]) for d in (1, 2, 3)])
     con.close()
     r = c.get("/api/me", headers=tma(uid))
     assert r.status_code == 200, r.text
@@ -147,15 +149,15 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     admin.main(["stats"])  # counts only
     stats = {name: n for n, name in (line.split(None, 1) for line in capsys.readouterr().out.splitlines())}
     assert stats["signed in with KBTU"] == "1" and stats["staff (by hand)"] == "1"
-    # a tester who signed in as a student turns staff: the number goes back, the later cards move down, and signing in
-    # again brings no number back (owner, Oct 13: the numbers count real students)
+    # a tester who signed in as a student turns staff: the number is retired (a gap: moving the later ones down would
+    # reuse a deleted account's burnt number), and signing in again brings no number back
     login(c, 14, "it"), login(c, 15, "zhan")
     nos = lambda: [c.get("/api/me", headers=tma(u)).json()["no"] for u in (10, 14, 15)]
     assert nos() == [1, 2, 3]
     admin.main(["staff", "14"])
-    assert nos() == [1, None, 2]
+    assert nos() == [1, None, 3]
     login(c, 14, "it")
-    assert nos() == [1, None, 2]
+    assert nos() == [1, None, 3]
 
 
 
@@ -503,43 +505,183 @@ def test_walk_in(env):
 
 
 def test_delete_my_data(env):
-    """§4.8: everything tied to the student goes, the Telegram account stays a guest; a president can't leave."""
+    """§4.8 / H2: a week, then the student's data goes; the Telegram account stays a guest. What is over moves to a
+    nameless placeholder, so every count stays; free text, receipts, names go; a President's club passes on."""
     c, cfg = env
     pres, ali, zhan = login(c, 20, "pres"), login(c, 21, "ali"), login(c, 22, "zhan")
     con = db.connect(cfg.db_path)
+    t0 = int(time.time())
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "member")])
-    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, seats, created_by, created_at, updated_at)
-        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', 1, ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "head")])
+    for eid, at in ((1, t0 + 86400), (2, t0 - 2 * 86400)):  # one ahead, one over
+        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, seats, created_by, created_at, updated_at)
+            VALUES (?, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', 1, ?, 0, 0)""", (eid, at, ali["id"]))
     A, Z = tma(21, "Ali"), tma(22, "Zhan")
     c.post("/api/events/1/registration", headers=A)     # the only seat
     c.post("/api/events/1/registration", headers=Z)     # waitlist
     c.put("/api/events/1/saved", headers=A)
     c.put("/api/orgs/1/subscription", headers=A)
     c.patch("/api/me", headers=A, json={"bio": "hi"})
+    # Ali's past: came to event 2 (paid, rated, volunteered), brought Zhan, a casting round, words as the club and his own
+    with db.tx(con):
+        for uid, inv in ((ali["id"], None), (zhan["id"], ali["id"])):
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, invited_by, created_at, updated_at, checked_in_at, note)
+                VALUES (2, ?, 'going', ?, ?, 0, 0, ?, 'vegan')""", (uid, f"T{uid}", inv, t0 - 2 * 86400))
+        fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, owner_id, created_at) VALUES ('r', 'receipt', 'image/jpeg', 1, 'ab/rcpt', ?, 0)",
+                          (ali["id"],)).lastrowid
+        con.execute("INSERT INTO receipts (registration_id, file_id, via, created_at) SELECT id, ?, 'app', 0 FROM registrations WHERE event_id = 2 AND user_id = ?",
+                    (fid, ali["id"]))
+        pic = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, owner_id, created_at) VALUES ('p', 'event_photo', 'image/webp', 1, 'ab/pic', ?, 0)",
+                          (ali["id"],)).lastrowid
+        con.execute("INSERT INTO event_photos (event_id, file_id, sort, added_by) VALUES (2, ?, 0, ?)", (pic, ali["id"]))
+        con.execute("INSERT INTO event_ratings (event_id, user_id, score, comment, created_at) VALUES (2, ?, 5, 'great', 0)", (ali["id"],))
+        con.execute("INSERT INTO volunteers (event_id, user_id, status, note, created_at) VALUES (2, ?, 'yes', 'call me', 0)", (ali["id"],))
+        con.execute("INSERT INTO rounds (id, org_id, title, closes_at, status, created_at) VALUES (1, 1, 'Autumn', 0, 'done', 0)")
+        app_id = con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, created_at, updated_at)
+            VALUES (1, ?, 'dev', '{"why": "me"}', 0, 0)""", (ali["id"],)).lastrowid
+        con.execute("INSERT INTO round_votes (app_id, user_id, verdict, note, at) VALUES (?, ?, 'next', 'strong', 0)", (app_id, pres["id"]))
+        con.execute("INSERT INTO comments (event_id, user_id, as_org, body, created_at) VALUES (2, ?, 1, 'Thanks all', 0), (2, ?, 0, 'mine', 0)",
+                    (ali["id"], ali["id"]))
+        con.execute("INSERT INTO strikes (org_id, user_id, reason, note, created_at) VALUES (1, ?, 'meeting', 'late again', 0)", (ali["id"],))
+        con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (1, ?, 0)", (ali["id"],))
+        con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", tuple(sorted((ali["id"], zhan["id"]))))
+    (Path(cfg.db_path).parent / "receipts" / "ab").mkdir(parents=True, exist_ok=True)
+    (Path(cfg.db_path).parent / "receipts" / "ab" / "rcpt.jpg").write_bytes(b"x")
+    came = lambda: con.execute("SELECT COUNT(*) FROM registrations WHERE event_id = 2 AND checked_in_at IS NOT NULL").fetchone()[0]  # noqa: E731
+    zsoul = con.execute("SELECT COUNT(*) FROM registrations WHERE invited_by = ?", (ali["id"],)).fetchone()[0]
 
-    reminders = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h'", (ali["id"],)).fetchone()[0]
+    reminders = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h'", (ali["id"],)).fetchone()[0]  # noqa: E731
     assert reminders() == 1
     assert c.patch("/api/me", headers=A, json={"nRemind": False}).json()["settings"]["nRemind"] is False and reminders() == 0
     c.patch("/api/me", headers=A, json={"nRemind": True})
     assert reminders() == 1                                                                   # the switch acts at once
 
-    delete = lambda h: c.post("/api/me/delete", headers=h)
-    assert delete(tma(20, "Pres")).json()["message"] == "president"                    # hand the club over first
+    assert c.get("/api/me/delete", headers=A).json() == {"photos": 1, "paid": False}
+    delete = lambda h, **kw: c.post("/api/me/delete", headers=h, json=kw)  # noqa: E731
     assert delete(tma(23, "Guest")).status_code == 401
     at = delete(A).json()["deleteAt"]                                                    # a week to change my mind
     assert at > time.time() + 6 * 86400 and con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'delete_soon'", (ali["id"],)).fetchone()
     bot.purge(cfg, con)
     assert c.get("/api/me", headers=A).json()["student"] is not None                    # not yet
     assert c.post("/api/me/keep", headers=A).json()["deleteAt"] is None                 # changed my mind
+    no = con.execute("SELECT card_no FROM users WHERE id = ?", (ali["id"],)).fetchone()[0]
     delete_now(c, cfg, A)
-    me = c.get("/api/me", headers=A).json()
-    assert (me["student"], me["memberships"], me["bio"], me["qr"]) == (None, [], "", None)    # a guest again
-    assert c.get("/api/events/1", headers=Z).json()["my"]["status"] == "going"               # the seat went on
-    left = [(t, n) for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-            for col in ("user_id", "from_id", "to_id", "a", "b") if col in [r[1] for r in con.execute(f"PRAGMA table_info({t})")]
-            for n in [con.execute(f"SELECT COUNT(*) FROM {t} WHERE {col} = ?", (ali["id"],)).fetchone()[0]] if n]
+    left = [(t, col) for t, col, notnull in logic._user_fks(con) if (t, col) not in logic._DEL_KEEP
+            if con.execute(f"SELECT 1 FROM {t} WHERE {col} = ?", (ali["id"],)).fetchone()]
     assert left == [], left                                                                   # every table, new ones too
+    me = c.get("/api/me", headers=A).json()
+    assert (me["student"], me["memberships"], me["bio"], me["qr"], me["no"]) == (None, [], "", None, None)    # a guest again
+    u = con.execute("SELECT tg_username, tg_first_name, card_no, delete_at FROM users WHERE id = ?", (ali["id"],)).fetchone()
+    assert tuple(u) == (None, "Ali", None, None)       # Telegram's name comes back only because he opened the app again
+    assert c.get("/api/events/1", headers=Z).json()["my"]["status"] == "going"               # the seat went on
+    # what is over stays counted, without him and without words
+    ph = con.execute("SELECT * FROM users WHERE id = (SELECT user_id FROM event_ratings WHERE event_id = 2)").fetchone()
+    assert ph["tg_id"] < 0 and ph["tg_id"] != -ali["id"]                                   # random: nothing leads back
+    assert ph and (ph["tg_first_name"], ph["tg_username"], ph["seen_at"], ph["can_dm"]) == ("", None, 0, 0)
+    assert came() == 2 and con.execute("SELECT note FROM registrations WHERE user_id = ?", (ph["id"],)).fetchone()[0] is None
+    assert con.execute("SELECT COUNT(*) FROM registrations WHERE invited_by = ?", (ali["id"],)).fetchone()[0] == 0 and zsoul == 1
+    assert tuple(con.execute("SELECT user_id, score, comment FROM event_ratings WHERE event_id = 2").fetchone()) == (ph["id"], 5, "")
+    assert tuple(con.execute("SELECT user_id, note FROM volunteers").fetchone()) == (ph["id"], "")
+    assert tuple(con.execute("SELECT user_id, answers FROM round_apps").fetchone()) == (ph["id"], "{}")
+    assert con.execute("SELECT note FROM round_votes").fetchone()[0] == ""                  # others' words about him go too
+    assert [tuple(r) for r in con.execute("SELECT user_id, body FROM comments")] == [(ph["id"], "Thanks all")]
+    assert tuple(con.execute("SELECT user_id, note FROM strikes").fetchone()) == (ali["id"], "")  # the count stays on the account
+    assert con.execute("SELECT 1 FROM org_bans WHERE user_id = ?", (ali["id"],)).fetchone()
+    assert con.execute("SELECT added_by FROM event_photos").fetchone()[0] is None            # the photo stays, nameless
+    assert con.execute("SELECT owner_id FROM files WHERE id = ?", (pic,)).fetchone()[0] is None
+    assert con.execute("SELECT created_by FROM events WHERE id = 2").fetchone()[0] is None
+    assert not con.execute("SELECT 1 FROM receipts").fetchone() and not (Path(cfg.db_path).parent / "receipts" / "ab" / "rcpt.jpg").exists()
+    # a returning Ali gets a new number, never his burnt one
+    login(c, 21, "ali")
+    assert c.get("/api/me", headers=A).json()["no"] not in (None, no)
+
+    # a President leaving: the club passes to the highest rank left (Zhan; Ali, its head, left with his account); alone, to the admin
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (zhan["id"],))
+    assert delete(tma(20, "Pres"), photos=True).status_code == 200
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (pres["id"],))
+    bot.purge(cfg, con)
+    assert con.execute("SELECT user_id FROM org_members WHERE org_id = 1 AND role = 'president'").fetchone()[0] == zhan["id"]
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'solo', 'club', 'Solo', 'S', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'president', 0)", (zhan["id"],))
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (pres["id"],))     # a deleted admin can't take it: no student
+    boss = login(c, 30, "boss")
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    delete_now(c, cfg, Z)
+    assert con.execute("SELECT user_id FROM org_members WHERE org_id = 2 AND role = 'president'").fetchone()[0] == boss["id"]
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'club_handover' AND ref = 'ho:2'", (boss["id"],)).fetchone()
+    assert con.execute("SELECT COUNT(*) FROM users WHERE tg_id < 0").fetchone()[0] == 3
+
+
+def test_delete_lists_cover_schema(env):
+    """Every column pointing at a person is in delete_me's lists or nullable: a new table can't keep someone by being
+    forgotten (H2)."""
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    missing = [(t, col) for t, col, notnull in logic._user_fks(con) if notnull and (t, col) not in logic._DEL_GONE | logic._DEL_KEEP]
+    assert missing == [], missing
+
+
+def test_delete_with_a_ticket_out_of_sight(env):
+    """A future seat at an event he can no longer see (the club hidden) doesn't block the deletion; the seat frees up.
+    His unsent invites to friends go; deletions.log keeps "delete my photos too" and forgets lines after 40 days."""
+    c, cfg = env
+    ali, zhan = login(c, 21, "ali"), login(c, 22, "zhan")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, seats, created_at, updated_at)
+        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', 1, 0, 0)""", (int(time.time()) + 86400,))
+    A, Z = tma(21, "Ali"), tma(22, "Zhan")
+    c.post("/api/events/1/registration", headers=A)
+    c.post("/api/events/1/registration", headers=Z)                                      # waitlist
+    con.execute("UPDATE orgs SET status = 'hidden'")
+    logic.notify(con, zhan["id"], "friend_invite", f"fi:1:{ali['id']}")
+    c.post("/api/me/delete", headers=A, json={"photos": True})
+    con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (ali["id"],))
+    bot.purge(cfg, con)
+    assert c.get("/api/me", headers=A).json()["student"] is None
+    assert con.execute("SELECT status FROM registrations WHERE user_id = ?", (zhan["id"],)).fetchone()[0] == "going"
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'friend_invite'").fetchone()
+    log_ = Path(cfg.db_path).parent / "deletions.log"
+    assert log_.read_text().split()[2] == "photos"
+    log_.write_text(f"{int(time.time()) - 41 * 86400} {'0' * 32}\n" + log_.read_text() + "12")    # an old line, a torn one
+    logic._prune_deletion_log(con)
+    assert len(log_.read_text().splitlines()) == 1
+
+
+def test_delete_waits_for_a_paid_ticket(env):
+    """A ticket paid for an event still ahead: the deletion waits until it has passed (owner, Oct 22)."""
+    c, cfg = env
+    ali = login(c, 21, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_at, updated_at)
+        VALUES (1, 1, 'published', 'Gala', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', 0, 0)""", (int(time.time()) + 86400,))
+    with db.tx(con):
+        con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'T1', 0, 0)", (ali["id"],))
+        fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, owner_id, created_at) VALUES ('r', 'receipt', 'image/jpeg', 1, 'ab/r', ?, 0)",
+                          (ali["id"],)).lastrowid
+        con.execute("INSERT INTO receipts (registration_id, file_id, via, created_at) SELECT id, ?, 'app', 0 FROM registrations", (fid,))
+    A = tma(21, "Ali")
+    assert c.get("/api/me/delete", headers=A).json()["paid"] is True
+    delete_now(c, cfg, A)
+    assert c.get("/api/me", headers=A).json()["student"] is not None                    # waits for the event
+    con.execute("UPDATE events SET starts_at = ?", (int(time.time()) - 5 * 3600,))
+    bot.purge(cfg, con)
+    assert c.get("/api/me", headers=A).json()["student"] is None
+
+
+def test_consent_again(env):
+    """The privacy policy changed (H2): a student agrees again once; the version is kept, staff keep theirs."""
+    c, cfg = env
+    login(c, 21, "ali")
+    A = tma(21, "Ali")
+    assert c.get("/api/me", headers=A).json()["student"]["consent"] == "1"
+    assert c.post("/api/me/consent", headers=A, json={"version": ""}).status_code == 400
+    assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).json()["student"]["consent"] == "2026-10-v3"
+    assert c.post("/api/me/consent", headers=tma(22, "Guest"), json={"version": "2026-10-v3"}).status_code == 401
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET consent_version = 'staff'")
+    assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).json()["student"]["consent"] == "staff"
 
 
 def test_legal_pages(env):
@@ -990,7 +1132,8 @@ def test_album(env):
     con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False               # a week after the end: closed
     assert delete_now(c, cfg, A) is None
-    assert c.get("/api/events/1", headers=P).json()["photos"] == []                         # my photos leave with me
+    left = c.get("/api/events/1", headers=P).json()["photos"]
+    assert len(left) == 9 and {p["by"] for p in left} == {None}                              # my photos stay, without my name (H2)
 
 
 def test_album_reports(env):
@@ -1320,24 +1463,31 @@ def test_registry(env, monkeypatch):
 
 
 def test_first_fifty(env, monkeypatch):
-    """Card numbers and "First 500" (§4.4, §4.11): the number is the order of first KBTU sign-in and stays the person's;
-    the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account frees nothing."""
+    """Card numbers and "First 500" (§4.4, §4.11): the number comes at the first real step after a KBTU sign-in
+    (checked in, in a club's team, or the app opened on 3 days; owner, Oct 22: a joke sign-up shouldn't take one) and
+    stays the person's; the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted
+    account's number burns: never given again, a return gets a new one."""
     c, cfg = env
     monkeypatch.setattr(logic, "FIRST_N", 2)
     con = db.connect(cfg.db_path)
     c.get("/api/me", headers=tma(69, "Boss"))
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 69")
     first = [{"code": "first50", "level": 1}]
-    f = login(c, 69, "ff")
-    assert f["no"] == 0 and f["unlocked"] == first
-    a, b = login(c, 70, "aa"), login(c, 71, "bb")
-    assert (a["no"], b["no"]) == (1, 2) and a["unlocked"] == b["unlocked"] == first
+    f = login(c, 69, "ff", card=False)
+    assert f["no"] == 0 and f["unlocked"] == first                      # the Creator needs no step
+    a = login(c, 70, "aa", card=False)
+    assert a["no"] is None and a["unlocked"] == []                      # signed in only: no number yet
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (a["id"],))
+    b = login(c, 71, "bb")                                              # 3 days: before a opens the app again
+    a = c.get("/api/me", headers=tma(70)).json()                        # in a club: the next number
+    assert (b["no"], a["no"]) == (1, 2) and a["unlocked"] == b["unlocked"] == first
     delete_now(c, cfg, tma(70, "Aa"))
     cc = login(c, 72, "cc")
-    assert cc["no"] == 3 and cc["unlocked"] == []                       # past the 2: a's number stays a's
+    assert cc["no"] == 3 and cc["unlocked"] == []                       # past the 2
     again = login(c, 70, "aa")
-    assert again["no"] == 1 and again["unlocked"] == first              # back after deleting: the same card, the same place
-    assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 2
+    assert again["no"] == 4 and again["unlocked"] == []                 # back after deleting: a new card, the old one burnt
+    assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 1
     assert c.get("/api/me", headers=tma(73, "Guest")).json()["no"] is None
     # migration 36: a card within the 500 that missed the award gets it quietly; then everyone has it = 100%
     monkeypatch.setattr(logic, "FIRST_N", 500)
@@ -1895,6 +2045,7 @@ def test_paid_events(env):
     c.post(f"/api/receipts/{att[0]['receipt']['id']}/review", headers=tma(20), json={"reject": False})
     assert c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()[0]["receipt"]["reviewed"] is True
 
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) - 5 * 3600, eid))  # a paid ticket ahead makes it wait (H2)
     for uid, name in ((11, "bob"), (10, "ali")):  # the same image: it goes when the last receipt using it does
         assert list((home / "receipts").rglob("*.webp"))
         assert delete_now(c, cfg, tma(uid)) is None
@@ -3068,7 +3219,7 @@ def test_manual_sign_in(env, monkeypatch):
     for tg in (21, 22, 24):
         logic.ms_remember(con, ids[tg], who(tg))
     me = manual(21).json()                                                                 # the ID held by a typed-in row: it gives way
-    assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is not None
+    assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is None   # the number comes at a first real step
     assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (ids[23],)).fetchone()
     r = manual(22)                                                                         # held by a Microsoft one: refused
     assert r.status_code == 409 and r.json()["message"] == "sid_taken"
@@ -3091,7 +3242,7 @@ def test_manual_sign_in(env, monkeypatch):
     from kbtu import admin                                                                # no Microsoft account: by hand
     admin.main(["student", "23", "24B031299", "Squat", "Ter", "3"])
     me = c.get("/api/me", headers=tma(23)).json()
-    assert me["student"]["studentId"] == "24B031299" and me["no"] is not None and not me["relink"]
+    assert me["student"]["studentId"] == "24B031299" and me["no"] is None and not me["relink"]   # the number at a first real step
     for gone in ("/api/kbtu/login", "/api/kbtu/status"):                                  # the password sign-in is gone
         assert c.post(gone, headers=tma(21), json={"login": "a", "password": "b"}).status_code in (404, 405)
 
@@ -3134,7 +3285,7 @@ def test_offsite_backup(env, monkeypatch):
     assert len(jobs) == 1
     clock[0] += 3600
     bot.offsite_round(cfg, con)
-    assert [n.split("/")[0] for n, _ in sent] == ["db", "media"] and sent[0][1] == ["kbtu-2024-10-06.db", "receipts"]
+    assert [n.split("/")[0] for n, _ in sent] == ["db", "media"] and sent[0][1] == ["kbtu-2024-10-06.db", "receipts", "deletions.log", "deletions.salt"]
     clock[0] += 3600
     bot.offsite_round(cfg, con)                                         # done for the day
     assert len(sent) == 2
@@ -3205,7 +3356,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
-    assert me["student"]["ms"] and me["msPending"] is None and me["no"]
+    assert me["student"]["ms"] and me["msPending"] is None and me["no"] is None
 
 
 def test_suggest_chat(env, monkeypatch):
@@ -3385,6 +3536,58 @@ def test_admin_day_and_ai(env):
     assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
     assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
+
+
+def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
+    """H2: a copy restored after a deletion brings the person back; deletions.log (outside the database, the Telegram
+    ID salted) lets `kbtu.admin redelete` delete them again, never someone who signed in again since."""
+    c, cfg = env
+    ali, zhan = login(c, 21, "ali"), login(c, 22, "zhan")
+    con = db.connect(cfg.db_path)
+    home = Path(cfg.db_path).parent
+    restored = home / "restored.db"
+    con.execute("VACUUM INTO ?", (str(restored),))                # last night's copy: both still there
+    delete_now(c, cfg, tma(21, "Ali"))
+    delete_now(c, cfg, tma(22, "Zhan"))
+    line = (home / "deletions.log").read_text().splitlines()[0]
+    assert len(line.split()) == 2 and re.fullmatch(r"[0-9a-f]{32}", line.split()[1]) and (home / "deletions.salt").exists()
+    login(c, 22, "zhan")                                           # Zhan came back: a new sign-in after the deletion
+    later = con.execute("SELECT verified_at FROM students WHERE user_id = ?", (zhan["id"],)).fetchone()[0]
+    rcon = db.connect(str(restored))
+    rcon.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (later + 10, zhan["id"]))  # as if restored after his return
+    rcon.execute("UPDATE students SET verified_at = 0 WHERE user_id = ?", (ali["id"],))                # signed in long before
+    rcon.close()
+    for k, v in (("BOT_TOKEN", "1:x"), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
+        monkeypatch.setenv(k, v)
+    from kbtu import admin
+    admin.main(["redelete"])
+    assert capsys.readouterr().out.strip() == "1 deleted again (2 in deletions.log)"
+    rcon = db.connect(str(restored))
+    assert [r[0] for r in rcon.execute("SELECT user_id FROM students")] == [zhan["id"]]
+
+
+def test_forgetting(env, monkeypatch):
+    """H2 minimisation: the bot's copies of messages lose their words after 30 days (the row keeps its key, so it
+    never goes twice); DMP's registry searches lose the typed text; a migration's .bak goes after 14 days."""
+    c, cfg = env
+    ali = login(c, 21, "ali")
+    con = db.connect(cfg.db_path)
+    t = int(time.time())
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after, sent_at) VALUES (?, 'x', 'old', '{\"t\": 1}', ?, ?), (?, 'x', 'new', '{\"t\": 1}', ?, ?)",
+                (ali["id"], t - 31 * 86400, t - 31 * 86400, ali["id"], t, t))
+    con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'registry_search', 'registry', '{\"q\": \"Ali\"}', ?)", (ali["id"], t - 31 * 86400))
+    midnight = (t + 5 * 3600) // 86400 * 86400 - 5 * 3600
+    monkeypatch.setattr(logic, "now", lambda: midnight + 600)
+    logic.stats_day(con)
+    assert [tuple(r) for r in con.execute("SELECT ref, payload FROM bot_outbox WHERE kind = 'x' ORDER BY ref")] == [("new", '{"t": 1}'), ("old", "{}")]
+    assert con.execute("SELECT data FROM audit_log WHERE action = 'registry_search'").fetchone()[0] == "{}"
+    db_path = Path(cfg.db_path).resolve()
+    old, new = db_path.with_name(db_path.name + ".v1-1.bak"), db_path.with_name(db_path.name + ".v2-2.bak")
+    for f, age in ((old, 15), (new, 1)):
+        f.write_bytes(b"x")
+        os.utime(f, (t - age * 86400, t - age * 86400))
+    bot.backup_day(cfg, con)
+    assert not old.exists() and new.exists()
 
 
 def test_db_must_exist(tmp_path, monkeypatch):

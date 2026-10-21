@@ -169,10 +169,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def patch_me(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.update_me(con, v, body)
 
+    @app.get("/api/me/delete")
+    def delete_info(con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.delete_info(con, v)
+
     @app.post("/api/me/delete")
-    def ask_delete(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def ask_delete(body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
         """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
-        return logic.ask_delete(con, v)
+        return logic.ask_delete(con, v, (body or {}).get("photos") is True)
+
+    @app.post("/api/me/consent")
+    def consent(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.consent(con, v, body.get("version"))
 
     @app.post("/api/me/keep")
     def keep_me(con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -919,7 +927,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.delete("/api/events/{eid}/photos/{fid}")
     def remove_album_photo(eid: int, fid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.remove_album_photo(con, v, eid, fid)
+        ev, gone = logic.remove_album_photo(con, v, eid, fid)
+        for rel in gone:
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+        return ev
 
     # ------------------------------------------------------------ attendee list as a file
 

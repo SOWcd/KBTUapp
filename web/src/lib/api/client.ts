@@ -82,7 +82,9 @@ export const server: Api = {
   updateMe: (patch) => call('PATCH', '/me', patch),
   uploadMyPhoto: (file) => call('POST', '/me/photo', file),
   deleteMyPhoto: () => call('DELETE', '/me/photo'),
-  deleteMe: () => call('POST', '/me/delete'),
+  deleteMe: (photos = false) => call('POST', '/me/delete', { photos }),
+  deleteInfo: () => call('GET', '/me/delete'),
+  consent: (version) => call('POST', '/me/consent', { version }),
   keepMe: () => call('POST', '/me/keep'),
 
   events: (q = {}) => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),

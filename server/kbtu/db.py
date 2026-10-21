@@ -434,6 +434,7 @@ def connect(path: str) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA busy_timeout = 15000")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core (Oct 7)
+    con.execute("PRAGMA secure_delete = ON")  # deleted rows' text doesn't linger in free pages (H2)
     con.execute("PRAGMA synchronous = NORMAL")  # with WAL: no corruption on a crash, fsync only at checkpoints
     return con
 

@@ -138,6 +138,7 @@ export interface StudentProfile {
   program: string | null;
   syncedAt: Ts;
   ms: boolean;     // signed in with the KBTU Microsoft account
+  consent: string; // the policy version agreed to (lib/legal.ts); 'staff' and 'admin': added by hand
 }
 
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */

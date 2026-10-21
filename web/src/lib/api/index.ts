@@ -19,7 +19,9 @@ export interface Api {
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back
   /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
    *  a President: conflict/'president'. */
-  deleteMe(): Promise<Me>;                                       // in 7 days (Me.deleteAt)
+  deleteMe(photos?: boolean): Promise<Me>;                       // in 7 days (Me.deleteAt); photos: my album photos go too
+  deleteInfo(): Promise<{ photos: number; paid: boolean }>;      // what the delete sheet says first
+  consent(version: string): Promise<Me>;                         // agree to a new policy version
   keepMe(): Promise<Me>;
 
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;

@@ -3,6 +3,7 @@
   // Telegram, comes back by /ms.html, and the app reloads me when it's in sight again; someone new then types only the
   // student ID and year (Microsoft doesn't know them: KBTU leaves employeeId empty). Typed in before Oct 20 (relink)
   // or through the old portal: the same button confirms the row they have.
+  import { CONSENT_VERSION } from '../../lib/legal';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -16,7 +17,6 @@
   let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
 
   const legal = (doc: 'privacy' | 'terms') => { haptic.tap(); openLink(`${location.origin}/${doc}?lang=${i18n.lang}`); };
-  const CONSENT_VERSION = '2026-10-v2'; // v2 (Oct 16): the full privacy policy and the terms, kbtu.sow.kz/privacy and /terms
   const st = session.me?.student, relink = !!session.me?.relink;
   let agree = $state(!!st);
   let busy = $state(false);

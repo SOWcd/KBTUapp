@@ -54,6 +54,8 @@ export const sheets = {
   map: (_place?: string, _exit?: boolean) => {}, // exit: "Help me get out" (the startapp=exit link); a place with a room ("Aud. 305", a class's "251"): its floor, the room circled
   /** delete account: what goes, then the KBTU password again */
   deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
+  /** a new privacy policy version: agree once more (lib/legal.ts) */
+  consent: () => {},
   /** a new post for a club (Head+), from News */
   composer: (_org: Id, _post?: Post) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */

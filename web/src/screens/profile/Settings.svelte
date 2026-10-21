@@ -38,9 +38,8 @@
     openLink(/^(ios|macos)$/.test(tg.platform) ? cal.page : 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(cal.feed));
   }
 
-  // §4.8: a President hands the club over first; everyone else sees what goes and has a week to change their mind
+  // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
-    if (me?.memberships.some((m) => m.role === 'president')) { haptic.error(); say(t('del.president'), 'pleading_face_3d'); return; }
     const a = data.myCard?.awards;
     const tickets = data.events.filter((e) => e.my && e.my.status !== 'cancelled' && !inner(e)).length;
     sheets.deleteAccount({ awards: a ? a.achievements.filter((x) => x.level > 0).length + a.badges.length : 0, tickets, clubs: me?.memberships.length ?? 0 });
