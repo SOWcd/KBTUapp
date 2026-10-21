@@ -219,7 +219,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         (owner, Oct 20): no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
         to the Microsoft one; held by a Microsoft-confirmed one, it's refused; the admins hear of both (id_clash)."""
         consent = str(body.get("consentVersion") or "")
-        sid, course = str(body.get("studentId") or "").strip().upper(), body.get("course")
+        sid = str(body.get("studentId") or "").strip().upper()
+        course = logic.course_of(sid)  # the ID says the year (audit M3: a typed "1" took free first-year seats); None: a year ahead
         ms = logic.ms_pending(con, v.id)
         # the account's names when Microsoft has them (ms_link writes them anyway); typed only where it has none
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
@@ -291,15 +292,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 raise ApiError("forbidden", "ms")  # each link once
             other = logic.one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
             if other and other[0] != uid:
-                raise ApiError("conflict", "linked")  # this Microsoft account is someone else's student already
+                raise ApiError("conflict", "linked")  # said here already, in the browser; ms_confirm checks again
             mine = logic.one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
             if mine and mine[0] and mine[0] != who["oid"]:
-                raise ApiError("conflict", "other_ms")  # already confirmed with another KBTU account: no silent swap
-            if mine:
-                logic.ms_link(con, uid, who)
-                return {"ok": True, "student": True}
-            logic.ms_remember(con, uid, who)
-            return {"ok": True, "student": False}
+                raise ApiError("conflict", "other_ms")
+            return {"ok": True, "code": logic.ms_hold(con, uid, who)}  # typed in the app, it goes through (audit M6)
+
+    @app.post("/api/ms/confirm")
+    def ms_confirm(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.ms_confirm(con, v, body.get("code"))
 
     @app.get("/api/me/schedule")
     def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -1292,9 +1293,11 @@ p b{color:#fff;font-weight:650}
 .btn[hidden]{display:none}
 .spin{width:30px;height:30px;margin:4px auto 6px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s .9s linear infinite}
 .spin[hidden]{display:none}@keyframes s{to{transform:rotate(1turn)}}
+.code{font:800 44px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.18em;margin:-6px 0 22px;padding:14px 0;border-radius:16px;background:rgba(255,255,255,.1)}
+.code[hidden]{display:none}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
-<h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
+<h1 id="h"></h1><p id="t"></p><div class="code" id="code" hidden></div><div class="spin" id="w"></div>
 <button class="btn main" id="yes" hidden></button><button class="btn ghost" id="no" hidden></button>
 <a class="btn ghost" id="open" hidden href="tg://"></a></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
@@ -1327,9 +1330,9 @@ show(L.wait);
   show(L.wait);
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
-  // back to Telegram by itself: "tg://" only switches to the app, the Mini App left open there is still open
-  // (owner, Oct 20: a t.me link opened it anew)
-  if (r.ok) { end(j.student ? "ok" : "okNew", "ok"); setTimeout(() => { location.href = "tg://"; }, 900); return; }
+  // the code, to type in the app (audit M6): nothing is linked until it is. "tg://" only switches to Telegram, where
+  // the Mini App is still open (owner, Oct 20: a t.me link opened it anew)
+  if (r.ok && j.code) { end("code", "ok"); $("code").textContent = j.code; $("code").hidden = false; return; }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

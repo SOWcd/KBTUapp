@@ -56,6 +56,9 @@ def env(tmp_path, monkeypatch):
 DB: list[str] = []  # the env's database (login() writes students straight into it)
 
 
+INTAKE = time.gmtime(time.time() + 5 * 3600).tm_year - (time.gmtime(time.time() + 5 * 3600).tm_mon < 9)  # this academic year's first-years entered then (Almaty)
+
+
 def login(c, uid: int, name: str, card: bool = True):
     """A confirmed KBTU student "<name>": student ID 24B<name>, <Name> Testov, year 2, SITE, a Monday Calculus class.
     Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19). `card`: with a
@@ -2186,7 +2189,15 @@ def test_deadline_and_free_first(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'head', 0 FROM users WHERE tg_id = 21")
-    con.execute("UPDATE students SET course = 1 WHERE user_id IN (SELECT id FROM users WHERE tg_id IN (10, 11, 13))")  # ann, bob, dan
+    con.execute("UPDATE students SET course = 1, student_id = printf('%02dB%07d', ?, user_id) WHERE user_id IN (SELECT id FROM users WHERE tg_id IN (10, 11, 13))",
+                (INTAKE % 100,))  # ann, bob, dan: this year's intake (the ID says the year, audit M3)
+    # migration 58 (M3): a year typed in since the portal closed becomes the ID's; the portal's own stays (a repeater)
+    con.execute("UPDATE students SET course = 1, consent_at = 1792350000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 12)")
+    con.execute("UPDATE students SET course = 1, consent_at = 1792000000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 13)")
+    con.executescript(dict(db.MIGRATIONS)[58])
+    assert [r[0] for r in con.execute("SELECT course FROM students s JOIN users u ON u.id = s.user_id WHERE u.tg_id IN (12, 13) ORDER BY u.tg_id")] \
+        == [logic.course_of("24B0000001"), 1] != [1, 1]
+    con.execute("UPDATE students SET course = 2 WHERE user_id = (SELECT id FROM users WHERE tg_id = 12)")
     start = int(time.time()) + 7200
     body = {"title": "Gala", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": 3,
             "price": 2000, "payToName": "Alikhan S.", "payPhone": "87071234567", "freeFirst": 1, "regUntil": start - 600}
@@ -2971,7 +2982,7 @@ def test_volunteers(env):
     oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
     ids = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (20, 21, 22, 23)}
     logic.set_role(con, None, ids[20], oid, "president", "test")
-    con.execute("UPDATE students SET course = 1 WHERE user_id = ?", (ids[23],))
+    con.execute("UPDATE students SET course = 1, student_id = printf('%02dB%07d', ?, user_id) WHERE user_id = ?", (INTAKE % 100, ids[23]))
     ev = {"title": "Open day", "place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF",
           "seats": 50, "volunteers": 1, "volunteersSenior": True}
     e = c.post(f"/api/orgs/{oid}/events", headers=tma(20), json=ev).json()
@@ -3203,7 +3214,7 @@ def test_manual_sign_in(env, monkeypatch):
     login(c, 20, "ali")  # confirmed: "24Bali"
     body = {"firstName": "\u041c\u0430\u0433\u0430", "lastName": "\u0422\u0435\u043c\u0438\u0440", "studentId": "24b031234", "course": 2, "consentVersion": "1"}
     manual = lambda uid, b=body: c.post("/api/kbtu/manual", headers=tma(uid), json=b)  # noqa: E731
-    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"course": 9}, {"consentVersion": ""}):
+    for bad in ({"firstName": "M4ga"}, {"studentId": "hello"}, {"studentId": "99B031234"}, {"consentVersion": ""}):  # the year: from the ID (M3), never ahead
         assert manual(21, {**body, **bad}).status_code == 400
     assert manual(21).json()["message"] == "ms_first"                                     # no Microsoft, no account
     assert manual(20).json()["message"] == "ms_first"                                     # confirmed already: nothing to type either
@@ -3342,9 +3353,15 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token()).status_code == 403                             # not a kbtu.kz sign-in name
     graph["userPrincipalName"] = "B_REAL@kbtu.kz"                             # "mail" may be a gmail: the sign-in name counts
     st = msauth.state_for(cfg.token_key, uid(21))
-    assert finish(21, token(), st=st).json() == {"ok": True, "student": True}
+    code = finish(21, token(), st=st).json()["code"]                          # the page shows a code: nothing linked yet (M6)
     assert finish(21, token(), st=st).status_code == 403                      # each link once
-    me = c.get("/api/me", headers=tma(21)).json()
+    assert c.get("/api/me", headers=tma(21)).json()["msCode"] is True
+    confirm = lambda tg, x: c.post("/api/ms/confirm", headers=tma(tg), json={"code": x})  # noqa: E731
+    assert confirm(22, code).status_code == 404                               # someone else's Telegram has nothing waiting
+    wrong = "000000" if code != "000000" else "111111"
+    assert confirm(21, wrong).json()["message"] == "code"
+    me = confirm(21, code).json()
+    assert me["msCode"] is False
     assert me["student"]["ms"] and me["student"]["email"] == "b_real@kbtu.kz"
     assert me["student"]["lastName"] == "Real"                                # the account's names over typed ones
     graph["id"] = "oid-9"
@@ -3352,11 +3369,18 @@ def test_ms_sign_in(env, monkeypatch):
     graph["id"] = "oid-1"
     assert finish(22, token()).json()["message"] == "linked"                  # the same account, another Telegram
     graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "userPrincipalName": "d_new@kbtu.kz"}
-    assert finish(22, token()).json() == {"ok": True, "student": False}       # new: remembered for the form
+    assert confirm(22, finish(22, token()).json()["code"]).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}  # new: for the form
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": "v2", "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
     assert me["student"]["ms"] and me["msPending"] is None and me["no"] is None
+    assert me["student"]["course"] == logic.course_of("24B099002") != 1                 # the ID's year, not the typed 1 (M3)
+    # five wrong codes end the wait
+    graph = {"id": "oid-3", "givenName": "Ers", "surname": "X", "userPrincipalName": "e_x@kbtu.kz"}
+    finish(23, token())
+    for _ in range(4):
+        assert confirm(23, "999999x").json()["message"] == "code"
+    assert confirm(23, "999999x").status_code == 403 and confirm(23, "123456").status_code == 404
 
 
 def test_suggest_chat(env, monkeypatch):

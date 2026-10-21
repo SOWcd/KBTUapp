@@ -25,6 +25,22 @@
   // Microsoft: away in the browser; back in sight, ask who I am now (confirmed, or the account's names to fill in)
   let away = $state(false);
   const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
+  // back from Microsoft, its page shows a code to type here (audit M6): a sign-in link someone else sent can't take
+  // your KBTU account to their Telegram without it
+  const waiting = $derived(!!session.me?.msCode);
+  let code = $state('');
+  async function confirmCode() {
+    if (busy || code.trim().length !== 6) return;
+    busy = true; error = '';
+    away = true; // a confirmed student closes the sheet below (also after a reload lost `away`)
+    try { session.me = await api.msConfirm(code.trim()); code = ''; }
+    catch (e) {
+      haptic.error();
+      const why = e instanceof ApiErr ? (e.code === 'conflict' ? e.message : e.code) : '';
+      error = why === 'bad_input' ? t('login.codeWrong') : why === 'linked' ? t('login.msTaken') : why === 'other_ms' ? t('login.msOther') : t('login.codeExpired');
+      if (why !== 'bad_input') void loadMe();
+    } finally { busy = false; }
+  }
   async function microsoft() {
     if (!agree) return;
     haptic.tap(); error = '';
@@ -46,9 +62,10 @@
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
-    && SID.test(m.studentId.trim().toUpperCase()) && m.course > 0 && agree && !busy);
+    && SID.test(m.studentId.trim().toUpperCase()) && agree && !busy);  // the year comes from the ID (audit M3)
   async function submit(ev?: Event) {
     ev?.preventDefault();
+    if (waiting) return void confirmCode();
     if (!pending || !mReady) return;
     busy = true; error = '';
     try {
@@ -86,7 +103,12 @@
 
 <Sheet {overlay} title={t('login.title')}>
   <form class="wrap" onsubmit={submit}>
-    {#if st}
+    {#if waiting}
+      <div class="big"><b>{t('login.codeTitle')}</b><span class="t-foot">{t('login.codeHint')}</span></div>
+      <input class="code" bind:value={code} inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" enterkeyhint="done" />
+      {#if error}<p class="err t-callout">{error}</p>{/if}
+      <Button kind="primary" size="l" full type="submit" disabled={code.trim().length !== 6} loading={busy}>{t('login.codeGo')}</Button>
+    {:else if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
       {@render msButton(t('login.msConfirm'))}
     {:else if pending}
@@ -100,13 +122,6 @@
       <label class="field"><span class="t-cap">{t('login.sid')}</span>
         <input bind:value={m.studentId} placeholder="24B031234" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
-      <div class="field"><span class="t-cap">{t('login.course')}</span>
-        <div class="years" role="radiogroup" aria-label={t('login.course')}>
-          {#each [1, 2, 3, 4, 5, 6] as n (n)}
-            <button type="button" role="radio" aria-checked={m.course === n} class:on={m.course === n} onclick={() => { haptic.select(); m.course = n; }}>{n}</button>
-          {/each}
-        </div>
-      </div>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if !agree}{@render consent()}{/if}
       {#if error}<p class="err t-callout">{error}</p>{/if}
@@ -117,7 +132,7 @@
       {@render consent()}
       {@render msButton(t('login.ms'))}
     {/if}
-    {#if error && !pending}<p class="err t-callout">{error}</p>{/if}
+    {#if error && !pending && !waiting}<p class="err t-callout">{error}</p>{/if}
   </form>
 </Sheet>
 
@@ -142,9 +157,8 @@
   .ok span { display: flex; flex-direction: column; gap: 4px; }
   .ok b { font: 680 16px/1.25 var(--font-text); }
   .ok i { font-style: normal; }
-  .years { display: flex; gap: 6px; }
-  .years button { flex: 1; height: 40px; border-radius: 12px; text-align: center; background: var(--surface-3); font: 650 17px/1 var(--font-text); color: var(--text); transition: background-color var(--t-fast), color var(--t-fast); }
-  .years button.on { background: var(--accent); color: #fff; }
+  .code { height: 64px; border-radius: var(--r-l); background: var(--surface-2); text-align: center; color: var(--text);
+    font: 760 32px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: 0.3em; }
   .what { align-self: flex-start; margin: -6px 0 0 34px; color: var(--text-3); }
   .what button { color: var(--accent-text); font-weight: 620; }
 </style>

@@ -156,6 +156,7 @@ export interface Me {
   photo: { telegram: boolean /* "Photo from Telegram" */; tg: string | null; own: string | null };
   student: StudentProfile | null; // null = guest
   msPending?: { first: string; last: string; email: string } | null; // signed in with Microsoft, the student ID still to type
+  msCode?: boolean; // back from Microsoft: the code its page shows waits to be typed (msConfirm)
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   founder: boolean;

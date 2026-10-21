@@ -207,6 +207,18 @@ def free_taken(con, eid: int) -> int:
     return one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status = 'going' AND free = 1", eid)[0]
 
 
+def course_of(sid: str | None, t: int | None = None) -> int | None:
+    """The year of study from the student ID: 24B031234 entered in 2024, the academic year turning on September 1
+    (Almaty); 1 to 6 (an ID handed out in August for the coming intake is a 1st year already). None for an ID without
+    that shape (staff, an admin's own marks)."""
+    m = re.match(r"(\d{2})[A-Z]", sid or "")
+    if not m:
+        return None
+    d = time.gmtime((now() if t is None else t) + 5 * 3600)
+    n = (d.tm_year if d.tm_mon >= 9 else d.tm_year - 1) - (2000 + int(m.group(1))) + 1
+    return None if n < 0 else max(1, min(6, n))  # an ID from a year still ahead is made up (the coming intake's: 0 -> 1)
+
+
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
     """Whether this person gets one of the event's free seats: a 1st-year student while some are left."""
     return bool(e["price"] and e["free_first"] and free_taken(con, e["id"]) < e["free_first"]
@@ -726,8 +738,67 @@ def ms_pending(con, uid: int) -> dict | None:
     return who if who and who["at"] > now() - MS_KEEP else None
 
 
+MS_CODE_TTL = 15 * 60  # the code /ms.html shows, to type in the app
+
+
+def ms_hold(con, uid: int, who: dict) -> str:
+    """A Microsoft sign-in waits for the code /ms.html shows to be typed in the app (audit M6): a sign-in link someone
+    else sent can't tie your KBTU account to their Telegram unless you also hand them the code (the page says never)."""
+    code = f"{secrets.randbelow(10**6):06d}"
+    con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (f"mscode:{uid}", json.dumps({"code": code, "who": who, "at": now(), "tries": 0})))
+    return code
+
+
+def ms_waiting(con, uid: int) -> dict | None:
+    r = one(con, "SELECT value FROM meta WHERE key = ?", f"mscode:{uid}")
+    h = json.loads(r[0]) if r else None
+    return h if h and h["at"] > now() - MS_CODE_TTL else None
+
+
+def ms_apply(con, uid: int, who: dict) -> bool:
+    """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
+    other = one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
+    if other and other[0] != uid:
+        raise ApiError("conflict", "linked")  # this Microsoft account is someone else's student already
+    mine = one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
+    if mine and mine[0] and mine[0] != who["oid"]:
+        raise ApiError("conflict", "other_ms")  # already confirmed with another KBTU account: no silent swap
+    if mine:
+        ms_link(con, uid, who)
+        return True
+    ms_remember(con, uid, who)
+    return False
+
+
+def ms_confirm(con, v: Viewer, code: object) -> dict:
+    """The code from /ms.html, typed in the app: the sign-in goes through. 5 wrong tries end it."""
+    wrong = None
+    with tx(con):
+        h = ms_waiting(con, v.id)
+        if not h:
+            raise ApiError("not_found", "expired")
+        if not isinstance(code, str) or not hmac.compare_digest(code.strip().encode(), h["code"].encode()):
+            last = h["tries"] >= 4
+            if last:
+                con.execute("DELETE FROM meta WHERE key = ?", (f"mscode:{v.id}",))
+            else:
+                con.execute("UPDATE meta SET value = json_set(value, '$.tries', ?) WHERE key = ?", (h["tries"] + 1, f"mscode:{v.id}"))
+            wrong = ApiError("forbidden" if last else "bad_input", "code")  # raised after the commit: the try must count
+        else:
+            con.execute("DELETE FROM meta WHERE key = ?", (f"mscode:{v.id}",))
+            try:
+                ms_apply(con, v.id, h["who"])
+            except ApiError as e:  # linked elsewhere meanwhile: the wait ends anyway (committed), then it's said
+                wrong = e
+    if wrong:
+        raise wrong
+    return me(con, Viewer(v.id, v.role, bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id))))
+
+
 def ms_sweep(con) -> None:
     """Each bot round: Microsoft sign-ins never finished (they hold the Graph profile) and the used-link marks"""
+    con.execute("DELETE FROM meta WHERE key LIKE 'mscode:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (now() - MS_CODE_TTL,))
     con.execute("DELETE FROM meta WHERE key LIKE 'ms:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (now() - MS_KEEP,))
     con.execute("DELETE FROM meta WHERE key LIKE 'ms_used:%' AND CAST(value AS INTEGER) < ?", (now() - 86400,))
 
@@ -772,6 +843,7 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
+        "msCode": ms_waiting(con, v.id) is not None,  # back from Microsoft: the code its page shows, to type here
         "relink": relink,
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
@@ -1134,7 +1206,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             elif (t, c) not in _DEL_KEEP and one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", v.id):
                 raise RuntimeError(f"deleting account {v.id}: {t}.{c} is in no list")  # the transaction rolls back
         con.execute("UPDATE map_graph SET updated_by = NULL WHERE updated_by = ?", (v.id,))  # no foreign key there
-        con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
+        con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{v.id}", f"mscode:{v.id}"))  # an unfinished Microsoft sign-in: its profile too
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
         # his unsent invites in friends' queues; who he was in the role history

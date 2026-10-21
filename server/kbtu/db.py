@@ -426,6 +426,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (day, user_id)
     ) WITHOUT ROWID;"""),
+    # audit M3: since the portal sign-in closed (Oct 19, 00:00 Almaty) the year was typed in; it becomes the student
+    # ID's (logic.course_of). The portal's own years stay: a repeater's ID is older than their year.
+    (58, """UPDATE students SET course = MAX(1, MIN(6, CAST(strftime('%Y', 'now', '+5 hours') AS INTEGER)
+        - (CAST(strftime('%m', 'now', '+5 hours') AS INTEGER) < 9) - (2000 + CAST(substr(student_id, 1, 2) AS INTEGER)) + 1))
+      WHERE consent_at >= 1792350000 AND student_id GLOB '[0-9][0-9][A-Z]*' AND consent_version NOT IN ('staff', 'admin');"""),
 ]
 
 
