@@ -47,7 +47,7 @@ export interface AdminStats { online: number; day: number; week: number; month: 
   ai?: { on: boolean; today: number; error: string | null };
   today?: number /* opened the app today so far (the visits log) */ }
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
-export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean }[] | null }
+export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
 export interface AdminAi { on: boolean; today: number; error: string | null; model: string; events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }

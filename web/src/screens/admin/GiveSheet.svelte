@@ -6,13 +6,14 @@
   // as a one-time link. Each grant is undoable for a minute; "You gave" below, where after that minute one given by
   // mistake is taken back, the whole award (owner, Oct 14: only from the admin panel, never from a person's profile).
   import { api, ApiErr, type GrantItem } from '../../lib/api';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, scanQr, shareCard } from '../../lib/tg';
   import { ago, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Emoji from '../../ui/Emoji.svelte';
+  import QrCam from '../../ui/QrCam.svelte';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -30,17 +31,38 @@
   api.myGrants().then((l) => (gave = l)).catch(() => {});
   $effect(() => { const i = setInterval(() => (tickNow = nowTs()), 5000); return () => clearInterval(i); });
 
-  function scan(code: GrantItem['code']) {
+  // our camera in the sheet (owner, Oct 21: not Telegram's popup); Telegram's only when ours is refused or missing
+  let scanning = $state<GrantItem['code'] | null>(null);
+  let live = $state<'off' | 'on' | 'failed'>('off');
+  let hit = $state(0);
+  let granting = $state(false);
+  const done = new Set<string>(); // given in this sheet: a badge left in view doesn't come back as "already has it"
+  // the camera rests while a grant runs and while another sheet (a confirm) covers this one
+  const paused = $derived(!scanning || granting || overlays[overlays.length - 1]?.id !== overlay.id);
+  function grant(text: string, code: GrantItem['code']) {
+    if (done.has(code + text)) return;
+    granting = true;
+    api.grantScan(text, code).then((g) => { done.add(code + text); gave = [g, ...(gave ?? [])]; hit++; haptic.ok(); })
+      .catch((e) => { haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('give.notFound'), 'pleading_face_3d'); })
+      .finally(() => (granting = false));
+  }
+  function popup(code: GrantItem['code']) {
     let last = '', lastAt = 0;
     const ok = scanQr(t('give.scan', { award: name(code) }), (text) => {
       if (text === last && Date.now() - lastAt < 4000) return false;
       last = text; lastAt = Date.now();
-      api.grantScan(text, code).then((g) => { gave = [g, ...(gave ?? [])]; haptic.ok(); })
-        .catch((e) => { haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('give.notFound'), 'pleading_face_3d'); });
+      grant(text, code);
       return false;
     });
     if (!ok) say(t('give.phone'), 'pleading_face_3d');
   }
+  function scan(code: GrantItem['code']) {
+    haptic.select();
+    if (scanning === code) { scanning = null; return; }
+    if (!('mediaDevices' in navigator)) { popup(code); return; }
+    scanning = code; live = 'off';
+  }
+  $effect(() => { if (live === 'failed' && scanning) { const c = scanning; scanning = null; popup(c); } });
   function send(code: GrantItem['code']) {
     shareCard({ kind: 'gl', id: '0', code }, 'https://t.me/KBTUappBot', name(code))
       .then((sent) => { if (sent) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); } })
@@ -63,13 +85,21 @@
 <Sheet {overlay} title={t('give.title')}>
   <div class="tiles">
     {#each GIVE as g (g.code)}
-      <button class="tile surface" onclick={() => (g.link ? send(g.code) : scan(g.code))}>
+      <button class="tile surface" class:on={scanning === g.code} onclick={() => (g.link ? send(g.code) : scan(g.code))}>
         <Emoji name={g.emoji} size={44} />
         <b>{name(g.code)}</b>
         <i>{t(g.link ? 'give.byLink' : 'give.byQr')}</i>
       </button>
     {/each}
   </div>
+  {#if scanning}
+    {@const code = scanning}
+    <div class="cam" transition:fold>
+      <QrCam bind:live {paused} onscan={(v) => grant(v, code)} />
+      {#key hit}<span class="aim" class:flash={hit > 0}></span>{/key}
+      <p>{t('give.scan', { award: name(code) })}</p>
+    </div>
+  {/if}
   {#if gave?.length}
     <button class="gv surface" class:open={showGave} onclick={() => (showGave = !showGave)}><span>{t('give.gave', { n: gave.length })}</span><ChevronDown size={18} /></button>
     {#if showGave}
@@ -90,6 +120,12 @@
   .tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; text-align: left; }
   .tile b { font: 650 15px/1.25 var(--font-text); }
   .tile i { font: 500 13px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
+  .tile.on { box-shadow: 0 0 0 2px var(--accent); }
+  .cam { position: relative; margin-top: 12px; aspect-ratio: 1; max-height: 44vh; border-radius: var(--r-l); overflow: hidden; background: #000; }
+  .cam p { position: absolute; left: 12px; right: 12px; bottom: 12px; text-align: center; color: #fff; font: 650 14px/1.3 var(--font-text); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+  .aim { position: absolute; inset: 18%; border-radius: 22px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 0 999px rgba(0, 0, 0, 0.28); pointer-events: none; }
+  .aim.flash { box-shadow: 0 0 0 4px var(--success), 0 0 0 999px rgba(0, 0, 0, 0.28); animation: pulse 420ms cubic-bezier(.2, .9, .25, 1.2); }
+  @keyframes pulse { from { transform: scale(1.08); } }
   .gv { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 12px; padding: 14px; font: 650 15px/1.2 var(--font-text); }
   .gv :global(svg) { color: var(--text-2); transition: transform .2s; }
   .gv.open :global(svg) { transform: rotate(180deg); }

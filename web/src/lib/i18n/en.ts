@@ -501,7 +501,7 @@ const en: Dict = {
   'say.hold': "Seat held for 30 min — pay now",
   'say.save': "Won't get lost|Saved for later|It's in your profile|Good taste",
   'say.unsave': "Removed|Okay, not this time|Crossed out",
-  'say.sub': "Club news will come to Telegram|Now you won't miss a thing|You'll hear first",
+  'say.sub': "News will come to Telegram|Now you won't miss a thing|You'll hear first",
   'say.unsub': "We'll miss you|Come back anytime|The door is open",
   'say.applied': "Good luck! The bot will bring the answer|Fingers crossed|The club will answer soon",
   'say.withdrawn': "Happens|Your call|Maybe next time",

@@ -27,8 +27,8 @@
   import { chrome } from './chrome';
   import Emoji from './Emoji.svelte';
 
-  type Props = { pages: CapPage[]; index: number; onpick: (i: number) => void; live?: Live | null; title?: string | null; icon?: Component<any> | null };
-  let { pages, index, onpick, live = null, title = null, icon = null }: Props = $props();
+  type Props = { pages: CapPage[]; index: number; onpick: (i: number) => void; live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean };
+  let { pages, index, onpick, live = null, title = null, icon = null, spin = false }: Props = $props();
 
   const BOOT_MS = 2550; // from the webview opening; matched to Telegram's «KBTU App» → «Close» on iPhone
   const phone = inTelegram && /^(ios|android)$/.test(tg.platform);
@@ -42,6 +42,7 @@
   let sleepTimer: ReturnType<typeof setTimeout> | undefined;
 
   const heading = $derived(title ?? (pages.length === 1 ? pages[0].label : null));
+  const headIcon = $derived(title ? icon : pages.length === 1 ? pages[0].icon : null); // a one-page tab: its page's icon
   const mode = $derived(heading ? 'title' : live && !awake ? 'live' : 'switch');
 
   function wake() {
@@ -127,7 +128,7 @@
     {/if}
   </button>
   <!-- title of a full-screen view or of a one-page tab -->
-  <div class="layer ttl" class:off={mode !== 'title'}>{#if icon && title}{@const Icon = icon}<Icon size={16} strokeWidth={2.4} />{/if}<span class="ellipsis">{heading ?? ''}</span></div>
+  <div class="layer ttl" class:spin class:off={mode !== 'title'}>{#if headIcon && heading}{@const Icon = headIcon}<Icon size={16} strokeWidth={2.4} />{/if}<span class="ellipsis">{heading ?? ''}</span></div>
 </div>
 
 <style>
@@ -181,4 +182,6 @@
 
   .ttl { justify-content: center; gap: 7px; font: 650 14px/1 var(--font-text); letter-spacing: -0.01em; padding: 0 14px; }
   .ttl :global(svg) { flex: none; opacity: 0.8; }
+  .ttl.spin :global(svg) { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>

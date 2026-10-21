@@ -17,6 +17,8 @@
   import { api, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
+  import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
@@ -33,7 +35,7 @@
   import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
   import Settings2 from '@lucide/svelte/icons/settings';
   import Toast from './ui/Toast.svelte';
-  import { feedChrome } from './ui/chrome';
+  import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
   import Feed from './screens/afisha/Feed.svelte';
   import Clubs from './screens/afisha/Clubs.svelte';
@@ -146,7 +148,8 @@
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
   const capTitle = $derived(ui.busy || capOf?.title || null);
-  const capIcon = $derived(ui.busy ? null : capOf?.icon ?? null);
+  // every state has an icon (owner, Oct 21): a spinner while a tap's work runs, a sparkle if a view forgot its own
+  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : null);
   // over the Feed the nav and capsule turn into tinted dark glass (chrome.ts): at once on a tab switch,
   // and in step with the finger while the Events pager moves
   $effect(() => { feedChrome(ui.tab === 'afisha' && ui.page.afisha === 0 ? 1 : 0, 'opacity 220ms ease'); });
@@ -385,8 +388,8 @@
 
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them (owner, Oct 14);
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-  {#if !(ui.tab === 'afisha' && pageIdx('afisha') === 0)}<div class="topfade" aria-hidden="true"></div><div class="botfade" aria-hidden="true"></div>{/if}
-  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} /></div>
+  <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
   <Nav labels={[t('tab.afisha'), tab2Label, t('tab.profile')]} dot={[false, (session.me?.counters.unreadBroadcasts ?? 0) > 0, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
 
   {#each overlays as o (o.id)}

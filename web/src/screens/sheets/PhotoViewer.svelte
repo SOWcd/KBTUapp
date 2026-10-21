@@ -2,6 +2,7 @@
   // An album full screen (SPEC §4.9): the photos side by side, a swipe goes to the next (the browser's own scroll
   // snapping), "3 / 12" in the capsule. Telegram's Back or Close leaves; mine, or any for the club's Head+, can go.
   // Who added it under the photo; another's can be reported: gone for me at once, the admin decides.
+  import Images from '@lucide/svelte/icons/images';
   import { onMount } from 'svelte';
   import { api, type AlbumPhoto, type ReportReason } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -36,7 +37,7 @@
     a.onfinish = () => removeOverlay(overlay.id);
   }
   $effect(() => { if (overlay.closing) leave(); });
-  $effect(() => { overlay.title = list.length ? `${at + 1} / ${list.length}` : ''; }); // the capsule's title
+  $effect(() => { overlay.title = list.length ? `${at + 1} / ${list.length}` : ''; overlay.icon = Images; }); // the capsule's title
 
   async function remove() {
     const p = list[at];

@@ -3114,14 +3114,16 @@ def admin_day(con, v: Viewer, day: int) -> dict:
     a day before the visits were kept (or past their 30 days): only the nightly count is known."""
     _admin(v)
     lo = day * 86400 - 5 * 3600
-    who = rows(con, """SELECT u.id, u.tg_first_name, u.tg_last_name, u.tg_username, u.nick, u.created_at >= ? AS new, s.user_id IS NOT NULL AS student
+    who = rows(con, """SELECT u.id, u.tg_first_name, u.tg_last_name, u.tg_username, u.nick, u.created_at >= ? AS new, s.user_id IS NOT NULL AS student,
+        EXISTS (SELECT 1 FROM students p WHERE p.user_id = u.id) AS profile
         FROM visits x JOIN users u ON u.id = x.user_id LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0
         WHERE x.day = ? ORDER BY u.created_at DESC""", lo, day)
     kept = day <= day_of(now()) and one(con, "SELECT 1 FROM visits WHERE day <= ? LIMIT 1", day) is not None
     row = one(con, "SELECT active, new FROM stats_days WHERE day = ?", day)
     return {"day": day, "active": len(who) if kept else (row["active"] if row else 0), "new": sum(r["new"] for r in who) if kept else (row["new"] if row else 0),
             "people": [{"id": r["id"], "name": r["nick"] or " ".join(x for x in (r["tg_first_name"], r["tg_last_name"]) if x) or "—",
-                        "username": r["tg_username"], "new": bool(r["new"]), "student": bool(r["student"])} for r in who] if kept else None}
+                        "username": r["tg_username"], "new": bool(r["new"]), "student": bool(r["student"]),
+                        "profile": bool(r["profile"])} for r in who] if kept else None}   # no profile (only opened the app): the row opens Telegram
 
 
 # what the translator works on (ai_next's own conditions): what the AI page counts and its retry resets

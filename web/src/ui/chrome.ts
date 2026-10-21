@@ -20,6 +20,20 @@ function apply(p: Part, ease: string) {
 export function feedChrome(k: number, ease = ''): void {
   state.k = Math.max(0, Math.min(1, k));
   for (const p of parts) apply(p, ease);
+  for (const f of fades) fadeOut(f, ease);
+}
+
+// the fades under the capsule and the nav go away over the Feed, with the same blend (they used to vanish at
+// the end of the swipe: the owner's video, Oct 21)
+const fades = new Set<HTMLElement>();
+function fadeOut(f: HTMLElement, ease: string) {
+  f.style.transition = ease ? ease.replace(/transform/g, 'opacity') : 'none';
+  f.style.opacity = String(1 - state.k);
+}
+export function unfeed(node: HTMLElement) {
+  fades.add(node);
+  fadeOut(node, '');
+  return { destroy() { fades.delete(node); } };
 }
 
 /** Tint of the slide on screen, 'r g b'. */

@@ -21,6 +21,7 @@
   import { haptic, inTelegram, scanQr, closeScanner, tg } from '../../lib/tg';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import QrCam from '../../ui/QrCam.svelte';
 
   let { overlay, id, names = false }: { overlay: Overlay; id: Id; names?: boolean } = $props();
 
@@ -28,39 +29,8 @@
   $effect(() => { api.event(id).then((d) => (detail = d)).catch(() => {}); });
   const e = $derived(eventById(id) ?? detail);
   const camera = inTelegram && /^(ios|android)$/.test(tg.platform) && tg.can('6.4');
-  // our camera: on until it fails (refused, none), then Telegram's popup takes over. Decoding: the phone's own
-  // BarcodeDetector where it has one (Android), else ZXing in wasm (iPhone: WebKit has none), served from our origin
-  let video = $state<HTMLVideoElement>();
+  // our camera (ui/QrCam) until it fails (refused, none), then Telegram's popup takes over
   let live = $state<'off' | 'on' | 'failed'>('mediaDevices' in navigator ? 'off' : 'failed');
-  let stream: MediaStream | null = null;
-  let last = { v: '', at: 0 };
-  type Detector = { detect(src: HTMLVideoElement): Promise<{ rawValue: string }[]> };
-  async function detector(): Promise<Detector> {
-    const N = (window as unknown as { BarcodeDetector?: { new (o: object): Detector; getSupportedFormats(): Promise<string[]> } }).BarcodeDetector;
-    if (N && (await N.getSupportedFormats().catch((): string[] => [])).includes('qr_code')) return new N({ formats: ['qr_code'] });
-    const [{ BarcodeDetector, prepareZXingModule }, { default: wasm }] = await Promise.all([import('barcode-detector/ponyfill'), import('zxing-wasm/reader/zxing_reader.wasm?url')]);
-    prepareZXingModule({ overrides: { locateFile: (p: string, prefix: string) => (p.endsWith('.wasm') ? wasm : prefix + p) } });
-    return new BarcodeDetector({ formats: ['qr_code'] });
-  }
-  async function startCam() {
-    try {
-      const [d, st] = await Promise.all([detector(), navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false })]);
-      stream = st;
-      if (gone || !video) { stopCam(); return; }
-      video.srcObject = st;
-      await video.play();
-      live = 'on';
-      while (!gone) {
-        if (!busy && video.readyState >= 2) {
-          const v = (await d.detect(video).catch(() => []))[0]?.rawValue;
-          const now = Date.now();  // the same code stays in view: once per 4 s
-          if (v && !busy && !(v === last.v && now - last.at < 4000)) { last = { v, at: now }; void check(v); }
-        }
-        await new Promise((r) => setTimeout(r, 120));
-      }
-    } catch { stopCam(); if (!gone) live = 'failed'; }
-  }
-  function stopCam() { stream?.getTracks().forEach((x) => x.stop()); stream = null; }
 
   let res = $state<CheckinResult | null>(null);
   let seq = $state(0);
@@ -69,6 +39,7 @@
   let busy = $state(false);
   let panel: HTMLDivElement;
   let gone = false;
+  let cam = $state(untrack(() => !names));  // off when leaving: the light goes out with the fade, not after it
 
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
   $effect(() => { overlay.title = names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
@@ -132,15 +103,14 @@
   onMount(() => {
     panel.animate([{ opacity: 0, transform: 'translate3d(0,40px,0)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (names) void openByName();
-    else if (live !== 'failed') void startCam();
-    else if (camera) scan();
+    else if (live === 'failed' && camera) scan();
     return hideChrome();
   });
 
   function leave() {
     if (gone) return;
     gone = true;
-    closeScanner(); stopCam();
+    closeScanner(); cam = false;
     const a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
@@ -160,11 +130,12 @@
     {/if}
 
     {#if !names && live !== 'failed'}
-      {#key seq}<div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already'} class:bad={!!res && res.result !== 'ok' && res.result !== 'already'} class:flash={seq > 0}>
-        <video bind:this={video} playsinline muted></video>
+      <!-- the camera stays outside {#key}: a new <video> per scan had no stream (black after the first scan) -->
+      <div class="cam" class:good={res?.result === 'ok'} class:warn={res?.result === 'already'} class:bad={!!res && res.result !== 'ok' && res.result !== 'already'}>
+        {#if cam}<QrCam bind:live paused={busy} onscan={(v) => void check(v)} />{/if}
         {#if live === 'off'}<span class="wait"><ScanLine size={36} /></span>{/if}
-        <span class="aim"></span>
-      </div>{/key}
+        {#key seq}<span class="aim" class:flash={seq > 0}></span>{/key}
+      </div>
     {/if}
 
     {#key seq}
@@ -244,13 +215,12 @@
 
   .hint { color: var(--text-2); }
   .cam { position: relative; flex: none; width: 100%; aspect-ratio: 1; max-height: 44vh; border-radius: var(--r-l); overflow: hidden; background: #000; }
-  .cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.5); }
   .aim { position: absolute; inset: 18%; border-radius: 22px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 0 999px rgba(0, 0, 0, 0.28); pointer-events: none; }
   .cam.good .aim { box-shadow: 0 0 0 4px var(--success), 0 0 0 999px rgba(0, 0, 0, 0.28); }
   .cam.warn .aim { box-shadow: 0 0 0 4px var(--warning), 0 0 0 999px rgba(0, 0, 0, 0.28); }
   .cam.bad .aim { box-shadow: 0 0 0 4px var(--danger), 0 0 0 999px rgba(0, 0, 0, 0.28); }
-  .cam.flash .aim { animation: pulse 420ms cubic-bezier(.2, .9, .25, 1.2); }
+  .aim.flash { animation: pulse 420ms cubic-bezier(.2, .9, .25, 1.2); }
   @keyframes pulse { from { transform: scale(1.08); } }
   .undo { margin-top: 2px; padding: 8px 16px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.16); font: 650 14px/1 var(--font-text); }
   .byname { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: var(--r-m); color: var(--accent-text);

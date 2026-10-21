@@ -9,6 +9,8 @@
   import { fmtPhone } from '../../lib/phone';
   import MemoAsksForm from './MemoAsks.svelte';
   import X from '@lucide/svelte/icons/x';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+  import PencilLine from '@lucide/svelte/icons/pencil-line';
   import Trash from '@lucide/svelte/icons/trash-2';
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import Clapperboard from '@lucide/svelte/icons/clapperboard';
@@ -65,7 +67,7 @@
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
   const dirty = $derived(touched && JSON.stringify(f) !== base);
   const live = $derived(!!saved && saved.status !== 'draft');
-  $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); }); // the capsule's title (SPEC §8.2)
+  $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); overlay.icon = live ? PencilLine : CalendarPlus; }); // the capsule's title (SPEC §8.2)
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 

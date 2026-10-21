@@ -144,7 +144,7 @@
           {#if picked?.people}
             <div class="who">
               {#each picked.people as p (p.id)}
-                <button onclick={() => sheets.person(p.id)}><Avatar person={{ id: p.id, name: p.name }} size={28} tappable={false} /><span class="ellipsis">{p.name}</span>
+                <button disabled={!p.profile && !p.username} onclick={() => (p.profile ? sheets.person(p.id) : openLink('https://t.me/' + p.username))}><Avatar person={{ id: p.id, name: p.name }} size={28} tappable={false} /><span class="ellipsis">{p.name}</span>
                   {#if p.username}<i class="ellipsis">@{p.username}</i>{/if}{#if p.new}<em>{t('st.newOne')}</em>{/if}</button>
               {/each}
             </div>

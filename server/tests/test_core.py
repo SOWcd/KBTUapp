@@ -3376,6 +3376,11 @@ def test_admin_day_and_ai(env):
     assert {p["id"] for p in day["people"]} >= {adm["id"], ali["id"]} and day["active"] == len(day["people"])
     assert c.get("/api/admin/stats", headers=tma(1)).json()["today"] == day["active"]
     assert c.get(f"/api/admin/stats/{today - 400}", headers=tma(1)).json()["people"] is None   # before the log
+    # only opened the app: no profile to open (it was "Something went wrong"), the row goes to Telegram instead
+    guest = c.get("/api/me", headers=tma(31)).json()
+    prof = {p["id"]: p["profile"] for p in c.get(f"/api/admin/stats/{today}", headers=tma(1)).json()["people"]}
+    assert prof[ali["id"]] and not prof[guest["id"]]
+    assert c.get(f"/api/users/{guest['id']}", headers=tma(30)).status_code == 404
     ai = c.get("/api/admin/ai", headers=tma(1)).json()
     assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
     assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403

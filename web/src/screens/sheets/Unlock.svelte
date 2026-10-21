@@ -3,6 +3,7 @@
   // its tier's colour, the confetti flies from it; its name, tier, what it took and how rare it is. Share sends our bot's
   // card (aw_<code>), "Great!" closes; the next new level, if any, comes after.
   import { onMount } from 'svelte';
+  import Trophy from '@lucide/svelte/icons/trophy';
   import type { Achievement } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
@@ -18,7 +19,7 @@
   const glow = $derived(a.levels.length > 1 ? GLOW[Math.min(a.level, 4)] : GLOW[0]);
   const tier = $derived(a.levels.length > 1 ? tierName(a) : '');
   const rare = $derived.by(() => { const x = a.levels[Math.max(0, a.level - 1)]?.rarity ?? a.rarity; return x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)); });
-  $effect(() => { overlay.title = t('unlock.kicker'); });
+  $effect(() => { overlay.title = t('unlock.kicker'); overlay.icon = Trophy; });
 
   let scrim: HTMLDivElement;
   let wrap: HTMLDivElement;
