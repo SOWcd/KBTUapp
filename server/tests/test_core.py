@@ -3358,3 +3358,18 @@ def test_admin_day_and_ai(env):
     assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
     assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
+
+
+def test_db_must_exist(tmp_path, monkeypatch):
+    """A locked vault leaves an empty folder: the image's DB_MUST_EXIST=1 stops the app instead of starting it empty"""
+    monkeypatch.setenv("BOT_TOKEN", "1:x")
+    monkeypatch.setenv("TOKEN_KEY", "A" * 43 + "=")
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "kbtu.db"))
+    monkeypatch.setenv("DB_MUST_EXIST", "1")
+    with pytest.raises(SystemExit, match="vault locked"):
+        config.load()
+    (tmp_path / "kbtu.db").touch()
+    assert config.load().db_path == str(tmp_path / "kbtu.db")
+    monkeypatch.setenv("DB_MUST_EXIST", "0")
+    (tmp_path / "kbtu.db").unlink()
+    assert config.load()

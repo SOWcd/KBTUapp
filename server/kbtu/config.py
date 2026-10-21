@@ -39,10 +39,15 @@ def load() -> Config:
     key = base64.b64decode(env["TOKEN_KEY"]) if env.get("TOKEN_KEY") else b""
     if len(key) != 32:
         raise SystemExit("TOKEN_KEY must be 32 random bytes in base64 (python -c 'import os,base64;print(base64.b64encode(os.urandom(32)).decode())')")
+    db_path = env.get("DB_PATH", str(ROOT / "server" / "kbtu.db"))
+    # the image sets DB_MUST_EXIST=1: production data lives in an encrypted vault (DEPLOY.md), and a vault that didn't
+    # open leaves an empty folder; a fresh database there would look like a working app with nobody in it
+    if env.get("DB_MUST_EXIST") == "1" and not Path(db_path).is_file():
+        raise SystemExit(f"{db_path} is missing (vault locked?). A brand-new install sets DB_MUST_EXIST=0 once")
     return Config(
         bot_token=env["BOT_TOKEN"],
         token_key=key,
-        db_path=env.get("DB_PATH", str(ROOT / "server" / "kbtu.db")),
+        db_path=db_path,
         web_dist=env.get("WEB_DIST", str(ROOT / "web" / "dist")),
         domain=env.get("DOMAIN", "kbtu.sow.kz"),
         bot_username=env.get("BOT_USERNAME", "KBTUappBot"),
