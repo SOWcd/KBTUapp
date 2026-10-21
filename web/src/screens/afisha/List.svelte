@@ -3,15 +3,24 @@
   // days as timelines: classes from the portal schedule (one slim row each; back-to-back ones of a subject
   // joined into one row with a "×2"/"×3" chip, lib/classes.ts; owner, Oct 13: tall blocks took too much room)
   // and events, in time order, so an event shows in the gap between classes where it really is. Tapping a date shows only that day.
+  // Mockup v24 (owner, Oct 21): "Today" up top with a stack of live cards you swipe like Wallet passes: the event I'm
+  // going to with its countdown and ticket, and the class on now or next with its room, what's left of it and the rest
+  // of the day. The class card comes first while a class is on or within the hour, else the event (most students have
+  // no timetable yet: PLAN 49, schedules). Neither: no stack.
   import { tagName } from '../../lib/posts';
   import MapIcon from '@lucide/svelte/icons/map';
   import { data, skipped, classKey, skipClass } from '../../lib/state/data.svelte';
-  import { t, tn, subjectOf } from '../../lib/i18n/index.svelte';
+  import { t, tn, subjectOf, placeOf } from '../../lib/i18n/index.svelte';
   import { shortSubject, lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, dayMonth, weekdayShort, OFFSET, at } from '../../lib/time';
   import type { ClassItem, EventCard } from '../../lib/api';
   import EventRow from '../../ui/EventRow.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { classesOn, classesLeft } from '../../lib/classes';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import QrCode from '@lucide/svelte/icons/qr-code';
+  import { onMount } from 'svelte';
+  import { soon, time } from '../../lib/time';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
   import { openLink } from '../../lib/tg';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
@@ -30,24 +39,33 @@
   const featured = $derived(data.posts.find((p) => p.featured));
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard });
-  function classesOn(d: number): Item[] {
-    const p = parts(dayTs(d) + 12 * 3600);
-    const on = (hm: string) => { const [h, m] = hm.split(':').map(Number); return at(p.y, p.m, p.d, h, m); };
-    return data.schedule.filter((c) => c.weekday === (p.wd || 7)) // 1 = Monday … 7 = Sunday
-      .map((c) => ({ key: classKey(d, c), at: on(c.begins), end: on(c.ends), c }));
-  }
+  const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
 
   type Day = { d: number; items: Item[] };
   const days = $derived.by<Day[]>(() => {
     const by = new Map<number, Item[]>();
     for (const e of data.events) { const d = dayNo(e.startsAt); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // all days: the coming week's class days too (the owner missed his Wednesday, Oct 5), later only event days
-    const week = strip.slice(0, 7).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
+    // today shows even when free ("a free day"), unless its classes are in the stack up top
+    const week = strip.slice(0, 7).filter((d) => d === today ? !cards.includes('class') : data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
     const wanted = picked != null ? [picked] : [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
     // a class before an event that starts at the same minute: you leave the class for it
-    return wanted.map((d) => ({ d, items: [...classesOn(d), ...(by.get(d) ?? [])].sort((a, b) => a.at - b.at || ('c' in a ? -1 : 1)) }));
+    return wanted.map((d) => ({ d, items: [...(d === today ? [] : classesOf(d)), ...(by.get(d) ?? [])].sort((a, b) => a.at - b.at || ('c' in a ? -1 : 1)) }));
   });
-  const clock = nowTs();
+  // the stack's clock: a minute is enough for "21 min left"
+  let now = $state(nowTs());
+  onMount(() => { const id = setInterval(() => (now = nowTs()), 30_000); return () => clearInterval(id); });
+  const clock = $derived(now);
+  const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
+  const going = $derived(data.events.filter((e) => e.my?.status === 'going' && e.status !== 'cancelled' && (e.endsAt ?? e.startsAt + 3 * 3600) > now && e.startsAt - now < 7 * 86400)
+    .sort((a, b) => a.startsAt - b.startsAt)[0]);
+  const cur = $derived(left[0]);
+  const onNow = $derived(!!cur && cur.b <= now);
+  const cards = $derived<('class' | 'event')[]>(cur && going ? (onNow || cur.b - now <= 3600 ? ['class', 'event'] : ['event', 'class']) : cur ? ['class'] : going ? ['event'] : []);
+  let stack = $state<HTMLDivElement>();
+  let shown = $state(0);
+  const onStack = () => { if (stack) shown = Math.round(stack.scrollLeft / stack.clientWidth); };
+  const weekCount = $derived(data.events.filter((e) => e.status !== 'cancelled' && dayNo(e.startsAt) >= today && dayNo(e.startsAt) < today + 7).length);
 
   function head(d: number): string {
     if (d === today) return t('common.today');
@@ -59,10 +77,56 @@
 
 <div class="page scroll">
   <header class="hd">
-    <span><h1 class="t-h1">{t('list.title')}</h1>
-    <p class="t-foot">{tn('list.count', data.events.filter((e) => e.status !== 'cancelled').length)}</p></span>
+    <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
     <button class="map" onclick={() => sheets.map()}><MapIcon size={18} />{t('map.open')}</button>
   </header>
+
+  {#if cards.length}
+    <div class="stack" bind:this={stack} onscroll={onStack} data-noswipe={cards.length > 1 ? '' : undefined}>
+      {#each cards as k (k)}
+        {#if k === 'class' && cur}
+          {@const room = cur.c.room}
+          {@const lk = lessonKind(cur.c.kind)}
+          <!-- the class on now or next: its room big, what's left of it, the rest of today -->
+          <section class="card now">
+            <div class="now-m">
+              {#if room}<span class="rm"><small>{t('list.room')}</small><b class="num ellipsis">{atBldg2(room) ? bldg2Room(room) || room : room}</b></span>{/if}
+              <span class="now-t"><small class:live={onNow}><i></i>{onNow ? t('list.nowUntil', { time: cur.c.ends }) : soon(cur.b, now)}</small>
+                <b class="clamp-2">{subjectOf(cur.c)}</b>
+                <span>{[lk ? t(`list.kind.${lk}Long`) : cur.c.kind, cur.c.teacher].filter(Boolean).join(' · ')}</span></span>
+            </div>
+            {#if onNow}
+              <div class="bar"><i style="width:{Math.min(100, ((now - cur.b) / (cur.e - cur.b)) * 100)}%"></i></div>
+              <div class="now-f num"><span>{t('list.minLeft', { n: Math.max(1, Math.ceil((cur.e - now) / 60)) })}</span><span>{cur.c.begins}–{cur.c.ends}</span></div>
+            {/if}
+            {#if left.length > 1}
+              <div class="ups">
+                {#each left.slice(1, 3) as x (x.b)}
+                  <div class="up"><time class="num">{x.c.begins}</time><span><b class="ellipsis">{subjectOf(x.c)}</b><small>{soon(x.b, now)}</small></span>{#if x.c.room}<em class="num ellipsis">{x.c.room}</em>{/if}</div>
+                {/each}
+              </div>
+            {/if}
+            {#if room && floorOf(room) != null}<button class="go" onclick={() => sheets.map(room)}><MapPin size={15} />{t('route.open')}</button>{/if}
+          </section>
+        {:else if k === 'event' && going}
+          <!-- the event I'm going to: how soon in words, the way there and the ticket -->
+          <section class="card ev" style="--c:{going.tint}" role="button" tabindex="0" onclick={() => sheets.event(going.id)} onkeydown={(k) => k.key === 'Enter' && sheets.event(going.id)}>
+            <div class="ev-top"><span class="ev-k"><i></i>{t('event.youGo')}</span><span class="ev-ob"><Emoji name={going.emoji ?? going.org.emoji} size={54} /></span></div>
+            <b class="ev-t clamp-2">{going.title}</b>
+            <span class="ev-m">{placeOf(going.place)} · {going.org.name}</span>
+            <div class="ev-cd"><b class="num">{soon(going.startsAt, now)}</b><small class="num">{t('list.at', { time: time(going.startsAt) })}</small></div>
+            <div class="ev-act">
+              {#if floorOf(going.place) != null}<button onclick={(e) => { e.stopPropagation(); sheets.map(going.place); }}><MapPin size={16} />{t('route.open')}</button>{/if}
+              <button onclick={(e) => { e.stopPropagation(); sheets.ticket(going.id); }}><QrCode size={16} />{t('event.ticket')}</button>
+            </div>
+          </section>
+        {/if}
+      {/each}
+    </div>
+    {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as k, i (k)}<i class:on={i === shown}></i>{/each}</div>{/if}
+  {/if}
+
+  <div class="evh"><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></div>
 
   <div class="strip hscroll" data-noswipe>
     <button class="day all" class:on={picked == null} onclick={() => (picked = null)}>{t('common.all')}</button>
@@ -131,11 +195,10 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
-  .hd { margin-bottom: 14px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .hd { margin-bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .map { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .map:active { transform: scale(0.95); }
-  .hd p { margin-top: 4px; }
 
   .more { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 20px 18px; text-align: center; }
   .more b { font: 700 16px/1.3 var(--font-text); }
@@ -188,6 +251,68 @@
   /* the dorm opens in 2GIS: their mark and green, as an off-campus place on the event sheet */
   .cl-r.gis { background: rgba(25, 170, 30, 0.14); color: #19AA1E; }
   :global(:root[data-theme='light']) .cl-r.gis { color: #0F7A14; }
+
+  /* "Today": the date small above it (mockup v24) */
+  .kick { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); margin-bottom: 2px; }
+  .kick::first-letter { text-transform: uppercase; }
+  .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
+  .evh { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 12px; }
+  .evh h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
+  .evh span { font: 550 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+
+  /* the live stack: cards side by side, one at a time under the finger */
+  .stack { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) 2px; scrollbar-width: none; scroll-padding: 0 var(--gutter); }
+  .stack::-webkit-scrollbar { display: none; }
+  .card { position: relative; flex: none; width: 100%; scroll-snap-align: center; overflow: hidden; border-radius: var(--r-xl); padding: 16px; display: flex; flex-direction: column; text-align: left; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin: 10px 0 2px; }
+  .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--line-2); transition: width .4s var(--ease-spring), background-color .3s; }
+  .dots i.on { width: 18px; background: var(--text); }
+
+  /* the class card: blue, calm */
+  .now { gap: 12px; background: radial-gradient(90% 80% at 0% 0%, rgba(59, 107, 255, 0.28), transparent 60%), var(--surface); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px var(--line), var(--shadow-card); }
+  .now-m { display: flex; gap: 14px; align-items: center; padding-right: 92px; }
+  .rm { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 18px; background: #fff; color: #0B1433; box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.6); }
+  .rm small { font: 600 var(--fs-micro)/1 var(--font-text); color: #4A5680; }
+  .rm b { max-width: 64px; font: 800 26px/1.1 var(--font-display); letter-spacing: -0.03em; }
+  .now-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .now-t small { display: flex; align-items: center; gap: 6px; font: 650 var(--fs-cap)/1.2 var(--font-text); color: var(--accent-text); }
+  .now-t small i { display: none; width: 7px; height: 7px; border-radius: 50%; background: #46D6FF; box-shadow: 0 0 0 3px rgba(70, 214, 255, 0.25); }
+  .now-t small.live i { display: block; }
+  .now-t b { font: 700 var(--fs-card)/1.2 var(--font-text); }
+  .now-t span { font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-3); }
+  .bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #46D6FF); }
+  .now-f { display: flex; justify-content: space-between; margin-top: -6px; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-2); }
+  .ups { display: flex; flex-direction: column; margin: 0 -16px -16px; border-top: 1px solid var(--line); }
+  .up { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+  .up + .up { border-top: 1px solid var(--line); }
+  .up time { flex: none; width: 44px; font: 650 var(--fs-sub)/1 var(--font-text); color: var(--accent-text); }
+  .up span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .up b { font: 620 var(--fs-body)/1.2 var(--font-text); }
+  .up small { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
+  .up em { flex: none; max-width: 30%; padding: 4px 8px; border-radius: 8px; background: var(--surface-3); font: 650 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-2); }
+  .go { position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px 0 10px; border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-sub)/1 var(--font-text); }
+
+  /* the event card: the event's own colour, its emoji floating */
+  .ev { gap: 4px; color: #fff; cursor: pointer;
+    background: radial-gradient(90% 70% at 85% 10%, color-mix(in srgb, var(--c) 60%, transparent), transparent 65%), radial-gradient(80% 70% at 10% 100%, color-mix(in srgb, var(--c) 35%, transparent), transparent 65%), #0F1328;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 36px -24px var(--c); }
+  .ev-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .ev-k { display: flex; align-items: center; gap: 6px; font: 750 var(--fs-cap)/1 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: #8FF0BE; }
+  .ev-k i { width: 6px; height: 6px; border-radius: 50%; background: #3FD68A; }
+  .ev-ob { margin: -6px -2px -10px 0; filter: drop-shadow(0 14px 16px rgba(0, 0, 0, 0.45)); animation: floaty 4s ease-in-out infinite; }
+  @keyframes floaty { 50% { transform: translateY(-6px) rotate(-3deg); } }
+  :global(html.lowfx) .ev-ob { animation: none; } /* power saving */
+  .ev-t { margin-top: 6px; font: 790 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
+  .ev-m { font: 500 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.7); }
+  .ev-cd { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; }
+  .ev-cd b { font: 800 var(--fs-sec)/1 var(--font-display); letter-spacing: -0.02em; }
+  .ev-cd small { font: 600 var(--fs-sub)/1 var(--font-text); color: rgba(255, 255, 255, 0.7); }
+  .ev-act { display: flex; gap: 8px; margin-top: 14px; }
+  .ev-act button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: var(--r-full);
+    background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); color: #fff; font: 650 var(--fs-body)/1 var(--font-text); }
+  .ev-act button:active { transform: scale(0.96); }
 
   .empty { padding: 4px 2px; }
   .tail { height: calc(var(--bottom) + 24px); }

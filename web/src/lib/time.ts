@@ -82,6 +82,15 @@ export function ago(ts: number, now = nowTs()): string {
   return dayMonth(ts);
 }
 
+/** How soon, in words, for a countdown: "now", "in 20 min", "in 3 h" (today), "tomorrow", "Fri, 24 Oct". */
+export function soon(ts: number, now = nowTs()): string {
+  const s = ts - now;
+  if (s <= 0) return t('soon.now');
+  if (s < 3600) return t('cap.inMin', { n: Math.ceil(s / 60) });
+  if (dayNo(ts) === dayNo(now)) return t('soon.h', { n: Math.round(s / 3600) });
+  return relDay(ts, now).toLowerCase();
+}
+
 /** "Today · 18:00" — the usual event line. */
 export const whenLine = (ts: number, now = nowTs()): string => relDay(ts, now) + ' · ' + time(ts);
 

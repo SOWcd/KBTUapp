@@ -12,6 +12,7 @@
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
+  import { classesLeft } from './lib/classes';
   import { backButton, haptic, onComputer, tg } from './lib/tg';
   import { api, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
@@ -152,12 +153,7 @@
     const now = clock;
     const today = dayNo(now);
     const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now);
-    const p = parts(now);
-    const wd = p.wd || 7;
-    const cls = data.schedule
-      .filter((c) => c.weekday === wd)
-      .map((c) => { const [bh, bm] = c.begins.split(':').map(Number); const [eh, em] = c.ends.split(':').map(Number); return { c, b: at(p.y, p.m, p.d, bh, bm), e: at(p.y, p.m, p.d, eh, em) }; })
-      .find((x) => x.e > now && x.b - now <= 3600 && !skipped.has(classKey(today, x.c)));
+    const cls = classesLeft(data.schedule, now).find((x) => x.b - now <= 3600 && !skipped.has(classKey(today, x.c)));
     if (cls) {
       const mins = Math.ceil((cls.b - now) / 60);
       return { kind: 'class', title: subjectOf(cls.c) + (cls.c.room ? ' · ' + cls.c.room : ''), at: cls.b, emoji: classEmoji(cls.c), tint: '#2FBF71',

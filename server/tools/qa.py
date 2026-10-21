@@ -57,6 +57,13 @@ def seed(path: str) -> None:
     for uid in (2, 3):
         con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
             VALUES (2, ?, 'going', ?, ?, ?)""", (uid, f"QA-T{uid}", now, now))
+    # Ali has today's timetable (made up), so the List's live stack shows its class card: one on now, two after it
+    t0 = time.gmtime(now + 5 * 3600)  # Almaty, UTC+5
+    hm = lambda m: f"{(t0.tm_hour * 60 + t0.tm_min + m) // 60 % 24:02d}:{(t0.tm_hour * 60 + t0.tm_min + m) % 60:02d}"
+    for b, e, subj, kind, room, who in ((-20, 30, "Algorithms and Data Structures", "practice", "403", "Kim D."),
+                                       (40, 90, "Physics", "lab", "162a", None), (120, 170, "Linear Algebra", "lecture", "256", None)):
+        con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room, teacher) VALUES (2, ?, ?, ?, ?, ?, ?, ?)",
+                    (t0.tm_wday + 1, hm(b), hm(e), subj, kind, room, who))
     # yesterday's event with an album: Ali and Bota came; Ali added two shots, Bota one (pictures drawn here)
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, created_by, created_at,
             updated_at, published_at) VALUES (3, 1, 'published', 'Karaoke night', 'Atrium', ?, ?, 'microphone_3d', '#7A2253', '#5C193E', 60, 1,
