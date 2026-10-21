@@ -1467,6 +1467,13 @@ def test_feature_post(env):
     got = {p["id"]: p["featured"] for p in c.get("/api/posts", headers=B, params={"scope": "all"}).json()}
     assert got == {1: False, 2: True}                                                           # one at a time
     assert feat(2, 0).json()["featured"] is False
+    login(c, 62, "ali")
+    react = lambda pid: c.put(f"/api/posts/{pid}/reactions/fire", headers=tma(62)).status_code  # noqa: E731
+    assert react(1) == 200 and react(3) == 404             # a members-only broadcast doesn't leak through its reactions
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'member', 0 FROM users WHERE tg_id = 62")
+    assert react(3) == 200                                 # a club member reacts to it as before
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 1")
+    assert react(1) == 404                                 # nor a hidden club's post
 
 
 def test_bot_texts_match_across_languages():
@@ -1934,8 +1941,12 @@ def test_receipt_reading(env, monkeypatch):
 
     fake({"amount": 1500, "no": "123456789012345678", "recipient": look("Aisha N."), "paid_at": made - 86400, "sender": "Ivanov I.I."})
     c.post(f"/api/events/{eid}/registration", headers=tma(10), json={})
+    pay = lambda uid: (lambda d: (d["payToName"], d["payPhone"]))(c.get(f"/api/events/{eid}", headers=tma(uid)).json())  # noqa: E731
+    assert pay(11) == (None, None)                                         # no seat: the treasurer's Kaspi phone stays hidden
+    assert pay(10) == pay(20) == ("Arman A.", "+77071234567")              # the one paying and the club see it
     mine = c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=pdf(500)).json()["my"]
     assert mine["status"] == "going" and mine["receiptFlags"] == ["amount_short", "recipient_mismatch", "too_early"]  # the student sees it too
+    assert pay(10) == ("Arman A.", "+77071234567") and pay(11) == (None, None)   # still his after the seat is taken
     assert abs(seen[-1][0] - 500 * 300 / 72) < 2 and abs(seen[-1][1] - 700 * 300 / 72) < 2  # the page, read at ~300 dpi
     got = {a["fullName"]: a["receipt"] for a in c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()}["Testov Ali"]
     assert got["flags"] == ["amount_short", "recipient_mismatch", "too_early"]

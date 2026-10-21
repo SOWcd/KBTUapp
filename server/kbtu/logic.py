@@ -308,7 +308,11 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
 
 def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     head = v.role == "admin" or can(con, v, e["org_id"], "events")
-    return {**card(con, v, e), **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"], "payToName": e["pay_to_name"], "payPhone": e["pay_phone"], "meetingTag": e["meeting_tag"],
+    c = card(con, v, e)
+    # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all
+    pay = head or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
+    return {**c, **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"],
+            "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"],
             "memo": json.loads(e["memo"]) if head and e["memo"] else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (owner, Oct 17: the talk is there)
@@ -1608,6 +1612,7 @@ def unread_broadcasts(con, v: Viewer) -> int:
     if not v.student or not one(con, "SELECT 1 FROM org_members WHERE user_id = ?", v.id):
         return 0
     return one(con, """SELECT COUNT(*) FROM posts p WHERE p.audience = 'clubs' AND p.hidden_at IS NULL AND p.created_at > ?
+        AND p.org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden')
         AND NOT EXISTS (SELECT 1 FROM post_reads r WHERE r.post_id = p.id AND r.user_id = ?)""", now() - 30 * 86400, v.id)[0]
 
 
@@ -1629,9 +1634,9 @@ def feature(con, v: Viewer, pid: object, days: object) -> dict:
 
 def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
     need_student(v)
-    p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
-    if not p or kind not in ("fire", "heart"):
+    if kind not in ("fire", "heart"):
         raise ApiError("not_found")
+    p = _thread(con, v, "post", pid)  # it answers with the post: only one the viewer may read
     if on:
         con.execute("INSERT OR IGNORE INTO post_reactions (post_id, user_id, kind) VALUES (?, ?, ?)", (pid, v.id, kind))
     else:
@@ -2006,7 +2011,8 @@ COMMENTS_A_MINUTE, REPORTS_A_DAY = 10, 20
 def _thread(con, v: Viewer, kind: str, tid: int) -> sqlite3.Row:
     """The post or event a comment thread hangs under, if the viewer can see it."""
     if kind == "post":
-        p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", tid)
+        p = one(con, """SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL
+                     AND org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden')""", tid)  # the feed's own rules (posts())
         if not p or (p["audience"] == "clubs" and not one(con, "SELECT 1 FROM org_members WHERE user_id = ?", v.id)):
             raise ApiError("not_found")
         return p

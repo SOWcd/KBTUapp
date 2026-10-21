@@ -12,7 +12,7 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { api, ApiErr, type EventFull, type Id } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { eventById, eventDetails, put, toggleGoing } from '../../lib/state/data.svelte';
+  import { eventById, put, toggleGoing } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
   import { time, nowTs } from '../../lib/time';
@@ -28,7 +28,9 @@
 
   const e = $derived(eventById(id));
   let detail = $state<EventFull | null>(null);
-  $effect(() => { eventDetails(id).then((x) => (detail = x)).catch(() => {}); });
+  // always fresh, never the prefetched copy: the treasurer's name and phone come only with the seat held, and a copy
+  // taken as the finger touched "Go" was asked before the hold
+  $effect(() => { api.event(id).then((x) => (detail = x)).catch(() => {}); });
   const until = $derived(e?.my?.holdUntil ?? null);
   const doubt = $derived(e?.my?.status === 'going' ? (e.my.receiptFlags ?? []) : []);
   const phone = $derived(fmtPhone(detail?.payPhone ?? ''));
