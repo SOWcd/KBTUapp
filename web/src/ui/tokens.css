@@ -7,6 +7,10 @@
   --font-display: 'Inter Variable', system-ui, -apple-system, sans-serif;
   --font-text: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
+  /* type scale (mockup v23; screens move to it one by one, 419 raw sizes before it): large title, section, card
+     title, body, sub, caption, micro */
+  --fs-title: 34px; --fs-sec: 22px; --fs-card: 17px; --fs-body: 15px; --fs-sub: 13px; --fs-cap: 12px; --fs-micro: 11px;
+
   /* spacing: 4-pt grid */
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
   --gutter: 16px;

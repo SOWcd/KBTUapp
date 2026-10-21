@@ -19,14 +19,17 @@
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
-  import List from '@lucide/svelte/icons/list';
-  import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+  // top and bottom bars never repeat an icon (owner, Oct 21): the bottom is ticket / landmark / circle-user-round
+  import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import Shapes from '@lucide/svelte/icons/shapes';
   import Newspaper from '@lucide/svelte/icons/newspaper';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import BookUser from '@lucide/svelte/icons/book-user';
-  import Landmark from '@lucide/svelte/icons/landmark';
+  import Flag from '@lucide/svelte/icons/flag';
+  import DoorOpen from '@lucide/svelte/icons/door-open';
+  import Users from '@lucide/svelte/icons/users';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import UserRound from '@lucide/svelte/icons/user-round';
+  import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
   import Toast from './ui/Toast.svelte';
   import { feedChrome } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
@@ -120,15 +123,15 @@
   const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('tab.join'));
 
   const PAGES = $derived<Record<Tab, CapPage[]>>({
-    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: List }, { label: t('page.clubs'), icon: LayoutGrid }],
+    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays }, { label: t('page.clubs'), icon: Shapes }],
     club: member && session.me?.oversee  // DMP staff: the clubs registry takes the Team page's place (§4.13)
       ? [{ label: t('page.news'), icon: Newspaper }, { label: t('page.registry'), icon: BookUser }, { label: t('tab.studio'), icon: LayoutDashboard }]
       : member
-      ? [{ label: t('page.news'), icon: Newspaper }, staff ? { label: t('tab.studio'), icon: LayoutDashboard } : { label: t('tab.club'), icon: Landmark }, { label: t('page.team'), icon: UsersRound }]
+      ? [{ label: t('page.news'), icon: Newspaper }, staff ? { label: t('tab.studio'), icon: LayoutDashboard } : { label: t('tab.club'), icon: Flag }, { label: t('page.team'), icon: Users }]
       : follower
-      ? [{ label: t('page.news'), icon: Newspaper }, { label: t('tab.join'), icon: Landmark }]
-      : [{ label: t('tab.join'), icon: Landmark }],
-    profile: [{ label: t('page.friends'), icon: UsersRound }, { label: t('page.me'), icon: UserRound }],
+      ? [{ label: t('page.news'), icon: Newspaper }, { label: t('tab.join'), icon: DoorOpen }]
+      : [{ label: t('tab.join'), icon: DoorOpen }],
+    profile: [{ label: t('page.friends'), icon: UsersRound }, { label: t('page.me'), icon: IdCardLanyard }],
   });
   // a non-member's tab 2 has one page (two for a follower: News, Join): clamp where it's used, so the saved page (Studio by default) comes
   // back by itself after sign-in
@@ -382,7 +385,7 @@
 
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them (owner, Oct 14);
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-  {#if !(ui.tab === 'afisha' && pageIdx('afisha') === 0)}<div class="topfade" aria-hidden="true"></div>{/if}
+  {#if !(ui.tab === 'afisha' && pageIdx('afisha') === 0)}<div class="topfade" aria-hidden="true"></div><div class="botfade" aria-hidden="true"></div>{/if}
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} /></div>
   <Nav labels={[t('tab.afisha'), tab2Label, t('tab.profile')]} dot={[false, (session.me?.counters.unreadBroadcasts ?? 0) > 0, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
 
@@ -397,6 +400,10 @@
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: var(--glow), var(--bg);
     -webkit-mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px));
     mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px)); }
+  /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
+  .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
+    -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
+    mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }
   .app { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   /* opacity only, backwards fill: a lingering transform fill would pin the pager pages (prototype bug) */
