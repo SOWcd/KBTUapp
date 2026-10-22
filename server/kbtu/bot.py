@@ -410,7 +410,7 @@ def offsite_round(cfg: Config, con) -> None:
     yday = time.strftime("%Y-%m-%d", time.gmtime(local - 86400))
     if local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
         # two nights without a copy off the server (six tries tonight already): the admins hear it once a day
-        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin'"):
+        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
             logic.notify(con, uid, "backup_failed", f"bf:{date}")
     # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
     jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]
@@ -454,7 +454,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
-        due = rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm FROM bot_outbox b JOIN users u ON u.id = b.user_id
+        due = rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b JOIN users u ON u.id = b.user_id
             WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
         for m in due:
             # take it first: during a deploy the old and the new container run side by side for a few seconds, and
@@ -465,6 +465,9 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             mark = lambda sent, error=None: con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ?", (now() if sent else None, error, m["id"]))
             if not m["can_dm"]:
                 mark(False, "no_dm")
+                continue
+            if m["banned_at"]:  # banned: the bot stops writing (owner, Oct 22)
+                mark(False, "banned")
                 continue
             msg = _render(con, m)
             if msg is None:
@@ -738,6 +741,10 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
         for upd in answer["result"]:
             offset = upd["update_id"] + 1
             msg = upd.get("message") or {}
+            sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
+            group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
+            if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
+                continue  # banned (owner, Oct 22): the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
                     await _picked(cfg, http, con, upd["callback_query"])

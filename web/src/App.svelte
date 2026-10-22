@@ -13,13 +13,14 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, onComputer, tg } from './lib/tg';
+  import { backButton, haptic, onComputer, openLink, tg } from './lib/tg';
   import { api, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
   import { CONSENT_VERSION } from './lib/legal';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Ban from '@lucide/svelte/icons/ban';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
@@ -117,6 +118,8 @@
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
+  sheets.adminTeam = () => lazy(() => import('./screens/admin/AdminTeam.svelte'), {});
+  sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
   sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
@@ -248,7 +251,7 @@
   $effect(() => {
     const snap = { me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team };
     JSON.stringify(snap); // read deeply, so any change schedules a save
-    if (!booted || data.error || session.failed) return;
+    if (!booted || data.error || session.failed || session.banned) return;
     clearTimeout(keepTimer);
     keepTimer = setTimeout(() => writeCache($state.snapshot(snap)), 1000);
   });
@@ -347,7 +350,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up
@@ -375,7 +378,7 @@
 
 <main class="app">
   {#each TABS as tab (tab)}
-    <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab}>
+    <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
         {#snippet page(i)}
           {#if tab === 'afisha'}
@@ -402,10 +405,24 @@
     <o.component {...o.props} overlay={o} />
   {/each}
   <Toast />
+  {#if session.banned}
+    <div class="banned" role="alertdialog" aria-labelledby="ban-t">
+      <span class="bico"><Ban size={34} /></span>
+      <h2 id="ban-t" class="t-h2">{t('ban.title')}</h2>
+      {#if session.banned.reason}<p class="t-callout">{t('ban.reason', { reason: session.banned.reason })}</p>{/if}
+      {#if session.banned.contact}<button class="bapp" onclick={() => openLink('https://t.me/' + session.banned!.contact)}>{t('ban.appeal')}</button>{/if}
+      <p class="t-foot">{t('ban.data')}</p>
+    </div>
+  {/if}
 </main>
 
 <style>
   .cap-theme { display: contents; }
+  .banned { position: absolute; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    padding: 24px; text-align: center; background: var(--glow), var(--bg); }
+  .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
+  .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
+  .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: var(--glow), var(--bg);
     -webkit-mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px));
     mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px)); }

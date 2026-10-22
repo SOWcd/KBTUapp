@@ -444,6 +444,9 @@ MIGRATIONS: list[tuple[int, str]] = [
         ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));"""),
     # club strikes are gone (owner, Oct 22: never used, a lot of code for nothing); probation stays as a label
     (60, "DROP TABLE strikes; DELETE FROM bot_outbox WHERE kind = 'strike';"),
+    # until now the sign-in demoted every admin missing from ADMIN_TG_IDS; it no longer does (roles are given in the
+    # app), so a stale admin row from before must not wake up as an admin: those in the env get it back at sign-in
+    (61, "UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0;"),  # the owner never loses it
 ]
 
 

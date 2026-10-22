@@ -40,9 +40,9 @@ class ApiError(Exception):
     STATUS = {"need_student": 401, "forbidden": 403, "not_found": 404, "full": 409, "closed": 409,
               "conflict": 409, "rate_limited": 429, "bad_input": 400, "unavailable": 503}
 
-    def __init__(self, code: str, message: str = ""):
+    def __init__(self, code: str, message: str = "", extra: dict | None = None):
         super().__init__(code)
-        self.code, self.message = code, message
+        self.code, self.message, self.extra = code, message, extra or {}
 
     @property
     def status(self) -> int:
@@ -814,7 +814,7 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
         return
     h = one(con, "SELECT first_name, last_name, email FROM students WHERE user_id = ?", old)
     held = json.dumps({"name": " ".join(x for x in (h["first_name"], h["last_name"]) if x), "email": h["email"]} if h else {})
-    for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin'"):
+    for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
         notify(con, uid, "id_clash", f"ic:{sid}:{new}:{old}", held)
 
 
@@ -858,8 +858,8 @@ def me(con, v: Viewer) -> dict:
                         for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
-                     "reports": one(con, "SELECT COUNT(DISTINCT target || target_id) FROM reports WHERE status = 'open'")[0] if v.role == "admin" else 0,
-                     "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role in ("admin", "moderator") else 0},
+                     "reports": one(con, "SELECT COUNT(DISTINCT target || target_id) FROM reports WHERE status = 'open'")[0] if v.role in ("admin", "moderator") else 0,
+                     "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
         "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too (review)
@@ -1051,7 +1051,7 @@ def _hand_over(con, uid: int) -> None:
         con.execute("UPDATE org_members SET role = 'member' WHERE org_id = ? AND user_id = ?", (oid, uid))
         heir = one(con, f"""SELECT user_id FROM org_members WHERE org_id = ? AND user_id != ? ORDER BY CASE role
             {" ".join(f"WHEN '{r}' THEN {n}" for r, n in RANK.items())} END DESC, joined_at, user_id LIMIT 1""", oid, uid)
-        admin = one(con, """SELECT id FROM users WHERE role = 'admin' AND id != ? AND tg_id > 0
+        admin = one(con, """SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL AND id != ? AND tg_id > 0
             AND id IN (SELECT user_id FROM students) ORDER BY id LIMIT 1""", uid)
         new = heir["user_id"] if heir else admin["id"] if admin else None
         if new is None:
@@ -1728,9 +1728,9 @@ def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "id": p["id"], "org": org_ref(con, orgs[p["org_id"]], files), "audience": p["audience"], "title": p["title"], "body": p["body"],
         "tag": p["tag"], "photo": media_shape(files[p["photo_file_id"]]) if p["photo_file_id"] in files else None,
         "pinned": bool(p["pinned"]), "featured": bool(p["featured_until"] and p["featured_until"] > now()),
-        "canDelete": v.role == "admin" or "posts" in rights.get(p["org_id"], ()),
+        "canDelete": v.role in ("admin", "moderator") or "posts" in rights.get(p["org_id"], ()),
         "canEdit": "posts" in rights.get(p["org_id"], ()), "editedAt": p["edited_at"],
-        "canFeature": v.role in ("admin", "moderator") and p["audience"] == "public",
+        "canFeature": v.role == "admin" and p["audience"] == "public",
         "commentsOn": bool(p["comments_on"]),
         "comments": comments.get(p["id"], 0),
         "reactions": {k: reactions.get((p["id"], k), 0) for k in ("fire", "heart")}, "mine": {k: (p["id"], k) in mine for k in ("fire", "heart")},
@@ -1842,7 +1842,7 @@ def hide_post(con, v: Viewer, pid: int) -> None:
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
     if not p:
         raise ApiError("not_found")
-    if v.role != "admin" and not can(con, v, p["org_id"], "posts"):
+    if v.role not in ("admin", "moderator") and not can(con, v, p["org_id"], "posts"):
         raise ApiError("forbidden")
     con.execute("UPDATE posts SET hidden_at = ? WHERE id = ?", (now(), pid))
     con.execute("INSERT INTO audit_log (actor_id, action, target, at) VALUES (?, 'post_hide', ?, ?)", (v.id, f"post:{pid}", now()))
@@ -1865,10 +1865,9 @@ def unread_broadcasts(con, v: Viewer) -> int:
 
 
 def feature(con, v: Viewer, pid: object, days: object) -> dict:
-    """A post for everyone on top of Events → List (moderators and the admin, §2) for 1–14 days; 0 takes it off. Public
-    posts only: a broadcast to club members stays theirs. One at a time: featuring one ends the other."""
-    if v.role not in ("admin", "moderator"):
-        raise ApiError("forbidden")
+    """A post for everyone on top of Events → List (the admin, §2; moderators only filter, owner Oct 22) for 1–14 days;
+    0 takes it off. Public posts only: a broadcast to club members stays theirs. One at a time: featuring one ends the other."""
+    _admin(v)
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid) if isinstance(pid, int) else None
     if not p or p["audience"] != "public" or not isinstance(days, int) or isinstance(days, bool) or not 0 <= days <= 14:
         raise ApiError("bad_input")
@@ -1937,15 +1936,14 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
             raise ApiError("conflict", "taken")
         aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, link, why, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, link, why, now())).lastrowid
-        for (uid,) in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')"):
+        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
             notify(con, uid, "club_application", f"capp:{aid}")
     return _club_app(con, one(con, "SELECT * FROM club_applications WHERE id = ?", aid), False)
 
 
 def club_applications(con, v: Viewer) -> list[dict]:
-    """The check (moderators and the admin): pending first, then the last decisions."""
-    if v.role not in ("admin", "moderator"):
-        raise ApiError("forbidden")
+    """The check (the admin: clubs are his, owner Oct 22): pending first, then the last decisions."""
+    _admin(v)
     return [_club_app(con, a, True) for a in rows(con, """SELECT * FROM club_applications ORDER BY status = 'pending' DESC,
         COALESCE(decided_at, created_at) DESC LIMIT 40""")]
 
@@ -1953,8 +1951,7 @@ def club_applications(con, v: Viewer) -> list[dict]:
 def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: object) -> dict:
     """Yes: the club exists at once as a student initiative and the applicant is its President. No: with a reason the
     applicant reads in the app (the bot's message is our template only, §9)."""
-    if v.role not in ("admin", "moderator"):
-        raise ApiError("forbidden")
+    _admin(v)
     why = str(reason or "").strip()
     if not approve and not 3 <= len(why) <= 300:
         raise ApiError("bad_input")
@@ -2270,7 +2267,7 @@ def _thread(con, v: Viewer, kind: str, tid: int) -> sqlite3.Row:
 
 
 def _moderates(con, v: Viewer, org: int) -> bool:
-    return v.role == "admin" or can(con, v, org, "posts")
+    return v.role in ("admin", "moderator") or can(con, v, org, "posts")
 
 
 def comments(con, v: Viewer, kind: str, tid: int) -> dict:
@@ -2377,7 +2374,7 @@ def report(con, v: Viewer, target: object, tid: object, reason: object) -> None:
 
 def report_queue(con, v: Viewer) -> list[dict]:
     """The admin's queue: one row per reported thing still up, the reasons counted, oldest first."""
-    _admin(v)
+    _mod(v)
     out = []
     for r in rows(con, """SELECT target, target_id, MIN(created_at) AS first, COUNT(*) AS n, GROUP_CONCAT(reason) AS reasons FROM reports
             WHERE status = 'open' GROUP BY target, target_id ORDER BY first"""):
@@ -2409,7 +2406,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
 def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[str]:
     """Take the thing down (a comment deleted, a post or an event hidden, a profile's own words and photo gone) or leave
     it; either way its reports close. Returns a removed photo's files to delete from disk."""
-    _admin(v)
+    _mod(v)
     photos: list[str] = []
     if remove:
         if target == "comment":
@@ -2435,7 +2432,7 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
 def taken_down(con, v: Viewer) -> list[dict]:
     """What the admin took down from the report queue in the last 30 days and is still down, newest first: a wrong call
     can be undone (§2 "hide / restore"). Things their own authors or clubs removed aren't here — that was their choice."""
-    _admin(v)
+    _mod(v)
     out = []
     for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action = 'report_remove' AND at > ?
             AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)
@@ -2455,7 +2452,7 @@ def taken_down(con, v: Viewer) -> list[dict]:
 
 def restore(con, v: Viewer, target: str, tid: int) -> None:
     """Undo a take-down: the comment, post or event is back as it was; audited."""
-    _admin(v)
+    _mod(v)
     if target == "comment":
         n = con.execute("UPDATE comments SET deleted_at = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL", (tid,)).rowcount
     elif target in ("post", "event"):
@@ -3955,6 +3952,122 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
 def _admin(v: Viewer) -> None:
     if v.role != "admin":
         raise ApiError("forbidden")
+
+
+def _mod(v: Viewer) -> None:
+    """Moderators filter content (owner, Oct 22): the report queue, taking things down and back; the admin too."""
+    if v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+
+
+# ---------------------------------------------------------------- the app's team (owner, Oct 22)
+# The owner (admin + is_founder) has every right and alone gives or takes the admin role; an admin gives the
+# moderator role and bans; nobody touches the owner, himself, or (unless the owner) another admin. All of it audited.
+
+STAFF_ROLES = ("user", "moderator", "admin")
+_STAFF = f"SELECT {PERSON_COLS}, u.tg_username, u.role, u.ban_reason FROM users u LEFT JOIN students s ON s.user_id = u.id"
+
+
+def _owner(con, v: Viewer) -> bool:
+    return v.role == "admin" and bool(one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)["is_founder"])
+
+
+def _staff_row(p: sqlite3.Row) -> dict:
+    return {"person": person_ref(p), "username": p["tg_username"], "role": p["role"], "owner": bool(p["is_founder"]),
+            "banReason": p["ban_reason"]}
+
+
+def staff(con, v: Viewer) -> dict:
+    _admin(v)
+    return {"team": [_staff_row(p) for p in rows(con, f"{_STAFF} WHERE u.role IN ('admin', 'moderator') AND u.tg_id > 0 ORDER BY u.is_founder DESC, u.role, u.id")],
+            "banned": [_staff_row(p) for p in rows(con, f"{_STAFF} WHERE u.banned_at IS NOT NULL AND u.tg_id > 0 ORDER BY u.banned_at DESC, u.id DESC")],
+            "owner": _owner(con, v)}
+
+
+def find_anyone(con, v: Viewer, username: str) -> dict:
+    """Anyone who opened the app, by @username: the team is picked from them."""
+    _admin(v)
+    name = str(username or "").strip().lstrip("@")
+    if not re.fullmatch(r"[A-Za-z0-9_]{4,32}", name):
+        raise ApiError("bad_input")
+    p = one(con, f"{_STAFF} WHERE lower(u.tg_username) = lower(?) AND u.tg_id > 0", name)
+    if not p:
+        raise ApiError("not_found")
+    return {**_staff_row(p), "banned": one(con, "SELECT banned_at FROM users WHERE id = ?", p["id"])["banned_at"] is not None}
+
+
+def _touchable(con, v: Viewer, uid) -> sqlite3.Row:
+    _admin(v)
+    if not isinstance(uid, int) or isinstance(uid, bool):
+        raise ApiError("bad_input")
+    u = one(con, "SELECT id, role, is_founder, banned_at FROM users WHERE id = ? AND tg_id > 0", uid)
+    if not u:
+        raise ApiError("not_found")
+    if u["is_founder"] or u["id"] == v.id or (u["role"] == "admin" and not _owner(con, v)):
+        raise ApiError("forbidden")
+    return u
+
+
+def set_staff(con, v: Viewer, uid, role) -> dict:
+    if role not in STAFF_ROLES:
+        raise ApiError("bad_input")
+    with tx(con):
+        u = _touchable(con, v, uid)
+        if role == "admin" and not _owner(con, v):
+            raise ApiError("forbidden")
+        if u["banned_at"] is not None and role != "user":
+            raise ApiError("conflict", "banned")
+        if u["role"] != role:
+            con.execute("UPDATE users SET role = ? WHERE id = ?", (role, u["id"]))
+            con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'staff_role', ?, ?, ?)",
+                        (v.id, f"user:{u['id']}", json.dumps({"from": u["role"], "to": role}), now()))
+    return staff(con, v)
+
+
+def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
+    """The platform ban (owner, Oct 22): no mutes, no strikes; the reason is required, he sees it, and the role goes.
+    His posts stay (moderators hide what's bad); the bot stops writing to him."""
+    if not isinstance(on, bool):
+        raise ApiError("bad_input")
+    why = " ".join(str(reason or "").split())
+    if on and not 3 <= len(why) <= 300:
+        raise ApiError("bad_input", "reason")
+    with tx(con):
+        u = _touchable(con, v, uid)
+        if on:
+            con.execute("UPDATE users SET banned_at = ?, ban_reason = ?, role = 'user' WHERE id = ?", (now(), why, u["id"]))
+        else:
+            con.execute("UPDATE users SET banned_at = NULL, ban_reason = NULL WHERE id = ?", (u["id"],))
+        con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)",
+                    (v.id, "ban" if on else "unban", f"user:{u['id']}", json.dumps({"reason": why} if on else {}, ensure_ascii=False), now()))
+    return staff(con, v)
+
+
+def ban_info(con, uid: int) -> dict:
+    """What a banned person sees: why, and whom to write (the owner)."""
+    u = one(con, "SELECT ban_reason FROM users WHERE id = ?", uid)
+    o = one(con, "SELECT tg_username FROM users WHERE is_founder = 1 AND tg_id > 0")
+    return {"reason": u["ban_reason"] if u else None, "contact": o["tg_username"] if o else None}
+
+
+def audit(con, v: Viewer) -> list[dict]:
+    """The owner's log of everything done with power: the last 200."""
+    if not _owner(con, v):
+        raise ApiError("forbidden")
+    out = []
+    for a in rows(con, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 200"):
+        p = one(con, f"{PERSON} WHERE u.id = ?", a["actor_id"]) if a["actor_id"] else None
+        kind, _, tid = a["target"].partition(":")
+        named = None  # whom or what, readable: a person or an org by name
+        if kind == "user" and tid.isdigit():
+            u = one(con, f"{PERSON} WHERE u.id = ?", int(tid))
+            named = shown_name(u) if u else None
+        elif kind == "org" and tid.isdigit():
+            o = one(con, "SELECT name FROM orgs WHERE id = ?", int(tid))
+            named = o["name"] if o else None
+        out.append({"id": a["id"], "actor": person_ref(p) if p else None, "action": a["action"], "target": a["target"],
+                    "targetName": named, "data": json.loads(a["data"] or "{}"), "at": a["at"]})
+    return out
 
 
 def create_org(con, actor: int | None, name: str, short: str, emoji: str, official: bool, slug: str | None = None,

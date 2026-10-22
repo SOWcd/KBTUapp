@@ -102,7 +102,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def api_error(_: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse({"error": exc.code, "message": exc.message}, status_code=exc.status)
+        return JSONResponse({**exc.extra, "error": exc.code, "message": exc.message}, status_code=exc.status)
 
     @app.exception_handler(RequestValidationError)
     async def bad_request(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -145,8 +145,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
             logic.visit(con, u["id"], t)
         else:
-            # the admin role follows ADMIN_TG_IDS; moderators are set by hand and kept
-            role = "admin" if tg["id"] in cfg.admins else "user" if u["role"] == "admin" else u["role"]
+            # ADMIN_TG_IDS are always admins; everyone else's role is given in the app (owner, Oct 22)
+            role = "admin" if tg["id"] in cfg.admins and not u["banned_at"] else u["role"]  # a ban outranks the env
             dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
             if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
                     or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
@@ -155,7 +155,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 logic.visit(con, u["id"], t)
                 u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
         if u["banned_at"]:
-            raise ApiError("forbidden", "banned")
+            raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
         # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (owner, Oct 20: Microsoft only)
         return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
 
@@ -998,6 +998,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/admin/grants")
     def grant(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.grant(con, v, body.get("userId"), body.get("code"))
+
+    @app.get("/api/admin/staff")
+    def staff(con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.staff(con, v)
+
+    @app.get("/api/admin/staff/find")
+    def staff_find(username: str = "", con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.find_anyone(con, v, username)
+
+    @app.post("/api/admin/staff")
+    def staff_set(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.set_staff(con, v, body.get("userId"), body.get("role"))
+
+    @app.post("/api/admin/ban")
+    def ban(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.set_ban(con, v, body.get("userId"), body.get("on"), body.get("reason"))
+
+    @app.get("/api/admin/audit")
+    def audit(con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.audit(con, v)
 
     @app.get("/api/admin/stats")
     def admin_stats(con=Depends(conn), v: Viewer = Depends(viewer)):

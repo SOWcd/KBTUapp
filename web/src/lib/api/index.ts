@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -147,9 +147,9 @@ export interface Api {
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean): Promise<void>; // admin: take it down or leave it
   myClubApplication(): Promise<ClubApplication | null>;  // starting a club (§4.6): my latest application
   applyClub(input: ClubApplicationInput): Promise<ClubApplication>;
-  clubApplications(): Promise<ClubApplication[]>;         // moderators, admin: pending first
+  clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
-  feature(postId: Id, days: number): Promise<Post>;      // moderators, admin: on top of List for everyone; 0 ends it
+  feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
   grant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found'): Promise<PersonCard>; // the admin's manual achievements
   /** the owner's batch scanner: a badge QR is one grant; undo within a minute; what I gave */
   grantScan(qr: string, code: GrantItem['code']): Promise<GrantItem>;
@@ -158,6 +158,11 @@ export interface Api {
   takeBackGrant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found'): Promise<PersonCard>;
   useGrantLink(token: string): Promise<{ code: string }>;
   myGrants(): Promise<GrantItem[]>;
+  staff(): Promise<Staff>;                                // admin: the app's team and the banned
+  staffFind(username: string): Promise<StaffRow>;          // admin: anyone who opened the app, by @username
+  setStaff(userId: Id, role: PlatformRole): Promise<Staff>; // admin role: the owner only
+  ban(userId: Id, on: boolean, reason?: string): Promise<Staff>; // a reason to ban (he sees it)
+  audit(): Promise<AuditRow[]>;                            // the owner: the last 200 actions done with power
   adminStats(): Promise<AdminStats>;
   adminDay(day: number): Promise<AdminDay>;
   adminAi(): Promise<AdminAi>;

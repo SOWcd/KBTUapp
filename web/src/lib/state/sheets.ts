@@ -76,6 +76,9 @@ export const sheets = {
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work (owner, Oct 21) */
   adminAi: () => {},
+  /** the app's team: roles and bans (admin); the audit log (the owner) */
+  adminTeam: () => {},
+  adminAudit: () => {},
   /** suggest any chat for the catalog: paste @name or a link (owner, Oct 21) */
   suggestChat: () => {},
   registry: () => {},

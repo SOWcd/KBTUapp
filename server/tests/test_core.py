@@ -208,6 +208,10 @@ def test_ears(env):
     assert sent[1]["text"] == texts.bot_message("en", "welcome")[0] and url(sent[1]).endswith("?startapp")
     assert con.execute("SELECT can_dm FROM users WHERE tg_id = 10").fetchone()[0] == 1
 
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 10")   # banned: the bot doesn't answer him at all
+    sent.clear()
+    assert asyncio.run(go()) == 11 and [m["chat_id"] for m in sent] == [11]
+
 
 def test_postman(env, monkeypatch):
     """Queued messages go out once, in the user's language, with a button into the app; a block stops them; two postmen
@@ -3607,3 +3611,78 @@ def test_db_must_exist(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_MUST_EXIST", "0")
     (tmp_path / "kbtu.db").unlink()
     assert config.load()
+
+
+def test_app_team(env):
+    """The app's team (owner, Oct 22): the owner alone gives or takes the admin role; an admin gives the moderator role
+    and bans, never touching the owner, himself or another admin; a moderator only filters content; a ban needs a
+    reason, drops the role, shows him why, and the bot stops writing; the owner reads the audit log."""
+    import httpx
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({30}))))
+    who = lambda uid, username: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": username.title(), "username": username}, BOT)}
+    O, A, M, U, X = who(30, "owner_x"), who(31, "admin_x"), who(32, "mod_x"), who(33, "user_x"), who(34, "other_x")
+    ids = {k: c.get("/api/me", headers=h).json()["id"] for k, h in dict(O=O, A=A, M=M, U=U, X=X).items()}
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ids["O"],))
+    find = lambda h, name: c.get("/api/admin/staff/find", headers=h, params={"username": name})
+    role = lambda h, k, r: c.post("/api/admin/staff", headers=h, json={"userId": ids[k], "role": r})
+    ban = lambda h, k, on, reason=None: c.post("/api/admin/ban", headers=h, json={"userId": ids[k], "on": on, "reason": reason})
+
+    assert c.get("/api/admin/staff", headers=U).status_code == 403
+    assert find(O, "@ADMIN_x").json()["person"]["id"] == ids["A"] and find(O, "nobody_here").status_code == 404 and find(O, "a b").status_code == 400
+    assert role(O, "A", "admin").status_code == 200                       # the owner makes an admin; it survives the next sign-in
+    assert c.get("/api/me", headers=A).json()["role"] == "admin"
+    assert role(A, "X", "admin").status_code == 403                       # an admin can't make admins
+    assert role(A, "M", "moderator").json()["team"][-1]["person"]["id"] == ids["M"]
+    assert role(A, "O", "user").status_code == 403 and ban(A, "O", True, "nope").status_code == 403   # nobody touches the owner
+    assert role(A, "A", "user").status_code == 403                        # nor himself
+    assert role(M, "U", "moderator").status_code == 403 and c.get("/api/admin/staff", headers=M).status_code == 403
+    assert c.get("/api/admin/reports", headers=M).status_code == 200     # the moderator's own work
+    assert c.get("/api/admin/stats", headers=M).status_code == 403
+    assert find(M, "user_x").status_code == 403 and c.get("/api/admin/club-applications", headers=M).status_code == 403   # clubs are the admin's
+    assert c.post("/api/admin/feature", headers=M, json={"postId": 1, "days": 1}).status_code == 403
+    assert c.get("/api/me", headers=M).json()["counters"]["clubApps"] == 0
+    assert ban(A, "X", True, "testing an admin ban").status_code == 200 and ban(A, "X", False).status_code == 200   # an admin bans users
+    assert c.post("/api/admin/ban", headers=O, json={"userId": ids["X"], "on": 1, "reason": "nope"}).status_code == 400   # a real bool
+    assert ban(O, "X", True, "x" * 301).status_code == 400
+    assert logic.one(con, "SELECT ban_reason FROM users WHERE id = ?", ids["X"])["ban_reason"] is None   # unban cleared it
+    assert role(O, "A", "moderator").status_code == 200 and role(O, "A", "admin").status_code == 200
+    assert ban(A, "X", True, "nope") .status_code == 200 and role(O, "X", "user").status_code == 200 and ban(O, "X", False).status_code == 200
+    assert role(O, "X", "admin").status_code == 200 and ban(A, "X", True, "nope").status_code == 403   # an admin can't ban an admin
+    assert role(O, "X", "user").status_code == 200
+    assert role(O, "A", "moderator").status_code == 200 and ban(O, "A", True, "spam links").status_code == 200   # the owner may
+    assert role(O, "A", "admin").status_code == 409                       # banned: no role back until unbanned
+
+    assert ban(O, "U", True).status_code == 400                           # a reason is required
+    assert ban(O, "M", True, "  insults   in chats ").json()["banned"][0]["banReason"] == "insults in chats"
+    r = c.get("/api/me", headers=M)
+    assert r.status_code == 403 and r.json()["message"] == "banned" and r.json()["reason"] == "insults in chats" and r.json()["contact"] == "owner_x"
+    assert logic.one(con, "SELECT role FROM users WHERE id = ?", ids["M"])["role"] == "user"
+    con.execute("UPDATE users SET can_dm = 1")
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'new_event', 'event:1', 0)", (ids["M"],))
+    sent = []
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
+            await bot.send_due(cfg, http)
+    asyncio.run(go())
+    assert not sent and logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"   # the bot keeps quiet
+    assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200
+
+    log = c.get("/api/admin/audit", headers=O).json()
+    assert [a["action"] for a in log][:3] == ["unban", "ban", "ban"] and log[1]["data"] == {"reason": "insults in chats"}
+    assert c.get("/api/admin/audit", headers=A).status_code == 403      # the owner's only (A is banned anyway)
+    con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ids["A"],))
+    assert role(O, "A", "admin").status_code == 200 and c.get("/api/admin/audit", headers=A).status_code == 403
+
+    # an ADMIN_TG_IDS admin banned by the owner stays a plain user while banned (the ban outranks the env)
+    con.execute("UPDATE users SET is_founder = 0 WHERE id = ?", (ids["O"],))
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ids["A"],))
+    assert ban(A, "O", True, "env admin test").status_code == 200
+    assert c.get("/api/me", headers=O).status_code == 403 and logic.one(con, "SELECT role FROM users WHERE id = ?", ids["O"])["role"] == "user"
+    assert ban(A, "O", False).status_code == 200 and c.get("/api/me", headers=O).json()["role"] == "admin"   # back at the next sign-in
+    # migration 61 keeps the owner's admin role, takes the rest
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["X"],))
+    con.executescript(dict(db.MIGRATIONS)[61])
+    assert [r["role"] for r in con.execute("SELECT role FROM users WHERE id IN (?, ?, ?) ORDER BY id", (ids["O"], ids["A"], ids["X"]))] == ["user", "admin", "user"]

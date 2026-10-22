@@ -22,7 +22,9 @@
   import { openLink, haptic } from '../../lib/tg';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { loadAfisha } from '../../lib/state/data.svelte';
-  import { loadMe } from '../../lib/state/session.svelte';
+  import { loadMe, session } from '../../lib/state/session.svelte';
+  import UsersRound from '@lucide/svelte/icons/users-round';
+  import ScrollText from '@lucide/svelte/icons/scroll-text';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
   import { withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
@@ -30,16 +32,19 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
+  // a moderator (owner, Oct 22) only filters content: the reports, what was taken down, the chats directory
+  const admin = $derived(session.me?.role === 'admin');
+  const owner = $derived(admin && !!session.me?.founder);
   // the rows' numbers, fetched with the panel
   let clubsN = $state<number | null>(null);
   let schoolsN = $state(0);
-  $effect(() => { api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
+  $effect(() => { if (admin) api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
   let chatsN = $state<number | null>(null);
   let chatsP = $state(0); // suggested, waiting for a look
   $effect(() => { api.chats().then((c) => { chatsN = c.all.length; chatsP = c.pending?.length ?? 0; }).catch(() => {}); });
   // ---- the numbers (PLAN "Admin stats"): no per-person logs, counts only; the chart is the nightly rows ----
   let stats = $state<AdminStats | null>(null);
-  $effect(() => { api.adminStats().then((s) => (stats = s)).catch(() => {}); });
+  $effect(() => { if (admin) api.adminStats().then((s) => (stats = s)).catch(() => {}); });
   const peak = $derived(Math.max(1, stats?.today ?? 0, ...(stats?.days ?? []).map((d) => d.active)));
   // 30 slots: 29 nightly rows ending yesterday (Almaty days), then today so far (the visits log)
   const today = Math.floor((Date.now() / 1000 + 5 * 3600) / 86400);
@@ -90,7 +95,7 @@
   }
   // ---- clubs waiting for the check (§4.6): yes creates the club with its applicant as President; no needs a reason ----
   let apps = $state<ClubApplication[] | null>(null);
-  $effect(() => { api.clubApplications().then((l) => (apps = l)).catch(() => (apps = [])); });
+  $effect(() => { if (admin) api.clubApplications().then((l) => (apps = l)).catch(() => (apps = [])); else apps = []; });
   const pending = $derived((apps ?? []).filter((a) => a.status === 'pending'));
   let refusing = $state<number | null>(null);
   let why = $state('');
@@ -206,12 +211,19 @@
 
   <h3 class="t-cap sh">{t('adm.manage')}</h3>
   <div class="rows surface">
+    {#if admin}
     <button class="r" onclick={() => sheets.adminClubs()}><span class="ic"><Building size={20} /></span><span class="lb">{t('adm.clubs')}{#if clubsN != null}<i>{tn('reg.clubs', clubsN)} · {tn('adm.schools', schoolsN)}</i>{/if}</span><ChevronRight size={18} /></button>
+    <!-- the app's team (owner, Oct 22): moderators, admins (the owner gives those), bans -->
+    <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
+    {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
+    {/if}
     <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
+    {#if admin}
     <!-- the AI page (owner, Oct 21): what the translator does, what failed -->
     <button class="r" onclick={() => sheets.adminAi()}><span class="ic"><Sparkles size={20} /></span><span class="lb">{t('ai.title')}{#if stats?.ai}<i>{stats.ai.on ? `${t('ai.on')} · ${stats.ai.today} ${t('ai.today')}` : t('ai.off')}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.registry()}><span class="ic"><BookUser size={20} /></span><span class="lb">{t('reg.title')}<i>{t('reg.sub')}</i></span><ChevronRight size={18} /></button>
+    {/if}
     {#if down?.length}
       <button class="r" aria-expanded={downOpen} onclick={() => (downOpen = !downOpen)}><span class="ic"><EyeOff size={20} /></span><span class="lb">{t('adm.undoTitle')}</span><i class="n num">{down.length}</i><span class="chev"><ChevronRight size={18} /></span></button>
     {/if}

@@ -20,7 +20,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   if (r.status === 204) return undefined as T;
   const data = await r.json().catch(() => null);
-  if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined);
+  // banned mid-session (owner, Oct 22): the app hears it from any call, not only at launch
+  if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
+  if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   return localize(data) as T;
 }
 
@@ -223,6 +225,11 @@ export const server: Api = {
   takeBackGrant: (userId, code) => call('POST', '/admin/grants/take-back', { userId, code }),
   useGrantLink: (token) => call('POST', `/grant-links/${token}`),
   myGrants: () => call('GET', '/admin/grants'),
+  staff: () => call('GET', '/admin/staff'),
+  staffFind: (username) => call('GET', '/admin/staff/find?username=' + encodeURIComponent(username)),
+  setStaff: (userId, role) => call('POST', '/admin/staff', { userId, role }),
+  ban: (userId, on, reason) => call('POST', '/admin/ban', { userId, on, reason: reason ?? null }),
+  audit: () => call('GET', '/admin/audit'),
   adminStats: () => call('GET', '/admin/stats'),
   adminDay: (day) => call('GET', `/admin/stats/${day}`),
   adminAi: () => call('GET', '/admin/ai'),

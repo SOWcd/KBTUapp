@@ -49,7 +49,7 @@
 
   // coming up: my tickets (a club's own event has none) and what I saved, soonest first
   const soon = $derived(data.events.filter((e) => (e.my && e.my.status !== 'cancelled' && !inner(e)) || e.saved).sort((a, b) => a.startsAt - b.startsAt));
-  const asks = $derived(me?.role === 'admin' ? me.counters.reports + me.counters.clubApps : 0);
+  const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
   // the app's own Telegram (owner, Oct 5): news in the channel, talk in the topics group (BUGS / IDEAS / QUESTIONS)
   const TG_NEWS = 'https://t.me/KBTUappNews', TG_TALK = 'https://t.me/KBTUappTop';
 
@@ -66,8 +66,8 @@
   {#if me?.student}
     <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below (owner, Oct 17) -->
     <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
-    {#if me.role === 'admin'}
-      <!-- the admin panel (owner, Oct 14), with what waits for it -->
+    {#if me.role === 'admin' || me.role === 'moderator'}
+      <!-- the admin panel (owner, Oct 14), with what waits for it; a moderator's is the content part (Oct 22) -->
       <button class="gear adm" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
     {/if}
   {/if}
