@@ -4,11 +4,14 @@
   import { toast } from '../lib/state/ui.svelte';
   import Emoji from './Emoji.svelte';
   import { glass } from './glass';
+  // read once per phrase, not live: a sheet closing right after say() must not move the toast mid-way (review, Oct 22);
+  // the map hides the chrome too but keeps its toast low, above its floors
+  const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d && !('map' in d); };
 </script>
 
 {#key toast.id}
   {#if toast.text}
-    <div class="toast glass glass-pill" role="status" use:glass>
+    <div class="toast glass glass-pill" class:top={atTop()} role="status" use:glass>
       <Emoji name={toast.emoji} size={26} />
       <span>{toast.text}</span>
     </div>
@@ -24,8 +27,11 @@
     transform: translateX(-50%); pointer-events: none;
     animation: pop 420ms var(--ease-spring) both, out 300ms var(--ease-in) 2300ms forwards;
   }
-  :global(html[data-sheet]) .toast { bottom: calc(var(--safe-bottom) + 24px); }
+  /* a sheet's footer holds its buttons: there the toast drops from the top, under Telegram's header, like an iOS push (owner, Oct 22) */
+  .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop, rise; }
   :global(html[data-map]) .toast { bottom: calc(var(--safe-bottom) + 108px); } /* above the map's floors and its note */
   @keyframes pop { from { opacity: 0; transform: translate(-50%, 14px) scale(0.92); } }
+  @keyframes drop { from { opacity: 0; transform: translate(-50%, -14px) scale(0.92); } }
+  @keyframes rise { to { opacity: 0; transform: translate(-50%, -8px) scale(0.96); } }
   @keyframes out { to { opacity: 0; transform: translate(-50%, 8px) scale(0.96); } }
 </style>
