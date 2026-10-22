@@ -77,11 +77,12 @@
     tried = true;
     if (!r || !ready) { haptic.error(); return; }
     busy = true;
+    const sending = snap; // what's typed while it goes isn't saved yet
     try {
       r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
       try { localStorage.removeItem(key()); } catch { /* blocked */ }
       const first = !sent;
-      sent = true; editing = false; saved = snap;
+      sent = true; editing = false; saved = sending;
       haptic.ok();
       if (first) burst();
       say(first ? t('cast.sent') : t('cast.saved'), 'party_popper_3d');
