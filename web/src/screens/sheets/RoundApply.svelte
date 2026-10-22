@@ -29,6 +29,11 @@
   let picks = $state<Id[]>([]);
   let answers = $state<Record<string, string | string[]>>({});
   let sent = $state(false);
+  // a sent application shows where it stands; its form opens again only on "Change" (owner, Oct 22: the form stayed after
+  // sending, and a pull after saving asked "leave without saving?")
+  let editing = $state(false);
+  let saved = $state('');
+  let leaving = false;
   let busy = $state(false);
   let tried = $state(false);
   const key = () => `kb-round-${r?.id}`;
@@ -37,15 +42,15 @@
     api.round(org).then((x) => {
       if (!x) { gone = true; return; }
       r = x;
-      if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; return; }
+      if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
       try { const d = JSON.parse(localStorage.getItem(key()) ?? 'null'); if (d) { picks = d.picks ?? []; answers = d.answers ?? {}; } } catch { /* blocked */ }
     }).catch(() => { gone = true; });
   });
   // the draft, as it's typed
   $effect(() => {
-    const snap = JSON.stringify({ picks, answers });
+    const draft = JSON.stringify({ picks, answers });
     if (!r || sent) return;
-    try { localStorage.setItem(key(), snap); } catch { /* blocked */ }
+    try { localStorage.setItem(key(), draft); } catch { /* blocked */ }
   });
 
   function pick(id: Id) {
@@ -56,6 +61,11 @@
     else say(t('cast.pickMax', { n: r?.picks ?? 1 }), 'raising_hands_3d_default');
   }
   const shown = $derived((r?.questions ?? []).filter((q) => q.tagId == null || picks.includes(q.tagId)));
+  const payload = () => Object.fromEntries(shown.map((q) => [String(q.id), answers[q.id] ?? '']));
+  // what the club would get, as the server keeps it (no empty answers, no unpicked department's): typing and erasing
+  // isn't a change
+  const snap = $derived(JSON.stringify({ picks, answers: Object.fromEntries(Object.entries(payload())
+    .map(([k, a]) => [k, Array.isArray(a) ? a : a.trim()] as const).filter(([, a]) => a.length)) }));
   const missing = (q: Round['questions'][number]) => q.required && !(Array.isArray(answers[q.id]) ? (answers[q.id] as string[]).length : String(answers[q.id] ?? '').trim());
   const ready = $derived(picks.length > 0 && !shown.some(missing));
   function toggleMany(qid: Id, opt: string) {
@@ -68,10 +78,10 @@
     if (!r || !ready) { haptic.error(); return; }
     busy = true;
     try {
-      r = await api.applyRound(r.id, { departments: picks, answers: Object.fromEntries(shown.map((q) => [String(q.id), answers[q.id] ?? ''])), source });
+      r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
       try { localStorage.removeItem(key()); } catch { /* blocked */ }
       const first = !sent;
-      sent = true;
+      sent = true; editing = false; saved = snap;
       haptic.ok();
       if (first) burst();
       say(first ? t('cast.sent') : t('cast.saved'), 'party_popper_3d');
@@ -106,6 +116,20 @@
     if (tgLink) openLink(tgLink); else say(t('cast.ivWrite'), 'raising_hands_3d_default');
   }
 
+  function cancelEdit() {
+    try { const d = JSON.parse(saved); picks = d.picks; answers = { ...d.answers }; } catch { /* never */ }
+    editing = false; tried = false;
+  }
+  // only edits to a sent application ask before closing; an unsent one keeps its draft on the phone
+  const changed = () => !leaving && sent && editing && snap !== saved;
+  let asking = false;
+  async function askLeave() {
+    if (asking) return;
+    asking = true;
+    try { if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); } }
+    finally { asking = false; }
+  }
+
   async function withdraw() {
     if (!r || !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('cast.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep'), danger: true }))) return;
     try { await api.withdrawRound(r.id); haptic.soft(); void loadAfisha(); close(overlay.id); }
@@ -113,7 +137,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={club?.name ?? t('cast.title')}>
+<Sheet {overlay} tall title={club?.name ?? t('cast.title')} hold={changed} onhold={askLeave}>
   {#if gone}
     <p class="t-callout dim">{t('cast.closed')}</p>
   {:else if r}
@@ -149,6 +173,7 @@
       </section>
     {/if}
 
+    {#if !sent || editing}
     <section class="known surface">
       <span class="t-cap">{t('cast.known')}</span>
       <div class="me">
@@ -191,12 +216,21 @@
       </div>
     {/each}
 
-    {#if sent && r.open}<button class="wd" onclick={withdraw}>{t('join.withdraw')}</button>{/if}
+    {/if}
+
+    {#if sent && r.open && !editing}<button class="wd" onclick={withdraw}>{t('join.withdraw')}</button>{/if}
   {/if}
 
   {#snippet footer()}
-    {#if r?.open}
-      <Button kind="primary" size="l" full loading={busy} onclick={send}>{sent ? t('cast.save') : t('cast.send')}</Button>
+    {#if r?.open && !sent}
+      <Button kind="primary" size="l" full loading={busy} onclick={send}>{t('cast.send')}</Button>
+    {:else if r?.open && editing}
+      <div class="row">
+        <Button kind="neutral" size="l" onclick={cancelEdit}>{t('common.cancel')}</Button>
+        <Button kind="primary" size="l" full loading={busy} disabled={snap === saved} onclick={send}>{t('cast.save')}</Button>
+      </div>
+    {:else if r?.open}
+      <Button kind="secondary" size="l" full onclick={() => { haptic.select(); editing = true; }}>{t('cast.change')}</Button>
     {/if}
   {/snippet}
 </Sheet>
@@ -236,5 +270,6 @@
   .opts button { height: 38px; padding: 0 14px; border-radius: var(--r-full); background: var(--surface-2); font: 600 14px/1 var(--font-text); color: var(--text-2); }
   .opts button.on { background: var(--text); color: var(--bg); }
   .err { margin: 2px 4px 0; font: 600 12.5px/1.3 var(--font-text); color: var(--danger-text); }
+  .row { display: flex; gap: 8px; }
   .wd { display: block; margin: 18px auto 4px; padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--text-2); }
 </style>

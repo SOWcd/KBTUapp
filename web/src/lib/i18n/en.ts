@@ -112,6 +112,7 @@ const en: Dict = {
   'cast.optional': "optional",
   'cast.send': "Send the application",
   'cast.save': "Save the changes",
+  'cast.change': "Change the application",
   'cast.sent': "Application sent!",
   'cast.saved': "Changes saved",
   'cast.stepSent': "Application sent",

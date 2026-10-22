@@ -112,6 +112,7 @@ const kk: Dict = {
   'cast.optional': "міндетті емес",
   'cast.send': "Өтінім жіберу",
   'cast.save': "Өзгерістерді сақтау",
+  'cast.change': "Өтінімді өзгерту",
   'cast.sent': "Өтінім жіберілді!",
   'cast.saved': "Өзгерістер сақталды",
   'cast.stepSent': "Өтінім жіберілді",
