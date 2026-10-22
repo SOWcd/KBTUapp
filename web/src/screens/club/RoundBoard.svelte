@@ -16,6 +16,7 @@
   import { dateInput, nowTs } from '../../lib/time';
   import { placeOf } from '../../lib/i18n/index.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -113,7 +114,7 @@
   let nf = $state({ date: dateInput(nowTs() + 2 * 86400), from: '15:00', to: '18:00', minutes: 20, capacity: 1, place: '' });
   async function addDay() {
     if (!r) return;
-    try { slots = await api.addSlots(r.id, nf); adding = false; haptic.ok(); }
+    try { slots = await api.addSlots(r.id, nf); adding = false; haptic.ok(); say(phrase('say.slotsAdded'), 'spiral_calendar_3d'); }
     catch { haptic.error(); say(t('cast.ivBad'), 'pleading_face_3d'); }
   }
   async function dropSlot(s: RoundSlot) {

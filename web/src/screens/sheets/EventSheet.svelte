@@ -113,7 +113,7 @@
     catch (x) { haptic.error(); say(t(x instanceof ApiErr && x.message === 'first_year' ? 'vol.noFirst' : x instanceof ApiErr && x.message === 'full' ? 'vol.full' : 'common.error'), 'pleading_face_3d'); }
   }
   async function volLeave() {
-    try { detail = await api.volunteerLeave(id); haptic.soft(); } catch { haptic.error(); }
+    try { detail = await api.volunteerLeave(id); haptic.soft(); say(phrase('say.volLeft'), 'waving_hand_3d_default'); } catch { haptic.error(); }
   }
 
   // ---- "+N seats" (§4.2): when it's full, the club's Head+ add seats right here; the waitlist moves in ----
@@ -181,6 +181,7 @@
     try {
       detail = await api.rate(id, score, comment);
       if (comment) { noted = true; haptic.ok(); say(t('rate.saved'), 'sparkles_3d'); }
+      else say(phrase('say.rated'), FACES[score - 1]);
     } catch { rated = was; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
@@ -214,7 +215,7 @@
 
   async function removeUpdate(u: EventUpdate) {
     if (!(await sheets.ask({ title: t('upd.deleteAsk'), ok: t('upd.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.deleteUpdate(id, u.id); if (detail) detail = { ...detail, updates: detail.updates.filter((x) => x.id !== u.id) }; haptic.soft(); }
+    try { await api.deleteUpdate(id, u.id); if (detail) detail = { ...detail, updates: detail.updates.filter((x) => x.id !== u.id) }; haptic.soft(); say(t('say.updDeleted'), 'waving_hand_3d_default'); }
     catch { say(t('common.error'), 'pleading_face_3d'); }
   }
 

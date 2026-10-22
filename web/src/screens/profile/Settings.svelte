@@ -25,7 +25,7 @@
     if (!me) return;
     haptic.tap();
     me.settings[k] = on;
-    try { session.me = await api.updateMe({ [k]: on }); }
+    try { session.me = await api.updateMe({ [k]: on }); say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d'); }
     catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); } // the one on screen now
   }
 
@@ -50,9 +50,9 @@
   <h1 class="ttl">{t('me.settings')}</h1>
   <div class="rows surface">
     <div class="r"><span class="lb">{t('me.guestLang')}</span>
-      <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); setLang(l); keep({ lang: l }); say(t('say.lang'), 'waving_hand_3d_default'); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
+      <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); setLang(l); keep({ lang: l }); say(phrase('say.lang'), 'speech_balloon_3d'); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
     <div class="r"><span class="lb">{t('me.guestTheme')}</span>
-      <span class="seg"><button class:on={theme.current === 'dark'} onclick={(e) => { if (theme.current !== 'dark') { chooseTheme('dark', e.currentTarget); keep({ theme: 'dark' }); say(phrase('say.theme.dark'), 'sparkles_3d'); } }}>{t('theme.dark')}</button><button class:on={theme.current === 'light'} onclick={(e) => { if (theme.current !== 'light') { chooseTheme('light', e.currentTarget); keep({ theme: 'light' }); say(phrase('say.theme.light'), 'sparkles_3d'); } }}>{t('theme.light')}</button></span></div>
+      <span class="seg"><button class:on={theme.current === 'dark'} onclick={(e) => { if (theme.current !== 'dark') { chooseTheme('dark', e.currentTarget); keep({ theme: 'dark' }); say(phrase('say.theme.dark'), 'crescent_moon_3d'); } }}>{t('theme.dark')}</button><button class:on={theme.current === 'light'} onclick={(e) => { if (theme.current !== 'light') { chooseTheme('light', e.currentTarget); keep({ theme: 'light' }); say(phrase('say.theme.light'), 'sparkles_3d'); } }}>{t('theme.light')}</button></span></div>
   </div>
 
   {#if me?.student}

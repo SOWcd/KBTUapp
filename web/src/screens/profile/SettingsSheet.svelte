@@ -4,12 +4,14 @@
   import Lock from '@lucide/svelte/icons/lock';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { type Overlay } from '../../lib/state/ui.svelte';
+  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
 
   let { overlay, kind }: { overlay: Overlay; kind: 'privacy' | 'power' } = $props();
+  const POWER_EMOJI = { on: 'hot_beverage_3d', off: 'high_voltage_3d', auto: 'robot_3d' } as const;
   const NOW = { fps: 'power.now.fps', battery: 'power.now.battery', device: 'power.now.device' } as const;
   const now = $derived(power.mode === 'on' ? 'power.now.on' : power.mode === 'off' ? 'power.now.off' : power.why ? NOW[power.why] : 'power.now.autoOff');
   // what we keep about a student first: the sign-in sheet's "What we store" opens this (§4.1 consent)
@@ -21,7 +23,7 @@
   {#if kind === 'power'}
     <h2 class="t-h2 hd">{t('power.title')}</h2>
     <p class="t-callout lead">{t('power.lead')}</p>
-    <div class="seg modes">{#each POWER_MODES as m (m)}<button class:on={power.mode === m} onclick={() => { haptic.select(); setPowerMode(m); }}>{t(`power.${m}`)}</button>{/each}</div>
+    <div class="seg modes">{#each POWER_MODES as m (m)}<button class:on={power.mode === m} onclick={() => { if (power.mode !== m) { haptic.select(); setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } }}>{t(`power.${m}`)}</button>{/each}</div>
     <section class="blk now"><p class="t-callout">{t(now)}</p>
       {#if power.mode === 'auto' && power.fps}<p class="t-foot">{t('power.fps', { n: power.fps })}</p>{/if}</section>
     <p class="t-foot note">{t('power.what')}</p>

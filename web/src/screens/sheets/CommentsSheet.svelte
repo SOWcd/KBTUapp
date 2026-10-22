@@ -11,6 +11,7 @@
   import Reply from '@lucide/svelte/icons/reply';
   import { api, ApiErr, type Comment, type CommentThread, type Id, type ReportReason } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { data } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -51,7 +52,7 @@
     sending = true;
     try {
       th = await api.addComment(kind, id, body, asClub, replying?.id);
-      draft = ''; replying = null; haptic.ok();
+      draft = ''; replying = null; haptic.ok(); say(phrase('say.commented'), 'speech_balloon_3d');
       requestAnimationFrame(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }));
     } catch (e) {
       haptic.error();
@@ -60,7 +61,7 @@
   }
   async function remove(c: Comment) {
     if (!(await sheets.ask({ title: t('cm.deleteAsk'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; menu = null; haptic.soft(); }
+    try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; menu = null; haptic.soft(); say(t('say.cmDeleted'), 'waving_hand_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function report(c: Comment, reason: ReportReason) {
@@ -69,7 +70,7 @@
   }
   async function toggle(ev: Event) {
     const on = (ev.currentTarget as HTMLInputElement).checked;
-    try { th = await api.setComments(kind, id, on); haptic.select(); }
+    try { th = await api.setComments(kind, id, on); haptic.select(); say(on ? phrase('say.cmOn') : t('say.cmOff'), on ? 'speech_balloon_3d' : 'locked_3d'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   function reply(c: Comment) {

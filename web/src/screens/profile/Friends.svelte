@@ -11,7 +11,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { api, type EventCard, type FriendRow } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadFriends, prefetchEvent } from '../../lib/state/data.svelte';
+  import { data, loadFriends, prefetchEvent, phrase } from '../../lib/state/data.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, friendsLine } from '../../lib/i18n/index.svelte';
@@ -48,7 +48,7 @@
   }
   async function takeBack(r: FriendRow) {
     busy = r.person.id;
-    try { await api.takeBackRequest(r.person.id); if (data.friends) data.friends = { ...data.friends, outgoing: data.friends.outgoing.filter((x) => x.person.id !== r.person.id) }; haptic.soft(); }
+    try { await api.takeBackRequest(r.person.id); if (data.friends) data.friends = { ...data.friends, outgoing: data.friends.outgoing.filter((x) => x.person.id !== r.person.id) }; haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }
     catch { say(t('common.error'), 'pleading_face_3d'); }
     finally { busy = null; }
   }

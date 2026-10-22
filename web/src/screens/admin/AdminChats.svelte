@@ -5,6 +5,7 @@
   import X from '@lucide/svelte/icons/x';
   import { api, ApiErr, type Chat } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -18,11 +19,11 @@
   let pending = $state<Chat[]>([]);
   $effect(() => { api.chats().then((c) => { chats = c.all; pending = c.pending ?? []; }).catch(() => (chats = [])); });
   async function approve(c: Chat) {
-    try { const x = await api.approveChat(c.id); pending = pending.filter((p) => p.id !== c.id); chats = [...(chats ?? []), x]; haptic.ok(); }
+    try { const x = await api.approveChat(c.id); pending = pending.filter((p) => p.id !== c.id); chats = [...(chats ?? []), x]; haptic.ok(); say(phrase('say.chatApproved'), 'party_popper_3d'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function decline(c: Chat) {
-    try { await api.deleteChat(c.id); pending = pending.filter((p) => p.id !== c.id); haptic.soft(); }
+    try { await api.deleteChat(c.id); pending = pending.filter((p) => p.id !== c.id); haptic.soft(); say(t('say.chatDeclined'), 'waving_hand_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   let chatForm = $state(false);
@@ -38,7 +39,7 @@
     finally { busy = false; }
   }
   async function dropChat(c: Chat) {
-    try { await api.deleteChat(c.id); chats = (chats ?? []).filter((x) => x.id !== c.id); haptic.soft(); }
+    try { await api.deleteChat(c.id); chats = (chats ?? []).filter((x) => x.id !== c.id); haptic.soft(); say(t('say.chatDropped'), 'file_cabinet_3d'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
 

@@ -121,7 +121,7 @@
     if (!m) return;
     f.placeUrl = m[0];
     f.place = f.place.replace(m[0], ' ').replace(/\s+/g, ' ').replace(/^[\s,.·-]+|[\s,.·-]+$/g, '').slice(0, 80);
-    haptic.ok();
+    haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d');
   }
 
   // a photo cover: shrunk on the phone, re-encoded by the server; the emoji and colour stay as the fallback
