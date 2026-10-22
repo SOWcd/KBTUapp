@@ -1121,7 +1121,7 @@ def deletion_hash(home: Path, tg_id: int) -> str:
 # Every column that points at a person (the foreign keys to users, read from the schema at each deletion) is in one
 # of these, or deleting an account refuses to run: a new table can't keep someone by being forgotten
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
-_DEL_KEEP = {("org_bans", "user_id"), ("strikes", "user_id")}  # a club's safety record stays on the Telegram account
+_DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
     ("students", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
@@ -1157,7 +1157,7 @@ def _placeholder(con) -> int:
 
 def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
     """Delete my data (§4.8, consent withdrawn), run by delete_due after the week. The Telegram account stays a guest:
-    its settings, a ban and the clubs' strike counts stay on the Telegram ID. Future tickets are given up first, so
+    its settings and a club's ban stay on the Telegram ID. Future tickets are given up first, so
     seats free up and the waitlist moves. My part of what is over moves to a nameless placeholder, its free text
     blanked: who came to an ended event, ratings, volunteering, done casting rounds, comments written as the club.
     Album photos I added stay without my name unless I asked them gone; everything else of mine is deleted.
@@ -1189,7 +1189,6 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute(f"""UPDATE round_votes SET user_id = :p, note = '' WHERE user_id = :u
             AND app_id IN (SELECT id FROM round_apps WHERE round_id IN ({done}))""", me_)
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u AND as_org = 1", me_)
-        con.execute("UPDATE strikes SET note = '' WHERE user_id = :u", me_)  # the count stays (3 = out), not the words
         # album photos: without my name, or gone if I asked (ask_delete)
         drop = one(con, "DELETE FROM meta WHERE key = ? RETURNING 1", f"delphotos:{v.id}") is not None
         mine = [r[0] for r in rows(con, "SELECT file_id FROM event_photos WHERE added_by = ?", v.id)] if drop else []
@@ -3064,26 +3063,21 @@ def _expected(con, e: sqlite3.Row) -> list[int]:
 
 def meeting_answers(con, v: Viewer, eid: int) -> list[dict]:
     """A club meeting's people for its Head+ (§2b): each one's answer (yes, no with the reason, none) and whether they
-    came; once it's over, who missed it without a reason and is on probation can get its strike, one tap, once."""
+    came, and whether they are on probation."""
     e = _staff_event(con, v, eid, "events")
     if not e["meeting"]:
         raise ApiError("bad_input")
-    over, mine = end_of(e) <= now(), role_in(con, v, e["org_id"])
     expected = _expected(con, e)
-    found = rows(con, f"""SELECT {PERSON_COLS}, m.role, m.probation, r.status, r.note, r.checked_in_at,
-            EXISTS (SELECT 1 FROM strikes x WHERE x.event_id = ? AND x.user_id = u.id) AS struck
+    found = rows(con, f"""SELECT {PERSON_COLS}, m.role, m.probation, r.status, r.note, r.checked_in_at
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id
         LEFT JOIN registrations r ON r.event_id = ? AND r.user_id = u.id
-        WHERE m.org_id = ? AND u.id IN ({_qs(expected)})""", eid, eid, e["org_id"], *expected) if expected else []
+        WHERE m.org_id = ? AND u.id IN ({_qs(expected)})""", eid, e["org_id"], *expected) if expected else []
     out = []
     for p in found:
         answer = "yes" if p["status"] in ("going", "hold") else "no" if p["status"] == "cancelled" else "none"
         came = p["checked_in_at"] is not None
         out.append({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "role": p["role"],
-                    "answer": answer, "note": p["note"] if answer == "no" else None, "came": came, "probation": bool(p["probation"]),
-                    "struck": bool(p["struck"]),
-                    "canStrike": over and not came and not (answer == "no" and p["note"]) and bool(p["probation"]) and not p["struck"]
-                    and RANK[mine] > RANK[p["role"]]})  # a "no" with a reason is excused; one without (a cancelled ticket) isn't
+                    "answer": answer, "note": p["note"] if answer == "no" else None, "came": came, "probation": bool(p["probation"])})
     return sorted(out, key=lambda x: (-RANK[x["role"]], x["fullName"]))
 
 
@@ -4116,7 +4110,7 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 
 def team(con, v: Viewer, oid: int) -> list[dict]:
     """The full roster for the club's own team (§3): full names and @usernames, highest role first, with the club's own
-    role name and the tags (§2b). Probation and strikes: for the club's Head+ and the person. Vice+ also see who
+    role name and the tags (§2b). Probation: for the club's Head+ and the person. Vice+ also see who
     hasn't been checked in at the club's events for 60 days, to keep the roster real (§4.13)."""
     mine = role_in(con, v, oid)
     if not mine:
@@ -4125,7 +4119,6 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
     vice, head = "team" in r, "people" in r
     found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, t.name AS title, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
-        (SELECT COUNT(*) FROM strikes x WHERE x.org_id = m.org_id AND x.user_id = u.id AND x.cleared_at IS NULL) AS strikes,
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
         (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
@@ -4135,7 +4128,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
                     "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < now() - QUIET_FOR,
                     # theirs, and Head+ strictly above them (the rank rule; audit L10: a Head saw the Vice's)
-                    **({"probation": bool(p["probation"]), "strikes": p["strikes"]} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
+                    **({"probation": bool(p["probation"])} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
 
 
@@ -4163,11 +4156,10 @@ def _manage(con, v: Viewer, oid: int, uid: int) -> str:
 
 
 def _remove(con, actor: int, oid: int, uid: int, ban: bool, by: str) -> None:
-    """Someone is out of the club: their tags, strikes and open removal requests there go too; banned, they can't come
+    """Someone is out of the club: their tags and open removal requests there go too; banned, they can't come
     back by an application or the link until a Vice+ lifts it (§2b)."""
     con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, uid))
     con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ?)", (uid, oid))
-    con.execute("DELETE FROM strikes WHERE org_id = ? AND user_id = ?", (oid, uid))
     con.execute("UPDATE removal_requests SET status = 'done', decided_by = ?, decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'",
                 (actor, now(), oid, uid))
     if ban:
@@ -4208,11 +4200,9 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
 
 # ---------------------------------------------------------------- Team 2.0 (owner, Oct 5; SPEC §2b)
 # A club's own roles are a name and colour on one of the levels, so every rights check stays on the level. Tags are
-# groups of people. Probation: Head+ put someone below them on it and give strikes; the third strike asks the President
-# or Vice to remove them. A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
+# groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off
+# (the strikes that came with it went on Oct 22: never used, owner). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
 
-STRIKES_OUT = 3
-STRIKE_REASONS = ("meeting", "event", "other")
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 
 
@@ -4245,7 +4235,6 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
         by = {b["id"]: b for b in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(asks))})", *[a["by_id"] for a in asks])} if asks else {}
         out["removals"] = [{"id": a["id"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(),
                             "by": person_ref(by[a["by_id"]]) if a["by_id"] in by else None, "ban": bool(a["ban"]), "note": a["note"],
-                            "strikes": one(con, "SELECT COUNT(*) FROM strikes WHERE org_id = ? AND user_id = ? AND cleared_at IS NULL", oid, a["user_id"])[0],
                             "at": a["created_at"], "canDecide": RANK[mine] > RANK[a["role"]]} for a in asks]
         out["bans"] = [{"person": person_ref(b), "fullName": f"{b['last_name'] or ''} {b['first_name'] or ''}".strip() or short_name(b), "at": b["created_at"]}
                        for b in rows(con, f"""SELECT {PERSON_COLS}, x.created_at FROM org_bans x JOIN users u ON u.id = x.user_id
@@ -4352,7 +4341,7 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     President and the Vice tag each other; departments in it are left as they are); `dept` — the department (a tag
     marked so) or null for none (PLAN 47): Vice+ on anyone; a Head on those below them, only into or out of the Head's
     own department, never their own; `probation` — Head+ put someone
-    below them on it, only the President or Vice take it off (passed: the strikes go, the bot congratulates)."""
+    below them on it, only the President or Vice take it off (passed: the bot congratulates)."""
     if not body or not set(body) <= {"role", "roleId", "tags", "dept", "probation"}:
         raise ApiError("bad_input")
     with tx(con):
@@ -4419,9 +4408,6 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
             was = one(con, "SELECT probation FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)["probation"]
             con.execute("UPDATE org_members SET probation = ? WHERE org_id = ? AND user_id = ?", (int(on), oid, uid))
             if was and not on:
-                con.execute("UPDATE strikes SET cleared_at = ?, cleared_by = ? WHERE org_id = ? AND user_id = ? AND cleared_at IS NULL", (now(), v.id, oid, uid))
-                con.execute("""UPDATE removal_requests SET status = 'declined', decided_by = ?, decided_at = ?
-                    WHERE org_id = ? AND user_id = ? AND status = 'pending' AND by_id IS NULL""", (v.id, now(), oid, uid))
                 notify(con, uid, "probation_passed", f"pp:{oid}:{now() // 86400}")
     return team(con, v, oid)
 
@@ -4436,62 +4422,6 @@ def _ask_removal(con, oid: int, uid: int, by: int | None, ban: bool, note: str) 
     for m in rows(con, "SELECT user_id, role FROM org_members WHERE org_id = ? AND role IN ('vice', 'president') AND user_id != ?", oid, by or 0):
         if RANK[m["role"]] > RANK[theirs]:
             notify(con, m["user_id"], "removal_ask", f"rm:{rid}")
-
-
-def add_strike(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
-    """Head+ give a strike to someone below them who is on probation (§2b): why (a missed meeting, a missed important
-    event, or something else said in the note). The bot tells them "n of 3"; the third asks the President and Vice."""
-    reason, note = str(body.get("reason") or ""), " ".join(str(body.get("note") or "").split())
-    meeting = body.get("eventId")  # from a meeting's answers (§2b): that meeting, missed, once
-    if reason not in STRIKE_REASONS or len(note) > 140 or (reason == "other" and not note) \
-            or meeting is not None and (reason != "meeting" or not isinstance(meeting, int) or isinstance(meeting, bool)):
-        raise ApiError("bad_input")
-    with tx(con):
-        _below(con, v, oid, uid, "people")
-        if not one(con, "SELECT probation FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)["probation"]:
-            raise ApiError("conflict", "probation")
-        if meeting is not None:
-            e = one(con, "SELECT * FROM events WHERE id = ? AND org_id = ? AND meeting = 1 AND status = 'published'", meeting, oid)
-            if not e or end_of(e) > now() or uid not in _expected(con, e):
-                raise ApiError("bad_input")
-            if one(con, "SELECT 1 FROM strikes WHERE event_id = ? AND user_id = ?", meeting, uid):
-                raise ApiError("conflict", "struck")
-            if one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", meeting, uid):
-                raise ApiError("conflict", "came")
-            note = note or e["title"]
-        sid = con.execute("INSERT INTO strikes (org_id, user_id, reason, note, by_id, created_at, event_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                          (oid, uid, reason, note, v.id, now(), meeting)).lastrowid
-        notify(con, uid, "strike", f"st:{sid}")
-        if one(con, "SELECT COUNT(*) FROM strikes WHERE org_id = ? AND user_id = ? AND cleared_at IS NULL", oid, uid)[0] >= STRIKES_OUT:
-            _ask_removal(con, oid, uid, None, False, "")
-    return team(con, v, oid)
-
-
-def strikes(con, v: Viewer, oid: int, uid: int) -> list[dict]:
-    """A person's strikes in the club, newest first, cleared ones too: for them and the club's Head+."""
-    if uid != v.id and v.role != "admin":
-        if not can(con, v, oid, "people"):
-            raise ApiError("forbidden")  # before _below: an outsider learns nothing about who is in the club
-        _below(con, v, oid, uid, "people")  # only those above them by the rank rule (audit L10: a Head saw the Vice's)
-    if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid):
-        raise ApiError("not_found")
-    found = rows(con, "SELECT * FROM strikes WHERE org_id = ? AND user_id = ? ORDER BY id DESC", oid, uid)
-    by = {p["id"]: p for p in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(found))})", *[x["by_id"] for x in found])} if found else {}
-    return [{"id": x["id"], "reason": x["reason"], "note": x["note"], "at": x["created_at"], "by": person_ref(by[x["by_id"]]) if x["by_id"] in by else None,
-             "clearedAt": x["cleared_at"]} for x in found]
-
-
-def clear_strike(con, v: Viewer, sid: int) -> None:
-    """A Vice+ above them clears a strike ("made up for it"); below three, the app's own removal request closes."""
-    x = one(con, "SELECT * FROM strikes WHERE id = ?", sid)
-    if not x:
-        raise ApiError("not_found")
-    with tx(con):
-        _below(con, v, x["org_id"], x["user_id"], "team")
-        con.execute("UPDATE strikes SET cleared_at = ?, cleared_by = ? WHERE id = ? AND cleared_at IS NULL", (now(), v.id, sid))
-        if one(con, "SELECT COUNT(*) FROM strikes WHERE org_id = ? AND user_id = ? AND cleared_at IS NULL", x["org_id"], x["user_id"])[0] < STRIKES_OUT:
-            con.execute("""UPDATE removal_requests SET status = 'declined', decided_by = ?, decided_at = ?
-                WHERE org_id = ? AND user_id = ? AND status = 'pending' AND by_id IS NULL""", (v.id, now(), x["org_id"], x["user_id"]))
 
 
 def remove(con, v: Viewer, oid: int, uid: int, body: dict) -> dict:

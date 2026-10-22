@@ -40,8 +40,6 @@ export const sheets = {
   joinInbox: (_org: Id) => {},
   /** Team 2.0 (§2b): the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
   teamSetup: (_org: Id, _onchange?: () => void) => {},
-  /** a strike for someone on probation (Head+) */
-  strike: (_org: Id, _user: Id, _name: string, _ondone?: () => void) => {},
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
   /** my nickname and photo (Telegram's or my own), from Me and my badge's photo */

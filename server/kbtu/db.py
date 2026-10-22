@@ -442,6 +442,8 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE r.user_id = users.id;
       INSERT INTO meta (key, value) SELECT 'card_last', MAX(card_no) FROM users WHERE card_no IS NOT NULL HAVING MAX(card_no) IS NOT NULL
         ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));"""),
+    # club strikes are gone (owner, Oct 22: never used, a lot of code for nothing); probation stays as a label
+    (60, "DROP TABLE strikes; DELETE FROM bot_outbox WHERE kind = 'strike';"),
 ]
 
 

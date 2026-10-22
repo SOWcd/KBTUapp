@@ -2,18 +2,17 @@
   // Tab 2 → Team (SPEC §2, §2b): the club's roster for its own team, highest role first (full names inside the team, §3),
   // each with the club's own role name and its tags. A tap opens the person's card; for someone below me it opens the
   // actions instead (the card is the first of them): Vice+ give a role (a level or one of the club's own) and remove;
-  // Head+ put on probation, give strikes, and ask the President and Vice to remove someone. On top for Vice+: the
+  // Head+ put on probation and ask the President and Vice to remove someone. On top for Vice+: the
   // removal requests. Tags (and probation) filter the list; "Roles and tags" makes the club's own. The club is the one
   // picked in Studio (ui.club). Vice+ also get the club's invite link (§4.5): share it to the club's chat, copy it, or
   // replace it if it went somewhere it shouldn't. Anyone but the President can leave.
-  import { api, ApiErr, type ClubRole, type OrgRole, type RemovalRequest, type Strike, type TeamMember, type TeamSetup } from '../../lib/api';
+  import { api, ApiErr, type ClubRole, type OrgRole, type RemovalRequest, type TeamMember, type TeamSetup } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { say, ui } from '../../lib/state/ui.svelte';
   import { data, loadTeam, studioChanged } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { ago } from '../../lib/time';
   import { byRank, canGive, canManage, isAbove, may, RANK, roleName, ROLE_NAME, withNick } from '../../lib/perms';
   import { haptic } from '../../lib/tg';
   import { shareInvite } from '../../lib/invite';
@@ -57,21 +56,14 @@
     run(() => api.updateMember(org(), x.person.id, { dept: d }),
       d == null ? t('team.deptNone', { name: x.person.name }) : t('team.deptSet', { name: x.person.name, dept: tagOf.get(d)?.name ?? '' }), 'raising_hands_3d_default');
 
-  // the strikes of whoever's actions are out (or mine), fetched when opened
-  let strikesOf = $state<{ user: number; items: Strike[] } | null>(null);
-  async function loadStrikes(user: number) {
-    try { const items = await api.strikes(m!.org.id, user); if (open === user) strikesOf = { user, items }; } catch { /* the count still shows */ }
-  }
   // a role of my own level on myself, a name only (owner, Oct 12); tags are picked in the tag (TeamSetupSheet)
   const ownLevel = $derived((setup?.roles ?? []).filter((r) => r.level === m?.role && r.rights.every((k) => may(m, k))));
   // the avatar is the profile; the row opens what I can do with them, or the profile when there's nothing (owner, Oct 14:
   // no "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
   function tap(x: TeamMember, ev: MouseEvent) {
     const self = x.person.id === me;
-    if ((ev.target as HTMLElement).closest('.av') || (self ? !x.probation && !ownLevel.length && !deptChoices(x).length : !isAbove(m, x.role) && !deptChoices(x).length)) { sheets.person(x.person.id); return; }
+    if ((ev.target as HTMLElement).closest('.av') || (self ? !ownLevel.length && !deptChoices(x).length : !isAbove(m, x.role) && !deptChoices(x).length)) { sheets.person(x.person.id); return; }
     open = open === x.person.id ? null : x.person.id;
-    strikesOf = null;
-    if (open != null && x.probation) void loadStrikes(x.person.id);
   }
   function refresh() {
     if (!m) return;
@@ -99,11 +91,6 @@
   const probation = (x: TeamMember, on: boolean) =>
     run(() => api.updateMember(org(), x.person.id, { probation: on }), on ? t('team.probationSet', { name: x.person.name }) : t('team.probationPassed', { name: x.person.name }),
       on ? 'sparkles_3d' : 'party_popper_3d');
-  const strike = (x: TeamMember) => sheets.strike(org(), x.person.id, x.person.name, () => { refresh(); void loadStrikes(x.person.id); });
-  async function clearStrike(s: Strike) {
-    try { await api.clearStrike(s.id); haptic.ok(); say(t('team.strikeCleared'), 'sparkles_3d'); refresh(); if (strikesOf) void loadStrikes(strikesOf.user); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
-  }
   // a Vice+ removes at once; a Head's goes to the President and Vice (§2b)
   const removeOrAsk = (x: TeamMember) => sheets.removeMember(org(), x.person.id, x.person.name, !vice, (gone) => {
     open = null;
@@ -144,20 +131,6 @@
   {/if}
 {/snippet}
 
-{#snippet strikeList(x: TeamMember, canClear: boolean)}
-  <div class="strikes">
-    <b class="sh">{t('team.strikes', { n: x.strikes ?? 0 })}<span class="pips">{#each [0, 1, 2] as i (i)}<span class:hit={i < (x.strikes ?? 0)}></span>{/each}</span></b>
-    {#if strikesOf?.user === x.person.id}
-      {#each strikesOf.items.filter((s) => !s.clearedAt) as s (s.id)}
-        <div class="st">
-          <span><b>{s.reason === 'other' ? s.note : t(`strike.${s.reason}`)}</b>{#if s.note && s.reason !== 'other'}{' · ' + s.note}{/if}
-            <i class="t-foot">{ago(s.at)}{s.by ? ' · ' + s.by.name : ''}</i></span>
-          {#if canClear}<button onclick={() => clearStrike(s)}>{t('team.clearStrike')}</button>{/if}
-        </div>
-      {/each}
-    {/if}
-  </div>
-{/snippet}
 
 <div class="page scroll">
   {#if m}
@@ -173,14 +146,14 @@
     </header>
 
     {#if setup?.removals?.length}
-      <!-- §2b: a Head's request, or the third strike; the President or a Vice above them decides -->
+      <!-- §2b: a Head's request; the President or a Vice above them decides -->
       <section class="asks">
         <h2 class="t-cap">{t('team.removals')}</h2>
         {#each setup.removals as q (q.id)}
           <div class="ask">
             <div class="aq"><Avatar person={q.person} size={36} />
               <span class="tx"><b class="ellipsis">{withNick(q.fullName, q.person)}</b>
-                <i class="t-foot">{q.by ? t('team.removalBy', { name: q.by.name }) : t('team.removalStrikes')}{q.ban ? ' · ' + t('team.withBan') : ''}{q.note ? ' · «' + q.note + '»' : ''}</i></span></div>
+                <i class="t-foot">{q.by ? t('team.removalBy', { name: q.by.name }) : ''}{q.ban ? ' · ' + t('team.withBan') : ''}{q.note ? ' · «' + q.note + '»' : ''}</i></span></div>
             {#if q.canDecide}
               <div class="ar"><Button kind="secondary" size="s" disabled={busy} onclick={() => decide(q, false)}>{t('team.keep')}</Button>
                 <Button kind="danger" size="s" disabled={busy} onclick={() => decide(q, true)}>{t('team.remove')}</Button></div>
@@ -231,7 +204,7 @@
                 <i class="t-foot ellipsis">{[x.person.nick, x.username && '@' + x.username].filter(Boolean).join(' · ') || x.person.name}{#if x.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}</i>
                 {#if x.tags?.length || x.probation}
                   <span class="marks">
-                    {#if x.probation}<span class="prob">{t('team.probation')}<span class="pips">{#each [0, 1, 2] as i (i)}<span class:hit={i < (x.strikes ?? 0)}></span>{/each}</span></span>{/if}
+                    {#if x.probation}<span class="prob">{t('team.probation')}</span>{/if}
                     {#each x.tags ?? [] as id (id)}{@const g = tagOf.get(id)}{#if g}<span class="tag"><span class="dot" style="--c:{g.color}"></span>{g.name}</span>{/if}{/each}
                   </span>
                 {/if}
@@ -242,7 +215,6 @@
               <div class="acts">
                 {#if x.person.id === me}
                   {@render deptRow(x)}
-                  {@render strikeList(x, false)}
                   {#if ownLevel.length}
                     <span class="t-cap">{t('team.roleLabel')}</span>
                     <div class="ar">{#each ownLevel as r (r.id)}<button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{r.name}</button>{/each}</div>
@@ -261,15 +233,10 @@
                       <button class="pill add" onclick={() => sheets.teamSetup(m.org.id, refresh)}>{t('ts.newRole')}</button>
                     </div>
                   {/if}
-                  <span class="t-cap">{t('team.probation')}</span>
-                  {#if x.probation}
-                    {@render strikeList(x, vice)}
-                    <div class="ar">
-                      <Button kind="danger" size="s" disabled={busy || (x.strikes ?? 0) >= 3} onclick={() => strike(x)}>{t('team.strike')}</Button>
-                      {#if vice}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, false)}>{t('team.probationOff')}</Button>{/if}
-                    </div>
-                  {:else}
-                    <div class="ar"><Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, true)}>{t('team.probationOn')}</Button></div>
+                  {#if !x.probation || vice}
+                    <span class="t-cap">{t('team.probation')}</span>
+                    <div class="ar">{#if x.probation}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, false)}>{t('team.probationOff')}</Button>
+                      {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, true)}>{t('team.probationOn')}</Button>{/if}</div>
                   {/if}
                   <div class="ar end">
                     {#if m.role === 'president'}<Button kind="secondary" size="s" disabled={busy} onclick={() => handOver(x)}>{t('team.transfer')}</Button>{/if}
@@ -336,9 +303,6 @@
     font: 620 11.5px/1 var(--font-text); }
   .prob { background: var(--warning-soft); color: var(--warning-text); }
   .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .pips { display: inline-flex; gap: 3px; margin-left: 2px; }
-  .pips span { width: 6px; height: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; opacity: 0.6; }
-  .pips span.hit { background: var(--danger); box-shadow: none; opacity: 1; }
   .rl { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2);
     font: 700 11px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; }
   .rl.top { background: var(--accent-soft); color: var(--accent-text); }
@@ -352,13 +316,6 @@
     font: 620 13px/1 var(--font-text); box-shadow: inset 0 0 0 1.5px transparent; }
   .pill.on { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent); }
   .pill:disabled:not(.on) { opacity: 0.5; }
-  .strikes { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); }
-  .sh { display: flex; align-items: center; gap: 8px; font: 650 14px/1.2 var(--font-text); color: var(--warning-text); }
-  .st { display: flex; align-items: center; gap: 8px; }
-  .st > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font: 500 14px/1.3 var(--font-text); }
-  .st b { font-weight: 650; }
-  .st i { font-style: normal; }
-  .st button { flex: none; height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface); color: var(--accent-text); font: 650 12.5px/1 var(--font-text); }
   .empty { padding: 14px 4px; text-align: center; }
   .leave { align-self: center; margin-top: 10px; padding: 10px 14px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
   .skel { display: flex; flex-direction: column; gap: 8px; }

@@ -129,8 +129,7 @@
   let answers = $state<import('../../lib/api').LeadersAnswer[] | null>(null);
   $effect(() => { if (e?.visibility === 'leaders' && head && crew) api.leadersAnswers(id).then((l) => (answers = l)).catch(() => {}); });
 
-  // ---- a club meeting (§2b): "can't" says why; the club's Head+ see everyone expected, and after it a strike for a
-  // missed one (on probation, no reason), one tap and a confirm ----
+  // ---- a club meeting (§2b): "can't" says why; the club's Head+ see everyone expected, and after it who came ----
   let meet = $state<MeetingAnswer[] | null>(null);
   const loadMeet = () => api.meetingAnswers(id).then((l) => (meet = l)).catch(() => {});
   $effect(() => { if (e?.meeting && head && crew) void loadMeet(); });
@@ -146,12 +145,6 @@
     const why = await sheets.askText({ title: t('meet.whyTitle'), text: t('meet.whyText'), ok: t('meet.send'), cancel: t('common.cancel'),
       placeholder: t('meet.whyPh'), max: 140 });
     if (why) declineInvite(id, why);
-  }
-  async function strike(a: MeetingAnswer) {
-    if (!e || !(await sheets.ask({ title: t('meet.strikeAsk'), text: t('meet.strikeText', { name: a.fullName, title: e.title }), ok: t('meet.strike'),
-      cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.addStrike(e.org.id, a.person.id, 'meeting', '', id); haptic.ok(); say(t('meet.strikeGiven'), 'pleading_face_3d'); void loadMeet(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
 
   // ---- the organizer's updates: the newest under the title, the rest one tap away; Head+ write here ----
@@ -432,7 +425,6 @@
             {#each list as a (a.person.id)}
               <div class="mp"><span class="mn"><b class="ellipsis">{withNick(a.fullName, a.person)}</b>
                 {#if a.answer === 'no'}<i>{a.note ?? t('meet.noWhy')}</i>{/if}</span>
-                {#if a.canStrike}<button class="ms" onclick={() => strike(a)}>{t('meet.strike')}</button>{:else if a.struck}<span class="mst">{t('meet.struck')}</span>{/if}
               </div>
             {/each}
           </div>
@@ -537,8 +529,6 @@
   .mp { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-m); background: var(--surface-2); }
   .mn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font: 600 14.5px/1.3 var(--font-text); }
   .mn i { font: 500 13px/1.3 var(--font-text); color: var(--text-2); font-style: normal; }
-  .ms { flex: none; padding: 6px 12px; border-radius: var(--r-full); background: var(--danger-soft); color: var(--danger-text); font: 650 13px/1 var(--font-text); }
-  .mst { flex: none; font: 600 12.5px/1 var(--font-text); color: var(--text-3); }
   .rnote :global(svg) { flex: none; color: var(--text-3); }
   .rnote.shut, .rnote.shut :global(svg) { color: var(--danger-text); }
   .paynote { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r-m); background: var(--warning-soft); color: var(--warning-text); font: 600 14px/1.35 var(--font-text); }

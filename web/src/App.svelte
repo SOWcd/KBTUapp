@@ -100,7 +100,6 @@
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
   sheets.teamSetup = (org, onchange) => lazy(() => import('./screens/club/TeamSetupSheet.svelte'), { org, onchange });
-  sheets.strike = (org, user, name, ondone) => lazy(() => import('./screens/club/StrikeSheet.svelte'), { org, user, name, ondone });
   sheets.removeMember = (org, user, name, request, ondone) => lazy(() => import('./screens/club/RemoveSheet.svelte'), { org, user, name, request, ondone });
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
@@ -239,7 +238,7 @@
     const mo = tg.startParam.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const m = tg.startParam.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
-    // tm_<club>: the bot's strike and removal messages open that club's Team (§2b)
+    // tm_<club>: the bot's removal messages open that club's Team (§2b)
     const team = (org: number) => { ui.club = org; ui.tab = 'club'; ui.page.club = 2; };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }

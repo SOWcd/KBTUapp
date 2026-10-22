@@ -67,10 +67,6 @@ ACH_NAMES = {
            "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder"},
 }
 TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "Аңыз"), "en": ("I", "II", "III", "Legend")}
-# a probation strike's reason in the bot's message (§2b); "other" says the organizer's note instead
-STRIKE_REASON = {"ru": {"meeting": "пропуск собрания", "event": "пропуск важного ивента"},
-                 "kk": {"meeting": "жиналысқа келмеді", "event": "маңызды іс-шараға келмеді"},
-                 "en": {"meeting": "missed a meeting", "event": "missed an important event"}}
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
 
 
@@ -186,10 +182,8 @@ BOT = {
         "chat_approved": ("🎉 Твой чат «{title}» теперь в каталоге КБТУ — спасибо!", "Открыть каталог"),
         "backup_failed": ("⚠️ Вторую ночь подряд копия базы не ушла в облако (R2). Посмотри логи сервера: строки «offsite».", None),
         "id_clash": ("🪪 Номер студенческого <b>{sid}</b> указали двое:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — вошёл сейчас\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — был раньше\nСпроси обоих. Отдать номер: unlink у второго, первый вводит номер заново.", None),
-        "strike": ("⚠️ Минус в <b>{org}</b>: {reason}. Минусов: {n} из 3.", "Открыть команду"),
         "probation_passed": ("🎉 Испытательный срок в <b>{org}</b> пройден — ты полноправный участник!", "Открыть клуб"),
         "removal_ask": ("🙋 {by} просит убрать <b>{name}</b> из {org}{ban}. Реши в приложении.", "Открыть команду"),
-        "removal_strikes": ("⚠️ У <b>{name}</b> в {org} три минуса. Реши, оставлять ли.", "Открыть команду"),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -261,10 +255,8 @@ BOT = {
         "chat_approved": ("🎉 Сенің «{title}» чатың енді ҚБТУ каталогында — рахмет!", "Каталогты ашу"),
         "backup_failed": ("⚠️ Қатарынан екінші түн дерекқор көшірмесі бұлтқа (R2) жіберілмеді. Сервер логтарын қара: «offsite» жолдары.", None),
         "id_clash": ("🪪 <b>{sid}</b> студент нөмірін екі адам көрсетті:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — қазір кірді\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — бұрын болған\nЕкеуінен сұра. Нөмірді беру: екіншісіне unlink, біріншісі нөмірді қайта енгізеді.", None),
-        "strike": ("⚠️ <b>{org}</b> клубындағы минус: {reason}. Минустар: 3-тен {n}.", "Команданы ашу"),
         "probation_passed": ("🎉 <b>{org}</b> клубындағы сынақ мерзімі аяқталды — сен толыққанды мүшесің!", "Клубты ашу"),
         "removal_ask": ("🙋 {by} <b>{name}</b> мүшесін {org} клубынан шығаруды сұрайды{ban}. Қосымшада шеш.", "Команданы ашу"),
-        "removal_strikes": ("⚠️ {org} клубында <b>{name}</b> үш минус алды. Қалдыру керек пе, шеш.", "Команданы ашу"),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -336,10 +328,8 @@ BOT = {
         "chat_approved": ("🎉 Your chat “{title}” is now in KBTU's catalog — thanks!", "Open the catalog"),
         "backup_failed": ("⚠️ For the second night in a row the database copy didn't reach the cloud (R2). Check the server logs: the \"offsite\" lines.", None),
         "id_clash": ("🪪 Two people gave student ID <b>{sid}</b>:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — signing in now\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — had it before\nAsk both. To move the ID: unlink the second, the first types it again.", None),
-        "strike": ("⚠️ A strike in <b>{org}</b>: {reason}. Strikes: {n} of 3.", "Open the team"),
         "probation_passed": ("🎉 You passed probation in <b>{org}</b>: you're a full member now!", "Open the club"),
         "removal_ask": ("🙋 {by} asks to remove <b>{name}</b> from {org}{ban}. Decide in the app.", "Open the team"),
-        "removal_strikes": ("⚠️ <b>{name}</b> has three strikes in {org}. Decide whether they stay.", "Open the team"),
     },
 }
 

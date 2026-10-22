@@ -680,7 +680,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def update_member(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.update_member(con, v, oid, uid, body)
 
-    # Team 2.0 (§2b): the club's roles and tags, probation strikes, removal by request, bans
+    # Team 2.0 (§2b): the club's roles and tags, probation, removal by request, bans
     @app.get("/api/orgs/{oid}/team")
     def team_setup(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.team_setup(con, v, oid)
@@ -708,18 +708,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/orgs/{oid}/tags/{tid}")
     def delete_tag(oid: int, tid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.delete_tag(con, v, oid, tid)
-
-    @app.get("/api/orgs/{oid}/members/{uid}/strikes")
-    def strikes(oid: int, uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.strikes(con, v, oid, uid)
-
-    @app.post("/api/orgs/{oid}/members/{uid}/strikes")
-    def add_strike(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.add_strike(con, v, oid, uid, body)
-
-    @app.delete("/api/strikes/{sid}", status_code=204)
-    def clear_strike(sid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        logic.clear_strike(con, v, sid)
 
     @app.post("/api/orgs/{oid}/members/{uid}/remove")
     def remove(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):

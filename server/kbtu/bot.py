@@ -265,15 +265,6 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         if not p or not one(con, "SELECT 1 FROM friendships WHERE a = ? AND b = ?", min(other, m["user_id"]), max(other, m["user_id"])):
             return None
         return (*texts.bot_message(lang, kind, name=logic.shown_name(p)), f"u_{other}")
-    if kind == "strike":  # st:<strike>, to the person (→ tm_<org>: their Team); gone if cleared or they've left the club
-        x = one(con, """SELECT x.*, o.name FROM strikes x JOIN orgs o ON o.id = x.org_id JOIN org_members mm ON mm.org_id = x.org_id AND mm.user_id = x.user_id
-            WHERE x.id = ? AND x.cleared_at IS NULL""", int(ref[1]))
-        if not x:
-            return None
-        n = one(con, "SELECT COUNT(*) FROM strikes WHERE org_id = ? AND user_id = ? AND cleared_at IS NULL AND id <= ?", x["org_id"], x["user_id"], x["id"])[0]
-        said = texts.STRIKE_REASON[lang if lang in texts.STRIKE_REASON else "ru"]
-        reason = x["note"] if x["reason"] == "other" else said[x["reason"]] + (f" ({x['note']})" if x["note"] else "")
-        return (*texts.bot_message(lang, kind, org=x["name"], reason=reason, n=n), f"tm_{x['org_id']}")
     if kind == "probation_passed":  # pp:<org>:<day>, to the person, while they're still in the club
         o = one(con, "SELECT o.name FROM orgs o JOIN org_members mm ON mm.org_id = o.id AND mm.user_id = ? WHERE o.id = ?", m["user_id"], int(ref[1]))
         return (*texts.bot_message(lang, kind, org=o["name"]), f"cl_{ref[1]}") if o else None
@@ -282,8 +273,6 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         p = one(con, logic.PERSON + " WHERE u.id = ?", q["user_id"]) if q else None
         if not q or not p:
             return None
-        if q["by_id"] is None:  # the third strike
-            return (*texts.bot_message(lang, "removal_strikes", name=logic.short_name(p), org=q["org"]), f"tm_{q['org_id']}")
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.BAN[lang if lang in texts.BAN else "ru"] if q["ban"] else ""), f"tm_{q['org_id']}")

@@ -542,7 +542,6 @@ def test_delete_my_data(env):
         con.execute("INSERT INTO round_votes (app_id, user_id, verdict, note, at) VALUES (?, ?, 'next', 'strong', 0)", (app_id, pres["id"]))
         con.execute("INSERT INTO comments (event_id, user_id, as_org, body, created_at) VALUES (2, ?, 1, 'Thanks all', 0), (2, ?, 0, 'mine', 0)",
                     (ali["id"], ali["id"]))
-        con.execute("INSERT INTO strikes (org_id, user_id, reason, note, created_at) VALUES (1, ?, 'meeting', 'late again', 0)", (ali["id"],))
         con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (1, ?, 0)", (ali["id"],))
         con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", tuple(sorted((ali["id"], zhan["id"]))))
     (Path(cfg.db_path).parent / "receipts" / "ab").mkdir(parents=True, exist_ok=True)
@@ -585,7 +584,6 @@ def test_delete_my_data(env):
     assert tuple(con.execute("SELECT user_id, answers FROM round_apps").fetchone()) == (ph["id"], "{}")
     assert con.execute("SELECT note FROM round_votes").fetchone()[0] == ""                  # others' words about him go too
     assert [tuple(r) for r in con.execute("SELECT user_id, body FROM comments")] == [(ph["id"], "Thanks all")]
-    assert tuple(con.execute("SELECT user_id, note FROM strikes").fetchone()) == (ali["id"], "")  # the count stays on the account
     assert con.execute("SELECT 1 FROM org_bans WHERE user_id = ?", (ali["id"],)).fetchone()
     assert con.execute("SELECT added_by FROM event_photos").fetchone()[0] is None            # the photo stays, nameless
     assert con.execute("SELECT owner_id FROM files WHERE id = ?", (pic,)).fetchone()[0] is None
@@ -1783,7 +1781,7 @@ def test_club_profile(env):
 
 def test_meetings(env):
     """Studio part 2 (§2b): a meeting the whole club (or a tag) is expected at. Everyone expected hears; "can't" needs a
-    reason; Head+ see the answers, and after it a strike for a missed one, once; the door lists everyone expected and
+    reason; Head+ see the answers and who came; the door lists everyone expected and
     lets in someone who came anyway; others don't see it."""
     c, cfg = env
     pres, head, mem, mem2, out = login(c, 80, "pres"), login(c, 81, "head"), login(c, 82, "mem"), login(c, 83, "mem2"), login(c, 84, "out")
@@ -1814,7 +1812,7 @@ def test_meetings(env):
     assert c.get(f"/api/events/{ev['id']}/meeting", headers=M2).status_code == 403                  # Head+ only
     ans = {a["person"]["id"]: a for a in c.get(f"/api/events/{ev['id']}/meeting", headers=H).json()}
     assert (ans[mem["id"]]["answer"], ans[mem["id"]]["note"]) == ("no", "Exam at 6") and ans[mem2["id"]]["answer"] == "yes"
-    assert ans[pres["id"]]["answer"] == "none" and not any(a["canStrike"] for a in ans.values())      # not over yet
+    assert ans[pres["id"]]["answer"] == "none"
     door = {d["person"]["id"] for d in c.get(f"/api/events/{ev['id']}/door", headers=H).json()}
     assert door == {pres["id"], head["id"], mem["id"], mem2["id"]}                                    # everyone expected
     # it happens: mem said no but came; mem2 said yes and didn't; the door lets mem in by name
@@ -1822,14 +1820,7 @@ def test_meetings(env):
     assert c.post(f"/api/events/{ev['id']}/checkin", headers=H, json={"userId": mem["id"]}).json()["result"] == "ok"
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 7200, int(time.time()) - 3600, ev["id"]))
     ans = {a["person"]["id"]: a for a in c.get(f"/api/events/{ev['id']}/meeting", headers=H).json()}
-    assert ans[mem["id"]]["came"] and not ans[mem["id"]]["canStrike"] and ans[mem2["id"]]["canStrike"]
-    assert not ans[pres["id"]]["canStrike"]                                                          # not on probation, above a Head
-    strike = lambda uid: c.post(f"/api/orgs/1/members/{uid}/strikes", headers=H, json={"reason": "meeting", "eventId": ev["id"]})
-    assert strike(mem2["id"]).status_code == 200 and strike(mem2["id"]).json()["message"] == "struck"   # once
-    assert strike(mem["id"]).json()["message"] == "came"
-    assert con.execute("SELECT note FROM strikes WHERE event_id = ?", (ev["id"],)).fetchone()[0] == "Weekly sync"
-    after = {a["person"]["id"]: a for a in c.get(f"/api/events/{ev['id']}/meeting", headers=H).json()}[mem2["id"]]
-    assert after["struck"] and not after["canStrike"]
+    assert ans[mem["id"]]["came"] and not ans[mem2["id"]]["came"]
     # a tag's meeting expects only the tag's people
     tagged = c.post("/api/orgs/1/events", headers=H, json={**body, "meetingTag": 5, "startsAt": start + 86400, "endsAt": start + 90000}).json()
     c.post(f"/api/events/{tagged['id']}/publish", headers=H)
@@ -2306,8 +2297,7 @@ def test_departments(env):
 
 def test_team_two(env):
     """Team 2.0 (§2b): the club's own roles are a name on a level (Vice+, strictly below their own); tags are groups
-    (Head+); probation strikes (Head+ give them, the person and Head+ see them, three ask the President or Vice, a Vice+
-    clears one, passing probation clears them all); a Head's removal is a request, a Vice+ removes at once; a ban keeps
+    (Head+); probation is a label (Head+ put it on, the person and Head+ see it, a Vice+ takes it off); a Head's removal is a request, a Vice+ removes at once; a ban keeps
     them out of applications and the link until lifted."""
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "vic"), (22, "hed"), (10, "ann"), (11, "bob"), (12, "cat")):
@@ -2377,36 +2367,15 @@ def test_team_two(env):
     assert member(12, 11)["tags"] == [tag] and c.get("/api/orgs/1/team", headers=tma(12)).json()["tags"][0]["count"] == 2
     assert "removals" not in c.get("/api/orgs/1/team", headers=tma(22)).json()                         # Vice+ only
 
-    # probation and strikes
-    assert c.post(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(22), json={"reason": "meeting"}).json()["message"] == "probation"
+    # probation: a label Head+ put on, only the President or a Vice take off (passed: the bot congratulates)
     assert c.patch(f"/api/orgs/1/members/{uid[11]}", headers=tma(10), json={"probation": True}).status_code == 403
     c.patch(f"/api/orgs/1/members/{uid[11]}", headers=tma(22), json={"probation": True})
-    assert c.post(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(22), json={"reason": "other"}).status_code == 400  # say what
-    c.post(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(22), json={"reason": "meeting", "note": "Monday"})
-    assert (member(22, 11)["probation"], member(22, 11)["strikes"]) == (True, 1)
-    assert member(11, 11)["strikes"] == 1 and "strikes" not in member(12, 11)                          # theirs and the leaders' only
-    assert c.get(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(12)).status_code == 403
-    assert c.get(f"/api/orgs/1/members/{uid[21]}/strikes", headers=tma(22)).status_code == 403    # a Head can't read the Vice's (L10)
-    assert "strikes" not in member(22, 21) and "strikes" in member(21, 22)                        # nor see the count in the team
-    assert c.get(f"/api/orgs/1/members/{uid[22]}/strikes", headers=tma(21)).status_code == 200    # the Vice reads the Head's
+    assert member(22, 11)["probation"] and member(11, 11)["probation"] and "probation" not in member(12, 11)  # theirs and the leaders' only
+    assert "probation" not in member(22, 21) and "probation" in member(21, 22)                    # a Head can't see the Vice's (L10)
     assert texts._cell("\t=1+1") == "'\t=1+1" and texts._cell("\r@x")[0] == "'"                  # CSV: no formula behind a tab (L4)
-    sid = c.get(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(11)).json()[0]["id"]
-    st = con.execute("SELECT ref, user_id FROM bot_outbox WHERE kind = 'strike'").fetchone()
-    text, _, link = bot._render(con, {"kind": "strike", "ref": st[0], "lang": "en", "user_id": st[1]})
-    assert "missed a meeting (Monday)" in text and "1 of 3" in text and link == "tm_1"
-    c.post(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(22), json={"reason": "event"})
-    c.post(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(22), json={"reason": "other", "note": "Skipped the cleanup"})
-    asks = c.get("/api/orgs/1/team", headers=tma(21)).json()["removals"]
-    assert [(a["by"], a["strikes"], a["canDecide"]) for a in asks] == [(None, 3, True)]                 # the third asks
-    assert sorted(outbox("removal_ask")) == sorted([uid[20], uid[21]])
-    ask = con.execute("SELECT ref, user_id FROM bot_outbox WHERE kind = 'removal_ask'").fetchone()
-    assert "three strikes" in bot._render(con, {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": ask[1]})[0]
-    assert c.delete(f"/api/strikes/{sid}", headers=tma(22)).status_code == 403                          # a Head can't clear
-    assert c.delete(f"/api/strikes/{sid}", headers=tma(21)).status_code == 204
-    assert c.get("/api/orgs/1/team", headers=tma(21)).json()["removals"] == [] and member(22, 11)["strikes"] == 2
     assert c.patch(f"/api/orgs/1/members/{uid[11]}", headers=tma(22), json={"probation": False}).status_code == 403
     c.patch(f"/api/orgs/1/members/{uid[11]}", headers=tma(21), json={"probation": False})               # passed
-    assert (member(22, 11)["probation"], member(22, 11)["strikes"]) == (False, 0) and outbox("probation_passed") == [uid[11]]
+    assert not member(22, 11)["probation"] and outbox("probation_passed") == [uid[11]]
 
     # removal: a Head asks, the President or a Vice decides; a ban keeps them out until lifted
     assert c.post(f"/api/orgs/1/members/{uid[12]}/remove", headers=tma(10), json={}).status_code == 403
@@ -2431,7 +2400,6 @@ def test_team_two(env):
     assert c.delete(f"/api/orgs/1/bans/{uid[12]}", headers=tma(21)).status_code == 204
     assert c.post(f"/api/invites/{token}", headers=tma(12)).status_code == 200                           # back by the link
     assert c.post(f"/api/orgs/1/members/{uid[11]}/remove", headers=tma(21), json={}).json() == {"done": True}  # a Vice at once
-    assert c.get(f"/api/orgs/1/members/{uid[11]}/strikes", headers=tma(21)).status_code == 404
 
 
 def test_streak_pauses():

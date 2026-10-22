@@ -41,7 +41,7 @@ export const withNick = (real: string, p: { nick?: string | null }): string => (
 /** Colours for the clubs' own roles and tags (§2b): each reads as a dot in both themes. */
 export const TEAM_COLORS = ['#3B6BFF', '#7C4DFF', '#FF4FA3', '#F2542D', '#FFB23D', '#2FBF71', '#18A9DB', '#8E8E93'];
 
-/** "people" acts on people strictly below them (tags, probation, strikes, asking to remove; §2b). */
+/** "people" acts on people strictly below them (tags, probation, asking to remove; §2b). */
 export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefined, theirs: OrgRole): boolean => may(m, 'people') && RANK[m!.role] > RANK[theirs];
 
 /** A club's own event (team-only, a club meeting) or DMP's leaders meeting: people come, nobody checks tickets, so it has

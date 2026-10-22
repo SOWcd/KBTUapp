@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, TeamSetup, ClubLevel, MemberPatch, Strike, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -195,16 +195,13 @@ export interface Api {
   changeRole(org: Id, user: Id, role: OrgRole): Promise<TeamMember[]>;
   removeMember(org: Id, user: Id): Promise<void>;          // my own id = leave; a President: conflict/'president'
   transfer(org: Id, user: Id): Promise<TeamMember[]>;
-  // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation strikes, removal by request, bans
+  // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans
   teamSetup(org: Id): Promise<TeamSetup>;
   saveRole(org: Id, input: { name: string; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup>;  // conflict/'taken'
   deleteRole(org: Id, id: Id): Promise<TeamSetup>;
   saveTag(org: Id, input: { name: string; color: string; department?: boolean }, id?: Id): Promise<TeamSetup>;
   deleteTag(org: Id, id: Id): Promise<TeamSetup>;
   updateMember(org: Id, user: Id, patch: MemberPatch): Promise<TeamMember[]>;
-  strikes(org: Id, user: Id): Promise<Strike[]>;         // mine, or anyone's as the club's Head+
-  addStrike(org: Id, user: Id, reason: Strike['reason'], note: string, eventId?: Id): Promise<TeamMember[]>; // conflict/'probation': not on it; eventId: a missed meeting, once
-  clearStrike(id: Id): Promise<void>;
   removeFromClub(org: Id, user: Id, ban: boolean, note: string): Promise<{ done: boolean }>; // a Head's: a request (done: false)
   decideRemoval(id: Id, approve: boolean): Promise<void>;
   unban(org: Id, user: Id): Promise<void>;
