@@ -828,10 +828,11 @@ def me(con, v: Viewer) -> dict:
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
     own = one(con, "SELECT path FROM files WHERE id = ?", u["avatar_file_id"]) if u["avatar_file_id"] else None
-    # the card number at the first real step, not at sign-in (owner, Oct 22: a joke sign-up deleted the next day
-    # shouldn't take one); staff (kbtu.admin staff) take none: it's the students' order. The Creator's 0 needs no step.
+    # the card number at the KBTU sign-in, in the order people came (owner, Oct 22 morning: "I want to see who came
+    # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
+    # students' order. A deleted account's number stays empty, never given again.
     if s and u["card_no"] is None and s["consent_version"] != "staff" and (
-            not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id) if u["is_founder"] else _earned(con, v.id)):
+            not u["is_founder"] or not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id)):
         first_fifty(con, v.id)  # the number and, with it, "First 500"
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
@@ -2698,14 +2699,8 @@ def card_no(con, uid: int) -> None:
             ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))""", (str(n[0]),))
 
 
-def _earned(con, uid: int) -> bool:
-    """A real step: checked in at an event, in a club's team, or the app opened on 3 different days."""
-    return con.execute("""SELECT EXISTS (SELECT 1 FROM registrations WHERE user_id = :u AND checked_in_at IS NOT NULL)
-        OR EXISTS (SELECT 1 FROM org_members WHERE user_id = :u) OR (SELECT COUNT(*) FROM visits WHERE user_id = :u) >= 3""", {"u": uid}).fetchone()[0] == 1
-
-
 def first_fifty(con, uid: int) -> None:
-    """At the first real step after a KBTU sign-in (_earned): the card number, then "First 500" (§4.11), the cards 00001-00500 (and the Creator's 00000).
+    """At a KBTU sign-in: the card number, then "First 500" (§4.11), the cards 00001-00500 (and the Creator's 00000).
     Kept as a grant; celebrated like any new level."""
     card_no(con, uid)
     u = one(con, "SELECT card_no, is_founder FROM users WHERE id = ?", uid)

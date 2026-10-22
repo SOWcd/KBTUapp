@@ -59,10 +59,9 @@ DB: list[str] = []  # the env's database (login() writes students straight into 
 INTAKE = time.gmtime(time.time() + 5 * 3600).tm_year - (time.gmtime(time.time() + 5 * 3600).tm_mon < 9)  # this academic year's first-years entered then (Almaty)
 
 
-def login(c, uid: int, name: str, card: bool = True):
+def login(c, uid: int, name: str):
     """A confirmed KBTU student "<name>": student ID 24B<name>, <Name> Testov, year 2, SITE, a Monday Calculus class.
-    Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19). `card`: with a
-    first real step done (the app opened on 3 days, logic._earned), so the card number comes."""
+    Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19)."""
     me = c.get("/api/me", headers=tma(uid, name.title())).json()
     con = db.connect(DB[0])
     with db.tx(con):
@@ -72,8 +71,6 @@ def login(c, uid: int, name: str, card: bool = True):
                     (me["id"], "24B" + name, name.title(), *[logic.now()] * 3))
         logic.save_schedule(con, me["id"], [types.SimpleNamespace(weekday=1, begins="09:00", ends="09:50", subject="Calculus",
                                                                   code="MATH101", kind="lecture", room="305", teacher=None)])
-        if card:
-            con.executemany("INSERT OR IGNORE INTO visits (day, user_id) VALUES (?, ?)", [(logic.day_of(logic.now()) - d, me["id"]) for d in (1, 2, 3)])
     con.close()
     r = c.get("/api/me", headers=tma(uid))
     assert r.status_code == 200, r.text
@@ -1466,31 +1463,25 @@ def test_registry(env, monkeypatch):
 
 
 def test_first_fifty(env, monkeypatch):
-    """Card numbers and "First 500" (§4.4, §4.11): the number comes at the first real step after a KBTU sign-in
-    (checked in, in a club's team, or the app opened on 3 days; owner, Oct 22: a joke sign-up shouldn't take one) and
-    stays the person's; the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted
-    account's number burns: never given again, a return gets a new one."""
+    """Card numbers and "First 500" (§4.4, §4.11): the number is the order of first KBTU sign-in and stays the person's;
+    the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
+    stays empty, never given again: a return gets a new one."""
     c, cfg = env
     monkeypatch.setattr(logic, "FIRST_N", 2)
     con = db.connect(cfg.db_path)
     c.get("/api/me", headers=tma(69, "Boss"))
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 69")
     first = [{"code": "first50", "level": 1}]
-    f = login(c, 69, "ff", card=False)
-    assert f["no"] == 0 and f["unlocked"] == first                      # the Creator needs no step
-    a = login(c, 70, "aa", card=False)
-    assert a["no"] is None and a["unlocked"] == []                      # signed in only: no number yet
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT', 'IT', 'laptop_3d', 0)")
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (a["id"],))
-    b = login(c, 71, "bb")                                              # 3 days: before a opens the app again
-    a = c.get("/api/me", headers=tma(70)).json()                        # in a club: the next number
-    assert (b["no"], a["no"]) == (1, 2) and a["unlocked"] == b["unlocked"] == first
+    f = login(c, 69, "ff")
+    assert f["no"] == 0 and f["unlocked"] == first
+    a, b = login(c, 70, "aa"), login(c, 71, "bb")
+    assert (a["no"], b["no"]) == (1, 2) and a["unlocked"] == b["unlocked"] == first
     delete_now(c, cfg, tma(70, "Aa"))
     cc = login(c, 72, "cc")
-    assert cc["no"] == 3 and cc["unlocked"] == []                       # past the 2
+    assert cc["no"] == 3 and cc["unlocked"] == []                       # past the 2; number 1 stays empty
     again = login(c, 70, "aa")
     assert again["no"] == 4 and again["unlocked"] == []                 # back after deleting: a new card, the old one burnt
-    assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 1
+    assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 2
     assert c.get("/api/me", headers=tma(73, "Guest")).json()["no"] is None
     # migration 36: a card within the 500 that missed the award gets it quietly; then everyone has it = 100%
     monkeypatch.setattr(logic, "FIRST_N", 500)
@@ -3234,7 +3225,7 @@ def test_manual_sign_in(env, monkeypatch):
     for tg in (21, 22, 24):
         logic.ms_remember(con, ids[tg], who(tg))
     me = manual(21).json()                                                                 # the ID held by a typed-in row: it gives way
-    assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is None   # the number comes at a first real step
+    assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is not None
     assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (ids[23],)).fetchone()
     r = manual(22)                                                                         # held by a Microsoft one: refused
     assert r.status_code == 409 and r.json()["message"] == "sid_taken"
@@ -3257,7 +3248,7 @@ def test_manual_sign_in(env, monkeypatch):
     from kbtu import admin                                                                # no Microsoft account: by hand
     admin.main(["student", "23", "24B031299", "Squat", "Ter", "3"])
     me = c.get("/api/me", headers=tma(23)).json()
-    assert me["student"]["studentId"] == "24B031299" and me["no"] is None and not me["relink"]   # the number at a first real step
+    assert me["student"]["studentId"] == "24B031299" and me["no"] is not None and not me["relink"]
     for gone in ("/api/kbtu/login", "/api/kbtu/status"):                                  # the password sign-in is gone
         assert c.post(gone, headers=tma(21), json={"login": "a", "password": "b"}).status_code in (404, 405)
 
@@ -3377,7 +3368,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": logic.CONSENT, "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
-    assert me["student"]["ms"] and me["msPending"] is None and me["no"] is None
+    assert me["student"]["ms"] and me["msPending"] is None and me["no"]
     assert me["student"]["course"] == logic.course_of("24B099002") != 1                 # the ID's year, not the typed 1 (M3)
     # five wrong codes end the wait
     graph = {"id": "oid-3", "givenName": "Ers", "surname": "X", "userPrincipalName": "e_x@kbtu.kz"}

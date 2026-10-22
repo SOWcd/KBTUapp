@@ -16,7 +16,7 @@
                                 one already signed in as a student turns staff: its card number is retired (a gap; until Oct 22
                                 the later cards moved down, but that would hand out a deleted account's burnt number)
   .venv/bin/python -m kbtu.admin confirm <@username | telegram id>        a typed-in student checked by hand (e.g. their
-                                student card): marked confirmed (the number and First 500 come at the first real step)
+                                student card): marked confirmed (the number and First 500 come at sign-in already)
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft (owner, Oct 20)

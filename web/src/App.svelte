@@ -186,7 +186,7 @@
     const first = session.me?.student?.firstName;
     const name = first ? ', ' + first : '';
     const key = h < 5 ? 'say.hi.night' : h < 12 ? 'say.hi.morning' : h < 18 ? 'say.hi.day' : 'say.hi.evening';
-    say(phrase(key, { name }), h < 5 ? 'pleading_face_3d' : h < 12 ? 'sparkles_3d' : h < 18 ? 'waving_hand_3d_default' : 'partying_face_3d');
+    say(phrase(key, { name }), h < 5 ? 'crescent_moon_3d' : h < 12 ? 'sparkles_3d' : h < 18 ? 'waving_hand_3d_default' : 'partying_face_3d');
   }
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications),
