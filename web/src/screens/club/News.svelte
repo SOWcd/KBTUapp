@@ -50,7 +50,7 @@
     const on = !p.mine[kind];
     p.mine[kind] = on; p.reactions[kind] += on ? 1 : -1; // at once; the server's answer settles it
     haptic.select();
-    try { Object.assign(p, await api.react(p.id, kind, on)); }
+    try { Object.assign(p, await api.react(p.id, kind, on)); if (on) say(phrase(kind === 'fire' ? 'say.fire' : 'say.heart'), kind === 'fire' ? 'fire_3d' : 'smiling_face_with_heart_eyes_3d'); }
     catch { p.mine[kind] = !on; p.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'pleading_face_3d'); }
   }
   async function takeDown(p: Post) {

@@ -11,6 +11,7 @@
   import { data, loadTeam } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { isAbove, may, RANK, RIGHTS, ROLE_NAME, TEAM_COLORS, withNick } from '../../lib/perms';
@@ -55,13 +56,13 @@
   async function save() {
     if (!kind || busy || !fname.trim()) return;
     busy = true;
-    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); }
+    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); say(phrase('say.tsSaved'), 'sparkles_3d'); }
     catch (e) { oops(e); } finally { busy = false; }
   }
   async function drop() {
     if (!kind || fid == null || busy) return;
     busy = true;
-    try { done(kind === 'role' ? await api.deleteRole(org, fid) : await api.deleteTag(org, fid)); }
+    try { done(kind === 'role' ? await api.deleteRole(org, fid) : await api.deleteTag(org, fid)); say(t('say.tsDropped'), 'waving_hand_3d_default'); }
     catch (e) { oops(e); } finally { busy = false; }
   }
   async function unban(user: Id) {

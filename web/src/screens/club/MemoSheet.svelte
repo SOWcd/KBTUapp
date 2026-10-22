@@ -11,6 +11,7 @@
   import { onMount } from 'svelte';
   import { api, type Id, type MemoDraft, type MemoSign } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, nowTs, relDay, time } from '../../lib/time';
@@ -61,7 +62,7 @@
   }
   async function saveSign() {
     if (!signing) return;
-    try { await api.memoSign(org, signing); signing = null; haptic.ok(); load(); } catch { oops(); }
+    try { await api.memoSign(org, signing); signing = null; haptic.ok(); say(phrase('say.signSaved'), 'love_letter_3d'); load(); } catch { oops(); }
   }
   const ITEMS = ['room', 'guests', 'provide', 'promo', 'gear', 'film'] as const; // printing has its own letter
   let area = $state<HTMLTextAreaElement>();

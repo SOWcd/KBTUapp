@@ -5,6 +5,7 @@
   import { api, ApiErr, type Id, type VolunteerApp } from '../../lib/api';
   import { studioChanged } from '../../lib/state/data.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { relDay } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -22,6 +23,7 @@
     try {
       list = await api.volunteerDecide(id, x.person.id, ok);
       ok ? haptic.ok() : haptic.warn();
+      say(ok ? phrase('say.volYes') : t('say.volNo'), ok ? 'raising_hands_3d_default' : 'waving_hand_3d_default');
       studioChanged();
     } catch (e) {
       haptic.error(); say(t(e instanceof ApiErr && e.message === 'full' ? 'vol.full' : 'common.error'), 'pleading_face_3d');

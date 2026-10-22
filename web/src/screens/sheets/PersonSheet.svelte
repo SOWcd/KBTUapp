@@ -12,6 +12,7 @@
   import EventRow from '../../ui/EventRow.svelte';
   import { api, ApiErr, type Id, type PersonCard, type ReportReason } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { phrase } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
   import { burst } from '../../ui/burst';
   import { sheets } from '../../lib/state/sheets';
@@ -68,7 +69,7 @@
   }
   const accept = () => act(() => api.answerFriend(id, true), welcome);
   const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); });
-  const takeBack = () => act(() => api.takeBackRequest(id), () => haptic.soft());
+  const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); });
   async function unfriend() {
     if (!shown || !(await sheets.ask({ title: t('fr.removeAsk', { name: shown.name }), text: t('fr.removeText'), ok: t('fr.remove'), cancel: t('common.cancel'), danger: true }))) return;
     await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); });

@@ -77,7 +77,7 @@
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function undo(g: GrantItem) {
-    try { await api.ungrant(g.id); gave = (gave ?? []).filter((x) => x.id !== g.id); haptic.soft(); }
+    try { await api.ungrant(g.id); gave = (gave ?? []).filter((x) => x.id !== g.id); haptic.soft(); say(t('say.ungranted'), 'waving_hand_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
 </script>
