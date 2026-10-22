@@ -447,6 +447,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     # until now the sign-in demoted every admin missing from ADMIN_TG_IDS; it no longer does (roles are given in the
     # app), so a stale admin row from before must not wake up as an admin: those in the env get it back at sign-in
     (61, "UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0;"),  # the owner never loses it
+    # the year of study moves on every September 1 (logic.course_day): course_year is the academic year a course was last
+    # right for; today's are this one's (the portal synced and migration 58 wrote them this autumn); a row without one
+    # counts from synced_at
+    (62, """ALTER TABLE students ADD COLUMN course_year INTEGER;
+    UPDATE students SET course_year = MAX(CAST(strftime('%Y', 'now', '+5 hours') AS INTEGER)
+        - (CAST(strftime('%m', 'now', '+5 hours') AS INTEGER) < 9),
+        CASE WHEN student_id GLOB '[0-9][0-9][A-Z]*' THEN 2000 + CAST(substr(student_id, 1, 2) AS INTEGER) ELSE 0 END)
+      WHERE course IS NOT NULL;"""),
 ]
 
 

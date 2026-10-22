@@ -1593,6 +1593,30 @@ def test_grant_scanner(env):
     assert c.delete(f"/api/admin/grants/{gave[1]['id']}", headers=B).status_code == 404       # too late to undo
 
 
+def test_course_day(env, monkeypatch):
+    """The year of study moves on every September 1 (Almaty), once, whatever year it was written in: the portal's lag
+    (a repeater) stays, 6 is the top, an August ID of the coming intake starts at 1, a missed year is caught up."""
+    import calendar
+    c, cfg = env
+    ids = [login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"))]
+    con = db.connect(cfg.db_path)
+    sept = calendar.timegm((2027, 9, 1, 0, 0, 0)) - 5 * 3600                                # Sept 1, 2027, 00:00 Almaty
+    for uid, sid, course, synced in zip(ids, ("26B000001", "24B000002", "21B000003", "27B000004"), (1, 2, 6, 1),
+                                        (sept - 300 * 86400, sept - 300 * 86400, sept - 300 * 86400, sept - 10 * 86400)):
+        con.execute("UPDATE students SET student_id = ?, course = ?, synced_at = ? WHERE user_id = ?", (sid, course, synced, uid))
+    courses = lambda: [con.execute("SELECT course FROM students WHERE user_id = ?", (u,)).fetchone()[0] for u in ids]  # noqa: E731
+    monkeypatch.setattr(logic, "now", lambda: sept - 60)                                    # Aug 31, 23:59: not yet
+    logic.course_day(con)
+    assert courses() == [1, 2, 6, 1]
+    monkeypatch.setattr(logic, "now", lambda: sept + 60)
+    logic.course_day(con)
+    logic.course_day(con)
+    assert courses() == [2, 3, 6, 1]
+    monkeypatch.setattr(logic, "now", lambda: sept + 731 * 86400)                           # Sept 2029, 2028 missed
+    logic.course_day(con)
+    assert courses() == [4, 5, 6, 3] and courses()[0] == logic.course_of("26B000001")
+
+
 def test_admin_stats(env, monkeypatch):
     """The admin's stats (PLAN, Oct 12): online in 10 minutes, active day/week/month, students, new today; a row a night
     just after midnight from seen_at, none later in the day; counts only."""

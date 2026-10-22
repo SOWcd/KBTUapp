@@ -446,6 +446,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         logic.tba_day(con)    # 10:00: events still without a place, to their organizers
         logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
         logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
+        logic.course_day(con)  # September 1: every student's year of study a year on
         casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
         purge(cfg, con)       # accounts whose week to change their mind ran out
         logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day

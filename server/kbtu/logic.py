@@ -214,9 +214,28 @@ def course_of(sid: str | None, t: int | None = None) -> int | None:
     m = re.match(r"(\d{2})[A-Z]", sid or "")
     if not m:
         return None
-    d = time.gmtime((now() if t is None else t) + 5 * 3600)
-    n = (d.tm_year if d.tm_mon >= 9 else d.tm_year - 1) - (2000 + int(m.group(1))) + 1
+    n = academic_year(t) - (2000 + int(m.group(1))) + 1
     return None if n < 0 else max(1, min(6, n))  # an ID from a year still ahead is made up (the coming intake's: 0 -> 1)
+
+
+def academic_year(t: int | None = None) -> int:
+    """2026 from September 1, 2026 to August 31, 2027 (Almaty)."""
+    d = time.gmtime((now() if t is None else t) + 5 * 3600)
+    return d.tm_year if d.tm_mon >= 9 else d.tm_year - 1
+
+
+def course_day(con) -> None:
+    """Daily, so on September 1 (Almaty): every year of study a year on, up to 6 as course_of. A course was right for
+    course_year, or else for the academic year it was written in (synced_at; an August ID of the coming intake: its own
+    year). Moved on, not re-read from the ID: the portal's years stay (a repeater's ID is older than their year)."""
+    if not _once(con, "course_day", str((now() + 5 * 3600) // 86400)):
+        return
+    ay = academic_year()
+    for r in rows(con, "SELECT user_id, student_id, course, course_year, synced_at FROM students WHERE course IS NOT NULL"):
+        m = re.match(r"(\d{2})[A-Z]", r["student_id"])
+        since = r["course_year"] or max(academic_year(r["synced_at"]), 2000 + int(m.group(1)) if m else 0)
+        if since < ay:
+            con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (min(6, r["course"] + ay - since), ay, r["user_id"]))
 
 
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
