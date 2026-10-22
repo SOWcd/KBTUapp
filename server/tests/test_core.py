@@ -1490,6 +1490,16 @@ def test_first_fifty(env, monkeypatch):
     con.executescript(dict(db.MIGRATIONS)[36])
     ach = next(a for a in logic.achievements(con, cc["id"]) if a["code"] == "first50")
     assert ach["level"] == 1 and ach["rarity"] == 1
+    # migration 59: a night sign-in left without a number gets the next one, and its "First 500" on the next open
+    for k, x in enumerate((b["id"], cc["id"], again["id"])):                # signed in in this order
+        con.execute("UPDATE students SET verified_at = ? WHERE user_id = ?", (1792600000 + k, x))
+        con.execute("UPDATE users SET card_no = NULL WHERE id = ?", (x,))
+        con.execute("DELETE FROM achievement_grants WHERE user_id = ?", (x,))
+        con.execute("DELETE FROM achievement_levels WHERE user_id = ?", (x,))
+    con.executescript(dict(db.MIGRATIONS)[59])
+    late = c.get("/api/me", headers=tma(71, "Bb")).json()
+    assert late["no"] == 5 and late["unlocked"] == first
+    assert [c.get("/api/me", headers=tma(t)).json()["no"] for t in (72, 70)] == [6, 7]
 
 
 def test_chats_directory(env, monkeypatch):
@@ -2222,6 +2232,13 @@ def test_deadline_and_free_first(env):
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**body, "freeFirst": 2}).json()["freeLeft"] == 1  # still changes
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**body, "freeFirst": 2, "price": 2500}).json()["message"] == "paid"
     assert c.patch(f"/api/events/{eid}", headers=tma(21), json={**body, "freeFirst": 2, "title": "Gala night"}).status_code == 200
+
+    login(c, 15, "fay")                                                                                    # a 1st-year master pays
+    con.execute("UPDATE students SET course = 1, student_id = printf('%02dM%07d', ?, user_id) WHERE user_id = (SELECT id FROM users WHERE tg_id = 15)",
+                (INTAKE % 100,))
+    con.execute("UPDATE events SET seats = 10 WHERE id = ?", (eid,))
+    fay = c.post(f"/api/events/{eid}/registration", headers=tma(15), json={}).json()
+    assert (fay["my"]["status"], fay["my"]["free"], fay["freeLeft"]) == ("hold", False, 1)
 
     con.execute("UPDATE events SET reg_until = ? WHERE id = ?", (int(time.time()) - 1, eid))
     late = c.post(f"/api/events/{eid}/registration", headers=tma(14), json={}).json()

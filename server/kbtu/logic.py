@@ -220,9 +220,10 @@ def course_of(sid: str | None, t: int | None = None) -> int | None:
 
 
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
-    """Whether this person gets one of the event's free seats: a 1st-year student while some are left."""
+    """Whether this person gets one of the event's free seats: a 1st-year bachelor (a B after the year in the ID; owner,
+    Oct 22: masters have no such seats) while some are left."""
     return bool(e["price"] and e["free_first"] and free_taken(con, e["id"]) < e["free_first"]
-                and (one(con, "SELECT course FROM students WHERE user_id = ?", uid) or {"course": None})["course"] == 1)
+                and one(con, "SELECT 1 FROM students WHERE user_id = ? AND course = 1 AND student_id GLOB '[0-9][0-9]B*'", uid))
 
 
 def friend_ids(con, uid: int) -> list[int]:
@@ -831,8 +832,10 @@ def me(con, v: Viewer) -> dict:
     # the card number at the KBTU sign-in, in the order people came (owner, Oct 22 morning: "I want to see who came
     # 84th"; the first-real-step rule of the night before is off); staff (kbtu.admin staff) take none: it's the
     # students' order. A deleted account's number stays empty, never given again.
-    if s and u["card_no"] is None and s["consent_version"] != "staff" and (
-            not u["is_founder"] or not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id)):
+    # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
+    if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
+            (u["is_founder"] or (u["card_no"] or FIRST_N + 1) <= FIRST_N)
+            and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         first_fifty(con, v.id)  # the number and, with it, "First 500"
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {

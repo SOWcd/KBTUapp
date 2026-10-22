@@ -431,6 +431,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     (58, """UPDATE students SET course = MAX(1, MIN(6, CAST(strftime('%Y', 'now', '+5 hours') AS INTEGER)
         - (CAST(strftime('%m', 'now', '+5 hours') AS INTEGER) < 9) - (2000 + CAST(substr(student_id, 1, 2) AS INTEGER)) + 1))
       WHERE consent_at >= 1792350000 AND student_id GLOB '[0-9][0-9][A-Z]*' AND consent_version NOT IN ('staff', 'admin');"""),
+    # card numbers at sign-in again (Oct 22): who signed in the night before, when a number waited for a first real
+    # step, gets theirs now in the order they came, after every number given so far (burnt ones stay burnt)
+    (59, """UPDATE users SET card_no = r.base + r.n FROM (SELECT s.user_id,
+            ROW_NUMBER() OVER (ORDER BY s.verified_at, s.user_id) AS n,
+            MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
+                (SELECT COALESCE(MAX(CAST(value AS INTEGER)), 0) FROM meta WHERE key = 'card_last')) AS base
+          FROM students s JOIN users x ON x.id = s.user_id
+          WHERE x.card_no IS NULL AND x.is_founder = 0 AND x.tg_id > 0 AND s.manual = 0 AND s.consent_version != 'staff') r
+        WHERE r.user_id = users.id;
+      INSERT INTO meta (key, value) SELECT 'card_last', MAX(card_no) FROM users WHERE card_no IS NOT NULL HAVING MAX(card_no) IS NOT NULL
+        ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));"""),
 ]
 
 
