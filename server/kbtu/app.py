@@ -266,14 +266,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/ms/verifier")
     def ms_verifier(state: str, con=Depends(conn)):
-        """The PKCE verifier, and whose Telegram this is: /ms.html asks "link to <name>?" before anything happens, so a
-        sign-in link someone else sent can't tie your KBTU account to their Telegram (review, Oct 19)"""
+        """The PKCE verifier. No "link to <name>?" question any more (owner, Oct 23: minimum steps): the code rides back
+        in the return link, and only the Telegram that started the sign-in can use it (ms_confirm)"""
         uid = msauth.state_uid(cfg.token_key, state)
-        u = logic.one(con, "SELECT tg_first_name, tg_username FROM users WHERE id = ?", uid) if uid else None
-        if not u:
+        if not uid or not logic.one(con, "SELECT 1 FROM users WHERE id = ?", uid):
             raise ApiError("not_found")  # a stale link: ms.html says "expired"
-        # the @username too: a first name alone is anyone's to fake (review, Oct 20)
-        return {"verifier": msauth.verifier(cfg.token_key, state), "tg": u["tg_first_name"] or "", "username": u["tg_username"] or ""}
+        return {"verifier": msauth.verifier(cfg.token_key, state)}
 
     @app.post("/api/ms/finish")
     async def ms_finish(body: dict = Body(...)):
@@ -298,7 +296,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             mine = logic.one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
             if mine and mine[0] and mine[0] != who["oid"]:
                 raise ApiError("conflict", "other_ms")
-            return {"ok": True, "code": logic.ms_hold(con, uid, who)}  # typed in the app, it goes through (audit M6)
+            return {"ok": True, "code": logic.ms_hold(con, uid, who)}  # back in the app by the return link (audit M6)
 
     @app.post("/api/ms/confirm")
     def ms_confirm(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -1300,22 +1298,20 @@ p b{color:#fff;font-weight:650}
 .btn:active{transform:scale(.97)}
 .main{color:#fff;background:radial-gradient(120% 90% at 30% 0%,#7f9dff,#3B6BFF 55%,#2448d8);box-shadow:0 10px 24px -8px rgba(59,107,255,.8),inset 0 1px 0 rgba(255,255,255,.5)}
 .ghost{margin-top:8px;color:rgba(255,255,255,.75);background:none}
-.btn[hidden]{display:none}
+.btn[hidden],small[hidden]{display:none}
+small{display:block;margin-top:12px;font-size:13px;color:rgba(255,255,255,.6)}
 .spin{width:30px;height:30px;margin:4px auto 6px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s .9s linear infinite}
 .spin[hidden]{display:none}@keyframes s{to{transform:rotate(1turn)}}
-.code{font:800 44px/1 ui-monospace,"SF Mono",Menlo,monospace;letter-spacing:.18em;margin:-6px 0 22px;padding:14px 0;border-radius:16px;background:rgba(255,255,255,.1)}
-.code[hidden]{display:none}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
-<h1 id="h"></h1><p id="t"></p><div class="code" id="code" hidden></div><div class="spin" id="w"></div>
-<button class="btn main" id="yes" hidden></button><button class="btn ghost" id="no" hidden></button>
-<a class="btn ghost" id="open" hidden href="tg://"></a></main><script>
+<h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
+<a class="btn main" id="open" hidden href="tg://"></a><small id="keep" hidden></small></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
 function show([h, t], mark) { $("h").textContent = h; $("t").textContent = t; $("w").hidden = !!mark || mark === "";
   if (mark) { $("badge").textContent = mark === "ok" ? "\u2713" : "!"; $("badge").className = "badge " + mark; $("badge").hidden = false; } }
-function end(state, mark) { show(L[state], mark); $("yes").hidden = $("no").hidden = true; $("open").textContent = L.open; $("open").hidden = false; }
+function end(state, mark) { show(L[state], mark); $("open").textContent = L.open; $("open").hidden = false; }
 show(L.wait);
 (async () => {
   const code = q.get("code"), state = q.get("state");
@@ -1331,18 +1327,16 @@ show(L.wait);
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));
   if (!tok.access_token) return end(nope(tok.error, tok.error_description), "bad");
-  // whose Telegram this goes to, asked first: a sign-in link someone else sent must not tie your account to them
-  show([L.ask[0], L.ask[1].replace("{name}", v.tg + (v.username ? " (@" + v.username + ")" : ""))], "");
-  $("yes").textContent = L.yes; $("no").textContent = L.no; $("yes").hidden = $("no").hidden = false;
-  const go = await new Promise((ok) => { $("yes").onclick = () => ok(true); $("no").onclick = () => ok(false); });
-  $("yes").hidden = $("no").hidden = true;
-  if (!go) return end("nope", "");
-  show(L.wait);
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
-  // the code, to type in the app (audit M6): nothing is linked until it is. "tg://" only switches to Telegram, where
-  // the Mini App is still open (owner, Oct 20: a t.me link opened it anew)
-  if (r.ok && j.code) { end("code", "ok"); $("code").textContent = j.code; $("code").hidden = false; return; }
+  // nothing is linked until the app sends the code back (audit M6), so it rides in the return link: only the Telegram
+  // that started the sign-in has a code waiting (owner, Oct 23: no typing; the app opening anew is fine). Tried at once
+  // (a browser may ask or refuse without a tap), the button stays for that
+  if (r.ok && j.code) {
+    end("ok", "ok"); $("open").href = "https://t.me/__BOT__?startapp=ms_" + j.code;
+    $("keep").textContent = L.keep; $("keep").hidden = false;  // the link is the sign-in: not to be sent on (review, Oct 23)
+    location.href = "tg://resolve?domain=__BOT__&startapp=ms_" + j.code; return;
+  }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

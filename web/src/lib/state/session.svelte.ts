@@ -23,9 +23,21 @@ export async function loadMe(): Promise<void> {
 let loginHook: ((after: () => void) => void) | null = null;
 export function setLoginHook(fn: (after: () => void) => void): void { loginHook = fn; }
 
-export function asStudent(action: () => void): void {
-  if (session.me?.student) action();
-  else loginHook?.(action);
+// Microsoft's return link opens the app anew, and the action's closure is gone by then: `again` is the action as a start
+// param (rc_<club>, newclub), kept on the phone and replayed after that sign-in (review, Oct 23)
+const AGAIN = 'kb-again';
+export function asStudent(action: () => void, again?: string): void {
+  if (session.me?.student) return action();
+  try { if (again) localStorage.setItem(AGAIN, JSON.stringify({ p: again, at: Date.now() })); else localStorage.removeItem(AGAIN); } catch { /* blocked */ }
+  loginHook?.(() => { takeAgain(); action(); });
+}
+/** The action a guest wanted before a Microsoft sign-in (half an hour at most), taken once */
+export function takeAgain(): string | null {
+  try {
+    const a = JSON.parse(localStorage.getItem(AGAIN) ?? 'null');
+    localStorage.removeItem(AGAIN);
+    return a && Date.now() - a.at < 30 * 60_000 ? String(a.p) : null;
+  } catch { return null; }
 }
 
 export const isStudent = () => !!session.me?.student;

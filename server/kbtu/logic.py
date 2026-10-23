@@ -766,12 +766,12 @@ def ms_pending(con, uid: int) -> dict | None:
     return who if who and who["at"] > now() - MS_KEEP else None
 
 
-MS_CODE_TTL = 15 * 60  # the code /ms.html shows, to type in the app
+MS_CODE_TTL = 15 * 60  # the code in /ms.html's return link
 
 
 def ms_hold(con, uid: int, who: dict) -> str:
-    """A Microsoft sign-in waits for the code /ms.html shows to be typed in the app (audit M6): a sign-in link someone
-    else sent can't tie your KBTU account to their Telegram unless you also hand them the code (the page says never)."""
+    """A Microsoft sign-in waits for its code to come back from /ms.html's return link (audit M6): that link opens the
+    Telegram of whoever signed in, so a sign-in link someone else sent can't tie your KBTU account to their Telegram."""
     code = f"{secrets.randbelow(10**6):06d}"
     con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
                 (f"mscode:{uid}", json.dumps({"code": code, "who": who, "at": now(), "tries": 0})))
@@ -800,7 +800,7 @@ def ms_apply(con, uid: int, who: dict) -> bool:
 
 
 def ms_confirm(con, v: Viewer, code: object) -> dict:
-    """The code from /ms.html, typed in the app: the sign-in goes through. 5 wrong tries end it."""
+    """The code from /ms.html's return link (ms_<code>): the sign-in goes through. 5 wrong tries end it."""
     wrong = None
     with tx(con):
         h = ms_waiting(con, v.id)
@@ -874,7 +874,7 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
-        "msCode": ms_waiting(con, v.id) is not None,  # back from Microsoft: the code its page shows, to type here
+        "msCode": ms_waiting(con, v.id) is not None,  # signed in with Microsoft, the return link not used yet
         "relink": relink,
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,

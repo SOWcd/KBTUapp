@@ -13,7 +13,7 @@ export { localize, original, translated } from './client';
 export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
-  msConfirm(code: string): Promise<Me>; // the code /ms.html showed: the sign-in goes through (bad_input: wrong; not_found/forbidden: start again)
+  msConfirm(code: string): Promise<Me>; // the code /ms.html's return link carried (ms_<code>): the sign-in goes through
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
   updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null }): Promise<Me>;
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off

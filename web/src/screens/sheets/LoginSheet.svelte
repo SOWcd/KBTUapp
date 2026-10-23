@@ -13,34 +13,22 @@
   import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, requestWriteAccess, openLink, on } from '../../lib/tg';
+  import { nowTs, parts } from '../../lib/time';
 
   let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
 
   const legal = (doc: 'privacy' | 'terms') => { haptic.tap(); openLink(`${location.origin}/${doc}?lang=${i18n.lang}`); };
   const st = session.me?.student, relink = !!session.me?.relink;
-  let agree = $state(!!st);
+  // back from Microsoft: ticked before its button (it stays off until then), the app opening anew lost it
+  let agree = $state(!!st || !!session.me?.msPending);
   let busy = $state(false);
   let error = $state('');
 
   // Microsoft: away in the browser; back in sight, ask who I am now (confirmed, or the account's names to fill in)
   let away = $state(false);
   const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
-  // back from Microsoft, its page shows a code to type here (audit M6): a sign-in link someone else sent can't take
-  // your KBTU account to their Telegram without it
+  // signed in, but back by the app switcher, not the page's button: the code rides only in that button's link (M6)
   const waiting = $derived(!!session.me?.msCode);
-  let code = $state('');
-  async function confirmCode() {
-    if (busy || code.trim().length !== 6) return;
-    busy = true; error = '';
-    away = true; // a confirmed student closes the sheet below (also after a reload lost `away`)
-    try { session.me = await api.msConfirm(code.trim()); code = ''; }
-    catch (e) {
-      haptic.error();
-      const why = e instanceof ApiErr ? (e.code === 'conflict' ? e.message : e.code) : '';
-      error = why === 'bad_input' ? t('login.codeWrong') : why === 'linked' ? t('login.msTaken') : why === 'other_ms' ? t('login.msOther') : t('login.codeExpired');
-      if (why !== 'bad_input') void loadMe();
-    } finally { busy = false; }
-  }
   async function microsoft() {
     if (!agree) return;
     haptic.tap(); error = '';
@@ -59,13 +47,15 @@
   $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); setTimeout(() => after?.(), 380); } });
 
   let m = $state({ lastName: '', firstName: '', studentId: '', course: 0 });
+  // the example ID starts with this intake's year, so a first-year sees their own (owner, Oct 23): the year of the last
+  // August, as a 26B student still enters in spring 2027
+  const yr = parts(nowTs()), sidEx = `${String(yr.m >= 7 ? yr.y : yr.y - 1).slice(2)}B123456`;
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
     && SID.test(m.studentId.trim().toUpperCase()) && agree && !busy);  // the year comes from the ID (audit M3)
   async function submit(ev?: Event) {
     ev?.preventDefault();
-    if (waiting) return void confirmCode();
     if (!pending || !mReady) return;
     busy = true; error = '';
     try {
@@ -78,7 +68,7 @@
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? e.message || e.code : '';
-      error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual') : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
+      error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual', { sid: sidEx }) : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
       if (why === 'ms_first') void loadMe(); // the Microsoft sign-in ran out: the button again
     } finally { busy = false; }
   }
@@ -104,10 +94,8 @@
 <Sheet {overlay} title={t('login.title')}>
   <form class="wrap" onsubmit={submit}>
     {#if waiting}
-      <div class="big"><b>{t('login.codeTitle')}</b><span class="t-foot">{t('login.codeHint')}</span></div>
-      <input class="code" bind:value={code} inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" enterkeyhint="done" />
-      {#if error}<p class="err t-callout">{error}</p>{/if}
-      <Button kind="primary" size="l" full type="submit" disabled={code.trim().length !== 6} loading={busy}>{t('login.codeGo')}</Button>
+      <div class="big"><b>{t('login.backTitle')}</b><span class="t-foot">{t('login.backHint')}</span></div>
+      {@render msButton(t('login.msAgain'))}
     {:else if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
       {@render msButton(t('login.msConfirm'))}
@@ -120,7 +108,7 @@
           <input bind:value={m.firstName} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" /></label>
       {/if}
       <label class="field"><span class="t-cap">{t('login.sid')}</span>
-        <input bind:value={m.studentId} placeholder="24B031234" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
+        <input bind:value={m.studentId} placeholder={sidEx} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if !agree}{@render consent()}{/if}
@@ -157,8 +145,6 @@
   .ok span { display: flex; flex-direction: column; gap: 4px; }
   .ok b { font: 680 16px/1.25 var(--font-text); }
   .ok i { font-style: normal; }
-  .code { height: 64px; border-radius: var(--r-l); background: var(--surface-2); text-align: center; color: var(--text);
-    font: 760 32px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: 0.3em; }
   .what { align-self: flex-start; margin: -6px 0 0 34px; color: var(--text-3); }
   .what button { color: var(--accent-text); font-weight: 620; }
 </style>
