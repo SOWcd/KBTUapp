@@ -9,7 +9,7 @@
   import X from '@lucide/svelte/icons/x';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
-  import { data, toggleSub } from '../../lib/state/data.svelte';
+  import { data, toggleSub, loadChats, chatsFor } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
@@ -20,17 +20,17 @@
   import Check from '@lucide/svelte/icons/check';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import UsersRound from '@lucide/svelte/icons/users-round';
-  import { api, type Chat, type Chats } from '../../lib/api';
+  import { type Chat } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
 
 
   let q = $state('');
   // the chats directory (§4.11): mine first (my school and course, then everyone's); the rest a tap away
-  let chats = $state<Chats | null>(null);
-  $effect(() => { void session.me?.id; api.chats().then((c) => (chats = c)).catch(() => {}); });
+  const chats = $derived(data.chats);
+  $effect(() => { if ((session.me?.id ?? null) !== chatsFor) loadChats(); });
   function tapChat(c: Chat) {
-    void openChat(c).then(() => { if (chats) chats = { forYou: chats.forYou.map((x) => (x.id === c.id ? { ...x, opened: true } : x)), all: chats.all.map((x) => (x.id === c.id ? { ...x, opened: true } : x)) }; });
+    void openChat(c).then(() => { if (chats) data.chats = { forYou: chats.forYou.map((x) => (x.id === c.id ? { ...x, opened: true } : x)), all: chats.all.map((x) => (x.id === c.id ? { ...x, opened: true } : x)) }; });
   }
   // clubs come first; KBTU's eleven schools after them under their own heading, no tab of their own (owner, Oct 14:
   // "schools matter less than clubs"; Oct 20: "there, but not up front")

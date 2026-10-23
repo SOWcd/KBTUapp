@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type ClassItem, type EventCard, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type TeamMember } from '../api';
+import { api, ApiErr, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type TeamMember } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
@@ -14,6 +14,7 @@ import { dayNo, nowTs } from '../time';
 export const data = $state({
   events: [] as EventCard[],
   eventsReady: false,
+  chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   orgs: [] as Org[],
   schedule: [] as ClassItem[],
   posts: [] as Post[],
@@ -87,12 +88,20 @@ export function phrase(key: Key, vars?: Record<string, string | number>): string
 }
 
 export async function loadAfisha(): Promise<void> {
+  loadChats();
   try {
     const [events, orgs, schedule, posts] = await Promise.all([api.events(), api.orgs(), api.schedule(), api.posts('all')]);
     data.events = events; data.orgs = orgs; data.schedule = joinClasses(schedule); data.posts = posts;
     data.error = false;
   } catch { data.error = true; }
   data.eventsReady = true;
+}
+
+// whose chats we hold: "for you" depends on my school and course, so a new me asks again
+export let chatsFor: Id | null | undefined;
+export function loadChats(): void {
+  chatsFor = session.me?.id ?? null;
+  api.chats().then((c) => (data.chats = c)).catch(() => {});
 }
 
 /** An event the app holds: the Afisha's, else a club's in Studio (drafts, team-only ones) */
