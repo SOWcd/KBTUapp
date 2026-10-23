@@ -171,9 +171,9 @@
   .stack :global(.av) { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5); }
 
   .side { position: absolute; right: 12px; bottom: calc(var(--bottom) + 8px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  /* a press on a button never pans the Feed: on iPhone the finger's first few points dragged the slide up and it snapped back (B3, video) */
-  .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; touch-action: none; }
-  .ring { width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
+  .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; }
+  /* a press on a ring never pans the Feed (B3, video); the labels still swipe (review: the whole column was dead) */
+  .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
   .ring.sm { width: 48px; height: 48px; }
   .act:active .ring { transform: scale(0.9); }
   .go .ring { background: var(--accent); box-shadow: 0 10px 26px -8px rgba(59, 107, 255, 0.9); }

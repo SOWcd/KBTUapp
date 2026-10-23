@@ -29,7 +29,7 @@ export const data = $state({
 });
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
-export function friendsChanged(): void { void loadFriends(); void loadMe(); }
+export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); }
 
 /** Friends, requests and where friends go, in the background (the speed rule: the page never waits for it); their faces
  * and the covers of where they go are fetched ahead too, so the page opens complete, not picture by picture. */
@@ -101,7 +101,7 @@ export async function loadAfisha(): Promise<void> {
 export let chatsFor: Id | null | undefined;
 export function loadChats(): void {
   chatsFor = session.me?.id ?? null;
-  api.chats().then((c) => (data.chats = c)).catch(() => {});
+  api.chats().then((c) => (data.chats = c)).catch(() => (chatsFor = undefined)); // Clubs asks again
 }
 
 /** An event the app holds: the Afisha's, else a club's in Studio (drafts, team-only ones) */
@@ -139,10 +139,10 @@ export function personCard(id: Id): { p: Promise<PersonCard>; card?: PersonCard 
   prefetchPerson(id);
   return people.get(id)!;
 }
-export function keepPerson(c: PersonCard): void {
-  const a = people.get(c.id);
-  if (a) a.card = c;
-}
+// a card after a friend action (or its stranger view when refused) replaces the old fetch whole: a reopen within 10 s
+// brought the old one back (review: an unfriended person with their friends-only data)
+export function keepPerson(c: PersonCard): void { people.set(c.id, { at: Date.now(), p: Promise.resolve(c), card: c }); }
+export function forgetPeople(): void { people.clear(); }
 
 export function put(card: EventCard): void {
   const i = data.events.findIndex((e) => e.id === card.id);

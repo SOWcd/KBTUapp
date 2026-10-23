@@ -27,10 +27,13 @@
 
   // svelte-ignore state_referenced_locally
   const pre = personCard(id); // a sheet is one person for its life
-  let p = $state<PersonCard | null>(pre.card ?? null);
+  // svelte-ignore state_referenced_locally
+  let p = $state<PersonCard | null>(session.me?.id === id ? null : pre.card ?? null); // mine: data.myCard is fresher
   let failed = $state<string | null>(null);  // the error's text: the day's limit of strangers' profiles (audit M2) says so
-  $effect(() => { pre.p.then((x) => (p = x)).catch((e) => (failed = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'person.tooMany' : 'common.error'))); });
-  $effect(() => { if (p) keepPerson(p); });
+  $effect(() => { pre.p.then((x) => (p = x)).catch((e) => {
+    const limit = e instanceof ApiErr && e.code === 'rate_limited';
+    if (limit && p) asStranger(); else failed = t(limit ? 'person.tooMany' : 'common.error'); // the server refuses it now
+  }); });
   // the plain card from what we know waits a moment: the real one usually lands first, and the plain one jumped into it
   let late = $state(false);
   $effect(() => { const k = setTimeout(() => (late = true), 300); return () => clearTimeout(k); });
@@ -53,14 +56,18 @@
   // the card again after a change. Now a stranger (unfriended, declined, taken back) past the day's limit of strangers,
   // the server refuses it: the stranger's view of what we have then (no card yet: the limit's message); else as before
   const reload = async (stranger = false) => {
-    try { p = await api.person(id); }
+    try { p = await api.person(id); keepPerson(p); }
     catch (e) {
       if (!stranger || !(e instanceof ApiErr && e.code === 'rate_limited')) throw e;
       if (!p) { failed = t('person.tooMany'); return; }
-      p = { ...p, friendship: 'none', friendsSince: null, clubs: [], past: [], going: [], awards: { ...p.awards, badges: [] },
-            shelf: p.shelf.filter((k) => !k.startsWith('b')), username: null, limited: true };
+      asStranger();
     }
   };
+  function asStranger() {
+    p = { ...p!, friendship: 'none', friendsSince: null, clubs: [], past: [], going: [], awards: { ...p!.awards, badges: [] },
+          shelf: p!.shelf.filter((k) => !k.startsWith('b')), username: null, limited: true };
+    keepPerson(p);
+  }
   async function act(job: () => Promise<unknown>, done: () => void, stranger = false) {
     acting = true;
     try { await job(); done(); friendsChanged(); await reload(stranger); }

@@ -108,6 +108,7 @@
     ro.observe(node.parentElement!);
     const mo = new MutationObserver(run); // a new title
     mo.observe(node, { childList: true, characterData: true, subtree: true });
+    document.fonts?.ready.then(run); // the first measure may be in the fallback font
     return { destroy: () => { ro.disconnect(); mo.disconnect(); } };
   }
 
