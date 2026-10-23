@@ -215,7 +215,14 @@ def course_of(sid: str | None, t: int | None = None) -> int | None:
     if not m:
         return None
     n = academic_year(t) - (2000 + int(m.group(1))) + 1
-    return None if n < 0 else max(1, min(6, n))  # an ID from a year still ahead is made up (the coming intake's: 0 -> 1)
+    return None if n < 0 else max(1, min(course_cap(sid), n))  # an ID from a year still ahead is made up (the coming intake's: 0 -> 1)
+
+
+def course_cap(sid: str | None) -> int:
+    """The last year of the degree the ID's letter names (owner, Oct 22): B bachelor 4, M master 2; any other letter 6.
+    Nobody is ever marked graduated: the app can't know (repeaters, leave), so the year stops at the last one."""
+    m = re.match(r"\d{2}([A-Z])", sid or "")
+    return {"B": 4, "M": 2}.get(m.group(1) if m else "", 6)
 
 
 def academic_year(t: int | None = None) -> int:
@@ -225,7 +232,8 @@ def academic_year(t: int | None = None) -> int:
 
 
 def course_day(con) -> None:
-    """Daily, so on September 1 (Almaty): every year of study a year on, up to 6 as course_of. A course was right for
+    """Daily, so on September 1 (Almaty): every year of study a year on, up to the degree's last (course_cap; a
+    stored year already past it, the portal's, is never lowered). A course was right for
     course_year, or else for the academic year it was written in (synced_at; an August ID of the coming intake: its own
     year). Moved on, not re-read from the ID: the portal's years stay (a repeater's ID is older than their year)."""
     if not _once(con, "course_day", str((now() + 5 * 3600) // 86400)):
@@ -235,7 +243,7 @@ def course_day(con) -> None:
         m = re.match(r"(\d{2})[A-Z]", r["student_id"])
         since = r["course_year"] or max(academic_year(r["synced_at"]), 2000 + int(m.group(1)) if m else 0)
         if since < ay:
-            con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (min(6, r["course"] + ay - since), ay, r["user_id"]))
+            con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (min(max(course_cap(r["student_id"]), r["course"]), r["course"] + ay - since), ay, r["user_id"]))
 
 
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:

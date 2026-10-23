@@ -1595,26 +1595,38 @@ def test_grant_scanner(env):
 
 def test_course_day(env, monkeypatch):
     """The year of study moves on every September 1 (Almaty), once, whatever year it was written in: the portal's lag
-    (a repeater) stays, 6 is the top, an August ID of the coming intake starts at 1, a missed year is caught up."""
+    (a repeater) stays, the degree's last year is the top (bachelor 4, master 2; a portal 6 is not lowered), an August
+    ID of the coming intake starts at 1, a missed year is caught up."""
     import calendar
     c, cfg = env
-    ids = [login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"))]
+    ids = [login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"), (14, "eve"))]
     con = db.connect(cfg.db_path)
     sept = calendar.timegm((2027, 9, 1, 0, 0, 0)) - 5 * 3600                                # Sept 1, 2027, 00:00 Almaty
-    for uid, sid, course, synced in zip(ids, ("26B000001", "24B000002", "21B000003", "27B000004"), (1, 2, 6, 1),
-                                        (sept - 300 * 86400, sept - 300 * 86400, sept - 300 * 86400, sept - 10 * 86400)):
+    for uid, sid, course, synced in zip(ids, ("26B000001", "24B000002", "21B000003", "27B000004", "26M000005"), (1, 2, 6, 1, 1),
+                                        (sept - 300 * 86400,) * 3 + (sept - 10 * 86400, sept - 300 * 86400)):
         con.execute("UPDATE students SET student_id = ?, course = ?, synced_at = ? WHERE user_id = ?", (sid, course, synced, uid))
     courses = lambda: [con.execute("SELECT course FROM students WHERE user_id = ?", (u,)).fetchone()[0] for u in ids]  # noqa: E731
     monkeypatch.setattr(logic, "now", lambda: sept - 60)                                    # Aug 31, 23:59: not yet
     logic.course_day(con)
-    assert courses() == [1, 2, 6, 1]
+    assert courses() == [1, 2, 6, 1, 1]
     monkeypatch.setattr(logic, "now", lambda: sept + 60)
     logic.course_day(con)
     logic.course_day(con)
-    assert courses() == [2, 3, 6, 1]
+    assert courses() == [2, 3, 6, 1, 2]
     monkeypatch.setattr(logic, "now", lambda: sept + 731 * 86400)                           # Sept 2029, 2028 missed
     logic.course_day(con)
-    assert courses() == [4, 5, 6, 3] and courses()[0] == logic.course_of("26B000001")
+    assert courses() == [4, 4, 6, 3, 2] and courses()[0] == logic.course_of("26B000001")
+    assert logic.course_of("19B000006") == 4 and logic.course_of("20M000007") == 2 and logic.course_of("20X000008") == 6
+    # migration 62 (its UPDATEs; the column exists already): course_year from synced_at (or an August ID's own year);
+    # a typed-in year past the degree's last is capped, the portal's (manual = 0) and staff's never
+    oct26, spring26 = calendar.timegm((2026, 10, 10, 0, 0, 0)), calendar.timegm((2026, 4, 1, 0, 0, 0))
+    for uid, sid, course, synced, manual, ver in zip(ids, ("21B000001", "20B000002", "20M000003", "27B000004", "24M000005"), (6, 5, 4, 1, 2),
+                                                  (oct26, spring26, oct26, oct26, oct26), (1, 0, 1, 1, 0), ("v3", "v3", "v3", "v3", "staff")):
+        con.execute("UPDATE students SET student_id = ?, course = ?, course_year = NULL, synced_at = ?, manual = ?, consent_version = ? WHERE user_id = ?",
+                    (sid, course, synced, manual, ver, uid))
+    con.executescript(dict(db.MIGRATIONS)[62].split(";", 1)[1])
+    got = [tuple(con.execute("SELECT course, course_year FROM students WHERE user_id = ?", (u,)).fetchone()) for u in ids]
+    assert got == [(4, 2026), (5, 2025), (2, 2026), (1, 2027), (2, 2026)]
 
 
 def test_admin_stats(env, monkeypatch):
