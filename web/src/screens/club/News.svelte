@@ -98,7 +98,7 @@
       <span class="who"><b class="ellipsis">{p.org.name}</b><i><span class="when">{#if !cast}{why(p) + ' · '}{/if}{ago(p.createdAt)}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</span>{#if p.pinned}<span class="pinned"><Pin size={12} />{t('news.pinned')}</span>{/if}</i></span>
       {#if cast && !p.read}<span class="new">{t('news.new')}</span>{/if}
       {#if p.tag}<Chip tone={p.tag === 'important' ? 'warning' : 'accent'}>{tagName(p.tag)}</Chip>{/if}
-      {#if p.canEdit || p.canDelete || p.canFeature}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
+      {#if p.canEdit || p.canDelete || p.canFeature || session.me?.student}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
     </header>
     {#if menu === p.id}
       <div class="pmenu">
@@ -108,6 +108,8 @@
         {/if}
         {#if p.canFeature}<button onclick={() => feature(p, p.featured ? 0 : 3)}>{p.featured ? t('news.unfeature') : t('news.feature')}</button>{/if}
         {#if p.canDelete}<button class="danger" onclick={() => { menu = null; void takeDown(p); }}>{t('news.hide')}</button>{/if}
+        <!-- anyone but its own club's writers: the one report sheet (owner, Oct 22) -->
+        {#if !p.canEdit && session.me?.student}<button onclick={() => { menu = null; sheets.report('post', p.id, p.title); }}>{t('cm.report')}</button>{/if}
       </div>
     {/if}
     {#if p.photo}<img class="pic" src={p.photo.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(p.photo)} />{/if}

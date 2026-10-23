@@ -9,7 +9,7 @@
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import X from '@lucide/svelte/icons/x';
   import Reply from '@lucide/svelte/icons/reply';
-  import { api, ApiErr, type Comment, type CommentThread, type Id, type ReportReason } from '../../lib/api';
+  import { api, ApiErr, type Comment, type CommentThread, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -23,14 +23,12 @@
 
   let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
 
-  const REASONS: ReportReason[] = ['spam', 'insult', 'danger', 'other'];
   let th = $state<CommentThread | null>(null);
   let draft = $state('');
   let asClub = $state(false);
   let sending = $state(false);
   let replying = $state<Comment | null>(null); // the comment mine answers
   let menu = $state<Id | null>(null);      // the comment whose actions are open
-  let reporting = $state(false);           // ... showing the report reasons
   let list = $state<HTMLDivElement>();
   let field = $state<HTMLTextAreaElement>();
 
@@ -64,10 +62,7 @@
     try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; menu = null; haptic.soft(); say(t('say.cmDeleted'), 'waving_hand_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
-  async function report(c: Comment, reason: ReportReason) {
-    try { await api.report('comment', c.id, reason); menu = null; haptic.ok(); say(t('cm.reported'), 'raising_hands_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
-  }
+  const report = (c: Comment) => { menu = null; sheets.report('comment', c.id, c.body); };
   async function toggle(ev: Event) {
     const on = (ev.currentTarget as HTMLInputElement).checked;
     try { th = await api.setComments(kind, id, on); haptic.select(); say(on ? phrase('say.cmOn') : t('say.cmOff'), on ? 'speech_balloon_3d' : 'locked_3d'); }
@@ -119,7 +114,7 @@
   }
   // a tap on a quote brings up the comment it answers
   const jump = (to: Id) => list?.querySelector(`[data-c="${to}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  const open = (c: Comment) => { menu = menu === c.id ? null : c.id; reporting = false; };
+  const open = (c: Comment) => { menu = menu === c.id ? null : c.id; };
   // the field grows with the text, up to five lines; Enter sends, Shift+Enter breaks the line
   const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 132) + 'px'; }; fit(); el.addEventListener('input', fit); };
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
@@ -153,12 +148,8 @@
             <p class="selectable">{c.body}</p>
             {#if menu === c.id}
               <div class="acts">
-                {#if reporting}
-                  {#each REASONS as r (r)}<button onclick={() => report(c, r)}>{t(`rep.${r}`)}</button>{/each}
-                {:else}
-                  {#if c.canDelete}<button class="danger" onclick={() => remove(c)}>{t('cm.delete')}</button>{/if}
-                  {#if !c.mine}<button onclick={() => (reporting = true)}>{t('cm.report')}</button>{/if}
-                {/if}
+                {#if c.canDelete}<button class="danger" onclick={() => remove(c)}>{t('cm.delete')}</button>{/if}
+                {#if !c.mine}<button onclick={() => report(c)}>{t('cm.report')}</button>{/if}
               </div>
             {/if}
           </div>

@@ -84,6 +84,8 @@ export const sheets = {
   registry: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
   comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
+  /** the one report sheet (owner, Oct 22): `about` names the thing, `onsent` hears it went (a photo hides for me) */
+  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo', _id: Id, _about?: string, _onsent?: () => void) => {},
   /** "Bring a friend" to an event */
   invite: (_id: Id, _title: string) => {},
   /** "Bring a friend" from their card: my upcoming events */

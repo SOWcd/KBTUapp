@@ -57,7 +57,8 @@ export interface AdminAi { on: boolean; today: number; error: string | null; mod
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>; at: Ts }
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
+  notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }

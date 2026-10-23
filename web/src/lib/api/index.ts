@@ -140,7 +140,7 @@ export interface Api {
   addComment(kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread>; // 500 chars, 10 a minute
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
-  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo', id: Id, reason: ReportReason): Promise<void>; // → the admin's queue
+  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
   reports(): Promise<ReportItem[]>;                                                  // admin
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one

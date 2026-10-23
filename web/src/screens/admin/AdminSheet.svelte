@@ -120,6 +120,7 @@
     else if (r.target === 'event') sheets.event(r.id);
     else if (r.target === 'user') sheets.person(r.id); // a profile: its nick, own photo and "about me"
     else if (r.target === 'photo') sheets.event(r.where.id); // the album's event (the thumb is in the row)
+    else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]); // no post screen: the row has its words, the thread its talk
   }
 </script>
 
@@ -199,7 +200,9 @@
       <h4 class="rh"><Flag size={14} />{tn('adm.reports', reports.length)}</h4>
       {#each reports as r (r.target + r.id)}
         <div class="rep">
-          <button class="rt" onclick={() => look(r)}>{#if r.target === 'photo'}<img class="rph" src={r.text} alt="" />{:else}<b class="clamp-2">{r.text}</b>{/if}<i>{t(`adm.rep.${r.target}`)} · {reasons(r)} · {ago(r.at)}</i></button>
+          <button class="rt" onclick={() => look(r)}>{#if r.target === 'photo'}<img class="rph" src={r.text} alt="" />{:else}<b class:clamp-2={r.target !== 'post'}>{r.text}</b>{/if}<i>{t(`adm.rep.${r.target}`)} · {reasons(r)} · {ago(r.at)}</i></button>
+          <!-- what the reporters wrote (never who): newest first -->
+          {#each r.notes ?? [] as n, i (i)}<p class="rn selectable"><b>{t(`rep.${n.reason}`)}</b> {n.note}</p>{/each}
           <div class="ra">
             <Button kind="danger" size="s" onclick={() => resolve(r, true)}>{t('adm.takeDown')}</Button>
             <Button kind="neutral" size="s" onclick={() => resolve(r, false)}>{t('adm.keep')}</Button>
@@ -296,6 +299,8 @@
   .rep { padding: 10px 0; border-top: 1px solid var(--line-2); }
   .rep:first-of-type { border-top: 0; }
   .rt { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; }
+  .rn { margin: 6px 0 0; padding: 8px 10px; border-radius: var(--r-s, 10px); background: var(--surface-2); font: 500 13.5px/1.35 var(--font-text); color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .rn b { color: var(--text); font-weight: 650; }
   .rt b { font: 600 15px/1.35 var(--font-text); }
   .rph { width: 96px; height: 96px; border-radius: var(--r-m); object-fit: cover; background: var(--surface-2); }
   .rt i { font: 500 12.5px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }

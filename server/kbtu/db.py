@@ -468,6 +468,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id   INTEGER NOT NULL,
       PRIMARY KEY (day, viewer_id, user_id)
     ) WITHOUT ROWID;"""),
+    # one report sheet for everything (owner, Oct 22): one OPEN report per person and thing; once a moderator has
+    # decided, the same person may report it again (it may have changed, or come back)
+    (64, """DROP INDEX one_report;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
 ]
 
 

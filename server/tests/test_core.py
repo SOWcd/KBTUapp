@@ -1172,6 +1172,15 @@ def test_album_reports(env):
     assert c.get("/api/events/1", headers=P).json()["photos"] == []                         # two people: hidden until the admin looks
     q = c.get("/api/admin/reports", headers=B).json()
     assert [(r["target"], r["id"], r["where"]) for r in q] == [("photo", ph["id"], {"kind": "event", "id": 1})] and q[0]["text"].endswith(".t.webp")
+    # a moderator never judges their own photo: not in their queue, and refused
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 91")
+    assert c.get("/api/me", headers=A).json()["counters"]["reports"] == 0
+    assert c.get("/api/admin/reports", headers=A).json() == [] and c.post(f"/api/admin/reports/photo/{ph['id']}", headers=A, json={"remove": False}).status_code == 403
+    con.execute("UPDATE users SET role = 'user' WHERE tg_id = 91")
+    # kept: back for everyone, and two new reports hide it only for those two (a moderator's call holds)
+    assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": False}).status_code == 204
+    assert rep(Z) == 204 and rep(D) == 204
+    assert len(c.get("/api/events/1", headers=P).json()["photos"]) == 1 and c.get("/api/events/1", headers=Z).json()["photos"] == []
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM event_photos").fetchone()[0] == 0 and c.get("/api/admin/reports", headers=B).json() == []
     e = c.get("/api/events/1", headers=P).json()
@@ -1243,10 +1252,18 @@ def test_comments(env):
     assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "spam"}).status_code == 204
     assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "insult"}).status_code == 204  # quiet repeat
     assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "boring"}).status_code == 400
+    for bad in ("x" * 501, 5, ["a"]):
+        assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "other", "note": bad}).status_code == 400
+    # the open report is updated, not doubled: the latest reason, the words kept
+    assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "other", "note": "  Rude to the host "}).status_code == 204
+    assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "spam", "note": ""}).status_code == 204
+    mine = next(x["id"] for x in c.get("/api/events/1/comments", headers=Z).json()["items"] if x["mine"])
+    assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": mine, "reason": "spam"}).status_code == 404  # my own: delete it
     assert c.get("/api/admin/reports", headers=P).status_code == 403
     assert c.get("/api/me", headers=B).json()["counters"]["reports"] == 1 and c.get("/api/me", headers=P).json()["counters"]["reports"] == 0
     q = c.get("/api/admin/reports", headers=B).json()
     assert [(x["target"], x["id"], x["text"], x["count"], x["reasons"]) for x in q] == [("comment", first, "Where is the entrance?", 1, {"spam": 1})]
+    assert [(n["reason"], n["note"]) for n in q[0]["notes"]] == [("spam", "Rude to the host")] and "reporter" not in str(q[0])
     assert c.delete(f"/api/comments/{first}", headers=Z).status_code == 403                             # not hers
     assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": True}).status_code == 204
     assert c.get("/api/admin/reports", headers=B).json() == [] and c.get("/api/me", headers=B).json()["counters"]["reports"] == 0
@@ -1256,6 +1273,10 @@ def test_comments(env):
     assert [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("comment", first)]
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 204
     assert first in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
+    # decided once, it may be reported again (it is back); kept this time
+    assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": first, "reason": "danger"}).status_code == 204
+    assert [(x["id"], x["reasons"], x["notes"]) for x in c.get("/api/admin/reports", headers=B).json()] == [(first, {"danger": 1}, [])]
+    assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": False}).status_code == 204
     assert c.get("/api/admin/taken-down", headers=B).json() == []
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 404               # nothing to undo
     assert c.post(f"/api/admin/taken-down/user/{first}/restore", headers=B).status_code == 400
@@ -3771,3 +3792,17 @@ def test_profile_privacy(env, monkeypatch):
     c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
     logic.delete_me(con, logic.Viewer(dan, "user", True))
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE ? IN (viewer_id, user_id)", (dan,)).fetchone()[0] == 0
+
+
+def test_report_limit(env, monkeypatch):
+    """The day's limit counts new reports only: updating one still waiting is free (the one report sheet, Oct 22)."""
+    c, cfg = env
+    ann, bob, cat = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat")))
+    monkeypatch.setattr(logic, "REPORTS_A_DAY", 1)
+    rep = lambda uid, note=None: c.post("/api/reports", headers=tma(10), json={"target": "user", "id": uid, "reason": "spam", "note": note})  # noqa: E731
+    assert rep(bob).status_code == 204 and rep(cat).json()["error"] == "rate_limited"
+    assert rep(bob, "Fake name").status_code == 204                                                    # the open one, updated: free
+    con = db.connect(cfg.db_path)
+    assert [tuple(r) for r in con.execute("SELECT target_id, note FROM reports")] == [(bob, "Fake name")]
+    logic.delete_me(con, logic.Viewer(ann, "user", True))                                              # her words go with her data
+    assert [tuple(r) for r in con.execute("SELECT reporter_id, target_id, note FROM reports")] == [(None, bob, None)]

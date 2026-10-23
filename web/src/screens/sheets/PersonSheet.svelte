@@ -10,7 +10,7 @@
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { api, ApiErr, type Id, type PersonCard, type ReportReason } from '../../lib/api';
+  import { api, ApiErr, type Id, type PersonCard } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
@@ -45,12 +45,6 @@
   // friendship (§4.7): ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
   let acting = $state(false);
 
-  const REASONS: ReportReason[] = ['spam', 'insult', 'danger', 'other'];
-  let reporting = $state(false);
-  async function report(r: ReportReason) {
-    try { await api.report('user', id, r); reporting = false; haptic.ok(); say(t('cm.reported'), 'raising_hands_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
-  }
   // the card again after a change. Now a stranger (unfriended, declined, taken back) past the day's limit of strangers,
   // the server refuses it: the stranger's view of what we have then (no card yet: the limit's message); else as before
   const reload = async (stranger = false) => {
@@ -164,10 +158,7 @@
     {#if !me && session.me?.student}
       <!-- a nick, an own photo or "about me" that shouldn't be there (owner, Oct 5): to the admin's queue -->
       <div class="rep">
-        {#if reporting}
-          <span class="t-foot">{t('person.reportWhy')}</span>
-          <div class="why">{#each REASONS as r (r)}<button onclick={() => report(r)}>{t(`rep.${r}`)}</button>{/each}</div>
-        {:else}<button class="quiet" onclick={() => (reporting = true)}>{t('person.report')}</button>{/if}
+        <button class="quiet" onclick={() => sheets.report('user', id, shown.name)}>{t('person.report')}</button>
         {#if shown.friendship === 'friends'}<button class="quiet" disabled={acting} onclick={unfriend}>{t('fr.remove')}</button>{/if}
       </div>
     {/if}
@@ -190,8 +181,6 @@
   .two :global(.btn.full:first-child:not(:last-child)) { flex: 0 0 auto; }
   .quiet { padding: 8px 10px; font: 600 13.5px/1 var(--font-text); color: var(--text-3); }
   .rep { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; text-align: center; }
-  .why { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-  .why button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); }
   .friends { text-align: center; color: var(--text-2); }
   /* section titles in the type scale of mockup v24 (sentence case, not the old caps caption) */
   .sec { margin: 26px 2px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; text-transform: none; color: var(--text); }

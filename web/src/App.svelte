@@ -125,6 +125,7 @@
   sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
   sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange });
   sheets.inviteTo = (id, name) => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name });
+  sheets.report = (target, id, about, onsent) => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent });
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});

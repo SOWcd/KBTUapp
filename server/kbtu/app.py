@@ -860,7 +860,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/reports", status_code=204)
     def report(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"))
+        logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
 
     @app.get("/api/admin/taken-down")
     def taken_down(con=Depends(conn), v: Viewer = Depends(viewer)):

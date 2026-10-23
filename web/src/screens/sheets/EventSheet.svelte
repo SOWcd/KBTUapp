@@ -465,6 +465,8 @@
       </button>
     {/if}
     {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
+    <!-- the one report sheet (owner, Oct 22): anyone but the event's own crew -->
+    {#if !may(mem, 'door') && !preview && session.me?.student}<button class="rep" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</button>{/if}
   {/if}
 
   {#snippet footer()}
@@ -633,6 +635,7 @@
     background: var(--accent-soft); color: var(--accent-text); font: 630 13.5px/1 var(--font-text); white-space: nowrap; }
   .tools button:active { transform: scale(0.96); }
   .kill { margin: 20px 0 4px; }
+  .rep { display: block; margin: 22px auto 4px; padding: 8px 10px; font: 600 13.5px/1 var(--font-text); color: var(--text-3); }
   .sec { margin: 8px 0 8px; }
   .desc { color: var(--text); white-space: pre-line; }
 

@@ -885,7 +885,8 @@ def me(con, v: Viewer) -> dict:
                         for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
-                     "reports": one(con, "SELECT COUNT(DISTINCT target || target_id) FROM reports WHERE status = 'open'")[0] if v.role in ("admin", "moderator") else 0,
+                     "reports": sum(_about(con, t, i) != v.id for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"))
+                                if v.role in ("admin", "moderator") else 0,  # as the queue: not those about me
                      "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
@@ -1244,7 +1245,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM bot_outbox WHERE kind = 'friend_invite' AND ref LIKE ? AND sent_at IS NULL", (f"fi:%:{v.id}",))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target = ?", (f"user:{v.id}",))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
-        con.execute("UPDATE reports SET note = NULL WHERE target = 'user' AND target_id = ?", (v.id,))
+        con.execute("UPDATE reports SET note = NULL WHERE (target = 'user' AND target_id = ?) OR reporter_id IS NULL", (v.id,))
         con.execute("INSERT INTO audit_log (actor_id, action, target, at) VALUES (NULL, 'delete_my_data', 'user', ?)", (now(),))
     return receipts, photos
 
@@ -2375,10 +2376,19 @@ def set_comments_on(con, v: Viewer, kind: str, tid: int, on: object) -> dict:
     return comments(con, v, kind, tid)
 
 
-def report(con, v: Viewer, target: object, tid: object, reason: object) -> None:
-    """"Report" → the Admin panel's queue. Once per person and thing (a repeat is quiet), 20 a day."""
+REPORT_NOTE = 500  # characters of "what's wrong", optional
+
+
+def report(con, v: Viewer, target: object, tid: object, reason: object, note: object = None) -> None:
+    """"Report" → the moderators' queue (one sheet for every thing: a reason and, if they like, a few words). One open
+    report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
+    20 new a day."""
     need_student(v)
-    if target not in ("post", "comment", "event", "user", "photo") or reason not in ("spam", "insult", "danger", "other") or not isinstance(tid, int):
+    if target not in ("post", "comment", "event", "user", "photo") or reason not in ("spam", "insult", "danger", "other") \
+            or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
+        raise ApiError("bad_input")
+    note = (note or "").strip() or None
+    if note and len(note) > REPORT_NOTE:
         raise ApiError("bad_input")
     if target == "photo":  # an album photo (its file id): hidden for me at once, for everyone once two people reported it
         p = one(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
@@ -2389,15 +2399,26 @@ def report(con, v: Viewer, target: object, tid: object, reason: object) -> None:
         if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
             raise ApiError("not_found")
     elif target == "comment":
-        c = one(con, "SELECT post_id, event_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
-        if not c:
+        c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
+        if not c or c["user_id"] == v.id:  # my own comment I delete, not report
             raise ApiError("not_found")
         _thread(con, v, "post" if c["post_id"] else "event", c["post_id"] or c["event_id"])
     else:
         _thread(con, v, target, tid)
+    if con.execute("UPDATE reports SET reason = ?, note = COALESCE(?, note) WHERE reporter_id = ? AND target = ? AND target_id = ? AND status = 'open'",
+                   (reason, note, v.id, target, tid)).rowcount:
+        return
     if one(con, "SELECT COUNT(*) FROM reports WHERE reporter_id = ? AND created_at > ?", v.id, now() - 86400)[0] >= REPORTS_A_DAY:
         raise ApiError("rate_limited")
-    con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, ?, ?, ?, ?)", (v.id, target, tid, reason, now()))
+    con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (v.id, target, tid, reason, note, now()))
+
+
+def _about(con, target: str, tid: int) -> int | None:
+    """Whose the reported thing is: the person, a comment's author, a photo's uploader (a club's post or event: nobody's)."""
+    r = (one(con, "SELECT ?", tid) if target == "user" else one(con, "SELECT user_id FROM comments WHERE id = ?", tid) if target == "comment"
+         else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo" else None)
+    return r[0] if r else None
 
 
 def report_queue(con, v: Viewer) -> list[dict]:
@@ -2417,17 +2438,23 @@ def report_queue(con, v: Viewer) -> list[dict]:
             p = one(con, "SELECT p.event_id, f.path FROM event_photos p JOIN files f ON f.id = p.file_id WHERE p.file_id = ?", r["target_id"])
             text, where = (f"media/{p['path']}.t.webp", ("event", p["event_id"])) if p else (None, None)
         elif r["target"] == "post":
-            p = one(con, "SELECT title FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
-            text, where = (p["title"], ("post", r["target_id"])) if p else (None, None)
+            # no post screen of its own to open: its words are the thing to judge, title and body
+            p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
+            text, where = (" · ".join(x for x in (p["title"], (p["body"] or "")[:400]) if x), ("post", r["target_id"])) if p else (None, None)
         else:
             e = one(con, "SELECT title FROM events WHERE id = ? AND hidden_at IS NULL", r["target_id"])
             text, where = (e["title"], ("event", r["target_id"])) if e else (None, None)
+        if _about(con, r["target"], r["target_id"]) == v.id:  # about me: another moderator decides (the notes could name the reporter)
+            continue
         if text is None:  # already gone: nothing to decide
             con.execute("UPDATE reports SET status = 'actioned', resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'", (now(), r["target"], r["target_id"]))
             continue
         reasons = r["reasons"].split(",")
+        # what the reporters wrote, newest first, never who wrote it
+        notes = [{"reason": n["reason"], "note": n["note"], "at": n["created_at"]} for n in rows(con, """SELECT reason, note, created_at FROM reports
+            WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
         out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1]}, "count": r["n"],
-                    "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "at": r["first"]})
+                    "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
     return out
 
 
@@ -2435,6 +2462,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
     """Take the thing down (a comment deleted, a post or an event hidden, a profile's own words and photo gone) or leave
     it; either way its reports close. Returns a removed photo's files to delete from disk."""
     _mod(v)
+    if _about(con, target, tid) == v.id:
+        raise ApiError("forbidden")
     photos: list[str] = []
     if remove:
         if target == "comment":
@@ -3866,8 +3895,10 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
     head = can(con, v, e["org_id"], "events")
     ps = rows(con, f"""SELECT f.*, p.added_by, s.first_name, s.last_name, u.nick FROM event_photos p JOIN files f ON f.id = p.file_id
         LEFT JOIN users u ON u.id = p.added_by LEFT JOIN students s ON s.user_id = p.added_by WHERE p.event_id = ?
-        AND f.id NOT IN (SELECT target_id FROM reports WHERE target = 'photo' AND status = 'open'
-                         GROUP BY target_id HAVING COUNT(DISTINCT reporter_id) >= 2 OR SUM(reporter_id = ?) > 0)
+        AND f.id NOT IN (SELECT r.target_id FROM reports r WHERE r.target = 'photo' AND r.status = 'open' GROUP BY r.target_id
+                         HAVING (COUNT(DISTINCT r.reporter_id) >= 2  -- for everyone, unless a moderator already kept it
+                                 AND NOT EXISTS (SELECT 1 FROM reports k WHERE k.target = 'photo' AND k.target_id = r.target_id AND k.status = 'dismissed'))
+                             OR SUM(r.reporter_id = ?) > 0)
         ORDER BY p.sort""", e["id"], v.id)
     by = lambda f: f["nick"] or (f"{f['first_name']} {f['last_name'][:1]}." if f["first_name"] else None)  # noqa: E731
     return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": by(f), "mine": f["added_by"] == v.id} for f in ps],
