@@ -1618,15 +1618,15 @@ def test_course_day(env, monkeypatch):
     assert courses() == [4, 4, 6, 3, 2] and courses()[0] == logic.course_of("26B000001")
     assert logic.course_of("19B000006") == 4 and logic.course_of("20M000007") == 2 and logic.course_of("20X000008") == 6
     # migration 62 (its UPDATEs; the column exists already): course_year from synced_at (or an August ID's own year);
-    # a typed-in year past the degree's last is capped, the portal's (manual = 0) and staff's never
-    oct26, spring26 = calendar.timegm((2026, 10, 10, 0, 0, 0)), calendar.timegm((2026, 4, 1, 0, 0, 0))
-    for uid, sid, course, synced, manual, ver in zip(ids, ("21B000001", "20B000002", "20M000003", "27B000004", "24M000005"), (6, 5, 4, 1, 2),
-                                                  (oct26, spring26, oct26, oct26, oct26), (1, 0, 1, 1, 0), ("v3", "v3", "v3", "v3", "staff")):
-        con.execute("UPDATE students SET student_id = ?, course = ?, course_year = NULL, synced_at = ?, manual = ?, consent_version = ? WHERE user_id = ?",
-                    (sid, course, synced, manual, ver, uid))
+    # a typed-in year (written since the portal closed, Oct 19) past the degree's last is capped, the portal's and staff's never
+    oct20, oct10, spring26 = (calendar.timegm(d) for d in ((2026, 10, 20, 0, 0, 0), (2026, 10, 10, 0, 0, 0), (2026, 4, 1, 0, 0, 0)))
+    for uid, sid, course, synced, ver in zip(ids, ("21B000001", "20B000002", "20M000003", "27B000004", "24M000005"), (6, 5, 4, 1, 3),
+                                             (oct20, spring26, oct20, oct10, oct20), ("v3", "v3", "v3", "v3", "staff")):
+        con.execute("UPDATE students SET student_id = ?, course = ?, course_year = NULL, synced_at = ?, manual = 0, consent_version = ? WHERE user_id = ?",
+                    (sid, course, synced, ver, uid))
     con.executescript(dict(db.MIGRATIONS)[62].split(";", 1)[1])
     got = [tuple(con.execute("SELECT course, course_year FROM students WHERE user_id = ?", (u,)).fetchone()) for u in ids]
-    assert got == [(4, 2026), (5, 2025), (2, 2026), (1, 2027), (2, 2026)]
+    assert got == [(4, 2026), (5, 2025), (2, 2026), (1, 2027), (3, 2026)]
 
 
 def test_admin_stats(env, monkeypatch):

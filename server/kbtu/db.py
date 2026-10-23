@@ -450,14 +450,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the year of study moves on every September 1 (logic.course_day): course_year is the academic year a course was
     # last right for: the one it was written in (synced_at, as course_day's fallback), or the ID's own for an August ID
     # of the coming intake. Then the years migration 58 read from the ID (typed-in rows, up to 6) stop at the degree's
-    # last (owner, Oct 22: bachelor 4, master 2); the portal's own (manual = 0) are never touched
+    # last (owner, Oct 22: bachelor 4, master 2): rows written since the portal closed (Oct 19; the typed-in sign-up
+    # sets synced_at, ms_link then clears manual); the portal's own are never touched
     (62, """ALTER TABLE students ADD COLUMN course_year INTEGER;
     UPDATE students SET course_year = MAX(CAST(strftime('%Y', synced_at, 'unixepoch', '+5 hours') AS INTEGER)
         - (CAST(strftime('%m', synced_at, 'unixepoch', '+5 hours') AS INTEGER) < 9),
         CASE WHEN student_id GLOB '[0-9][0-9][A-Z]*' THEN 2000 + CAST(substr(student_id, 1, 2) AS INTEGER) ELSE 0 END)
       WHERE course IS NOT NULL;
     UPDATE students SET course = CASE substr(student_id, 3, 1) WHEN 'B' THEN 4 ELSE 2 END
-      WHERE manual = 1 AND consent_version NOT IN ('staff', 'admin')
+      WHERE synced_at >= 1792350000 AND consent_version NOT IN ('staff', 'admin')
         AND ((student_id GLOB '[0-9][0-9]B*' AND course > 4) OR (student_id GLOB '[0-9][0-9]M*' AND course > 2));"""),
 ]
 
