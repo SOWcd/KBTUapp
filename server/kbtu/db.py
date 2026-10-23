@@ -460,6 +460,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     UPDATE students SET course = CASE substr(student_id, 3, 1) WHEN 'B' THEN 4 ELSE 2 END
       WHERE synced_at >= 1792350000 AND consent_version NOT IN ('staff', 'admin')
         AND ((student_id GLOB '[0-9][0-9]B*' AND course > 4) OR (student_id GLOB '[0-9][0-9]M*' AND course > 2));"""),
+    # audit M2: strangers' profiles opened per day (logic._stranger_view); kept two days at most, no foreign keys
+    # (delete_me clears a person's rows both ways)
+    (63, """CREATE TABLE profile_views (
+      day       INTEGER NOT NULL,   -- Almaty day number
+      viewer_id INTEGER NOT NULL,
+      user_id   INTEGER NOT NULL,
+      PRIMARY KEY (day, viewer_id, user_id)
+    ) WITHOUT ROWID;"""),
 ]
 
 

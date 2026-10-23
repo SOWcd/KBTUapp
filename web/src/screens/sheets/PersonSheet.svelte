@@ -26,8 +26,8 @@
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
   let p = $state<PersonCard | null>(null);
-  let failed = $state(false);
-  $effect(() => { api.person(id).then((x) => (p = x)).catch(() => (failed = true)); });
+  let failed = $state<string | null>(null);  // the error's text: the day's limit of strangers' profiles (audit M2) says so
+  $effect(() => { api.person(id).then((x) => (p = x)).catch((e) => (failed = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'person.tooMany' : 'common.error'))); });
   // what the app already knows opens the card at once (me; a friend or a request: name, face, course); the rest fills in
   const known = $derived.by((): PersonCard | null => {
     if (session.me?.id === id && data.myCard) return data.myCard;
@@ -51,9 +51,20 @@
     try { await api.report('user', id, r); reporting = false; haptic.ok(); say(t('cm.reported'), 'raising_hands_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
-  async function act(job: () => Promise<unknown>, done: () => void) {
+  // the card again after a change. Now a stranger (unfriended, declined, taken back) past the day's limit of strangers,
+  // the server refuses it: the stranger's view of what we have then (no card yet: the limit's message); else as before
+  const reload = async (stranger = false) => {
+    try { p = await api.person(id); }
+    catch (e) {
+      if (!stranger || !(e instanceof ApiErr && e.code === 'rate_limited')) throw e;
+      if (!p) { failed = t('person.tooMany'); return; }
+      p = { ...p, friendship: 'none', friendsSince: null, clubs: [], past: [], going: [], awards: { ...p.awards, badges: [] },
+            shelf: p.shelf.filter((k) => !k.startsWith('b')), username: null, limited: true };
+    }
+  };
+  async function act(job: () => Promise<unknown>, done: () => void, stranger = false) {
     acting = true;
-    try { await job(); done(); friendsChanged(); p = await api.person(id); }
+    try { await job(); done(); friendsChanged(); await reload(stranger); }
     catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'pleading_face_3d'); }
     finally { acting = false; }
   }
@@ -63,16 +74,16 @@
     try {
       const r = await api.askFriend(id);
       if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
-      friendsChanged(); p = await api.person(id);
+      friendsChanged(); await reload();
     } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'pleading_face_3d'); }
     finally { acting = false; }
   }
   const accept = () => act(() => api.answerFriend(id, true), welcome);
-  const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); });
-  const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); });
+  const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }, true);
+  const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }, true);
   async function unfriend() {
     if (!shown || !(await sheets.ask({ title: t('fr.removeAsk', { name: shown.name }), text: t('fr.removeText'), ok: t('fr.remove'), cancel: t('common.cancel'), danger: true }))) return;
-    await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); });
+    await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); }, true);
   }
 </script>
 
@@ -105,7 +116,9 @@
       </div>
     {/if}
 
-    {#if !p}
+    {#if !p && failed}
+      <p class="t-body dim pad">{failed}</p>
+    {:else if !p}
       <div class="skel" aria-hidden="true"><span class="s2"></span><span class="s3"></span></div>
     {:else}
     <!-- everything they have earned, right under the card (owner, Oct 7: "not secret; the showcase is what they pick to
@@ -136,6 +149,7 @@
         {/each}
       </div>
     {/if}
+    {#if p.limited}<p class="t-foot none lim">{t('person.limited')}</p>{/if}
     {#if p.past?.length}
       <!-- where they were before, written down by itself (a club leader, Oct 16: "ex-head of X, Oct 25 - May 26") -->
       <h3 class="sec">{t('person.past')}</h3>
@@ -159,7 +173,7 @@
     {/if}
     {/if}
   {:else if failed}
-    <p class="t-body dim pad">{t('common.error')}</p>
+    <p class="t-body dim pad">{failed}</p>
   {:else}
     <div class="skel"><span class="s1"></span><span class="s2"></span><span class="s3"></span></div>
   {/if}
@@ -196,6 +210,7 @@
   .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; transition: transform var(--t-fast) var(--ease); }
   .cell:active { transform: scale(0.94); }
   .none { margin: 0 4px; }
+  .lim { margin-top: 18px; }
   .cell i { font: 550 10.5px/1.2 var(--font-text); font-style: normal; color: var(--text-2); text-align: center; }
 
 

@@ -1236,6 +1236,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             elif (t, c) not in _DEL_KEEP and one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", v.id):
                 raise RuntimeError(f"deleting account {v.id}: {t}.{c} is in no list")  # the transaction rolls back
         con.execute("UPDATE map_graph SET updated_by = NULL WHERE updated_by = ?", (v.id,))  # no foreign key there
+        con.execute("DELETE FROM profile_views WHERE viewer_id = ? OR user_id = ?", (v.id, v.id))  # no foreign keys either
         con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{v.id}", f"mscode:{v.id}"))  # an unfinished Microsoft sign-in: its profile too
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
@@ -2774,19 +2775,42 @@ def achievements(con, uid: int) -> list[dict]:
     return out
 
 
+PROFILES_A_DAY = 200  # strangers' profiles a day (audit M2): browsing needs a few dozen, a scrape needs thousands
+
+
+def _stranger_view(con, v: Viewer, uid: int) -> None:
+    """Counts a profile opened by someone who is neither a friend nor a clubmate; past the day's limit, refused. One
+    row per (Almaty day, viewer, profile), so reopening the same one is free; the day before yesterday's rows go."""
+    day = (now() + 5 * 3600) // 86400
+    if one(con, "SELECT 1 FROM profile_views WHERE day = ? AND viewer_id = ? AND user_id = ?", day, v.id, uid):
+        return
+    con.execute("DELETE FROM profile_views WHERE day < ?", (day - 1,))  # ponytail: count then insert, a burst can pass 200 by a few
+    if one(con, "SELECT COUNT(*) FROM profile_views WHERE day = ? AND viewer_id = ?", day, v.id)[0] >= PROFILES_A_DAY:
+        raise ApiError("rate_limited")
+    con.execute("INSERT INTO profile_views (day, viewer_id, user_id) VALUES (?, ?, ?)", (day, v.id, uid))
+
+
 def person(con, v: Viewer, uid: int) -> dict:
+    """A profile (§4.12). Friends and clubmates see it all; anyone else (audit M2) the card, the bio and achievements
+    (the "team" medal says only "some club", accepted), but not the clubs, past roles, event badges or a club's badge
+    that came by itself (where someone goes can say more than they chose to show: a
+    support group, a faith club) and at most PROFILES_A_DAY of them, so the student body can't be scraped by id."""
     need_student(v)
     p = one(con, PERSON + " WHERE u.id = ?", uid)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
     if not p or not s:
         raise ApiError("not_found")
-    u = one(con, "SELECT bio, showcase, show_going, card_no, is_founder, tg_username FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT bio, showcase, show_going, card_no, is_founder, tg_username, skin_pick, skin_org FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
     # their @username, to their own club's team only (§3: the team sees it in its roster anyway): "Message on Telegram"
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
                                v.id, uid) is not None
     state = "none" if uid == v.id else friendship(con, v.id, uid)
-    ach = achievements(con, uid)
+    close = uid == v.id or link is not None or team or v.role in ("admin", "moderator")  # the team: reports need it all
+    if not close:
+        _stranger_view(con, v, uid)
+    # when a level was reached is the second of a check-in: matched against the Afisha it names the event (review, Oct 23)
+    ach = [a if close else {**a, "at": None} for a in achievements(con, uid)]
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
         roles = _roles(con, v)
@@ -2796,28 +2820,31 @@ def person(con, v: Viewer, uid: int) -> dict:
     badges = [{"eventId": e["id"], "title": e["badge_name"], "org": org_ref(con, _org(con, e["org_id"])), "emoji": e["emoji"] or "party_popper_3d",
                "color": e["tint"] or "#3B6BFF", "at": e["starts_at"]}
               for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-                  WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid)]
+                  WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid)] if close else []
     return {
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
         "attended": len(attended(con, uid)),
         # the role shows only to the club's own team (owner, Oct 15): outside, just the club
         "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, "title": m["title"] if m["mine"] else None} for m in rows(con, """
             SELECT m.role, t.name AS title, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.* FROM org_members m
-            JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid)],
+            JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close],
         # where they were before (org_history, written by triggers): a role held at least a day, the club still shown;
         # the role by the same rule as above. Newest first
         "past": [{"org": org_ref(con, h), "role": h["role"] if h["mine"] else None, "since": h["since"], "until": h["until"]} for h in rows(con, """
             SELECT h.role, h.since, h.until, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = h.org_id AND x.user_id = ?) AS mine, o.*
             FROM org_history h JOIN orgs o ON o.id = h.org_id
             WHERE h.user_id = ? AND h.until IS NOT NULL AND h.until - h.since >= 86400 AND o.status = 'active'
-            ORDER BY h.until DESC LIMIT 20""", v.id, uid)],
+            ORDER BY h.until DESC LIMIT 20""", v.id, uid) if close],
         "showcase": [a for c in u["showcase"].split(",") for a in ach if a["code"] == c and a["level"] > 0],
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
         "shelf": [k for k in u["showcase"].split(",") if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
         "awards": {"achievements": ach, "badges": badges},
         "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going,
         "username": u["tg_username"] if team else None,
-        "skin": _skin(con, uid),
+        # a badge picked to be shown, shows; the one that came by itself from a club would tell a stranger the club
+        "skin": _skin(con, uid) if close else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
+                else u["skin_org"] if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]) else None,
+        **({} if close else {"limited": True}),
     }
 
 

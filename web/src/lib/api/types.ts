@@ -463,6 +463,7 @@ export interface PersonCard extends PersonRef {
   going: EventCard[];           // only when friends and they allow it
   skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram" (owner, Oct 6)
+  limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
 }
 
 /** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the

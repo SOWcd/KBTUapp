@@ -861,6 +861,8 @@ const en: Dict = {
   'person.badges': "Badges",
   'person.awards': "Awards",
   'person.noAwards': "No awards yet: they come with the first events.",
+  'person.limited': "Clubs and event badges are visible to friends and clubmates",
+  'person.tooMany': "That's enough strangers' profiles for today: friends and clubmates are still open, the rest tomorrow",
   'person.goes': "Going to",
   'person.rarity': "{p}% of students have it",
   'soon': "I'm building this section next",

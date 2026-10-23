@@ -2986,10 +2986,10 @@ def test_official_roles(env):
     assert next((r["name"], r["level"], r["rights"]) for r in out if r["id"] == head) == ("Head", "head", ["door", "events"])
     c.post(f"/api/orgs/{oid}/transfer", headers=tma(20), json={"userId": ids[21]})
     assert con.execute("SELECT role, role_id FROM org_members WHERE org_id = ? AND user_id = ?", (oid, ids[20])).fetchone()[:] == ("vice", vp)
-    # outside the club a person's card shows the club, not the role (owner, Oct 15)
+    # a clubmate sees the role; outside the club, the card shows no clubs at all since audit M2 (it showed the club, not the role)
     login(c, 30, "out")
-    card = lambda viewer: next(m for m in c.get(f"/api/users/{ids[21]}", headers=tma(viewer)).json()["clubs"] if m["org"]["id"] == oid)  # noqa: E731
-    assert card(30)["role"] is None and card(22)["role"] == "president"
+    clubs = lambda viewer: c.get(f"/api/users/{ids[21]}", headers=tma(viewer)).json()["clubs"]  # noqa: E731
+    assert clubs(30) == [] and next(m for m in clubs(22) if m["org"]["id"] == oid)["role"] == "president"
 
 
 def test_volunteers(env):
@@ -3722,3 +3722,52 @@ def test_app_team(env):
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["X"],))
     con.executescript(dict(db.MIGRATIONS)[61])
     assert [r["role"] for r in con.execute("SELECT role FROM users WHERE id IN (?, ?, ?) ORDER BY id", (ids["O"], ids["A"], ids["X"]))] == ["user", "admin", "user"]
+
+
+def test_profile_privacy(env, monkeypatch):
+    """Audit M2: a stranger sees the card, bio and achievements but not clubs, past roles, event badges or a club's
+    badge that came by itself, and at most PROFILES_A_DAY profiles a day (the same one again is free); friends,
+    clubmates and moderators see it all and are never counted."""
+    c, cfg = env
+    ann, bob, cat, dan, eve = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"), (14, "eve")))
+    con = db.connect(cfg.db_path)
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0),
+        (2, 'studex', 'club', 'StudEx', 'SE', 'star_3d', 1, 0), (3, 'chess', 'club', 'Chess', 'CH', 'crown_3d', 1, 0)""")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0), (1, ?, 'member', 0), (2, ?, 'member', 0)", (ann, cat, ann))
+    con.execute("INSERT INTO org_history (user_id, org_id, role, since, until) VALUES (?, 3, 'head', 0, 5 * 86400)", (ann,))
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, badge_name, created_at, updated_at)
+        VALUES (9, 1, 'published', 'Hack', '305', 1000, 'laptop_3d', '#3B6BFF', 'Hacker', 0, 0)""")
+    con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at, checked_in_at)
+        VALUES (9, ?, 'going', 'T9', 0, 0, 1000)""", (ann,))
+    con.execute("UPDATE users SET showcase = 'b9', tg_username = 'ann_tg' WHERE id = ?", (ann,))
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (min(ann, bob), max(ann, bob)))
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (eve,))
+    full = lambda tg: c.get(f"/api/users/{ann}", headers=tma(tg)).json()  # noqa: E731
+    for tg in (10, 11, 12, 14):  # herself, a friend, a clubmate, a moderator
+        p = full(tg)
+        assert {m["org"]["id"] for m in p["clubs"]} == {1, 2} and [h["org"]["id"] for h in p["past"]] == [3] and "limited" not in p
+        assert [b["eventId"] for b in p["awards"]["badges"]] == [9] and p["shelf"] == ["b9"] and p["skin"] == 2
+    p = full(13)
+    assert p["clubs"] == [] and p["past"] == [] and p["awards"]["badges"] == [] and p["shelf"] == [] and p["limited"] is True
+    assert p["skin"] is None and p["username"] is None and p["name"] and p["course"] == 2               # StudEx's badge came by itself
+    con.execute("UPDATE users SET skin_pick = 'org', skin_org = 2 WHERE id = ?", (ann,))
+    assert full(13)["skin"] == 2                                                                       # picked to be shown: shows
+    con.execute("INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'first_in', 1, 1000)", (ann,))
+    assert all(a["at"] is None for a in full(13)["awards"]["achievements"])                            # a level's date names a check-in
+    assert any(a["at"] for a in full(11)["awards"]["achievements"])
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (eve,))
+    assert "limited" not in full(14)                                                                   # an admin sees it all, uncounted
+    assert c.get("/api/users/999999", headers=tma(13)).status_code == 404                             # nobody there: not counted
+    assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(dan, ann)]  # only the stranger counts
+    monkeypatch.setattr(logic, "PROFILES_A_DAY", 2)
+    assert c.get(f"/api/users/{ann}", headers=tma(13)).status_code == 200                              # the same one again: free
+    assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
+    assert c.get(f"/api/users/{cat}", headers=tma(13)).json()["error"] == "rate_limited"
+    assert c.get(f"/api/users/{ann}", headers=tma(12)).status_code == 200                              # a clubmate is never counted
+    later = int(time.time()) + 2 * 86400
+    monkeypatch.setattr(logic, "now", lambda: later)                                                   # two days on
+    assert c.get(f"/api/users/{cat}", headers=tma(13)).status_code == 200
+    assert con.execute("SELECT COUNT(*) FROM profile_views WHERE day < ?", ((later + 5 * 3600) // 86400 - 1,)).fetchone()[0] == 0
+    c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
+    logic.delete_me(con, logic.Viewer(dan, "user", True))
+    assert con.execute("SELECT COUNT(*) FROM profile_views WHERE ? IN (viewer_id, user_id)", (dan,)).fetchone()[0] == 0
