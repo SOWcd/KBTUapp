@@ -104,7 +104,7 @@
           <input bind:value={m.firstName} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" /></label>
       {/if}
       <label class="field"><span class="t-cap">{t('login.sid')}</span>
-        <input bind:value={m.studentId} placeholder="24B031234" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
+        <input bind:value={m.studentId} placeholder="26B123456" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if !agree}{@render consent()}{/if}

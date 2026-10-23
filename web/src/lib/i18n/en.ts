@@ -633,7 +633,7 @@ const en: Dict = {
   'login.sid': "Student ID",
   'login.course': "Year",
   'login.manualNote': "The ID as on your student card: organizers see it at the door.",
-  'login.badManual': "Check your name and student ID — like 24B031234",
+  'login.badManual': "Check your name and student ID — like 26B123456",
   'login.sidTaken': "This student ID is already taken. We told the admin, they'll get in touch.",
   'me.settings': "Settings",
   'me.admin': "Admin panel",
