@@ -101,6 +101,16 @@
     return () => { window.removeEventListener('kb:pager', onPager); document.removeEventListener('pointerdown', onTouch, true); clearInterval(tick); clearTimeout(boot); };
   });
 
+  // a title shrinks to fit before it is cut (owner, Oct 23: the award title was cut on a narrow capsule); 11 px is the floor
+  function fit(node: HTMLElement) {
+    const run = () => { node.style.fontSize = ''; const k = node.clientWidth / node.scrollWidth; if (k < 1) node.style.fontSize = `${Math.max(11, Math.floor(14 * k * 2) / 2)}px`; };
+    const ro = new ResizeObserver(run); // the capsule widens after boot, on a narrow phone it starts smaller
+    ro.observe(node.parentElement!);
+    const mo = new MutationObserver(run); // a new title
+    mo.observe(node, { childList: true, characterData: true, subtree: true });
+    return { destroy: () => { ro.disconnect(); mo.disconnect(); } };
+  }
+
   const liveTop = $derived.by(() => {
     if (!live) return '';
     const left = live.at - now;
@@ -128,7 +138,7 @@
     {/if}
   </button>
   <!-- title of a full-screen view or of a one-page tab -->
-  <div class="layer ttl" class:spin class:off={mode !== 'title'}>{#if headIcon && heading}{@const Icon = headIcon}<Icon size={16} strokeWidth={2.4} />{/if}<span class="ellipsis">{heading ?? ''}</span></div>
+  <div class="layer ttl" class:spin class:off={mode !== 'title'}>{#if headIcon && heading}{@const Icon = headIcon}<Icon size={16} strokeWidth={2.4} />{/if}<span class="ellipsis" use:fit>{heading ?? ''}</span></div>
 </div>
 
 <style>
