@@ -13,8 +13,8 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, onComputer, openLink, tg } from './lib/tg';
-  import { api, localize } from './lib/api';
+  import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg } from './lib/tg';
+  import { api, ApiErr, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
   import { CONSENT_VERSION } from './lib/legal';
@@ -95,7 +95,9 @@
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
-  sheets.roundApply = (org, source) => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source });
+  // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
+  // in a whole application before the server said no)
+  sheets.roundApply = (org, source) => asStudent(() => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source }));
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
@@ -124,8 +126,8 @@
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
   sheets.registry = () => lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {});
   sheets.comments = (kind, id, title, onchange) => lazy(() => import('./screens/sheets/CommentsSheet.svelte'), { kind, id, title, onchange });
-  sheets.inviteTo = (id, name) => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name });
-  sheets.report = (target, id, about, onsent) => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent });
+  sheets.inviteTo = (id, name) => asStudent(() => lazy(() => import('./screens/sheets/InviteToSheet.svelte'), { id, name }));
+  sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }));
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
@@ -196,6 +198,8 @@
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
   // one-time link, §4.7), friends (the Friends page: the bot's request message) ----
   function deepLink() {
+    const ms = tg.startParam.match(/^ms_(\d{6})$/); // back from the Microsoft page: its button carries the code (M6, owner Oct 23)
+    if (ms) { msBack(ms[1]); return; }
     const j = tg.startParam.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = tg.startParam.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -245,6 +249,19 @@
     // tm_<club>: the bot's removal messages open that club's Team (§2b)
     const team = (org: number) => { ui.club = org; ui.tab = 'club'; ui.page.club = 2; };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
+  }
+
+  async function msBack(code: string) {
+    try {
+      session.me = await api.msConfirm(code);
+      if (session.me.msPending) { sheets.login(); return; } // someone new: only the student ID is left
+      haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void requestWriteAccess(); void loadAfisha();
+    } catch (e) {
+      haptic.error();
+      const why = e instanceof ApiErr ? (e.code === 'conflict' ? e.message : e.code) : '';
+      say(t(why === 'linked' ? 'login.msTaken' : why === 'other_ms' ? 'login.msOther' : 'login.codeExpired'), 'pleading_face_3d');
+      void loadMe();
+    }
   }
 
   // the copy for the next launch follows what the screens show, a second after it settles (only once the server answered)

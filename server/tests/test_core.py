@@ -3374,7 +3374,7 @@ def test_ms_sign_in(env, monkeypatch):
     state = re.search(r"state=([^&]+)", url).group(1).replace("%2E", ".").replace("%3D", "=")
     assert msauth.KBTU in url and "code_challenge=" in url
     v = c.get("/api/ms/verifier", params={"state": state}).json()
-    assert v["verifier"] == msauth.verifier(cfg.token_key, state) and v["tg"] == "Test"   # /ms.html asks "link to Test?"
+    assert v == {"verifier": msauth.verifier(cfg.token_key, state)}           # nobody's name: the code in the return link guards
     assert c.get("/api/ms/verifier", params={"state": "1.2.\u00e9"}).status_code == 404      # not a 500
     assert c.get("/api/ms/verifier", params={"state": state[:-2] + "xx"}).status_code == 404
 
