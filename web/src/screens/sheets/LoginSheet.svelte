@@ -13,6 +13,7 @@
   import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, requestWriteAccess, openLink, on } from '../../lib/tg';
+  import { nowTs, parts } from '../../lib/time';
 
   let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
 
@@ -46,6 +47,9 @@
   $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); setTimeout(() => after?.(), 380); } });
 
   let m = $state({ lastName: '', firstName: '', studentId: '', course: 0 });
+  // the example ID starts with this intake's year, so a first-year sees their own (owner, Oct 23): the year of the last
+  // August, as a 26B student still enters in spring 2027
+  const yr = parts(nowTs()), sidEx = `${String(yr.m >= 7 ? yr.y : yr.y - 1).slice(2)}B123456`;
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
@@ -64,7 +68,7 @@
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? e.message || e.code : '';
-      error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual') : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
+      error = e instanceof ApiErr && e.message === 'consent' ? t('login.reopen') : why === 'bad_input' ? t('login.badManual', { sid: sidEx }) : why === 'sid_taken' ? t('login.sidTaken') : why === 'ms_first' ? t('login.msFirst') : t('common.error');
       if (why === 'ms_first') void loadMe(); // the Microsoft sign-in ran out: the button again
     } finally { busy = false; }
   }
@@ -104,7 +108,7 @@
           <input bind:value={m.firstName} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" /></label>
       {/if}
       <label class="field"><span class="t-cap">{t('login.sid')}</span>
-        <input bind:value={m.studentId} placeholder="26B123456" autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
+        <input bind:value={m.studentId} placeholder={sidEx} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if !agree}{@render consent()}{/if}
