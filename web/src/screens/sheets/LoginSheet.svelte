@@ -18,7 +18,8 @@
 
   const legal = (doc: 'privacy' | 'terms') => { haptic.tap(); openLink(`${location.origin}/${doc}?lang=${i18n.lang}`); };
   const st = session.me?.student, relink = !!session.me?.relink;
-  let agree = $state(!!st);
+  // back from Microsoft: ticked before its button (it stays off until then), the app opening anew lost it
+  let agree = $state(!!st || !!session.me?.msPending);
   let busy = $state(false);
   let error = $state('');
 

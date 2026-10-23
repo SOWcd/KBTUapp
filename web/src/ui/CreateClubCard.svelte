@@ -8,7 +8,7 @@
   import Button from './Button.svelte';
 
   // the application: clubs open after the creator's check (said on the sheet itself)
-  const start = () => asStudent(() => sheets.createClub());
+  const start = () => asStudent(() => sheets.createClub(), 'newclub');
 </script>
 
 <section class="cc">

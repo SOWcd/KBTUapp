@@ -1298,13 +1298,14 @@ p b{color:#fff;font-weight:650}
 .btn:active{transform:scale(.97)}
 .main{color:#fff;background:radial-gradient(120% 90% at 30% 0%,#7f9dff,#3B6BFF 55%,#2448d8);box-shadow:0 10px 24px -8px rgba(59,107,255,.8),inset 0 1px 0 rgba(255,255,255,.5)}
 .ghost{margin-top:8px;color:rgba(255,255,255,.75);background:none}
-.btn[hidden]{display:none}
+.btn[hidden],small[hidden]{display:none}
+small{display:block;margin-top:12px;font-size:13px;color:rgba(255,255,255,.6)}
 .spin{width:30px;height:30px;margin:4px auto 6px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s .9s linear infinite}
 .spin[hidden]{display:none}@keyframes s{to{transform:rotate(1turn)}}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
 <h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
-<a class="btn main" id="open" hidden href="tg://"></a></main><script>
+<a class="btn main" id="open" hidden href="tg://"></a><small id="keep" hidden></small></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
@@ -1333,6 +1334,7 @@ show(L.wait);
   // (a browser may ask or refuse without a tap), the button stays for that
   if (r.ok && j.code) {
     end("ok", "ok"); $("open").href = "https://t.me/__BOT__?startapp=ms_" + j.code;
+    $("keep").textContent = L.keep; $("keep").hidden = false;  // the link is the sign-in: not to be sent on (review, Oct 23)
     location.href = "tg://resolve?domain=__BOT__&startapp=ms_" + j.code; return;
   }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");

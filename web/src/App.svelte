@@ -4,7 +4,7 @@
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, type Tab } from './lib/state/ui.svelte';
-  import { session, loadMe, setLoginHook, asStudent } from './lib/state/session.svelte';
+  import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
@@ -97,7 +97,7 @@
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
   // in a whole application before the server said no)
-  sheets.roundApply = (org, source) => asStudent(() => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source }));
+  sheets.roundApply = (org, source) => asStudent(() => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source }), `rc_${org}`);
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
@@ -197,14 +197,14 @@
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
   // one-time link, §4.7), friends (the Friends page: the bot's request message) ----
-  function deepLink() {
-    const ms = tg.startParam.match(/^ms_(\d{6})$/); // back from the Microsoft page: its button carries the code (M6, owner Oct 23)
+  function deepLink(p = tg.startParam) {
+    const ms = p.match(/^ms_(\d{6})$/); // back from the Microsoft page: its button carries the code (M6, owner Oct 23)
     if (ms) { msBack(ms[1]); return; }
-    const j = tg.startParam.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
+    const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
-    const pr = tg.startParam.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
+    const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
     if (pr) { presidentByLink(Number(pr[1]), pr[2]); return; }
-    const gl = tg.startParam.match(/^gl_([0-9a-f]{24})$/); // the creator's one-time award link
+    const gl = p.match(/^gl_([0-9a-f]{24})$/); // the creator's one-time award link
     if (gl) {
       ui.tab = 'profile';
       asStudent(async () => {
@@ -213,21 +213,21 @@
       });
       return;
     }
-    const fr = tg.startParam.match(/^fr_([0-9a-f]{24})$/);
+    const fr = p.match(/^fr_([0-9a-f]{24})$/);
     if (fr) { friendByLink(fr[1]); return; }
-    if (tg.startParam === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
-    if (tg.startParam === 'friends') { ui.tab = 'profile'; ui.page.profile = 0; return; }
-    if (tg.startParam === 'me') { ui.tab = 'profile'; ui.page.profile = 1; return; }   // the bot: "keep my account"
-    if (tg.startParam === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
-    if (tg.startParam === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
-    if (tg.startParam === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
-    const ph = tg.startParam.match(/^ph_(\d+)$/); // the bot's "photos are in the album": the event, the album open over it
+    if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
+    if (p === 'friends') { ui.tab = 'profile'; ui.page.profile = 0; return; }
+    if (p === 'me') { ui.tab = 'profile'; ui.page.profile = 1; return; }   // the bot: "keep my account"
+    if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
+    if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
+    if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
+    const ph = p.match(/^ph_(\d+)$/); // the bot's "photos are in the album": the event, the album open over it
     if (ph) { const id = Number(ph[1]); sheets.event(id); api.event(id).then((e) => { if (e.photos.length) sheets.photos(e.photos, 0); }).catch(() => {}); return; }
-    const cp = tg.startParam.match(/^cp_(\d+)$/); // the bot's "someone replied" under a post: its thread
+    const cp = p.match(/^cp_(\d+)$/); // the bot's "someone replied" under a post: its thread
     if (cp) { asStudent(() => sheets.comments('post', Number(cp[1]), t('cm.title'))); return; }
-    const cm = tg.startParam.match(/^cm_(\d+)$/); // the bot's question / answer card: the event and its thread
+    const cm = p.match(/^cm_(\d+)$/); // the bot's question / answer card: the event and its thread
     if (cm) { const id = Number(cm[1]); sheets.event(id); asStudent(() => { api.event(id).then((e) => sheets.comments('event', id, e.title)).catch(() => {}); }); return; }
-    const aw = tg.startParam.match(/^aw_([a-z0-9_]{1,40})$/); // someone's award card: my own way to the same one
+    const aw = p.match(/^aw_([a-z0-9_]{1,40})$/); // someone's award card: my own way to the same one
     if (aw) {
       ui.tab = 'profile'; ui.page.profile = 1;
       asStudent(async () => {
@@ -237,25 +237,28 @@
       });
       return;
     }
-    if (tg.startParam === 'news') { ui.tab = 'club'; ui.page.club = 0; return; }
-    const rc = tg.startParam.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
+    if (p === 'news') { ui.tab = 'club'; ui.page.club = 0; return; }
+    const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
-    const iv = tg.startParam.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
+    const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (tg.startParam === 'clubs') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the bot's "other clubs recruit now"
-    const mo = tg.startParam.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
+    if (p === 'clubs') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the bot's "other clubs recruit now"
+    const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
-    const m = tg.startParam.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
+    const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b)
     const team = (org: number) => { ui.club = org; ui.tab = 'club'; ui.page.club = 2; };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }
 
   async function msBack(code: string) {
+    // the same link again (the page's button after its own jump, Telegram's reload): used already, nothing to say
+    if (!session.me?.msCode) return;
+    const again = () => { const p = takeAgain(); if (p) deepLink(p); }; // what the guest wanted before signing in
     try {
       session.me = await api.msConfirm(code);
-      if (session.me.msPending) { sheets.login(); return; } // someone new: only the student ID is left
-      haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void requestWriteAccess(); void loadAfisha();
+      if (session.me.msPending) { sheets.login(again); return; } // someone new: only the student ID is left
+      haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void requestWriteAccess(); void loadAfisha(); again();
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? (e.code === 'conflict' ? e.message : e.code) : '';
