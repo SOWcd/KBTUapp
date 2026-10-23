@@ -11,7 +11,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { api, type EventCard, type FriendRow } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadFriends, prefetchEvent, phrase } from '../../lib/state/data.svelte';
+  import { data, loadFriends, prefetchEvent, prefetchPerson, phrase } from '../../lib/state/data.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, friendsLine } from '../../lib/i18n/index.svelte';
@@ -70,7 +70,7 @@
           {#each f.incoming as r, i (r.person.id)}
             <div class="req" style="--i:{i}">
               <Avatar person={r.person} size={46} ring />
-              <button class="tx" onclick={() => sheets.person(r.person.id)}><b class="ellipsis">{withNick(r.fullName, r.person)}</b><i class="ellipsis">{line(r)}</i></button>
+              <button class="tx" onpointerdown={() => prefetchPerson(r.person.id)} onclick={() => sheets.person(r.person.id)}><b class="ellipsis">{withNick(r.fullName, r.person)}</b><i class="ellipsis">{line(r)}</i></button>
               <Button kind="primary" size="s" loading={busy === r.person.id} onclick={() => answer(r, true)}>{t('fr.accept')}</Button>
               <button class="no" aria-label={t('fr.decline')} disabled={busy === r.person.id} onclick={() => answer(r, false)}><X size={18} /></button>
             </div>
@@ -110,7 +110,7 @@
           <div class="rows surface">
             {#each f.friends as r (r.person.id)}
               {@const next = nextOf(r)}
-              <button class="row" onclick={() => sheets.person(r.person.id)}>
+              <button class="row" onpointerdown={() => prefetchPerson(r.person.id)} onclick={() => sheets.person(r.person.id)}>
                 <span class="av" class:live={next && dayNo(next.startsAt) === today}><Avatar person={r.person} size={44} tappable={false} /></span>
                 <span class="tx">
                   <b class="ellipsis">{withNick(r.fullName, r.person)}</b>

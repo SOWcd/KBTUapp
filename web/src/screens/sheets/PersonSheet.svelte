@@ -12,7 +12,7 @@
   import EventRow from '../../ui/EventRow.svelte';
   import { api, ApiErr, type Id, type PersonCard } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { phrase } from '../../lib/state/data.svelte';
+  import { phrase, personCard, keepPerson } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
   import { burst } from '../../ui/burst';
   import { sheets } from '../../lib/state/sheets';
@@ -25,9 +25,15 @@
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
-  let p = $state<PersonCard | null>(null);
+  // svelte-ignore state_referenced_locally
+  const pre = personCard(id); // a sheet is one person for its life
+  let p = $state<PersonCard | null>(pre.card ?? null);
   let failed = $state<string | null>(null);  // the error's text: the day's limit of strangers' profiles (audit M2) says so
-  $effect(() => { api.person(id).then((x) => (p = x)).catch((e) => (failed = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'person.tooMany' : 'common.error'))); });
+  $effect(() => { pre.p.then((x) => (p = x)).catch((e) => (failed = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'person.tooMany' : 'common.error'))); });
+  $effect(() => { if (p) keepPerson(p); });
+  // the plain card from what we know waits a moment: the real one usually lands first, and the plain one jumped into it
+  let late = $state(false);
+  $effect(() => { const k = setTimeout(() => (late = true), 300); return () => clearTimeout(k); });
   // what the app already knows opens the card at once (me; a friend or a request: name, face, course); the rest fills in
   const known = $derived.by((): PersonCard | null => {
     if (session.me?.id === id && data.myCard) return data.myCard;
@@ -38,9 +44,8 @@
     return { ...row.person, no: null, course: row.course, school: row.school, bio: '', attended: -1, clubs: [], past: [], showcase: [], shelf: [],
       awards: { achievements: [], badges: [] }, friendship, friendsSince: friendship === 'friends' ? row.at : null, going: [] };
   });
-  const shown = $derived(p ?? known);
-
   const me = $derived(session.me?.id === id);
+  const shown = $derived(p ?? (late || me ? known : null));
 
   // friendship (§4.7): ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
   let acting = $state(false);

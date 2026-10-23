@@ -116,6 +116,25 @@ export function eventDetails(id: Id): Promise<EventFull> {
   return a && Date.now() - a.at < 10_000 ? a.p : api.event(id);
 }
 
+// a person's card, fetched from the touch (B4: the card opened as a plain one, then jumped into its skin) and kept for
+// the session, so a second look opens whole at once while it refreshes
+const people = new Map<Id, { at: number; p: Promise<PersonCard>; card?: PersonCard }>();
+export function prefetchPerson(id: Id): void {
+  const a = people.get(id);
+  if (a && Date.now() - a.at < 10_000) return;
+  const e: { at: number; p: Promise<PersonCard>; card?: PersonCard } = { at: Date.now(), p: api.person(id), card: a?.card };
+  e.p.then((c) => (e.card = c), () => (e.at = 0));
+  people.set(id, e);
+}
+export function personCard(id: Id): { p: Promise<PersonCard>; card?: PersonCard } {
+  prefetchPerson(id);
+  return people.get(id)!;
+}
+export function keepPerson(c: PersonCard): void {
+  const a = people.get(c.id);
+  if (a) a.card = c;
+}
+
 export function put(card: EventCard): void {
   const i = data.events.findIndex((e) => e.id === card.id);
   if (i >= 0) data.events[i] = card;
