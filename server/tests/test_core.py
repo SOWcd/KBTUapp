@@ -713,7 +713,7 @@ def test_admin_clubs(env):
     assert c.post("/api/admin/orgs", headers=A, json={"name": "X", "short": "X", "emoji": "trophy_3d"}).status_code == 400
 
     club = c.post("/api/admin/orgs", headers=A, json={"name": "Chess Club", "short": "ch", "emoji": "trophy_3d", "official": True}).json()
-    assert (club["short"], club["official"], club["slug"], club["team"], club["members"]) == ("CH", True, f"club{club['id']}", [], 0)
+    assert (club["short"], club["official"], club["slug"], club["team"], club["members"]) == ("CH", True, "chessclub", [], 0)
     put = lambda body: c.put(f"/api/admin/orgs/{club['id']}/role", headers=A, json=body)
     assert put({"who": "@nobody", "role": "president"}).json()["message"] == "who"   # never opened the app
     assert put({"who": "@pres_kbtu", "role": "boss"}).status_code == 400
@@ -1721,11 +1721,15 @@ def test_club_applications(env, monkeypatch):
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
     login(c, 60, "boss"); ali = login(c, 61, "ali"); zhan = login(c, 62, "zhan")
     B, A, Z = tma(60, "Boss"), tma(61, "Ali"), tma(62, "Zhan")
-    good = {"name": "Chess Club", "short": "CH", "description": "We play chess every week.", "emoji": "trophy_3d", "cover": 2,
-            "why": "Twenty people already play in the atrium; first month: a tournament and lessons for beginners."}
-    assert c.post("/api/club-applications", headers=A, json={**good, "why": "short"}).status_code == 400
-    assert c.post("/api/club-applications", headers=A, json={**good, "link": "javascript:alert(1)"}).status_code == 400
+    # A4: a name, a description, up to 6 social links; no "why" (the form before the refactor still sends one link)
+    links = ["https://instagram.com/chess.kbtu", "https://t.me/chesskbtu"]
+    good = {"name": "Chess Club", "short": "CH", "description": "We play chess every week.", "emoji": "trophy_3d", "cover": 2, "links": links}
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["javascript:alert(1)"]}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://t.me/x"] * 7}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": "https://t.me/x"}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={k: x for k, x in good.items() if k != "links"} | {"link": "javascript:alert(1)"}).status_code == 400
     app = c.post("/api/club-applications", headers=A, json=good).json()
+    assert app["links"] == links and app["why"] is None
     assert app["status"] == "pending" and c.post("/api/club-applications", headers=A, json=good).json()["message"] == "pending"
     con = db.connect(cfg.db_path)
     ping = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application'").fetchall()
@@ -1744,9 +1748,12 @@ def test_club_applications(env, monkeypatch):
     assert done["status"] == "approved" and done["applicant"]["fullName"] == "Testov Ali"
     me = c.get("/api/me", headers=A).json()
     assert [(m["org"]["name"], m["role"]) for m in me["memberships"]] == [("Chess Club", "president")]
+    assert c.get(f"/api/orgs/{done['orgId']}", headers=A).json()["links"] == links           # the club got them all
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application_decided'").fetchone()
     assert bot._render(con, told)[2] == f"cl_{done['orgId']}"
-    z = c.post("/api/club-applications", headers=Z, json={**good, "name": "Go Club"}).json()
+    z = c.post("/api/club-applications", headers=Z, json={k: x for k, x in good.items() if k != "links"} | {"name": "Go Club", "link": "https://t.me/go",
+                                                                                                           "why": "Old form"}).json()
+    assert (z["links"], z["why"]) == (["https://t.me/go"], "Old form")                          # an old client
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False}).status_code == 400  # a reason
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False, "reason": "There is a Go club already"}).json()["status"] == "rejected"
     assert c.get("/api/club-applications/mine", headers=Z).json()["application"]["reason"] == "There is a Go club already"
@@ -3806,3 +3813,67 @@ def test_report_limit(env, monkeypatch):
     assert [tuple(r) for r in con.execute("SELECT target_id, note FROM reports")] == [(bob, "Fake name")]
     logic.delete_me(con, logic.Viewer(ann, "user", True))                                              # her words go with her data
     assert [tuple(r) for r in con.execute("SELECT reporter_id, target_id, note FROM reports")] == [(None, bob, None)]
+
+
+def test_club_short_links(env):
+    """A5: a club's slug comes from its name (Cyrillic in Latin letters, unique, never the app's own paths); only the
+    President changes it; kbtu.sow.kz/<slug> opens the club in the bot; the clubs made before take their names' slugs."""
+    c, cfg = env
+    pres, vice = login(c, 90, "pres"), login(c, 91, "vice")
+    con = db.connect(cfg.db_path)
+    with db.tx(con):
+        a = logic.create_org(con, None, "\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u0443\u0431", "SK", "trophy_3d", False)
+        b = logic.create_org(con, None, "\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439  \u041a\u043b\u0443\u0431!", "SK", "trophy_3d", False)
+        x = logic.create_org(con, None, "API", "A", "trophy_3d", False)
+        old = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('club7', 'club', 'Open Mic', 'OM', 'trophy_3d', 0)").lastrowid
+    slug = lambda oid: con.execute("SELECT slug FROM orgs WHERE id = ?", (oid,)).fetchone()[0]  # noqa: E731
+    assert (slug(a), slug(b), slug(x)) == ("shahmatnyiklub", "shahmatnyiklub2", "api2")
+    logic.name_slugs(con)
+    assert slug(old) == "openmic"
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0), (?, ?, 'vice', 0)", (a, pres["id"], a, vice["id"]))
+    P = tma(90, "Pres")
+    assert c.patch(f"/api/orgs/{a}", headers=tma(91, "Vice"), json={"slug": "chess"}).status_code == 403   # the President's
+    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "exit"}).status_code == 400                  # the app's own
+    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "Ch-ess"}).status_code == 400
+    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "openmic"}).status_code == 409
+    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "Chess"}).json()["slug"] == "chess"
+    r = c.get("/Chess", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"].endswith(f"?startapp=cl_{a}")
+    assert c.get("/nosuchclub", follow_redirects=False).status_code == 200                              # the app itself
+    assert c.get("/exit", follow_redirects=False).headers["location"].endswith("startapp=exit")
+
+
+def test_door_guests(env):
+    """A19: a walk-in without the app types their full name at the door (Member+, door open, a free event); the typist
+    takes a wrong one back in 10 minutes; Head+ sees full names, a Member short ones. A student confirmed by Microsoft
+    with that name counts as came, only when exactly one unlinked entry at that event has it."""
+    c, cfg = env
+    pres, mem, ali, bota = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali"), login(c, 74, "bota")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0)", (pres["id"], mem["id"]))
+    start = int(time.time()) - 600
+    for eid, price in ((1, None), (2, None), (3, 1000)):
+        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at, price,
+            pay_to_name, pay_phone) VALUES (?, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0, ?, 'Pres', '+70000000000')""",
+            (eid, start, start + 7200, pres["id"], price))
+    M, P = tma(71, "Mem"), tma(70, "Pres")
+    add = lambda eid, name, h=M: c.post(f"/api/events/{eid}/door/guests", headers=h, json={"name": name})  # noqa: E731
+    assert add(1, "Ali Testov", tma(73, "Zhan")).status_code == 403                    # the team only
+    assert add(1, "Ali").status_code == 400 and add(1, "Ali 123").status_code == 400   # a first and a last name
+    assert add(3, "Ali Testov").json()["message"] == "paid"
+    g = add(1, "Ali  Testov").json()
+    assert (g["name"], g["undo"]) == ("Ali T.", True)                                  # a Member: the short name
+    assert add(1, "testov ali").json()["message"] == "already"
+    assert [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()] == ["Ali Testov"]
+    assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=P).status_code == 409   # the typist's
+    assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=M).status_code == 204
+    add(1, "Ali Testov"); add(1, "Bota Testova"); add(2, "Ali Testov")
+    con.execute("INSERT INTO door_guests (event_id, full_name, norm, created_at) VALUES (2, 'Testov Ali', 'ali testov', 0)")  # two at event 2
+    logic.ms_link(con, ali["id"], {"oid": "o1", "email": "a@kbtu.kz", "first": "", "last": "", "profile": {}})
+    came = lambda uid: con.execute("SELECT event_id, checked_in_at IS NOT NULL, walk_in FROM registrations WHERE user_id = ?", (uid,)).fetchall()  # noqa: E731
+    assert [tuple(r) for r in came(ali["id"])] == [(1, 1, 1)]                          # event 2: two Ali Testovs, neither
+    assert c.get("/api/events/1/door/guests", headers=P).json()[1]["linked"] is True
+    assert came(bota["id"]) == []                                                      # "Bota Testova" is not "Bota Testov"
+    logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
+    assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()

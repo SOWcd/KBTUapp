@@ -176,8 +176,8 @@
           {#if capp === a.id}
           <div class="cb" transition:fold>
           <p class="selectable">{a.description}</p>
-          <p class="why selectable"><b>{t('adm.cappWhy')}</b> {a.why}</p>
-          {#if a.link}<button class="lnk" onclick={() => openLink(a.link!)}>{a.link}</button>{/if}
+          {#if a.why}<p class="why selectable"><b>{t('adm.cappWhy')}</b> {a.why}</p>{/if}
+          {#each a.links as l (l)}<button class="lnk" onclick={() => openLink(l)}>{l}</button>{/each}
           {#if refusing === a.id}
             <textarea bind:value={why} rows="2" maxlength="300" placeholder={t('adm.cappReason')}></textarea>
             <div class="ra"><Button kind="neutral" size="s" onclick={() => (refusing = null)}>{t('common.cancel')}</Button>

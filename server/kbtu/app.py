@@ -79,6 +79,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     def after(con) -> None:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
+        logic.name_slugs(con)
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once
     db.init(cfg.db_path, after=after)
@@ -661,6 +662,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/events/{eid}/door")
     def door(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.door(con, v, eid)
+
+    @app.get("/api/events/{eid}/door/guests")
+    def door_guests(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.door_guests(con, v, eid)
+
+    @app.post("/api/events/{eid}/door/guests")
+    def add_door_guest(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        """A walk-in by the full name they typed (A19)."""
+        return logic.add_door_guest(con, v, eid, body.get("name"))
+
+    @app.delete("/api/events/{eid}/door/guests/{gid}", status_code=204)
+    def undo_door_guest(eid: int, gid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        logic.undo_door_guest(con, v, eid, gid)
 
     @app.post("/api/orgs/{oid}/invites")
     def invite(oid: int, body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -1260,7 +1274,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405 (owner, Oct 13)
     @app.api_route("/{path:path}", methods=["GET", "HEAD"])
-    def frontend(path: str, request: Request):
+    def frontend(path: str, request: Request, con=Depends(conn)):
         if path.startswith("api/"):
             raise ApiError("not_found")
         start = request.query_params.get("tgWebAppStartParam")
@@ -1268,7 +1282,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
         if path == "demo" or path.startswith("demo/"):  # the in-browser demo went (Oct 11): its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
-        return file(path) or page()  # SPA: the app routes itself
+        if f := file(path):
+            return f
+        if oid := logic.org_by_slug(con, path.strip("/")):  # kbtu.sow.kz/<club>: an Instagram bio's link (A5)
+            return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp=cl_{oid}", status_code=302)
+        return page()  # SPA: the app routes itself
 
     return app
 

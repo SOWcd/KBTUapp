@@ -12,11 +12,11 @@ export interface ApiError { error: 'need_student' | 'forbidden' | 'not_found' | 
 /** Image prepared by the server: WebP, thumbnail and a tiny inline blur preview. */
 /** An application to start a club (§4.6): it opens after the creator's check. `applicant` for moderators and the admin. */
 export interface ClubApplication {
-  id: Id; name: string; short: string; description: string; emoji: string; cover: number; link: string | null; why: string;
+  id: Id; name: string; short: string; description: string; emoji: string; cover: number; links: string[]; why: string | null;
   status: 'pending' | 'approved' | 'rejected'; reason: string | null; orgId: Id | null; createdAt: Ts; decidedAt: Ts | null; reapplyAt: Ts | null;
   applicant?: { person: PersonRef; fullName: string; username: string | null; course: number | null; school: string | null } | null;
 }
-export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link: string | null; why: string }
+export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean }
@@ -113,7 +113,7 @@ export interface Org extends OrgRef {
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
-export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; logoId?: Id | null }
+export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; logoId?: Id | null; slug?: string } // slug: the President's (A5)
 
 /** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
  *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */
@@ -367,6 +367,8 @@ export interface AttendeeReceipt {
 /** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
 export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean }
+/** A walk-in by the full name they typed (A19): full for Head+, short at the door; undo = mine, in the first 10 min */
+export interface DoorGuest { id: Id; name: string; at: Ts; linked: boolean; undo: boolean }
 
 /** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
 /** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */

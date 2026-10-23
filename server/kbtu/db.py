@@ -472,6 +472,42 @@ MIGRATIONS: list[tuple[int, str]] = [
     # decided, the same person may report it again (it may have changed, or come back)
     (64, """DROP INDEX one_report;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
+    # A4 (owner, Oct 23): a club application is a name, a description and up to 6 social links, no "why" essay: the
+    # table again with links (JSON, the club's own rule) and why optional (old rows keep theirs). A19: the walk-ins at
+    # the door without the app, by the full name they typed; linked when one confirms with Microsoft (logic.ms_link)
+    (65, """CREATE TABLE club_applications_new (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      short       TEXT NOT NULL,
+      description TEXT NOT NULL,
+      emoji       TEXT NOT NULL,
+      cover       INTEGER NOT NULL,
+      links       TEXT NOT NULL DEFAULT '[]',
+      why         TEXT CHECK (length(why) BETWEEN 1 AND 500),
+      status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      reason      TEXT,
+      org_id      INTEGER REFERENCES orgs(id) ON DELETE SET NULL,
+      created_at  INTEGER NOT NULL,
+      decided_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_at  INTEGER
+    ) STRICT;
+    INSERT INTO club_applications_new SELECT id, user_id, name, short, description, emoji, cover,
+      CASE WHEN link IS NULL THEN '[]' ELSE json_array(link) END, why, status, reason, org_id, created_at, decided_by, decided_at
+      FROM club_applications;
+    DROP TABLE club_applications;
+    ALTER TABLE club_applications_new RENAME TO club_applications;
+    CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE status = 'pending';
+    CREATE TABLE door_guests (
+      id         INTEGER PRIMARY KEY,
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      full_name  TEXT NOT NULL,
+      norm       TEXT NOT NULL,                     -- logic._norm_name: the words sorted, lowercase, yo as e
+      added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
+    ) STRICT;
+    CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;"""),
 ]
 
 

@@ -749,6 +749,7 @@ def ms_link(con, uid: int, who: dict) -> None:
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
+    link_door_guests(con, uid)
 
 
 def ms_remember(con, uid: int, who: dict) -> None:
@@ -1158,7 +1159,7 @@ _DEL_GONE = {
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
-    ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"),
+    ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -1678,6 +1679,13 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         sets["name"] = text("name") if 2 <= len(text("name")) <= 60 else bad
         if sets["name"] is not bad and one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived' AND id != ?", sets["name"], oid):
             raise ApiError("conflict", "taken")
+    if "slug" in body:  # the short link is the President's (owner, Oct 23)
+        if _roles(con, v).get(oid) != "president":
+            raise ApiError("forbidden")
+        s = text("slug").lower()
+        sets["slug"] = s if SLUG.fullmatch(s) and s not in RESERVED else bad
+        if sets["slug"] is not bad and one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id != ?", s, oid):
+            raise ApiError("conflict", "taken")
     if "short" in body:
         sets["short"] = text("short").upper() if 1 <= len(text("short")) <= 2 else bad
     if "emoji" in body:
@@ -1688,9 +1696,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     if "description" in body:
         sets["description"] = text("description") if len(text("description")) <= 600 else bad
     if "links" in body:
-        ls = body["links"]
-        ok = isinstance(ls, list) and len(ls) <= 6 and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) for x in ls)
-        sets["links"] = json.dumps(ls) if ok else bad
+        sets["links"] = json.dumps(body["links"]) if _links_ok(body["links"]) else bad
     if "logoId" in body:
         lg = body["logoId"]
         if lg is not None and (not isinstance(lg, int) or isinstance(lg, bool)):
@@ -1927,9 +1933,14 @@ COVERS = 6                  # the cover palette (OrgLogo.svelte's COVERS)
 LINK = re.compile(r"https://[A-Za-z0-9.-]+\.[a-z]{2,}(/[^\s]*)?")
 
 
+def _links_ok(ls: object) -> bool:
+    """A club's social links: up to 6 https addresses (the app draws Instagram, Telegram, TikTok... from the host)."""
+    return isinstance(ls, list) and len(ls) <= 6 and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) for x in ls)
+
+
 def _club_app(con, a: sqlite3.Row, staff: bool) -> dict:
     out = {"id": a["id"], "name": a["name"], "short": a["short"], "description": a["description"], "emoji": a["emoji"], "cover": a["cover"],
-           "link": a["link"], "why": a["why"], "status": a["status"], "reason": a["reason"], "orgId": a["org_id"], "createdAt": a["created_at"],
+           "links": json.loads(a["links"]), "why": a["why"], "status": a["status"], "reason": a["reason"], "orgId": a["org_id"], "createdAt": a["created_at"],
            "decidedAt": a["decided_at"], "reapplyAt": a["decided_at"] + CLUB_REAPPLY if a["status"] == "rejected" else None}
     if staff:  # who asks: what the admin needs to judge and to write to them first (§4.6)
         p = one(con, f"SELECT {DMP_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?", a["user_id"])
@@ -1949,11 +1960,13 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
     per person; after a decline, a new one in 30 days. The admins hear about it from the bot."""
     need_student(v)
     name, short = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper()
-    about, why, link = str(body.get("description") or "").strip(), str(body.get("why") or "").strip(), str(body.get("link") or "").strip() or None
+    about, why = str(body.get("description") or "").strip(), str(body.get("why") or "").strip() or None
+    # up to 6 social links, the club's own rule (A4, owner Oct 23); the form before the refactor sends one "link"
+    links = body["links"] if "links" in body else [x] if (x := str(body.get("link") or "").strip()) else []
     emoji, cover = str(body.get("emoji") or ""), body.get("cover")
-    if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and 10 <= len(about) <= 600 and 20 <= len(why) <= 500
+    if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and 10 <= len(about) <= 600 and (why is None or len(why) <= 500)
             and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and isinstance(cover, int) and not isinstance(cover, bool) and 0 <= cover < COVERS
-            and (link is None or (len(link) <= 200 and LINK.fullmatch(link)))):
+            and _links_ok(links)):
         raise ApiError("bad_input")
     with tx(con):  # a double tap must not make two pending applications
         last = one(con, "SELECT * FROM club_applications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", v.id)
@@ -1963,8 +1976,8 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
             raise ApiError("rate_limited")
         if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", name):
             raise ApiError("conflict", "taken")
-        aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, link, why, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, link, why, now())).lastrowid
+        aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, links, why, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, json.dumps(links), why, now())).lastrowid
         for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
             notify(con, uid, "club_application", f"capp:{aid}")
     return _club_app(con, one(con, "SELECT * FROM club_applications WHERE id = ?", aid), False)
@@ -1993,7 +2006,7 @@ def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: obj
             if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", a["name"]):
                 raise ApiError("conflict", "taken")
             oid = create_org(con, v.id, a["name"], a["short"], a["emoji"], False)
-            con.execute("UPDATE orgs SET cover = ?, description = ?, links = ? WHERE id = ?", (a["cover"], a["description"], json.dumps([a["link"]] if a["link"] else []), oid))
+            con.execute("UPDATE orgs SET cover = ?, description = ?, links = ? WHERE id = ?", (a["cover"], a["description"], a["links"], oid))
             set_role(con, v.id, a["user_id"], oid, "president", "club_application")
         con.execute("UPDATE club_applications SET status = ?, reason = ?, org_id = ?, decided_by = ?, decided_at = ? WHERE id = ?",
                     ("approved" if approve else "rejected", None if approve else why, oid, v.id, now(), aid))
@@ -4032,6 +4045,85 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
         raise ApiError("conflict")
 
 
+# A19 (owner, Oct 23 night): someone at the door without the app, or not on the list, types their own first and last
+# name on the organiser's phone. When a student with that name confirms with Microsoft later, they count as came.
+GUEST_NAME = re.compile(r"[^\W\d_]+(?:[-'’][^\W\d_]+)*(?: [^\W\d_]+(?:[-'’][^\W\d_]+)*){1,3}")
+GUESTS_MAX = 500  # an event's walk-ins by name (a typo loop must not fill the table)
+
+
+def _norm_name(s: str) -> str:
+    """"Ivanov  Ivan" and "ivan ivanov" are one person; Cyrillic yo is e."""
+    return " ".join(sorted(s.lower().replace("\u0451", "\u0435").split()))
+
+
+def _guest(g: sqlite3.Row, full: bool, me: int) -> dict:
+    first, *rest = g["full_name"].split(" ")
+    return {"id": g["id"], "name": g["full_name"] if full else f"{first} {rest[-1][:1]}.", "at": g["created_at"],
+            "linked": g["user_id"] is not None, "undo": g["added_by"] == me and g["user_id"] is None and g["created_at"] > now() - UNDO}
+
+
+def door_guests(con, v: Viewer, eid: int) -> list[dict]:
+    """The walk-ins by name, newest first: full names for Head+ (like the attendees), short ones for the door (§3)."""
+    e = _staff_event(con, v, eid, "door")
+    full = can(con, v, e["org_id"], "events")
+    return [_guest(g, full, v.id) for g in rows(con, "SELECT * FROM door_guests WHERE event_id = ? ORDER BY created_at DESC, id DESC", eid)]
+
+
+def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
+    """A walk-in by name (Member+, the door's right): while the door is open, a free event only (a paid one needs a
+    ticket). The same name twice at one event is one person."""
+    full = " ".join(str(name or "").split())
+    if not (3 <= len(full) <= 80 and GUEST_NAME.fullmatch(full)):
+        raise ApiError("bad_input")
+    with tx(con):
+        e = _staff_event(con, v, eid, "door")
+        t = now()
+        if e["status"] != "published" or t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
+            raise ApiError("conflict", "closed")
+        if e["price"]:
+            raise ApiError("conflict", "paid")
+        norm = _norm_name(full)
+        if one(con, "SELECT 1 FROM door_guests WHERE event_id = ? AND norm = ?", eid, norm):
+            raise ApiError("conflict", "already")
+        if one(con, "SELECT COUNT(*) FROM door_guests WHERE event_id = ?", eid)[0] >= GUESTS_MAX:
+            raise ApiError("rate_limited")
+        gid = con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at) VALUES (?, ?, ?, ?, ?)",
+                          (eid, full, norm, v.id, t)).lastrowid
+        return _guest(one(con, "SELECT * FROM door_guests WHERE id = ?", gid), can(con, v, e["org_id"], "events"), v.id)
+
+
+def undo_door_guest(con, v: Viewer, eid: int, gid: int) -> None:
+    """A wrong name taken back by whoever typed it, in the first 10 minutes, while nobody is linked to it."""
+    _staff_event(con, v, eid, "door")
+    if not con.execute("DELETE FROM door_guests WHERE id = ? AND event_id = ? AND added_by = ? AND user_id IS NULL AND created_at > ?",
+                       (gid, eid, v.id, now() - UNDO)).rowcount:
+        raise ApiError("conflict")
+
+
+def link_door_guests(con, uid: int) -> None:
+    """A student confirmed by Microsoft (their names are KBTU's): at each event where exactly ONE walk-in not yet linked
+    has their full name, that was them (owner's rule with my guard: two such entries and nobody can tell, so neither)."""
+    s = one(con, "SELECT first_name, last_name FROM students WHERE user_id = ?", uid)
+    if not s or not s["first_name"] or not s["last_name"]:
+        return
+    with tx(con):
+        for g in rows(con, """SELECT g.* FROM door_guests g WHERE g.norm = ? AND g.user_id IS NULL
+                AND (SELECT COUNT(*) FROM door_guests x WHERE x.event_id = g.event_id AND x.norm = g.norm AND x.user_id IS NULL) = 1
+                AND NOT EXISTS (SELECT 1 FROM door_guests y WHERE y.event_id = g.event_id AND y.user_id = ?)""",
+                      _norm_name(f"{s['first_name']} {s['last_name']}"), uid):
+            con.execute("UPDATE door_guests SET user_id = ? WHERE id = ?", (uid, g["id"]))
+            r = one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", g["event_id"], uid)
+            if r and r["checked_in_at"]:
+                continue
+            if r:
+                con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1,
+                    checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE id = ?""", (g["created_at"], g["added_by"], now(), r["id"]))
+            else:
+                con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, checked_in_at, checked_in_by, checkin_manual,
+                    created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?, 1, ?, ?)""",
+                            (g["event_id"], uid, _ticket_code(con), g["created_at"], g["added_by"], now(), now()))
+
+
 # ---------------------------------------------------------------- admin: clubs and their teams (pilot, SPEC §2)
 
 def _admin(v: Viewer) -> None:
@@ -4159,10 +4251,8 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
                kind: str = "club") -> int:
     """A club or a school, by the admin (the app or the CLI). A school (owner, Oct 13: KBTU's own, a few, made by the
     admin, never by an application) is official from the start and never closes; its President has a club
-    President's rights. A slug nobody chose becomes club<N>: deep links use ids anyway."""
-    if slug is None:
-        n = one(con, "SELECT COALESCE(MAX(id), 0) + 1 FROM orgs")[0]
-        slug = next(s for s in (f"club{n + i}" for i in range(1000)) if not one(con, "SELECT 1 FROM orgs WHERE slug = ?", s))
+    President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>)."""
+    slug = slug or slug_for(con, name)
     cur = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, official, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                       (slug, kind, name, short, emoji, int(official or kind == "school"), actor, now()))
     for rn, color, lv in OFFICIAL_ROLES:
@@ -4170,6 +4260,35 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'org_create', ?, ?, ?)",
                 (actor, f"org:{cur.lastrowid}", json.dumps({"name": name}), now()))
     return cur.lastrowid
+
+
+# A5 short links kbtu.sow.kz/<slug> (owner, Oct 23): the name in Latin letters, the app's own paths never
+# Cyrillic a..ya (U+0430..U+044F) in order, then yo and the Kazakh letters (code points: the code stays ASCII)
+TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i k l m n o p r s t u f h c ch sh sch _ y _ e yu ya".split())),
+    0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
+SLUG = re.compile(r"[a-z0-9]{2,24}")
+RESERVED = {"api", "cal", "healthz", "exit", "privacy", "terms", "og", "media", "demo", "old", "assets", "emoji", "map", "admin",
+            "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events"}
+
+
+def slug_for(con, name: str, oid: int | None = None) -> str:
+    """A free slug from a name: "Open Mic Club" -> openmicclub, then openmicclub2, ..."""
+    base = re.sub(r"[^a-z0-9]", "", name.lower().translate(TRANSLIT))[:22]
+    base = base if len(base) >= 2 else f"club{base}"
+    return next(s for s in (base if n == 1 else f"{base}{n}" for n in range(1, 10_000))
+                if s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid))
+
+
+def name_slugs(con) -> None:
+    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once."""
+    with tx(con):
+        for o in rows(con, "SELECT id, name FROM orgs WHERE slug GLOB 'club[0-9]*'"):
+            con.execute("UPDATE orgs SET slug = ? WHERE id = ?", (slug_for(con, o["name"], o["id"]), o["id"]))
+
+
+def org_by_slug(con, slug: str) -> int | None:
+    o = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug.lower()) if SLUG.fullmatch(slug.lower()) else None
+    return o[0] if o else None
 
 
 OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))  # with the President: db migration 40
