@@ -1684,7 +1684,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             raise ApiError("forbidden")
         s = text("slug").lower()
         sets["slug"] = s if SLUG.fullmatch(s) and s not in RESERVED else bad
-        if sets["slug"] is not bad and one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id != ?", s, oid):
+        if sets["slug"] is not bad and not _slug_free(con, s, oid):
             raise ApiError("conflict", "taken")
     if "short" in body:
         sets["short"] = text("short").upper() if 1 <= len(text("short")) <= 2 else bad
@@ -1712,6 +1712,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         for k in ("name", "description"):  # the app showed a translation in the form: sent back unchanged, it's no edit
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
+        if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{before['slug']}", str(oid)))
         con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
         if "description" in sets and sets["description"] != before["description"]:
             con.execute("UPDATE orgs SET lang = NULL, ai_tries = 0 WHERE id = ?", (oid,))  # translated again (ai.py)
@@ -1935,7 +1937,8 @@ LINK = re.compile(r"https://[A-Za-z0-9.-]+\.[a-z]{2,}(/[^\s]*)?")
 
 def _links_ok(ls: object) -> bool:
     """A club's social links: up to 6 https addresses (the app draws Instagram, Telegram, TikTok... from the host)."""
-    return isinstance(ls, list) and len(ls) <= 6 and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) for x in ls)
+    return isinstance(ls, list) and len(ls) <= 6 and len(set(map(str, ls))) == len(ls) \
+        and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) for x in ls)  # the app keys them: no twins
 
 
 def _club_app(con, a: sqlite3.Row, staff: bool) -> dict:
@@ -4082,6 +4085,9 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
             raise ApiError("conflict", "closed")
         if e["price"]:
             raise ApiError("conflict", "paid")
+        if e["visibility"] != "public":  # a team meeting is marked from its expected list (§2b), not by typed names
+            raise ApiError("conflict", "team")
+        con.execute("DELETE FROM door_guests WHERE user_id IS NULL AND created_at < ?", (t - GUEST_DAYS,))  # nobody came for them
         norm = _norm_name(full)
         if one(con, "SELECT 1 FROM door_guests WHERE event_id = ? AND norm = ?", eid, norm):
             raise ApiError("conflict", "already")
@@ -4100,28 +4106,38 @@ def undo_door_guest(con, v: Viewer, eid: int, gid: int) -> None:
         raise ApiError("conflict")
 
 
+GUEST_DAYS = 30 * 86400  # a walk-in's name waits this long for its student, then goes
+
+
 def link_door_guests(con, uid: int) -> None:
-    """A student confirmed by Microsoft (their names are KBTU's): at each event where exactly ONE walk-in not yet linked
-    has their full name, that was them (owner's rule with my guard: two such entries and nobody can tell, so neither)."""
+    """A student confirmed by Microsoft (their names are KBTU's): a walk-in of the last 30 days with their full name was
+    them, only if no other student has that name (owner's rule with the review's guard: two Aruzhan Serikovas and
+    nobody can tell). Only where the door rules still hold: a public free event, not banned from the club; a
+    registration they had stays theirs (cancelled or waitlisted: they said no, the name is left alone)."""
     s = one(con, "SELECT first_name, last_name FROM students WHERE user_id = ?", uid)
     if not s or not s["first_name"] or not s["last_name"]:
         return
+    norm = _norm_name(f"{s['first_name']} {s['last_name']}")
+    twins = sum(_norm_name(f"{r[0]} {r[1]}") == norm for r in rows(con, """SELECT first_name, last_name FROM students
+        WHERE user_id != ? AND first_name IS NOT NULL AND last_name IS NOT NULL""", uid))  # ponytail: a scan per confirmation, a norm column if it grows
+    if twins:
+        return
     with tx(con):
-        for g in rows(con, """SELECT g.* FROM door_guests g WHERE g.norm = ? AND g.user_id IS NULL
-                AND (SELECT COUNT(*) FROM door_guests x WHERE x.event_id = g.event_id AND x.norm = g.norm AND x.user_id IS NULL) = 1
-                AND NOT EXISTS (SELECT 1 FROM door_guests y WHERE y.event_id = g.event_id AND y.user_id = ?)""",
-                      _norm_name(f"{s['first_name']} {s['last_name']}"), uid):
-            con.execute("UPDATE door_guests SET user_id = ? WHERE id = ?", (uid, g["id"]))
-            r = one(con, "SELECT id, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", g["event_id"], uid)
-            if r and r["checked_in_at"]:
+        for g in rows(con, """SELECT g.* FROM door_guests g JOIN events e ON e.id = g.event_id WHERE g.norm = ? AND g.user_id IS NULL
+                AND g.created_at > ? AND e.status = 'published' AND e.price IS NULL AND e.visibility = 'public'
+                AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.org_id = e.org_id AND b.user_id = ?)
+                AND NOT EXISTS (SELECT 1 FROM door_guests y WHERE y.event_id = g.event_id AND y.user_id = ?)""", norm, now() - GUEST_DAYS, uid, uid):
+            r = one(con, "SELECT id, status, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", g["event_id"], uid)
+            if r and (r["status"] != "going" or r["checked_in_at"]):
                 continue
-            if r:
-                con.execute("""UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1,
-                    checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE id = ?""", (g["created_at"], g["added_by"], now(), r["id"]))
-            else:
-                con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, checked_in_at, checked_in_by, checkin_manual,
-                    created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?, 1, ?, ?)""",
-                            (g["event_id"], uid, _ticket_code(con), g["created_at"], g["added_by"], now(), now()))
+            con.execute("UPDATE door_guests SET user_id = ? WHERE id = ?", (uid, g["id"]))
+            if not r:
+                con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at)
+                    VALUES (?, ?, 'going', ?, 1, ?, ?)""", (g["event_id"], uid, _ticket_code(con), now(), now()))
+            # as a check-in at the door: the rating ask and the levels it brings (review: written directly, they were lost)
+            _came(con, one(con, "SELECT * FROM events WHERE id = ?", g["event_id"]), uid, lambda g=g: con.execute(
+                """UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE event_id = ? AND user_id = ?""",
+                (g["created_at"], g["added_by"], now(), g["event_id"], uid)))
 
 
 # ---------------------------------------------------------------- admin: clubs and their teams (pilot, SPEC §2)
@@ -4276,19 +4292,33 @@ def slug_for(con, name: str, oid: int | None = None) -> str:
     base = re.sub(r"[^a-z0-9]", "", name.lower().translate(TRANSLIT))[:22]
     base = base if len(base) >= 2 else f"club{base}"
     return next(s for s in (base if n == 1 else f"{base}{n}" for n in range(1, 10_000))
-                if s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid))
+                if _slug_free(con, s, oid))
 
 
 def name_slugs(con) -> None:
-    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once."""
+    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once (review: every start renamed
+    a club<N> its President chose)."""
+    if one(con, "SELECT 1 FROM meta WHERE key = 'slugs_named'"):
+        return
     with tx(con):
+        con.execute("INSERT INTO meta (key, value) VALUES ('slugs_named', '1')")
         for o in rows(con, "SELECT id, name FROM orgs WHERE slug GLOB 'club[0-9]*'"):
             con.execute("UPDATE orgs SET slug = ? WHERE id = ?", (slug_for(con, o["name"], o["id"]), o["id"]))
 
 
 def org_by_slug(con, slug: str) -> int | None:
-    o = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug.lower()) if SLUG.fullmatch(slug.lower()) else None
+    s = slug.lower()
+    if not SLUG.fullmatch(s):
+        return None
+    o = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", s) \
+        or one(con, "SELECT o.id FROM meta m JOIN orgs o ON o.id = CAST(m.value AS INTEGER) WHERE m.key = ? AND o.status = 'active'", f"slug:{s}")
     return o[0] if o else None
+
+
+def _slug_free(con, s: str, oid: int | None) -> bool:
+    """Not the app's, nobody's now, nobody's before (a changed slug keeps leading to its club: the old bios)."""
+    held = one(con, "SELECT value FROM meta WHERE key = ?", f"slug:{s}")
+    return s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid) and (not held or held[0] == str(oid))
 
 
 OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))  # with the President: db migration 40

@@ -1274,7 +1274,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405 (owner, Oct 13)
     @app.api_route("/{path:path}", methods=["GET", "HEAD"])
-    def frontend(path: str, request: Request, con=Depends(conn)):
+    def frontend(path: str, request: Request):
         if path.startswith("api/"):
             raise ApiError("not_found")
         start = request.query_params.get("tgWebAppStartParam")
@@ -1284,7 +1284,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path):
             return f
-        if oid := logic.org_by_slug(con, path.strip("/")):  # kbtu.sow.kz/<club>: an Instagram bio's link (A5)
+        oid = None
+        if logic.SLUG.fullmatch(path.strip("/").lower()):
+            with pool.conn() as con:  # only past the files (review: every asset took a connection)
+                oid = logic.org_by_slug(con, path.strip("/"))
+        if oid:  # kbtu.sow.kz/<club>: an Instagram bio's link (A5)
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp=cl_{oid}", status_code=302)
         return page()  # SPA: the app routes itself
 

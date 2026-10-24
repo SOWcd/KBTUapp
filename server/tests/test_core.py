@@ -1727,6 +1727,7 @@ def test_club_applications(env, monkeypatch):
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["javascript:alert(1)"]}).status_code == 400
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://t.me/x"] * 7}).status_code == 400
     assert c.post("/api/club-applications", headers=A, json={**good, "links": "https://t.me/x"}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://t.me/x"] * 2}).status_code == 400  # keyed in the app
     assert c.post("/api/club-applications", headers=A, json={k: x for k, x in good.items() if k != "links"} | {"link": "javascript:alert(1)"}).status_code == 400
     app = c.post("/api/club-applications", headers=A, json=good).json()
     assert app["links"] == links and app["why"] is None
@@ -3828,17 +3829,23 @@ def test_club_short_links(env):
         old = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('club7', 'club', 'Open Mic', 'OM', 'trophy_3d', 0)").lastrowid
     slug = lambda oid: con.execute("SELECT slug FROM orgs WHERE id = ?", (oid,)).fetchone()[0]  # noqa: E731
     assert (slug(a), slug(b), slug(x)) == ("shahmatnyiklub", "shahmatnyiklub2", "api2")
+    con.execute("DELETE FROM meta WHERE key = 'slugs_named'")  # the app's start ran it already
     logic.name_slugs(con)
     assert slug(old) == "openmic"
+    con.execute("UPDATE orgs SET slug = 'club7' WHERE id = ?", (old,))
+    logic.name_slugs(con)
+    assert slug(old) == "club7"                                                        # once: a chosen club7 stays
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0), (?, ?, 'vice', 0)", (a, pres["id"], a, vice["id"]))
     P = tma(90, "Pres")
     assert c.patch(f"/api/orgs/{a}", headers=tma(91, "Vice"), json={"slug": "chess"}).status_code == 403   # the President's
     assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "exit"}).status_code == 400                  # the app's own
     assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "Ch-ess"}).status_code == 400
-    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "openmic"}).status_code == 409
+    assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "club7"}).status_code == 409
     assert c.patch(f"/api/orgs/{a}", headers=P, json={"slug": "Chess"}).json()["slug"] == "chess"
     r = c.get("/Chess", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].endswith(f"?startapp=cl_{a}")
+    assert c.get("/shahmatnyiklub", follow_redirects=False).headers["location"].endswith(f"cl_{a}")  # the old bio still works
+    assert logic.slug_for(con, "Shahmatnyi klub") == "shahmatnyiklub3"                 # and nobody else takes it
     assert c.get("/nosuchclub", follow_redirects=False).status_code == 200                              # the app itself
     assert c.get("/exit", follow_redirects=False).headers["location"].endswith("startapp=exit")
 
@@ -3868,12 +3875,18 @@ def test_door_guests(env):
     assert [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()] == ["Ali Testov"]
     assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=P).status_code == 409   # the typist's
     assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=M).status_code == 204
-    add(1, "Ali Testov"); add(1, "Bota Testova"); add(2, "Ali Testov")
-    con.execute("INSERT INTO door_guests (event_id, full_name, norm, created_at) VALUES (2, 'Testov Ali', 'ali testov', 0)")  # two at event 2
-    logic.ms_link(con, ali["id"], {"oid": "o1", "email": "a@kbtu.kz", "first": "", "last": "", "profile": {}})
+    add(1, "Ali Testov"); add(1, "Bota Testova"); add(2, "Ali Testov"); add(1, "Mem Testov")
+    con.execute("UPDATE events SET status = 'cancelled' WHERE id = 2")                # the door's rules still hold
+    ms = lambda uid: logic.ms_link(con, uid, {"oid": f"o{uid}", "email": "a@kbtu.kz", "first": "", "last": "", "profile": {}})  # noqa: E731
+    ms(ali["id"])
     came = lambda uid: con.execute("SELECT event_id, checked_in_at IS NOT NULL, walk_in FROM registrations WHERE user_id = ?", (uid,)).fetchall()  # noqa: E731
-    assert [tuple(r) for r in came(ali["id"])] == [(1, 1, 1)]                          # event 2: two Ali Testovs, neither
-    assert c.get("/api/events/1/door/guests", headers=P).json()[1]["linked"] is True
+    assert [tuple(r) for r in came(ali["id"])] == [(1, 1, 1)]
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'rate'", (ali["id"],)).fetchone()  # as a real check-in
+    assert {x["name"]: x["linked"] for x in c.get("/api/events/1/door/guests", headers=P).json()}["Ali Testov"] is True
     assert came(bota["id"]) == []                                                      # "Bota Testova" is not "Bota Testov"
+    other = login(c, 75, "other")
+    con.execute("UPDATE students SET first_name = 'Mem' WHERE user_id = ?", (other["id"],))  # two students named Mem Testov
+    ms(mem["id"])
+    assert came(mem["id"]) == []                                                       # nobody can tell which one came
     logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()
