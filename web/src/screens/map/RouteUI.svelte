@@ -99,6 +99,8 @@
   $effect(() => { void cur; jelly(drop); }); // the floors' drop squashes as it slides, as the tab bar's does
   function show(i: number) { rt.step = i; const leg = rt.route!.legs[i]; go(leg.f, leg.pts); }
   function stop() { haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; onclose(); }
+  /** the step card's X: back to the ways, A kept (owner, Oct 24: looked at the fast one, wants the lift); the exit has one way */
+  function toWays() { if (!asked) return stop(); haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; }
   const hours = (x: MapNode): string => { const d = new Date(), h = x.h?.[d.getDay() === 0 ? 2 : d.getDay() === 6 ? 1 : 0]; return h ? h.split('-')[1] : ''; };
   function floorName(n: number) { return n ? t('route.floor', { n }) : t('route.basement'); }
   /** a step in words: walk past the named points to the stairs or lift and go up or down, or arrive */
@@ -215,7 +217,7 @@
   <!-- the step on the way (owner, Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
   <div class="card step glass glass-sheet" data-cover use:glass={{ bloom: true }} use:refract>
     <div class="top"><span>{t('route.step', { i: rt.step + 1, n })} · {floorName(rt.route.legs[rt.step].f)} · {t('route.min', { n: mins(secs(rt.route)) })}</span>
-      <button onclick={stop} aria-label={t('common.close')}><X size={18} /></button></div>
+      <button onclick={toWays} aria-label={t('common.close')}><X size={18} /></button></div>
     <div class="bars" aria-hidden="true">{#each rt.route.legs as _, i (i)}<i class:on={i <= rt.step}></i>{/each}</div>
     <div class="nav">{#key rt.step}<p class="txt">{words(rt.step)}</p>{/key}
       {#if n > 1}<button disabled={rt.step === 0} onclick={() => { haptic.tap(); show(rt.step - 1); }} aria-label={t('route.back')}><ChevronLeft size={22} /></button>{/if}
