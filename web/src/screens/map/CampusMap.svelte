@@ -37,7 +37,7 @@
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
-  import { mapFrom } from '../../lib/state/sheets';
+  import { mapFrom, copyCap, type CapCopy } from '../../lib/state/sheets';
 
   let { overlay, place, exit = false }: { overlay: Overlay; place?: string; exit?: boolean } = $props();
   const ROOMS = uniqRooms as unknown as Record<string, number[][]>[]; // by floor: room → where its number is printed
@@ -374,40 +374,62 @@
   function appear() {
     if (appeared || gone) return;
     appeared = true; shownAt = performance.now();
-    if (iris) {
-      const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' };
-      panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o);
-      // the top capsule turns into the map's when the edge reaches it, not at the tap (owner, Oct 25)
-      const h = halo(30, reach(iris.at), o, [1, 1, 1, 0]);
-      let done = false;
-      crossing(h, (r) => r >= capsuleAt(), () => { if (!gone && !done) { done = true; undoChrome = hideChrome(); } });
-    } else {
+    undoChrome = hideChrome();
+    if (!iris) {
       panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
-      undoChrome = hideChrome();
+      return;
     }
+    const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }, far = reach(iris.at);
+    panel.animate({ clipPath: [iris(30), iris(far)] }, o);
+    // the map breathes out to meet you: a touch larger at first, it settles as the circle opens
+    stage.animate({ transform: ['scale(1.08)', 'none'], transformOrigin: [`${iris.at.x}px ${iris.at.y - stage.offsetTop}px`, `${iris.at.x}px ${iris.at.y - stage.offsetTop}px`] }, o);
+    // the page under it steps back (iOS's way): it stays put under the map, so it's clear the map came over it
+    under = document.querySelector<HTMLElement>('.app > .tab.on')?.animate(
+      { transform: ['none', 'scale(0.94)'], opacity: [1, 0.45], transformOrigin: [`${iris.at.x}px ${iris.at.y}px`, `${iris.at.x}px ${iris.at.y}px`] }, { ...o, fill: 'forwards' }) ?? null;
+    const h = halo(30, far, o, [1, 1, 1, 0]);
+    // the capsule is cut by the circle (owner, Oct 25): inside it already says "Map", outside it's still the old one
+    if (iris.cap) split(h, iris.cap, false);
   }
+  let under: Animation | null = null;
   // opened from the nav's round button (owner, Oct 25: "one with the bar"): the map grows out of that circle and
   // shrinks back into it; clip-path only, the map under it is painted once
   const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
   const iris = (() => {
-    const at = mapFrom.at; mapFrom.at = null;
+    const { at, cap } = mapFrom; mapFrom.at = mapFrom.cap = null;
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
-    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at });
+    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap });
   })();
+  // the map's own capsule, copied whenever it changes (the floor), for the way back: closing, the real one is the
+  // old page's at once, the copy shows inside the shrinking circle
+  let mapCap: CapCopy | null = null;
+  $effect(() => {
+    void overlay.title; void own;
+    if (iris && !gone) void tick().then(() => requestAnimationFrame(() => { if (!gone) mapCap = copyCap(); }));
+  });
+  // two capsules meet on the circle's edge: the real one and a still copy, each masked to its side, every frame
+  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean) {
+    const real = document.querySelector<HTMLElement>('.cap');
+    const w = document.createElement('div');
+    w.className = copy.theme;
+    w.style.cssText = 'display:block;position:fixed;inset:0;z-index:9998;pointer-events:none';
+    w.setAttribute('aria-hidden', 'true');
+    w.append(copy.node);
+    document.body.append(w);
+    const side = (el: HTMLElement, inside: boolean, r: number) => {
+      const b = el.getBoundingClientRect(), [i, o] = inside ? ['#000', 'transparent'] : ['transparent', '#000'];
+      const m = `radial-gradient(circle at ${iris!.at.x - b.left}px ${iris!.at.y - b.top}px, ${i} ${r}px, ${o} ${r}px)`;
+      el.style.setProperty('mask', m); el.style.setProperty('-webkit-mask', m);
+    };
+    const frame = () => {
+      if (!h.isConnected || !real) { real?.style.removeProperty('mask'); real?.style.removeProperty('-webkit-mask'); w.remove(); return; }
+      const r = h.offsetWidth / 2;
+      side(real, !copyInside, r); side(copy.node, copyInside, r);
+      requestAnimationFrame(frame);
+    };
+    frame();
+  }
   // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
   // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
-  // how far the capsule's nearest point is from the circle's centre
-  function capsuleAt(): number {
-    const c = document.querySelector('.cap')?.getBoundingClientRect();
-    if (!c || !iris) return 0;
-    const { x, y } = iris.at;
-    return Math.hypot(Math.max(c.left - x, 0, x - c.right), Math.max(c.top - y, 0, y - c.bottom));
-  }
-  // calls `go` on the frame the ring's radius passes the test (the ring is gone: at once)
-  function crossing(h: HTMLElement, test: (r: number) => boolean, go: () => void) {
-    const tick = () => { if (!h.isConnected || test(h.offsetWidth / 2)) go(); else requestAnimationFrame(tick); };
-    requestAnimationFrame(tick);
-  }
   function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[]): HTMLElement {
     const h = document.createElement('i');
     h.className = 'map-halo';
@@ -433,11 +455,16 @@
     if (gone) return;
     gone = true;
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
-    if (iris) crossing(halo(reach(iris.at), 30, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)' }, [1, 1, 0]),
-      (r) => r < capsuleAt(), () => { undoChrome(); undoChrome = () => {}; });
-    const a = iris
-      ? (panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' }))
-      : panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+    let a: Animation;
+    if (iris) {
+      const o = { duration: 420, easing: 'cubic-bezier(.5, 0, .6, .5)' }, far = reach(iris.at);
+      const h = halo(far, 30, o, [1, 1, 0]);
+      if (mapCap) split(h, mapCap, true);
+      undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
+      stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
+      if (under) { const u = under; u.updatePlaybackRate(560 / 420); u.reverse(); void u.finished.then(() => u.cancel(), () => {}); }
+      a = panel.animate({ clipPath: [iris(far), iris(30)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
+    } else a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
   $effect(() => { if (overlay.closing) leave(); });

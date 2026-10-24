@@ -6,8 +6,18 @@ import type { StoryGroup } from '../posts';
 
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean };
 
-/** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it */
-export const mapFrom: { at: { x: number; y: number } | null } = { at: null };
+/** a still copy of the top capsule and its theme wrapper's classes (the map's circle cuts between it and the live one) */
+export type CapCopy = { node: HTMLElement; theme: string };
+export function copyCap(): CapCopy | null {
+  const c = document.querySelector<HTMLElement>('.cap');
+  if (!c) return null;
+  const node = c.cloneNode(true) as HTMLElement;
+  node.removeAttribute('role');
+  return { node, theme: c.parentElement?.className ?? '' };
+}
+/** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
+ *  the capsule as it was before the map changed it */
+export const mapFrom: { at: { x: number; y: number } | null; cap: CapCopy | null } = { at: null, cap: null };
 
 export const sheets = {
   person: (_id: Id) => {},
