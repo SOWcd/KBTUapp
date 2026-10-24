@@ -10,9 +10,10 @@
 <i class="ck {kind}" style="--s:{size}px" title={t(`chats.${kind}`)}>
   <svg viewBox="0 0 24 24" aria-hidden="true">
     {#if kind === 'channel'}
-      <!-- a speaker and its two waves -->
-      <path d="M3 10.3v3.4c0 .8.6 1.4 1.4 1.4H6.3l4.6 3.5c.8.6 2 0 2-1V6.4c0-1-1.2-1.6-2-1L6.3 8.9H4.4C3.6 8.9 3 9.5 3 10.3Z" />
-      <path class="ln" d="M16.2 9.2a4 4 0 0 1 0 5.6M18.9 6.6a7.6 7.6 0 0 1 0 10.8" />
+      <!-- a megaphone, Telegram's own sign for a channel (owner, Oct 25: the speaker read as "sound") -->
+      <path d="M3.5 9.7c0-1 .8-1.7 1.7-1.7h2.6l8.9-4.3c.9-.4 1.8.2 1.8 1.1v14.4c0 1-.9 1.5-1.8 1.1L7.8 16H5.2c-1 0-1.7-.8-1.7-1.7Z" />
+      <path class="bk" d="M6.4 16.6h3.3l1 3.3c.2.7-.3 1.4-1 1.4h-.9c-.6 0-1-.4-1.2-.9Z" />
+      <path class="ln" d="M20.8 9.6v4.8" />
     {:else if kind === 'forum'}
       <!-- two bubbles: threads talking -->
       <path class="bk" d="M10 15.6h5l3.2 2.6c.5.4 1.2 0 1.2-.6v-2.1a2.3 2.3 0 0 0 1.6-2.2V9.5a2.3 2.3 0 0 0-2.3-2.3h-.4v3.6a4.6 4.6 0 0 1-4.6 4.6H10Z" />
