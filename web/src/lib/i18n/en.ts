@@ -436,6 +436,7 @@ const en: Dict = {
   'pad.noRoom': "No such room on the plan",
   'pad.near': "{room} isn't on the plan: I'll show roughly where",
   'pad.entrance': "Entrance · {floor}",
+  'pad.evac': "evacuation only",
   'pad.closed': "closed",
   'pad.till': "until {time}",
   'pad.arrived': "You're there",

@@ -3,8 +3,9 @@
 // and height, as uniq-rooms.json has them; all floors share one frame, so a staircase sits at the same (u, v) on each.
 
 /** k: stairs, lift, exit (else a corridor point); g: the staircase's or lift's id on all its floors; r: rooms whose door
- *  opens here; b: backup, only when there is no other way (owner, Oct 11); h: an exit's hours Mon-Fri, Sat, Sun */
-export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; h?: string[] };
+ *  opens here; b: backup, only when there is no other way (owner, Oct 11); e: an evacuation door, opened only then (owner, Oct 24:
+ *  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun */
+export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[] };
 export type Graph = { n: MapNode[]; e: [number, number][]; ver: number };
 export type Mode = 'fast' | 'lift' | 'alt';
 export type Pt = { f: number; u: number; v: number; node?: MapNode };

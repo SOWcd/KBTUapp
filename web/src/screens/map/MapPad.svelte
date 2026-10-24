@@ -1,6 +1,6 @@
 <script lang="ts" module>
   /** a named place on the "Place" side: a hall, the canteen, an entrance */
-  export type PadTile = { v: string; label: string; sub?: string; door?: boolean; off?: boolean };
+  export type PadTile = { v: string; label: string; sub?: string; door?: boolean; off?: boolean; evac?: boolean };
   export type PadCheck = { ok: boolean; hint: string; tone?: 'ok' | 'no' };
   import { t as tr } from '../../lib/i18n/index.svelte';
   import { SPOTS, floorOf, normRoom } from '../../lib/map';
@@ -17,7 +17,8 @@
     const now = new Date(), seen = new Set<string>();
     const till = (x: MapNode) => x.h?.[now.getDay() === 0 ? 2 : now.getDay() === 6 ? 1 : 0]?.split('-')[1] ?? '';
     return (g?.n ?? []).filter((n) => n.k === 'x' && !n.b && n.name && !seen.has(n.name) && seen.add(n.name))
-      .map((n) => ({ v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? tr('pad.till', { time: till(n) }) : tr('pad.closed') }));
+      .map((n) => n.e ? { v: n.name!, label: n.name!, door: true, evac: true, off: true, sub: tr('pad.evac') }
+        : { v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? tr('pad.till', { time: till(n) }) : tr('pad.closed') });
   }
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
@@ -117,7 +118,7 @@
       {#each groups as g, gi (gi)}
         {#if g.title}<p class="cap">{g.title}</p>{/if}
         {#each g.tiles as tl (tl.v)}
-          <button class="tile" class:door={tl.door} class:off={tl.off} class:on={tl.v === typed} disabled={tl.off && point === 'a'} onclick={() => take(tl.v)}>
+          <button class="tile" class:door={tl.door} class:off={tl.off && !tl.evac} class:evac={tl.evac} class:on={tl.v === typed} disabled={tl.off && point === 'a'} onclick={() => take(tl.v)}>
             <span class="ti">{#if tl.door}<DoorOpen size={18} />{:else}<MapPin size={18} />{/if}</span>
             <span><b>{tl.label}</b>{#if tl.sub}<small>{tl.sub}</small>{/if}</span>
           </button>
@@ -194,6 +195,10 @@
   .ti { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent-text); }
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }
+  /* an evacuation door: red, open only then (owner, Oct 24) */
+  .tile.evac .ti { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
+  .tile.evac small { color: var(--danger-text); }
+  .tile.evac:disabled { opacity: 0.55; }
   .tile.off b { text-decoration: line-through; }
   .tile.on { background: var(--pt); color: #fff; }
   .tile.on .ti { background: rgba(255, 255, 255, 0.2); color: #fff; }
