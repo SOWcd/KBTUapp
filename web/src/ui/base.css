@@ -52,9 +52,14 @@ img { max-width: 100%; }
    behind); a sheen spot and a bright rim whose angle follow the phone's tilt (--gx/--gy from
    glass.ts); a specular top edge; faint warm/cool fringes left and right; a soft inner bevel.
    Static paint: nothing repaints unless the phone moves. A glass element must be positioned.
+   The rim (owner, Oct 24: an even hairline all round read as a drawn border, "not real"): bright only on the arc that
+   faces the light (--hx, along the top), a dim reflection on the opposite bottom arc (--ox), barely there elsewhere,
+   with a soft specular spot under the bright arc. Same cost: two gradients, repainted only on tilt.
    Variants: .glass-pill (capsule, toasts: lighter blur, one clean rim), .glass-sheet (big surfaces:
    no light spot, it read as a flashlight). */
 .glass {
+  --hx: calc(24% + var(--gx, 0) * 38%);
+  --ox: calc(76% - var(--gx, 0) * 38%);
   isolation: isolate;
   background-color: var(--glass-bg);
   -webkit-backdrop-filter: blur(24px) saturate(190%);
@@ -64,19 +69,22 @@ img { max-width: 100%; }
 .glass::before, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .glass::before {
   z-index: -1;
-  background: radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%);
+  background:
+    radial-gradient(ellipse 34% 26% at var(--hx) 0%, rgba(255, 255, 255, 0.28), transparent 70%),
+    radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%);
   box-shadow:
-    inset 0 1px 0.5px rgba(255, 255, 255, 0.85),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.25),
-    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.28),
-    inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.32),
-    inset 0 -10px 18px -10px rgba(0, 0, 0, 0.18),
-    inset 0 10px 22px -12px rgba(255, 255, 255, 0.45),
-    inset 0 0 18px rgba(255, 255, 255, 0.12);
+    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22),
+    inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26),
+    inset 0 -10px 18px -10px rgba(0, 0, 0, 0.2),
+    inset 0 8px 16px -10px rgba(255, 255, 255, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.07);
 }
 .glass::after {
-  padding: 1px;
-  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.08) 28%, transparent 50%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0.55));
+  padding: 1.2px;
+  background:
+    radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
+    radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.42), transparent 70%),
+    rgba(255, 255, 255, 0.07);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -87,7 +95,7 @@ img { max-width: 100%; }
   backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
   box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
 }
-.glass-pill::before { box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.75), inset 0 0 12px rgba(255, 255, 255, 0.08); }
+.glass-pill::before { box-shadow: inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06); }
 .glass-sheet::before { background: none; box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.6); }
 /* Light theme (owner, Oct 5 and again Oct 6: "in the light theme there's no glass at all"): white rims vanish on a
    white page and a milky body over white cards reads as plastic, so here the glass is clearer (what scrolls under it
@@ -98,7 +106,10 @@ img { max-width: 100%; }
 :root[data-theme='light'], .theme-light { --glass-clear: rgba(255, 255, 255, 0.14); }
 :root[data-theme='light'] .glass-pill, .theme-light .glass-pill { -webkit-backdrop-filter: blur(8px) saturate(190%); backdrop-filter: var(--refract, blur(8px) saturate(190%)); }
 :root[data-theme='light'] .glass::after, .theme-light .glass::after {
-  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), #fff, rgba(255, 255, 255, 0.35) 28%, rgba(11, 20, 51, 0.05) 50%, rgba(11, 20, 51, 0.1) 72%, rgba(11, 20, 51, 0.18));
+  background:
+    radial-gradient(ellipse 46% 140% at var(--hx) 0%, #fff, rgba(255, 255, 255, 0.5) 40%, transparent 72%),
+    radial-gradient(ellipse 50% 130% at var(--ox) 100%, rgba(11, 20, 51, 0.2), transparent 75%),
+    rgba(11, 20, 51, 0.07);
 }
 :root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before {
   box-shadow:
@@ -112,9 +123,12 @@ img { max-width: 100%; }
 :root[data-theme='light'] .glass-pill, .theme-light .glass-pill { box-shadow: 0 12px 30px -12px rgba(24, 36, 90, 0.4), 0 1px 3px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.16); }
 /* a dark part on a light page: the dark glass back */
 :root[data-theme='light'] .theme-dark .glass::after {
-  background: linear-gradient(calc(135deg + var(--gx, 0) * 90deg), rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.08) 28%, transparent 50%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0.55));
+  background:
+    radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
+    radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.42), transparent 70%),
+    rgba(255, 255, 255, 0.07);
 }
-:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.75), inset 0 0 12px rgba(255, 255, 255, 0.08); }
+:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06); }
 :root[data-theme='light'] .theme-dark .glass-pill { box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
   -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06); backdrop-filter: blur(10px) saturate(200%) brightness(1.06); }
 :root[data-theme='light'] .theme-dark { --glass-clear: rgba(255, 255, 255, 0.1); }

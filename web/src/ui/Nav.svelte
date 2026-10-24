@@ -67,11 +67,14 @@
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55), 0 0 24px -6px var(--nav-glow, rgba(120, 150, 255, 0.4));
     transition: transform var(--t-slow) var(--ease-spring), height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
-  /* an edge all the way round (owner, Oct 13: "the bar has no edges"; the shared rim lit only the top-left corner),
-     brightest on top, the colour fringes at the sides */
+  /* an edge all the way round (owner, Oct 13: "the bar has no edges"), but lit like glass, not drawn (Oct 24: the even
+     bright outline looked fake): the shared rim's bright arc and its reflection over a faint edge, the colour fringes */
   .nav::after {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2) 45%, rgba(255, 255, 255, 0.34)),
-      linear-gradient(90deg, rgba(255, 120, 200, 0.5), transparent 20%, transparent 80%, rgba(90, 190, 255, 0.55));
+    background:
+      radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
+      radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.45), transparent 70%),
+      linear-gradient(90deg, rgba(255, 120, 200, 0.4), transparent 18%, transparent 82%, rgba(90, 190, 255, 0.45)),
+      rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base { background: var(--glass-clear); }
   .nav > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.55); background-image: linear-gradient(120deg, transparent, rgba(12, 14, 24, 0.6)); }
