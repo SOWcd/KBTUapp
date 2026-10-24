@@ -111,6 +111,13 @@
   }
   const clamp = () => { [x, y] = clamped(s, x, y); };
   function reset() { halt(); s = 1; x = 0; y = Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
+  /** the view a floor opens in: on the main map the building (u .12-.85 of UNI-Q's sheet, white margins round it) fills
+   *  the width (owner, Oct 24: "why is it so far away"); the old plan has no margins, the whole of it */
+  function home(): [number, number, number] {
+    const W = stage.clientWidth, H = stage.clientHeight, k = ver === 'main' ? 1.3 : 1;
+    return [k, ...clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, (H - W * AR * k) / 2)];
+  }
+  function goHome() { [s, x, y] = home(); settle(); paint(); }
 
   // the main map's tiles on screen at scale s and offset (x, y), from the level that size needs; none while the overview will do
   type Tile = { key: string; src: string; l: number; t: number; w: number; h: number };
@@ -214,9 +221,9 @@
     const p = pts.has(e.pointerId) ? local(e) : null;
     pts.delete(e.pointerId); from = pts.size ? mid() : null; if (!pts.size) settleSoon(120);
     // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15)
-    const hy = Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2);
     const dragged = !press || !p || Math.hypot(p.x - press.x, p.y - press.y) >= 8; // a tap (a double tap's first) isn't a let-go
-    if (!pts.size && !rt.edit && dragged && s < 1.3 && Math.hypot(x, y - hy) > 4) zoomTo(1, 0, hy, 380);
+    const [hs, hx, hy2] = home();
+    if (!pts.size && !rt.edit && dragged && s < hs * 1.05 && Math.hypot(x - hx, y - hy2) > 4) zoomTo(hs, hx, hy2, 380);
     if (rt.edit && press && p && !pts.size && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 400) {
       const W = stage.clientWidth * s, u = (p.x - x) / W, v = (p.y - y) / (W * AR);
       const hit = rt.graph?.n.filter((n) => n.f === cur).map((n) => ({ n, d: Math.hypot(x + n.u * W - p.x, y + n.v * W * AR - p.y) }))
@@ -237,13 +244,13 @@
   // another floor keeps the view: the floors share one frame, so the same part of the building stays on screen and
   // only the tiles change (owner, Oct 6: "switching floors resets the map's size")
   function pick(n: number) { if (n === cur) return; haptic.select(); halt(); cur = n; tiles = []; touched++; pickTiles(); }
-  function setVer(v: 'main' | 'old') { if (v === ver) return; haptic.select(); ver = v; if (v === 'old' && !cur) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); }
+  function setVer(v: 'main' | 'old') { if (v === ver) return; haptic.select(); ver = v; if (v === 'old' && !cur) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); goHome(); }
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
   let glided = false, glideT = 0, touched = 0;
   // the map's controls (owner, Oct 24, mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
   // a lift panel on the right with the look button above it; every input is our keypad (MapPad), no system keyboard
-  let pad = $state(false), menu = $state(false);
+  let pad = $state(false);
   let at = $state<{ f: number; u: number; v: number; label: string } | null>(null); // a found place without a number (canteen)
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
   function checkFind(text: string): PadCheck {
@@ -277,7 +284,7 @@
   const card = $derived(!pad && !routing && !rt.edit && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
-  function fit() { halt(); framed = null; zoomTo(1, 0, Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2), 420); }
+  function fit() { halt(); framed = null; zoomTo(...home(), 420); }
   const railFloors = $derived([5, 4, 3, 2, 1, 0].filter((n) => ver === 'main' || FLOORS[n]));
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
@@ -358,7 +365,7 @@
   }
 
   onMount(() => {
-    reset();
+    reset(); goHome();
     appear();
     const ro = new ResizeObserver(() => { clamp(); paint(); clearTimeout(reframeT); reframeT = window.setTimeout(reframe, 200); });
     const d = document.documentElement.dataset;
@@ -428,7 +435,8 @@
   </div>
   <!-- right edge: the map's look (the menu), the floors as a lift panel ("whole floor" dropped: owner, Oct 24, no use) -->
   <div class="side">
-    <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }} aria-label={t('map.look')} aria-expanded={menu}>
+    <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
+    <button class="rb glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)} aria-label={t('map.theme')}>
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
@@ -437,19 +445,13 @@
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
   </div>
-  <div class="menu" class:on={menu} inert={!menu}>
-    <div class="vseg" class:r={look === 'light'}><span class="knob" aria-hidden="true"></span>
-      <button class:on={look === 'dark'} onclick={(e) => { if (look !== 'dark') flip(e.currentTarget); }}>{t('map.dark')}</button>
-      <button class:on={look === 'light'} onclick={(e) => { if (look !== 'light') flip(e.currentTarget); }}>{t('map.light')}</button></div>
-    <button class="mrow" onclick={() => setVer(ver === 'old' ? 'main' : 'old')} role="switch" aria-checked={ver === 'old'}>
-      <span>{t('map.oldPlan')}<small>{ver === 'old' ? t('map.note') : t('map.oldSub')}</small></span><i class="sw" class:on={ver === 'old'}></i></button>
-    <p class="credit">{t('map.noteMain')}</p>
-  </div>
-  {#if menu}<div class="shade" onpointerdown={() => (menu = false)} aria-hidden="true"></div>{/if}
+  <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
+  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')} ·
+    <button onclick={() => setVer(ver === 'old' ? 'main' : 'old')}>{ver === 'old' ? t('map.newPlan') : t('map.oldPlan')}</button></p>
   <!-- the bottom, under the thumb: find a room or place, or get out -->
   <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
-    <button class="bar glass glass-pill" use:glass onclick={() => { haptic.tap(); menu = false; pad = true; }}><Search size={20} />{t('map.find')}</button>
-    <button class="exit glass glass-pill" use:glass onclick={() => { menu = false; leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={24} /></button>
+    <button class="bar glass glass-pill" use:glass onclick={() => { haptic.tap(); pad = true; }}><Search size={20} />{t('map.find')}</button>
+    <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={24} /></button>
   </div>
   {#if card}
     <div class="rcard" data-cover>
@@ -548,34 +550,10 @@
   .rail button { position: relative; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
   .rail button.on { color: #0a0f24; }
   .rail button.r::after { content: ''; position: absolute; right: 3px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
-  .menu { position: absolute; z-index: 4; right: 66px; top: calc(max(48px, var(--top)) + 10px); width: 236px; padding: 8px; border-radius: 22px; color: #f5f7ff;
-    -webkit-backdrop-filter: blur(28px) saturate(170%); backdrop-filter: blur(28px) saturate(170%); background: linear-gradient(180deg, rgba(40, 46, 80, 0.86), rgba(16, 19, 38, 0.94));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 20px 50px -10px rgba(0, 0, 0, 0.7);
-    transform-origin: 100% 0; transform: scale(0.6); opacity: 0; pointer-events: none; transition: transform 0.45s var(--ease-spring), opacity 0.2s; }
-  .menu.on { transform: none; opacity: 1; pointer-events: auto; }
-  /* the light look: a light menu (owner, Oct 24: it was the dark one) */
-  .theme-light .menu { color: #0b1433; background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 243, 252, 0.96)); box-shadow: inset 0 1px 0 #fff, 0 0 0 0.5px rgba(11, 20, 51, 0.12), 0 20px 50px -14px rgba(24, 36, 90, 0.35); }
-  .theme-light .vseg { background: rgba(11, 20, 51, 0.06); }
-  .theme-light .vseg .knob { background: #0b1433; box-shadow: 0 6px 16px -6px rgba(11, 20, 51, 0.5); }
-  .theme-light .vseg button { color: rgba(11, 20, 51, 0.6); }
-  .theme-light .vseg button.on { color: #fff; }
-  .theme-light .mrow small, .theme-light .credit { color: rgba(11, 20, 51, 0.5); }
-  .theme-light .credit { border-top-color: rgba(11, 20, 51, 0.08); }
-  .theme-light .sw { background: rgba(11, 20, 51, 0.12); }
-  .shade { position: absolute; inset: 0; z-index: 3; }
-  .vseg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: rgba(255, 255, 255, 0.07); }
-  .vseg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
-    background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
-  .vseg.r .knob { transform: translateX(100%); }
-  .vseg button { position: relative; flex: 1; height: 36px; font: 650 14px/1 var(--font-text); color: rgba(236, 240, 255, 0.7); transition: color 0.25s; }
-  .vseg button.on { color: #0a0f24; }
-  .mrow { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 8px 8px; text-align: left; font: 600 14px/1.25 var(--font-text); color: inherit; }
-  .mrow small { display: block; color: rgba(236, 240, 255, 0.5); font: 500 12px/1.3 var(--font-text); }
-  .sw { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(255, 255, 255, 0.14); transition: background 0.3s; }
-  .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform 0.45s var(--ease-bounce); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
-  .sw.on { background: #3fd68a; }
-  .sw.on::after { transform: translateX(18px); }
-  .credit { margin: 4px 0 0; padding: 10px 8px 4px; border-top: 1px solid rgba(255, 255, 255, 0.08); color: rgba(236, 240, 255, 0.5); font: 500 12px/1.3 var(--font-text); }
+  .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);
+    transition: opacity 0.25s; }
+  .note button { font: inherit; color: var(--accent-text); font-weight: 650; }
+  .note.away { opacity: 0; pointer-events: none; }
   /* the bottom: the search bar and the exit */
   .dock { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px); display: flex; gap: 10px; transition: transform 0.55s var(--ease-spring), opacity 0.25s; }
   .dock.away { transform: translateY(130%); opacity: 0; pointer-events: none; }

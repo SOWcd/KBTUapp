@@ -13,6 +13,8 @@
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
     .sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
+  // a real room as the example, a new one each time (owner, Oct 24: not always 305)
+  const EX = ALL.filter((r) => /^[1-5]\d\d$/.test(r));
   const suggest = (typed: string) => { const q = normRoom(typed); return q.length < 2 ? [] : ALL.filter((r) => r.startsWith(q) && r !== q); };
 </script>
 
@@ -35,6 +37,7 @@
     check: (text: string) => PadCheck; onsubmit: (text: string) => void; onclose: () => void; start?: string;
   } = $props();
 
+  const example = EX[Math.floor(Math.random() * EX.length)] ?? '305';
   const LET = ['\u0430', '\u0431', '\u0432', '\u0433']; // a, b, v, g as typed on a door
   let typed = $state(untrack(() => start)), fresh = $state(-1), side = $state<'num' | 'place'>('num'), shook = $state(0);
   const word = $derived(/[^\d\u0430-\u0433]/.test(typed));
@@ -84,7 +87,7 @@
   </div>
   {#key shook}
     <div class="disp" class:word class:shake={shook > 0} role="status">
-      {#if !typed}<span class="ph">305</span><i class="caret"></i>
+      {#if !typed}<span class="ph">{example}</span><i class="caret"></i>
       {:else if word}<span>{typed}</span>
       {:else}{#each [...typed] as c, i (i + c)}<span class="d" class:new={i === fresh}>{c}</span>{/each}<i class="caret"></i>{/if}
     </div>
@@ -156,16 +159,16 @@
   .sug button { height: 36px; display: grid; place-items: center; border-radius: 18px; background: var(--surface-2); font: 650 15px/1 var(--font-text); animation: chip 0.4s var(--ease-spring) backwards; }
   .sug button.on { background: var(--pt); color: #fff; }
   @keyframes chip { from { opacity: 0; transform: translateY(8px) scale(0.9); } }
-  .body { position: relative; height: calc(var(--k) * 4 + 36px); margin-top: 10px; transition: height 0.5s var(--ease-spring); }
+  .body { position: relative; height: calc(var(--k) * 4 + 30px); margin-top: 10px; transition: height 0.5s var(--ease-spring); }
   .body.tall { height: calc(var(--k) * 4 + 80px); }
   .body > div { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
   .body .hide { opacity: 0; pointer-events: none; transform: scale(0.96); }
-  .pad { display: grid; grid-template-columns: repeat(3, var(--k)); grid-auto-rows: var(--k); justify-content: center; align-content: start; column-gap: 26px; row-gap: 12px; }
-  .pad button { width: var(--k); height: var(--k); border-radius: 50%; display: grid; place-items: center; font: 550 32px/1 var(--font-display); color: var(--text);
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: var(--k); align-content: start; gap: 10px; }
+  .pad button { width: 100%; height: var(--k); border-radius: calc(var(--k) / 2); display: grid; place-items: center; font: 550 32px/1 var(--font-display); color: var(--text);
     background: radial-gradient(120% 100% at 50% 0%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.045) 70%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
     transition: background 0.45s ease, color 0.45s ease, transform 0.45s var(--ease-bounce); touch-action: manipulation; }
-  .pad button:global(.hit) { background: rgba(255, 255, 255, 0.92); color: #0a0f24; transform: scale(0.92); transition-duration: 40ms; }
+  .pad button:global(.hit) { background: rgba(255, 255, 255, 0.92); color: #0a0f24; transform: scale(0.96); transition-duration: 40ms; }
   .pad button.x { background: none; box-shadow: none; color: var(--text-2); }
   .pad button.x:global(.hit) { background: var(--surface-2); color: var(--text); }
   .pad button.l { font: 650 22px/1 var(--font-text); }

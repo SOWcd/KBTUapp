@@ -439,6 +439,7 @@ const kk: Dict = {
   'pad.closed': "жабық",
   'pad.till': "{time} дейін",
   'pad.arrived': "Келдің",
+  'map.newPlan': "UNI-Q картасы",
   'pad.a': "А",
   'pad.b': "Б",
   'map.find': "Аудитория не орын",

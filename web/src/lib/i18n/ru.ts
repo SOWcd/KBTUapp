@@ -440,6 +440,7 @@ const ru = {
   'pad.closed': "закрыт",
   'pad.till': "до {time}",
   'pad.arrived': "Ты на месте",
+  'map.newPlan': "Карта UNI-Q",
   'pad.a': "А",
   'pad.b': "Б",
   'map.find': "Аудитория или место",
