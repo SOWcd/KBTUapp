@@ -469,6 +469,7 @@ const ru = {
   'route.m.fast': "Быстрый",
   'route.m.lift': "На лифте",
   'route.rush': "Час пик: лифты забиты, дольше ждать",
+  'route.m.stairs': "По лестнице",
   'route.m.alt': "Другой путь",
   'route.sameFloor': "На этом же этаже",
   'route.openTill': "Открыт до {time}",

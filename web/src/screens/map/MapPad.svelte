@@ -5,10 +5,19 @@
   import { t as tr } from '../../lib/i18n/index.svelte';
   import { SPOTS, floorOf, normRoom } from '../../lib/map';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
+  import { openAt, type Graph, type MapNode } from '../../lib/route';
   const fl = (n: number) => (n ? tr('route.floor', { n }) : tr('route.basement'));
   /** the places people know by name, with where they are */
   export function placeTiles(): PadTile[] {
     return SPOTS.map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}` : fl(s.f ?? 0) }; });
+  }
+  /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (owner, Oct 24:
+   *  "from one entrance to another, through the building") */
+  export function exitTiles(g: Graph | null): PadTile[] {
+    const now = new Date(), seen = new Set<string>();
+    const till = (x: MapNode) => x.h?.[now.getDay() === 0 ? 2 : now.getDay() === 6 ? 1 : 0]?.split('-')[1] ?? '';
+    return (g?.n ?? []).filter((n) => n.k === 'x' && !n.b && n.name && !seen.has(n.name) && seen.add(n.name))
+      .map((n) => ({ v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? tr('pad.till', { time: till(n) }) : tr('pad.closed') }));
   }
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
@@ -85,6 +94,8 @@
     <button role="tab" aria-selected={side === 'num'} class:on={side === 'num'} onclick={() => flip('num')}>{t('pad.number')}</button>
     <button role="tab" aria-selected={side === 'place'} class:on={side === 'place'} onclick={() => flip('place')}><MapPin size={16} />{placeTab}</button>
   </div>
+  <!-- the place side is only its tiles: no number to show there (owner, Oct 24) -->
+  {#if side === 'num'}
   {#key shook}
     <div class="disp" class:word class:shake={shook > 0} role="status">
       {#if !typed}<span class="ph">{example}</span><i class="caret"></i>
@@ -93,7 +104,6 @@
     </div>
   {/key}
   <p class="hint" class:ok={res.tone === 'ok'} class:no={res.tone === 'no'}>{res.hint}</p>
-  {#if side === 'num'}
     <div class="sug">{#each sug as r, i (r)}<button class:on={asTyped(r) === typed} style:animation-delay="{i * 25}ms" onclick={() => take(asTyped(r))}>{asTyped(r)}</button>{/each}</div>
   {/if}
   <div class="body" class:tall={side === 'place'}>

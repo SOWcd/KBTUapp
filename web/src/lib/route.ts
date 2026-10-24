@@ -11,9 +11,10 @@ export type Pt = { f: number; u: number; v: number; node?: MapNode };
 export type Leg = { f: number; pts: Pt[]; up?: MapNode; to?: number };
 export type Route = { mode: Mode; secs: number; legs: Leg[]; via: number[] };
 
+// ponytail: LIFT_WAIT is a guess for a busy campus lift (owner, Oct 24); measure one at a break and tune
 // ponytail: one guessed scale for the whole plan (about 250 m across, the wings ~170 m apart); calibrate against a measured corridor
 export const PLAN_M = 250;
-const WALK = 1.2, STAIR = 20, LIFT_WAIT = 40, LIFT_FLOOR = 8, BACKUP = 600; // m/s, s per flight, s, s, s for a backup point
+const WALK = 1.2, STAIR = 20, LIFT_WAIT = 75, LIFT_FLOOR = 8, BACKUP = 600; // m/s, s per flight, s, s, s for a backup point
 
 /** a point's distance in metres on one floor; ar: the plan's height to its width */
 export const metres = (a: { u: number; v: number }, b: { u: number; v: number }, ar: number) => Math.hypot(a.u - b.u, (a.v - b.v) * ar) * PLAN_M;

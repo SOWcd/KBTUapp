@@ -29,7 +29,7 @@
   import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
-  import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, type PadCheck } from './MapPad.svelte';
 
   let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
@@ -42,11 +42,7 @@
   const spotName = (k: string) => t(`route.spot.${k}` as 'route.spot.canteen');
   /** an entrance by its name on the graph: a start too (A16: people come in from Tole bi, Kazybek bi, Panfilov) */
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
-  const exits = $derived.by(() => {
-    const now = new Date(), seen = new Set<string>();
-    return (rt.graph?.n ?? []).filter((n) => n.k === 'x' && !n.b && n.name && !seen.has(n.name) && seen.add(n.name)) // not the night post
-      .map((n) => ({ v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? t('pad.till', { time: hours(n) }) : t('pad.closed') }));
-  });
+  const exits = $derived(exitTiles(rt.graph));
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
    *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {
@@ -251,7 +247,7 @@
         {@const Icon = ICON[o.route.mode]}
         <button class="opt" class:sel={i === 0} style:animation-delay="{i * 50}ms" onclick={() => start(o)}>
           <span class="ic"><Icon size={18} /></span>
-          <span class="grow"><b>{t(`route.m.${o.route.mode}`)}</b>
+          <span class="grow"><b>{o.route.mode === 'fast' && options.some((x) => x.route.secs < o.route.secs) ? t('route.m.stairs') : t(`route.m.${o.route.mode}`)}</b>
             {#if o.route.mode === 'lift' && rush}<small class="rush">{t('route.rush')}</small>
             {:else}<small>{o.route.legs.length > 1 ? o.route.legs.map((l) => floorName(l.f)).join(' → ') : t('route.sameFloor')}</small>{/if}</span>
           <span class="min">{mins(o.route.secs + (o.route.mode === 'lift' && rush ? RUSH_WAIT : 0))} <small>{t('route.minShort')}</small></span>

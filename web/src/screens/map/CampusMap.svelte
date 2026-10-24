@@ -24,6 +24,7 @@
   import Moon from '@lucide/svelte/icons/moon';
   import { theme, reveal, paintFor, type Theme } from '../../lib/state/theme.svelte';
   import MapIcon from '@lucide/svelte/icons/map';
+  import History from '@lucide/svelte/icons/history';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
@@ -32,7 +33,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
-  import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
@@ -257,7 +258,15 @@
     return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
   }));
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
+  // the entrances on B too (owner, Oct 24); the graph has them, fetched when the keypad opens
+  const doorNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
+  async function openPad() {
+    haptic.tap(); pad = true;
+    if (!rt.graph) rt.graph = await api.mapGraph().catch(() => null);
+  }
   function checkFind(text: string): PadCheck {
+    const dn = doorNamed(text);
+    if (dn) return { ok: true, tone: 'ok', hint: t('pad.entrance', { floor: floorName(dn.f) }) };
     const sp = spotOf(text);
     if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) };
     const r = roomOf(text), f = floorOf(r);
@@ -267,7 +276,7 @@
   /** the keypad's answer: to its floor, ringed, glided to (the room's own effect below), the card under it */
   function found(text: string) {
     haptic.tap(); pad = false; clearTimeout(glideT);
-    const sp = spotOf(text);
+    const dn = doorNamed(text), sp = dn ? { f: dn.f, u: dn.u, v: dn.v } : spotOf(text);
     if (sp && sp.f != null) {
       room = null; at = { f: sp.f, u: sp.u!, v: sp.v!, label: text }; glided = false;
       if (ver === 'old') { ver = 'main'; reset(); }
@@ -440,6 +449,9 @@
   </div>
   <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
   <div class="side">
+    <!-- the 2023 plan, for who wants it (owner, Oct 24: the top row's spare room; it was a link under the map) -->
+    <button class="rb glass glass-pill" class:on={ver === 'old'} class:away={!!rt.route} use:glass onclick={() => { haptic.tap(); setVer(ver === 'old' ? 'main' : 'old'); }}
+      aria-label={ver === 'old' ? t('map.newPlan') : t('map.oldPlan')} aria-pressed={ver === 'old'}><History size={20} /></button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
       <span class="knob" style:left="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
@@ -451,23 +463,24 @@
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
-  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')} ·
-    <button onclick={() => setVer(ver === 'old' ? 'main' : 'old')}>{ver === 'old' ? t('map.newPlan') : t('map.oldPlan')}</button></p>
+  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')}</p>
   <!-- the bottom, under the thumb: find a room or place, or get out -->
   <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
-    <button class="bar glass glass-pill" use:glass onclick={() => { haptic.tap(); pad = true; }}><Search size={20} />{t('map.find')}</button>
+    <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} />{t('map.find')}</button>
     <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={24} /></button>
   </div>
   {#if card}
     <div class="rcard" data-cover>
       <span class="grab" aria-hidden="true"></span>
-      <div class="rhead"><div><h2><span class="ptb" aria-hidden="true">{t('pad.b')}</span>{cardTitle}</h2><p>{floorName(at ? at.f : (roomFloor ?? 0))}</p></div>
+      <!-- the place itself is the way to another one (owner, Oct 24: an "Other" button beside the route looked wrong) -->
+      <div class="rhead"><button class="rfind" onclick={openPad} aria-label={t('map.other')}>
+          <span class="ptb" aria-hidden="true">{t('pad.b')}</span><span class="rt"><b>{cardTitle}</b><small>{floorName(at ? at.f : (roomFloor ?? 0))}</small></span>
+          <Search size={18} /></button>
         <button class="xb" onclick={clearFound} aria-label={t('common.close')}><X size={18} /></button></div>
-      <div class="btns"><button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
-        <button class="ghost" onclick={() => { haptic.tap(); pad = true; }}><Search size={18} />{t('map.other')}</button></div>
+      <button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
     </div>
   {/if}
-  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
+  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, { title: t('pad.places'), tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
   {#if routing || rt.edit}
     <RouteUI bind:this={ui} {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
   {/if}
@@ -547,6 +560,8 @@
   /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .rb { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
+  .rb.on { background: var(--accent); color: #fff; }
+  .rb.away { opacity: 0; pointer-events: none; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
   .rail { position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
   .rail.away { opacity: 0; transform: translateY(-30px); pointer-events: none; }
@@ -557,7 +572,6 @@
   .rail button.r::after { content: ''; position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
   .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);
     transition: opacity 0.25s; }
-  .note button { font: inherit; color: var(--accent-text); font-weight: 650; }
   .note.away { opacity: 0; pointer-events: none; }
   /* the bottom: the search bar and the exit */
   .dock { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px); display: flex; gap: 10px; transition: transform 0.55s var(--ease-spring), opacity 0.25s; }
@@ -572,15 +586,17 @@
     box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08); animation: rise 0.6s var(--ease-spring); }
   @keyframes rise { from { transform: translate3d(0, 105%, 0); } }
   .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 0 auto 10px; }
-  .rhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .rhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ptb { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; margin-right: 10px; vertical-align: 2px; background: var(--accent); color: #fff;
     font: 800 15px/1 var(--font-display); box-shadow: 0 0 0 4px rgba(59, 107, 255, 0.25); }
-  .rhead h2 { margin: 0; font: 800 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
-  .rhead p { margin: 3px 0 0; color: var(--text-2); font: 550 15px/1.3 var(--font-text); }
+  .rfind { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border-radius: 22px; background: var(--surface-2); color: var(--text-2); text-align: left; }
+  .rfind:active { transform: scale(0.98); }
+  .rfind .rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .rfind b { font: 800 22px/1.15 var(--font-display); letter-spacing: -0.01em; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rfind small { font: 550 14px/1.2 var(--font-text); color: var(--text-2); }
+  .rfind .ptb { margin: 0; vertical-align: 0; flex: none; }
   .xb { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
-  .btns { display: flex; gap: 10px; margin-top: 14px; }
-  .go { flex: 1; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 750 17px/1 var(--font-text); color: #fff;
+  .go { width: 100%; margin-top: 12px; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 750 17px/1 var(--font-text); color: #fff;
     background: linear-gradient(180deg, #5c85ff, #3b6bff 55%, #3457e0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px -8px rgba(59, 107, 255, 0.8); }
-  .ghost { flex: none; height: 56px; padding: 0 20px; border-radius: 28px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; font: 700 16px/1 var(--font-text); color: var(--text); }
   @media (prefers-reduced-motion: reduce) { .rcard { animation: none; } }
 </style>

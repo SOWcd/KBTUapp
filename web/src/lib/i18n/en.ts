@@ -468,6 +468,7 @@ const en: Dict = {
   'route.m.fast': "Fastest",
   'route.m.lift': "By lift",
   'route.rush': "Rush hour: the lifts are packed, expect a wait",
+  'route.m.stairs': "By the stairs",
   'route.m.alt': "Another way",
   'route.sameFloor': "On this floor",
   'route.openTill': "Open till {time}",
