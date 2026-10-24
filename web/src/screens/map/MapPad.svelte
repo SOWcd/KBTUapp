@@ -10,9 +10,11 @@
   /** " · administration area" after a room on floor 4's south side (owner, Oct 24), else nothing */
   export const adminNote = (r: string | null | undefined) => (adminZone(r) ? ' \u00b7 ' + tr('route.admin') : '');
   /** the places people know by name, with where they are */
-  export function placeTiles(): PadTile[] {
-    return SPOTS.map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}${adminNote(s.room)}` : fl(s.f ?? 0) }; });
+  export function placeTiles(adm = false): PadTile[] {
+    return SPOTS.filter((s) => !!s.adm === adm).map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}${adminNote(s.room)}` : fl(s.f ?? 0) }; });
   }
+  /** the places, then the offices under their own title (owner, Oct 24: "not really needed, can stay") */
+  export const placeGroups = () => [{ title: tr('pad.places'), tiles: placeTiles() }, { title: tr('pad.admin'), tiles: placeTiles(true) }];
   /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (owner, Oct 24:
    *  "from one entrance to another, through the building") */
   export function exitTiles(g: Graph | null): PadTile[] {
@@ -190,14 +192,16 @@
   .pad button.x:global(.hit) { background: var(--surface-2); color: var(--text); }
   .pad button.l { font: 650 22px/1 var(--font-text); }
   .pad button.l.off { opacity: 0.25; }
-  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: max-content; gap: 8px; align-content: start; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
   .tiles::-webkit-scrollbar { display: none; }
   .cap { grid-column: 1 / -1; margin: 4px 2px 0; font: 650 12px/1 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
   .tile { min-height: 58px; padding: 8px 12px; border-radius: 18px; background: var(--surface); display: flex; align-items: center; gap: 10px; text-align: left;
     font: 620 13.5px/1.2 var(--font-text); color: var(--text); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
-  .tile b { font-weight: 640; }
+  .tile > span:last-child { min-width: 0; }
+  /* a long name: two lines at most, the floor line one (owner, Oct 24: names spilled over the next row) */
+  .tile b { font-weight: 640; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; hyphens: auto; }
   .tile small::first-letter { text-transform: uppercase; }
-  .tile small { display: block; margin-top: 2px; color: var(--text-3); font: 500 12px/1.2 var(--font-text); }
+  .tile small { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-3); font: 500 12px/1.2 var(--font-text); }
   .ti { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent-text); }
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }

@@ -22,8 +22,8 @@ it('finds the floor of a room, never of an address', () => {
   expect(floorOf('Independence Hall')).toBe(2);
   expect(floorOf('Halyk Arena')).toBe(null); // an arena in town, not the co-working's floor
   expect(roomOf('Kunaev Hall')).toBe('400a');
-  expect(spotOf('\u041d\u0430\u0443\u0447\u043d\u0430\u044f \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430')?.room).toBe('158'); // UNI-Q's names, any language
-  expect(spotOf('Research Library')?.room).toBe('158');
+  expect(spotOf('\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430')?.room).toBe('158'); // UNI-Q's names, any language
+  expect(spotOf('Library')?.room).toBe('158');
   expect(adminZone('466')).toBe(true);
   expect(adminZone('470')).toBe(false);
   expect(roomOf('Al-Farabi Hall')).toBe('470');

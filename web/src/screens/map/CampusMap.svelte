@@ -33,7 +33,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
-  import MapPad, { placeTiles, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
@@ -480,7 +480,7 @@
       <button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
     </div>
   {/if}
-  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, { title: t('pad.places'), tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
+  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, ...placeGroups()]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
   {#if routing || rt.edit}
     <RouteUI bind:this={ui} {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
   {/if}

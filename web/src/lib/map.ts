@@ -48,14 +48,14 @@ const INDEP = /\u043d\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043c|\u0442\u04
 /** Places people know by name, buttons on "Help me get out" and words in "from/to" (owner, Oct 19): a hall is its room;
  *  the canteen and Halyk Co-working have no number, so a point on the main map's plan (read off it). The escapes: the
  *  Russian and Kazakh for canteen, the Russian for co-working and Halyk. */
-export type Spot = { k: string; re?: RegExp; room?: string; f?: number; u?: number; v?: number };
+export type Spot = { k: string; re?: RegExp; room?: string; f?: number; u?: number; v?: number; adm?: boolean }; // adm: offices, a group of their own
 export const SPOTS: Spot[] = [
   { k: 'canteen', re: /\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|canteen|cafeteria/i, f: 0, u: 0.552, v: 0.602 },
   { k: 'cowork', re: /\u043a\u043e\u0432\u043e\u0440\u043a|\u0445\u0430\u043b\u044b\u043a|co-?work|halyk/i, f: 1, u: 0.496, v: 0.457 },
   { k: 'kunaev', re: HALLS[0][0], room: '400a' },
   { k: 'farabi', re: HALLS[1][0], room: '470' },
   { k: 'indep', re: INDEP, f: 2, u: 0.498, v: 0.613 },
-  // UNI-Q's named rooms (owner, Oct 24: all of them in Places, to route to and from), known by their name in any language
+  // UNI-Q's named rooms (owner, Oct 24: all of them in Places, to route to and from; short names), known by name in any language
   { k: 'library', room: '158' },
   { k: 'career', room: '152' },
   { k: 'students', room: '155' },
@@ -64,13 +64,13 @@ export const SPOTS: Spot[] = [
   { k: 'marine', room: '255' },
   { k: 'gamedev', room: '47' },
   { k: 'honeywell', room: '140' },
-  { k: 'security', room: '250a' },
-  { k: 'dispatch', room: '1' },
-  { k: 'rector', room: '466' },
-  { k: 'vrScience', room: '415' },
-  { k: 'vrSocial', room: '472' },
-  { k: 'legal', room: '503' },
-  { k: 'accounting', room: '523' },
+  { k: 'security', room: '250a', adm: true },
+  { k: 'dispatch', room: '1', adm: true },
+  { k: 'rector', room: '466', adm: true },
+  { k: 'vrScience', room: '415', adm: true },
+  { k: 'vrSocial', room: '472', adm: true },
+  { k: 'legal', room: '503', adm: true },
+  { k: 'accounting', room: '523', adm: true },
 ];
 /** The named place a text means: "Canteen", "halyk co-working"; a number in it is a room or an address, never a spot */
 const named = (s: Spot) => [ru, kk, en].map((d) => d[`route.spot.${s.k}` as 'route.spot.canteen'] as string);

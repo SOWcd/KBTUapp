@@ -29,7 +29,7 @@
   import { roomOf, floorOf, nearRooms, spotOf, adminZone, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
-  import MapPad, { placeTiles, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
 
   let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
@@ -231,11 +231,11 @@
     </div>
   </div>
 {:else if leaving}
-  <MapPad title={t('pad.whereTitle')} go={t('route.lead')} point="a" placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} {check}
+  <MapPad title={t('pad.whereTitle')} go={t('route.lead')} point="a" placeTab={t('pad.place')} groups={placeGroups()} {check}
           onsubmit={(v) => { from = v; const o = optionsFor(v, true)[0]; if (o) start(o); }} {onclose} />
 {:else if !asked}
   <MapPad title={t('pad.fromTitle')} go={t('pad.showWays')} point="a" placeTab={t('pad.entranceOrPlace')} start={from}
-          groups={[{ title: t('pad.entrances'), tiles: exits }, { title: t('pad.places'), tiles: placeTiles() }]} {check}
+          groups={[{ title: t('pad.entrances'), tiles: exits }, ...placeGroups()]} {check}
           onsubmit={(v) => { haptic.tap(); from = v; asked = true; }} {onclose} />
 {:else}
   <div class="scrim" onclick={onclose} aria-hidden="true"></div>
