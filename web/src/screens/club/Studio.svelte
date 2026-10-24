@@ -13,6 +13,7 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
+  import { glass } from '../../ui/glass';
   import { api, type EventCard, type Id, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
@@ -103,26 +104,24 @@
 <div class="page scroll">
   {#if m}
     <header class="hd">
-      <!-- the club's name switches clubs (owner, Oct 23, A3) and holds its page's settings: no chips row, no pencil (Oct 24) -->
-      {#if mine.length > 1 || vice}
-        <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>
-          <OrgLogo org={m.org} size={46} />
-          <span class="name"><span class="h"><h1 class="ellipsis">{m.org.name}</h1><ChevronDown size={20} strokeWidth={2.6} class="chev" /></span>
-            <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
-        </button>
-      {:else}
-        <div class="title">
-          <OrgLogo org={m.org} size={46} />
-          <span class="name"><h1 class="ellipsis">{m.org.name}</h1>
-            <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
-        </div>
-      {/if}
+      <!-- the club's name switches clubs (owner, Oct 23, A3; no chips row); the pencil to its page stays top right, in glass
+           (owner, Oct 24: not inside the list) -->
+      {#snippet who()}
+        <OrgLogo org={m.org} size={46} />
+        <span class="name"><span class="h"><h1 class="ellipsis">{m.org.name}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
+          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
+      {/snippet}
+      <div class="row">
+        {#if mine.length > 1}
+          <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>{@render who()}</button>
+        {:else}<div class="title">{@render who()}</div>{/if}
+        {#if vice}<button class="ic glass glass-pill" use:glass onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} strokeWidth={2.2} /></button>{/if}
+      </div>
       {#if picking}
         <div class="pick surface" transition:fold>
           {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
             <button onclick={() => { haptic.tap(); ui.club = x.org.id; seg = 0; picking = false; }}><OrgLogo org={x.org} size={30} /><span class="tx"><b class="ellipsis">{x.org.name}</b><i class="t-foot ellipsis">{roleName(x.role, x.title)}</i></span></button>
           {/each}
-          {#if vice}<button onclick={() => { picking = false; sheets.clubEdit(m.org.id); }}><span class="pi"><Pencil size={17} /></span><span class="tx"><b>{t('ce.title')}</b></span><ChevronRight size={18} /></button>{/if}
         </div>
       {/if}
     </header>
@@ -217,7 +216,12 @@
   .title { display: flex; align-items: center; gap: 12px; }
   .name { flex: 1; min-width: 0; }
   .name h1 { font: 800 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
-  button.title { width: 100%; text-align: left; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .title { flex: 1; min-width: 0; }
+  button.title { text-align: left; }
+  .ic { position: relative; flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
+    transition: transform 0.45s var(--ease-bounce); }
+  .ic:active { transform: scale(0.9); transition-duration: 80ms; }
   button.title:active { opacity: 0.7; }
   .h { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .h :global(.chev) { flex: none; color: var(--text-3); transition: transform var(--t-base) var(--ease); }
@@ -229,7 +233,6 @@
   .pick .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .pick .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
   .pick .tx i { font-style: normal; }
-  .pi { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
   .role { display: flex; align-items: center; gap: 5px; }
   .role :global(svg) { color: #FFB23D; }
   .todo { display: flex; flex-direction: column; margin-bottom: 18px; padding: 4px 0; }
