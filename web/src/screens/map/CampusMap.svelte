@@ -374,7 +374,7 @@
   function appear() {
     if (appeared || gone) return;
     appeared = true; shownAt = performance.now();
-    if (iris) panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, { duration: 460, easing: 'cubic-bezier(.3, .9, .3, 1)' });
+    if (iris) { const o = { duration: 460, easing: 'cubic-bezier(.3, .9, .3, 1)' }; panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o); halo(30, reach(iris.at), o, [1, 1, 0]); }
     else panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
     undoChrome = hideChrome();
   }
@@ -386,6 +386,16 @@
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
     return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at });
   })();
+  // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
+  // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
+  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[]) {
+    if (!iris) return;
+    const h = document.createElement('i');
+    h.className = 'map-halo';
+    h.style.cssText = `left:${iris.at.x}px;top:${iris.at.y}px`;
+    document.body.append(h);
+    h.animate({ width: [`${from * 2}px`, `${to * 2}px`], height: [`${from * 2}px`, `${to * 2}px`], opacity }, o).finished.catch(() => {}).finally(() => h.remove());
+  }
 
   onMount(() => {
     reset(); goHome();
@@ -404,7 +414,8 @@
     gone = true;
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
     const a = iris
-      ? panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' })
+      ? (halo(reach(iris.at), 30, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)' }, [1, 1, 0]),
+        panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' }))
       : panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
@@ -502,6 +513,10 @@
 </div>
 
 <style>
+  :global(.map-halo) {
+    position: fixed; z-index: 9999; translate: -50% -50%; border-radius: 50%; pointer-events: none;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 0 22px 5px rgba(130, 165, 255, 0.6), inset 0 0 26px 6px rgba(130, 165, 255, 0.5);
+  }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
   /* the main map's paper all round, white, or inverted with the plan in the dark look */
