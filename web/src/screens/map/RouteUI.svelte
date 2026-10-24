@@ -108,18 +108,20 @@
     const via = past.length ? ' ' + t('route.past', { names: past.join(', ') }) : '';
     if (!last) {
       const lift = leg.up?.k === 'l', up = leg.to! > leg.f;
-      return t(lift ? (up ? 'route.liftUp' : 'route.liftDown') : up ? 'route.stairsUp' : 'route.stairsDown', { floor: floorName(leg.to!), near: nearRoom(leg) }) + via;
+      return t(lift ? (up ? 'route.liftUp' : 'route.liftDown') : up ? 'route.stairsUp' : 'route.stairsDown', { floor: floorName(leg.to!), near: nearRoom(leg) }).replace(/^./, (c) => c.toUpperCase()) + via; // kk: no room, a small letter first
     }
     const p = chosen?.exit ? null : place(dest);
     return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : p?.near ? t('route.toNear', { room: p.near, near: p.room })
       : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: p?.room ?? dest })) + via;
   }
-  /** which stairs: the room whose door is nearest to them, "the stairs by 384" (a friend's note, Oct 16: a floor has several) */
+  /** which stairs: " by" the room whose door is nearest to them, or nothing, "the stairs by 384" (a friend's note, Oct 16: a floor has several) */
   function nearRoom(leg: Leg): string {
     const s = leg.up ?? leg.pts[leg.pts.length - 1], by = (n: MapNode) => Math.hypot(n.u - s.u, (n.v - s.v) * ar);
     const ok = (r: string) => /^\d/.test(r) && r !== roomOf(from); // not "the stairs by 351" to someone standing at 351
-    const doors = rt.graph!.n.filter((n) => n.f === leg.f && n.r?.some(ok)).sort((x, y) => by(x) - by(y));
-    return doors[0]?.r!.find(ok) ?? '';
+    // only a door right by them: a far one names the stairs on the other side (owner, Oct 24: "the stairs by 728" sent left)
+    const doors = rt.graph!.n.filter((n) => n.f === leg.f && n.r?.some(ok) && by(n) < 0.1).sort((x, y) => by(x) - by(y));
+    const r = doors[0]?.r!.find(ok);
+    return r ? t('route.by', { room: r }) : '';
   }
   const p_isEnd = (name: string) => name === chosen?.exit?.name;
 

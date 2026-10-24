@@ -16,9 +16,10 @@ it('finds the floor of a room, never of an address', () => {
   expect(roomOf('305 \u0438 306')).toBe('305');
   expect(roomOf('305\u043a\u0430\u0431')).toBe('305');
   expect(floorOf('251a')).toBe(2);
-  // Independence Hall's wing is 7xx on floor 2 (owner, Oct 15), by number or by name; the basement's 70 stays below
+  // Independence Hall's wing is 7xx on floor 2 (owner, Oct 15); the basement's 70 stays below
   expect(floorOf('728')).toBe(2);
-  expect(roomOf('Independence Hall')).toBe('726');
+  expect(roomOf('Independence Hall')).toBe(null); // the round hall, a place without a number (owner, Oct 24)
+  expect(floorOf('Independence Hall')).toBe(2);
   expect(roomOf('Al-Farabi Hall')).toBe('470');
   expect(spotOf('Halyk Co-working')?.f).toBe(1);
   expect(spotOf('Canteen 5')).toBe(null);

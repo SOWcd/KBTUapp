@@ -251,7 +251,11 @@
   // the map's controls (owner, Oct 24, mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
   // a lift panel on the right with the look button above it; every input is our keypad (MapPad), no system keyboard
   let pad = $state(false);
-  let at = $state<{ f: number; u: number; v: number; label: string } | null>(null); // a found place without a number (canteen)
+  // a found place without a number (canteen, Independence Hall); the schedule can open the map on one
+  let at = $state<{ f: number; u: number; v: number; label: string } | null>(untrack(() => {
+    const sp = place && !room ? spotOf(place) : null;
+    return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
+  }));
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
   function checkFind(text: string): PadCheck {
     const sp = spotOf(text);
@@ -285,7 +289,7 @@
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
   function fit() { halt(); framed = null; zoomTo(...home(), 420); }
-  const railFloors = $derived([5, 4, 3, 2, 1, 0].filter((n) => ver === 'main' || FLOORS[n]));
+  const railFloors = $derived([0, 1, 2, 3, 4, 5].filter((n) => ver === 'main' || FLOORS[n]));
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
     if (glided) return;
@@ -315,7 +319,7 @@
     // offsets, not rects: a card still rising (a transform) would measure short
     const H = panel.clientHeight; let bottom = 0;
     panel.querySelectorAll<HTMLElement>('[data-cover]').forEach((el) => { bottom = Math.max(bottom, H - el.offsetTop); });
-    return { top: 8, bottom: bottom ? bottom + 12 : 0 };
+    return { top: 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
   }
   /** glide to show all of `pts`, between the buttons at the top and `inset` px at the bottom (a route's card): the whole
    *  step, never closer than it fits (owner, Oct 15: the way didn't fit and he had to find himself) */
@@ -366,6 +370,7 @@
 
   onMount(() => {
     reset(); goHome();
+    if (at) glideTo(at.u, at.v, 3.2, true);
     appear();
     const ro = new ResizeObserver(() => { clamp(); paint(); clearTimeout(reframeT); reframeT = window.setTimeout(reframe, 200); });
     const d = document.documentElement.dataset;
@@ -433,17 +438,17 @@
       {/if}
     </div>
   </div>
-  <!-- right edge: the map's look (the menu), the floors as a lift panel ("whole floor" dropped: owner, Oct 24, no use) -->
+  <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
   <div class="side">
-    <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
-    <button class="rb glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)} aria-label={t('map.theme')}>
-      {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
-      <span class="knob" style:top="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
+      <span class="knob" style:left="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
       {#each railFloors as n (n)}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
+    <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
+    <button class="rb glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)} aria-label={t('map.theme')}>
+      {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
   <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')} ·
@@ -540,16 +545,16 @@
   .node.sel { outline: 3px solid var(--text); outline-offset: 2px; }
 
   /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
-  .side { position: absolute; z-index: 2; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .rb { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
-  .rail { position: relative; display: flex; flex-direction: column; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
-  .rail.away { opacity: 0; transform: translateX(40px); pointer-events: none; }
-  .rail .knob { position: absolute; left: 4px; right: 4px; height: 42px; border-radius: 21px; transition: top 0.5s var(--ease-spring);
+  .rail { position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
+  .rail.away { opacity: 0; transform: translateY(-30px); pointer-events: none; }
+  .rail .knob { position: absolute; top: 4px; bottom: 4px; width: 42px; border-radius: 21px; transition: left 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
   .rail button { position: relative; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
   .rail button.on { color: #0a0f24; }
-  .rail button.r::after { content: ''; position: absolute; right: 3px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
+  .rail button.r::after { content: ''; position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
   .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);
     transition: opacity 0.25s; }
   .note button { font: inherit; color: var(--accent-text); font-weight: 650; }

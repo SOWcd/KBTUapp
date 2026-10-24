@@ -37,10 +37,11 @@ export const normRoom = (s: string): string =>
 /** Halls the portal names instead of numbering them (owner, Oct 7: the Kunaev hall is 400a). A name with a digit in it is
  *  an address, never a hall: Kunaev is a street in Almaty too. The escapes: Kunaev in Russian and in Kazakh. */
 const HALLS: [RegExp, string][] = [[/\u043a\u0443\u043d\u0430\u0435\u0432|\u049b\u043e\u043d\u0430\u0435\u0432|kunaye?v/i, '400a'],
-  // Independence Hall (owner, Oct 15): its big room, 726. The escapes: "nezavisim" in Russian, "tauelsiz" in Kazakh.
-  [/\u043d\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043c|\u0442\u04d9\u0443\u0435\u043b\u0441\u0456\u0437|independence/i, '726'],
   // Al-Farabi Hall (owner, Oct 19): 470. The escape: "farabi" in Russian and Kazakh.
   [/\u0444\u0430\u0440\u0430\u0431\u0438|farabi/i, '470']];
+/** Independence Hall (owner, Oct 24: not 726, the round hall in the middle of floor 2). The escapes: "nezavisim" in
+ *  Russian, "tauelsiz" in Kazakh. */
+const INDEP = /\u043d\u0435\u0437\u0430\u0432\u0438\u0441\u0438\u043c|\u0442\u04d9\u0443\u0435\u043b\u0441\u0456\u0437|independence/i;
 /** Places people know by name, buttons on "Help me get out" and words in "from/to" (owner, Oct 19): a hall is its room;
  *  the canteen and Halyk Co-working have no number, so a point on the main map's plan (read off it). The escapes: the
  *  Russian and Kazakh for canteen, the Russian for co-working and Halyk. */
@@ -49,8 +50,8 @@ export const SPOTS: Spot[] = [
   { k: 'canteen', re: /\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|canteen|cafeteria/i, f: 0, u: 0.552, v: 0.602 },
   { k: 'cowork', re: /\u043a\u043e\u0432\u043e\u0440\u043a|\u0445\u0430\u043b\u044b\u043a|co-?work|halyk/i, f: 1, u: 0.496, v: 0.457 },
   { k: 'kunaev', re: HALLS[0][0], room: '400a' },
-  { k: 'farabi', re: HALLS[2][0], room: '470' },
-  { k: 'indep', re: HALLS[1][0], room: '726' },
+  { k: 'farabi', re: HALLS[1][0], room: '470' },
+  { k: 'indep', re: INDEP, f: 2, u: 0.498, v: 0.613 },
 ];
 /** The named place a text means: "Canteen", "halyk co-working"; a number in it is a room or an address, never a spot */
 export const spotOf = (text: string): Spot | null => (/\d/.test(text) ? null : SPOTS.find((s) => s.re.test(text)) ?? null);
@@ -64,11 +65,12 @@ export function roomOf(place: string | null | undefined): string | null {
   if (b) return normRoom(b[1]);
   return /\d/.test(p) ? null : HALLS.find(([re]) => re.test(p))?.[1] ?? null;
 }
-/** Its floor: the room's first digit ("305" → 3), 0 for the basement's 1-99; 7xx is Independence Hall's wing on floor 2
+/** Its floor: the room's first digit (or a named place's floor) ("305" → 3), 0 for the basement's 1-99; 7xx is Independence Hall's wing on floor 2
  *  (owner, Oct 15). Compare with null: 0 is a floor. */
 export function floorOf(place: string | null | undefined): number | null {
   const r = roomOf(place);
-  return r == null ? null : /^7\d\d/.test(r) ? 2 : /^\d{3}/.test(r) ? Number(r[0]) : 0;
+  if (r == null) return place ? spotOf(place)?.f ?? null : null; // a place without a number: the canteen, Independence Hall
+  return /^7\d\d/.test(r) ? 2 : /^\d{3}/.test(r) ? Number(r[0]) : 0;
 }
 
 /** The dormitory: the portal names classes held there "DMiS ..." (PE: "DMiS OFP (Rugby)..."); the schedule shows a
