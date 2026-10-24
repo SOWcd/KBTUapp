@@ -16,12 +16,9 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth, dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
-  import Hash from '@lucide/svelte/icons/hash';
   import TelegramMark from '../../ui/TelegramMark.svelte';
+  import ChatKind from '../../ui/ChatKind.svelte';
   import CreateClubCard from '../../ui/CreateClubCard.svelte';
-  import Check from '@lucide/svelte/icons/check';
-  import Megaphone from '@lucide/svelte/icons/megaphone';
-  import UsersRound from '@lucide/svelte/icons/users-round';
   import { type Chat } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
@@ -32,7 +29,7 @@
   const chats = $derived(data.chats);
   $effect(() => { if ((session.me?.id ?? null) !== chatsFor) loadChats(); });
   function tapChat(c: Chat) {
-    void openChat(c).then(() => { if (chats) data.chats = { forYou: chats.forYou.map((x) => (x.id === c.id ? { ...x, opened: true } : x)), all: chats.all.map((x) => (x.id === c.id ? { ...x, opened: true } : x)) }; });
+    void openChat(c);
   }
   // clubs come first; KBTU's eleven schools after them under their own heading, no tab of their own (owner, Oct 14:
   // "schools matter less than clubs"; Oct 20: "there, but not up front")
@@ -101,8 +98,7 @@
             <span class="cav" class:sq={c.kind === 'forum'} style={c.photo ? '' : `background:${tint(c.title)}`}>
               {#if c.photo}<img src={c.photo} alt="" />{:else}<em>{initials(c.title)}</em>{/if}
               <!-- what it is, Telegram's way: a channel, a group, a group with topics -->
-              <i class="kind {c.kind}" title={t(`chats.${c.kind}`)}>{#if c.kind === 'channel'}<Megaphone size={12} strokeWidth={2.6} />{:else if c.kind === 'forum'}<Hash size={12} strokeWidth={2.6} />{:else}<UsersRound size={12} strokeWidth={2.6} />{/if}</i>
-              {#if c.opened}<span class="tick"><Check size={10} strokeWidth={3.2} /></span>{/if}
+              <span class="kind"><ChatKind kind={c.kind} /></span>
             </span>
             <b>{c.title}</b>
             {#if c.members}<small><TelegramMark size={10} />{compact(c.members)}</small>{/if}
@@ -177,9 +173,8 @@
   .cav img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
   .cav em { font: 800 21px/1 var(--font-display); font-style: normal; letter-spacing: -0.02em; }
   .add .cav { background: none; color: var(--text-2); box-shadow: inset 0 0 0 1.5px var(--line-2); }
-  .kind { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #2AABEE; box-shadow: 0 0 0 2.5px var(--bg); }
-  .kind.group { background: #7C4DFF; } .kind.forum { background: #F08A3C; }
-  .tick { position: absolute; right: -2px; top: -2px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--success); color: #fff; box-shadow: 0 0 0 2.5px var(--bg); }
+  .kind { position: absolute; right: -3px; bottom: -3px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--bg); }
+  .sq .kind { border-radius: 32%; }
 
   /* clubs: tiles, two a row; the club's emoji as a faint ghost in the corner; the bell its own button */
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
