@@ -1175,9 +1175,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input")
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/savePreparedInlineMessage", json={
-                    "user_id": request.state.tg["id"], "result": result,
-                    "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True})).json()
+                async def save(res: dict) -> dict:
+                    return (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/savePreparedInlineMessage", json={
+                        "user_id": request.state.tg["id"], "result": res,
+                        "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True})).json()
+                # the pack's emoji in the card too (owner, Oct 24); the card goes as the user's own message, which Bot API
+                # 9.4 doesn't promise, so a refusal saves it again plain. The pack lives where the postman runs: loaded here once
+                if not bot._custom:
+                    await bot.load_pack(cfg, http)
+                msg = result["input_message_content"]
+                fancy = {**result, "input_message_content": {**msg, "message_text": bot.premium(msg["message_text"])}}
+                r = await save(fancy)
+                if not r.get("ok") and fancy != result:
+                    log.warning("share card, emoji refused: %s", r.get("description"))
+                    r = await save(result)
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("share card: %s", type(exc).__name__)
             raise ApiError("unavailable", "telegram") from None
