@@ -28,9 +28,11 @@
   const student = $derived(!!me?.student); // a boolean: a fresh Me (the dot's count) doesn't reload the page
   // loaded with the app (and kept for the next launch), so the page opens full; coming into view refreshes it quietly
   const casts = $derived(data.news?.casts ?? []);
-  // every public post, not only my clubs' (the circles on List keep those): this page's own copy, fresh on each visit
-  let posts = $state<Post[] | null>(null);
-  const loadAll = () => api.posts('all').then((l) => (posts = l)).catch(() => (posts ??= []));
+  // every public post, not only my clubs' (the circles on List keep those): the copy the app loads with the Afisha and
+  // keeps for the next launch, so the page opens full (owner, Oct 24: it used to wait for its own request); each visit
+  // refreshes it quietly
+  const posts = $derived(data.eventsReady ? data.posts : null);
+  const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
   $effect(() => { if (here) untrack(() => { if (student) void loadNews(); void loadAll(); }); }); // staff read the feed too
   $effect(() => { if (here && casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
@@ -57,7 +59,7 @@
     try {
       await api.hidePost(p.id);
       if (data.news) data.news = { casts: data.news.casts.filter((x) => x.id !== p.id), posts: data.news.posts.filter((x) => x.id !== p.id) };
-      posts = posts?.filter((x) => x.id !== p.id) ?? null;
+      data.posts = data.posts.filter((x) => x.id !== p.id);
       haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
@@ -75,7 +77,7 @@
       const fresh = await api.feature(p.id, days);
       const put = (l: Post[]) => l.map((x) => (x.id === p.id ? fresh : days ? { ...x, featured: false } : x));
       if (data.news) data.news = { casts: put(data.news.casts), posts: put(data.news.posts) };
-      if (posts) posts = put(posts);
+      data.posts = put(data.posts);
       haptic.ok(); say(days ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d');
       void loadAfisha(); // List's card follows
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }

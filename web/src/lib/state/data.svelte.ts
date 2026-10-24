@@ -92,6 +92,7 @@ export async function loadAfisha(): Promise<void> {
   try {
     const [events, orgs, schedule, posts] = await Promise.all([api.events(), api.orgs(), api.schedule(), api.posts('all')]);
     data.events = events; data.orgs = orgs; data.schedule = joinClasses(schedule); data.posts = posts;
+    warm(posts.slice(0, 4).map((p) => p.photo?.url)); // Afisha's News page opens with its first photos in place
     data.error = false;
   } catch { data.error = true; }
   data.eventsReady = true;

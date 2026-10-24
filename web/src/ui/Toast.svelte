@@ -27,13 +27,18 @@
     const el = pill;
     if (!el || !from || still()) return;
     const to = el.offsetWidth;
-    if (Math.abs(to - from) > 1) el.animate({ width: [`${from}px`, `${to}px`] }, { duration: 420, easing: 'cubic-bezier(.32, 1.25, .4, 1)' });
+    if (Math.abs(to - from) < 2) return;
+    // one line while the width moves (owner's video, Oct 24: the narrow start wrapped the new line, the pill grew a
+    // line taller and jumped up); the final width is that line's own, so nothing wraps at the end either
+    el.classList.add('morph');
+    el.animate({ width: [`${from}px`, `${to}px`] }, { duration: 420, easing: 'cubic-bezier(.32, 1.25, .4, 1)' }).finished
+      .catch(() => {}).finally(() => el.classList.remove('morph'));
   });
 
   // the old line leaves where it stood: out of the flow at once, so the pill measures the new one
   function leave(node: HTMLElement) {
     const { offsetLeft: l, offsetTop: t } = node;
-    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;`;
+    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;white-space:nowrap;`;
     return { duration: still() ? 0 : 160, css: (k: number) => `opacity:${k};filter:blur(${(1 - k) * 4}px)` };
   }
   function come(_node: HTMLElement, { first }: { first: boolean }) {
@@ -73,6 +78,7 @@
   :global(html[data-map]) .toast { bottom: calc(var(--safe-bottom) + 108px); } /* above the map's floors and its note */
   .em { display: flex; flex: none; }
   .tx { min-width: 0; }
+  .toast:global(.morph) .tx { white-space: nowrap; }
   .bounce { display: flex; animation: bounce 560ms cubic-bezier(.3, 1.6, .5, 1) 60ms both; }
   @keyframes pop { from { transform: translate(-50%, 14px) scale(0.92); } }
   @keyframes drop { from { transform: translate(-50%, -14px) scale(0.92); } }
