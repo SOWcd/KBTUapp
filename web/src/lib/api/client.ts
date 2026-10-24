@@ -88,6 +88,7 @@ export const server: Api = {
   deleteInfo: () => call('GET', '/me/delete'),
   consent: (version) => call('POST', '/me/consent', { version }),
   keepMe: () => call('POST', '/me/keep'),
+  dmOn: (event?: Id) => call('POST', '/me/dm', { event }),
 
   events: (q = {}) => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
   pastEvents: () => call('GET', '/events/past'),

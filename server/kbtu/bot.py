@@ -279,10 +279,10 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
     e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
     if not e or (kind != "event_cancelled" and e["status"] != "published"):
         return None
-    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free"):  # a club's own event has no ticket (owner, Oct 6)
+    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket (owner, Oct 6)
         kind += "_team"
     text, button = texts.bot_message(lang, kind, title=e["title"], when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang), org=e["org_name"])
-    return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free') else 'ev'}_{e['id']}"
+    return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
 
 
 def purge(cfg: Config, con) -> None:

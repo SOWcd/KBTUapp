@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import type { Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
-  import { eventById, toggleGoing, declineInvite } from '../../lib/state/data.svelte';
+  import { eventById, toggleGoing, declineInvite, askDm } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
@@ -16,6 +16,7 @@
   import { calendarUrl } from '../../lib/calendar';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import Bell from '@lucide/svelte/icons/bell';
   import { glass } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -116,6 +117,8 @@
     {#if valid && !my?.checkedInAt}<p class="hint">{t('tk.hint')}</p>{/if}
     <!-- the receipt looks wrong (§4.3): why, and another file in its place, in the pay sheet -->
     {#if valid && my?.receiptFlags?.length}<button class="pill glass glass-pill doubt" use:glass onclick={() => { close(overlay.id); sheets.pay(id); }}><TriangleAlert size={17} />{t('tk.receiptDoubt')}</button>{/if}
+    <!-- the bot may not write yet: no reminders, no ticket in the chat (owner, Oct 24) -->
+    {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
     <div class="acts">
       {#if valid && !started}
         <button class="pill glass glass-pill" use:glass onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={18} />{t('tk.calendar')}</button>

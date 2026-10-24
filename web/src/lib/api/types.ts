@@ -162,6 +162,7 @@ export interface Me {
   msPending?: { first: string; last: string; email: string } | null; // signed in with Microsoft, the student ID still to type
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
+  canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)
   founder: boolean;
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests

@@ -6,7 +6,7 @@ import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
 import { sheets } from './sheets';
-import { haptic } from '../tg';
+import { haptic, requestWriteAccess } from '../tg';
 import { burst } from '../../ui/burst';
 import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
@@ -173,11 +173,23 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       else if (st === 'going') { haptic.ok(); burst(false, undefined, after.emoji); say(phrase('say.going'), 'party_popper_3d'); }
       else if (st === 'waitlist') { haptic.tap(); say(phrase('say.wait'), 'pleading_face_3d'); }
       else if (st === 'hold') { haptic.tap(); say(phrase('say.hold'), 'sparkles_3d'); onPaid?.(after); }
+      if (!leaving && st !== 'hold') setTimeout(() => void askDm(id), 1300);
     } catch (e) {
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
     }
   }, 'go_' + id);
+}
+
+/** The bot can't write to someone who never opened it: Telegram's own "allow messages", asked when it pays off (just
+ *  signed up), and the server knows at once and sends this event's confirmation (owner, Oct 24). Asked once by itself;
+ *  the ticket's "Turn on reminders" asks again. */
+export async function askDm(eid?: Id, again = false): Promise<void> {
+  if (!session.me || session.me.canDm) return;
+  try { if (!again && localStorage.getItem('kb-dm-asked')) return; localStorage.setItem('kb-dm-asked', '1'); } catch { /* blocked */ }
+  say(t('dm.why'), 'speech_balloon_3d');
+  if (!(await requestWriteAccess())) return;
+  try { session.me = await api.dmOn(eid); haptic.ok(); say(t('dm.on'), 'speech_balloon_3d'); } catch { /* the next launch tells the server */ }
 }
 
 /** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */

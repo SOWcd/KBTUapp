@@ -183,6 +183,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def consent(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.consent(con, v, body.get("version"))
 
+    @app.post("/api/me/dm")
+    def dm_on(body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.dm_on(con, v, (body or {}).get("event"))
+
     @app.post("/api/me/keep")
     def keep_me(con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.keep_me(con, v)

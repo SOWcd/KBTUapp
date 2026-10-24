@@ -836,7 +836,7 @@ def me(con, v: Viewer) -> dict:
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
-        "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
+        "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
@@ -1023,6 +1023,16 @@ def consent(con, v: Viewer, version: object) -> dict:
         raise ApiError("bad_input")
     con.execute("UPDATE students SET consent_version = ?, consent_at = ? WHERE user_id = ? AND consent_version NOT IN ('staff', 'admin')",
                 (version, now(), v.id))
+    return me(con, v)
+
+
+def dm_on(con, v: Viewer, eid: object) -> dict:
+    """Telegram's "allow messages" said yes inside the app: the bot may write from now on, not from the next launch
+    (the launch data said no). The event just signed up for gets its confirmation with the ticket (owner, Oct 24). A
+    false yes costs nothing: the bot's first 403 turns it off again."""
+    con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (v.id,))
+    if type(eid) is int and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", eid, v.id):
+        notify(con, v.id, "going_ok", f"event:{eid}")
     return me(con, v)
 
 

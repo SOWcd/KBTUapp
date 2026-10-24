@@ -14,7 +14,7 @@
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
-  import { haptic, requestWriteAccess, openLink, on } from '../../lib/tg';
+  import { haptic, openLink, on } from '../../lib/tg';
   import { nowTs, parts } from '../../lib/time';
 
   let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
@@ -58,7 +58,7 @@
     try {
       session.me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, CONSENT_VERSION);
       haptic.ok();
-      say(phrase('say.welcome', { name: session.me.student?.firstName ?? '' }), 'partying_face_3d'); void requestWriteAccess();
+      say(phrase('say.welcome', { name: session.me.student?.firstName ?? '' }), 'partying_face_3d');
       await loadAfisha();
       close(overlay.id);
       setTimeout(() => after?.(), 380);

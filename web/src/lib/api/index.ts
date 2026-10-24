@@ -23,6 +23,7 @@ export interface Api {
   deleteInfo(): Promise<{ photos: number; paid: boolean }>;      // what the delete sheet says first
   consent(version: string): Promise<Me>;                         // agree to a new policy version
   keepMe(): Promise<Me>;
+  dmOn(event?: Id): Promise<Me>;
 
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;
   pastEvents(): Promise<EventCard[]>;

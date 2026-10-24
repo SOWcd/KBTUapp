@@ -3891,3 +3891,26 @@ def test_staff_badge_and_chat_order(env):
     for title, n, sort in (("Small", 10, 0), ("Big", 900, 5), ("Unknown", None, 0)):
         con.execute("INSERT INTO chats (title, kind, url, members, sort, status, created_at) VALUES (?, 'group', 'https://t.me/x', ?, ?, 'live', 0)", (title, n, sort))
     assert [x["title"] for x in c.get("/api/chats", headers=A).json()["all"]] == ["Big", "Small", "Unknown"]
+
+
+def test_dm_on(env):
+    """Telegram's "allow messages" from inside the app (owner, Oct 24): the bot may write at once, and the event just
+    signed up for gets its confirmation with the ticket; nothing for an event I'm not going to."""
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 21, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    start = int(time.time()) + 86400
+    for i in (1, 2):
+        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, created_by, created_at, updated_at)
+            VALUES (?, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (i, start, start + 7200, pres["id"]))
+    A = tma(21, "Ali")
+    con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (ali["id"],))
+    assert c.get("/api/me", headers=A).json()["canDm"] is False
+    assert c.post("/api/events/1/registration", headers=A, json={}).json()["my"]["status"] == "going"
+    assert c.post("/api/me/dm", headers=A, json={"event": 1}).json()["canDm"] is True
+    c.post("/api/me/dm", headers=A, json={"event": 2})   # not going there: no message
+    c.post("/api/me/dm", headers=A, json={"event": 1})   # twice: one message
+    sent = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'going_ok'").fetchall()
+    assert [s["ref"] for s in sent] == ["event:1"] and bot._render(con, sent[0])[2] == "tk_1"
+    assert c.post("/api/me/dm", headers=tma(30, "Guest"), json={}).status_code == 200   # a guest too: the bot may write
