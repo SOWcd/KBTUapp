@@ -24,6 +24,7 @@
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   // top and bottom bars never repeat an icon (owner, Oct 21): the bottom is ticket / landmark / circle-user-round
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
@@ -39,6 +40,7 @@
   import ListPage from './screens/afisha/List.svelte';
   import Feed from './screens/afisha/Feed.svelte';
   import Clubs from './screens/afisha/Clubs.svelte';
+  import News from './screens/afisha/News.svelte';
   import Me from './screens/profile/Me.svelte';
   import Friends from './screens/profile/Friends.svelte';
   import Settings from './screens/profile/Settings.svelte';
@@ -139,7 +141,7 @@
   const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
 
   const PAGES = $derived<Record<Tab, CapPage[]>>({
-    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }],
+    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }, { label: t('page.news'), icon: Newspaper }],
     club: member && session.me?.oversee  // DMP staff: the clubs registry takes the Team page's place (§4.13)
       ? [{ label: t('page.clubs'), icon: Shapes }, { label: t('page.registry'), icon: BookUser }, { label: t('tab.studio'), icon: LayoutDashboard }]
       : member
@@ -230,7 +232,7 @@
       });
       return;
     }
-    if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 1; return; } // the circles on top of List
+    if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
     const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
@@ -396,7 +398,7 @@
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
         {#snippet page(i)}
           {#if tab === 'afisha'}
-            {#if i === 0}<Feed />{:else}<ListPage />{/if}
+            {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<News />{/if}
           {:else if tab === 'club'}
             {#if !member || i === 0}<Clubs />
             {:else if session.me?.oversee}{#if i === 1}{#await registryPage() then m}<m.default />{/await}{:else}{#await studioPage() then m}<m.default />{/await}{/if}
