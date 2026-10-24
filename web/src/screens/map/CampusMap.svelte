@@ -455,7 +455,10 @@
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
       <span class="knob" style:left="calc(4px + {railFloors.indexOf(cur)} * var(--fb))" aria-hidden="true"></span>
-      {#each railFloors as n (n)}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}
+      <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
+           instead of jumping (owner, Oct 24 video) -->
+      {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button role="tab" aria-selected={cur === n} class:on={cur === n}
+        class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => pick(n)}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
     <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
@@ -568,7 +571,8 @@
   .rail.away { opacity: 0; transform: translateY(-30px); pointer-events: none; }
   .rail .knob { position: absolute; top: 4px; bottom: 4px; width: var(--fb); border-radius: 21px; transition: left 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
-  .rail button { position: relative; width: var(--fb); height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
+  .rail button { position: relative; width: var(--fb); height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s, width 0.5s var(--ease-spring), opacity 0.3s; }
+  .rail button.gone { width: 0; opacity: 0; overflow: hidden; pointer-events: none; }
   .rail button.on { color: #0a0f24; }
   .rail button.r::after { content: ''; position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
   .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);
