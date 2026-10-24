@@ -267,8 +267,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/ms/verifier")
     def ms_verifier(state: str, con=Depends(conn)):
-        """The PKCE verifier. No "link to <name>?" question any more (owner, Oct 23: minimum steps): the code rides back
-        in the return link, and only the Telegram that started the sign-in can use it (ms_confirm)"""
+        """The PKCE verifier. No "link to <name>?" question (owner, Oct 23: minimum steps)"""
         uid = msauth.state_uid(cfg.token_key, state)
         if not uid or not logic.one(con, "SELECT 1 FROM users WHERE id = ?", uid):
             raise ApiError("not_found")  # a stale link: ms.html says "expired"
@@ -291,17 +290,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         with pool.conn() as con, db.tx(con):
             if not con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"ms_used:{state[-16:]}", str(logic.now()))).rowcount:
                 raise ApiError("forbidden", "ms")  # each link once
-            other = logic.one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
-            if other and other[0] != uid:
-                raise ApiError("conflict", "linked")  # said here already, in the browser; ms_confirm checks again
-            mine = logic.one(con, "SELECT ms_oid FROM students WHERE user_id = ?", uid)
-            if mine and mine[0] and mine[0] != who["oid"]:
-                raise ApiError("conflict", "other_ms")
-            return {"ok": True, "code": logic.ms_hold(con, uid, who)}  # back in the app by the return link (audit M6)
-
-    @app.post("/api/ms/confirm")
-    def ms_confirm(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        return logic.ms_confirm(con, v, body.get("code"))
+            # linked at once, no code back from the app: a forwarded sign-in link is caught by hand and unlinked (owner, Oct 24)
+            logic.ms_apply(con, uid, who)
+            return {"ok": True}
 
     @app.get("/api/me/schedule")
     def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
@@ -1327,7 +1318,7 @@ small{display:block;margin-top:12px;font-size:13px;color:rgba(255,255,255,.6)}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
 <h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
-<a class="btn main" id="open" hidden href="tg://"></a><small id="keep" hidden></small></main><script>
+<a class="btn main" id="open" hidden href="tg://"></a></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
@@ -1351,14 +1342,9 @@ show(L.wait);
   if (!tok.access_token) return end(nope(tok.error, tok.error_description), "bad");
   const r = await fetch("/api/ms/finish", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, token: tok.access_token }) });
   const j = await r.json().catch(() => ({}));
-  // nothing is linked until the app sends the code back (audit M6), so it rides in the return link: only the Telegram
-  // that started the sign-in has a code waiting (owner, Oct 23: no typing; the app opening anew is fine). Tried at once
-  // (a browser may ask or refuse without a tap), the button stays for that
-  if (r.ok && j.code) {
-    end("ok", "ok"); $("open").href = "https://t.me/__BOT__?startapp=ms_" + j.code;
-    $("keep").textContent = L.keep; $("keep").hidden = false;  // the link is the sign-in: not to be sent on (review, Oct 23)
-    location.href = "tg://resolve?domain=__BOT__&startapp=ms_" + j.code; return;
-  }
+  // linked already: plain Telegram, so the app window left open greets him there; a startapp link would open a second
+  // app over it (owner, Oct 24). Tried at once (a browser may ask or refuse without a tap), the button stays for that
+  if (r.ok) { end("ok", "ok"); location.href = "tg://"; return; }
   end({ linked: "linked", other_ms: "otherMs", not_kbtu: "notKbtu" }[j.message] || "fail", "bad");
 })().catch(() => end("fail", "bad"));
 </script></body></html>"""

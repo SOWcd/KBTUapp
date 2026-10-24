@@ -198,8 +198,6 @@
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
   // one-time link, §4.7), friends (the Friends page: the bot's request message) ----
   function deepLink(p = tg.startParam) {
-    const ms = p.match(/^ms_(\d{6})$/); // back from the Microsoft page: its button carries the code (M6, owner Oct 23)
-    if (ms) { msBack(ms[1]); return; }
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -251,20 +249,12 @@
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }
 
-  async function msBack(code: string) {
-    // the same link again (the page's button after its own jump, Telegram's reload): used already, nothing to say
-    if (!session.me?.msCode) return;
-    const again = () => { const p = takeAgain(); if (p) deepLink(p); }; // what the guest wanted before signing in
-    try {
-      session.me = await api.msConfirm(code);
-      if (session.me.msPending) { sheets.login(again); return; } // someone new: only the student ID is left
-      haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void requestWriteAccess(); void loadAfisha(); again();
-    } catch (e) {
-      haptic.error();
-      const why = e instanceof ApiErr ? (e.code === 'conflict' ? e.message : e.code) : '';
-      say(t(why === 'linked' ? 'login.msTaken' : why === 'other_ms' ? 'login.msOther' : 'login.codeExpired'), 'pleading_face_3d');
-      void loadMe();
-    }
+  // the app was closed while away at Microsoft (the page returns to plain Telegram): someone new types the student ID
+  // now, then what the guest wanted before signing in runs (owner, Oct 24)
+  function msBack() {
+    const again = () => { const p = takeAgain(); if (p) deepLink(p); };
+    if (session.me?.msPending) sheets.login(again);
+    else if (session.me?.student && !tg.startParam) again();
   }
 
   // the copy for the next launch follows what the screens show, a second after it settles (only once the server answered)
@@ -371,7 +361,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

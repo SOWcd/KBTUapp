@@ -770,24 +770,6 @@ def ms_pending(con, uid: int) -> dict | None:
     return who if who and who["at"] > now() - MS_KEEP else None
 
 
-MS_CODE_TTL = 15 * 60  # the code in /ms.html's return link
-
-
-def ms_hold(con, uid: int, who: dict) -> str:
-    """A Microsoft sign-in waits for its code to come back from /ms.html's return link (audit M6): that link opens the
-    Telegram of whoever signed in, so a sign-in link someone else sent can't tie your KBTU account to their Telegram."""
-    code = f"{secrets.randbelow(10**6):06d}"
-    con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                (f"mscode:{uid}", json.dumps({"code": code, "who": who, "at": now(), "tries": 0})))
-    return code
-
-
-def ms_waiting(con, uid: int) -> dict | None:
-    r = one(con, "SELECT value FROM meta WHERE key = ?", f"mscode:{uid}")
-    h = json.loads(r[0]) if r else None
-    return h if h and h["at"] > now() - MS_CODE_TTL else None
-
-
 def ms_apply(con, uid: int, who: dict) -> bool:
     """The Microsoft account on this Telegram: a student already confirmed (True), or remembered for the form."""
     other = one(con, "SELECT user_id FROM students WHERE ms_oid = ?", who["oid"])
@@ -803,34 +785,9 @@ def ms_apply(con, uid: int, who: dict) -> bool:
     return False
 
 
-def ms_confirm(con, v: Viewer, code: object) -> dict:
-    """The code from /ms.html's return link (ms_<code>): the sign-in goes through. 5 wrong tries end it."""
-    wrong = None
-    with tx(con):
-        h = ms_waiting(con, v.id)
-        if not h:
-            raise ApiError("not_found", "expired")
-        if not isinstance(code, str) or not hmac.compare_digest(code.strip().encode(), h["code"].encode()):
-            last = h["tries"] >= 4
-            if last:
-                con.execute("DELETE FROM meta WHERE key = ?", (f"mscode:{v.id}",))
-            else:
-                con.execute("UPDATE meta SET value = json_set(value, '$.tries', ?) WHERE key = ?", (h["tries"] + 1, f"mscode:{v.id}"))
-            wrong = ApiError("forbidden" if last else "bad_input", "code")  # raised after the commit: the try must count
-        else:
-            con.execute("DELETE FROM meta WHERE key = ?", (f"mscode:{v.id}",))
-            try:
-                ms_apply(con, v.id, h["who"])
-            except ApiError as e:  # linked elsewhere meanwhile: the wait ends anyway (committed), then it's said
-                wrong = e
-    if wrong:
-        raise wrong
-    return me(con, Viewer(v.id, v.role, bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id))))
-
-
 def ms_sweep(con) -> None:
     """Each bot round: Microsoft sign-ins never finished (they hold the Graph profile) and the used-link marks"""
-    con.execute("DELETE FROM meta WHERE key LIKE 'mscode:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (now() - MS_CODE_TTL,))
+    con.execute("DELETE FROM meta WHERE key LIKE 'mscode:%'")  # the return-link codes, dropped Oct 24
     con.execute("DELETE FROM meta WHERE key LIKE 'ms:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (now() - MS_KEEP,))
     con.execute("DELETE FROM meta WHERE key LIKE 'ms_used:%' AND CAST(value AS INTEGER) < ?", (now() - 86400,))
 
@@ -878,7 +835,6 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
-        "msCode": ms_waiting(con, v.id) is not None,  # signed in with Microsoft, the return link not used yet
         "relink": relink,
         "role": u["role"], "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,

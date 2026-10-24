@@ -3382,7 +3382,7 @@ def test_ms_sign_in(env, monkeypatch):
     state = re.search(r"state=([^&]+)", url).group(1).replace("%2E", ".").replace("%3D", "=")
     assert msauth.KBTU in url and "code_challenge=" in url
     v = c.get("/api/ms/verifier", params={"state": state}).json()
-    assert v == {"verifier": msauth.verifier(cfg.token_key, state)}           # nobody's name: the code in the return link guards
+    assert v == {"verifier": msauth.verifier(cfg.token_key, state)}           # nobody's name
     assert c.get("/api/ms/verifier", params={"state": "1.2.\u00e9"}).status_code == 404      # not a 500
     assert c.get("/api/ms/verifier", params={"state": state[:-2] + "xx"}).status_code == 404
 
@@ -3402,15 +3402,10 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token()).status_code == 403                             # not a kbtu.kz sign-in name
     graph["userPrincipalName"] = "B_REAL@kbtu.kz"                             # "mail" may be a gmail: the sign-in name counts
     st = msauth.state_for(cfg.token_key, uid(21))
-    code = finish(21, token(), st=st).json()["code"]                          # the page shows a code: nothing linked yet (M6)
+    assert finish(21, token(), st=st).json() == {"ok": True}                  # linked at once (owner, Oct 24: no return code)
     assert finish(21, token(), st=st).status_code == 403                      # each link once
-    assert c.get("/api/me", headers=tma(21)).json()["msCode"] is True
-    confirm = lambda tg, x: c.post("/api/ms/confirm", headers=tma(tg), json={"code": x})  # noqa: E731
-    assert confirm(22, code).status_code == 404                               # someone else's Telegram has nothing waiting
-    wrong = "000000" if code != "000000" else "111111"
-    assert confirm(21, wrong).json()["message"] == "code"
-    me = confirm(21, code).json()
-    assert me["msCode"] is False
+    me = c.get("/api/me", headers=tma(21)).json()
+    assert "msCode" not in me
     assert me["student"]["ms"] and me["student"]["email"] == "b_real@kbtu.kz"
     assert me["student"]["lastName"] == "Real"                                # the account's names over typed ones
     graph["id"] = "oid-9"
@@ -3418,19 +3413,12 @@ def test_ms_sign_in(env, monkeypatch):
     graph["id"] = "oid-1"
     assert finish(22, token()).json()["message"] == "linked"                  # the same account, another Telegram
     graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "userPrincipalName": "d_new@kbtu.kz"}
-    assert confirm(22, finish(22, token()).json()["code"]).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}  # new: for the form
+    assert finish(22, token()).json() == {"ok": True}                         # new: remembered for the form
     assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": logic.CONSENT, "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
     assert me["student"]["ms"] and me["msPending"] is None and me["no"]
     assert me["student"]["course"] == logic.course_of("24B099002") != 1                 # the ID's year, not the typed 1 (M3)
-    # five wrong codes end the wait
-    graph = {"id": "oid-3", "givenName": "Ers", "surname": "X", "userPrincipalName": "e_x@kbtu.kz"}
-    finish(23, token())
-    for _ in range(4):
-        assert confirm(23, "999999x").json()["message"] == "code"
-    assert confirm(23, "999999x").status_code == 403 and confirm(23, "123456").status_code == 404
-
 
 def test_suggest_chat(env, monkeypatch):
     """Any student suggests a chat through the bot (PLAN item 45): picked in Telegram's picker or sent as @name; public

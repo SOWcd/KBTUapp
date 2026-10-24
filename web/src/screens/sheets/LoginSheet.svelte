@@ -27,8 +27,6 @@
   // Microsoft: away in the browser; back in sight, ask who I am now (confirmed, or the account's names to fill in)
   let away = $state(false);
   const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
-  // signed in, but back by the app switcher, not the page's button: the code rides only in that button's link (M6)
-  const waiting = $derived(!!session.me?.msCode);
   async function microsoft() {
     if (!agree) return;
     haptic.tap(); error = '';
@@ -93,10 +91,7 @@
 
 <Sheet {overlay} title={t('login.title')}>
   <form class="wrap" onsubmit={submit}>
-    {#if waiting}
-      <div class="big"><b>{t('login.backTitle')}</b><span class="t-foot">{t('login.backHint')}</span></div>
-      {@render msButton(t('login.msAgain'))}
-    {:else if st}
+    {#if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
       {@render msButton(t('login.msConfirm'))}
     {:else if pending}
@@ -108,7 +103,7 @@
           <input bind:value={m.firstName} autocomplete="given-name" autocapitalize="words" enterkeyhint="next" maxlength="40" /></label>
       {/if}
       <label class="field"><span class="t-cap">{t('login.sid')}</span>
-        <input bind:value={m.studentId} placeholder={sidEx} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
+        <input class="sid" bind:value={m.studentId} placeholder={sidEx} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if !agree}{@render consent()}{/if}
@@ -120,11 +115,12 @@
       {@render consent()}
       {@render msButton(t('login.ms'))}
     {/if}
-    {#if error && !pending && !waiting}<p class="err t-callout">{error}</p>{/if}
+    {#if error && !pending}<p class="err t-callout">{error}</p>{/if}
   </form>
 </Sheet>
 
 <style>
+  .sid { text-transform: uppercase; } /* a typed "b" shows as "B"; it's sent upper-cased (owner, Oct 24) */
   .wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
   .agree { position: relative; display: flex; gap: 10px; align-items: center; padding: 6px 2px; }
   .agree input { position: absolute; opacity: 0; width: 1px; height: 1px; }

@@ -665,7 +665,7 @@ def place_or_tba(place: str, lang: str) -> str:
 
 
 # /ms.html, where Microsoft sends a student back (msauth.py): the browser outside Telegram, its language picks the set.
-# Each state: a title and a line; "keep" sits under the return button.
+# Each state: a title and a line.
 MS_PAGE = {
     "ru": {"wait": ("Секунду…", "Проверяем аккаунт КБТУ"),
            "ok": ("Готово!", "Возвращаем в Telegram…"),
@@ -675,8 +675,7 @@ MS_PAGE = {
            "otherMs": ("Уже подтверждено", "Твой профиль подтверждён другим аккаунтом КБТУ."),
            "notKbtu": ("Нужен аккаунт КБТУ", "Войди с логином вида s_familiya@kbtu.kz — личный или чужой аккаунт Microsoft не подойдёт. Вернись в приложение и попробуй снова."),
            "expired": ("Ссылка устарела", "Ссылка для входа живёт 15 минут. Вернись в приложение и нажми кнопку ещё раз."),
-           "open": "Вернуться в Telegram",
-           "keep": "Эта кнопка входит в твой Telegram. Никому не отправляй её ссылку."},
+           "open": "Вернуться в Telegram"},
     "kk": {"wait": ("Бір сәт…", "ҚБТУ аккаунты тексерілуде"),
            "ok": ("Дайын!", "Telegram-ға қайтарамыз…"),
            "nope": ("Ештеңе байланбады", "Бұл бетті жаба бер."),
@@ -685,8 +684,7 @@ MS_PAGE = {
            "otherMs": ("Расталған", "Профилің басқа ҚБТУ аккаунтымен расталған."),
            "notKbtu": ("ҚБТУ аккаунты керек", "s_tegi@kbtu.kz түріндегі логинмен кір — жеке не басқа Microsoft аккаунты келмейді. Қосымшаға оралып, қайта көр."),
            "expired": ("Сілтеменің мерзімі өтті", "Кіру сілтемесі 15 минут жарамды. Қосымшаға оралып, батырманы қайта бас."),
-           "open": "Telegram-ға оралу",
-           "keep": "Бұл батырма сенің Telegram-ыңа кіргізеді. Оның сілтемесін ешкімге жіберме."},
+           "open": "Telegram-ға оралу"},
     "en": {"wait": ("One moment…", "Checking your KBTU account"),
            "ok": ("Done!", "Taking you back to Telegram…"),
            "nope": ("Nothing linked", "You can just close this page."),
@@ -695,6 +693,5 @@ MS_PAGE = {
            "otherMs": ("Already confirmed", "Your profile is confirmed with another KBTU account."),
            "notKbtu": ("A KBTU account is needed", "Sign in with your login like s_lastname@kbtu.kz — a personal or another organization's Microsoft account won't work. Go back to the app and try again."),
            "expired": ("The link expired", "A sign-in link lasts 15 minutes. Go back to the app and tap the button again."),
-           "open": "Back to Telegram",
-           "keep": "This button signs in your Telegram. Never send its link to anyone."},
+           "open": "Back to Telegram"},
 }
