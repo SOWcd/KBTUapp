@@ -126,7 +126,7 @@
       {#each groups as g, gi (gi)}
         {#if g.title}<p class="cap">{g.title}</p>{/if}
         {#each g.tiles as tl (tl.v)}
-          <button class="tile" class:door={tl.door} class:off={tl.off && !tl.evac} class:evac={tl.evac} class:on={tl.v === typed} onclick={() => take(tl.v)}>
+          <button class="tile" class:door={tl.door} class:off={tl.off} class:evac={tl.evac} class:on={tl.v === typed} onclick={() => take(tl.v)}>
             <span class="ti">{#if tl.door}<DoorOpen size={18} />{:else}<MapPin size={18} />{/if}</span>
             <span><b>{tl.label}</b>{#if tl.sub}<small>{tl.sub}</small>{/if}</span>
           </button>
@@ -206,7 +206,9 @@
   .ti { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent-text); }
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }
-  /* an evacuation door: red, open only then (owner, Oct 24) */
+  /* an evacuation door: dimmed and struck like a closed one, its red mark and "evacuation only" in full on two lines;
+     it must not invite a tap (owner, Oct 24) */
+  .tile.evac small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .tile.evac .ti { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
   .tile.evac small { color: var(--danger-text); }
   .tile.off b { text-decoration: line-through; }
