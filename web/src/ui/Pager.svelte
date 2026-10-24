@@ -170,5 +170,5 @@
 
 <style>
   .pager { position: absolute; inset: 0; overflow: hidden; touch-action: pan-y; }
-  .pg { position: absolute; inset: 0; contain: layout paint; backface-visibility: hidden; } /* clear: the aurora shows through (App.svelte) */
+  .pg { position: absolute; inset: 0; contain: layout paint; backface-visibility: hidden; } /* clear: the app ground shows through */
 </style>

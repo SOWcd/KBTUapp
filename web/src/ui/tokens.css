@@ -64,7 +64,7 @@
   --switch-knob: #3B6BFF;
   --bg: #07080F;
   --bg-raised: #0D0F19;
-  --surface: rgba(255, 255, 255, 0.055); /* translucent over the aurora (mockup v23 .surf); ~#11131E on the plain page */
+  --surface: rgba(255, 255, 255, 0.055); /* translucent; ~#11131E on the plain ground */
   --surface-2: rgba(255, 255, 255, 0.09);
   --surface-solid: #11131E;             /* where a card must hide what's under it: avatar rings, buttons over the map */
   --surface-3: #222637;
@@ -92,8 +92,7 @@
   --chrome-ink: rgba(255, 255, 255, 0.85);
   --shadow-card: none;
   --scrim: rgba(3, 4, 10, 0.62);
-  --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.26), transparent 70%);
-  --aurora: 1;                           /* the moving light behind the pages (App.svelte .aurora) */
+  --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day (owner, Oct 24) */
 }
 
 :root[data-theme='light'],
@@ -131,6 +130,5 @@
   --chrome-ink: #4A5680;
   --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
   --scrim: rgba(11, 20, 51, 0.32);
-  --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.13), transparent 70%);
-  --aurora: 0.35;
+  --glow: none;
 }

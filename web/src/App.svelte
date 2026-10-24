@@ -396,8 +396,6 @@
 </script>
 
 <main class="app">
-  <!-- the light behind every page (mockup v23): three soft lights that wander by transform only -->
-  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
   {#each TABS as tab (tab)}
     <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
@@ -454,18 +452,6 @@
   .app { position: absolute; inset: 0; overflow: hidden; background: var(--bg); isolation: isolate; }
   /* one palette on every tab: a hue swap per tab looked childish (owner, Oct 24); the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
-  .aurora { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: var(--aurora);
-    --a1: #2F5BFF; --a2: #7C4DFF; --a3: #19B4D6; }
-  .aurora i { position: absolute; width: 110%; height: 65%; border-radius: 50%; will-change: transform; animation: float1 23s ease-in-out infinite; }
-  .aurora i:nth-child(1) { left: -40%; top: -20%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a1) 62%, transparent), transparent); }
-  .aurora i:nth-child(2) { right: -45%; top: 15%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a2) 50%, transparent), transparent); animation-name: float2; animation-duration: 29s; animation-delay: -11s; }
-  .aurora i:nth-child(3) { left: -20%; bottom: -30%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a3) 36%, transparent), transparent); animation-name: float3; animation-duration: 35s; animation-delay: -19s; }
-  .aurora::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 50%, transparent) 45%, color-mix(in srgb, var(--bg) 88%, transparent)); }
-  @keyframes float1 { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 25% { transform: translate3d(32%, 14%, 0) scale(1.12); } 50% { transform: translate3d(18%, 38%, 0) scale(.92); } 75% { transform: translate3d(-10%, 20%, 0) scale(1.05); } }
-  @keyframes float2 { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 30% { transform: translate3d(-30%, 22%, 0) scale(.9); } 60% { transform: translate3d(-12%, -18%, 0) scale(1.15); } 80% { transform: translate3d(8%, 10%, 0) scale(1); } }
-  @keyframes float3 { 0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); } 35% { transform: translate3d(28%, -30%, 0) scale(.95); } 65% { transform: translate3d(-8%, -45%, 0) scale(1.1); } }
-  :global(html.lowfx) .aurora i { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .aurora i { animation: none !important; } }
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   /* opacity only, backwards fill: a lingering transform fill would pin the pager pages (prototype bug) */
   .tab.on { visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
