@@ -374,7 +374,7 @@
   function appear() {
     if (appeared || gone) return;
     appeared = true; shownAt = performance.now();
-    if (iris) { const o = { duration: 460, easing: 'cubic-bezier(.3, .9, .3, 1)' }; panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o); halo(30, reach(iris.at), o, [1, 1, 0]); }
+    if (iris) { const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }; panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o); halo(30, reach(iris.at), o, [1, 1, 1, 0]); }
     else panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
     undoChrome = hideChrome();
   }
@@ -515,7 +515,9 @@
 <style>
   :global(.map-halo) {
     position: fixed; z-index: 9999; translate: -50% -50%; border-radius: 50%; pointer-events: none;
-    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 0 22px 5px rgba(130, 165, 255, 0.6), inset 0 0 26px 6px rgba(130, 165, 255, 0.5);
+    /* thick and clear (owner, Oct 25: the thin line was barely seen, the jump disoriented him) */
+    box-shadow: 0 0 0 3.5px rgba(255, 255, 255, 0.95), 0 0 0 7px rgba(140, 175, 255, 0.55), 0 0 36px 12px rgba(120, 160, 255, 0.55),
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.6), inset 0 0 40px 10px rgba(120, 160, 255, 0.45);
   }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
