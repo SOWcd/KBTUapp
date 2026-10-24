@@ -20,6 +20,10 @@
       .map((n) => n.e ? { v: n.name!, label: n.name!, door: true, evac: true, off: true, sub: tr('pad.evac') }
         : { v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? tr('pad.till', { time: till(n) }) : tr('pad.closed') });
   }
+  /** an entrance's line under the number: its floor and, when it won't open, why; picking it is still fine, A or B
+   *  (owner, Oct 24: "I can stand by a closed door") */
+  export const doorHint = (n: MapNode, floor: string) =>
+    tr('pad.entrance', { floor }) + (n.e ? ' \u00b7 ' + tr('pad.evac') : openAt(n, new Date()) ? '' : ' \u00b7 ' + tr('pad.closed').toLowerCase());
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
     .sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
@@ -48,7 +52,7 @@
   } = $props();
 
   const example = EX[Math.floor(Math.random() * EX.length)] ?? '305';
-  const LET = ['\u0430', '\u0431', '\u0432', '\u0433']; // a, b, v, g as typed on a door
+  const LET = ['\u0430', '\u0431', '\u0432']; // a, b, v as typed on a door; no g on the plan (owner, Oct 24)
   let typed = $state(untrack(() => start)), fresh = $state(-1), side = $state<'num' | 'place'>('num'), shook = $state(0);
   const word = $derived(/[^\d\u0430-\u0433]/.test(typed));
   const res = $derived(check(typed));
@@ -61,7 +65,7 @@
     if (word) typed = '';
     side = 'num';
     if (k === 'del') { if (!typed) return deny(); typed = typed.slice(0, -1); fresh = -1; }
-    else if (k === 'l') { // after a number "a", again "b", "v", "g", then off
+    else if (k === 'l') { // after a number "a", again "b", "v", then off
       const i = LET.indexOf(typed.slice(-1));
       if (i >= 0) typed = typed.slice(0, -1) + (LET[i + 1] ?? '');
       else if (/\d$/.test(typed)) typed += LET[0];
@@ -71,8 +75,8 @@
     else return deny();
     haptic.tap();
   }
-  /** a room as typed on the keypad: the maps' Latin a, b, v back to the Cyrillic the letter key shows */
-  const asTyped = (r: string) => r.replace(/[abvc]/g, (c) => '\u0430\u0431\u0432\u0441'['abvc'.indexOf(c)]);
+  /** a room as typed on the keypad: the maps' Latin a, b, v back to the Cyrillic the letter key shows (86c stays Latin) */
+  const asTyped = (r: string) => r.replace(/[abv]/g, (c) => '\u0430\u0431\u0432'['abv'.indexOf(c)]);
   function take(v: string) { haptic.select(); typed = v; fresh = -1; }
   function flip(s: 'num' | 'place') { if (s !== side) { haptic.select(); side = s; } }
   function submit() { if (res.ok) onsubmit(typed); else deny(); }
@@ -118,7 +122,7 @@
       {#each groups as g, gi (gi)}
         {#if g.title}<p class="cap">{g.title}</p>{/if}
         {#each g.tiles as tl (tl.v)}
-          <button class="tile" class:door={tl.door} class:off={tl.off && !tl.evac} class:evac={tl.evac} class:on={tl.v === typed} disabled={tl.off && point === 'a'} onclick={() => take(tl.v)}>
+          <button class="tile" class:door={tl.door} class:off={tl.off && !tl.evac} class:evac={tl.evac} class:on={tl.v === typed} onclick={() => take(tl.v)}>
             <span class="ti">{#if tl.door}<DoorOpen size={18} />{:else}<MapPin size={18} />{/if}</span>
             <span><b>{tl.label}</b>{#if tl.sub}<small>{tl.sub}</small>{/if}</span>
           </button>
@@ -198,7 +202,6 @@
   /* an evacuation door: red, open only then (owner, Oct 24) */
   .tile.evac .ti { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
   .tile.evac small { color: var(--danger-text); }
-  .tile.evac:disabled { opacity: 0.55; }
   .tile.off b { text-decoration: line-through; }
   .tile.on { background: var(--pt); color: #fff; }
   .tile.on .ti { background: rgba(255, 255, 255, 0.2); color: #fff; }

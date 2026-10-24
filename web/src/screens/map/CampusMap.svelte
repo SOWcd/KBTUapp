@@ -33,7 +33,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
-  import MapPad, { placeTiles, exitTiles, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, doorHint, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
@@ -266,7 +266,7 @@
   }
   function checkFind(text: string): PadCheck {
     const dn = doorNamed(text);
-    if (dn) return { ok: true, tone: 'ok', hint: t('pad.entrance', { floor: floorName(dn.f) }) };
+    if (dn) return { ok: true, tone: 'ok', hint: doorHint(dn, floorName(dn.f)) };
     const sp = spotOf(text);
     if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) };
     const r = roomOf(text), f = floorOf(r);
@@ -454,7 +454,7 @@
       aria-label={ver === 'old' ? t('map.newPlan') : t('map.oldPlan')} aria-pressed={ver === 'old'}><History size={20} /></button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
-      <span class="knob" style:left="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
+      <span class="knob" style:left="calc(4px + {railFloors.indexOf(cur)} * var(--fb))" aria-hidden="true"></span>
       {#each railFloors as n (n)}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
@@ -559,15 +559,16 @@
 
   /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .rb { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
+  .rb { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
   .rb.on { background: var(--accent); color: #fff; }
   .rb.away { opacity: 0; pointer-events: none; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
-  .rail { position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
+  /* a floor button shrinks on a narrow phone so the row fits (two 46px buttons, two 10px gaps, 12px sides) */
+  .rail { --fb: min(42px, calc((100vw - 144px) / 6)); position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
   .rail.away { opacity: 0; transform: translateY(-30px); pointer-events: none; }
-  .rail .knob { position: absolute; top: 4px; bottom: 4px; width: 42px; border-radius: 21px; transition: left 0.5s var(--ease-spring);
+  .rail .knob { position: absolute; top: 4px; bottom: 4px; width: var(--fb); border-radius: 21px; transition: left 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
-  .rail button { position: relative; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
+  .rail button { position: relative; width: var(--fb); height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
   .rail button.on { color: #0a0f24; }
   .rail button.r::after { content: ''; position: absolute; bottom: 3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
   .note { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); margin: 0; text-align: center; font: 550 12px/1.3 var(--font-text); color: var(--text-3);

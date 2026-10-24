@@ -130,14 +130,15 @@ export function routes(g: Graph, ar: number, a: { at: At[]; pt: Pt }, b: { at: A
   if (fast.legs.length > 1) {
     // lifts are for everyone, not a step-free mode (owner, Oct 24): ride the nearest lift and take a flight by it when it
     // stops short (3 -> 1, then down to 0), never a walk to the far wing for a lift that goes all the way. A flight costs
-    // more here so the lift wins wherever it is near; with stairs right by the start, the way by lifts only.
+    // more here so the lift wins wherever it is near; with stairs right by the start, as few flights as can be (lifts
+    // only where they reach, else a flight at the end: the basement's 94 has no lift).
     const rides = (r: { ids: number[] } | null) => !!r && r.ids.some((id) => by.get(id)?.k === 'l');
-    let lr = shortest(g, adj, a.at, to, () => true, (x) => (x.stair != null ? STAIR * 4 : 0));
-    if (!rides(lr)) lr = shortest(g, adj, a.at, to, (x) => x.stair == null, () => 0);
+    let pen = STAIR * 4, lr = shortest(g, adj, a.at, to, () => true, (x) => (x.stair != null ? pen : 0));
+    if (!rides(lr)) { pen = STAIR * 40; lr = shortest(g, adj, a.at, to, () => true, (x) => (x.stair != null ? pen : 0)); }
     const lift = rides(lr) ? make('lift', lr) : null;
     // the walk, not the flights' extra cost: one per flight taken
     const flights = lr?.ids.filter((id, i) => i > 0 && by.get(id)!.k === 's' && by.get(lr!.ids[i - 1])!.k === 's' && by.get(id)!.f !== by.get(lr!.ids[i - 1])!.f).length ?? 0;
-    if (lift) { lift.secs -= STAIR * 4 * flights; out.push(lift); }
+    if (lift) { lift.secs -= pen * flights; out.push(lift); }
     const used = new Set(fast.via), alt = make('alt', shortest(g, adj, a.at, to, (x) => !x.lift, (x) => (x.stair != null && used.has(x.stair) ? BACKUP : 0)));
     if (alt && alt.secs <= fast.secs * 1.3 && alt.via.some((s) => !used.has(s))) out.push(alt);
   }

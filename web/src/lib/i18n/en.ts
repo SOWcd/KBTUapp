@@ -453,7 +453,7 @@ const en: Dict = {
   'map.oldPlan': "2023 plan",
   'map.oldSub': "Our old drawing, floors 1–5",
   'map.fit': "Whole floor",
-  'map.bShort': "B",
+  'map.bShort': "0",
   'route.out': "Help me get out",
   'route.here': "You are here",
   'route.helpTitle': "Looking for the way out?",

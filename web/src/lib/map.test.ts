@@ -20,6 +20,8 @@ it('finds the floor of a room, never of an address', () => {
   expect(floorOf('728')).toBe(2);
   expect(roomOf('Independence Hall')).toBe(null); // the round hall, a place without a number (owner, Oct 24)
   expect(floorOf('Independence Hall')).toBe(2);
+  expect(floorOf('Halyk Arena')).toBe(null); // an arena in town, not the co-working's floor
+  expect(roomOf('Kunaev Hall')).toBe('400a');
   expect(roomOf('Al-Farabi Hall')).toBe('470');
   expect(spotOf('Halyk Co-working')?.f).toBe(1);
   expect(spotOf('Canteen 5')).toBe(null);

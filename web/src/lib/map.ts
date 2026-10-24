@@ -36,7 +36,7 @@ export const normRoom = (s: string): string =>
   s.trim().toLowerCase().replace(/[\u0430\u0431\u0432\u0441]/g, (c) => 'abvc'['\u0430\u0431\u0432\u0441'.indexOf(c)]);
 /** Halls the portal names instead of numbering them (owner, Oct 7: the Kunaev hall is 400a). A name with a digit in it is
  *  an address, never a hall: Kunaev is a street in Almaty too. The escapes: Kunaev in Russian and in Kazakh. */
-const HALLS: [RegExp, string][] = [[/\u043a\u0443\u043d\u0430\u0435\u0432|\u049b\u043e\u043d\u0430\u0435\u0432|kunaye?v/i, '400a'],
+const HALLS: [RegExp, string][] = [[/\u043a\u0443\u043d\u0430\u0435\u0432|\u049b\u043e\u043d\u0430\u0435\u0432|kunay?e?v/i, '400a'],
   // Al-Farabi Hall (owner, Oct 19): 470. The escape: "farabi" in Russian and Kazakh.
   [/\u0444\u0430\u0440\u0430\u0431\u0438|farabi/i, '470']];
 /** Independence Hall (owner, Oct 24: not 726, the round hall in the middle of floor 2). The escapes: "nezavisim" in
@@ -69,7 +69,7 @@ export function roomOf(place: string | null | undefined): string | null {
  *  (owner, Oct 15). Compare with null: 0 is a floor. */
 export function floorOf(place: string | null | undefined): number | null {
   const r = roomOf(place);
-  if (r == null) return place ? spotOf(place)?.f ?? null : null; // a place without a number: the canteen, Independence Hall
+  if (r == null) return place && spotOf(place)?.k === 'indep' ? 2 : null; // the schedule's Independence Hall; not any "Halyk" or "canteen" (an arena, a home)
   return /^7\d\d/.test(r) ? 2 : /^\d{3}/.test(r) ? Number(r[0]) : 0;
 }
 

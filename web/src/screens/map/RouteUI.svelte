@@ -29,7 +29,7 @@
   import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
-  import MapPad, { placeTiles, exitTiles, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, doorHint, type PadCheck } from './MapPad.svelte';
 
   let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
@@ -43,6 +43,8 @@
   /** an entrance by its name on the graph: a start too (A16: people come in from Tole bi, Kazybek bi, Panfilov) */
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   const exits = $derived(exitTiles(rt.graph));
+  /** a picked entrance that won't open now: said by its name, the way still goes (owner, Oct 24: "I can stand by it") */
+  const shut = (text: string) => { const n = exitNamed(text); return !n ? '' : n.e ? t('pad.evac') : openAt(n, new Date()) ? '' : t('pad.closed'); };
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
    *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {
@@ -72,7 +74,8 @@
     return b ? routes(g, ar, a, { at: attach(g, b, ar, b.room), pt: b }).map((route) => ({ route })) : [];
   }
   const options = $derived(asked ? optionsFor(from, false) : []);
-  const rush = liftRush(new Date()); // the break between classes: the lifts are packed (owner, Oct 24)
+  const rush = $derived(asked && liftRush(new Date())); // the break between classes: the lifts are packed (owner, Oct 24); read when the ways show
+  const secs = (r: Route) => r.secs + (r.mode === 'lift' && rush ? RUSH_WAIT : 0);
   /** the keypad's line under the number: where that is, or the exit it leads to */
   function check(text: string): PadCheck {
     const p = text.trim() ? place(text) : null;
@@ -83,7 +86,7 @@
       return o?.exit ? { ok: true, tone: 'ok', hint: `${o.exit.name} \u00b7 ${t('route.openTill', { time: hours(o.exit) }).replace(/^./, (c) => c.toLowerCase())} \u00b7 ${t('route.min', { n: mins(o.route.secs) })}` }
         : { ok: false, tone: 'no', hint: t('route.noExit') };
     }
-    return { ok: true, tone: 'ok', hint: exitNamed(text) ? t('pad.entrance', { floor: floorName(p.f) }) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) };
+    return { ok: true, tone: 'ok', hint: exitNamed(text) ? doorHint(exitNamed(text)!, floorName(p.f)) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) };
   }
   const mins = (s: number) => Math.max(1, Math.round(s / 60));
   const ICON: Record<Mode, typeof Zap> = { fast: Zap, lift: ArrowUpDown, alt: Shuffle };
@@ -211,7 +214,7 @@
   {@const n = rt.route.legs.length}
   <!-- the step on the way (owner, Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
   <div class="card step glass glass-sheet" data-cover use:glass={{ bloom: true }} use:refract>
-    <div class="top"><span>{t('route.step', { i: rt.step + 1, n })} · {floorName(rt.route.legs[rt.step].f)} · {t('route.min', { n: mins(rt.route.secs) })}</span>
+    <div class="top"><span>{t('route.step', { i: rt.step + 1, n })} · {floorName(rt.route.legs[rt.step].f)} · {t('route.min', { n: mins(secs(rt.route)) })}</span>
       <button onclick={stop} aria-label={t('common.close')}><X size={18} /></button></div>
     <div class="bars" aria-hidden="true">{#each rt.route.legs as _, i (i)}<i class:on={i <= rt.step}></i>{/each}</div>
     <div class="nav">{#key rt.step}<p class="txt">{words(rt.step)}</p>{/key}
@@ -240,17 +243,17 @@
       {#if onedit}<button class="ed" onclick={() => { haptic.tap(); onedit(); }}><Pencil size={15} />{t('route.edit')}</button>{/if}
       <button onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
     <!-- the start: tap to change it (back to the keypad) -->
-    <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot a">{t('pad.a')}</span><b>{roomOf(from) ?? from}</b><Pencil size={14} /></button>
-    <div class="end"><span class="dot b">{t('pad.b')}</span><b>{roomOf(dest) ?? dest}</b></div>
+    <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot a">{t('pad.a')}</span><b>{roomOf(from) ?? from}</b>{#if shut(from)}<small class="shut">{shut(from)}</small>{/if}<Pencil size={14} /></button>
+    <div class="end"><span class="dot b">{t('pad.b')}</span><b>{roomOf(dest) ?? dest}</b>{#if shut(dest)}<small class="shut">{shut(dest)}</small>{/if}</div>
     <div class="opts">
       {#each options as o, i (i)}
         {@const Icon = ICON[o.route.mode]}
         <button class="opt" class:sel={i === 0} style:animation-delay="{i * 50}ms" onclick={() => start(o)}>
           <span class="ic"><Icon size={18} /></span>
-          <span class="grow"><b>{o.route.mode === 'fast' && options.some((x) => x.route.secs < o.route.secs) ? t('route.m.stairs') : t(`route.m.${o.route.mode}`)}</b>
+          <span class="grow"><b>{o.route.mode === 'fast' && options.some((x) => secs(x.route) < secs(o.route)) ? t('route.m.stairs') : t(`route.m.${o.route.mode}`)}</b>
             {#if o.route.mode === 'lift' && rush}<small class="rush">{t('route.rush')}</small>
             {:else}<small>{o.route.legs.length > 1 ? o.route.legs.map((l) => floorName(l.f)).join(' → ') : t('route.sameFloor')}</small>{/if}</span>
-          <span class="min">{mins(o.route.secs + (o.route.mode === 'lift' && rush ? RUSH_WAIT : 0))} <small>{t('route.minShort')}</small></span>
+          <span class="min">{mins(secs(o.route))} <small>{t('route.minShort')}</small></span>
         </button>
       {:else}
         <p class="none">{t('route.noWay')}</p>
@@ -276,6 +279,7 @@
   .ways .top button:last-child { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); }
   .end { display: flex; align-items: center; gap: 10px; width: 100%; padding: 4px 2px; font: 600 15px/1.3 var(--font-text); color: var(--text); text-align: left; }
   .end :global(svg) { color: var(--text-3); }
+  .end .shut { font-size: 13px; color: var(--danger-text); }
   .dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; color: #fff; font: 800 13px/1 var(--font-display); }
   .dot.a { background: #2fc277; }
   .dot.b { background: var(--accent); }

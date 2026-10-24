@@ -49,4 +49,10 @@ describe('routes', () => {
     expect(ride.up!.u).toBeGreaterThan(0.5); // the central lift by 348, not a wing's
     expect(ride.up!.u).toBeLessThan(0.6);
   });
+  it('a lift way to the basement corner no lift reaches: a lift, then the flight (review, Oct 24)', () => {
+    const real = plan as unknown as Graph, ar = 2965 / 3307, d = real.n.find((n) => n.r?.includes('384'))!, n23 = real.n.find((n) => n.id === 23)!;
+    const p = { f: d.f, u: d.u, v: d.v }, q = { f: n23.f, u: n23.u, v: n23.v };
+    const lift = routes(real, ar, { at: attach(real, p, ar, '384'), pt: p }, { at: [[23, 0]], pt: q }).find((r) => r.mode === 'lift');
+    expect(lift?.legs.some((l) => l.up?.k === 'l')).toBe(true);
+  });
 });
