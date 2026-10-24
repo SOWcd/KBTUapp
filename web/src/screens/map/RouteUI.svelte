@@ -27,7 +27,7 @@
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
   import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
-  import { attach, routes, openAt, type Mode, type Pt } from '../../lib/route';
+  import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
 
@@ -76,6 +76,7 @@
     return b ? routes(g, ar, a, { at: attach(g, b, ar, b.room), pt: b }).map((route) => ({ route })) : [];
   }
   const options = $derived(asked ? optionsFor(from, false) : []);
+  const rush = liftRush(new Date()); // the break between classes: the lifts are packed (owner, Oct 24)
   /** the keypad's line under the number: where that is, or the exit it leads to */
   function check(text: string): PadCheck {
     const p = text.trim() ? place(text) : null;
@@ -251,8 +252,9 @@
         <button class="opt" class:sel={i === 0} style:animation-delay="{i * 50}ms" onclick={() => start(o)}>
           <span class="ic"><Icon size={18} /></span>
           <span class="grow"><b>{t(`route.m.${o.route.mode}`)}</b>
-            <small>{o.route.legs.length > 1 ? o.route.legs.map((l) => floorName(l.f)).join(' → ') : t('route.sameFloor')}</small></span>
-          <span class="min">{mins(o.route.secs)} <small>{t('route.minShort')}</small></span>
+            {#if o.route.mode === 'lift' && rush}<small class="rush">{t('route.rush')}</small>
+            {:else}<small>{o.route.legs.length > 1 ? o.route.legs.map((l) => floorName(l.f)).join(' → ') : t('route.sameFloor')}</small>{/if}</span>
+          <span class="min">{mins(o.route.secs + (o.route.mode === 'lift' && rush ? RUSH_WAIT : 0))} <small>{t('route.minShort')}</small></span>
         </button>
       {:else}
         <p class="none">{t('route.noWay')}</p>
@@ -290,6 +292,7 @@
   .opt.sel .ic { background: var(--accent); color: #fff; }
   .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .grow b { font: 650 16px/1.2 var(--font-text); }
+  .grow small.rush { color: var(--warning-text); font-weight: 650; }
   .grow small, .min small { font: 500 13px/1.2 var(--font-text); color: var(--text-2); }
   .min { font: 800 22px/1 var(--font-display); white-space: nowrap; }
   .none { font: 500 14px/1.3 var(--font-text); color: var(--text-2); padding: 4px 2px; }

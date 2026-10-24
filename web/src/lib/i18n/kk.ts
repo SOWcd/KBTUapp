@@ -467,6 +467,7 @@ const kk: Dict = {
   'route.places': "Нөмірсіз орындар",
   'route.m.fast': "Ең жылдам",
   'route.m.lift': "Лифтпен",
+  'route.rush': "Қарбалас уақыт: лифттер толы, көбірек күтесіз",
   'route.m.alt': "Басқа жол",
   'route.sameFloor': "Осы қабатта",
   'route.openTill': "{time} дейін ашық",

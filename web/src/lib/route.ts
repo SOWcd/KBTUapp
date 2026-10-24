@@ -26,6 +26,11 @@ export function openAt(n: MapNode, d: Date): boolean {
   return a <= b ? m >= a && m < b : m >= a || m < b;
 }
 
+/** The lifts' rush (owner, Oct 24): classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
+ *  extra wait then. ponytail: every day, the hour not checked; the timetable's real hours if it ever misleads */
+export const RUSH_WAIT = 180;
+export const liftRush = (d: Date): boolean => d.getMinutes() >= 45 || d.getMinutes() < 5;
+
 type Arc = { to: number; w: number; stair?: number; lift?: boolean };
 function arcs(g: Graph, ar: number): Map<number, Arc[]> {
   const by = new Map(g.n.map((n) => [n.id, n])), adj = new Map<number, Arc[]>(g.n.map((n) => [n.id, []]));
