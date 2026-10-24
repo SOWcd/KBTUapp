@@ -27,11 +27,9 @@
   // top and bottom bars never repeat an icon (owner, Oct 21): the bottom is ticket / landmark / circle-user-round
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
-  import Newspaper from '@lucide/svelte/icons/newspaper';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import BookUser from '@lucide/svelte/icons/book-user';
   import Flag from '@lucide/svelte/icons/flag';
-  import DoorOpen from '@lucide/svelte/icons/door-open';
   import Users from '@lucide/svelte/icons/users';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
@@ -41,7 +39,6 @@
   import ListPage from './screens/afisha/List.svelte';
   import Feed from './screens/afisha/Feed.svelte';
   import Clubs from './screens/afisha/Clubs.svelte';
-  import Join from './screens/club/Join.svelte';
   import Me from './screens/profile/Me.svelte';
   import Friends from './screens/profile/Friends.svelte';
   import Settings from './screens/profile/Settings.svelte';
@@ -71,6 +68,7 @@
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id });
+  sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
   sheets.photos = (photos, start, onremove, ongone) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone });
   sheets.login = (after) => open(LoginSheet, { after, why: after ? 'go' : 'other' });
   sheets.pc = (ok) => lazy(() => import('./screens/sheets/PcSheet.svelte'), { ok });
@@ -79,7 +77,6 @@
   // Studio is for club teams only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
-  const newsPage = () => import('./screens/club/News.svelte');
   const registryPage = () => import('./screens/dmp/Registry.svelte');
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
@@ -87,7 +84,7 @@
     if (s && !session.me?.deleteAt && !['staff', 'admin', CONSENT_VERSION].includes(s.consent) && !overlays.length) sheets.consent();
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
-  const warmClub = () => { if (!session.me) return; void newsPage(); void studioPage(); void teamPage(); if (session.me.oversee) void registryPage(); };
+  const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); if (session.me.oversee) void registryPage(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
@@ -137,22 +134,20 @@
   // ---- tab 2 depends on who you are ----
   const member = $derived((session.me?.memberships.length ?? 0) > 0);
   const staff = $derived(!!session.me?.memberships.some((m) => m.role !== 'member'));
-  // a student in no club who follows some: News, then Join (owner, Oct 13: followers had no way to the posts)
-  const follower = $derived(!member && !!session.me?.student && data.orgs.some((o) => o.subscribed));
-  const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('tab.join'));
+  // tab 2 is the clubs' tab for everyone (owner, Oct 24; PLAN 46): the catalogue first (joining and following live there),
+  // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
+  const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
 
   const PAGES = $derived<Record<Tab, CapPage[]>>({
-    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays }, { label: t('page.clubs'), icon: Shapes }],
+    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }],
     club: member && session.me?.oversee  // DMP staff: the clubs registry takes the Team page's place (§4.13)
-      ? [{ label: t('page.news'), icon: Newspaper }, { label: t('page.registry'), icon: BookUser }, { label: t('tab.studio'), icon: LayoutDashboard }]
+      ? [{ label: t('page.clubs'), icon: Shapes }, { label: t('page.registry'), icon: BookUser }, { label: t('tab.studio'), icon: LayoutDashboard }]
       : member
-      ? [{ label: t('page.news'), icon: Newspaper }, staff ? { label: t('tab.studio'), icon: LayoutDashboard } : { label: t('tab.club'), icon: Flag }, { label: t('page.team'), icon: Users }]
-      : follower
-      ? [{ label: t('page.news'), icon: Newspaper }, { label: t('tab.join'), icon: DoorOpen }]
-      : [{ label: t('tab.join'), icon: DoorOpen }],
+      ? [{ label: t('page.clubs'), icon: Shapes }, staff ? { label: t('tab.studio'), icon: LayoutDashboard } : { label: t('tab.club'), icon: Flag }, { label: t('page.team'), icon: Users }]
+      : [{ label: t('page.clubs'), icon: Shapes }],
     profile: [{ label: t('page.friends'), icon: UsersRound, dot: (session.me?.counters.friendRequests ?? 0) > 0 }, { label: t('page.me'), icon: IdCardLanyard }, { label: t('me.settings'), icon: Settings2 }],
   });
-  // a non-member's tab 2 has one page (two for a follower: News, Join): clamp where it's used, so the saved page (Studio by default) comes
+  // a non-member's tab 2 has one page (the catalogue): clamp where it's used, so the saved page (Studio by default) comes
   // back by itself after sign-in
   const pageIdx = (tab: Tab) => Math.min(ui.page[tab], PAGES[tab].length - 1);
   $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.club; void ui.page.profile; persistNav(); });
@@ -235,12 +230,12 @@
       });
       return;
     }
-    if (p === 'news') { ui.tab = 'club'; ui.page.club = 0; return; }
+    if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 1; return; } // the circles on top of List
     const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (p === 'clubs') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the bot's "other clubs recruit now"
+    if (p === 'clubs') { ui.tab = 'club'; ui.page.club = 0; return; } // the bot's "other clubs recruit now"
     const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
@@ -401,9 +396,9 @@
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
         {#snippet page(i)}
           {#if tab === 'afisha'}
-            {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<Clubs />{/if}
+            {#if i === 0}<Feed />{:else}<ListPage />{/if}
           {:else if tab === 'club'}
-            {#if !member}{#if follower && i === 0}{#await newsPage() then m}<m.default />{/await}{:else}<Join />{/if}{:else if i === 0}{#await newsPage() then m}<m.default />{/await}
+            {#if !member || i === 0}<Clubs />
             {:else if session.me?.oversee}{#if i === 1}{#await registryPage() then m}<m.default />{/await}{:else}{#await studioPage() then m}<m.default />{/await}{/if}
             {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
           {:else}
@@ -418,7 +413,7 @@
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
-  <Nav labels={[t('tab.afisha'), tab2Label, t('tab.profile')]} dot={[false, (session.me?.counters.unreadBroadcasts ?? 0) > 0, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
+  <Nav labels={[t('tab.afisha'), tab2Label, t('tab.profile')]} dot={[(session.me?.counters.unreadBroadcasts ?? 0) > 0, false, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
 
   {#each overlays as o (o.id)}
     <o.component {...o.props} overlay={o} />

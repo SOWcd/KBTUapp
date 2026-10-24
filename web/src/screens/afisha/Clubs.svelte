@@ -1,6 +1,7 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus';
-  // Events → Clubs (mockup v24, owner Oct 21): subscribe to a club to hear about its new events (the bell; the Feed
+  // Tab 2 → Clubs, the catalogue for everyone (owner, Oct 24: it moved here from Events; the Join page folded in as
+  // "Recruiting now" up top). Mockup v24, owner Oct 21: subscribe to a club to hear about its new events (the bell; the Feed
   // and List show everything anyway). All / mine up top, search (a catalog of 50–100 clubs is unusable by scrolling),
   // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
   // as a list. Categories wait for the server (orgs have no category yet).
@@ -9,10 +10,11 @@
   import X from '@lucide/svelte/icons/x';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
-  import { data, toggleSub, loadChats, chatsFor } from '../../lib/state/data.svelte';
+  import { data, toggleSub, toggleJoin, loadChats, chatsFor } from '../../lib/state/data.svelte';
+  import Button from '../../ui/Button.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
+  import { dayMonth, dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
   import Hash from '@lucide/svelte/icons/hash';
   import TelegramMark from '../../ui/TelegramMark.svelte';
@@ -48,6 +50,9 @@
       if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id)) m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
     return m;
   });
+  // recruiting now (was the Join page): a round first (soonest deadline), then one-tap applications; not my own clubs
+  const recruit = $derived(session.me?.student ? data.orgs.filter((o) => (o.round || o.recruiting) && !o.myRole)
+    .sort((a, b) => +(a.kind === 'school') - +(b.kind === 'school') || (a.round ? a.round.closesAt : Infinity) - (b.round ? b.round.closesAt : Infinity)) : []);
   // a chat without a picture: its letters on a colour of its own
   const tint = (title: string) => COVERS[[...title].reduce((h, c) => h + c.charCodeAt(0), 0) % COVERS.length];
 </script>
@@ -66,6 +71,24 @@
     <input bind:value={q} placeholder={t('clubs.search')} type="search" enterkeyhint="search" autocomplete="off" />
     {#if q}<button onclick={() => (q = '')} aria-label={t('common.close')}><X size={16} /></button>{/if}
   </label>
+
+  {#if recruit.length && !q.trim()}
+    <div class="sec"><h2>{t('clubs.openNow')}</h2><span class="num">{recruit.length}</span></div>
+    <div class="recruit surface">
+      {#each recruit as o (o.id)}
+        <div class="rc">
+          <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
+          <OrgLogo org={o} size={44} />
+          <span class="txt"><b class="ellipsis">{o.name}</b><small class="ellipsis">{o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : tn('club.members', o.members)}</small></span>
+          <span class="go">
+            {#if o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
+            {:else if o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>
+            {:else}<Button kind={o.myRequest ? 'neutral' : 'primary'} size="s" onclick={() => toggleJoin(o.id)}>{o.myRequest ? t('join.sent') : t('join.apply')}</Button>{/if}
+          </span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   {#if chats && (chats.all.length || session.me?.student) && !q.trim()}
     <section class="chats">
@@ -176,6 +199,14 @@
   .cnx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { grid-column: 1 / -1; padding: 20px 4px; }
 
+  /* recruiting now: one list, the button its own target */
+  .recruit { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
+  .rc { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 12px 8px 10px; }
+  .rc + .rc { box-shadow: inset 0 1px 0 var(--line); }
+  .rc:active:not(:has(.go :active)) { background: var(--surface-2); }
+  .rc .txt { flex: 1; pointer-events: none; }
+  .rc .txt b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
+  .go { position: relative; z-index: 2; flex: none; }
   /* schools: one list */
   .schools { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .school { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 12px 8px 10px; text-align: left; color: var(--text-3); }

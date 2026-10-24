@@ -137,7 +137,7 @@
       <span class="endart"><Emoji name="sparkles_3d" size={96} /></span>
       <b>{t('feed.end')}</b>
       <p>{t('feed.endText')}</p>
-      <span class="endacts"><button onclick={() => (ui.page.afisha = 1)}>{t('page.list')}</button><button onclick={() => (ui.page.afisha = 2)}>{t('page.clubs')}</button></span>
+      <span class="endacts"><button onclick={() => (ui.page.afisha = 1)}>{t('page.list')}</button><button onclick={() => { ui.tab = 'club'; ui.page.club = 0; }}>{t('page.clubs')}</button></span>
     </div>
   {/if}
 </div>

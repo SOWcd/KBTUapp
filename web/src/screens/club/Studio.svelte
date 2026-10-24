@@ -11,6 +11,7 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
+  import PenLine from '@lucide/svelte/icons/pen-line';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
   import { glass } from '../../ui/glass';
@@ -188,9 +189,11 @@
 
     <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
          the memo to DMP; inviting lives on Team, editing the club up top (owner, Oct 17) -->
-    {#if staff || may(m, 'memo') || (vice && recruiting) || (casting && round)}
+    {#if staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="qa">
         {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
+        <!-- the club's news, now circles on Afisha (owner, Oct 24): written from here -->
+        {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></button>{/if}
         {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
         {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></button>{/if}
       </div>

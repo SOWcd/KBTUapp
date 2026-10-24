@@ -15,6 +15,7 @@
   import { dayNo, nowTs, parts, weekday, dayMonth, weekdayShort, OFFSET, at } from '../../lib/time';
   import type { ClassItem, EventCard } from '../../lib/api';
   import EventRow from '../../ui/EventRow.svelte';
+  import StoryRow from './StoryRow.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { classesOn, classesLeft } from '../../lib/classes';
   import MapPin from '@lucide/svelte/icons/map-pin';
@@ -84,6 +85,7 @@
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
     <button class="map" onclick={() => sheets.map()}><MapIcon size={18} />{t('map.open')}</button>
   </header>
+  <StoryRow />
 
   {#if cards.length}
     <!-- data-edge: at the stack's end the swipe moves the pages (Pager) -->
@@ -193,7 +195,7 @@
       <Emoji name="sparkles_3d" size={36} />
       <b>{t('list.moreSoon')}</b>
       <p class="t-foot">{t('list.moreSoonText')}</p>
-      <button onclick={() => (ui.page.afisha = 2)}>{t('list.toClubs')}</button>
+      <button onclick={() => { ui.tab = 'club'; ui.page.club = 0; }}>{t('list.toClubs')}</button>
     </section>
   {/if}
   <div class="tail"></div>

@@ -13,7 +13,9 @@
   import EventRow from '../../ui/EventRow.svelte';
   import Button from '../../ui/Button.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
-  import { api, translated, type EventCard, type Id, type Org } from '../../lib/api';
+  import { api, translated, type EventCard, type Id, type Org, type Post } from '../../lib/api';
+  import { ago } from '../../lib/time';
+  import { focusPos } from '../../lib/photo';
   import { data, toggleJoin, toggleSub } from '../../lib/state/data.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -27,6 +29,13 @@
 
   let fetched = $state<Org | null>(null);
   let fetchedEvents = $state<EventCard[] | null>(null);
+  // the club's news, every post (the circles on Afisha keep 30 days): newest first here, played oldest first
+  let posts = $state<Post[] | null>(null);
+  function play(p: Post) {
+    if (!o || !posts) return;
+    const list = [...posts].sort((a, b) => a.createdAt - b.createdAt);
+    sheets.stories([{ org: posts[0].org, posts: list, unread: list.some((x) => !x.read), cast: false }], 0, list.indexOf(p));
+  }
   // the afisha already holds the club's upcoming events (the server's list is the same filter): they show at once
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id) : null));
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
@@ -35,6 +44,7 @@
   $effect(() => {
     api.org(id).then((x) => (fetched = x)).catch(() => {});
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
+    api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});
   });
   const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club (owner, Oct 20)
   const contact = $derived(o?.links.find((u) => social(u).kind === 'telegram') ?? o?.links[0]);
@@ -76,6 +86,17 @@
       <div class="list">{#each events as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
     {:else if events}
       <p class="t-foot none">{t('club.noEvents')}</p>
+    {/if}
+    {#if posts?.length}
+      <h3 class="t-cap sec">{t('page.news')}</h3>
+      <div class="posts">
+        {#each posts.slice(0, 6) as p (p.id)}
+          <button class="pst" onclick={() => play(p)}>
+            {#if p.photo}<img src={p.photo.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
+            <span><b class="clamp-2">{p.title}</b><small>{ago(p.createdAt)}</small></span>
+          </button>
+        {/each}
+      </div>
     {/if}
   {/if}
 
@@ -130,4 +151,12 @@
   .sec { margin: 22px 2px 8px; }
   .list { display: flex; flex-direction: column; gap: 8px; }
   .none { padding: 4px 2px; }
+  .posts { display: flex; flex-direction: column; border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
+  .pst { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 14px; text-align: left; }
+  .pst + .pst { box-shadow: inset 0 1px 0 var(--line); }
+  .pst:active { background: var(--surface-2); }
+  .pst img { width: 44px; height: 44px; flex: none; border-radius: 10px; object-fit: cover; }
+  .pst span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .pst b { font: 620 15px/1.25 var(--font-text); color: var(--text); }
+  .pst small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
 </style>

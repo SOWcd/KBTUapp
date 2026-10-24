@@ -2,6 +2,7 @@
 // event row opens the event). App wires them up; components call these, so no import cycles.
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round } from '../api';
 import type { ShelfItem } from '../awards';
+import type { StoryGroup } from '../posts';
 
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean };
 
@@ -54,7 +55,9 @@ export const sheets = {
   deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
   /** a new privacy policy version: agree once more (lib/legal.ts) */
   consent: () => {},
-  /** a new post for a club (Head+), from News */
+  /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
+  stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
+  /** a new post for a club (Head+), from Studio */
   composer: (_org: Id, _post?: Post) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */
   addFriend: (_mode?: 'share') => {},
