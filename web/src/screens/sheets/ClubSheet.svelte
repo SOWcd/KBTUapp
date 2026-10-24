@@ -8,6 +8,9 @@
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Camera from '@lucide/svelte/icons/camera';
+  import Users from '@lucide/svelte/icons/users';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Avatar from '../../ui/Avatar.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
@@ -40,6 +43,7 @@
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id) : null));
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
+  const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   $effect(() => {
     api.org(id).then((x) => (fetched = x)).catch(() => {});
@@ -78,6 +82,21 @@
           {@const s = social(url)}
           <button class="link" onclick={() => openLink(url)}><SocialIcon kind={s.kind} size={19} /><span class="ellipsis">{s.label}</span></button>
         {/each}
+      </div>
+    {/if}
+
+    {#if leaders.length}
+      <h3 class="t-cap sec">{t('club.lead')}</h3>
+      <div class="posts">
+        {#each leaders as m (m.person.id)}
+          <button class="pst" onclick={() => sheets.person(m.person.id)}>
+            <Avatar person={m.person} size={44} tappable={false} />
+            <span><b class="ellipsis">{m.person.name}</b><small>{roleName(m.role, m.title)}</small></span>
+          </button>
+        {/each}
+        {#if (fetched?.members ?? o.members) > leaders.length && (!o.membersHidden || o.myRole)}
+          <button class="pst all" onclick={() => sheets.people(o.id, o.name)}><Users size={20} /><span><b>{t('club.everyone')}</b></span><small>{fetched?.members ?? o.members}</small><ChevronRight size={18} /></button>
+        {/if}
       </div>
     {/if}
 
@@ -159,4 +178,8 @@
   .pst span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .pst b { font: 620 15px/1.25 var(--font-text); color: var(--text); }
   .pst small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
+  .all { color: var(--accent-text); }
+  .all span { flex: 1; }
+  .all b { color: var(--accent-text); }
+  .all :global(svg) { flex: none; }
 </style>

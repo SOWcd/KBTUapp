@@ -107,6 +107,7 @@ export const server: Api = {
   adminOrgs: () => call('GET', '/admin/orgs'),
   adminOrgEvents: (org) => call('GET', `/admin/orgs/${org}/events`),
   team: (org) => call('GET', `/orgs/${org}/members`),
+  people: (org) => call('GET', `/orgs/${org}/people`),
   invite: (org, dept) => call('POST', `/orgs/${org}/invites`, dept ? { dept } : {}),
   acceptInvite: (token) => call('POST', `/invites/${token}`),
   changeRole: (org, user, role) => call('PATCH', `/orgs/${org}/members/${user}`, { role }),

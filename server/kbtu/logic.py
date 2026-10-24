@@ -1537,7 +1537,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
         "round": {"id": live[o["id"]]["id"], "closesAt": live[o["id"]]["closes_at"], "applied": o["id"] in applied} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
-        "recruiting": bool(o["recruiting"]), "myRequest": _request_state(asked.get(o["id"])),
+        "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "myRequest": _request_state(asked.get(o["id"])),
         "subscribed": o["id"] in subscribed,
         "myRole": mine[o["id"]]["role"] if o["id"] in mine else None, "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
         "myTitle": mine[o["id"]]["title"] if o["id"] in mine else None,
@@ -1554,7 +1554,25 @@ def org(con, v: Viewer, oid: int) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND (status = 'active' OR status = 'hidden' AND ?)", oid, v.role == "admin")
     if not o:
         raise ApiError("not_found")
-    return org_shape(con, v, o)
+    return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')")}
+
+
+def _people(con, oid: int, where: str = "") -> list[dict]:
+    found = rows(con, f"""SELECT {PERSON_COLS}, m.role, t.name AS title FROM org_members m JOIN users u ON u.id = m.user_id
+        JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ? {where}""", oid)
+    return sorted(({"person": person_ref(p), "role": p["role"], "title": p["title"]} for p in found),
+                  key=lambda m: (-RANK[m["role"]], m["person"]["name"]))
+
+
+def people(con, v: Viewer, oid: int) -> list[dict]:
+    """Everyone in a club or school, for anyone (owner, Oct 24: President and Vice first, a button for the rest), unless
+    the club hides the list: then its own people and the app's staff only. Names and roles, never @usernames (team())."""
+    o = one(con, "SELECT members_hidden FROM orgs WHERE id = ? AND status = 'active'", oid)
+    if not o:
+        raise ApiError("not_found")
+    if o["members_hidden"] and not role_in(con, v, oid) and v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+    return _people(con, oid)
 
 
 def subscribe(con, v: Viewer, oid: int, on: bool) -> dict:
@@ -1644,6 +1662,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
     if "recruiting" in body:
         sets["recruiting"] = body["recruiting"] if isinstance(body["recruiting"], bool) else bad
+    if "membersHidden" in body:
+        sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
     if "name" in body:
         sets["name"] = text("name") if 2 <= len(text("name")) <= 60 else bad
         if sets["name"] is not bad and one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived' AND id != ?", sets["name"], oid):

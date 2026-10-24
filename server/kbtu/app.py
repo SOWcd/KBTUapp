@@ -683,6 +683,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def team(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.team(con, v, oid)
 
+    @app.get("/api/orgs/{oid}/people")
+    def people(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.people(con, v, oid)
+
     @app.patch("/api/orgs/{oid}/members/{uid}")
     def update_member(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.update_member(con, v, oid, uid, body)

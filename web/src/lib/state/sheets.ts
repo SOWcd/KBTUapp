@@ -65,6 +65,8 @@ export const sheets = {
   roster: (_org: OrgRef, _onofficial?: (on: boolean) => void) => {},
   /** the club's profile (Vice+): name, letters, emoji, cover, about, links */
   clubEdit: (_org: Id) => {},
+  /** everyone in a club or school (the club sheet's "All members") */
+  people: (_org: Id, _title: string) => {},
   /** starting a club (§4.6): my application or the form */
   createClub: () => {},
   /** KBTU's academic calendar: the year's dates (SPEC §4.11) */

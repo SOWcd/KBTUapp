@@ -511,6 +511,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # recruiting is the club's own switch in Studio now: closed everywhere until a club opens it (owner, Oct 24: the list
     # of open clubs was every club); a round (Literature club's) shows on its own
     (66, "UPDATE orgs SET recruiting = 0;"),
+    # 53/68 (owner, Oct 24): a club's members are public unless the club hides the list (a support group, a faith club)
+    (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 

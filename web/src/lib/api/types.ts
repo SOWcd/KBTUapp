@@ -101,6 +101,8 @@ export interface Org extends OrgRef {
   members: number;
   upcoming: number;
   recruiting: boolean;          // takes join applications (the club closes it in Studio)
+  membersHidden: boolean;       // the club hides its member list from outsiders (owner, Oct 24)
+  leaders?: Member[];           // President and Vice, from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
   round?: { id: Id; closesAt: Ts; applied: boolean } | null; // a recruitment round taking applications (casting) and whether I applied
   subscribed: boolean;
@@ -113,10 +115,13 @@ export interface Org extends OrgRef {
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
-export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; logoId?: Id | null; slug?: string } // slug: the President's (A5)
+export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; membersHidden?: boolean; logoId?: Id | null; slug?: string } // slug: the President's (A5)
 
 /** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
  *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */
+/** Someone in a club as anyone sees them: name and role, never the @username (api.team is the club's own) */
+export interface Member { person: PersonRef; role: OrgRole; title: string | null }
+
 export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
 /** at the door (Member+): the real short name beside a nick (owner, Oct 5) */
 export type DoorRef = PersonRef & { realName: string };

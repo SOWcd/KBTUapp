@@ -3914,3 +3914,22 @@ def test_dm_on(env):
     sent = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'going_ok'").fetchall()
     assert [s["ref"] for s in sent] == ["event:1"] and bot._render(con, sent[0])[2] == "tk_1"
     assert c.post("/api/me/dm", headers=tma(30, "Guest"), json={}).status_code == 200   # a guest too: the bot may write
+
+
+def test_club_people(env):
+    """Members are public: President and Vice on the club, everyone behind a button; a club may hide the list (Oct 24)."""
+    c, cfg = env
+    pres, vice, ali, bob = login(c, 70, "pres"), login(c, 71, "vice"), login(c, 72, "ali"), login(c, 73, "bob")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    for u, role in ((pres, "president"), (vice, "vice"), (ali, "member")):
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", (u["id"], role))
+    o = c.get("/api/orgs/1", headers=tma(73)).json()
+    assert [m["role"] for m in o["leaders"]] == ["president", "vice"] and o["membersHidden"] is False
+    everyone = c.get("/api/orgs/1/people", headers=tma(73)).json()
+    assert [m["person"]["id"] for m in everyone] == [pres["id"], vice["id"], ali["id"]] and "username" not in everyone[0]
+    assert c.patch("/api/orgs/1", headers=tma(72), json={"membersHidden": True}).status_code == 403   # a member can't
+    assert c.patch("/api/orgs/1", headers=tma(70), json={"membersHidden": True}).json()["membersHidden"] is True
+    assert c.get("/api/orgs/1/people", headers=tma(73)).status_code == 403                             # a stranger now can't
+    assert len(c.get("/api/orgs/1/people", headers=tma(72)).json()) == 3                               # its own people can
+    assert len(c.get("/api/orgs/1", headers=tma(73)).json()["leaders"]) == 2                           # the leaders still show

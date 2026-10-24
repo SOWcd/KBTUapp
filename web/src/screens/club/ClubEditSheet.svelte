@@ -24,9 +24,9 @@
   let o = $state<Org | null>(null);
   // the logo (owner, Oct 5): one of my uploads, or null — then the emoji on its cover shows again
   let logo = $state<{ id?: Id; url: string } | null>(null);
-  let f = $state({ name: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[] });
+  let f = $state({ name: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
   $effect(() => {
-    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft) }; logo = x.logo ? { url: x.logo } : null; })
+    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden }; logo = x.logo ? { url: x.logo } : null; })
       .catch(() => { say(t('common.error'), 'pleading_face_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
@@ -53,6 +53,7 @@
     if (f.description.trim() !== (o.description ?? '')) p.description = f.description.trim();
     if (links.join('\n') !== o.links.join('\n')) p.links = links;
     if ((logo?.url ?? null) !== (o.logo ?? null)) p.logoId = logo?.id ?? null;
+    if (f.hidden !== o.membersHidden) p.membersHidden = f.hidden;
     return p;
   });
   const changed = $derived(Object.keys(patch).length > 0);
@@ -106,6 +107,9 @@
     <h3 class="t-cap cap">{t('ce.links')}</h3>
     <p class="t-foot note">{t('ce.linksNote')}</p>
     <LinksEdit bind:links={f.links} />
+
+    <label class="switch hide"><span><b>{t('ce.hideMembers')}</b><i class="t-foot">{t('ce.hideMembersNote')}</i></span>
+      <input type="checkbox" role="switch" bind:checked={f.hidden} /></label>
   {/if}
 
   {#snippet footer()}
@@ -134,4 +138,5 @@
   .wait { display: flex; flex-direction: column; gap: 12px; }
   .wait span { height: 60px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.5; } }
+  .hide { margin-top: 22px; }
 </style>
