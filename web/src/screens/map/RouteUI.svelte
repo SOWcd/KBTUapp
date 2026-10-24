@@ -110,6 +110,7 @@
     const via = past.length ? ' ' + t('route.past', { names: past.join(', ') }) : '';
     if (!last) {
       const lift = leg.up?.k === 'l', up = leg.to! > leg.f;
+      if (leg.up?.s === 0) return t('route.toYard') + via; // a level door, no stairs
       return t(lift ? (up ? 'route.liftUp' : 'route.liftDown') : up ? 'route.stairsUp' : 'route.stairsDown', { floor: floorName(leg.to!), near: nearRoom(leg) }).replace(/^./, (c) => c.toUpperCase()) + via; // kk: no room, a small letter first
     }
     const p = chosen?.exit ? null : place(dest);

@@ -481,6 +481,7 @@ const kk: Dict = {
   'route.floor': "{n}-қабат",
   'route.basement': "цоколь қабаты",
   'route.past': "({names} арқылы)",
+  'route.toYard': "Аулаға шық",
   'route.yard': "аула",
   'route.by': "{room} жанындағы ",
   'route.stairsUp': "{near}баспалдаққа барып, көтеріл: {floor}",

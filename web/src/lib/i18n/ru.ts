@@ -482,6 +482,7 @@ const ru = {
   'route.floor': "{n} этаж",
   'route.basement': "цокольный этаж",
   'route.past': "(через {names})",
+  'route.toYard': "Выйди во двор",
   'route.yard': "двор",
   'route.by': " у {room}",
   'route.stairsUp': "Дойди до лестницы{near} и поднимись на {floor}",

@@ -481,6 +481,7 @@ const en: Dict = {
   'route.floor': "floor {n}",
   'route.basement': "the basement",
   'route.past': "(through {names})",
+  'route.toYard': "Go out to the yard",
   'route.yard': "the yard",
   'route.by': " by {room}",
   'route.stairsUp': "Go to the stairs{near} and up to {floor}",

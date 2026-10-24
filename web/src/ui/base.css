@@ -201,6 +201,8 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 :root:not(.vt-solid), :root:not(.vt-solid) .theme-light, :root:not(.vt-solid) .theme-dark {
   transition: --glass-bg 360ms ease, --glass-pill-bg 360ms ease, --glass-clear 360ms ease;
 }
+/* glass with a tint of its own (the route's step card) goes solid too: it showed the plan through, sharp (owner, Oct 24) */
+.vt-solid .glass { background-color: var(--glass-solid) !important; }
 .vt-circle::view-transition-old(root), .vt-circle::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 /* a language switch: the old screen stays put, the new one comes into focus over it; the backgrounds match, so only the
    words visibly change */

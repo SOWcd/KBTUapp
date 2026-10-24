@@ -4,8 +4,9 @@
 
 /** k: stairs, lift, exit (else a corridor point); g: the staircase's or lift's id on all its floors; r: rooms whose door
  *  opens here; b: backup, only when there is no other way (owner, Oct 11); e: an evacuation door, opened only then (owner, Oct 24:
- *  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun */
-export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[] };
+ *  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun; s: seconds up to this stair node from
+ *  the one below, 0 for a level door: the yard is floor 0 by the west stairs and floor 1 by Halyk Coworking (owner, Oct 24) */
+export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[]; s?: number };
 export type Graph = { n: MapNode[]; e: [number, number][]; ver: number };
 export type Mode = 'fast' | 'lift' | 'alt';
 export type Pt = { f: number; u: number; v: number; node?: MapNode };
@@ -49,7 +50,7 @@ function arcs(g: Graph, ar: number): Map<number, Arc[]> {
     ns.sort((a, b) => a.f - b.f);
     ns.forEach((a, i) => ns.slice(i + 1).forEach((b) => {
       if (a.k === 'l') add(a.id, b.id, { w: LIFT_WAIT + LIFT_FLOOR * (b.f - a.f), lift: true });
-      else if (b === ns[i + 1]) add(a.id, b.id, { w: STAIR * (b.f - a.f), stair: a.g });
+      else if (b === ns[i + 1]) add(a.id, b.id, { w: b.s ?? STAIR * (b.f - a.f), stair: a.g });
     }));
   }
   return adj;
