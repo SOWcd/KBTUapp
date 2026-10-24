@@ -64,9 +64,10 @@
     const g = rt.graph, p = place(text);
     if (!g || !p) return [];
     const a = { at: attach(g, p, ar, p.room), pt: p as Pt };
-    if (out) { // the nearest exit open now, one answer (owner, Oct 15); a backup one (the night post) only when none other is open
-      const now = new Date(), open = g.n.filter((x) => x.k === 'x' && openAt(x, now)), main = open.filter((x) => !x.b);
-      const best = (main.length ? main : open).map((x) => ({ route: routes(g, ar, a, { at: [[x.id, 0]] })[0], exit: x }))
+    if (out) { // the nearest exit open now, one answer (owner, Oct 15); the backup (the night post) whenever none other is open,
+      // its own hours or not (owner, Oct 24: Saturday 20-22 had no door at all and the button went dead)
+      const now = new Date(), main = g.n.filter((x) => x.k === 'x' && !x.b && !x.e && openAt(x, now));
+      const best = (main.length ? main : g.n.filter((x) => x.k === 'x' && x.b)).map((x) => ({ route: routes(g, ar, a, { at: [[x.id, 0]] })[0], exit: x }))
         .filter((o) => o.route).sort((p, q) => p.route.secs - q.route.secs)[0];
       return best ? [best] : [];
     }

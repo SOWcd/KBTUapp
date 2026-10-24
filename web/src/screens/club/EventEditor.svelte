@@ -31,7 +31,7 @@
   import Poster from '../../ui/Poster.svelte';
   import CoverFocus from './CoverFocus.svelte';
   import { PICK_EMOJI } from '../../lib/emoji';
-  import EmojiPick from '../../ui/EmojiPick.svelte';
+  import LookPick from '../../ui/LookPick.svelte';
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
 
@@ -325,6 +325,8 @@
   }
 </script>
 
+{#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
+
 <div class="panel" bind:this={panel} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <header class="bar">
     {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
@@ -362,12 +364,11 @@
         <p class="hint tintnote">{t('ed.tint')}</p>
       {:else}
         <p class="hint">{t('ed.coverTip')}</p>
-        <EmojiPick bind:value={f.emoji} size={30} />
+        <LookPick bind:emoji={f.emoji} bind:color={f.color} colors={COLORS} />
       {/if}
-      <div class="colors" class:seven={!!(f.cover && photoColor)}>
-        {#if f.cover && photoColor}<button class="photo" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/if}
-        {#each COLORS as c (c)}<button class:on={f.color === c} style="--c:{c}" onclick={() => (f.color = c)} aria-label={c}></button>{/each}
-      </div>
+      {#if f.cover}
+        <LookPick bind:color={f.color} colors={COLORS} lead={photoColor ? tintPhoto : undefined} />
+      {/if}
     </section>
 
     <section class="cover">
@@ -606,12 +607,7 @@
   .gis span { flex: 1; min-width: 0; }
   .gis button { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: inherit; }
   .cover h2 { margin: 4px 2px 0; }
-  .colors button:active { transform: scale(0.92); }
-  .colors { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 8px; justify-items: center; }
-  .colors.seven { grid-template-columns: repeat(7, 1fr); }
-  .colors button { width: 100%; max-width: 34px; aspect-ratio: 1; border-radius: 50%; background: var(--c); transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast); }
-  .colors button.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--c); }
-  .colors .photo { display: flex; align-items: center; justify-content: center; color: #fff; animation: dot 420ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
+  .tp { display: flex; align-items: center; justify-content: center; color: #fff; animation: dot 420ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
   @keyframes dot { from { transform: scale(0.3); opacity: 0; } }
 
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

@@ -2,7 +2,6 @@
   // The club's profile (Vice+, SPEC §2): what students see on its sheet — the name, its logo or an emoji on a cover
   // (a live logo), about, up to six links (a network and its username, or any address). Save sends only what changed; leaving with
   // changes asks first.
-  import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import { api, ApiErr, original, type Id, type Org, type OrgPatch } from '../../lib/api';
@@ -11,13 +10,13 @@
   import { loadMe } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import EmojiPick from '../../ui/EmojiPick.svelte';
-  import { social, linkUrl, linkDraft, isHandle, NETS, type LinkDraft } from '../../lib/social';
+  import LookPick from '../../ui/LookPick.svelte';
+  import LinksEdit from '../../ui/LinksEdit.svelte';
+  import { linkUrl, linkDraft, type LinkDraft } from '../../lib/social';
   import { haptic } from '../../lib/tg';
   import { shrink } from '../../lib/photo';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import SocialIcon from '../../ui/SocialIcon.svelte';
   import OrgLogo, { COVERS } from '../../ui/OrgLogo.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
@@ -45,12 +44,6 @@
   const urls = $derived(f.links.map(linkUrl));
   const links = $derived(urls.filter((u): u is string => !!u));
   const linksOk = $derived(f.links.every((d, i) => !d.v.trim() || !!urls[i]));
-  let inputs = $state<HTMLInputElement[]>([]);
-  async function addLink(kind: LinkDraft['kind']) {
-    f.links.push({ kind, v: '' });
-    await tick();
-    inputs[f.links.length - 1]?.focus();
-  }
   const patch = $derived.by(() => {
     const p: OrgPatch = {};
     if (!o) return p;
@@ -105,30 +98,14 @@
     <p class="t-foot note">{t('ce.nameHint')}</p>
     {#if !logo}
       <p class="t-foot note">{t('ce.logoOr')}</p>
-      <div class="covers">{#each COVERS as c, i (i)}<button class:on={f.cover === i} style="background:{c}" onclick={() => (f.cover = i)} aria-label={String(i + 1)}></button>{/each}</div>
-      <div class="ep"><EmojiPick bind:value={f.emoji} size={26} /></div>
+      <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={() => COVERS[f.cover], (c) => (f.cover = COVERS.indexOf(c))} colors={COVERS} size={26} /></div>
     {/if}
     <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="3" placeholder={t('nc.aboutPh')} use:grow></textarea></label>
     <p class="t-foot note">{t('ce.aboutHint')}</p>
 
     <h3 class="t-cap cap">{t('ce.links')}</h3>
     <p class="t-foot note">{t('ce.linksNote')}</p>
-    {#each f.links as d, i (i)}
-      <div class="link" class:bad={!!d.v.trim() && !urls[i]}>
-        <SocialIcon kind={urls[i] ? social(urls[i]!).kind : d.kind} size={18} />
-        {#if d.kind !== 'web' && (!d.v.trim() || isHandle(d))}<span class="at">@</span>{/if}
-        <input bind:this={inputs[i]} bind:value={d.v} oninput={() => { if (d.kind !== 'web') d.v = d.v.replace(/^@+/, ''); }} maxlength="200"
-          placeholder={d.kind === 'web' ? 'site.kz' : 'username'} autocapitalize="none" autocomplete="off" spellcheck="false" inputmode={d.kind === 'web' ? 'url' : 'text'} />
-        <button class="rm" onclick={() => f.links.splice(i, 1)} aria-label={t('cm.delete')}><X size={16} /></button>
-      </div>
-    {/each}
-    {#if f.links.length < 6}
-      <div class="nets">
-        {#each [...NETS, { kind: 'web' as const, label: t('ce.site') }] as n (n.kind)}
-          <button class="addl" onclick={() => addLink(n.kind)}><SocialIcon kind={n.kind} size={16} />{n.label}</button>
-        {/each}
-      </div>
-    {/if}
+    <LinksEdit bind:links={f.links} />
   {/if}
 
   {#snippet footer()}
@@ -145,28 +122,15 @@
   .pv i { font: 600 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
   .field { margin-bottom: 12px; }
   .field textarea { min-height: 0; color: var(--text); }
-  .covers { display: flex; gap: 10px; margin: 2px 2px 14px; }
-  .covers button { width: 32px; height: 32px; border-radius: 50%; flex: none; }
-  .covers button.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
   .ep { margin-bottom: 14px; }
   .cap { margin: 6px 2px 2px; }
   .note { margin: 0 2px 10px; }
-  .link { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 6px 0 14px; margin-bottom: 8px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-2); }
-  .link.bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
-  .link input { flex: 1; min-width: 0; font: 550 15px/1.3 var(--font-text); color: var(--text); }
-  .link input::placeholder { color: var(--text-3); }
-  .at { margin-right: -9px; font: 550 15px/1.3 var(--font-text); color: var(--text-3); }
-  .rm { flex: none; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-  .rm:active { background: var(--surface); }
-  .nets { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
   .lg { display: flex; gap: 8px; margin: -2px 0 12px; }
   .pill { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 620 14px/1 var(--font-text); }
   .pill input { display: none; }
   .pill.off { background: var(--surface-2); color: var(--text-2); }
   .pill.busy { opacity: 0.6; animation: pulse 1.1s ease-in-out infinite; }
-  .addl { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
   .wait { display: flex; flex-direction: column; gap: 12px; }
   .wait span { height: 60px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.5; } }

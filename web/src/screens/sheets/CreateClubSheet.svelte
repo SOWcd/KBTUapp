@@ -1,23 +1,24 @@
 <script lang="ts">
   // Starting a club (SPEC §4.6). Said up front: clubs open after the creator's check, so the form asks for the idea —
-  // the name, an emoji on a cover (a live logo), what the club does, an optional link (https:// optional), and the required
-  // "why this club, what in the first month". After sending: "on the check"; a yes opens the club (I'm its President),
-  // a no shows the reason and when a new application is possible.
+  // the name (a real club's as the example), its look (LookPick, as the event editor), one description and the club's
+  // networks (LinksEdit; owner, Oct 24: no "why / first month", a button per network). After sending: "on the check";
+  // a yes opens the club (I'm its President), a no shows the reason and when a new application is possible.
   import { api, ApiErr, type ClubApplication } from '../../lib/api';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
-  import { loadAfisha } from '../../lib/state/data.svelte';
+  import { data, loadAfisha } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, nowTs } from '../../lib/time';
   import { PICK_EMOJI } from '../../lib/emoji';
-  import EmojiPick from '../../ui/EmojiPick.svelte';
+  import LookPick from '../../ui/LookPick.svelte';
+  import LinksEdit from '../../ui/LinksEdit.svelte';
   import { haptic } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
-  import { linkUrl } from '../../lib/social';
+  import { linkUrl, type LinkDraft } from '../../lib/social';
 
   let { overlay }: { overlay: Overlay } = $props();
 
@@ -26,17 +27,20 @@
   const waiting = $derived(!!mine && mine.status === 'rejected' && (mine.reapplyAt ?? 0) > nowTs());
   const form = $derived(mine !== undefined && (!mine || (mine.status === 'rejected' && !waiting)));
 
-  let f = $state({ name: '', emoji: PICK_EMOJI[0], cover: 2, description: '', link: '', why: '' });
+  let f = $state({ name: '', emoji: PICK_EMOJI[0], cover: COVERS[2], description: '', links: [] as LinkDraft[] });
+  // the example: a real club's name, picked once (owner, Oct 24: "e.g. Chess club" read as a template)
+  const clubs = data.orgs.filter((o) => o.kind === 'club');
+  const example = clubs.length ? clubs[Math.floor(Math.random() * clubs.length)].name : t('nc.namePh');
   const short = $derived(initials(f.name));
-  const link = $derived(f.link.trim() ? linkUrl({ kind: 'web', v: f.link }) : null);
-  const preview = $derived({ id: 0, slug: '', name: f.name || '…', short, emoji: f.emoji, cover: f.cover, kind: 'club' as const, official: false });
-  const ready = $derived(f.name.trim().length >= 2 && (!f.link.trim() || !!link) && f.description.trim().length >= 10 && f.why.trim().length >= 20);
+  const urls = $derived(f.links.map(linkUrl));
+  const preview = $derived({ id: 0, slug: '', name: f.name || example, short: short || initials(example), emoji: f.emoji, cover: COVERS.indexOf(f.cover), kind: 'club' as const, official: false });
+  const ready = $derived(f.name.trim().length >= 2 && f.links.every((d, i) => !d.v.trim() || !!urls[i]) && f.description.trim().length >= 10);
 
   let sending = $state(false);
   async function send() {
     sending = true;
     try {
-      mine = await api.applyClub({ name: f.name.trim(), short, emoji: f.emoji, cover: f.cover, description: f.description.trim(), link, why: f.why.trim() });
+      mine = await api.applyClub({ name: f.name.trim(), short, emoji: f.emoji, cover: COVERS.indexOf(f.cover), description: f.description.trim(), links: urls.filter((u): u is string => !!u) });
       haptic.ok(); burst(); say(t('nc.sent'), 'party_popper_3d');
     } catch (e) {
       haptic.error();
@@ -66,14 +70,13 @@
     {/if}
     {#if form}
       <p class="lead">{t('nc.lead', { dmp: t('tab.dmp') })}</p>
-      <div class="pv"><OrgLogo org={preview} size={64} /><span><b class="ellipsis">{f.name || t('nc.namePh')}</b><i>{t('nc.initiative')}</i></span></div>
-      <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" placeholder={t('nc.namePh')} /></label>
-      <div class="covers">{#each COVERS as c, i (i)}<button class:on={f.cover === i} style="background:{c}" onclick={() => (f.cover = i)} aria-label={String(i + 1)}></button>{/each}</div>
-      <div class="ep"><EmojiPick bind:value={f.emoji} size={26} /></div>
-      <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="2" placeholder={t('nc.aboutPh')} use:grow></textarea></label>
-      <label class="field"><span class="t-cap">{t('nc.why')}</span><textarea bind:value={f.why} maxlength="500" rows="3" placeholder={t('nc.whyPh')} use:grow></textarea>
-        {#if f.why.trim().length < 20}<i class="need">{t('nc.whyNeed', { n: 20 - f.why.trim().length })}</i>{/if}</label>
-      <label class="field"><span class="t-cap">{t('nc.link')}</span><input bind:value={f.link} maxlength="200" placeholder="instagram.com/…" autocapitalize="none" spellcheck="false" inputmode="url" /></label>
+      <div class="pv"><OrgLogo org={preview} size={64} /><b class="ellipsis" class:ph={!f.name.trim()}>{f.name || example}</b></div>
+      <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" placeholder={example} /></label>
+      <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={f.cover} colors={COVERS} size={26} /></div>
+      <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="4" placeholder={t('nc.aboutPh')} use:grow></textarea>
+        {#if f.description.trim().length < 10}<i class="need">{t('nc.whyNeed', { n: 10 - f.description.trim().length })}</i>{/if}</label>
+      <h3 class="t-cap cap">{t('ce.links')}</h3>
+      <LinksEdit bind:links={f.links} />
     {/if}
   {/if}
 
@@ -87,15 +90,12 @@
   .hd { margin: 4px 0 10px; }
   .lead { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r-m); background: var(--accent-soft); color: var(--accent-text); font: 550 14px/1.4 var(--font-text); }
   .pv { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .pv span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .pv b { font: 720 18px/1.2 var(--font-display); }
-  .pv i { font: 600 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
+  .pv b { min-width: 0; font: 720 18px/1.2 var(--font-display); }
+  .pv b.ph { color: var(--text-3); }
+  .cap { margin: 6px 2px 8px; }
   .field { margin-bottom: 12px; }
   .field textarea { min-height: 0; color: var(--text); }
   .need { font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .covers { display: flex; gap: 10px; margin: 2px 2px 14px; }
-  .covers button { width: 32px; height: 32px; border-radius: 50%; flex: none; }
-  .covers button.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
   .status { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 8px; text-align: center; }
   .status b { font: 760 22px/1.2 var(--font-display); }
   .status p { color: var(--text-2); font: 500 15px/1.45 var(--font-text); text-wrap: balance; }
