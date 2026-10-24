@@ -3,7 +3,7 @@
   // days as timelines: classes from the portal schedule (one slim row each; back-to-back ones of a subject
   // joined into one row with a "×2"/"×3" chip, lib/classes.ts; owner, Oct 13: tall blocks took too much room)
   // and events, in time order, so an event shows in the gap between classes where it really is. No date strip (owner, Oct 24: people
-  // scroll): each day's header sticks to the top while its day passes under it.
+  // scroll); the headers don't stick either (a slab mid-screen over the rows, owner's screenshot).
   // Mockup v24 (owner, Oct 21): "Today" up top with a stack of live cards you swipe like Wallet passes: the event I'm
   // going to with its countdown and ticket, and the class on now or next with its room, what's left of it and the rest
   // of the day. The class card comes first while a class is on or within the hour, else the event (most students have
@@ -202,8 +202,7 @@
   .pin-top { display: flex; align-items: center; gap: 8px; }
 
   .dayblk { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
-  /* sticks just under the capsule's fade, on the page's ground so the rows pass under it */
-  .dh { position: sticky; top: calc(var(--page-top) - 12px); z-index: 1; padding: 6px 0; margin-top: -6px; background: var(--bg); display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
+  .dh { display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
   .dh .now { color: var(--accent-text); }
 
   /* a class: one slim row between the event cards, the way a day really goes */

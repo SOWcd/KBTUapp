@@ -750,6 +750,8 @@ const en: Dict = {
   'nc.pending': "The application is with the creator. The bot will write as soon as there's an answer.",
   'nc.approved': "The club is open and you're its President. Gather your team and publish the first event!",
   'nc.open': "Open the club",
+  'nc.another': "Start another club",
+  'nc.anotherNote': "KBTU allows one presidency per person: once the new club is approved, invite its future President and hand the club over in Team.",
   'nc.rejected': "«{name}» wasn't approved for now",
   'nc.reapply': "A new application is possible from {date}",
   'nc.taken': "A club with this name exists",

@@ -25,7 +25,10 @@
   let mine = $state<ClubApplication | null | undefined>(undefined);
   $effect(() => { api.myClubApplication().then((a) => (mine = a)).catch(() => (mine = null)); });
   const waiting = $derived(!!mine && mine.status === 'rejected' && (mine.reapplyAt ?? 0) > nowTs());
-  const form = $derived(mine !== undefined && (!mine || (mine.status === 'rejected' && !waiting)));
+  // after a yes, another club too (owner, Oct 24: a President starts one with a friend and hands it over; KBTU allows one
+  // presidency, so the form says so)
+  let again = $state(false);
+  const form = $derived(mine !== undefined && (!mine || again || (mine.status === 'rejected' && !waiting)));
 
   let f = $state({ name: '', emoji: PICK_EMOJI[0], cover: COVERS[2], description: '', links: [] as LinkDraft[] });
   // the example: a real club's name, picked once (owner, Oct 24: "e.g. Chess club" read as a template)
@@ -56,12 +59,13 @@
 
   {#if mine === undefined}
     <div class="wait" aria-hidden="true"><span></span><span></span></div>
-  {:else if mine && mine.status !== 'rejected'}
+  {:else if mine && mine.status !== 'rejected' && !again}
     <div class="status" class:ok={mine.status === 'approved'}>
       <OrgLogo org={{ id: 0, slug: '', name: mine.name, short: mine.short, emoji: mine.emoji, cover: mine.cover, kind: 'club', official: false }} size={72} />
       <b>{mine.name}</b>
       <p>{mine.status === 'pending' ? t('nc.pending') : t('nc.approved')}</p>
-      {#if mine.status === 'approved' && mine.orgId}<Button kind="primary" size="l" full onclick={() => openClub(mine!.orgId!)}>{t('nc.open')}</Button>{/if}
+      {#if mine.status === 'approved' && mine.orgId}<Button kind="primary" size="l" full onclick={() => openClub(mine!.orgId!)}>{t('nc.open')}</Button>
+        <Button kind="secondary" size="l" full onclick={() => (again = true)}>{t('nc.another')}</Button>{/if}
     </div>
   {:else}
     {#if mine?.status === 'rejected'}
@@ -69,7 +73,7 @@
         {#if waiting}<p class="t-foot">{t('nc.reapply', { date: dayMonth(mine.reapplyAt!) })}</p>{/if}</div>
     {/if}
     {#if form}
-      <p class="lead">{t('nc.lead', { dmp: t('tab.dmp') })}</p>
+      <p class="lead">{t('nc.lead', { dmp: t('tab.dmp') })}{#if again}<br /><br />{t('nc.anotherNote')}{/if}</p>
       <div class="pv"><OrgLogo org={preview} size={64} /><b class="ellipsis" class:ph={!f.name.trim()}>{f.name || example}</b></div>
       <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" placeholder={example} /></label>
       <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={f.cover} colors={COVERS} size={26} /></div>
