@@ -32,7 +32,6 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
-  import Scan from '@lucide/svelte/icons/scan';
   import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
@@ -95,7 +94,7 @@
   // laid out at scale `base` (drawn sharp there); between base and s it is a CSS scale until the fingers let go.
   let s = 1, x = 0, y = 0, base = 1, settleT = 0;
   const MAX = 8;
-  const paint = (ease = '') => { plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`; if (s > 1.3 !== zoomed) zoomed = s > 1.3; };
+  const paint = (ease = '') => { plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`; };
   /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
   function settle() {
     clearTimeout(settleT);
@@ -244,7 +243,7 @@
   let glided = false, glideT = 0, touched = 0;
   // the map's controls (owner, Oct 24, mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
   // a lift panel on the right with the look button above it; every input is our keypad (MapPad), no system keyboard
-  let pad = $state(false), menu = $state(false), zoomed = $state(false);
+  let pad = $state(false), menu = $state(false);
   let at = $state<{ f: number; u: number; v: number; label: string } | null>(null); // a found place without a number (canteen)
   const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
   function checkFind(text: string): PadCheck {
@@ -427,19 +426,19 @@
       {/if}
     </div>
   </div>
-  <!-- right edge: the map's look (the menu), the floors as a lift panel, "whole floor" once zoomed in -->
+  <!-- right edge: the map's look (the menu), the floors as a lift panel ("whole floor" dropped: owner, Oct 24, no use) -->
   <div class="side">
     <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }} aria-label={t('map.look')} aria-expanded={menu}>
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
-    <div class="rail glass glass-pill" use:glass role="tablist" aria-label={t('map.floors')}>
+    <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
+    <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
       <span class="knob" style:top="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
       {#each railFloors as n (n)}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
-    <button class="rb fit glass glass-pill" class:off={!zoomed} use:glass onclick={() => { haptic.tap(); fit(); }} aria-label={t('map.fit')} inert={!zoomed}><Scan size={20} /></button>
   </div>
   <div class="menu" class:on={menu} inert={!menu}>
-    <div class="seg" class:r={look === 'light'}><span class="knob" aria-hidden="true"></span>
+    <div class="vseg" class:r={look === 'light'}><span class="knob" aria-hidden="true"></span>
       <button class:on={look === 'dark'} onclick={(e) => { if (look !== 'dark') flip(e.currentTarget); }}>{t('map.dark')}</button>
       <button class:on={look === 'light'} onclick={(e) => { if (look !== 'light') flip(e.currentTarget); }}>{t('map.light')}</button></div>
     <button class="mrow" onclick={() => setVer(ver === 'old' ? 'main' : 'old')} role="switch" aria-checked={ver === 'old'}>
@@ -455,15 +454,15 @@
   {#if card}
     <div class="rcard" data-cover>
       <span class="grab" aria-hidden="true"></span>
-      <div class="rhead"><div><h2>{cardTitle}</h2><p>{floorName(at ? at.f : (roomFloor ?? 0))}</p></div>
+      <div class="rhead"><div><h2><span class="ptb" aria-hidden="true">{t('pad.b')}</span>{cardTitle}</h2><p>{floorName(at ? at.f : (roomFloor ?? 0))}</p></div>
         <button class="xb" onclick={clearFound} aria-label={t('common.close')}><X size={18} /></button></div>
       <div class="btns"><button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
         <button class="ghost" onclick={() => { haptic.tap(); pad = true; }}><Search size={18} />{t('map.other')}</button></div>
     </div>
   {/if}
-  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
+  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
   {#if routing || rt.edit}
-    <RouteUI bind:this={ui} {rt} {cur} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
+    <RouteUI bind:this={ui} {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
   {/if}
 </div>
 
@@ -518,7 +517,7 @@
   .pin.start { width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 3px solid var(--accent); opacity: 0.5; }
   .pin.start.now { opacity: 1; }
   .pin.me { width: 22px; height: 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.22), 0 4px 14px rgba(0, 0, 0, 0.5); }
-  .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: #2fc277; } /* A is green, B blue (owner, Oct 24) */
   .pin.tag { transform: translate(-50%, calc(-100% - 20px)); padding: 6px 10px; border-radius: 10px; background: #fff; color: #0a0f24; font: 750 12px/1 var(--font-text); white-space: nowrap;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
   .pin.end { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fff, 0 6px 18px rgba(59, 107, 255, 0.8); }
@@ -542,8 +541,8 @@
   .side { position: absolute; z-index: 2; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .rb { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
-  .rb.fit.off { opacity: 0; transform: scale(0.6); pointer-events: none; }
-  .rail { position: relative; display: flex; flex-direction: column; padding: 4px; border-radius: 26px; }
+  .rail { position: relative; display: flex; flex-direction: column; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
+  .rail.away { opacity: 0; transform: translateX(40px); pointer-events: none; }
   .rail .knob { position: absolute; left: 4px; right: 4px; height: 42px; border-radius: 21px; transition: top 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
   .rail button { position: relative; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
@@ -554,13 +553,22 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 20px 50px -10px rgba(0, 0, 0, 0.7);
     transform-origin: 100% 0; transform: scale(0.6); opacity: 0; pointer-events: none; transition: transform 0.45s var(--ease-spring), opacity 0.2s; }
   .menu.on { transform: none; opacity: 1; pointer-events: auto; }
+  /* the light look: a light menu (owner, Oct 24: it was the dark one) */
+  .theme-light .menu { color: #0b1433; background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(240, 243, 252, 0.96)); box-shadow: inset 0 1px 0 #fff, 0 0 0 0.5px rgba(11, 20, 51, 0.12), 0 20px 50px -14px rgba(24, 36, 90, 0.35); }
+  .theme-light .vseg { background: rgba(11, 20, 51, 0.06); }
+  .theme-light .vseg .knob { background: #0b1433; box-shadow: 0 6px 16px -6px rgba(11, 20, 51, 0.5); }
+  .theme-light .vseg button { color: rgba(11, 20, 51, 0.6); }
+  .theme-light .vseg button.on { color: #fff; }
+  .theme-light .mrow small, .theme-light .credit { color: rgba(11, 20, 51, 0.5); }
+  .theme-light .credit { border-top-color: rgba(11, 20, 51, 0.08); }
+  .theme-light .sw { background: rgba(11, 20, 51, 0.12); }
   .shade { position: absolute; inset: 0; z-index: 3; }
-  .seg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: rgba(255, 255, 255, 0.07); }
-  .seg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
+  .vseg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: rgba(255, 255, 255, 0.07); }
+  .vseg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
-  .seg.r .knob { transform: translateX(100%); }
-  .seg button { position: relative; flex: 1; height: 36px; font: 650 14px/1 var(--font-text); color: rgba(236, 240, 255, 0.7); transition: color 0.25s; }
-  .seg button.on { color: #0a0f24; }
+  .vseg.r .knob { transform: translateX(100%); }
+  .vseg button { position: relative; flex: 1; height: 36px; font: 650 14px/1 var(--font-text); color: rgba(236, 240, 255, 0.7); transition: color 0.25s; }
+  .vseg button.on { color: #0a0f24; }
   .mrow { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 8px 8px; text-align: left; font: 600 14px/1.25 var(--font-text); color: inherit; }
   .mrow small { display: block; color: rgba(236, 240, 255, 0.5); font: 500 12px/1.3 var(--font-text); }
   .sw { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(255, 255, 255, 0.14); transition: background 0.3s; }
@@ -582,6 +590,8 @@
   @keyframes rise { from { transform: translate3d(0, 105%, 0); } }
   .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 0 auto 10px; }
   .rhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .ptb { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; margin-right: 10px; vertical-align: 2px; background: var(--accent); color: #fff;
+    font: 800 15px/1 var(--font-display); box-shadow: 0 0 0 4px rgba(59, 107, 255, 0.25); }
   .rhead h2 { margin: 0; font: 800 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
   .rhead p { margin: 3px 0 0; color: var(--text-2); font: 550 15px/1.3 var(--font-text); }
   .xb { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }

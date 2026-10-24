@@ -30,8 +30,8 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
 
-  let { title, go, green = false, placeTab, groups, check, onsubmit, onclose, start = '' }: {
-    title: string; go: string; green?: boolean; placeTab: string; groups: { title?: string; tiles: PadTile[] }[];
+  let { title, go, point, placeTab, groups, check, onsubmit, onclose, start = '' }: {
+    title: string; go: string; point: 'a' | 'b'; placeTab: string; groups: { title?: string; tiles: PadTile[] }[];
     check: (text: string) => PadCheck; onsubmit: (text: string) => void; onclose: () => void; start?: string;
   } = $props();
 
@@ -73,10 +73,11 @@
 </script>
 
 <div class="scrim" onclick={onclose} aria-hidden="true"></div>
-<div class="msheet" data-cover role="dialog" aria-label={title}>
+<!-- the point being set shows by its colour (owner, Oct 24: "which one am I setting now?"): A green, B blue -->
+<div class="msheet pt-{point}" data-cover role="dialog" aria-label={title}>
   <span class="grab" aria-hidden="true"></span>
-  <div class="head"><h2>{title}</h2><button class="xb" onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
-  <div class="seg" class:r={side === 'place'} role="tablist">
+  <div class="head"><h2><span class="pt" aria-hidden="true">{point === 'a' ? t('pad.a') : t('pad.b')}</span>{title}</h2><button class="xb" onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
+  <div class="vseg" class:r={side === 'place'} role="tablist">
     <span class="knob" aria-hidden="true"></span>
     <button role="tab" aria-selected={side === 'num'} class:on={side === 'num'} onclick={() => flip('num')}>{t('pad.number')}</button>
     <button role="tab" aria-selected={side === 'place'} class:on={side === 'place'} onclick={() => flip('place')}><MapPin size={16} />{placeTab}</button>
@@ -111,34 +112,39 @@
       {/each}
     </div>
   </div>
-  <button class="go" class:green disabled={!res.ok} onclick={submit}>{go}</button>
+  <button class="go" disabled={!res.ok} onclick={submit}>{go}</button>
 </div>
 
 <style>
   .scrim { position: absolute; inset: 0; z-index: 5; background: rgba(2, 3, 8, 0.45); animation: fade 0.4s ease; }
   @keyframes fade { from { opacity: 0; } }
-  .msheet { --k: clamp(52px, calc((100dvh - 430px) / 4.6), 72px);
+  .msheet { --k: clamp(52px, calc((100dvh - 430px) / 4.6), 72px); --pt: #3b6bff; --pt-text: var(--accent-text);
     position: absolute; z-index: 6; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(var(--safe-bottom) + 14px); border-radius: 36px 36px 0 0;
-    background: var(--surface-solid); color: var(--text); box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: radial-gradient(120% 50% at 50% 0%, color-mix(in srgb, var(--pt) 22%, transparent), transparent 70%), var(--surface-solid); color: var(--text);
+    box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1.5px 0 color-mix(in srgb, var(--pt) 70%, transparent);
     animation: rise 0.6s var(--ease-spring); }
+  .msheet.pt-a { --pt: #2fc277; --pt-text: var(--success); }
+  .head h2 { display: flex; align-items: center; gap: 10px; }
+  .pt { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--pt); color: #fff;
+    font: 800 16px/1 var(--font-display); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pt) 25%, transparent), 0 4px 14px color-mix(in srgb, var(--pt) 60%, transparent); }
   @keyframes rise { from { transform: translate3d(0, 105%, 0); } }
   .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 0 auto 8px; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-  .head h2 { margin: 0; font: 800 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
+  .head h2 { margin-block: 0; font: 800 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
   .xb { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
-  .seg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: var(--surface); }
-  .seg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
+  .vseg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: var(--surface); }
+  .vseg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
     background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
-  .seg.r .knob { transform: translateX(100%); }
-  .seg button { position: relative; flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font: 650 14px/1 var(--font-text); color: var(--text-2); transition: color 0.25s; }
-  .seg button.on { color: #0a0f24; }
+  .vseg.r .knob { transform: translateX(100%); }
+  .vseg button { position: relative; flex: 1; height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; font: 650 14px/1 var(--font-text); color: var(--text-2); transition: color 0.25s; }
+  .vseg button.on { color: #0a0f24; }
   .disp { height: 66px; margin-top: 6px; display: flex; align-items: center; justify-content: center; font: 800 56px/1 var(--font-display); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
   .disp.word { font-size: 28px; letter-spacing: -0.01em; }
   .disp .d { display: inline-block; }
   .disp .d.new { animation: pop 0.5s var(--ease-bounce); }
   @keyframes pop { from { transform: translateY(40%) scale(0.5); opacity: 0; filter: blur(6px); } }
   .ph { color: var(--text-3); opacity: 0.45; }
-  .caret { width: 3px; height: 48px; border-radius: 2px; margin-left: 4px; background: var(--accent-text); box-shadow: 0 0 10px var(--accent-text); animation: blink 1s steps(2) infinite; }
+  .caret { width: 3px; height: 48px; border-radius: 2px; margin-left: 4px; background: var(--pt-text); box-shadow: 0 0 10px var(--pt-text); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .disp.shake { animation: shake 0.4s; }
   @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
@@ -148,7 +154,7 @@
   .hint.no { color: var(--danger-text, var(--danger)); }
   .sug { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; height: 36px; margin-top: 8px; }
   .sug button { height: 36px; display: grid; place-items: center; border-radius: 18px; background: var(--surface-2); font: 650 15px/1 var(--font-text); animation: chip 0.4s var(--ease-spring) backwards; }
-  .sug button.on { background: var(--accent); color: #fff; }
+  .sug button.on { background: var(--pt); color: #fff; }
   @keyframes chip { from { opacity: 0; transform: translateY(8px) scale(0.9); } }
   .body { position: relative; height: calc(var(--k) * 4 + 36px); margin-top: 10px; transition: height 0.5s var(--ease-spring); }
   .body.tall { height: calc(var(--k) * 4 + 80px); }
@@ -176,13 +182,13 @@
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }
   .tile.off b { text-decoration: line-through; }
-  .tile.on { background: var(--accent); color: #fff; }
+  .tile.on { background: var(--pt); color: #fff; }
   .tile.on .ti { background: rgba(255, 255, 255, 0.2); color: #fff; }
   .tile.on small { color: rgba(255, 255, 255, 0.7); }
   .go { width: 100%; height: 56px; margin-top: 10px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font: 750 17px/1 var(--font-text); color: #fff;
     background: linear-gradient(180deg, #5c85ff, #3b6bff 55%, #3457e0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px -8px rgba(59, 107, 255, 0.8);
     transition: opacity 0.25s, filter 0.25s; }
-  .go.green { background: linear-gradient(180deg, #55e29c, #2fc277 60%, #22a866); color: #04140b; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 24px -8px rgba(63, 214, 138, 0.7); }
+  .pt-a .go { background: linear-gradient(180deg, #55e29c, #2fc277 60%, #22a866); color: #04140b; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 24px -8px rgba(63, 214, 138, 0.7); }
   .go:disabled { opacity: 0.35; filter: saturate(0.4); }
   :global(.theme-light) .pad button:not(.x) { background: radial-gradient(120% 100% at 50% 0%, rgba(11, 20, 51, 0.04), rgba(11, 20, 51, 0.08) 70%); box-shadow: inset 0 0 0 1px rgba(11, 20, 51, 0.06); }
   :global(.theme-light) .pad button:global(.hit) { background: #0b1433; color: #fff; }

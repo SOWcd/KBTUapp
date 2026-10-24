@@ -439,6 +439,8 @@ const en: Dict = {
   'pad.closed': "closed",
   'pad.till': "until {time}",
   'pad.arrived': "You're there",
+  'pad.a': "A",
+  'pad.b': "B",
   'map.find': "Room or place",
   'map.routeHere': "Route here",
   'map.other': "Another",

@@ -28,12 +28,12 @@
   import { say } from '../../lib/state/ui.svelte';
   import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, type Mode, type Pt } from '../../lib/route';
-  import { glass, refract } from '../../ui/glass';
+  import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
 
-  let { rt, cur, ar, rooms, to = null, out = false, go, onclose, onedit }: {
+  let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
-    go: (f: number, pts: { u: number; v: number }[]) => void; onclose: () => void; onedit?: () => void;
+    go: (f: number, pts: { u: number; v: number }[]) => void; pick: (f: number) => void; onclose: () => void; onedit?: () => void;
   } = $props();
 
   // ---- finding the way: where to comes from the room card, where from from the keypad (MapPad), then the ways ----
@@ -95,6 +95,8 @@
     haptic.tap();
     chosen = o; rt.route = o.route; rt.ends = [roomOf(from) ?? from, o.exit?.name ?? roomOf(dest) ?? dest]; show(0);
   }
+  let drop = $state<HTMLSpanElement>();
+  $effect(() => { void cur; jelly(drop); }); // the floors' drop squashes as it slides, as the tab bar's does
   function show(i: number) { rt.step = i; const leg = rt.route!.legs[i]; go(leg.f, leg.pts); }
   function stop() { haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; onclose(); }
   const hours = (x: MapNode): string => { const d = new Date(), h = x.h?.[d.getDay() === 0 ? 2 : d.getDay() === 6 ? 1 : 0]; return h ? h.split('-')[1] : ''; };
@@ -218,12 +220,17 @@
       {#if rt.step < n - 1}<button class="p" onclick={() => { haptic.tap(); show(rt.step + 1); }} aria-label={t('route.next')}><ChevronRight size={22} /></button>
       {:else}<button class="p ok" onclick={() => { haptic.ok(); say(t('pad.arrived'), 'partying_face_3d'); stop(); }} aria-label={t('pad.arrived')}><Check size={22} /></button>{/if}
     </div>
+    <!-- on the way the floors are the card's last row, the rail is gone (owner, Oct 15 and again Oct 24: it hid the way) -->
+    <div class="fls" role="tablist" aria-label={t('map.floors')}>
+      <span class="drop" bind:this={drop} style:left="calc(3px + (100% - 6px) * {cur} / 6)" aria-hidden="true"></span>
+      {#each [0, 1, 2, 3, 4, 5] as f (f)}<button role="tab" aria-selected={cur === f} class:on={cur === f} class:r={rt.route.legs.some((l) => l.f === f)} onclick={() => pick(f)}>{f || t('map.bShort')}</button>{/each}
+    </div>
   </div>
 {:else if leaving}
-  <MapPad title={t('pad.whereTitle')} go={t('route.lead')} green placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} {check}
+  <MapPad title={t('pad.whereTitle')} go={t('route.lead')} point="a" placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} {check}
           onsubmit={(v) => { from = v; const o = optionsFor(v, true)[0]; if (o) start(o); }} {onclose} />
 {:else if !asked}
-  <MapPad title={t('pad.fromTitle')} go={t('pad.showWays')} placeTab={t('pad.entranceOrPlace')} start={from}
+  <MapPad title={t('pad.fromTitle')} go={t('pad.showWays')} point="a" placeTab={t('pad.entranceOrPlace')} start={from}
           groups={[{ title: t('pad.entrances'), tiles: exits }, { title: t('pad.places'), tiles: placeTiles() }]} {check}
           onsubmit={(v) => { haptic.tap(); from = v; asked = true; }} {onclose} />
 {:else}
@@ -234,8 +241,8 @@
       {#if onedit}<button class="ed" onclick={() => { haptic.tap(); onedit(); }}><Pencil size={15} />{t('route.edit')}</button>{/if}
       <button onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
     <!-- the start: tap to change it (back to the keypad) -->
-    <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot"></span><b>{roomOf(from) ?? from}</b><Pencil size={14} /></button>
-    <div class="end"><span class="dot fin"></span><b>{roomOf(dest) ?? dest}</b></div>
+    <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot a">{t('pad.a')}</span><b>{roomOf(from) ?? from}</b><Pencil size={14} /></button>
+    <div class="end"><span class="dot b">{t('pad.b')}</span><b>{roomOf(dest) ?? dest}</b></div>
     <div class="opts">
       {#each options as o, i (i)}
         {@const Icon = ICON[o.route.mode]}
@@ -269,8 +276,9 @@
   .ways .top button:last-child { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); }
   .end { display: flex; align-items: center; gap: 10px; width: 100%; padding: 4px 2px; font: 600 15px/1.3 var(--font-text); color: var(--text); text-align: left; }
   .end :global(svg) { color: var(--text-3); }
-  .dot { width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--accent-text); flex: none; }
-  .dot.fin { background: var(--accent-text); }
+  .dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; color: #fff; font: 800 13px/1 var(--font-display); }
+  .dot.a { background: #2fc277; }
+  .dot.b { background: var(--accent); }
   .opts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
   .opt { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; background: var(--surface); text-align: left; box-shadow: inset 0 0 0 1.5px transparent;
     animation: optIn 0.5s var(--ease-spring) backwards; }
@@ -302,6 +310,17 @@
     box-shadow: 0 6px 18px -4px rgba(59, 107, 255, 0.7), inset 0 1px 0.5px rgba(255, 255, 255, 0.7), inset 0 -2px 4px rgba(0, 0, 40, 0.25); }
   .nav button.p.ok { color: #04140b; background: radial-gradient(120% 90% at 30% 0%, #8ff0bd, #2fc277 55%, #1e9d5c); box-shadow: 0 6px 18px -4px rgba(47, 194, 119, 0.7), inset 0 1px 0.5px rgba(255, 255, 255, 0.7); }
   .nav button:disabled { opacity: 0.3; }
+  .fls { position: relative; display: flex; margin: 10px 0 0 -4px; padding: 3px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 -0.5px 0 rgba(255, 255, 255, 0.18); }
+  .drop { position: absolute; top: 3px; bottom: 3px; width: calc((100% - 6px) / 6); border-radius: 999px; transition: left 380ms var(--ease-spring);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(225, 232, 255, 0.82));
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.45), inset 0 1px 0.5px #fff, inset 0 -2px 4px rgba(90, 120, 255, 0.25); }
+  .fls button { position: relative; flex: 1; height: 38px; border-radius: 999px; display: grid; place-items: center; font: 700 16px/1 var(--font-display); color: var(--text-2); transition: color 0.2s ease; }
+  .fls button.on { color: #0b1433; }
+  .fls button.r::after { content: ''; position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  :global(.theme-light) .fls { background: rgba(11, 20, 51, 0.06); box-shadow: inset 0 1px 2px rgba(11, 20, 51, 0.15); }
+  :global(.theme-light) .drop { background: #0b1433; }
+  :global(.theme-light) .fls button.on { color: #fff; }
   :global(.theme-light) .step { background: rgba(255, 255, 255, 0.5); box-shadow: 0 14px 34px -12px rgba(24, 36, 90, 0.4), 0 0 0 0.5px rgba(11, 20, 51, 0.14); }
   :global(.theme-light) .bars i { background: rgba(11, 20, 51, 0.12); }
   :global(.theme-light) .bars i.on { background: var(--accent); }

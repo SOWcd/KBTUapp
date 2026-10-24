@@ -440,6 +440,8 @@ const ru = {
   'pad.closed': "закрыт",
   'pad.till': "до {time}",
   'pad.arrived': "Ты на месте",
+  'pad.a': "А",
+  'pad.b': "Б",
   'map.find': "Аудитория или место",
   'map.routeHere': "Маршрут сюда",
   'map.other': "Другая",

@@ -439,6 +439,8 @@ const kk: Dict = {
   'pad.closed': "жабық",
   'pad.till': "{time} дейін",
   'pad.arrived': "Келдің",
+  'pad.a': "А",
+  'pad.b': "Б",
   'map.find': "Аудитория не орын",
   'map.routeHere': "Осында жол",
   'map.other': "Басқа",
