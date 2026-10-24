@@ -1,7 +1,7 @@
 // floorOf: a main-building room at the start of a place gives its floor; street addresses and other numbers never do.
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
-import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf } from './map';
+import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -22,6 +22,10 @@ it('finds the floor of a room, never of an address', () => {
   expect(floorOf('Independence Hall')).toBe(2);
   expect(floorOf('Halyk Arena')).toBe(null); // an arena in town, not the co-working's floor
   expect(roomOf('Kunaev Hall')).toBe('400a');
+  expect(spotOf('\u041d\u0430\u0443\u0447\u043d\u0430\u044f \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430')?.room).toBe('158'); // UNI-Q's names, any language
+  expect(spotOf('Research Library')?.room).toBe('158');
+  expect(adminZone('466')).toBe(true);
+  expect(adminZone('470')).toBe(false);
   expect(roomOf('Al-Farabi Hall')).toBe('470');
   expect(spotOf('Halyk Co-working')?.f).toBe(1);
   expect(spotOf('Canteen 5')).toBe(null);

@@ -33,7 +33,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
-  import MapPad, { placeTiles, exitTiles, doorHint, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
@@ -268,10 +268,10 @@
     const dn = doorNamed(text);
     if (dn) return { ok: true, tone: 'ok', hint: doorHint(dn, floorName(dn.f)) };
     const sp = spotOf(text);
-    if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) };
+    if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) + adminNote(sp.room) };
     const r = roomOf(text), f = floorOf(r);
     if (!r || f == null) return text.length >= 3 || /[^\d\u0430-\u0433]/.test(text) ? { ok: false, tone: 'no', hint: t('pad.noRoom') } : { ok: false, hint: t('pad.roomHint') };
-    return ROOMS[f]?.[r] ? { ok: true, tone: 'ok', hint: floorName(f) } : { ok: true, hint: t('pad.near', { room: r }) };
+    return ROOMS[f]?.[r] ? { ok: true, tone: 'ok', hint: floorName(f) + adminNote(r) } : { ok: true, hint: t('pad.near', { room: r }) };
   }
   /** the keypad's answer: to its floor, ringed, glided to (the room's own effect below), the card under it */
   function found(text: string) {
@@ -284,7 +284,7 @@
       glideTo(sp.u!, sp.v!, 3.2, true);
       return;
     }
-    const r = roomOf(text);
+    const r = roomOf(text) ?? spotOf(text)?.room ?? null; // a named room: UNI-Q's library is 158
     if (!r) return;
     at = null; glided = r === room; // the same room again: stay
     room = r;

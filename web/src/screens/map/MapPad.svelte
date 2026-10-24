@@ -3,13 +3,15 @@
   export type PadTile = { v: string; label: string; sub?: string; door?: boolean; off?: boolean; evac?: boolean };
   export type PadCheck = { ok: boolean; hint: string; tone?: 'ok' | 'no' };
   import { t as tr } from '../../lib/i18n/index.svelte';
-  import { SPOTS, floorOf, normRoom } from '../../lib/map';
+  import { SPOTS, floorOf, normRoom, adminZone } from '../../lib/map';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { openAt, type Graph, type MapNode } from '../../lib/route';
   const fl = (n: number) => (n ? tr('route.floor', { n }) : tr('route.basement'));
+  /** " · administration area" after a room on floor 4's south side (owner, Oct 24), else nothing */
+  export const adminNote = (r: string | null | undefined) => (adminZone(r) ? ' \u00b7 ' + tr('route.admin') : '');
   /** the places people know by name, with where they are */
   export function placeTiles(): PadTile[] {
-    return SPOTS.map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}` : fl(s.f ?? 0) }; });
+    return SPOTS.map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}${adminNote(s.room)}` : fl(s.f ?? 0) }; });
   }
   /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (owner, Oct 24:
    *  "from one entrance to another, through the building") */

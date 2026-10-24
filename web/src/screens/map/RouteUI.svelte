@@ -26,10 +26,10 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
-  import { roomOf, floorOf, nearRooms, spotOf, SPOTS } from '../../lib/map';
+  import { roomOf, floorOf, nearRooms, spotOf, adminZone, SPOTS } from '../../lib/map';
   import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
-  import MapPad, { placeTiles, exitTiles, doorHint, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeTiles, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
 
   let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
@@ -44,7 +44,7 @@
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   const exits = $derived(exitTiles(rt.graph));
   /** a picked entrance that won't open now: said by its name, the way still goes (owner, Oct 24: "I can stand by it") */
-  const shut = (text: string) => { const n = exitNamed(text); return !n ? '' : n.e ? t('pad.evac') : openAt(n, new Date()) ? '' : t('pad.closed'); };
+  const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : openAt(n, new Date()) ? '' : t('pad.closed'); };
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
    *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {
@@ -52,7 +52,7 @@
     if (x) return { f: x.f, u: x.u, v: x.v, room: x.name! };
     const s = spotOf(text);
     if (s?.f != null) return { f: s.f, u: s.u!, v: s.v!, room: spotName(s.k) };
-    const r = roomOf(text), f = floorOf(r);
+    const r = roomOf(text) ?? s?.room ?? null, f = floorOf(r);
     if (!r || f == null) return null;
     const at = rooms[f]?.[r]?.[0], door = rt.graph?.n.find((n) => n.r?.includes(r));
     if (at) return { f, u: at[0], v: at[1], room: r };
@@ -86,7 +86,7 @@
       return o?.exit ? { ok: true, tone: 'ok', hint: `${o.exit.name} \u00b7 ${t('route.openTill', { time: hours(o.exit) }).replace(/^./, (c) => c.toLowerCase())} \u00b7 ${t('route.min', { n: mins(o.route.secs) })}` }
         : { ok: false, tone: 'no', hint: t('route.noExit') };
     }
-    return { ok: true, tone: 'ok', hint: exitNamed(text) ? doorHint(exitNamed(text)!, floorName(p.f)) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) };
+    return { ok: true, tone: 'ok', hint: exitNamed(text) ? doorHint(exitNamed(text)!, floorName(p.f)) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) + adminNote(p.room) };
   }
   const mins = (s: number) => Math.max(1, Math.round(s / 60));
   const ICON: Record<Mode, typeof Zap> = { fast: Zap, lift: ArrowUpDown, alt: Shuffle };
@@ -114,7 +114,7 @@
     }
     const p = chosen?.exit ? null : place(dest);
     return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : p?.near ? t('route.toNear', { room: p.near, near: p.room })
-      : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: p?.room ?? dest })) + via;
+      : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: spotOf(dest) ? dest : p?.room ?? dest })) + via;
   }
   /** which stairs: " by" the room whose door is nearest to them, or nothing, "the stairs by 384" (a friend's note, Oct 16: a floor has several) */
   function nearRoom(leg: Leg): string {
