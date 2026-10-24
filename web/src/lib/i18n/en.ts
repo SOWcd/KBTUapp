@@ -1225,6 +1225,7 @@ const en: Dict = {
   'studio.todoRecruitHint': "Applications to the club are closed now",
   'studio.todoPres': "Not the club's President?",
   'studio.todoPresHint': "Invite them with this link, then tap them in the team list and choose “Hand over the club”",
+  'studio.todoPresMe': "I'm the President",
   'studio.invite': "Invite",
   'studio.next': "Up next",
   'studio.none': "Nothing coming up",

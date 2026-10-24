@@ -25,8 +25,7 @@
 
   let { overlay, org, post }: { overlay: Overlay; org: Id; post?: Post } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
-  let pick = $state(0);
-  $effect.pre(() => { if (!pick) pick = org; });
+  const pick = $derived(org);
   const club = $derived(mine.find((m) => m.org.id === pick)?.org);
   // "Important" messages the club's members (once a day per club), so it's Vice+'s (owner, Oct 13)
   const vice = $derived(may(mine.find((m) => m.org.id === pick), 'team'));
@@ -109,17 +108,12 @@
 <Sheet {overlay} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
 
-  {#if !was && mine.length > 1}
-    <div class="clubs hscroll" data-noswipe>
-      {#each mine as m (m.org.id)}
-        <button class:on={m.org.id === pick} onclick={() => (pick = m.org.id)}><OrgLogo org={m.org} size={22} /><span class="ellipsis">{m.org.name}</span></button>
-      {/each}
-    </div>
-  {:else if club}
+  <!-- the club chosen in Studio, no picker (owner, Oct 24: "why a choice where none is needed") -->
+  {#if club}
     <p class="from"><OrgLogo org={club} size={22} /><b>{club.name}</b></p>
   {/if}
   <!-- an event announces itself in News once published: no post for it as well (owner, Oct 13) -->
-  {#if !was && events && pick}<button class="tip" onclick={() => sheets.editor(pick!)}><CalendarPlus size={18} /><span>{t('post.eventTip')}</span><ChevronRight size={16} /></button>{/if}
+  {#if !was && events}<button class="tip" onclick={() => sheets.editor(pick)}><CalendarPlus size={18} /><span>{t('post.eventTip')}</span><ChevronRight size={16} /></button>{/if}
 
   {#if photo}
     <div class="shot"><img src={photo.url} alt="" /><button class="rm" aria-label="×" onclick={() => (photo = null)}><X size={18} /></button></div>
@@ -162,10 +156,6 @@
   .tip :global(svg) { flex: none; }
   .hd { margin: 4px 0 12px; }
   .from { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font: 600 14px/1 var(--font-text); }
-  .clubs { gap: 6px; margin: 0 calc(-1 * var(--gutter)) 12px; padding: 0 var(--gutter); }
-  .clubs button { flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; height: 36px; padding: 0 12px 0 7px; border-radius: var(--r-full);
-    background: var(--surface-2); font: 620 13.5px/1 var(--font-text); }
-  .clubs button.on { background: var(--text); color: var(--bg); }
 
   .add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 112px; border-radius: 18px; color: var(--accent-text);
     border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); font: 620 14px/1 var(--font-text); }

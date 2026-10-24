@@ -97,7 +97,11 @@
   const fresh = $derived(waiting + (round?.counts?.new ?? 0));
   const askRecruit = $derived(vice && !recruiting && !round && termJustStarted());
   // the club's creator alone in it, often not its President (owner, Oct 17): invite them, then hand it over in Team
-  const alone = $derived(m?.role === 'president' && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
+  // "I am the President" hides it for that club on this device (owner, Oct 24)
+  const PRES = 'kbtu.presOk';
+  let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
+  function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
+  const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
   const todo = $derived(alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
@@ -132,6 +136,7 @@
       <div class="todo surface">
         {#if alone}
           <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>
+          <button class="me" onclick={() => iAmPres(m.org.id)}>{t('studio.todoPresMe')}</button>
         {/if}
         {#if fresh}
           <button onclick={openRecruit}><UserPlus size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoApps')}</b></span><b class="count">{fresh}</b><ChevronRight size={18} /></button>
@@ -242,6 +247,8 @@
   .todo button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px 8px 14px; text-align: left; color: var(--text-3); }
   .todo button + button { border-top: 0.5px solid var(--line); }
   .todo button:active { background: var(--surface-2); }
+  .todo button.me { width: auto; min-height: 0; margin-top: -6px; padding: 0 12px 12px 46px; border-top: 0; font: 650 14px/1.3 var(--font-text); color: var(--accent-text); }
+  .todo button.me:active { background: none; opacity: 0.6; }
   .todo button > :global(svg:first-child) { flex: none; color: var(--accent-text); }
   .todo .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .todo .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }

@@ -1225,6 +1225,7 @@ const kk: Dict = {
   'studio.todoRecruitHint': "Қазір клубқа өтінім жабық",
   'studio.todoPres': "Клуб президенті сен емессің бе?",
   'studio.todoPresHint': "Оны осы сілтемемен шақыр, содан кейін команда тізімінде оны басып, «Клубты беру» таңда",
+  'studio.todoPresMe': "Президент — мен",
   'studio.invite': "Шақыру",
   'studio.next': "Жақын арада",
   'studio.none': "Жақын арада іс-шара жоқ",

@@ -1226,6 +1226,7 @@ const ru = {
   'studio.todoRecruitHint': "Сейчас заявки в клуб закрыты",
   'studio.todoPres': "Ты не президент клуба?",
   'studio.todoPresHint': "Пригласи его этой ссылкой, потом в списке команды нажми на него и «Передать клуб»",
+  'studio.todoPresMe': "Президент — я",
   'studio.invite': "Пригласить",
   'studio.next': "Ближайшее",
   'studio.none': "Ближайших событий нет",
