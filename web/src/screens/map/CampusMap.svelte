@@ -27,11 +27,13 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { FLOORS, TILES, loadFloor, roomOf, floorOf, normRoom, nearRooms } from '../../lib/map';
+  import { FLOORS, TILES, SPOTS, loadFloor, roomOf, floorOf, normRoom, nearRooms, spotOf } from '../../lib/map';
   import uniq from '../../assets/map/uniq-tiles.json';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass } from '../../ui/glass';
   import RouteIcon from '@lucide/svelte/icons/route';
+  import Scan from '@lucide/svelte/icons/scan';
+  import MapPad, { placeTiles, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
@@ -50,7 +52,7 @@
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
   let ver = $state<'main' | 'old'>('main');
   let rt = $state<RouteView>({ graph: null, route: null, step: 0, edit: false, sel: null, moving: false });
-  let routing = $state(false), ui = $state<RouteUI>(), typing = $state(false);
+  let routing = $state(false), ui = $state<RouteUI>();
   let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one (owner, Oct 15)
   async function openRoute(edit = false) {
     haptic.tap();
@@ -72,8 +74,6 @@
   let framed: number[][] | null = null, reframeT = 0;
   function reframe() { if (!framed || !rt.route) return; glided = false; clearTimeout(glideT); frame(framed); }
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
-  // no floors bar on the way (the step card has them) or on "Help me get out" (no use for them there)
-  const bare = $derived(!!rt.route || (routing && leaving));
   const routeFloors = $derived(new Set(rt.route?.legs.map((l) => l.f) ?? []));
   const edgesHere = $derived.by(() => {
     if (!rt.edit || !rt.graph) return [];
@@ -95,7 +95,7 @@
   // laid out at scale `base` (drawn sharp there); between base and s it is a CSS scale until the fingers let go.
   let s = 1, x = 0, y = 0, base = 1, settleT = 0;
   const MAX = 8;
-  const paint = (ease = '') => { plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`; };
+  const paint = (ease = '') => { plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`; if (s > 1.3 !== zoomed) zoomed = s > 1.3; };
   /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
   function settle() {
     clearTimeout(settleT);
@@ -242,22 +242,44 @@
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
   let glided = false, glideT = 0, touched = 0;
-  let q = $state(''), searching = $state(false), box = $state<HTMLInputElement>();
-  /** the row becomes the box; focused in the tap itself, so iOS brings the keyboard up */
-  function openSearch() { haptic.tap(); flushSync(() => (searching = true)); box?.focus(); } // no longer inert: focusable in the tap itself, so iOS brings the keyboard up
-  function shutSearch() { searching = false; box?.blur(); }
-  function find(e: SubmitEvent) {
-    e.preventDefault();
-    const r = roomOf(q);
-    if (!r) { box?.blur(); haptic.error(); say(t('map.noMatch'), 'pleading_face_3d'); return; }
-    haptic.tap();
-    shutSearch();
-    clearTimeout(glideT); glided = r === room; // the same room again: stay
+  // the map's controls (owner, Oct 24, mockup design/mock/map.html): the search bar and the exit at the bottom, the floors as
+  // a lift panel on the right with the look button above it; every input is our keypad (MapPad), no system keyboard
+  let pad = $state(false), menu = $state(false), zoomed = $state(false);
+  let at = $state<{ f: number; u: number; v: number; label: string } | null>(null); // a found place without a number (canteen)
+  const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
+  function checkFind(text: string): PadCheck {
+    const sp = spotOf(text);
+    if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) };
+    const r = roomOf(text), f = floorOf(r);
+    if (!r || f == null) return text.length >= 3 || /[^\d\u0430-\u0433]/.test(text) ? { ok: false, tone: 'no', hint: t('pad.noRoom') } : { ok: false, hint: t('pad.roomHint') };
+    return ROOMS[f]?.[r] ? { ok: true, tone: 'ok', hint: floorName(f) } : { ok: true, hint: t('pad.near', { room: r }) };
+  }
+  /** the keypad's answer: to its floor, ringed, glided to (the room's own effect below), the card under it */
+  function found(text: string) {
+    haptic.tap(); pad = false; clearTimeout(glideT);
+    const sp = spotOf(text);
+    if (sp && sp.f != null) {
+      room = null; at = { f: sp.f, u: sp.u!, v: sp.v!, label: text }; glided = false;
+      if (ver === 'old') { ver = 'main'; reset(); }
+      if (sp.f !== cur) { halt(); cur = sp.f; tiles = []; touched++; pickTiles(); }
+      glideTo(sp.u!, sp.v!, 3.2, true);
+      return;
+    }
+    const r = roomOf(text);
+    if (!r) return;
+    at = null; glided = r === room; // the same room again: stay
     room = r;
     const f = floorOf(r)!;
     if (!f && ver === 'old') { ver = 'main'; reset(); } // the basement is on the main map only
     if (f !== cur) { halt(); cur = f; tiles = []; touched++; pickTiles(); }
   }
+  const dest = $derived(room ?? at?.label ?? null);
+  const cardTitle = $derived(at ? at.label : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
+  const card = $derived(!pad && !routing && !rt.edit && !!dest);
+  function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
+  /** the whole floor again, gliding */
+  function fit() { halt(); framed = null; zoomTo(1, 0, Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2), 420); }
+  const railFloors = $derived([5, 4, 3, 2, 1, 0].filter((n) => ver === 'main' || FLOORS[n]));
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
     if (glided) return;
@@ -278,14 +300,16 @@
     });
   }
   // the main map: where the number is printed (uniq-rooms.json, read off the plan); 251a is another room than 251
-  const spots = $derived(ver === 'main' && onRoomFloor ? (ROOMS[cur][room!] ?? []) : []);
+  const spots = $derived(ver !== 'main' ? [] : onRoomFloor ? (ROOMS[cur][room!] ?? []) : at && at.f === cur ? [[at.u, at.v]] : []);
   // not numbered on the plan: its nearest numbers show roughly where it is (nearRooms)
   const near = $derived(ver !== 'main' || !onRoomFloor || spots.length ? [] : nearRooms(ROOMS[cur], room!, AR).map(([, at]) => at));
-  /** the stage's part nothing covers: below the buttons' row, above the bottom card; measured, so the keyboard, the
-   *  card's height and the safe areas all count. One place for every route framing */
+  /** the stage's part nothing covers: above the bottom card or sheet (data-cover); measured, so the card's height and
+   *  the safe areas count. One place for every framing */
   function free() {
-    const st = stage.getBoundingClientRect(), lens = panel.querySelector('.lens')?.getBoundingClientRect(), card = panel.querySelector('.card')?.getBoundingClientRect();
-    return { top: lens ? Math.max(0, lens.bottom - st.top) + 8 : 0, bottom: card ? Math.max(0, st.bottom - card.top) + 12 : 0 };
+    // offsets, not rects: a card still rising (a transform) would measure short
+    const H = panel.clientHeight; let bottom = 0;
+    panel.querySelectorAll<HTMLElement>('[data-cover]').forEach((el) => { bottom = Math.max(bottom, H - el.offsetTop); });
+    return { top: 8, bottom: bottom ? bottom + 12 : 0 };
   }
   /** glide to show all of `pts`, between the buttons at the top and `inset` px at the bottom (a route's card): the whole
    *  step, never closer than it fits (owner, Oct 15: the way didn't fit and he had to find himself) */
@@ -296,7 +320,7 @@
   }
   $effect(() => {
     if (ver !== 'main' || !onRoomFloor) return;
-    if (spots.length) glideTo(spots[0][0], spots[0][1]);
+    if (spots.length) glideTo(spots[0][0], spots[0][1], 3.2, true); // framed above the room's card
     else if (glided) return;
     else if (near.length) { say(t('map.lookHere', { room: room! }), 'pleading_face_3d'); frame(near); }
     else { glided = true; say(t('map.notFound', { room: room! }), 'pleading_face_3d'); } // the old plan won't have it either
@@ -355,9 +379,7 @@
   $effect(() => { if (overlay.closing) leave(); });
 </script>
 
-<!-- typing (a room for the way out, the route's rooms): the floors hide under the keyboard (owner, Oct 15) -->
-<div class="panel theme-{look}" class:main={ver === 'main'} class:typing class:onway={bare} bind:this={panel}
-     onfocusin={(e) => (typing = e.target instanceof HTMLInputElement)} onfocusout={() => (typing = false)}>
+<div class="panel theme-{look}" class:main={ver === 'main'} bind:this={panel}>
   {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
   <div class="stage" bind:this={stage} role="img" aria-label={title} data-noswipe
        onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
@@ -369,26 +391,31 @@
             <img src={tl.src} alt="" draggable="false" decoding="async" style:left="{tl.l}%" style:top="{tl.t}%" style:width="{tl.w}%" style:height="{tl.h}%" />
           {/each}
         </div>
-        {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
+        {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
+          {#if i === 0 && card}<span class="pin flag" style:left="{u * 100}%" style:top="{v * 100}%">{cardTitle}</span>{/if}{/each}
         {#each near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
         {#if legsHere.length || edgesHere.length}
           <svg class="way" viewBox="0 0 1000 {1000 * AR}" preserveAspectRatio="none" aria-hidden="true">
             {#each edgesHere as [a, b] (a.id + '-' + b.id)}<line x1={a.u * 1000} y1={a.v * 1000 * AR} x2={b.u * 1000} y2={b.v * 1000 * AR} class="edge" />{/each}
-            {#each legsHere as l (l.i)}<polyline points={line(l.pts)} class:now={l.i === rt.step} />{/each}
+            <!-- the way (owner, Oct 24: "chic"): a soft glow, the line, white dots running along the step on screen -->
+            {#each legsHere as l (l.i)}
+              {#if l.i === rt.step}<polyline class="glow" points={line(l.pts)} />{/if}
+              <polyline points={line(l.pts)} class:now={l.i === rt.step} />
+              {#if l.i === rt.step}<polyline class="run" points={line(l.pts)} />{/if}
+            {/each}
           </svg>
         {/if}
         {#each legsHere as l (l.i)}
           {@const a = l.pts[0]}
           {@const b = l.pts[l.pts.length - 1]}
           {#if l.i === 0}
-            <!-- where you are: the room's number in a blue badge over the printed one, the line from under it, "You are
-                 here" above (owner, Oct 15: the label hid the number, then a ring in plan units looked wrong) -->
-            <span class="pin me" style:left="{a.u * 100}%" style:top="{a.v * 100}%">{rt.ends?.[0] ?? ''}</span>
-            <span class="pin tag me-tag" style:left="{a.u * 100}%" style:top="{a.v * 100}%">{t('route.here')}</span>
+            <!-- where you are: a dot and "You are here" above it (the mockup the owner liked, Oct 24) -->
+            <span class="pin me" style:left="{a.u * 100}%" style:top="{a.v * 100}%"></span>
+            <span class="pin tag" style:left="{a.u * 100}%" style:top="{a.v * 100}%">{t('route.here')}</span>
           {:else}<span class="pin start" class:now={l.i === rt.step} style:left="{a.u * 100}%" style:top="{a.v * 100}%"></span>{/if}
-          {#if l.to != null}<span class="pin badge" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{l.to > l.f ? '↑' : '↓'}{l.to}</span>
+          {#if l.to != null}<span class="pin badge" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{l.to > l.f ? '\u2191' : '\u2193'} {floorName(l.to)}</span>
           {:else}<span class="pin end" style:left="{b.u * 100}%" style:top="{b.v * 100}%"></span>
-            {#if rt.ends}<span class="pin tag end-tag" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{rt.ends[1]}</span>{/if}{/if}
+            {#if rt.ends}<span class="pin flag" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{rt.ends[1]}</span>{/if}{/if}
         {/each}
         {#if rt.edit && rt.graph}
           {#each rt.graph.n.filter((n) => n.f === cur) as n (n.id)}
@@ -400,42 +427,48 @@
       {/if}
     </div>
   </div>
-  <!-- the magnifier grows into the box across the row while the row's buttons fade; closing runs it back -->
-  <form class="find glass glass-pill" class:open={searching} use:glass role="search" onsubmit={find} inert={!searching}>
-    <Search size={18} />
-    <input type="search" bind:this={box} bind:value={q} placeholder={t('map.search')} enterkeyhint="search" autocomplete="off" spellcheck="false"
-           aria-label={t('map.search')} onblur={() => { if (!q.trim()) searching = false; }} />
-    <button type="button" class="shut" onclick={() => { haptic.tap(); shutSearch(); }} aria-label={t('common.close')}><X size={18} /></button>
-  </form>
-  <div class="row" class:away={searching} inert={searching}>
-  <button class="lens glass glass-pill" use:glass onclick={openSearch} aria-label={t('map.search')}><Search size={20} /></button>
-  <!-- "Help me get out" for everyone, in the app too, not only by the link (owner, Oct 15); the admin's map is anyone's (Oct 16) -->
-  <button class="rb glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={20} /></button>
-  <button class="th glass glass-pill" use:glass onclick={(e) => flip(e.currentTarget)}
-          aria-label={t('map.theme')}>{#if look === 'dark'}<Sun size={20} />{:else}<Moon size={20} />{/if}</button>
-  <div class="ver glass glass-pill" use:glass role="tablist" aria-label={t('map.version')}>
-    <button role="tab" aria-selected={ver === 'main'} class:on={ver === 'main'} onclick={() => setVer('main')}>{t('map.verMain')}</button>
-    <button role="tab" aria-selected={ver === 'old'} class:on={ver === 'old'} onclick={() => setVer('old')}>{t('map.verOld')}</button>
+  <!-- right edge: the map's look (the menu), the floors as a lift panel, "whole floor" once zoomed in -->
+  <div class="side">
+    <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }} aria-label={t('map.look')} aria-expanded={menu}>
+      {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
+    <div class="rail glass glass-pill" use:glass role="tablist" aria-label={t('map.floors')}>
+      <span class="knob" style:top="{4 + railFloors.indexOf(cur) * 42}px" aria-hidden="true"></span>
+      {#each railFloors as n (n)}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}
+        aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
+    </div>
+    <button class="rb fit glass glass-pill" class:off={!zoomed} use:glass onclick={() => { haptic.tap(); fit(); }} aria-label={t('map.fit')} inert={!zoomed}><Scan size={20} /></button>
   </div>
+  <div class="menu" class:on={menu} inert={!menu}>
+    <div class="seg" class:r={look === 'light'}><span class="knob" aria-hidden="true"></span>
+      <button class:on={look === 'dark'} onclick={(e) => { if (look !== 'dark') flip(e.currentTarget); }}>{t('map.dark')}</button>
+      <button class:on={look === 'light'} onclick={(e) => { if (look !== 'light') flip(e.currentTarget); }}>{t('map.light')}</button></div>
+    <button class="mrow" onclick={() => setVer(ver === 'old' ? 'main' : 'old')} role="switch" aria-checked={ver === 'old'}>
+      <span>{t('map.oldPlan')}<small>{ver === 'old' ? t('map.note') : t('map.oldSub')}</small></span><i class="sw" class:on={ver === 'old'}></i></button>
+    <p class="credit">{t('map.noteMain')}</p>
   </div>
-  <!-- from one room to another for everyone, in sight (owner, Oct 19: "routes matter a lot", it had no button left) -->
-  <button class="goto glass glass-pill" class:away={searching || routing || rt.edit} inert={searching || routing || rt.edit} use:glass
-          onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={18} />{t('route.title')}</button>
-  <p class="note" class:away={searching || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')}</p>
-  {#if routing || rt.edit}
-    <RouteUI bind:this={ui} {rt} {cur} ar={AR} rooms={ROOMS} to={room} {go} {pick} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
+  {#if menu}<div class="shade" onpointerdown={() => (menu = false)} aria-hidden="true"></div>{/if}
+  <!-- the bottom, under the thumb: find a room or place, or get out -->
+  <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
+    <button class="bar glass glass-pill" use:glass onclick={() => { haptic.tap(); menu = false; pad = true; }}><Search size={20} />{t('map.find')}</button>
+    <button class="exit glass glass-pill" use:glass onclick={() => { menu = false; leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={24} /></button>
+  </div>
+  {#if card}
+    <div class="rcard" data-cover>
+      <span class="grab" aria-hidden="true"></span>
+      <div class="rhead"><div><h2>{cardTitle}</h2><p>{floorName(at ? at.f : (roomFloor ?? 0))}</p></div>
+        <button class="xb" onclick={clearFound} aria-label={t('common.close')}><X size={18} /></button></div>
+      <div class="btns"><button class="go" onclick={() => { leaving = false; void openRoute(); }}><RouteIcon size={20} />{t('map.routeHere')}</button>
+        <button class="ghost" onclick={() => { haptic.tap(); pad = true; }}><Search size={18} />{t('map.other')}</button></div>
+    </div>
   {/if}
-  <div class="floors glass glass-pill" class:away={searching || typing || bare} inert={searching || typing || bare} use:glass role="tablist" aria-label={t('map.floors')}>
-    {#each FLOORS as old, n (n)}
-      {#if ver === 'main' || old}<button role="tab" aria-selected={cur === n} class:on={cur === n} class:r={routeFloors.has(n)} onclick={() => pick(n)}>{n}</button>{/if}
-    {/each}
-  </div>
+  {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} placeTab={t('pad.place')} groups={[{ tiles: placeTiles() }]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
+  {#if routing || rt.edit}
+    <RouteUI bind:this={ui} {rt} {cur} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
+  {/if}
 </div>
 
 <style>
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
-  /* the floors are gone while typing: the card takes their place, right above the keyboard (owner, Oct 15) */
-  .panel.typing :global(.card), .panel.onway :global(.card) { bottom: calc(var(--safe-bottom) + 10px); }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
   /* the main map's paper all round, white, or inverted with the plan in the dark look */
   .panel.main { background: #fff; }
@@ -465,72 +498,96 @@
   .sheet img { position: absolute; display: block; pointer-events: none; -webkit-user-drag: none; }
   .sheet .ov { inset: 0; width: 100%; height: 100%; }
     .theme-dark .sheet { filter: invert(0.95) hue-rotate(180deg); }
+  /* the room found: a ring that breathes out, its name in a blue flag above (mockup, Oct 24) */
   .spot { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
-    border: 2.5px solid var(--accent); background: rgba(59, 107, 255, 0.14); animation: spot 1.6s ease-in-out infinite; }
-  @keyframes spot { 50% { opacity: 0.45; } }
+    border: 3px solid var(--accent-text); background: rgba(59, 107, 255, 0.14); box-shadow: 0 0 22px rgba(59, 107, 255, 0.6); }
+  .spot::before, .spot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 3px solid var(--accent-text); animation: ripple 2s var(--ease-spring) infinite; }
+  .spot::after { animation-delay: 1s; }
+  @keyframes ripple { from { transform: scale(1); opacity: 0.9; } to { transform: scale(2.2); opacity: 0; } }
+  .spot.near { border-style: dashed; border-color: var(--text-3); background: none; box-shadow: none; } /* a neighbour, for bearings */
+  .spot.near::before, .spot.near::after { display: none; }
+  /* the way: a soft glow under the step on screen, the line, white dots running along it (owner, Oct 24: "chic") */
   .way { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   .way polyline { fill: none; stroke: var(--accent); stroke-opacity: 0.35; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-  .way polyline.now { stroke-opacity: 1; stroke-width: 6; }
+  .way polyline.now { stroke: #6e92ff; stroke-opacity: 1; stroke-width: 7; }
+  .way polyline.glow { stroke: var(--accent); stroke-opacity: 0.22; stroke-width: 20; }
+  .way polyline.run { stroke: #fff; stroke-opacity: 1; stroke-width: 2.6; stroke-dasharray: 1 13; animation: run 0.9s linear infinite; }
+  @keyframes run { to { stroke-dashoffset: -14; } }
   .way .edge { stroke: var(--accent); stroke-opacity: 0.7; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
   .pin { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
   .pin.start { width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 3px solid var(--accent); opacity: 0.5; }
   .pin.start.now { opacity: 1; }
-  .pin.end { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(59, 107, 255, 0.25); }
-  .pin.me { min-width: 30px; height: 30px; padding: 0 8px; border-radius: 15px; display: grid; place-items: center; background: var(--accent); color: #fff;
-    font: 750 14px/1 var(--font-display); border: 2px solid #fff; box-shadow: 0 0 0 5px rgba(59, 107, 255, 0.28), 0 4px 12px rgba(0, 0, 0, 0.4); }
-  .pin.tag.me-tag { transform: translate(-50%, calc(-100% - 26px)); } /* over the badge and its 5px ring; .pin.tag below used to win and sat it on the number (owner, Oct 17) */
-  .pin.tag { transform: translate(-50%, calc(-100% - 8px)); padding: 4px 8px; border-radius: 9px; background: var(--text); color: var(--bg); font: 700 12px/1 var(--font-text); white-space: nowrap; }
-  .pin.end-tag { transform: translate(-50%, calc(-100% - 14px)); background: var(--accent); color: #fff; }
-  .pin.badge { transform: translate(-50%, -130%); padding: 3px 7px; border-radius: 9px; background: var(--accent); color: #fff; font: 700 12px/1 var(--font-text); }
+  .pin.me { width: 22px; height: 22px; border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.22), 0 4px 14px rgba(0, 0, 0, 0.5); }
+  .pin.me::after { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  .pin.tag { transform: translate(-50%, calc(-100% - 20px)); padding: 6px 10px; border-radius: 10px; background: #fff; color: #0a0f24; font: 750 12px/1 var(--font-text); white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+  .pin.end { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px #fff, 0 6px 18px rgba(59, 107, 255, 0.8); }
+  .pin.end::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--accent-text); animation: ripple 2s var(--ease-spring) infinite; }
+  .pin.flag { transform: translate(-50%, calc(-100% - 24px)); padding: 7px 12px; border-radius: 12px; white-space: nowrap; background: var(--accent); color: #fff;
+    font: 750 14px/1 var(--font-text); box-shadow: 0 8px 22px -6px rgba(59, 107, 255, 0.8); animation: flagIn 0.5s var(--ease-bounce) backwards 0.2s; }
+  .pin.flag::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; background: inherit; border-radius: 2px; transform: translateX(-50%) rotate(45deg); }
+  @keyframes flagIn { from { opacity: 0; transform: translate(-50%, calc(-100% - 10px)) scale(0.7); } }
+  .pin.badge { transform: translate(-50%, -130%); padding: 5px 9px; border-radius: 10px; background: #f5b13d; color: #1d1300; font: 800 13px/1 var(--font-text); white-space: nowrap;
+    box-shadow: 0 6px 16px -4px rgba(245, 177, 61, 0.7); }
+  :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag { animation: none; } }
   .node { position: absolute; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
     background: var(--bg); border: 2.5px solid var(--accent-text); display: grid; place-items: center; font: 800 9px/1 var(--font-text); color: #fff; }
   .node.ks, .node.kl { width: 16px; height: 16px; border-radius: 5px; background: var(--accent-2); border: 0; }
   .node.kx { width: 16px; height: 16px; background: #34c77b; border: 0; }
   .node.b { border-style: dashed; opacity: 0.7; }
   .node.sel { outline: 3px solid var(--text); outline-offset: 2px; }
-  .spot.near { border-style: dashed; border-color: var(--text-3); background: none; animation: none; } /* a neighbour, for bearings */
 
-  /* always the whole row, clipped: closed, the clip is the magnifier exactly (44 px, 64 px from the right); opening grows
-     the clip, so nothing is laid out again per frame (owner, Oct 15: moving left/right made the opening jerky) */
-  .find { position: absolute; z-index: 3; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); height: 44px; display: flex;
-    align-items: center; gap: 8px; padding: 0 13px; border-radius: var(--r-full); color: var(--text); overflow: hidden; opacity: 0; pointer-events: none;
-    clip-path: inset(0 52px 0 calc(100% - 96px) round 22px);
-    transition: clip-path 0.42s var(--ease-spring), opacity 0.16s ease 0.1s; }
-  .find.open { opacity: 1; pointer-events: auto; clip-path: inset(0 0 0 0 round 22px); transition: clip-path 0.46s var(--ease-spring), opacity 0.12s ease; }
-  .find :global(svg) { flex: none; }
-  .find input, .find .shut { opacity: 0; transition: opacity 0.14s ease; }
-  .find.open input, .find.open .shut { opacity: 1; transition: opacity 0.24s ease 0.14s; }
-  .row { transition: opacity 0.2s ease; }
-  .row.away { opacity: 0; }
-  .shut { flex: none; width: 32px; height: 32px; margin-right: -8px; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
-  .floors, .note, .goto { transition: opacity 0.2s ease, translate 0.3s var(--ease-spring); }
-  .floors.away, .note.away, .goto.away { opacity: 0; translate: 0 24px; pointer-events: none; }
-  .find input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--text);
-    font: 600 16px/1 var(--font-text); -webkit-appearance: none; appearance: none; }
-  .find input::placeholder { color: var(--text-3); }
-  .find input::-webkit-search-cancel-button { -webkit-appearance: none; }
-  .lens { position: absolute; z-index: 2; right: 64px; top: calc(max(48px, var(--top)) + 10px); width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; color: var(--text); transition: transform var(--t-fast) var(--ease); }
-  .lens:active { transform: scale(0.92); }
-  .rb { position: absolute; z-index: 2; right: 116px; top: calc(max(48px, var(--top)) + 10px); width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; color: var(--text); }
-  .floors button.r::after { content: ''; position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
-  .th { position: absolute; z-index: 2; right: 12px; top: calc(max(48px, var(--top)) + 10px); width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; color: var(--text); transition: transform var(--t-fast) var(--ease); }
-  .th:active { transform: scale(0.92); }
-  .ver { position: absolute; z-index: 2; left: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; gap: 2px; padding: 4px; border-radius: var(--r-full); }
-  .ver button { height: 36px; padding: 0 14px; border-radius: var(--r-full); font: 650 14px/1 var(--font-text); color: var(--text-2);
-    transition: background-color var(--t-fast), color var(--t-fast), transform var(--t-fast) var(--ease); }
-  .ver button.on { background: var(--text); color: var(--bg); }
-  .ver button:active { transform: scale(0.94); }
-  .goto { position: absolute; z-index: 2; left: 50%; bottom: calc(var(--safe-bottom) + 100px); transform: translateX(-50%); height: 44px; padding: 0 18px;
-    border-radius: var(--r-full); display: flex; align-items: center; gap: 8px; font: 650 15px/1 var(--font-text); color: var(--text); white-space: nowrap; }
-  .note { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 76px); text-align: center; pointer-events: none;
-    font: 550 12px/1.3 var(--font-text); color: var(--text-3); }
-  .floors { position: absolute; left: 50%; bottom: calc(var(--safe-bottom) + 16px); transform: translateX(-50%); display: flex; gap: 4px; padding: 4px;
-    border-radius: var(--r-full); }
-  .floors button { position: relative; width: 48px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-full); font: 700 16px/1 var(--font-display); color: var(--text-2);
-    transition: background-color var(--t-fast), color var(--t-fast), transform var(--t-fast) var(--ease); }
-  .floors button.on { background: var(--text); color: var(--bg); }
-  .floors button:active { transform: scale(0.92); }
+  /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
+  .side { position: absolute; z-index: 2; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .rb { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
+  .rb:active { transform: scale(0.92); transition-duration: 80ms; }
+  .rb.fit.off { opacity: 0; transform: scale(0.6); pointer-events: none; }
+  .rail { position: relative; display: flex; flex-direction: column; padding: 4px; border-radius: 26px; }
+  .rail .knob { position: absolute; left: 4px; right: 4px; height: 42px; border-radius: 21px; transition: top 0.5s var(--ease-spring);
+    background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
+  .rail button { position: relative; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s; }
+  .rail button.on { color: #0a0f24; }
+  .rail button.r::after { content: ''; position: absolute; right: 3px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: #6e92ff; box-shadow: 0 0 8px #6e92ff; }
+  .menu { position: absolute; z-index: 4; right: 66px; top: calc(max(48px, var(--top)) + 10px); width: 236px; padding: 8px; border-radius: 22px; color: #f5f7ff;
+    -webkit-backdrop-filter: blur(28px) saturate(170%); backdrop-filter: blur(28px) saturate(170%); background: linear-gradient(180deg, rgba(40, 46, 80, 0.86), rgba(16, 19, 38, 0.94));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 20px 50px -10px rgba(0, 0, 0, 0.7);
+    transform-origin: 100% 0; transform: scale(0.6); opacity: 0; pointer-events: none; transition: transform 0.45s var(--ease-spring), opacity 0.2s; }
+  .menu.on { transform: none; opacity: 1; pointer-events: auto; }
+  .shade { position: absolute; inset: 0; z-index: 3; }
+  .seg { position: relative; display: flex; padding: 3px; border-radius: 15px; background: rgba(255, 255, 255, 0.07); }
+  .seg .knob { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 12px; transition: transform 0.5s var(--ease-spring);
+    background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
+  .seg.r .knob { transform: translateX(100%); }
+  .seg button { position: relative; flex: 1; height: 36px; font: 650 14px/1 var(--font-text); color: rgba(236, 240, 255, 0.7); transition: color 0.25s; }
+  .seg button.on { color: #0a0f24; }
+  .mrow { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 8px 8px; text-align: left; font: 600 14px/1.25 var(--font-text); color: inherit; }
+  .mrow small { display: block; color: rgba(236, 240, 255, 0.5); font: 500 12px/1.3 var(--font-text); }
+  .sw { position: relative; flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(255, 255, 255, 0.14); transition: background 0.3s; }
+  .sw::after { content: ''; position: absolute; left: 2px; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform 0.45s var(--ease-bounce); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+  .sw.on { background: #3fd68a; }
+  .sw.on::after { transform: translateX(18px); }
+  .credit { margin: 4px 0 0; padding: 10px 8px 4px; border-top: 1px solid rgba(255, 255, 255, 0.08); color: rgba(236, 240, 255, 0.5); font: 500 12px/1.3 var(--font-text); }
+  /* the bottom: the search bar and the exit */
+  .dock { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px); display: flex; gap: 10px; transition: transform 0.55s var(--ease-spring), opacity 0.25s; }
+  .dock.away { transform: translateY(130%); opacity: 0; pointer-events: none; }
+  .bar { position: relative; flex: 1; min-width: 0; height: 58px; border-radius: 29px; display: flex; align-items: center; gap: 12px; padding: 0 20px; font: 600 17px/1 var(--font-text); color: var(--text-2); }
+  .bar :global(svg) { color: var(--text); flex: none; }
+  .exit { position: relative; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
+  .bar, .exit { transition: transform 0.45s var(--ease-bounce); }
+  .bar:active, .exit:active { transform: scale(0.95); transition-duration: 80ms; }
+  /* the room found: a short panel with the way to it */
+  .rcard { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(var(--safe-bottom) + 16px); border-radius: 36px 36px 0 0; background: var(--surface-solid); color: var(--text);
+    box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08); animation: rise 0.6s var(--ease-spring); }
+  @keyframes rise { from { transform: translate3d(0, 105%, 0); } }
+  .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 0 auto 10px; }
+  .rhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .rhead h2 { margin: 0; font: 800 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
+  .rhead p { margin: 3px 0 0; color: var(--text-2); font: 550 15px/1.3 var(--font-text); }
+  .xb { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
+  .btns { display: flex; gap: 10px; margin-top: 14px; }
+  .go { flex: 1; height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 750 17px/1 var(--font-text); color: #fff;
+    background: linear-gradient(180deg, #5c85ff, #3b6bff 55%, #3457e0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px -8px rgba(59, 107, 255, 0.8); }
+  .ghost { flex: none; height: 56px; padding: 0 20px; border-radius: 28px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; font: 700 16px/1 var(--font-text); color: var(--text); }
+  @media (prefers-reduced-motion: reduce) { .rcard { animation: none; } }
 </style>
