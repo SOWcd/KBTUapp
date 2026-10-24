@@ -374,9 +374,17 @@
   function appear() {
     if (appeared || gone) return;
     appeared = true; shownAt = performance.now();
-    if (iris) { const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }; panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o); halo(30, reach(iris.at), o, [1, 1, 1, 0]); }
-    else panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
-    undoChrome = hideChrome();
+    if (iris) {
+      const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' };
+      panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, o);
+      // the top capsule turns into the map's when the edge reaches it, not at the tap (owner, Oct 25)
+      const h = halo(30, reach(iris.at), o, [1, 1, 1, 0]);
+      let done = false;
+      crossing(h, (r) => r >= capsuleAt(), () => { if (!gone && !done) { done = true; undoChrome = hideChrome(); } });
+    } else {
+      panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+      undoChrome = hideChrome();
+    }
   }
   // opened from the nav's round button (owner, Oct 25: "one with the bar"): the map grows out of that circle and
   // shrinks back into it; clip-path only, the map under it is painted once
@@ -388,13 +396,25 @@
   })();
   // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
   // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
-  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[]) {
-    if (!iris) return;
+  // how far the capsule's nearest point is from the circle's centre
+  function capsuleAt(): number {
+    const c = document.querySelector('.cap')?.getBoundingClientRect();
+    if (!c || !iris) return 0;
+    const { x, y } = iris.at;
+    return Math.hypot(Math.max(c.left - x, 0, x - c.right), Math.max(c.top - y, 0, y - c.bottom));
+  }
+  // calls `go` on the frame the ring's radius passes the test (the ring is gone: at once)
+  function crossing(h: HTMLElement, test: (r: number) => boolean, go: () => void) {
+    const tick = () => { if (!h.isConnected || test(h.offsetWidth / 2)) go(); else requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[]): HTMLElement {
     const h = document.createElement('i');
     h.className = 'map-halo';
-    h.style.cssText = `left:${iris.at.x}px;top:${iris.at.y}px`;
+    h.style.cssText = `left:${iris!.at.x}px;top:${iris!.at.y}px`;
     document.body.append(h);
     h.animate({ width: [`${from * 2}px`, `${to * 2}px`], height: [`${from * 2}px`, `${to * 2}px`], opacity }, o).finished.catch(() => {}).finally(() => h.remove());
+    return h;
   }
 
   onMount(() => {
@@ -413,9 +433,10 @@
     if (gone) return;
     gone = true;
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
+    if (iris) crossing(halo(reach(iris.at), 30, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)' }, [1, 1, 0]),
+      (r) => r < capsuleAt(), () => { undoChrome(); undoChrome = () => {}; });
     const a = iris
-      ? (halo(reach(iris.at), 30, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)' }, [1, 1, 0]),
-        panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' }))
+      ? (panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' }))
       : panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
@@ -515,9 +536,10 @@
 <style>
   :global(.map-halo) {
     position: fixed; z-index: 9999; translate: -50% -50%; border-radius: 50%; pointer-events: none;
-    /* thick and clear (owner, Oct 25: the thin line was barely seen, the jump disoriented him) */
-    box-shadow: 0 0 0 3.5px rgba(255, 255, 255, 0.95), 0 0 0 7px rgba(140, 175, 255, 0.55), 0 0 36px 12px rgba(120, 160, 255, 0.55),
-      inset 0 0 0 1.5px rgba(255, 255, 255, 0.6), inset 0 0 40px 10px rgba(120, 160, 255, 0.45);
+    /* clear, not heavy (owner, Oct 25: thin was lost, 3.5 px "even too much"); the glow is stepped rings with no blur,
+       a blurred shadow repainted the whole growing circle every frame and the opening stuttered */
+    box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.95), 0 0 0 5px rgba(150, 180, 255, 0.5), 0 0 0 9px rgba(130, 165, 255, 0.24),
+      0 0 0 14px rgba(120, 160, 255, 0.1), inset 0 0 0 4px rgba(150, 180, 255, 0.3), inset 0 0 0 9px rgba(130, 165, 255, 0.12);
   }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
