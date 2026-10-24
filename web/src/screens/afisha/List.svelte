@@ -81,7 +81,6 @@
 <div class="page scroll">
   <header class="hd">
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
-    <button class="map" onclick={() => sheets.map()}><MapIcon size={18} />{t('map.open')}</button>
   </header>
   <StoryRow />
 
@@ -189,9 +188,6 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
   .hd { margin-bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-  .map { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
-  .map:active { transform: scale(0.95); }
 
   .more { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 20px 18px; text-align: center; }
   .more b { font: 700 16px/1.3 var(--font-text); }

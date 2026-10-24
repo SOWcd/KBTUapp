@@ -7,6 +7,8 @@
   import Ticket from '@lucide/svelte/icons/ticket';
   import Landmark from '@lucide/svelte/icons/landmark';
   import UserRound from '@lucide/svelte/icons/circle-user-round';
+  import MapIcon from '@lucide/svelte/icons/map';
+  import { sheets } from '../lib/state/sheets';
   import { ui, TABS, goTab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
@@ -38,6 +40,7 @@
   function pick(i: number) { if (drag?.on) return; goTab(TABS[i]); ui.awake++; }
 </script>
 
+<div class="dock">
 <nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract use:chrome
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up}>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
@@ -52,12 +55,25 @@
     </button>
   {/each}
 </nav>
+<!-- the map beside the tabs, under the thumb on every screen (owner, Oct 25: the button at the top of Today was hard
+     to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
+<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }} use:chrome
+        onclick={() => sheets.map()}>
+  <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
+  <MapIcon size={22} strokeWidth={1.9} />
+</button>
+</div>
 
 <style>
-  .nav {
-    position: absolute; left: 50%; bottom: calc(var(--safe-bottom) + 10px); z-index: var(--z-nav);
-    width: min(360px, calc(100% - 32px)); height: 60px; padding: 4px; border-radius: var(--r-full);
-    display: flex; transform: translateX(-50%); touch-action: none; overflow: hidden;
+  .dock {
+    position: absolute; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 10px); z-index: var(--z-nav);
+    display: flex; justify-content: center; align-items: center; gap: 8px; pointer-events: none;
+    transition: transform var(--t-slow) var(--ease-spring);
+  }
+  .dock > * { pointer-events: auto; }
+  :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); }
+  .nav, .mapb {
+    position: relative; flex: none; height: 60px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
     /* the capsule's clear glass (owner, Oct 4: on the big bar the dark frosted body read as plastic) */
     /* calmer than it was (owner, Oct 13: what scrolled under it smeared through "crookedly"): a stronger blur, less
        saturation; still the one backdrop filter, the rim and glow below are plain paint */
@@ -65,23 +81,27 @@
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
     background: none;
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55), 0 0 24px -6px var(--nav-glow, rgba(120, 150, 255, 0.4));
-    transition: transform var(--t-slow) var(--ease-spring), height var(--t-base) var(--ease), width var(--t-base) var(--ease);
+    transition: height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
+  .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; container-type: inline-size; }
+  .mapb { width: 60px; display: grid; place-items: center; color: var(--chrome-ink); }
+  .mapb > :global(svg) { position: relative; }
+  .mapb:active { transform: scale(0.94); }
+  .mapb.mini { width: 50px; height: 50px; }
   /* an edge all the way round (owner, Oct 13: "the bar has no edges"), but lit like glass, not drawn (Oct 24: the even
      bright outline looked fake): the shared rim's bright arc and its reflection over a faint edge, the colour fringes */
-  .nav::after {
+  .nav::after, .mapb::after {
     background:
       radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
       radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.45), transparent 70%),
       linear-gradient(90deg, rgba(255, 120, 200, 0.4), transparent 18%, transparent 82%, rgba(90, 190, 255, 0.45)),
       rgba(255, 255, 255, 0.16);
   }
-  .nav > .tone-base { background: var(--glass-clear); }
-  .nav > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.55); background-image: linear-gradient(120deg, transparent, rgba(12, 14, 24, 0.6)); }
+  .nav > .tone-base, .mapb > .tone-base { background: var(--glass-clear); }
+  .nav > .tone-feed, .mapb > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.55); background-image: linear-gradient(120deg, transparent, rgba(12, 14, 24, 0.6)); }
   /* past the halfway point to the Feed: the dark palette (chrome.ts sets data-feed) */
-  .nav:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
-  .nav.mini { height: 50px; width: min(250px, calc(100% - 64px)); }
-  :global(html[data-sheet]) .nav { transform: translate(-50%, calc(100% + 40px)); }
+  .nav:global([data-feed]), .mapb:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
+  .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
   .pill {
     position: absolute; top: 4px; bottom: 4px; width: calc((100% - 8px) / 3); border-radius: var(--r-full); background: var(--text);
     transition: left 380ms var(--ease-spring), background-color 200ms ease;
@@ -103,6 +123,6 @@
   .tab.on .lbl { max-width: 120px; opacity: 1; }
   .mini .tab.on .lbl { max-width: 0; opacity: 0; }
   .mini .tab.on { gap: 0; }
-  /* a 320-px phone: a third of the bar is ~93 px, so the longest label (Russian "Join") gets a size smaller */
-  @media (max-width: 359px) { .tab { padding: 0 2px; } .tab.on { gap: 5px; } .lbl { font-size: 13px; letter-spacing: -0.02em; } }
+  /* a narrow bar (the map button beside it takes 68 px): a third of ~95 px, the longest label gets a size smaller */
+  @container (max-width: 310px) { .tab { padding: 0 2px; } .tab.on { gap: 5px; } .lbl { font-size: 13px; letter-spacing: -0.02em; } }
 </style>
