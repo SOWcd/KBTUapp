@@ -15,7 +15,7 @@
   import Check from '@lucide/svelte/icons/check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Zap from '@lucide/svelte/icons/zap';
-  import Accessibility from '@lucide/svelte/icons/accessibility';
+  import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
   import Shuffle from '@lucide/svelte/icons/shuffle';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import Undo from '@lucide/svelte/icons/undo-2';
@@ -86,7 +86,7 @@
     return { ok: true, tone: 'ok', hint: exitNamed(text) ? t('pad.entrance', { floor: floorName(p.f) }) : p.near ? t('pad.near', { room: p.near }) : floorName(p.f) };
   }
   const mins = (s: number) => Math.max(1, Math.round(s / 60));
-  const ICON: Record<Mode, typeof Zap> = { fast: Zap, lift: Accessibility, alt: Shuffle };
+  const ICON: Record<Mode, typeof Zap> = { fast: Zap, lift: ArrowUpDown, alt: Shuffle };
   let chosen = $state<{ route: Route; exit?: MapNode } | null>(null);
   function start(o: { route: Route; exit?: MapNode }) {
     haptic.tap();

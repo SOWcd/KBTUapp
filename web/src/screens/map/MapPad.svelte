@@ -117,7 +117,7 @@
       {#each groups as g, gi (gi)}
         {#if g.title}<p class="cap">{g.title}</p>{/if}
         {#each g.tiles as tl (tl.v)}
-          <button class="tile" class:door={tl.door} class:off={tl.off} class:on={tl.v === typed} disabled={tl.off} onclick={() => take(tl.v)}>
+          <button class="tile" class:door={tl.door} class:off={tl.off} class:on={tl.v === typed} disabled={tl.off && point === 'a'} onclick={() => take(tl.v)}>
             <span class="ti">{#if tl.door}<DoorOpen size={18} />{:else}<MapPin size={18} />{/if}</span>
             <span><b>{tl.label}</b>{#if tl.sub}<small>{tl.sub}</small>{/if}</span>
           </button>

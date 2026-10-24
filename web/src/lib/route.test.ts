@@ -41,4 +41,12 @@ describe('routes', () => {
     expect(best.x.id).toBe(414); // Kazybek bi, not Panfilov's by the east stairs
     expect(best.r.via[0]).toBe(8);
   });
+  it('the lift way rides the lift at hand and takes the stairs by it, no walk to the far wing (owner, Oct 24)', () => {
+    const real = plan as unknown as Graph, ar = 2965 / 3307, p = { f: 3, u: 0.4983, v: 0.8634 }, canteen = { f: 0, u: 0.552, v: 0.602 };
+    const lift = routes(real, ar, { at: attach(real, p, ar, '351'), pt: p }, { at: attach(real, canteen, ar), pt: canteen }).find((r) => r.mode === 'lift')!;
+    const ride = lift.legs.find((l) => l.up?.k === 'l')!;
+    expect(ride.f).toBe(3);
+    expect(ride.up!.u).toBeGreaterThan(0.5); // the central lift by 348, not a wing's
+    expect(ride.up!.u).toBeLessThan(0.6);
+  });
 });
