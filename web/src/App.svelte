@@ -162,7 +162,9 @@
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : null);
   // over the Feed the nav and capsule turn into tinted dark glass (chrome.ts): at once on a tab switch,
   // and in step with the finger while the Events pager moves
-  $effect(() => { feedChrome(ui.tab === 'afisha' && ui.page.afisha === 0 ? 1 : 0, 'opacity 220ms ease'); });
+  // a titled overlay over the Feed (the map, a sheet) takes the normal chrome (owner's video, Oct 25: the map's capsule
+  // kept the Feed's tint)
+  $effect(() => { feedChrome(ui.tab === 'afisha' && ui.page.afisha === 0 && !capOf ? 1 : 0, 'opacity 220ms ease'); });
 
   // ---- live capsule: an event today you're going to, or a class within the next hour ----
   let clock = $state(nowTs());

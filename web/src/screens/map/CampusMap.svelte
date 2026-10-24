@@ -457,12 +457,19 @@
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
     let a: Animation;
     if (iris) {
-      const o = { duration: 420, easing: 'cubic-bezier(.5, 0, .6, .5)' }, far = reach(iris.at);
+      // eases out into the button (owner's video, Oct 25: an ease-in close was fastest at its last frame and "hit like a
+      // hammer"); the page under comes back on the same curve
+      const o = { duration: 480, easing: 'cubic-bezier(.45, 0, .2, 1)' }, far = reach(iris.at);
       const h = halo(far, 30, o, [1, 1, 0]);
       if (mapCap) split(h, mapCap, true);
       undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
       stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
-      if (under) { const u = under; u.updatePlaybackRate(560 / 420); u.reverse(); void u.finished.then(() => u.cancel(), () => {}); }
+      const page = document.querySelector<HTMLElement>('.app > .tab.on');
+      if (under && page) {
+        const u = under;
+        page.animate({ transform: ['scale(0.94)', 'none'], opacity: [0.45, 1], transformOrigin: [`${iris.at.x}px ${iris.at.y}px`, `${iris.at.x}px ${iris.at.y}px`] }, o);
+        u.cancel(); // the forwards hold goes, the new animation starts where it left the page
+      }
       a = panel.animate({ clipPath: [iris(far), iris(30)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
     } else a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
