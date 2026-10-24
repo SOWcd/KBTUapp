@@ -200,7 +200,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; }
   .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
   .title { display: flex; align-items: center; gap: 12px; }

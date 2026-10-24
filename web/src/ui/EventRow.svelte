@@ -62,5 +62,5 @@
   .fr { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .stack { display: flex; }
   .stack :global(.av + .av) { margin-left: -6px; }
-  .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface); }
+  .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 </style>

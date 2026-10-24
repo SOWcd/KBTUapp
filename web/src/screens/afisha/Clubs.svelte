@@ -131,7 +131,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; }
   .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
   .search { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: var(--r-m); background: var(--surface); color: var(--text-3); box-shadow: var(--shadow-card); }
   .search input { flex: 1; min-width: 0; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text); }

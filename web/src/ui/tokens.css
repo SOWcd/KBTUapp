@@ -16,12 +16,13 @@
   --gutter: 16px;
 
   /* radii */
-  --r-xs: 8px; --r-s: 12px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
+  --r-xs: 8px; --r-s: 12px; --r-tile: 14px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
 
   /* motion: transform and opacity only */
   --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
   --ease-spring: cubic-bezier(.32, .72, 0, 1);   /* sheets, iOS-like settle */
   --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-bounce: cubic-bezier(.34, 1.45, .5, 1); /* a press let go: a small overshoot */
   --t-fast: 120ms; --t-base: 220ms; --t-slow: 380ms;
 
   /* layers */
@@ -59,13 +60,14 @@
   --switch-knob: #3B6BFF;
   --bg: #07080F;
   --bg-raised: #0D0F19;
-  --surface: #11131E;
-  --surface-2: #191C29;
+  --surface: rgba(255, 255, 255, 0.055); /* translucent over the aurora (mockup v23 .surf); ~#11131E on the plain page */
+  --surface-2: rgba(255, 255, 255, 0.09);
+  --surface-solid: #11131E;             /* where a card must hide what's under it: avatar rings, buttons over the map */
   --surface-3: #222637;
   --line: rgba(255, 255, 255, 0.07);
   --line-2: rgba(255, 255, 255, 0.13);
   --text: #F4F6FF;
-  --text-2: rgba(232, 236, 255, 0.66);
+  --text-2: rgba(240, 243, 255, 0.68);
   --text-3: rgba(232, 236, 255, 0.52); /* 4.8:1 or more on every dark surface (was 3.9; owner asked about the dark colours, Oct 6) */
   --accent-text: #8FA8FF;
   --accent-soft: rgba(59, 107, 255, 0.18);
@@ -87,6 +89,7 @@
   --shadow-card: none;
   --scrim: rgba(3, 4, 10, 0.62);
   --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.26), transparent 70%);
+  --aurora: 1;                           /* the moving light behind the pages (App.svelte .aurora) */
 }
 
 :root[data-theme='light'],
@@ -98,6 +101,7 @@
   --bg-raised: #FFFFFF;
   --surface: #FFFFFF;
   --surface-2: #ECEFF6;
+  --surface-solid: #FFFFFF;
   --surface-3: #E1E5EF;
   --line: rgba(11, 20, 51, 0.07);
   --line-2: rgba(11, 20, 51, 0.13);
@@ -124,4 +128,5 @@
   --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
   --scrim: rgba(11, 20, 51, 0.32);
   --glow: radial-gradient(70% 38% at 22% -6%, rgba(59, 107, 255, 0.13), transparent 70%);
+  --aurora: 0.35;
 }

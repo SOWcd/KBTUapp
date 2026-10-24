@@ -31,9 +31,9 @@ img { max-width: 100%; }
 
 /* ---- type scale ---- */
 .t-hero { font: 800 34px/1.04 var(--font-display); letter-spacing: -0.035em; }
-.t-h1 { font: 800 27px/1.08 var(--font-display); letter-spacing: -0.03em; }
-.t-h2 { font: 780 21px/1.14 var(--font-display); letter-spacing: -0.025em; }
-.t-h3 { font: 750 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
+.t-h1 { font: 800 28px/1.08 var(--font-display); letter-spacing: -0.03em; }
+.t-h2 { font: 760 22px/1.14 var(--font-display); letter-spacing: -0.025em; }
+.t-h3 { font: 700 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
 .t-title { font: 640 16px/1.28 var(--font-text); letter-spacing: -0.01em; }
 .t-body { font: 450 15px/1.45 var(--font-text); }
 .t-callout { font: 550 14px/1.35 var(--font-text); }
@@ -181,12 +181,12 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .scroll::-webkit-scrollbar { display: none; }
 .hscroll { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
 .hscroll::-webkit-scrollbar { display: none; }
-.press { transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease); }
-.press:active { transform: scale(0.97); }
+.press { transition: transform 450ms var(--ease-bounce); }
+.press:active { transform: scale(0.965); transition-duration: 80ms; }
 /* every button answers a press (owner, Oct 13: "buttons don't react at all"): a small give, zero specificity, so a
    component's own :active, transform or transition always wins */
-:where(button:not(:disabled), [role='button']) { transition: transform var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease); }
-:where(button:not(:disabled), [role='button']):active { transform: scale(0.96); opacity: 0.85; }
+:where(button:not(:disabled), [role='button']) { transition: transform 450ms var(--ease-bounce), opacity var(--t-fast) var(--ease); }
+:where(button:not(:disabled), [role='button']):active { transform: scale(0.965); opacity: 0.9; transition-duration: 80ms; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* the theme switch (theme.svelte.ts): the circle is drawn by script on the new snapshot, so both snapshots sit still

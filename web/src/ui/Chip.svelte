@@ -8,8 +8,8 @@
 
 <style>
   .chip {
-    display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 7px;
-    font: 650 11.5px/1 var(--font-text); letter-spacing: 0.01em; white-space: nowrap; flex: none;
+    display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: var(--r-full);
+    font: 600 13px/1 var(--font-text); white-space: nowrap; flex: none; /* one family (mockup v23): colour is the only variant */
   }
   .neutral { background: var(--surface-2); color: var(--text-2); }
   .accent { background: var(--accent-soft); color: var(--accent-text); }

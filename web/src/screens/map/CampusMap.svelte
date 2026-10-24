@@ -441,7 +441,7 @@
   .panel.main { background: #fff; }
   .panel.main.theme-dark { background: #0d0d0d; }
   .x { position: absolute; z-index: 2; left: 12px; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); width: 38px; height: 38px;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface); color: var(--text); }
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-solid); color: var(--text); }
   .stage { position: absolute; inset: max(48px, var(--top)) 0 0; overflow: hidden; touch-action: none; cursor: grab; }
   .plan { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 1; transform-origin: 0 0; will-change: transform;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;

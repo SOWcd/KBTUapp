@@ -200,7 +200,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; }
   .hd { margin-bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .map { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }

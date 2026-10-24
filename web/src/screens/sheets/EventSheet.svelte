@@ -624,7 +624,7 @@
     background: var(--accent); color: #fff; font: 650 13.5px/1 var(--font-text); }
   .inv:active { transform: scale(0.95); }
   .stack :global(.av + .av) { margin-left: -8px; }
-  .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-2); }
+  .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
   .day { display: flex; flex-direction: column; gap: 5px; padding: 11px 12px; margin: -2px 0 14px; border-radius: var(--r-m); background: var(--surface-2); }
   .day .dh { display: flex; align-items: center; gap: 6px; margin-bottom: 1px; }

@@ -163,7 +163,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); display: flex; flex-direction: column; gap: 14px; }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 14px; }
   .page > :global(*) { flex-shrink: 0; }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .hd p { margin-top: 4px; }

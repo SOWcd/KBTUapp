@@ -49,7 +49,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; }
   .hd { margin-bottom: 16px; }
   .hd p { margin-top: 4px; }
   .list { display: flex; flex-direction: column; gap: 10px; }

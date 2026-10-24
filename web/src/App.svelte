@@ -388,6 +388,8 @@
 </script>
 
 <main class="app">
+  <!-- the light behind every page (mockup v23): three soft blobs that drift by transform only, tinted per tab -->
+  <div class="aurora" data-tab={ui.tab} aria-hidden="true"><i></i><i></i><i></i></div>
   {#each TABS as tab (tab)}
     <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
@@ -434,14 +436,31 @@
   .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
-  .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: var(--glow), var(--bg);
+  .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
     -webkit-mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px));
     mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }
-  .app { position: absolute; inset: 0; overflow: hidden; background: var(--bg); }
+  .app { position: absolute; inset: 0; overflow: hidden; background: var(--bg); isolation: isolate; }
+  /* the colours glide when the tab changes (typed, so they can) */
+  @property --a1 { syntax: '<color>'; inherits: true; initial-value: #2F5BFF; }
+  @property --a2 { syntax: '<color>'; inherits: true; initial-value: #7C4DFF; }
+  @property --a3 { syntax: '<color>'; inherits: true; initial-value: #19B4D6; }
+  .aurora { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: var(--aurora);
+    --a1: #2F5BFF; --a2: #7C4DFF; --a3: #19B4D6; transition: --a1 1s, --a2 1s, --a3 1s; }
+  .aurora[data-tab='club'] { --a1: #7C4DFF; --a2: #E04B9A; --a3: #3B6BFF; }
+  .aurora[data-tab='profile'] { --a1: #3B6BFF; --a2: #1BB6C9; --a3: #7C4DFF; }
+  .aurora i { position: absolute; width: 130%; height: 75%; border-radius: 50%; will-change: transform; animation: drift 26s ease-in-out infinite alternate; }
+  .aurora i:nth-child(1) { left: -45%; top: -25%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a1) 62%, transparent), transparent); }
+  .aurora i:nth-child(2) { right: -55%; top: 10%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a2) 50%, transparent), transparent); animation-duration: 32s; animation-delay: -9s; }
+  .aurora i:nth-child(3) { left: -25%; bottom: -35%; background: radial-gradient(closest-side, color-mix(in srgb, var(--a3) 34%, transparent), transparent); animation-duration: 38s; animation-delay: -17s; }
+  /* the lower half darkens, so text there stays calm */
+  .aurora::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 50%, transparent) 45%, color-mix(in srgb, var(--bg) 88%, transparent)); }
+  @keyframes drift { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(9%, 6%, 0) scale(1.08); } 100% { transform: translate3d(-7%, -5%, 0) scale(.96); } }
+  :global(html.lowfx) .aurora i { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .aurora i { animation: none !important; } }
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   /* opacity only, backwards fill: a lingering transform fill would pin the pager pages (prototype bug) */
   .tab.on { visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }

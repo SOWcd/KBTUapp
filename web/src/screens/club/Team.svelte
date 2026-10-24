@@ -260,12 +260,12 @@
 
 <style>
   .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); display: flex; flex-direction: column; gap: 10px; }
+  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
   .page > :global(*) { flex-shrink: 0; }
   /* the club's President: a crown on the avatar (owner, Oct 15) */
   .av { position: relative; }
   .crown { position: absolute; right: -3px; top: -4px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface); }
+    background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface-solid); }
   .icons { display: flex; gap: 8px; flex: none; }
   .ic { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
   .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows (owner, Oct 17) */
