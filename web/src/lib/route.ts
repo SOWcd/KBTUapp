@@ -29,9 +29,13 @@ export function openAt(n: MapNode, d: Date): boolean {
 }
 
 /** The lifts' rush (owner, Oct 24): classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
- *  extra wait then. ponytail: every day, the hour not checked; the timetable's real hours if it ever misleads */
+ *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (owner,
+ *  Oct 24, a Saturday evening said "rush"). The phone's own clock, which in Almaty is campus time. */
 export const RUSH_WAIT = 180;
-export const liftRush = (d: Date): boolean => d.getMinutes() >= 45 || d.getMinutes() < 5;
+export const liftRush = (d: Date): boolean => {
+  const day = d.getDay(), h = d.getHours(), m = d.getMinutes();
+  return day >= 1 && day <= 5 && ((m >= 45 && h >= 7 && h <= 18) || (m < 5 && h >= 8 && h <= 19));
+};
 
 type Arc = { to: number; w: number; stair?: number; lift?: boolean };
 function arcs(g: Graph, ar: number): Map<number, Arc[]> {

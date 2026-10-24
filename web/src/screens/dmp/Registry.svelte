@@ -118,7 +118,7 @@
 
 <style>
   /* as a page of DMP's tab (the sheet brings its own): under the capsule, the bottom nav's room at the end */
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; background: var(--glow), var(--bg); }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--glow), var(--bg); }
   .tail { height: calc(var(--bottom) + 24px); }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .hd p { margin-top: 4px; }

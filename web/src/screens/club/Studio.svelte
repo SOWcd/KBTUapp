@@ -11,6 +11,8 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import { fold } from '../../ui/fold';
   import { api, type EventCard, type Id, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
@@ -76,6 +78,7 @@
   }
 
   let seg = $state(0);
+  let picking = $state(false);
   const segs = $derived(staff ? [[t('studio.upcoming'), upcoming], [t('studio.drafts'), drafts], [t('studio.past'), past]] as const : [[t('studio.upcoming'), upcoming], [t('studio.past'), past]] as const);
   const list = $derived(segs[Math.min(seg, segs.length - 1)][1]);
 
@@ -100,20 +103,28 @@
 <div class="page scroll">
   {#if m}
     <header class="hd">
-      {#if mine.length > 1}
-        <div class="orgs">
-          {#each mine as x (x.org.id)}
-            <button class:on={x.org.id === m.org.id} onclick={() => { ui.club = x.org.id; seg = 0; }}><OrgLogo org={x.org} size={22} /><span class="ellipsis">{x.org.name}</span></button>
-          {/each}
+      <!-- the club's name switches clubs (owner, Oct 23, A3) and holds its page's settings: no chips row, no pencil (Oct 24) -->
+      {#if mine.length > 1 || vice}
+        <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>
+          <OrgLogo org={m.org} size={46} />
+          <span class="name"><span class="h"><h1 class="ellipsis">{m.org.name}</h1><ChevronDown size={20} strokeWidth={2.6} class="chev" /></span>
+            <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
+        </button>
+      {:else}
+        <div class="title">
+          <OrgLogo org={m.org} size={46} />
+          <span class="name"><h1 class="ellipsis">{m.org.name}</h1>
+            <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
         </div>
       {/if}
-      <div class="title">
-        <OrgLogo org={m.org} size={46} />
-        <span class="name"><h1 class="ellipsis">{m.org.name}</h1>
-          <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
-        <!-- the club's page, edited from up here (owner, Oct 17: the row of buttons below said nothing) -->
-        {#if vice}<button class="ic" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} /></button>{/if}
-      </div>
+      {#if picking}
+        <div class="pick surface" transition:fold>
+          {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
+            <button onclick={() => { haptic.tap(); ui.club = x.org.id; seg = 0; picking = false; }}><OrgLogo org={x.org} size={30} /><span class="tx"><b class="ellipsis">{x.org.name}</b><i class="t-foot ellipsis">{roleName(x.role, x.title)}</i></span></button>
+          {/each}
+          {#if vice}<button onclick={() => { picking = false; sheets.clubEdit(m.org.id); }}><span class="pi"><Pencil size={17} /></span><span class="tx"><b>{t('ce.title')}</b></span><ChevronRight size={18} /></button>{/if}
+        </div>
+      {/if}
     </header>
 
     {#if todo}
@@ -200,22 +211,27 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
   .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
   .title { display: flex; align-items: center; gap: 12px; }
   .name { flex: 1; min-width: 0; }
   .name h1 { font: 800 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
-  .ic { width: 38px; height: 38px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text);
-    transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
-  /* a press glows (owner, Oct 17: a tap must show it was seen) */
-  .ic:active { transform: scale(0.92); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); }
+  button.title { width: 100%; text-align: left; }
+  button.title:active { opacity: 0.7; }
+  .h { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .h :global(.chev) { flex: none; color: var(--text-3); transition: transform var(--t-base) var(--ease); }
+  [aria-expanded='true'] .h :global(.chev) { transform: rotate(180deg); }
+  .pick { display: flex; flex-direction: column; margin-top: 12px; padding: 4px 0; border-radius: var(--r-l); overflow: hidden; }
+  .pick button { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; text-align: left; color: var(--text-3); }
+  .pick button + button { border-top: 0.5px solid var(--line); }
+  .pick button:active { background: var(--surface-2); }
+  .pick .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .pick .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
+  .pick .tx i { font-style: normal; }
+  .pi { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
   .role { display: flex; align-items: center; gap: 5px; }
   .role :global(svg) { color: #FFB23D; }
-  .orgs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
-  .orgs button { display: inline-flex; align-items: center; gap: 7px; max-width: 200px; height: 34px; padding: 0 12px 0 6px; flex: none;
-    border-radius: var(--r-full); background: var(--surface); color: var(--text-2); font: 620 13px/1 var(--font-text); }
-  .orgs button.on { background: var(--text); color: var(--bg); }
   .todo { display: flex; flex-direction: column; margin-bottom: 18px; padding: 4px 0; }
   .todo button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px 8px 14px; text-align: left; color: var(--text-3); }
   .todo button + button { border-top: 0.5px solid var(--line); }

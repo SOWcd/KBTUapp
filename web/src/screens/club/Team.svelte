@@ -260,7 +260,7 @@
 
 <style>
   .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
   .page > :global(*) { flex-shrink: 0; }
   /* the club's President: a crown on the avatar (owner, Oct 15) */
   .av { position: relative; }

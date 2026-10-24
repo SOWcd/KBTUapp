@@ -445,8 +445,8 @@
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    -webkit-mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px));
-    mask-image: linear-gradient(#000 calc(var(--top) - 4px), transparent calc(var(--top) + 36px)); }
+    -webkit-mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top));
+    mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));

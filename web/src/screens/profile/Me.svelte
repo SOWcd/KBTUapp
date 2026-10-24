@@ -137,7 +137,7 @@
 
 <style>
   .sub { display: block; margin-top: 2px; font: 500 12.5px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
 
   .sec { margin-top: 10px; }
@@ -156,7 +156,7 @@
   .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
   .list { display: flex; flex-direction: column; gap: 8px; }
   /* the pencil and the shield: in the lanyard's gap right of its strap */
-  .gear { position: absolute; top: calc(var(--top) + 50px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
+  .gear { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
   .gear:active { transform: scale(0.92); }
   .gear.adm { right: calc(var(--gutter) + 44px); }

@@ -168,7 +168,7 @@
   .pmenu { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
   .pmenu button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); color: var(--text); }
   .pmenu .danger { color: var(--danger-text); background: var(--danger-soft); }
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
   .hd p { margin-top: 4px; }

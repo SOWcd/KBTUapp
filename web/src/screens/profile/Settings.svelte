@@ -94,7 +94,7 @@
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: calc(var(--top) + 56px) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
   .ttl { margin: 6px 4px 8px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
   .sec { display: flex; align-items: baseline; gap: 8px; margin: 20px 4px 0; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }

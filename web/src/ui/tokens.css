@@ -48,6 +48,10 @@
   --safe-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --tg-head: var(--tg-content-safe-area-inset-top, 0px);
   --top: calc(var(--safe-top) + var(--tg-head));
+  /* where a tab page's content starts: right under Telegram's row (Close, our capsule, menu: Telegram's inset reaches well below them),
+     or our own capsule outside Telegram; one value for every page, so no screen grows its own gap (owner, Oct 24) */
+  --head-bottom: max(46px, calc(var(--safe-top) + var(--tg-head) / 2 + 19px)); /* the capsule's lower edge (Capsule.svelte .cap) */
+  --page-top: calc(var(--head-bottom) + 14px);
   --nav-h: 64px;
   --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
 }
