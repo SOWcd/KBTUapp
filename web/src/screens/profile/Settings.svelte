@@ -10,7 +10,7 @@
   import { api, type Settings } from '../../lib/api';
   import { inner } from '../../lib/perms';
   import { t, i18n, setLang, LANGS, LANG_NAMES } from '../../lib/i18n/index.svelte';
-  import { theme, chooseTheme } from '../../lib/state/theme.svelte';
+  import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
   import { haptic, openLink, tg } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
@@ -50,7 +50,7 @@
   <h1 class="ttl">{t('me.settings')}</h1>
   <div class="rows surface">
     <div class="r"><span class="lb">{t('me.guestLang')}</span>
-      <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); setLang(l); keep({ lang: l }); say(phrase('say.lang'), 'speech_balloon_3d'); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
+      <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); keep({ lang: l }); reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang'); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
     <div class="r"><span class="lb">{t('me.guestTheme')}</span>
       <span class="seg"><button class:on={theme.current === 'dark'} onclick={(e) => { if (theme.current !== 'dark') { chooseTheme('dark', e.currentTarget); keep({ theme: 'dark' }); say(phrase('say.theme.dark'), 'crescent_moon_3d'); } }}>{t('theme.dark')}</button><button class:on={theme.current === 'light'} onclick={(e) => { if (theme.current !== 'light') { chooseTheme('light', e.currentTarget); keep({ theme: 'light' }); say(phrase('say.theme.light'), 'sparkles_3d'); } }}>{t('theme.light')}</button></span></div>
   </div>

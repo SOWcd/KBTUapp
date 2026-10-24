@@ -45,12 +45,14 @@ function timeAt(p: number): number {
  *  person asked for less motion, or power saving is on. The map's own theme switch uses it too.
  *  The new look's glass is solid while the transition runs (`vt-solid`, base.css): its live snapshot can't draw what's
  *  behind glass (iOS), so the old look's glass showed through and snapped over at the end (owner, Oct 6); once it's
- *  over the glass clears up in a third of a second. */
-export function reveal(change: () => void, done: () => void, from?: Element): void {
+ *  over the glass clears up in a third of a second. `look: 'lang'`: a new language's words come into focus over the
+ *  old ones (base.css .vt-lang; owner, Oct 24: "the language switch must be beautiful"). */
+export function reveal(change: () => void, done: () => void, from?: Element, look?: 'lang'): void {
   if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx')) { change(); return done(); }
   const root = document.documentElement;
   const b = from?.getBoundingClientRect(), at = b && { x: b.left + b.width / 2, y: b.top + b.height / 2 };
   root.classList.toggle('vt-circle', !!at);
+  root.classList.toggle('vt-lang', look === 'lang');
   const vt = (running = document.startViewTransition(() => { root.classList.add('vt-solid'); flushSync(change); }));
   let painted = false;
   const paint = () => { if (!painted && running === vt) { painted = true; done(); } };
@@ -60,7 +62,7 @@ export function reveal(change: () => void, done: () => void, from?: Element): vo
       { duration: 480, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', pseudoElement: '::view-transition-new(root)' });
     setTimeout(paint, 480 * timeAt(Math.min(1, Math.hypot(at.x - innerWidth / 2, at.y) / r))); // the top centre, where Telegram's buttons are
   }).catch(() => {});
-  const tidy = () => { paint(); if (running === vt) { running = null; root.classList.remove('vt-circle', 'vt-solid'); } };
+  const tidy = () => { paint(); if (running === vt) { running = null; root.classList.remove('vt-circle', 'vt-lang', 'vt-solid'); } };
   vt.finished.then(tidy, tidy);
 }
 
