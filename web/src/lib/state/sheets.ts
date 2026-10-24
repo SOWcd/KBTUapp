@@ -6,6 +6,9 @@ import type { StoryGroup } from '../posts';
 
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean };
 
+/** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it */
+export const mapFrom: { at: { x: number; y: number } | null } = { at: null };
+
 export const sheets = {
   person: (_id: Id) => {},
   /** my QR full screen (the corner of my badge) */

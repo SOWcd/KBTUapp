@@ -1,6 +1,6 @@
 <script lang="ts">
   // What a chat is, Telegram's three kinds, as a small lit badge on its avatar (owner, Oct 25: the stock line icons
-  // looked default). Filled glyphs drawn for this app, a glossy gradient chip; a forum's chip is a squircle like its avatar.
+  // looked default). Filled glyphs drawn for this app, a dark glass chip; a forum's chip is a squircle like its avatar.
   import type { Chat } from '../lib/api';
   import { t } from '../lib/i18n/index.svelte';
 
@@ -29,14 +29,16 @@
 </i>
 
 <style>
+  /* variant B of five (owner, Oct 25): dark glass with a lit rim, the glyph in the kind's colour */
   .ck {
-    display: grid; place-items: center; width: var(--s); height: var(--s); border-radius: 50%; color: #fff;
-    background: linear-gradient(160deg, #6fd0ff, #1f8fe6 70%);
-    box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.6), inset 0 -2px 4px rgba(0, 0, 0, 0.18);
+    display: grid; place-items: center; width: var(--s); height: var(--s); border-radius: 50%; color: #3aa8ff;
+    background: rgba(28, 36, 68, 0.88); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32), inset 0 1px 0.5px rgba(255, 255, 255, 0.5);
   }
-  .ck.group { background: linear-gradient(160deg, #b59cff, #6c3ff2 70%); }
-  .ck.forum { border-radius: 32%; background: linear-gradient(160deg, #ffc072, #f06b2a 70%); }
-  svg { width: 64%; height: 64%; fill: currentColor; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18)); }
+  .ck.group { color: #a07cff; }
+  .ck.forum { border-radius: 32%; color: #ff9248; }
+  :global(.theme-light) .ck, :global(:root[data-theme='light']) .ck { background: rgba(255, 255, 255, 0.92); box-shadow: inset 0 0 0 1px rgba(11, 20, 51, 0.12), 0 1px 3px rgba(11, 20, 51, 0.12); }
+  svg { width: 64%; height: 64%; fill: currentColor; }
   .ln { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
   .bk { opacity: 0.62; }
 </style>

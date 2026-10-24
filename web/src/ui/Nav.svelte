@@ -8,7 +8,7 @@
   import Landmark from '@lucide/svelte/icons/landmark';
   import UserRound from '@lucide/svelte/icons/circle-user-round';
   import MapIcon from '@lucide/svelte/icons/map';
-  import { sheets } from '../lib/state/sheets';
+  import { sheets, mapFrom } from '../lib/state/sheets';
   import { ui, TABS, goTab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
@@ -58,7 +58,7 @@
 <!-- the map beside the tabs, under the thumb on every screen (owner, Oct 25: the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
 <button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }} use:chrome
-        onclick={() => sheets.map()}>
+        onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2 }; sheets.map(); }}>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <MapIcon size={22} strokeWidth={1.9} />
 </button>

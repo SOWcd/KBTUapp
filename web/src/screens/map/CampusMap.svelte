@@ -37,6 +37,7 @@
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
+  import { mapFrom } from '../../lib/state/sheets';
 
   let { overlay, place, exit = false }: { overlay: Overlay; place?: string; exit?: boolean } = $props();
   const ROOMS = uniqRooms as unknown as Record<string, number[][]>[]; // by floor: room → where its number is printed
@@ -373,9 +374,18 @@
   function appear() {
     if (appeared || gone) return;
     appeared = true; shownAt = performance.now();
-    panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+    if (iris) panel.animate({ clipPath: [iris(30), iris(reach(iris.at))] }, { duration: 460, easing: 'cubic-bezier(.3, .9, .3, 1)' });
+    else panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
     undoChrome = hideChrome();
   }
+  // opened from the nav's round button (owner, Oct 25: "one with the bar"): the map grows out of that circle and
+  // shrinks back into it; clip-path only, the map under it is painted once
+  const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  const iris = (() => {
+    const at = mapFrom.at; mapFrom.at = null;
+    if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at });
+  })();
 
   onMount(() => {
     reset(); goHome();
@@ -393,7 +403,9 @@
     if (gone) return;
     gone = true;
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
-    const a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+    const a = iris
+      ? panel.animate({ clipPath: [iris(reach(iris.at)), iris(30)], opacity: [1, 1, 0] }, { duration: 380, easing: 'cubic-bezier(.5, 0, .7, .4)', fill: 'forwards' })
+      : panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
   $effect(() => { if (overlay.closing) leave(); });
