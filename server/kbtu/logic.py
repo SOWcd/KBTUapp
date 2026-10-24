@@ -4237,9 +4237,10 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
                kind: str = "club") -> int:
     """A club or a school, by the admin (the app or the CLI). A school (owner, Oct 13: KBTU's own, a few, made by the
     admin, never by an application) is official from the start and never closes; its President has a club
-    President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>)."""
+    President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>). Recruiting starts closed:
+    the club opens it in Studio (owner, Oct 24)."""
     slug = slug or slug_for(con, name)
-    cur = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, official, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    cur = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, official, created_by, created_at, recruiting) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
                       (slug, kind, name, short, emoji, int(official or kind == "school"), actor, now()))
     for rn, color, lv in OFFICIAL_ROLES:
         con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (?, ?, ?, ?, 1, ?)", (cur.lastrowid, rn, color, lv, now()))

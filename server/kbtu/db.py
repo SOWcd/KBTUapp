@@ -17,7 +17,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (2, "ALTER TABLE files ADD COLUMN color TEXT;"),   # a photo's average colour: the event sheet's tint (Oct 4)
     # a club's socials (Instagram, TikTok, YouTube, Telegram, a site), shown on its sheet; the old single link moves in
     (3, "ALTER TABLE orgs ADD COLUMN links TEXT NOT NULL DEFAULT '[]'; UPDATE orgs SET links = json_array(link) WHERE link IS NOT NULL;"),
-    # join applications (§4.5): open unless the club closes them in Studio; the "recruiting until" date goes (owner, Oct 4)
+    # join applications (§4.5): the club opens or closes them in Studio (closed by default since 66); the "recruiting until" date goes (owner, Oct 4)
     (4, "ALTER TABLE orgs ADD COLUMN recruiting INTEGER NOT NULL DEFAULT 1; UPDATE orgs SET recruiting = 0 WHERE kind IN ('school','office','app');"
         " ALTER TABLE orgs DROP COLUMN recruiting_until;"),
     # the badge QR (§4.4, owner Oct 4): a random code per student, so nobody can make a QR from a user id;
@@ -508,6 +508,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
     ) STRICT;
     CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;"""),
+    # recruiting is the club's own switch in Studio now: closed everywhere until a club opens it (owner, Oct 24: the list
+    # of open clubs was every club); a round (Literature club's) shows on its own
+    (66, "UPDATE orgs SET recruiting = 0;"),
 ]
 
 
