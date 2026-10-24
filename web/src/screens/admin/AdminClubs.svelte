@@ -131,7 +131,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('adm.clubs')}>
+<Sheet {overlay} full title={t('adm.clubs')}>
   <h2 class="t-h2 hd">{t('adm.clubs')}</h2>
   <p class="t-foot lead">{t('adm.lead')}</p>
   {#if schools}

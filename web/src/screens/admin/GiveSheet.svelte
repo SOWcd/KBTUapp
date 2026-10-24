@@ -82,7 +82,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('give.title')}>
+<Sheet {overlay} full title={t('give.title')}>
   <div class="tiles">
     {#each GIVE as g (g.code)}
       <button class="tile surface" class:on={scanning === g.code} onclick={() => (g.link ? send(g.code) : scan(g.code))}>

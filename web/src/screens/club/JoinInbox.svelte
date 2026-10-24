@@ -55,7 +55,7 @@
   const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), r.school].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} tall title={t('cast.card')}>
+<Sheet {overlay} full title={t('cast.card')}>
   <h2 class="t-h2 hd">{t('cast.card')}</h2>
   {#if o}
     <label class="switch">

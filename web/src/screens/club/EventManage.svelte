@@ -74,7 +74,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('mg.title')}>
+<Sheet {overlay} full title={t('mg.title')}>
   {#if e}
     <button class="hd" onclick={() => sheets.event(id)}>
       <Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />

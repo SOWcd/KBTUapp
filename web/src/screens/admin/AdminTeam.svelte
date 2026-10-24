@@ -89,7 +89,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} tall title={t('staff.title')} icon={UsersRound}>
+<Sheet {overlay} full title={t('staff.title')} icon={UsersRound}>
   <form class="find" onsubmit={(e) => { e.preventDefault(); void find(); }}>
     <label class="srch"><Search size={17} /><input bind:value={q} placeholder="@username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search" /></label>
     <Button kind="secondary" size="m" type="submit" loading={looking}>{t('staff.find')}</Button>

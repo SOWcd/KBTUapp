@@ -45,7 +45,7 @@
 
 </script>
 
-<Sheet {overlay} tall title={t('adm.chats')}>
+<Sheet {overlay} full title={t('adm.chats')}>
   <h2 class="t-h2 hd">{t('adm.chats')}</h2>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
   {#if pending.length}

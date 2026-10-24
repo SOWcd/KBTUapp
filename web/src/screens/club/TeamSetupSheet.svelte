@@ -133,7 +133,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} tall title={t('team.setup')}>
+<Sheet {overlay} full title={t('team.setup')}>
   <h2 class="t-h2 hd">{t('team.setup')}</h2>
 
   <section>

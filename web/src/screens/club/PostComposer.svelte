@@ -106,7 +106,7 @@
   const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
 </script>
 
-<Sheet {overlay} tall title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
+<Sheet {overlay} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
 
   {#if !was && mine.length > 1}

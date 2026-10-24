@@ -25,7 +25,7 @@
   };
 </script>
 
-<Sheet {overlay} tall title={t('audit.title')} icon={ScrollText}>
+<Sheet {overlay} full title={t('audit.title')} icon={ScrollText}>
   {#if log && !log.length}<p class="t-callout dim">{t('audit.empty')}</p>{/if}
   {#if log?.length}
     <div class="rows surface">

@@ -88,7 +88,7 @@
   const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
 </script>
 
-<Sheet {overlay} tall title={t('ce.title')} {hold} {onhold}>
+<Sheet {overlay} full title={t('ce.title')} {hold} {onhold}>
   <h2 class="t-h2 hd">{t('ce.title')}</h2>
   <p class="t-foot sub">{t('ce.sub')}</p>
 

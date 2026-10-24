@@ -23,7 +23,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('ai.title')} icon={Sparkles}>
+<Sheet {overlay} full title={t('ai.title')} icon={Sparkles}>
   {#if ai}
     <section class="top surface">
       <span class="st" class:on={ai.on}><i></i>{ai.on ? t('ai.on') : t('ai.off')}</span>

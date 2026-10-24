@@ -32,7 +32,7 @@
   const line = (x: VolunteerApp) => [x.course && t('person.course', { n: x.course }), x.school, relDay(x.at)].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} tall title={t('vol.list')}>
+<Sheet {overlay} full title={t('vol.list')}>
   <h2 class="t-h2">{t('vol.list')}</h2>
   <p class="t-foot sub">{t('vol.taken', { n: yes, of: need })}</p>
   {#if list}

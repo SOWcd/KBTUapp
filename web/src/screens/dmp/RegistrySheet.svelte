@@ -7,4 +7,4 @@
   let { overlay }: { overlay: Overlay } = $props();
 </script>
 
-<Sheet {overlay} tall title={t('reg.title')}><Registry inSheet /></Sheet>
+<Sheet {overlay} full title={t('reg.title')}><Registry inSheet /></Sheet>

@@ -65,7 +65,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('studio.attendees')}>
+<Sheet {overlay} full title={t('studio.attendees')}>
   <h2 class="t-h2">{t('studio.attendees')}</h2>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
   {#if list}

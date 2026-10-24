@@ -125,7 +125,7 @@
 </script>
 
 <!-- the title is the capsule's, with the shield (owner, Oct 21: not twice) -->
-<Sheet {overlay} tall title={t('me.admin')} icon={ShieldCheck}>
+<Sheet {overlay} full title={t('me.admin')} icon={ShieldCheck}>
   {#if stats}
     <section class="stats surface">
       <div class="top">

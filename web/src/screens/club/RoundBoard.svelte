@@ -145,7 +145,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={r?.title ?? t('cast.board')}>
+<Sheet {overlay} full title={r?.title ?? t('cast.board')}>
   {#if cur && r}
     {@const a = cur}
     <button class="back" onclick={() => { cur = null; walking = false; }}><ChevronLeft size={18} />{walking ? t('cast.stopReview') : t('cast.back')}</button>

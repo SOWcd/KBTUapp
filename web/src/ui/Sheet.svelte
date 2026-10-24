@@ -16,8 +16,11 @@
   // Without one, text typed here and not sent asks before a hand closes it (owner, Oct 17: a pull lost a club's application).
   // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above
   // (my lanyard while I dress it, owner Oct 17)
-  type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; see?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', icon, tint = null, tall = false, see = false, children, footer, hold, onhold }: Props = $props();
+  // Sizes by one rule (owner, Oct 24): WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
+  // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
+  // up to the capsule; ONE DECISION is neither: as tall as its content.
+  type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
+  let { overlay, title = '', icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let panel: HTMLDivElement;
@@ -64,7 +67,7 @@
   // ---- pull to close ----
   let startX = 0, startY = 0, currentY = 0, dragging = false, decided = false, lastY = 0, lastT = 0, v = 0;
   function onStart(e: TouchEvent) {
-    if (e.touches.length !== 1) return;
+    if (full || e.touches.length !== 1) return;
     const inBody = body.contains(e.target as Node);
     if (inBody && body.scrollTop > 0) return; // the list scrolls first
     if ((e.target as Element).closest?.('textarea')) return; // a long text scrolls itself; dragging it closed the memo (owner, Oct 15)
@@ -108,9 +111,9 @@
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
-  <div class="grip" aria-hidden="true"></div>
+  {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <div class="body scroll" bind:this={body}>{@render children()}</div>
   {#if footer}<div class="foot">{@render footer()}</div>{/if}
 </div>
@@ -127,6 +130,9 @@
     will-change: transform;
   }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
+  .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .full::before, .full::after { display: none; }
+  .full .body { padding-top: var(--page-top); }
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }
   .tint {
