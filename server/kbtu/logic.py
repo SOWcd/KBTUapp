@@ -156,6 +156,7 @@ def _roles(con, v: Viewer) -> dict[int, str]:
 
 
 PERSON_COLS = ("u.id, u.tg_first_name, u.tg_last_name, u.tg_photo_url, u.is_founder, u.mark, u.show_going, s.first_name, s.last_name, u.nick,"
+               " u.role AS platform_role,"  # aliased: lists join a club role as `role`
                " CASE WHEN u.avatar_tg = 0 THEN (SELECT path FROM files WHERE id = u.avatar_file_id) END AS own_photo")
 PERSON = f"SELECT {PERSON_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id"
 
@@ -179,7 +180,9 @@ def avatar_of(p: sqlite3.Row) -> str | None:
 
 
 def person_ref(p: sqlite3.Row) -> dict:
-    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"]}
+    # A9 (owner, Oct 23): the app's moderators and admins carry a badge everyone sees, like the founder's
+    staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
+    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff}
 
 
 def _door_ref(p: sqlite3.Row) -> dict:
@@ -2028,12 +2031,13 @@ def _chat(c: sqlite3.Row, opened: set[int]) -> dict:
 
 
 def chats(con, v: Viewer) -> dict:
-    """Curated Telegram chats (§4.11): "for you" are the ones aimed at my school and course plus those for everyone; a
+    """Curated Telegram chats (§4.11), the biggest first (A8, owner Oct 23); "for you" are the ones aimed at my school and
+    course plus those for everyone (my school and course first, by size within); a
     tick once I've opened one (an honest nudge, the bot checks nothing yet)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (owner, Oct 21: any chat)
-    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY sort, course IS NULL DESC, course, title")
+    everything = [_chat(c, opened) for c in rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY COALESCE(members, -1) DESC, title")
                   if v.student or "/+" not in c["url"]]
     fits = lambda c: (c["school"] in (None, st["school"])) and (c["course"] in (None, st["course"]))  # noqa: E731
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last

@@ -117,7 +117,7 @@ export interface OrgPatch { name?: string; short?: string; emoji?: string; cover
 
 /** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
  *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */
-export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null }  // mark: the idea author's blue seal
+export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
 /** at the door (Member+): the real short name beside a nick (owner, Oct 5) */
 export type DoorRef = PersonRef & { realName: string };
 

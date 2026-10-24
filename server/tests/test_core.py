@@ -3890,3 +3890,16 @@ def test_door_guests(env):
     assert came(mem["id"]) == []                                                       # nobody can tell which one came
     logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()
+
+
+def test_staff_badge_and_chat_order(env):
+    """A9: everyone sees who is the app's moderator or admin; A8: the chats directory lists the biggest first."""
+    c, cfg = env
+    ali, mod = login(c, 61, "ali"), login(c, 62, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    A = tma(61, "Ali")
+    assert (c.get(f"/api/users/{mod['id']}", headers=A).json()["staff"], c.get(f"/api/users/{ali['id']}", headers=A).json()["staff"]) == ("moderator", None)
+    for title, n, sort in (("Small", 10, 0), ("Big", 900, 5), ("Unknown", None, 0)):
+        con.execute("INSERT INTO chats (title, kind, url, members, sort, status, created_at) VALUES (?, 'group', 'https://t.me/x', ?, ?, 'live', 0)", (title, n, sort))
+    assert [x["title"] for x in c.get("/api/chats", headers=A).json()["all"]] == ["Big", "Small", "Unknown"]

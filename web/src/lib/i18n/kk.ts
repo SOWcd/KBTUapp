@@ -397,7 +397,7 @@ const kk: Dict = {
   'cap.idea': "Идея авторының белгісі",
   'map.title': "Карта · {n} қабат",
   'map.note': "2023 жылғы жоспар — бірдеңе өзгеруі мүмкін",
-  'map.basement': "Карта · цоколь",
+  'map.basement': "Карта · жертөле",
   'map.version': "Карта нұсқасы",
   'map.verMain': "Негізгі",
   'map.verOld': "Ескі",
