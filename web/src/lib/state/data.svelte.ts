@@ -159,6 +159,7 @@ function errorText(e: unknown): string {
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
+  // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft (owner, Oct 24)
   asStudent(async () => {
     const before = eventById(id);
     if (!before || before.status === 'cancelled') return;
@@ -176,7 +177,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
     }
-  });
+  }, 'go_' + id);
 }
 
 /** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */

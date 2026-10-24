@@ -1,11 +1,13 @@
 <script lang="ts">
-  // KBTU sign-in (SPEC §4.1): Microsoft only (owner, Oct 20). One big button, consent ticked above it; it opens outside
+  // KBTU sign-in (SPEC §4.1): Microsoft only (owner, Oct 20). One big button; pressing it accepts the terms, said under
+  // it with both links (owner, Oct 24: no checkbox); it opens outside
   // Telegram, comes back by /ms.html, and the app reloads me when it's in sight again; someone new then types only the
   // student ID and year (Microsoft doesn't know them: KBTU leaves employeeId empty). Typed in before Oct 20 (relink)
   // or through the old portal: the same button confirms the row they have.
   import { CONSENT_VERSION } from '../../lib/legal';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Sheet from '../../ui/Sheet.svelte';
+  import Emoji from '../../ui/Emoji.svelte';
   import Button from '../../ui/Button.svelte';
   import { api, ApiErr } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -19,8 +21,6 @@
 
   const legal = (doc: 'privacy' | 'terms') => { haptic.tap(); openLink(`${location.origin}/${doc}?lang=${i18n.lang}`); };
   const st = session.me?.student, relink = !!session.me?.relink;
-  // back from Microsoft: ticked before its button (it stays off until then), the app opening anew lost it
-  let agree = $state(!!st || !!session.me?.msPending);
   let busy = $state(false);
   let error = $state('');
 
@@ -28,7 +28,6 @@
   let away = $state(false);
   const pending = $derived(session.me?.msPending ?? null), done = $derived(!!session.me?.student?.ms);
   async function microsoft() {
-    if (!agree) return;
     haptic.tap(); error = '';
     try { const { url } = await api.msStart(); away = true; openLink(url); }
     catch { haptic.error(); error = t('common.error'); }
@@ -51,7 +50,7 @@
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
-    && SID.test(m.studentId.trim().toUpperCase()) && agree && !busy);  // the year comes from the ID (audit M3)
+    && SID.test(m.studentId.trim().toUpperCase()) && !busy);  // the year comes from the ID (audit M3)
   async function submit(ev?: Event) {
     ev?.preventDefault();
     if (!pending || !mReady) return;
@@ -73,20 +72,15 @@
 </script>
 
 {#snippet consent()}
-  <label class="agree">
-    <input type="checkbox" bind:checked={agree} />
-    <span class="box" aria-hidden="true"></span>
-    <span class="t-callout">{t('login.consent')}</span>
-  </label>
-  <span class="what t-foot"><button type="button" onclick={() => legal('terms')}>{t('login.terms')}</button> · <button type="button" onclick={() => legal('privacy')}>{t('login.consentLink')}</button></span>
+  <p class="what t-foot">{t('login.consent')}<br /><button type="button" onclick={() => legal('terms')}>{t('login.terms')}</button> · <button type="button" onclick={() => legal('privacy')}>{t('login.consentLink')}</button></p>
 {/snippet}
 
 {#snippet msButton(label: string)}
   <!-- Microsoft's own sign-in button look (their branding: the four squares, "Sign in with Microsoft") -->
-  <button type="button" class="ms" onclick={microsoft} disabled={!agree}>
+  <button type="button" class="ms" onclick={microsoft}>
     <svg viewBox="0 0 21 21" width="21" height="21" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
     <span>{label}</span></button>
-  <p class="t-foot dim center">{away ? t('login.msAway') : t('login.msNote')}</p>
+  {#if away}<p class="t-foot dim center">{t('login.msAway')}</p>{/if}
 {/snippet}
 
 <Sheet {overlay} title={t('login.title')}>
@@ -94,6 +88,7 @@
     {#if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->
       {@render msButton(t('login.msConfirm'))}
+      {@render consent()}
     {:else if pending}
       <div class="ok"><CircleCheck size={20} /><span><b>{t('login.msOk')}</b><i class="t-foot">{pending.email} · {t('login.msOkText')}</i></span></div>
       {#if !pending.last || !pending.first}
@@ -106,14 +101,14 @@
         <input class="sid" bind:value={m.studentId} placeholder={sidEx} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" maxlength="12" />
       </label>
       <p class="t-foot dim">{t('login.manualNote')}</p>
-      {#if !agree}{@render consent()}{/if}
       {#if error}<p class="err t-callout">{error}</p>{/if}
       <Button kind="primary" size="l" full type="submit" disabled={!mReady} loading={busy}>{t('login.submit')}</Button>
+      {@render consent()}
     {:else}
       {#if relink}<p class="relink t-callout">{t('login.relink')}</p>{/if}
-      <div class="big"><b>{t('login.big')}</b><span class="t-foot">{t('login.bigSub')}</span></div>
-      {@render consent()}
+      <div class="big"><Emoji name="waving_hand_3d_default" size={72} /><b>{t('login.big')}</b></div>
       {@render msButton(t('login.ms'))}
+      {@render consent()}
     {/if}
     {#if error && !pending}<p class="err t-callout">{error}</p>{/if}
   </form>
@@ -122,18 +117,12 @@
 <style>
   .sid { text-transform: uppercase; } /* a typed "b" shows as "B"; it's sent upper-cased (owner, Oct 24) */
   .wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
-  .agree { position: relative; display: flex; gap: 10px; align-items: center; padding: 6px 2px; }
-  .agree input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-  .box { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--line-2); flex: none; transition: background-color var(--t-fast), border-color var(--t-fast); }
-  .agree input:checked + .box { background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/16px no-repeat; border-color: var(--accent); }
   .err { color: var(--danger-text); }
   .ms { display: flex; align-items: center; justify-content: center; gap: 12px; height: 56px; border-radius: var(--r-l); background: #fff; color: #1b1b1b;
     font: 650 17px/1 var(--font-text); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), var(--shadow-card); }
   .ms:active { transform: scale(0.98); }
-  .ms:disabled { opacity: 0.45; }
-  .big { display: flex; flex-direction: column; gap: 6px; text-align: center; padding: 6px 0 4px; }
-  .big b { font: 750 24px/1.2 var(--font-display, var(--font-text)); letter-spacing: -0.01em; }
-  .big span { color: var(--text-2); }
+  .big { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 8px 12px 10px; }
+  .big b { font: 750 26px/1.15 var(--font-display, var(--font-text)); letter-spacing: -0.015em; text-wrap: balance; }
   .relink { padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-3); }
   .center { text-align: center; margin-top: -4px; }
   .ok { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--r-l); background: var(--success-soft); }
@@ -141,6 +130,6 @@
   .ok span { display: flex; flex-direction: column; gap: 4px; }
   .ok b { font: 680 16px/1.25 var(--font-text); }
   .ok i { font-style: normal; }
-  .what { align-self: flex-start; margin: -6px 0 0 34px; color: var(--text-3); }
+  .what { margin: 2px 0 0; text-align: center; color: var(--text-3); line-height: 1.45; }
   .what button { color: var(--accent-text); font-weight: 620; }
 </style>

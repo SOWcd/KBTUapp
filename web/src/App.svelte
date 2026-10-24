@@ -7,7 +7,7 @@
   import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
-  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
@@ -252,7 +252,15 @@
   // the app was closed while away at Microsoft (the page returns to plain Telegram): someone new types the student ID
   // now, then what the guest wanted before signing in runs (owner, Oct 24)
   function msBack() {
-    const again = () => { const p = takeAgain(); if (p) deepLink(p); };
+    // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
+    // must not sign anyone up)
+    const again = () => {
+      const p = takeAgain(), go = p?.match(/^go_(\d+)$/);
+      if (!go) { if (p) deepLink(p); return; }
+      const id = Number(go[1]), st = eventById(id)?.my?.status;
+      sheets.event(id);
+      if (st !== 'going' && st !== 'hold' && st !== 'waitlist') toggleGoing(id, () => sheets.pay(id));
+    };
     if (session.me?.msPending) sheets.login(again);
     else if (session.me?.student && !tg.startParam) again();
   }
