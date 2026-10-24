@@ -50,13 +50,20 @@
     return { duration: still() ? 0 : 520, easing: (k: number) => 1 - Math.pow(1 - k, 3),
       css: (k: number) => `clip-path:inset(0 ${(1 - k) * r}px 0 0 round 999px);opacity:${Math.min(1, k * 3)}` };
   }
-  function fade(_node: HTMLElement, { top }: { top: boolean }) {
-    return { duration: still() ? 0 : 280, css: (k: number) => `opacity:${k};transform:translate(-50%, ${(1 - k) * (top ? -8 : 8)}px) scale(${0.96 + k * 0.04})` };
+  // the exit mirrors it (owner, Oct 25): the line is wiped back into the emoji, then that circle pops away
+  function shrink(node: HTMLElement, { top }: { top: boolean }) {
+    const r = node.offsetWidth - node.offsetHeight, h = node.offsetHeight / 2;
+    return { duration: still() ? 0 : 480, css: (k: number) => {
+      const u = 1 - k, c = Math.min(1, u / 0.6), q = Math.max(0, (u - 0.5) / 0.5);
+      const s = c * c * (3 - 2 * c); // smoothstep: the wipe eases in and settles on the circle
+      return `clip-path:inset(0 ${s * r}px 0 0 round 999px);opacity:${1 - q * q};transform-origin:${h}px 50%;`
+        + `transform:translate(-50%, ${q * (top ? -6 : 6)}px) scale(${1 - 0.6 * q * q}) rotate(${q * 14}deg)`;
+    } };
   }
 </script>
 
 {#if toast.text}
-  <div class="toast glass glass-pill" class:top role="status" use:glass bind:this={pill} in:grow out:fade={{ top }}>
+  <div class="toast glass glass-pill" class:top role="status" use:glass bind:this={pill} in:grow out:shrink={{ top }}>
     {#key toast.id}
       <span class="em" in:come={{ first: fresh }} out:leave><span class:bounce={fresh}><Emoji name={toast.emoji} size={26} /></span></span>
       <span class="tx" in:come={{ first: fresh }} out:leave>{toast.text}</span>
