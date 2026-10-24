@@ -379,7 +379,6 @@ const ru = {
   'list.dorm': "Общага",
   'list.bldg2': "К2",
   'list.freeDay': 'Свободный день',
-  'list.nothing': 'В этот день событий нет',
 
   'feed.end': "Это все события",
   'feed.endText': "Новые появляются каждый день. Подпишись на клубы — бот напишет первым.",
@@ -483,6 +482,7 @@ const ru = {
   'route.floor': "{n} этаж",
   'route.basement': "цокольный этаж",
   'route.past': "(через {names})",
+  'route.yard': "двор",
   'route.by': " у {room}",
   'route.stairsUp': "Дойди до лестницы{near} и поднимись на {floor}",
   'route.stairsDown': "Дойди до лестницы{near} и спустись на {floor}",
@@ -643,7 +643,6 @@ const ru = {
   'say.tsSaved': "Сохранено|Готово, всё на месте",
   'say.tsDropped': "Удалено",
   'say.gisLink': "Маршрут из 2ГИС подхватили|Ссылка 2ГИС на месте",
-  'list.todayShort': "сег",
   'list.kind.lecture': "Л",
   'list.kind.practice': "П",
   'list.kind.lab': "Лб",

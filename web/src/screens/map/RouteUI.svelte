@@ -106,7 +106,7 @@
   /** a step in words: walk past the named points to the stairs or lift and go up or down, or arrive */
   function words(i: number): string {
     const route = rt.route!, leg = route.legs[i], last = i === route.legs.length - 1;
-    const past = leg.pts.slice(1, -1).map((p) => p.node?.name).filter((x, j, all): x is string => !!x && all.indexOf(x) === j && !p_isEnd(x) && x !== from); // not "via Tole bi" to someone coming in there
+    const past = leg.pts.slice(1, -1).map((p) => p.node?.name === '\u0434\u0432\u043e\u0440' ? t('route.yard') : p.node?.name).filter((x, j, all): x is string => !!x && all.indexOf(x) === j && !p_isEnd(x) && x !== from); // not "via Tole bi" to someone coming in there
     const via = past.length ? ' ' + t('route.past', { names: past.join(', ') }) : '';
     if (!last) {
       const lift = leg.up?.k === 'l', up = leg.to! > leg.f;

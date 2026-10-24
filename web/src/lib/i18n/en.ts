@@ -378,7 +378,6 @@ const en: Dict = {
   'list.dorm': "Dorm",
   'list.bldg2': "B2",
   'list.freeDay': 'Free day',
-  'list.nothing': 'No events this day',
 
   'feed.end': "That's every event",
   'feed.endText': "New ones appear every day. Follow clubs: the bot tells you first.",
@@ -482,6 +481,7 @@ const en: Dict = {
   'route.floor': "floor {n}",
   'route.basement': "the basement",
   'route.past': "(through {names})",
+  'route.yard': "the yard",
   'route.by': " by {room}",
   'route.stairsUp': "Go to the stairs{near} and up to {floor}",
   'route.stairsDown': "Go to the stairs{near} and down to {floor}",
@@ -642,7 +642,6 @@ const en: Dict = {
   'say.tsSaved': "Saved|Done, all in place",
   'say.tsDropped': "Deleted",
   'say.gisLink': "Got the 2GIS route|2GIS link in place",
-  'list.todayShort': "today",
   'list.kind.lecture': "L",
   'list.kind.practice': "P",
   'list.kind.lab': "Lab",

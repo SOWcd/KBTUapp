@@ -135,7 +135,7 @@
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .full::before, .full::after { display: none; }
   .full .body { padding-top: var(--page-top); }
-  .x { position: absolute; top: 4px; left: 12px; z-index: 1; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  .x { position: absolute; top: calc(var(--safe-top) + 4px); left: 12px; z-index: 1; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--surface); color: var(--text); }
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }

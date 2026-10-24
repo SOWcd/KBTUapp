@@ -1,8 +1,9 @@
 <script lang="ts">
-  // Events → List (the home page). Title + count, a two-week date strip, the featured post, then the
+  // Events → List (the home page). Title + count, the featured post, then the
   // days as timelines: classes from the portal schedule (one slim row each; back-to-back ones of a subject
   // joined into one row with a "×2"/"×3" chip, lib/classes.ts; owner, Oct 13: tall blocks took too much room)
-  // and events, in time order, so an event shows in the gap between classes where it really is. Tapping a date shows only that day.
+  // and events, in time order, so an event shows in the gap between classes where it really is. No date strip (owner, Oct 24: people
+  // scroll): each day's header sticks to the top while its day passes under it.
   // Mockup v24 (owner, Oct 21): "Today" up top with a stack of live cards you swipe like Wallet passes: the event I'm
   // going to with its countdown and ticket, and the class on now or next with its room, what's left of it and the rest
   // of the day. The class card comes first while a class is on or within the hour, else the event (most students have
@@ -12,7 +13,7 @@
   import { data, skipped, classKey, skipClass } from '../../lib/state/data.svelte';
   import { t, tn, subjectOf, placeOf } from '../../lib/i18n/index.svelte';
   import { shortSubject, lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, dayMonth, weekdayShort, OFFSET, at } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, at } from '../../lib/time';
   import type { ClassItem, EventCard } from '../../lib/api';
   import EventRow from '../../ui/EventRow.svelte';
   import StoryRow from './StoryRow.svelte';
@@ -29,17 +30,14 @@
   import Emoji from '../../ui/Emoji.svelte';
   import { ui } from '../../lib/state/ui.svelte';
 
-  let picked = $state<number | null>(null); // local day number, null = all days
   let openPost = $state(false);
 
   // the stack's clock: a minute is enough for "21 min left"
   let now = $state(nowTs());
   // moves on at midnight with the stack's clock (the app can stay open overnight)
   const today = $derived(dayNo(now));
-  const strip = $derived(Array.from({ length: 14 }, (_, i) => today + i));
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
 
-  const busyDays = $derived(new Set(data.events.filter((e) => e.status !== 'cancelled').map((e) => dayNo(e.startsAt))));
   const featured = $derived(data.posts.find((p) => p.featured));
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard });
@@ -52,8 +50,8 @@
     // all days: the coming week's class days too (the owner missed his Wednesday, Oct 5), later only event days
     // today's classes stay here too: their rows are where "I won't go" is tapped (and taken back), and the stack shows
     // only the next three
-    const week = strip.slice(0, 7).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
-    const wanted = picked != null ? [picked] : [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
+    const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
+    const wanted = [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
     // a class before an event that starts at the same minute: you leave the class for it
     return wanted.map((d) => ({ d, items: [...classesOf(d), ...(by.get(d) ?? [])].sort((a, b) => a.at - b.at || ('c' in a ? -1 : 1)) }));
   });
@@ -136,18 +134,7 @@
 
   <div class="evh"><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></div>
 
-  <div class="strip hscroll" data-noswipe>
-    <button class="day all" class:on={picked == null} onclick={() => (picked = null)}>{t('common.all')}</button>
-    {#each strip as d, i (d)}
-      <button class="day" class:on={picked === d} onclick={() => (picked = picked === d ? null : d)}>
-        <i>{i === 0 ? t('list.todayShort') : weekdayShort(dayTs(d) + 12 * 3600)}</i>
-        <b class="num">{parts(dayTs(d) + 12 * 3600).d}</b>
-        <s class:has={busyDays.has(d)}></s>
-      </button>
-    {/each}
-  </div>
-
-  {#if featured && picked == null}
+  {#if featured}
     <button class="pin surface press" onclick={() => (openPost = !openPost)}>
       <span class="pin-top"><Chip tone="warning">{tagName(featured.tag) ?? t('common.more')}</Chip><span class="t-foot">{featured.org.name}</span></span>
       <span class="t-title">{featured.title}</span>
@@ -183,13 +170,11 @@
       {/each}
 
       {#if !day.items.length}
-        <p class="empty t-foot">{picked != null ? t('list.nothing') : t('list.freeDay')}</p>
-      {:else if picked != null && !day.items.some((x) => 'e' in x)}
-        <p class="empty t-foot">{t('list.nothing')}</p>
+        <p class="empty t-foot">{t('list.freeDay')}</p>
       {/if}
     </section>
   {/each}
-  {#if picked == null && data.eventsReady && data.events.filter((e) => e.status !== 'cancelled').length < 6}
+  {#if data.eventsReady && data.events.filter((e) => e.status !== 'cancelled').length < 6}
     <!-- the first weeks of the pilot: a short list should read as "more is coming", not as an empty app -->
     <section class="more surface">
       <Emoji name="sparkles_3d" size={36} />
@@ -213,27 +198,12 @@
   .more p { text-wrap: balance; }
   .more button { margin-top: 8px; height: 38px; padding: 0 16px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); }
   .more button:active { transform: scale(0.96); }
-  .strip { gap: 6px; margin: 0 calc(-1 * var(--gutter)) 18px; padding: 0 var(--gutter); }
-  .day {
-    position: relative; flex: none; width: 46px; height: 62px; border-radius: 15px; background: var(--surface);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    transition: background-color var(--t-base) var(--ease), color var(--t-base) var(--ease), transform var(--t-fast) var(--ease);
-  }
-  .day:active { transform: scale(0.95); }
-  .day i { font: 650 10.5px/1 var(--font-text); font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .day b { font: 700 18px/1.15 var(--font-text); letter-spacing: -0.02em; }
-  .day s { width: 4px; height: 4px; border-radius: 50%; background: transparent; margin-top: 2px; }
-  .day s.has { background: var(--accent); }
-  .day.all { width: auto; padding: 0 14px; font: 650 13px/1 var(--font-text); }
-  .day.on { background: var(--text); color: var(--bg); }
-  .day.on i { color: var(--bg); opacity: 0.6; }
-  .day.on s.has { background: var(--bg); }
-
   .pin { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 14px 16px; margin-bottom: 18px; text-align: left; }
   .pin-top { display: flex; align-items: center; gap: 8px; }
 
   .dayblk { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
-  .dh { display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
+  /* sticks just under the capsule's fade, on the page's ground so the rows pass under it */
+  .dh { position: sticky; top: calc(var(--page-top) - 12px); z-index: 1; padding: 6px 0; margin-top: -6px; background: var(--bg); display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
   .dh .now { color: var(--accent-text); }
 
   /* a class: one slim row between the event cards, the way a day really goes */

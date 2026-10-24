@@ -378,7 +378,6 @@ const kk: Dict = {
   'list.dorm': "Жатақхана",
   'list.bldg2': "К2",
   'list.freeDay': 'Бос күн',
-  'list.nothing': 'Бұл күні іс-шара жоқ',
 
   'feed.end': "Бұл барлық іс-шаралар",
   'feed.endText': "Жаңалары күн сайын пайда болады. Клубтарға жазыл — бот бірінші болып жазады.",
@@ -482,6 +481,7 @@ const kk: Dict = {
   'route.floor': "{n}-қабат",
   'route.basement': "цоколь қабаты",
   'route.past': "({names} арқылы)",
+  'route.yard': "аула",
   'route.by': "{room} жанындағы ",
   'route.stairsUp': "{near}баспалдаққа барып, көтеріл: {floor}",
   'route.stairsDown': "{near}баспалдаққа барып, түс: {floor}",
@@ -642,7 +642,6 @@ const kk: Dict = {
   'say.tsSaved': "Сақталды|Дайын, бәрі орнында",
   'say.tsDropped': "Өшірілді",
   'say.gisLink': "2ГИС маршруты қосылды|2ГИС сілтемесі орнында",
-  'list.todayShort': "бүг",
   'list.kind.lecture': "Д",
   'list.kind.practice': "П",
   'list.kind.lab': "З",
