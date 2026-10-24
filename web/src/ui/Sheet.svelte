@@ -6,7 +6,8 @@
   import type { Component, Snippet } from 'svelte';
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
-  import { haptic } from '../lib/tg';
+  import X from '@lucide/svelte/icons/x';
+  import { haptic, inTelegram } from '../lib/tg';
   import { sheets } from '../lib/state/sheets';
   import { t } from '../lib/i18n/index.svelte';
   import { glass } from './glass';
@@ -113,7 +114,8 @@
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
 <div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
-  {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
+  {#if !full}<div class="grip" aria-hidden="true"></div>
+  {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
   <div class="body scroll" bind:this={body}>{@render children()}</div>
   {#if footer}<div class="foot">{@render footer()}</div>{/if}
 </div>
@@ -133,6 +135,8 @@
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .full::before, .full::after { display: none; }
   .full .body { padding-top: var(--page-top); }
+  .x { position: absolute; top: 4px; left: 12px; z-index: 1; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--surface); color: var(--text); }
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }
   .tint {

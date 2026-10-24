@@ -88,7 +88,7 @@
     if (!was || (noTitle && needTitle())) return;
     busy = true;
     try {
-      await api.updatePost(was.id, patch);
+      Object.assign(was, await api.updatePost(was.id, patch)); // a story or club page showing it updates in place
       leaving = true; haptic.ok(); say(phrase('post.saved'), 'sparkles_3d');
       void loadNews();
       close(overlay.id);

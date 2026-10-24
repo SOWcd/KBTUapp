@@ -44,7 +44,8 @@
     gone = true;
     const a = root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translate3d(0,${pull}px,0) scale(0.94)` }], { duration: 220, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
-    if (read.size) void loadMe(); // the Afisha dot follows
+    clearTimeout(timer); // the marks land before the Afisha dot is asked again
+    if (read.size) void api.readPosts([...read]).catch(() => {}).then(loadMe);
   }
   $effect(() => { if (overlay.closing) leave(); });
   $effect(() => { overlay.title = g?.org.name ?? ''; overlay.theme = 'dark'; }); // the capsule names the club
@@ -59,7 +60,7 @@
     clearTimeout(timer);
     timer = setTimeout(() => api.readPosts([...read]).catch(() => {}), 600);
   });
-  $effect(() => () => { clearTimeout(timer); if (read.size) api.readPosts([...read]).catch(() => {}); });
+  $effect(() => () => { clearTimeout(timer); if (!gone && read.size) api.readPosts([...read]).catch(() => {}); });
 
   function step(d: 1 | -1) {
     menu = false;
