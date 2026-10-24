@@ -1,18 +1,18 @@
 <script lang="ts">
-  // The news on top of Afisha's List, as a row of circles (owner, Oct 24; PLAN 46): the broadcasts (DMP, KBTU App) and
-  // every club I'm in or follow that posted in the last 30 days; a ring while something is unread. A tap plays that
+  // The news on top of Afisha's List, as a row of circles (owner, Oct 24; PLAN 46): the broadcasts (DMP, KBTU App),
+  // every club I'm in or follow that posted in the last 30 days, and every club with a new event (lib/posts.ts); a ring while something is unread. A tap plays that
   // club's posts full screen (Stories.svelte), then the next clubs'.
   import { untrack } from 'svelte';
   import { data, loadNews } from '../../lib/state/data.svelte';
   import { ui } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { nowTs } from '../../lib/time';
-  import { storyGroups } from '../../lib/posts';
+  import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha' && ui.page.afisha === 1) void untrack(loadNews); });
-  const groups = $derived(data.news ? storyGroups(data.news.casts, data.news.posts, nowTs()) : []);
+  const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events, seenEv));
 </script>
 
 {#if groups.length}

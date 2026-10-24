@@ -3,22 +3,23 @@
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
   // The post's own tools sit here now that the News page is gone: reactions, comments, and in ⋯ edit, pin, show on
-  // List, take down, report.
+  // List, take down, report. A club's new event is a story of its own: its cover, when and where, and a tap to open it.
   import { onMount } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
   import { api, type Post } from '../../lib/api';
+  import Poster from '../../ui/Poster.svelte';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { ago } from '../../lib/time';
+  import { ago, relDay, time } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import { focusPos } from '../../lib/photo';
-  import { tagName, storyStart, type StoryGroup } from '../../lib/posts';
+  import { tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Emoji from '../../ui/Emoji.svelte';
 
@@ -29,12 +30,13 @@
   let pi = $state(0);
   let menu = $state(false);
   const g = $derived(groups[gi]);
-  const p = $derived(g?.posts[pi]);
+  const p = $derived(g?.items[pi]?.post);
+  const ev = $derived(g?.items[pi]?.ev);
   let root: HTMLDivElement;
   let gone = false;
 
   onMount(() => {
-    gi = start; pi = at ?? storyStart(groups[start]);
+    gi = start; pi = at ?? storyStart(groups[start], seenEv);
     root.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
     haptic.soft();
     return hideChrome();
@@ -53,10 +55,11 @@
   // read once on screen; sent in one go a moment later
   const read = new Set<number>();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => { if (ev) { markSeen(ev.id); if (g) g.unread = g.items.some((s) => (s.post ? !s.post.read : !seenEv.has(s.ev!.id))); } });
   $effect(() => {
     if (!p || p.read || !session.me?.student) return;
     p.read = true; read.add(p.id);
-    if (g) g.unread = g.posts.some((x) => !x.read);
+    if (g) g.unread = g.items.some((s) => (s.post ? !s.post.read : !seenEv.has(s.ev!.id)));
     clearTimeout(timer);
     timer = setTimeout(() => api.readPosts([...read]).catch(() => {}), 600);
   });
@@ -64,8 +67,8 @@
 
   function step(d: 1 | -1) {
     menu = false;
-    if (d > 0 ? pi < g.posts.length - 1 : pi > 0) { pi += d; haptic.select(); return; }
-    if (d > 0 ? gi < groups.length - 1 : gi > 0) { gi += d; pi = d > 0 ? storyStart(groups[gi]) : groups[gi].posts.length - 1; haptic.select(); return; }
+    if (d > 0 ? pi < g.items.length - 1 : pi > 0) { pi += d; haptic.select(); return; }
+    if (d > 0 ? gi < groups.length - 1 : gi > 0) { gi += d; pi = d > 0 ? storyStart(groups[gi], seenEv) : groups[gi].items.length - 1; haptic.select(); return; }
     if (d > 0) close(overlay.id);
   }
   function tap(e: MouseEvent) {
@@ -101,10 +104,10 @@
   }
   // a post taken down or reported leaves the stories at once
   function drop(q: Post) {
-    g.posts.splice(g.posts.indexOf(q), 1);
+    g.items.splice(g.items.findIndex((s) => s.post === q), 1);
     if (data.news) data.news = { casts: data.news.casts.filter((x) => x.id !== q.id), posts: data.news.posts.filter((x) => x.id !== q.id) };
-    if (!g.posts.length) { groups.splice(gi, 1); if (!groups.length) { close(overlay.id); return; } gi = Math.min(gi, groups.length - 1); pi = 0; return; }
-    pi = Math.min(pi, g.posts.length - 1);
+    if (!g.items.length) { groups.splice(gi, 1); if (!groups.length) { close(overlay.id); return; } gi = Math.min(gi, groups.length - 1); pi = 0; return; }
+    pi = Math.min(pi, g.items.length - 1);
   }
   async function takeDown() {
     if (!p) return;
@@ -119,7 +122,24 @@
 
 <div class="st" bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="dialog" aria-modal="true" tabindex="-1" aria-label={g?.org.name}>
-  {#if g && p}
+  {#if g && ev}
+    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}"><Poster item={ev} size={180} radius={36} /></div>{/key}
+    <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
+    <div class="top">
+      <div class="bars">{#each g.items as _, i (i)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>
+      <div class="who">
+        <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} /><span><small>{t('news.newEvent')}{ev.publishedAt ? ' · ' + ago(ev.publishedAt) : ''}</small></span></button>
+        <button class="ib" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} /></button>
+      </div>
+    </div>
+    {#key ev.id}
+      <div class="txt">
+        <h2>{ev.title}</h2>
+        <p>{relDay(ev.startsAt)}, {time(ev.startsAt)}{ev.place ? ' · ' + ev.place : ''}</p>
+      </div>
+    {/key}
+    <div class="acts"><button class="open" onclick={() => sheets.event(ev.id)}>{t('story.openEvent')}</button></div>
+  {:else if g && p}
     {#key p.id}
       <div class="bg" class:pic={!!p.photo}>
         {#if p.photo}<img src={p.photo.url} alt="" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
@@ -128,7 +148,7 @@
     <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
 
     <div class="top">
-      <div class="bars">{#each g.posts as x, i (x.id)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>
+      <div class="bars">{#each g.items as _, i (i)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>
       <div class="who">
         <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} />
           <span><small>{ago(p.createdAt)}{#if p.tag}{' · ' + tagName(p.tag)}{/if}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</small></span></button>
@@ -173,6 +193,9 @@
   .bg img { width: 100%; height: 100%; object-fit: cover; }
   .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 22%, transparent 45%, rgba(0, 0, 0, 0.85)); }
   .tapzone { position: absolute; inset: 0; }
+  /* an event: its poster centred on its own tint */
+  .bg.ev { display: grid; place-items: center; padding-bottom: 18vh; background: radial-gradient(90% 60% at 50% 35%, color-mix(in srgb, var(--c) 55%, transparent), #0E0F14 75%); }
+  .acts .open { flex: 1; justify-content: center; background: #fff; color: #0B0D14; font: 700 15.5px/1 var(--font-text); }
   .top { position: absolute; left: 12px; right: 12px; top: calc(var(--head-bottom) + 8px); display: flex; flex-direction: column; gap: 10px; }
   .bars { display: flex; gap: 4px; }
   .bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.3); transition: background 200ms; }

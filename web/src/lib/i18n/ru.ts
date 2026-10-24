@@ -1568,6 +1568,7 @@ const ru = {
   'news.new': "новое",
   'news.more': "ещё",
   'story.next': 'Дальше',
+  'story.openEvent': "Открыть событие",
   'news.hideAsk': "Убрать пост?",
   'news.hideText': "Его больше не увидят ни в Новостях, ни на странице клуба.",
   'news.feature': "Закрепить для всех на 3 дня",

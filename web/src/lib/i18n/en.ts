@@ -1567,6 +1567,7 @@ const en: Dict = {
   'news.new': "new",
   'news.more': "more",
   'story.next': 'Next',
+  'story.openEvent': "Open the event",
   'news.hideAsk': "Take the post down?",
   'news.hideText': "It won't show in News or on the club page anymore.",
   'news.feature': "Feature for everyone for 3 days",

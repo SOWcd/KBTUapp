@@ -1567,6 +1567,7 @@ const kk: Dict = {
   'news.new': "жаңа",
   'news.more': "тағы",
   'story.next': 'Келесі',
+  'story.openEvent': "Іс-шараны ашу",
   'news.hideAsk': "Жазбаны алып тастау керек пе?",
   'news.hideText': "Оны енді Жаңалықтарда да, клуб бетінде де көрмейді.",
   'news.feature': "Барлығына 3 күнге бекіту",

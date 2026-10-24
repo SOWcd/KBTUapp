@@ -34,7 +34,7 @@
   function play(p: Post) {
     if (!o || !posts) return;
     const list = [...posts].sort((a, b) => a.createdAt - b.createdAt);
-    sheets.stories([{ org: posts[0].org, posts: list, unread: list.some((x) => !x.read), cast: false }], 0, list.indexOf(p));
+    sheets.stories([{ org: posts[0].org, items: list.map((post) => ({ post })), unread: list.some((x) => !x.read), cast: false }], 0, list.indexOf(p));
   }
   // the afisha already holds the club's upcoming events (the server's list is the same filter): they show at once
   const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id) : null));
