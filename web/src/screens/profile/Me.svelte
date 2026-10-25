@@ -8,6 +8,7 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import { session } from '../../lib/state/session.svelte';
@@ -96,15 +97,22 @@
        names what comes next. Under it KBTU's psychologist (owner, Oct 5) -->
   <div class="term surface">
     {#if sem}
+      <!-- v25 (owner, Oct 25: "make it beautiful"): one track with the term filled to this week and a glowing dot on it,
+           the midterm a gold band, the exams red at the end; the next calendar day its own row, never cut -->
+      {@const at = (w: number) => `${((w - 0.5) / (sem.weeks + 1)) * 100}%`}
       <button class="sem" onclick={() => sheets.academic()}>
-        <span class="sem-h"><span><b>{sem.over ? t('sem.over') : t('sem.week', { n: sem.week, of: sem.weeks })}</b><i class="sub">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</i></span>
-          {#if up}<span class="chip">{nameOf(up)} · {whenOf(up)}</span>{/if}</span>
-        <span class="strip" style="--n:{sem.weeks}" aria-hidden="true">
-          {#each { length: sem.weeks } as _, i (i)}<i class:past={i + 1 < sem.week} class:mid={i + 1 >= sem.mid[0] && i + 1 <= sem.mid[1]} class:now={!sem.over && i + 1 === sem.week}>{#if !sem.over && i + 1 === sem.week}<b class="num">{sem.week}</b>{/if}</i>{/each}
-          <i class="ex" class:now={sem.exams}></i>
+        <span class="sem-h"><b>{sem.over ? t('sem.over') : t('sem.week', { n: sem.week, of: sem.weeks })}</b>
+          <span class="left">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</span></span>
+        <span class="track" aria-hidden="true">
+          <i class="band" style="left:{((sem.mid[0] - 1) / (sem.weeks + 1)) * 100}%;width:{((sem.mid[1] - sem.mid[0] + 1) / (sem.weeks + 1)) * 100}%"></i>
+          <i class="exam"></i>
+          <i class="fill" style="width:{sem.over ? '100%' : at(sem.week)}"></i>
+          {#if !sem.over}<i class="dot" style="left:{at(sem.week)}"></i>{/if}
         </span>
-        <span class="sem-l"><span>{semFrom}</span><span style="left:calc(({sem.mid[0]} - 0.5) / ({sem.weeks} + 1) * 100%)">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
+        <span class="sem-l"><span>{semFrom}</span><span style="left:{at((sem.mid[0] + sem.mid[1]) / 2)}">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
       </button>
+      {#if up}<button class="r nx" onclick={() => sheets.academic()}><span class="ni"><CalendarDays size={18} /></span>
+        <span class="lb ellipsis">{nameOf(up)}</span><span class="nw">{whenOf(up)}</span><ChevronRight size={16} /></button>{/if}
     {:else}
       <button class="r" onclick={() => sheets.academic()}>
         <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
@@ -147,26 +155,24 @@
 
   /* the term card: the strip of weeks, then the psychologist (mockup v24) */
   .term { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .sem { display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 12px; text-align: left; }
-  .sem-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
-  .sem-h > span:first-child { flex: none; }
-  .sem-h b { font: 700 var(--fs-card)/1.2 var(--font-text); color: var(--text); }
-  /* long calendar names ("Registration for 2027–2028…") shrink with an ellipsis, the week never breaks */
-  .chip { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; align-items: center; height: 26px; padding: 0 10px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font: 650 var(--fs-cap)/26px var(--font-text); white-space: nowrap; }
-  .strip { position: relative; display: grid; grid-template-columns: repeat(calc(var(--n) + 1), 1fr); gap: 3px; height: 30px; align-items: center; }
-  .strip i { height: 8px; border-radius: 3px; background: var(--surface-3); }
-  .strip i.past { background: linear-gradient(90deg, var(--accent), #6E8FFF); }
-  .strip i.mid { background: color-mix(in srgb, var(--gold) 40%, var(--surface-3)); }
-  .strip i.mid.past { background: linear-gradient(90deg, #6E8FFF, var(--gold)); }
-  .strip i.ex { background: color-mix(in srgb, var(--danger) 70%, var(--surface-3)); }
-  /* this week: a lens with its number, sitting on the strip */
-  .strip i.now { position: relative; background: var(--accent); }
-  .strip i.now b { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(circle at 35% 30%, #fff, #E6ECFF); color: #1A2C80; font: 800 13px/1 var(--font-text); font-style: italic;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 14px -4px rgba(0, 0, 0, 0.5); }
+  .sem { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; text-align: left; }
+  .sem-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .sem-h b { font: 750 19px/1.15 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
+  .left { flex: none; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
+  .track { position: relative; height: 10px; margin: 6px 0 2px; border-radius: 5px; background: var(--surface-3); }
+  .track i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+  .band { background: color-mix(in srgb, var(--gold) 38%, transparent); }
+  .exam { right: 0; width: calc(100% / 16); background: color-mix(in srgb, var(--danger) 75%, transparent); }
+  .fill { left: 0; background: linear-gradient(90deg, #3B6BFF, #7C5CFF); box-shadow: 0 0 14px -2px color-mix(in srgb, #5B6BFF 70%, transparent); }
+  .dot { top: 50% !important; bottom: auto !important; width: 20px; height: 20px; translate: -50% -50%; border-radius: 50% !important;
+    background: radial-gradient(circle at 35% 30%, #fff, #DCE3FF); box-shadow: 0 0 0 4px color-mix(in srgb, #6B6BFF 45%, transparent), 0 0 18px 2px color-mix(in srgb, #6B6BFF 60%, transparent); }
   .sem-l { position: relative; display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
-  .sem-l span:nth-child(2) { position: absolute; translate: -10% 0; color: var(--warning-text); }
+  .sem-l span:nth-child(2) { position: absolute; translate: -50% 0; color: var(--warning-text); }
   .sem-l span:last-child { color: var(--danger-text); }
+  .nx { min-height: 52px; gap: 10px; }
+  .ni { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; background: var(--warning-soft); color: var(--warning-text); flex: none; }
+  .nx .lb { font-size: var(--fs-body); }
+  .nw { flex: none; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--warning-text); }
   .term .r { box-shadow: inset 0 1px 0 var(--line); }
   .psy { min-height: 56px; }
   .book { position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 10px 0 12px; border-radius: var(--r-full);
