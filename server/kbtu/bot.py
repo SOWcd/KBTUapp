@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, logic, media, offsite, receipt, texts, video
+from . import ai, casting, db, logic, media, offsite, receipt, texts, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -940,6 +940,14 @@ async def _translator(cfg: Config) -> None:
                 await asyncio.sleep(30)
 
 
+async def _userbot(cfg: Config) -> None:
+    """The channel mirror (userbot.py); never takes the postman down with it (asyncio.gather)."""
+    try:
+        await userbot.run(cfg)
+    except Exception:  # noqa: BLE001
+        log.exception("userbot")
+
+
 async def run(cfg: Config) -> None:
     """Forever, in one process: every worker (and, during a deploy, the other container) waits on a lock file next to
     the database, and whoever holds it is the postman, since Telegram's rate limit is the bot's, not a worker's; if
@@ -956,4 +964,4 @@ async def run(cfg: Config) -> None:
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
         async with httpx.AsyncClient(timeout=15) as http:
             await load_pack(cfg, http)
-            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg))
+            await asyncio.gather(_postman(cfg, http), _ears(cfg, http), _videos(cfg), _translator(cfg), _userbot(cfg))

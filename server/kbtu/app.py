@@ -423,6 +423,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def main_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.main_org_chat(con, v, oid, cid)
 
+    @app.put("/api/orgs/{oid}/chats/{cid}/mirror")
+    def mirror_org_chat(oid: int, cid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
+
     @app.delete("/api/orgs/{oid}/chats/{cid}")
     def drop_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         out, gone = logic.drop_org_chat(con, v, oid, cid)

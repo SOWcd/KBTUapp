@@ -1774,13 +1774,19 @@ def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "tag": p["tag"], "photo": media_shape(files[p["photo_file_id"]]) if p["photo_file_id"] in files else None,
         "pinned": bool(p["pinned"]), "featured": bool(p["featured_until"] and p["featured_until"] > now()),
         "canDelete": v.role in ("admin", "moderator") or "posts" in rights.get(p["org_id"], ()),
-        "canEdit": "posts" in rights.get(p["org_id"], ()), "editedAt": p["edited_at"],
+        # a channel's post (mirror.py) is edited in Telegram, and its reactions and comments live there
+        "canEdit": "posts" in rights.get(p["org_id"], ()) and not p["tg_url"], "editedAt": p["edited_at"], "tg": _tg_shape(p),
         "canFeature": v.role == "admin" and p["audience"] == "public",
         "commentsOn": bool(p["comments_on"]),
         "comments": comments.get(p["id"], 0),
         "reactions": {k: reactions.get((p["id"], k), 0) for k in ("fire", "heart")}, "mine": {k: (p["id"], k) in mine for k in ("fire", "heart")},
         "read": p["id"] in read, "createdAt": p["created_at"],
     } for p in found]
+
+
+def _tg_shape(p: sqlite3.Row) -> dict | None:
+    from . import mirror  # mirror.py imports this module
+    return mirror.shape(p)
 
 
 def posts(con, v: Viewer, scope: str) -> list[dict]:
@@ -1853,6 +1859,8 @@ def update_post(con, v: Viewer, pid: int, body: dict) -> dict:
     if not p:
         raise ApiError("not_found")
     _may(con, v, p["org_id"], "posts")
+    if p["tg_url"] and body.keys() - {"pinned"}:
+        raise ApiError("bad_input")  # a channel's post is edited in Telegram; here it is only pinned
     bad, sets = object(), {}
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
     if "title" in body:
@@ -1929,6 +1937,8 @@ def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
     if kind not in ("fire", "heart"):
         raise ApiError("not_found")
     p = _thread(con, v, "post", pid)  # it answers with the post: only one the viewer may read
+    if p["tg_url"]:
+        raise ApiError("bad_input")  # a channel's post shows Telegram's reactions; a tap opens it there
     if on:
         con.execute("INSERT OR IGNORE INTO post_reactions (post_id, user_id, kind) VALUES (?, ?, ?)", (pid, v.id, kind))
     else:
@@ -2224,7 +2234,7 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None} if editor else x)
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"])} if editor else x)
     return out
 
 
@@ -2284,6 +2294,21 @@ def main_org_chat(con, v: Viewer, oid: int, cid: int) -> list[dict]:
         con.execute("UPDATE chats SET main = 0 WHERE org_id = ? AND main = 1", (oid,))
         con.execute("UPDATE chats SET main = 1 WHERE id = ?", (cid,))
         _chats_audit(con, v, oid, f"main {c['url']}")
+    return org_chats(con, oid, True)
+
+
+def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
+    """Studio's switch under the main channel (PLAN 86 part 2): its posts in the club's news, or not. The posts already
+    mirrored stay the club's news; off, the userbot leaves the channel."""
+    if not isinstance(on, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        may_chats(con, v, oid)
+        c = one(con, "SELECT * FROM chats WHERE id = ? AND org_id = ?", cid, oid)
+        if not c:
+            raise ApiError("not_found")
+        con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (int(on), cid))
+        _chats_audit(con, v, oid, f"mirror {'on' if on else 'off'} {c['url']}")
     return org_chats(con, oid, True)
 
 

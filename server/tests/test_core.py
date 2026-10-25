@@ -4189,6 +4189,139 @@ def test_org_catalog_chat_is_the_admins_to_give(env, monkeypatch):
     assert logic.bot_added(con, 81, {"id": -100700, "type": "channel", "title": "Chat 1"}) is not None
 
 
+def test_channel_mirror(env, tmp_path):
+    """PLAN 86 part 2: an org's main public channel in its news (mirror.py, fed by userbot.py with fake messages here):
+    a post's first line is its title, its photo copied; an album is one post; an edit follows and reads "edited"; a
+    video is a link; Telegram's views and reactions show and ours are refused, and so are edits in the app; a deletion
+    takes the post down once all its messages went; nobody is notified. Off in Studio, or another main channel: the
+    userbot leaves and the posts already there stay."""
+    import io
+    from PIL import Image
+    from kbtu import media, mirror
+    c, cfg = env
+    pres, ali = login(c, 80, "pres"), login(c, 81, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main) VALUES
+        (1, 'Open Mic News', 'channel', 'https://t.me/Mic_News', 0, 'org', 1, 1), (2, 'Open Mic Team', 'channel', 'https://t.me/+Secret1', 0, 'org', 1, 0)""")
+    assert mirror.wanted(con) == {"mic_news": 1} and mirror.to_join(con) == ["mic_news"]   # the main public channel only
+    assert mirror.take(con, 500, mirror.Msg(id=1, date=1000, text="Not joined")) is None    # a channel we don't mirror: dropped
+    mirror.joined(con, 500, "mic_news")
+    assert mirror.to_join(con) == [] and mirror.last(con, 500) == 0
+    png = io.BytesIO(); Image.new("RGB", (64, 48), "red").save(png, "PNG")
+    pic = media.save(png.getvalue(), tmp_path)
+    outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
+
+    # a post: the first line its title
+    p1 = mirror.take(con, 500, mirror.Msg(id=10, date=logic.now() - 60, text="Stand-up night on Friday\nSign up by Thursday.\nFree entry.",
+                                           photo=pic, views=120, reactions=[("\U0001F525", 7), ("\u2764", 3), ("\u2605", 0)]))
+    got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
+    assert (got["title"], got["body"]) == ("Stand-up night on Friday", "Sign up by Thursday.\nFree entry.")
+    assert got["photo"] and got["tg"] == {"url": "https://t.me/mic_news/10", "views": 120, "reactions": [["\U0001F525", 7], ["\u2764", 3]], "media": None}
+    assert got["commentsOn"] is False and got["canEdit"] is False
+    assert c.get("/api/posts?scope=org:1", headers=tma(80)).json()[0]["canEdit"] is False   # not even its President: Telegram's
+    assert c.put(f"/api/posts/{p1}/reactions/fire", headers=tma(81)).status_code == 400
+    assert c.patch(f"/api/posts/{p1}", headers=tma(80), json={"title": "Changed here"}).status_code == 400
+    assert c.patch(f"/api/posts/{p1}", headers=tma(80), json={"pinned": True}).json()["pinned"] is True  # a pin is the club's own
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox                      # nobody notified
+
+    # an edit, and the counts later
+    assert mirror.take(con, 500, mirror.Msg(id=10, date=0, text="Stand-up night moved to Saturday", views=300, reactions=[("\U0001F525", 9)])) == p1
+    got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
+    assert (got["title"], got["body"], got["tg"]["views"], got["tg"]["reactions"]) == ("Stand-up night moved to Saturday", "", 300, [["\U0001F525", 9]])
+    assert got["editedAt"] and got["photo"]                                                             # the photo stays
+
+    # an album: three messages, one post; its caption on the second; a video only a link
+    a = [mirror.Msg(id=20, date=logic.now(), grouped=77, photo=pic), mirror.Msg(id=21, date=logic.now(), grouped=77, text="Photos from the night"),
+         mirror.Msg(id=22, date=logic.now(), grouped=77, media="video")]
+    (ap,) = {mirror.take(con, 500, m) for m in a}
+    album = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[ap]
+    assert (album["title"], album["tg"]["url"], album["tg"]["media"], album["editedAt"]) == ("Photos from the night", "https://t.me/mic_news/20", "video", None)
+    assert album["photo"]
+    assert mirror.needs_photo(con, 500, 23, 77) is False and mirror.needs_photo(con, 500, 30, None) is True
+    long = mirror.take(con, 500, mirror.Msg(id=30, date=logic.now(), text="word " * 60))
+    lp = con.execute("SELECT title, body FROM posts WHERE id = ?", (long,)).fetchone()
+    assert len(lp["title"]) <= 120 and lp["title"].endswith("\u2026") and lp["body"] == ("word " * 60).strip()   # nothing lost
+    assert mirror.last(con, 500) == 30 and sorted(mirror.recent(con, 500)) == [10, 20, 21, 22, 30]
+
+    # deletions: an album's post goes when all its messages went
+    assert mirror.gone(con, 500, [20, 21]) == [] and mirror.gone(con, 500, [22]) == [album["id"]]
+    assert album["id"] not in [x["id"] for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()]
+    assert mirror.take(con, 500, mirror.Msg(id=22, date=0, text="back?")) != album["id"]                  # a deleted post isn't revived
+
+    # off in Studio: no more posts, the userbot leaves; the posts stay
+    assert c.put("/api/orgs/1/chats/1/mirror", headers=tma(81), json={"on": False}).status_code == 403    # not Ali's club
+    studio = c.put("/api/orgs/1/chats/1/mirror", headers=tma(80), json={"on": False}).json()
+    assert studio[0]["mirror"] is False and mirror.wanted(con) == {} and mirror.to_leave(con) == [(500, "mic_news")]
+    assert mirror.take(con, 500, mirror.Msg(id=40, date=logic.now(), text="Unseen")) is None
+    assert p1 in [x["id"] for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()]
+    mirror.left(con, 500)
+    # another main channel: that one is joined next
+    c.put("/api/orgs/1/chats/1/mirror", headers=tma(80), json={"on": True})
+    con.execute("INSERT INTO chats (id, title, kind, url, created_at, status, org_id) VALUES (3, 'Mic Live', 'channel', 'https://t.me/mic_live', 0, 'org', 1)")
+    c.put("/api/orgs/1/chats/3/main", headers=tma(80))
+    assert mirror.to_join(con) == ["mic_live"]
+
+
+def test_userbot_reads_telethon_messages(env):
+    """userbot.Mirror with Telethon-shaped messages (a fake client): a photo is downloaded once and copied, a video and
+    a file are named, Telegram's reactions read (a custom emoji as a star), service messages and anything from a chat
+    that isn't mirrored dropped unread (a group's message never reaches the database), a saved photo nobody uses removed."""
+    import datetime
+    import io
+    from PIL import Image
+    from types import SimpleNamespace as NS
+    from kbtu import mirror, userbot
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    mirror.joined(con, 500, "mic_news")
+    png = io.BytesIO(); Image.new("RGB", (40, 30), "blue").save(png, "PNG")
+    downloads = []
+
+    class Client:
+        async def download_media(self, m, kind):
+            downloads.append(m.id)
+            return png.getvalue()
+
+    def msg(i, chan=500, text="", photo=None, video=None, document=None, grouped=None, reactions=None, action=None):
+        return NS(id=i, peer_id=NS(channel_id=chan) if chan else NS(user_id=5), action=action, message=text, grouped_id=grouped,
+                  date=datetime.datetime.now(datetime.timezone.utc), photo=photo, video=video, gif=None, video_note=None,
+                  media=photo or video or document, web_preview=None, views=42, reactions=reactions)
+    work = userbot.Mirror(cfg, Client(), con)
+    run = lambda m: asyncio.run(work.guard(work.post(m)))  # noqa: E731
+    likes = NS(results=[NS(reaction=NS(emoticon="\U0001F44D"), count=5), NS(reaction=NS(document_id=1), count=2)])
+    run(msg(1, text="Open mic tonight", photo=object(), grouped=9, reactions=likes))
+    run(msg(2, photo=object(), grouped=9))                    # the album's second photo: the post has one, not downloaded
+    run(msg(3, text="Teaser", video=object()))
+    run(msg(4, text="Rules", document=object()))
+    run(msg(5, text="pinned a message", action=object()))     # a service message
+    run(msg(6, chan=777, text="a group's chatter"))           # not a mirrored chat
+    run(msg(7, chan=None, text="a private message"))
+    got = {r["title"]: r for r in con.execute("SELECT * FROM posts").fetchall()}
+    assert sorted(got) == ["Open mic tonight", "Rules", "Teaser"] and downloads == [1]
+    assert got["Open mic tonight"]["photo_file_id"] and json.loads(got["Open mic tonight"]["tg_reactions"]) == [["\U0001F44D", 5], ["\u2605", 2]]
+    assert (got["Teaser"]["tg_media"], got["Rules"]["tg_media"], got["Teaser"]["tg_views"]) == ("video", "file", 42)
+    assert con.execute("SELECT COUNT(*) FROM tg_post_msgs").fetchone()[0] == 4
+
+
+def test_userbot_off(env, caplog):
+    """The userbot stays off, saying why in one line, while any of its three settings is missing (nothing else changes)."""
+    import dataclasses
+    import logging
+    from kbtu import userbot
+    c, cfg = env
+    assert userbot.missing(cfg) == "no TG_API_ID / TG_API_HASH / TG_SESSION"
+    assert userbot.missing(dataclasses.replace(cfg, tg_api_id="12", tg_api_hash="h")) == "no TG_API_ID / TG_API_HASH / TG_SESSION"
+    assert userbot.missing(dataclasses.replace(cfg, tg_api_id="x", tg_api_hash="h", tg_session="s")) == "TG_API_ID is not a number"
+    assert "tg_session" not in repr(dataclasses.replace(cfg, tg_session="secret")) and "secret" not in repr(dataclasses.replace(cfg, tg_session="secret"))
+    with caplog.at_level(logging.WARNING, logger="kbtu.userbot"):
+        asyncio.run(userbot.run(cfg))
+    assert [r.getMessage() for r in caplog.records] == ["userbot: off (no TG_API_ID / TG_API_HASH / TG_SESSION)"]
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""
