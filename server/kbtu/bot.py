@@ -39,8 +39,9 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
 # (Oct 14), loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
 # rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
-# the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks)
-EMOJI_PACKS = ("NewsEmoji", "AnimatedAsianEmoji")
+# the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks; Oct 25: Telegram's own
+# AnimatedEmoji last, only for what the others lack)
+EMOJI_PACKS = ("NewsEmoji", "AnimatedAsianEmoji", "AnimatedEmoji")
 _custom: dict[str, str] = {}   # plain emoji (no variation selector) -> custom_emoji_id
 _custom_re: re.Pattern | None = None
 
