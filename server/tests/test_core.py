@@ -4800,3 +4800,73 @@ def test_portal_schedule(env, monkeypatch):
     dump = "\n".join(con.iterdump())
     assert "00X000000" not in dump and "Phone Only Course" not in dump           # the student ID is never kept; the phone layout ignored
     assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})
+
+
+def test_bot_cards_for_helpers_and_invites(env):
+    """The bot's cards about an event for one person (_render): a volunteer's yes/no, an invitation to a leaders'
+    meeting; quiet once the decision changed or they signed up."""
+    c, cfg = env
+    pres, vol = login(c, 61, "pres"), login(c, 62, "vol")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    start = logic.now() + 3 * 86400
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at)
+        VALUES (1, 1, 'published', 'Jam', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (start, start + 3600, pres["id"]))
+    con.execute("INSERT INTO volunteers (event_id, user_id, status, created_at) VALUES (1, ?, 'yes', 0)", (vol["id"],))
+    card = lambda kind, ref: bot._render(con, {"kind": kind, "ref": ref, "lang": "ru", "user_id": vol["id"], "payload": None})  # noqa: E731
+    fields = dict(org="Open Mic", title="Jam", when=texts.when(start, "ru"), place=texts.place_or_tba("305", "ru"))
+    assert card("volunteer_yes", "vo:1:0") == (*texts.bot_message("ru", "volunteer_yes", **fields), "ev_1")
+    assert card("volunteer_no", "vo:1:0") is None                                      # the decision says yes
+    for kind in ("leaders_invite", "meeting_invite"):
+        assert card(kind, "li:1") == (*texts.bot_message("ru", kind, **fields), "ev_1")
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'T62ABC', 0, 0)", (vol["id"],))
+    assert card("leaders_invite", "li:1") is None                                      # answered by signing up
+
+
+def test_chat_avatars_on_disk(env, monkeypatch):
+    """A chat's avatar from its t.me page: saved with a suggestion (a broken picture: none), replaced by the daily look
+    and by the bot's own card for a chat it sits in, the old file then off the disk."""
+    import io
+    from PIL import Image
+    from kbtu import media
+    c, cfg = env
+    login(c, 63, "ali")
+    con = db.connect(cfg.db_path)
+    root = Path(cfg.db_path).resolve().parent / "media"
+    def png(color):
+        b = io.BytesIO()
+        Image.new("RGB", (64, 64), color).save(b, "PNG")
+        return b.getvalue()
+    image = {"https://t.me/jam_news": png((200, 40, 40)), "https://t.me/broken_pic": b"not a picture"}
+    async def peek(http, url):
+        return {"ok": True, "title": url.rsplit("/", 1)[1], "image": image.get(url), "members": 50, "about": None, "channel": True}
+    monkeypatch.setattr(media, "chat_peek", peek)
+    def suggest(handle):
+        con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+        return asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 63, "type": "private"}, "date": logic.now(), "text": handle}))["text"]
+    on_disk = lambda p: (root / f"{p}.webp").exists()  # noqa: E731
+    assert suggest("@jam_news").startswith("✅") and suggest("@broken_pic").startswith("✅")
+    first = con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
+    assert first and on_disk(first)
+    assert con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/broken_pic'").fetchone()[0] is None
+    image["https://t.me/jam_news"] = png((40, 200, 40))                                 # a new avatar on t.me
+    asyncio.run(bot.refresh_chats(cfg, None, con))
+    second = con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
+    assert second != first and on_disk(second) and not on_disk(first)
+    # once our bot sits in the chat, Telegram's own card: title, about, members, avatar
+    cid = con.execute("SELECT id FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
+    class Resp:
+        def __init__(self, body=None, content=b""):
+            self.body, self.content, self.status_code = body, content, 200
+        def json(self):
+            return self.body
+    class Http:
+        async def post(self, url, json=None):
+            method = url.rsplit("/", 1)[1]
+            return Resp({"getChat": {"ok": True, "result": {"title": "Jam  News", "description": "Every Friday", "photo": {"big_file_id": "F"}}},
+                         "getChatMemberCount": {"ok": True, "result": 77}, "getFile": {"ok": True, "result": {"file_path": "p/1.jpg", "file_size": 999}}}[method])
+        async def get(self, url):
+            return Resp(content=png((40, 40, 200)))
+    assert asyncio.run(bot.chat_card(cfg, Http(), con, cid, -100123)) is True
+    row = con.execute("SELECT title, about, members, photo FROM chats WHERE id = ?", (cid,)).fetchone()
+    assert tuple(row)[:3] == ("Jam News", "Every Friday", 77) and row[3] not in (first, second) and on_disk(row[3]) and not on_disk(second)
