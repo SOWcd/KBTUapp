@@ -99,7 +99,7 @@
           <section class="card now">
             <button class="open" onclick={() => sheets.week()} aria-label={t('sched.weekTitle')}></button>
             <div class="now-m" class:pr={!!room && floorOf(room) != null}>
-              {#if room}<span class="rm"><small>{t('list.room')}</small><b class="num ellipsis">{atBldg2(room) ? bldg2Room(room) || room : room}</b></span>{/if}
+              {#if room}{@const rl = atDorm(room) ? t('list.dorm') : atBldg2(room) ? bldg2Room(room) || room : room}<span class="rm"><small>{t('list.room')}</small><b class="num ellipsis" class:sm={rl.length > 4}>{rl}</b></span>{/if}
               <span class="now-t"><small class:live={onNow}><i></i>{onNow ? t('list.nowUntil', { time: cur.c.ends }) : soon(cur.b, now)}</small>
                 <b class="clamp-2">{subjectOf(cur.c)}</b>
                 <span>{[lk ? t(`list.kind.${lk}Long`) : cur.c.kind, cur.c.teacher].filter(Boolean).join(' · ')}</span></span>
@@ -156,7 +156,7 @@
 
   {#each days as day (day.d)}
     <section class="dayblk">
-      <h2 class="dh"><span class:now={day.d === today}>{head(day.d)}</span><span class="t-foot">{dayMonth(dayTs(day.d) + 12 * 3600)}</span></h2>
+      <h2 class="dh"><span class:td={day.d === today}>{head(day.d)}</span><span class="t-foot">{dayMonth(dayTs(day.d) + 12 * 3600)}</span></h2>
 
       {#each day.items as it (it.key)}
         {#if 'c' in it}
@@ -212,7 +212,7 @@
 
   .dayblk { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
   .dh { display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
-  .dh .now { color: var(--accent-text); }
+  .dh .td { color: var(--accent-text); }
 
   /* a class: one slim row between the event cards, the way a day really goes */
   .cl { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; border-radius: 14px; background: var(--surface-2); }
@@ -262,6 +262,7 @@
   .rm { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 18px; background: #fff; color: #0B1433; box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.6); }
   .rm small { font: 600 var(--fs-micro)/1 var(--font-text); color: #4A5680; }
   .rm b { max-width: 64px; font: 800 26px/1.1 var(--font-display); letter-spacing: -0.03em; }
+  .rm b.sm { font-size: 15px; } /* the dorm, a long room: whole, not cut to one letter (owner, Oct 26) */
   .now-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .now-t small { display: flex; align-items: center; gap: 6px; font: 650 var(--fs-cap)/1.2 var(--font-text); color: var(--accent-text); }
   .now-t small i { display: none; width: 7px; height: 7px; border-radius: 50%; background: #46D6FF; box-shadow: 0 0 0 3px rgba(70, 214, 255, 0.25); }

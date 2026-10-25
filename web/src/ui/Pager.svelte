@@ -130,9 +130,13 @@
     if (can && !visited[cur + dir]) visited[cur + dir] = true;
     layout(can ? dx : (dx / (1 + Math.abs(dx) / 90)) * 0.6);
   }
+  // iOS still calls a short flick a tap: the click after a swipe would open the ticket under the finger (owner, Oct 26)
+  let swiped = 0;
+  const eat = (e: MouseEvent) => { if (performance.now() - swiped < 400) { e.stopPropagation(); e.preventDefault(); } };
   function end() {
     const z = tz; tz = null;
     if (!z || z.lock !== 'x') return;
+    swiped = performance.now();
     const h = z.hist;
     const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
     const dir = Math.abs(vx) > 0.3 ? (vx < 0 ? 1 : -1) : z.dx < 0 ? 1 : -1;
@@ -163,6 +167,7 @@
     root.addEventListener('touchmove', move, { passive: false });
     root.addEventListener('touchend', end);
     root.addEventListener('touchcancel', end);
+    root.addEventListener('click', eat, true);
     const onResize = () => { w0 = 0; layout(0); };
     addEventListener('resize', onResize);
     // the width for the first drag, read where layout is already done (a ResizeObserver's first callback)
