@@ -3,6 +3,7 @@
   // snapping), "3 / 12" in the capsule. Telegram's Back or Close leaves; mine, or any for the club's Head+, can go.
   // Who added it under the photo; another's can be reported: gone for me at once, the admin decides.
   import Images from '@lucide/svelte/icons/images';
+  import X from '@lucide/svelte/icons/x';
   import { onMount } from 'svelte';
   import type { AlbumPhoto } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
@@ -70,7 +71,7 @@
     <div class="row">
     {#if list[at] && !list[at].mine}<button class="pill glass glass-pill" use:glass onclick={report}>{t('cm.report')}</button>{/if}
     {#if onremove && list[at]?.canDelete}<button class="pill glass glass-pill danger" use:glass onclick={remove}>{t('album.remove')}</button>{/if}
-    <button class="pill glass glass-pill" use:glass onclick={() => close(overlay.id)}>{t('common.close')}</button>
+    <button class="pill x glass glass-pill" use:glass onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} strokeWidth={2.4} /></button>
     </div>
   </div>
 </div>
@@ -88,5 +89,7 @@
   .by { font: 600 13px/1.2 var(--font-text); color: rgba(255, 255, 255, 0.75); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
   .pill { position: relative; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.12); }
   .pill:active { transform: scale(0.96); }
+  /* a round cross, not a worded pill (owner, Oct 25) */
+  .pill.x { width: 44px; padding: 0; display: grid; place-items: center; }
   .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
 </style>
