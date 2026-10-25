@@ -30,6 +30,7 @@
   import Emoji from '../../ui/Emoji.svelte';
   import { ui } from '../../lib/state/ui.svelte';
   import { nameOf, shortOf } from '../../lib/short';
+  import { session } from '../../lib/state/session.svelte';
 
   let openPost = $state(false);
 
@@ -96,6 +97,7 @@
           {@const lk = lessonKind(cur.c.kind)}
           <!-- the class on now or next: its room big, what's left of it, the rest of today -->
           <section class="card now">
+            <button class="open" onclick={() => sheets.week()} aria-label={t('sched.weekTitle')}></button>
             <div class="now-m" class:pr={!!room && floorOf(room) != null}>
               {#if room}<span class="rm"><small>{t('list.room')}</small><b class="num ellipsis">{atBldg2(room) ? bldg2Room(room) || room : room}</b></span>{/if}
               <span class="now-t"><small class:live={onNow}><i></i>{onNow ? t('list.nowUntil', { time: cur.c.ends }) : soon(cur.b, now)}</small>
@@ -132,6 +134,14 @@
       {/each}
     </div>
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as k, i (k)}<i class:on={i === shown}></i>{/each}</div>{/if}
+  {/if}
+
+  {#if session.me?.student && !data.schedule.length}
+    <!-- no timetable yet: how to get it in (PLAN 26), until it's there -->
+    <button class="addw surface press" onclick={() => sheets.schedHowTo()}>
+      <Emoji name="spiral_calendar_3d" size={40} />
+      <span><b>{t('sched.cardTitle')}</b><small>{t('sched.cardSub')}</small></span>
+    </button>
   {/if}
 
   <div class="evh"><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></div>
@@ -291,6 +301,10 @@
   .ev-act { position: relative; z-index: 1; display: flex; gap: 8px; margin-top: 14px; }
   /* the whole card opens the event; its two buttons sit above it */
   .open { position: absolute; inset: 0; border-radius: inherit; }
+  .addw { display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 14px; padding: 14px 16px; border-radius: var(--r-l); text-align: left; }
+  .addw span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .addw b { font: 680 var(--fs-body)/1.2 var(--font-text); }
+  .addw small { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .ev-act button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: var(--r-full);
     background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); color: #fff; font: 650 var(--fs-body)/1 var(--font-text); }
   .ev-act button:active { transform: scale(0.96); }

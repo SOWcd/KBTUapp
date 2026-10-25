@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, logic, media, offsite, receipt, texts, userbot, video
+from . import ai, casting, db, logic, media, offsite, portal, receipt, texts, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -664,6 +664,49 @@ def _file(msg: dict) -> dict | None:
     return (msg.get("photo") or [None])[-1]  # the biggest size comes last
 
 
+SCHED_FILES = (".webarchive", ".mht", ".mhtml", ".html", ".htm")
+SCHED_MAX = 20 * 1024 * 1024  # what a bot may download (getFile); a saved schedule page is ~0.4-7 MB
+
+
+def _sched_file(msg: dict) -> dict | None:
+    """The portal's schedule page saved on the phone: Safari's Web Archive, Chrome's .mht (or the page itself)."""
+    d = msg.get("document") or {}
+    return d if str(d.get("file_name") or "").lower().endswith(SCHED_FILES) else None
+
+
+async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
+    """A student's week from the portal's schedule page (portal.py; PLAN 26, owner Oct 25: Share -> Web Archive ->
+    Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one). The file is
+    read in memory and never kept; nothing of the page goes to the log; the student ID on it isn't read."""
+    chat = msg.get("chat") or {}
+    if chat.get("type") != "private":
+        return None
+    u = one(con, """SELECT u.id, u.lang, s.first_name, s.last_name FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0
+        WHERE u.tg_id = ?""", chat["id"])
+    lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
+    say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
+    if not u:
+        return say("sched_signin")
+    d = _sched_file(msg) or {}
+    if int(d.get("file_size") or 0) > SCHED_MAX:
+        return say("sched_big")
+    try:
+        r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getFile", params={"file_id": d.get("file_id")})
+        data = (await http.get(f"https://api.telegram.org/file/bot{cfg.bot_token}/{r.json()['result']['file_path']}")).content
+        week = await asyncio.to_thread(lambda: portal.parse(portal.page_html(data)))
+    except portal.NotSchedule as exc:
+        log.info("schedule: not a schedule page (%s)", exc)
+        return say("sched_not")
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        log.warning("schedule: %s", type(exc).__name__)
+        return say("sched_bad")
+    if not portal.same_person(week.name, u["first_name"], u["last_name"]):
+        return say("sched_other")
+    with db.tx(con):
+        logic.save_schedule(con, u["id"], week.lessons)
+    return say("sched_ok", "sched", n=len(week.lessons))
+
+
 def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg: Config | None = None, keys: list | None = None) -> dict:
     body: dict = {"chat_id": chat, "text": text, "parse_mode": "HTML"}
     if keys or button:
@@ -845,7 +888,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         log.exception("suggest")
                         body = None
                 else:
-                    body = await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)
+                    body = await _schedule(cfg, http, con, msg) if _sched_file(msg) else await _receipt(cfg, http, con, msg) if _file(msg) else _welcome(con, cfg, msg)
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
                     await _send(cfg, http, body)

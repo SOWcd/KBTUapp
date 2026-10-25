@@ -123,6 +123,8 @@
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
+  sheets.schedHowTo = (first) => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), { first });
+  sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
   sheets.adminTeam = () => lazy(() => import('./screens/admin/AdminTeam.svelte'), {});
@@ -271,6 +273,7 @@
       return;
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
