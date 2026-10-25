@@ -27,6 +27,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { roleName } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
+  import { session } from '../../lib/state/session.svelte';
   import { social } from '../../lib/social';
   import { dayMonth, relDay } from '../../lib/time';
   import { openLink, haptic } from '../../lib/tg';
@@ -122,6 +123,11 @@
           {/if}
         </div>
       {/if}
+    {:else if fetched && (o.myRights?.includes('profile') || session.me?.role === 'admin')}
+      <!-- none yet: shown to who can link them (owner, Oct 26: even the app's creator couldn't find how) -->
+      <h3 class="t-cap sec">{t('oc.title')}</h3>
+      <div class="nochat surface"><p class="t-foot">{t('oc.emptyHint')}</p>
+        <Button kind="secondary" size="m" full onclick={() => sheets.clubEdit(o.id, 'chats')}>{t('oc.linkChat')}</Button></div>
     {/if}
 
     {#if leaders.length}
@@ -234,4 +240,5 @@
   .all span { flex: 1; }
   .all b { color: var(--accent-text); }
   .all :global(svg) { flex: none; }
+  .nochat { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-l); }
 </style>
