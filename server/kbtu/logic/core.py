@@ -88,7 +88,7 @@ def overseer(con, v: Viewer) -> bool:
 
 # ---------------------------------------------------------------- shapes
 
-# the Student Government a mark "Student Government" and first in lists, no rights beyond any club's
+# the Student Government: a mark "Student Government" and first in lists, no rights beyond any club's
 GOV_SLUG = "studentgovernment"
 
 
@@ -179,7 +179,7 @@ def avatar_of(p: sqlite3.Row) -> str | None:
 
 
 def person_ref(p: sqlite3.Row) -> dict:
-    # A9 the app's moderators and admins carry a badge everyone sees, like the founder's
+    # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
     return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff}
 
@@ -221,7 +221,7 @@ def course_of(sid: str | None, t: int | None = None) -> int | None:
 
 
 def course_cap(sid: str | None) -> int:
-    """The last year of the degree the ID's letter names B bachelor 4, M master 2; any other letter 6.
+    """The last year of the degree the ID's letter names: B bachelor 4, M master 2; any other letter 6.
     Nobody is ever marked graduated: the app can't know (repeaters, leave), so the year stops at the last one."""
     m = re.match(r"\d{2}([A-Z])", sid or "")
     return {"B": 4, "M": 2}.get(m.group(1) if m else "", 6)

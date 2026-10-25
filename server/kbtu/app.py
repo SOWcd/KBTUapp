@@ -907,7 +907,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         media.drop(photos, logic.drop_my_photo(con, v))
         return logic.me(con, v)
 
-    # my own photo instead of Telegram's the body as in /api/photos; the one it replaces leaves the disk
+    # my own photo instead of Telegram's: the body as in /api/photos; the one it replaces leaves the disk
     @app.post("/api/me/photo")
     async def upload_my_photo(request: Request, con: Con, v: Me):
         data = await read_upload(request)
@@ -1305,7 +1305,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return legal_page("terms", lang)
 
     def legal_page(doc: str, lang: str) -> Response:
-        """kbtu.sow.kz/privacy and /terms plain pages anyone can open, in ru, kk or en; the app links
+        """kbtu.sow.kz/privacy and /terms: plain pages anyone can open, in ru, kk or en; the app links
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
@@ -1362,7 +1362,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         start = request.query_params.get("tgWebAppStartParam")
         if start == "old" and cfg.old_dir:  # t.me/KBTUappBot?startapp=old
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
-        if path == "demo" or path.startswith("demo/"):  # the in-browser demo went its old links open the app in Telegram
+        if path == "demo" or path.startswith("demo/"):  # the in-browser demo went: its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path):
             return f

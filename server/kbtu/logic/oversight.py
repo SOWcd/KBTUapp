@@ -148,7 +148,7 @@ def _admin(v: Viewer) -> None:
 
 
 def _mod(v: Viewer) -> None:
-    """Moderators filter content the report queue, taking things down and back; the admin too."""
+    """Moderators filter content: the report queue, taking things down and back; the admin too."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
 
@@ -217,7 +217,7 @@ def set_staff(con, v: Viewer, uid, role) -> dict:
 
 
 def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
-    """The platform ban no mutes, no strikes; the reason is required, he sees it, and the role goes.
+    """The platform ban: no mutes, no strikes; the reason is required, he sees it, and the role goes.
     His posts stay (moderators hide what's bad); the bot stops writing to him."""
     if not isinstance(on, bool):
         raise ApiError("bad_input")

@@ -912,7 +912,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
             group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
             if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
-                continue  # banned the bot neither answers nor acts for him
+                continue  # banned: the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
                     await _tapped(cfg, http, con, upd["callback_query"])

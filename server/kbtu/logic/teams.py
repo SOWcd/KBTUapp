@@ -215,7 +215,7 @@ def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> di
         raise ApiError("bad_input")
     was = one(con, "SELECT department FROM org_tags WHERE id = ? AND org_id = ?", tid, oid) if tid is not None else None
     if dept is not None and bool(dept) != bool(was and was[0]) and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
-        raise ApiError("forbidden")  # a Head unmarking a department would sidestep its rules Vice+ only
+        raise ApiError("forbidden")  # a Head unmarking a department would sidestep its rules: Vice+ only
     with tx(con):
         if tid is None and one(con, "SELECT COUNT(*) FROM org_tags WHERE org_id = ?", oid)[0] >= 30:
             raise ApiError("conflict", "many")

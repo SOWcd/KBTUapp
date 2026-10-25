@@ -460,7 +460,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
 
 
 def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int) -> sqlite3.Row | str:
-    """A badge QR at the door someone who forgot to register, or was just passing by, comes in.
+    """A badge QR at the door: someone who forgot to register, or was just passing by, comes in.
     A ticket they hold is checked in as usual; a free event registers them on the spot (walk_in); a paid one
     needs a ticket."""
     if e["status"] != "published":

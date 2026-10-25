@@ -337,17 +337,17 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     return cur.lastrowid
 
 
-# A5 short links kbtu.sow.kz/<slug> the name in Latin letters, the app's own paths never
+# A5 short links kbtu.sow.kz/<slug>: the name in Latin letters, the app's own paths never
 # Cyrillic a..ya (U+0430..U+044F) in order, then yo and the Kazakh letters (code points: the code stays ASCII)
 TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i k l m n o p r s t u f h c ch sh sch _ y _ e yu ya".split())),
     0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
 SLUG = re.compile(r"[a-z0-9]{2,24}")
 RESERVED = {"api", "cal", "healthz", "exit", "privacy", "terms", "og", "media", "demo", "old", "assets", "emoji", "map", "admin",
             "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events",
-            # and for the clubs' own links what a phishing page would like to be
+            # and for the clubs' own links: what a phishing page would like to be
             "favicon", "apple-touch-icon", "robots", "sitemap", "auth", "oauth", "logout", "signin", "signup", "register", "account",
             "me", "profile", "dmp", "pay", "kaspi", "telegram", "tg", "security", "official", "news", "about", "wp-admin"}
-# a club's own short link a club slug, or words joined by single hyphens, 2-32 characters
+# a club's own short link: a club slug, or words joined by single hyphens, 2-32 characters
 SHORT = re.compile(r"(?=.{2,32}$)[a-z0-9]+(?:-[a-z0-9]+)*")
 LINKS_MAX = 20  # a club's: the names are everyone's, first come, first served
 
@@ -371,7 +371,7 @@ def name_slugs(con) -> None:
             con.execute("UPDATE orgs SET slug = ? WHERE id = ?", (slug_for(con, o["name"], o["id"]), o["id"]))
 
 
-# words a club's initials leave out "Club of Film and Theatre" is CFT; Russian and Kazakh ones as code
+# words a club's initials leave out: "Club of Film and Theatre" is CFT; Russian and Kazakh ones as code
 # points (the code stays ASCII)
 LINK_WORDS = {*"\u0438 \u0432 \u0432\u043e \u043d\u0430 \u043f\u043e \u0434\u043b\u044f \u0441 \u0441\u043e \u043e \u043e\u0431 \u043e\u0442 \u043f\u0440\u0438 \u0437\u0430 \u0438\u0437 \u043a \u0436\u04d9\u043d\u0435 \u043c\u0435\u043d \u043f\u0435\u043d \u0431\u0435\u043d".split(),
               "and", "of", "the", "for", "in", "on", "at", "a", "an", "to", "by"}
@@ -387,7 +387,7 @@ def initials(name: str) -> str:
     return "".join(w[0] for w in words).upper()[:8]
 
 
-# Org names, one style no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
+# Org names, one style: no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
 # one is the abbr. Done to a name as it's created or renamed; the names already there were fixed by hand.
 KBTU = {"KBTU", "\u041a\u0411\u0422\u0423"}  # and in Cyrillic
 _KB = r"(?:kbtu|\u043a\u0431\u0442\u0443)"

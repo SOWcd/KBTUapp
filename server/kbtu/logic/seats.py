@@ -215,7 +215,7 @@ def event_ics(con, eid: int, link: str) -> str:
 
 
 def cal_token(con, v: Viewer) -> str:
-    """My calendar feed's secret made once and kept, so a subscribed calendar stays subscribed."""
+    """My calendar feed's secret: made once and kept, so a subscribed calendar stays subscribed."""
     need_student(v)
     t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
     if not t:

@@ -132,7 +132,7 @@ def main(args: list[str]) -> None:
             con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (u["id"],))
             con.execute("UPDATE users SET card_no = NULL WHERE id = ?", (u["id"],))
             con.execute("DELETE FROM achievement_grants WHERE user_id = ? AND code = 'first50'", (u["id"],))
-        # its number stays a gap moving the later ones down would hand someone a deleted account's burnt number
+        # its number stays a gap: moving the later ones down would hand someone a deleted account's burnt number
         print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} retired")
     elif cmd == "student" and len(args) == 6:
         u, sid, t = _user(con, args[1]), args[2].upper(), now()

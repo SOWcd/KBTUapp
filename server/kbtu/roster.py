@@ -1,6 +1,6 @@
 """The clubs' rosters from DMP's Student Union sheet (PLAN 95): DMP gave it and allowed its use; every
 row waits in roster_pending for its student and stays theirs (the city hidden or deleted any time). A one-off until
-everyone has signed up the table is dropped by hand then.
+everyone has signed up: the table is dropped by hand then.
 
 Listed under my Telegram username but not signed in with Microsoft yet: a welcome with the clubs and positions only,
 and the way to sign in. A row is someone's when the Telegram username (or the KBTU e-mail) is theirs AND the sheet's
@@ -181,7 +181,7 @@ def asks(con, uid: int) -> list[sqlite3.Row]:
 
 
 def join(con, uid: int, r: sqlite3.Row) -> bool:
-    """The row made real; what the app already has wins a membership held keeps its role, a missing one
+    """The row made real; what the app already has wins: a membership held keeps its role, a missing one
     is added (a President on the sheet where the club already has another in the app: Vice), and the position as the
     club role's name, the department, the city, the year and the phone fill only what's empty. Then the row goes.
     True when a President on the sheet came in as Vice."""
@@ -221,7 +221,7 @@ def join(con, uid: int, r: sqlite3.Row) -> bool:
 
 def claim(con, uid: int, rid: int) -> None:
     """"Yes, it's me" on a row listed under another name (a typo, a new surname): whoever confirms hears it (the club's
-    President, or DMP's leads for a club without one). A student never removes a row a wrong one goes
+    President, or DMP's leads for a club without one). A student never removes a row: a wrong one goes
     to support from the app."""
     from .logic import ApiError, notify
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)

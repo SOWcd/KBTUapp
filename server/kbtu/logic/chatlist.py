@@ -104,7 +104,7 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
 
 
 # A chat any student suggests (PLAN item 45): picked in the bot's own
-# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21 a closed
+# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21: a closed
 # one by its invite link, which only signed-in students then see (chats()) and the admin sees marked before approving.
 HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
 
@@ -123,7 +123,7 @@ INVITE = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:\+|joinchat/)([A-Za-z0
 
 
 def chat_link(text: str) -> str | None:
-    """Any chat a student can name a public one by @name or its t.me link,
+    """Any chat a student can name: a public one by @name or its t.me link,
     a closed one by its invite link (t.me/+…, t.me/joinchat/…); its t.me address, or None."""
     if name := chat_handle(text):
         return f"https://t.me/{name}"

@@ -170,7 +170,7 @@ def test_sign_in_rules(env, monkeypatch, capsys):
 def test_frontend(env):
     c, _ = env
     assert "<title>app</title>" in c.get("/clubs/it").text   # SPA fallback
-    r = c.get("/demo/", follow_redirects=False)              # the in-browser demo went its old links open the app
+    r = c.get("/demo/", follow_redirects=False)              # the in-browser demo went: its old links open the app
     assert r.status_code == 302 and r.headers["location"].startswith("https://t.me/")
     r = c.get("/assets/a.js")
     assert "immutable" in r.headers["cache-control"]
@@ -693,7 +693,7 @@ def test_consent_again(env):
 
 
 def test_legal_pages(env):
-    """The privacy policy and the terms public pages in three languages, linked to each other."""
+    """The privacy policy and the terms: public pages in three languages, linked to each other."""
     c, _ = env
     for doc in ("privacy", "terms"):
         for lang in ("ru", "kk", "en"):
@@ -740,7 +740,7 @@ def test_admin_clubs(env):
     past = c.get(f"/api/users/{pid}", headers=P).json()["past"]
     assert [(x["org"]["id"], x["role"]) for x in past] == [(club["id"], None), (club["id"], None)]  # the role: to the club's team only
     assert [o["id"] for o in c.get("/api/admin/orgs", headers=A).json()] == [club["id"]]
-    # hide, never delete gone for everyone but the admin's list, and back with one more tap
+    # hide, never delete: gone for everyone but the admin's list, and back with one more tap
     hide = lambda on, h=A: c.put(f"/api/admin/orgs/{club['id']}/hidden", headers=h, json={"hidden": on})
     assert hide(True, P).status_code == 403
     assert hide(True).json()["hidden"] is True
@@ -950,7 +950,7 @@ def test_posts(env):
 
 
 def test_invite_cards(env, monkeypatch):
-    """Invites go out as our bot's card a line of text and a button — the link only behind the button,
+    """Invites go out as our bot's card: a line of text and a button — the link only behind the button,
     never in the text; a club's card is for its Vice+ only."""
     import json
     import httpx
@@ -1014,7 +1014,7 @@ def test_checkin_by_name(env):
 
 
 def test_event_updates(env):
-    """An organizer's update Head+ only, pinned on the event for everyone, the bot tells the people going
+    """An organizer's update: Head+ only, pinned on the event for everyone, the bot tells the people going
     (our template, never the organizer's words), three a day at most; deleting it drops the queued message."""
     c, cfg = env
     pres, mem, ali = login(c, 80, "pres"), login(c, 81, "mem"), login(c, 82, "ali")
@@ -1041,7 +1041,7 @@ def test_event_updates(env):
 
 
 def test_ratings(env):
-    """One tap after the event only people checked in, from the end until 7 days later; anonymous to the club
+    """One tap after the event: only people checked in, from the end until 7 days later; anonymous to the club
     (average, counts, comments without names; from three ratings on); the bot asks an hour after the end unless reminders are off."""
     c, cfg = env
     pres, ali, zhan = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan")
@@ -1077,7 +1077,7 @@ def test_ratings(env):
 
 
 def test_calendar_file(env):
-    """"To calendar" on the ticket the going get a signed link the phone's browser opens with no session."""
+    """"To calendar" on the ticket: the going get a signed link the phone's browser opens with no session."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
     con = db.connect(cfg.db_path)
@@ -1098,7 +1098,7 @@ def test_calendar_file(env):
 
 
 def test_album(env):
-    """The guests' album who came adds up to 10 photos from the start until a week after the end, the team too;
+    """The guests' album: who came adds up to 10 photos from the start until a week after the end, the team too;
     the one who added it or the club's Head+ take one out; guests see none; deleting my data takes mine out."""
     import io
     from PIL import Image
@@ -1146,7 +1146,7 @@ def test_album(env):
 
 
 def test_album_reports(env):
-    """A photo can be reported gone for the reporter at once, for everyone after two people, the admin's queue
+    """A photo can be reported: gone for the reporter at once, for everyone after two people, the admin's queue
     shows its thumb and "take down" deletes it; "Photos from participants" off = only the team adds; who added it shows."""
     import dataclasses
     import io
@@ -1190,7 +1190,7 @@ def test_album_reports(env):
     assert len(c.get("/api/events/1", headers=P).json()["photos"]) == 1 and c.get("/api/events/1", headers=Z).json()["photos"] == []
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM event_photos").fetchone()[0] == 0 and c.get("/api/admin/reports", headers=B).json() == []
-    # kept 30 days for an undo the file stays, "taken down" lists it, Restore puts it back in the album
+    # kept 30 days for an undo: the file stays, "taken down" lists it, Restore puts it back in the album
     path = con.execute("SELECT path FROM files WHERE id = ?", (ph["id"],)).fetchone()[0]
     on_disk = lambda: (Path(cfg.db_path).parent / "media" / f"{path}.webp").exists()  # noqa: E731
     assert on_disk() and [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("photo", ph["id"])]
@@ -1214,7 +1214,7 @@ def test_album_reports(env):
 
 
 def test_bring_a_friend(env):
-    """"Bring a friend" my friends and where they stand; one bot card per friend and event; the friend's
+    """"Bring a friend": my friends and where they stand; one bot card per friend and event; the friend's
     registration credits the first one who asked ("Life of the party"); the card goes quiet once they're in."""
     c, cfg = env
     pres, ali, zhan, dana = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan"), login(c, 93, "dana")
@@ -1346,7 +1346,7 @@ def test_question_badges(env):
 
 
 def test_nick_and_photo(env):
-    """A nickname and my own photo everyone sees the nick, organizers the real name beside it; my photo
+    """A nickname and my own photo: everyone sees the nick, organizers the real name beside it; my photo
     turns "Photo from Telegram" off, on again is Telegram's; a report takes the nick, photo and "about me" down."""
     import dataclasses
     import io
@@ -1411,13 +1411,13 @@ def test_nick_and_photo(env):
     c.patch("/api/me", headers=A, json={"nick": "Ali again"})
     c.post("/api/me/photo", headers=A, content=raw.getvalue())
     assert delete_now(c, cfg, A) is None
-    # deleting the account takes the kept copy at once the nick and words, the photo off the disk
+    # deleting the account takes the kept copy at once: the nick and words, the photo off the disk
     assert not con.execute("SELECT 1 FROM takedowns WHERE user_id = ?", (ali["id"],)).fetchone() and not (Path(cfg.db_path).parent / newer).exists()
     u = con.execute("SELECT nick, avatar_tg, avatar_file_id FROM users WHERE id = ?", (ali["id"],)).fetchone()
     assert tuple(u) == (None, 1, None) and not con.execute("SELECT 1 FROM files WHERE kind = 'avatar' AND owner_id = ?", (ali["id"],)).fetchone()
 
 def test_calendar_feed(env):
-    """My calendar feed one secret address per student, kept; everything I go to (a cancelled event struck
+    """My calendar feed: one secret address per student, kept; everything I go to (a cancelled event struck
     through); the page hands webcal:// to the phone's calendar; gone with my data."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
@@ -1445,7 +1445,7 @@ def test_calendar_feed(env):
 
 
 def test_unlock_moment(env):
-    """A check-in that brings a new achievement level the date it was reached, the bot's message once, and the
+    """A check-in that brings a new achievement level: the date it was reached, the bot's message once, and the
     app's unlock moment until it has been celebrated."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
@@ -1863,7 +1863,7 @@ def test_club_profile(env):
     assert c.get("/api/orgs/1", headers=M).json()["description"] == "We build things."                    # nothing half-saved
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'org_edit'").fetchone()[0] == 1
 
-    # the logo the editor's own upload goes on and shows wherever the club does; a stray id doesn't; null takes it off
+    # the logo: the editor's own upload goes on and shows wherever the club does; a stray id doesn't; null takes it off
     import io
     from PIL import Image
     raw = io.BytesIO()
@@ -1999,7 +1999,7 @@ def test_teambuilding_thunder(env):
 
 
 def test_message_teammate(env):
-    """"Message on Telegram" a profile carries the @username to the same club's team only."""
+    """"Message on Telegram": a profile carries the @username to the same club's team only."""
     c, cfg = env
     pres, mem, out = login(c, 95, "pres"), login(c, 96, "mem"), login(c, 97, "out")
     con = db.connect(cfg.db_path)
@@ -2433,7 +2433,7 @@ def test_team_two(env):
     assert c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"role": "head"}).json()[2]["role"] == "head"  # the old way still works
     c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"role": "member"})
 
-    # the toggles a role is its rights; the highest ranks it; only rights I have, below my level
+    # the toggles: a role is its rights; the highest ranks it; only rights I have, below my level
     made = c.post("/api/orgs/1/roles", headers=tma(21), json={"name": "SMM", "color": "#FF4FA3", "rights": ["posts", "posts"]}).json()["roles"]
     r_smm = next(r for r in made if r["name"] == "SMM")
     assert (r_smm["rights"], r_smm["level"]) == (["door", "posts"], "head")  # the door is everyone's
@@ -2511,7 +2511,7 @@ def test_streak_pauses():
 
 
 def test_memo(env, monkeypatch):
-    """PLAN "Memo in one tap" next week's events that ask DMP for something become DMP's complex memos in one
+    """PLAN "Memo in one tap": next week's events that ask DMP for something become DMP's complex memos in one
     email, signed by whoever opens it; Wednesday morning the President and Vices hear it's ready. A place may be left
     to be confirmed: the memo then asks for any room, the organizer hears 7/3/1/0 days before, and typing the room in
     later sends nobody a message (the 2-hour reminder says it)."""
@@ -2641,7 +2641,7 @@ def test_memo_v2(env, monkeypatch):
     assert c.post("/api/orgs/1/memo/sent", headers=tma(21), json={"ids": [a["id"], 90]}).status_code == 204
     m = c.get("/api/orgs/1/memo", headers=tma(20)).json()
     assert m["events"] == [] and texts.MEMO2_BLANK.format(org="StudEx") in m["text"] and {x["id"] for x in m["sent"]} == {a["id"], 90} and m["sent"][0]["sentBy"]
-    # DMP sees it in the app the club, its events, who said "sent"; others may not look
+    # DMP sees it in the app: the club, its events, who said "sent"; others may not look
     assert c.get("/api/registry/memos", headers=tma(20)).status_code == 403
     login(c, 29, "dmp")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
@@ -2674,7 +2674,7 @@ def test_memo_v2(env, monkeypatch):
 
 
 def test_place_changes(env, monkeypatch):
-    """PLAN "Place and time" one KBTU room for another tells only those with reminders off (the 2-hour reminder
+    """PLAN "Place and time": one KBTU room for another tells only those with reminders off (the 2-hour reminder
     shows it); another venue tells everyone, edits within 10 minutes in one message; within 2 hours of the start, at
     once and only to who isn't checked in; Studio's "Change room" during the event; each new place a line in Updates."""
     c, cfg = env
@@ -2860,7 +2860,7 @@ def test_saved_tomorrow(env, monkeypatch):
 
 
 def test_badge_skin(env):
-    """Badge skins I show the badge of an official club I'm in, or the KBTU one; never picked, a club
+    """Badge skins: I show the badge of an official club I'm in, or the KBTU one; never picked, a club
     with a badge shows by itself; my pick holds, and others see it. Since Oct 20 anyone may try on any club's; the
     creator's own is his alone."""
     c, cfg = env
@@ -2902,7 +2902,7 @@ def test_badge_skin(env):
 
 
 def test_important_post(env):
-    """An "Important" post Vice+ write it; the club's members (not the author) hear it from the bot, one
+    """An "Important" post: Vice+ write it; the club's members (not the author) hear it from the bot, one
     such message a day per club at most; other labels message nobody."""
     from kbtu import bot
     c, cfg = env
@@ -2989,7 +2989,7 @@ def test_grant_link(env):
 
 
 def test_premium_emoji(monkeypatch):
-    """The pack's emoji the plain ones our texts use become <tg-emoji>, with or without U+FE0F; the rest stay."""
+    """The pack's emoji: the plain ones our texts use become <tg-emoji>, with or without U+FE0F; the rest stay."""
     import re as _re
     from kbtu import bot
     monkeypatch.setattr(bot, "_custom", {"🎉": "1", "⚠": "2"})
@@ -3000,7 +3000,7 @@ def test_premium_emoji(monkeypatch):
 
 
 def test_schools_seeded(env):
-    """KBTU's schools come from its site once crests, three languages; a school made by hand before is
+    """KBTU's schools come from its site once: crests, three languages; a school made by hand before is
     filled in, not doubled; an edit by hand drops that field's translations."""
     c, cfg = env
     con = db.connect(cfg.db_path)
@@ -3026,7 +3026,7 @@ def test_schools_seeded(env):
 
 
 def test_official_roles(env):
-    """Every club has the three official roles the President (the level) and the fixed Vice
+    """Every club has the three official roles: the President (the level) and the fixed Vice
     and Head, which can't be renamed, deleted or raised (their rights below the level may be tuned); a Vice or Head
     without a role name holds them, the old President too after handing the club over."""
     c, cfg = env
@@ -3053,7 +3053,7 @@ def test_official_roles(env):
 
 
 def test_volunteers(env):
-    """Volunteers an event asks for N, maybe not year 1; a student applies with a "why", the organizer
+    """Volunteers: an event asks for N, maybe not year 1; a student applies with a "why", the organizer
     says yes or no and the bot tells them; no more yeses than places."""
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "ali"), (22, "bota"), (23, "dan")):
@@ -3082,7 +3082,7 @@ def test_volunteers(env):
 
 
 def test_event_chat(env):
-    """An event's group without a userbot "Create chat" gives a startgroup link with a one-time token;
+    """An event's group without a userbot: "Create chat" gives a startgroup link with a one-time token;
     the bot's /start in the group from an organizer links it; join requests: those going and the team in, others not."""
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "ali"), (22, "bota")):
@@ -3109,7 +3109,7 @@ def test_event_chat(env):
 
 
 def test_events_channel(env, monkeypatch):
-    """The events channel a published public event is due once; an edit makes it due again; a cancel
+    """The events channel: a published public event is due once; an edit makes it due again; a cancel
     marks its post; a team-only one never goes."""
     c, cfg = env
     login(c, 20, "pres")
@@ -3184,7 +3184,7 @@ def test_map_graph(env):
 
 
 def test_exit_link(env):
-    """"Help me get out" kbtu.sow.kz/exit goes to the app's exit screen; /exit in the bot answers with
+    """"Help me get out": kbtu.sow.kz/exit goes to the app's exit screen; /exit in the bot answers with
     a message and its button, to forward anywhere."""
     c, cfg = env
     r = c.get("/exit", follow_redirects=False)
@@ -3221,7 +3221,7 @@ def test_premium_emoji_everywhere(env, monkeypatch):
 
 
 def test_card_number_never_given_twice(env):
-    """Card numbers the last card's account purged, the next student still gets a new number."""
+    """Card numbers: the last card's account purged, the next student still gets a new number."""
     c, cfg = env
     for tg in (31, 32):
         login(c, tg, f"s{tg}")
@@ -3286,7 +3286,7 @@ def test_channel_refused_post_skipped(env):
 
 
 def test_manual_sign_in(env, monkeypatch):
-    """Microsoft only the ID and year are typed only after a Microsoft sign-in; a row typed in before
+    """Microsoft only: the ID and year are typed only after a Microsoft sign-in; a row typed in before
     acts as nobody until Microsoft confirms it; an ID held by such a row goes to the Microsoft one, held by a confirmed
     one it's refused; the admins hear of both with both contacts. The admin adds someone with no Microsoft by hand."""
     c, cfg = env
@@ -3698,7 +3698,7 @@ def test_db_must_exist(tmp_path, monkeypatch):
 
 
 def test_app_team(env):
-    """The app's team the owner alone gives or takes the admin role; an admin gives the moderator role
+    """The app's team: the owner alone gives or takes the admin role; an admin gives the moderator role
     and bans, never touching the owner, himself or another admin; a moderator only filters content; a ban needs a
     reason, drops the role, shows him why, and the bot stops writing; the owner reads the audit log."""
     import httpx
@@ -4001,7 +4001,7 @@ def test_staff_badge_and_chat_order(env):
 
 
 def test_dm_on(env):
-    """Telegram's "allow messages" from inside the app the bot may write at once, and the event just
+    """Telegram's "allow messages" from inside the app: the bot may write at once, and the event just
     signed up for gets its confirmation with the ticket; nothing for an event I'm not going to."""
     c, cfg = env
     pres, ali = login(c, 20, "pres"), login(c, 21, "ali")
@@ -4043,7 +4043,7 @@ def test_club_people(env):
 
 
 def test_club_abbr(env):
-    """A club's short name the clubs made before take their initials at start and keep a set one; a new
+    """A club's short name: the clubs made before take their initials at start and keep a set one; a new
     club has its initials from the first day; Vice+ edit it (one word, 2-8 characters), a member can't; DMP and the
     admin may set any club's, and only that."""
     c, cfg = env
@@ -4344,7 +4344,7 @@ def test_userbot_reads_telethon_messages(env):
 
 
 def test_mirror_languages(env):
-    """A school's channel in three languages the same announcement posted in kk, ru and en within half an
+    """A school's channel in three languages: the same announcement posted in kk, ru and en within half an
     hour is one post with the other two as its translations (an album whose caption comes after its photos too); two
     posts in one language stay two; a translation's edit and deletion touch only its language. A one-language post takes
     the translations the channel wrote in its comments; only without any, after 2 h, our AI, and the channel's own
@@ -4457,7 +4457,7 @@ def test_userbot_off(env, caplog):
 
 
 def test_membership_oversee(env):
-    """DMP is an org in Studio a membership says whether I lead in an overseeing org, so Studio shows
+    """DMP is an org in Studio: a membership says whether I lead in an overseeing org, so Studio shows
     the registry with it picked; a plain member of DMP, or a club's Vice, doesn't get it."""
     c, cfg = env
     dana, ali = login(c, 90, "dana"), login(c, 91, "ali")
@@ -4544,7 +4544,7 @@ def test_roster_load_and_join(env):
 
 
 def test_roster_app_wins(env):
-    """PLAN 95, students already in the app what the app has wins. A membership held keeps its role (no
+    """PLAN 95, students already in the app: what the app has wins. A membership held keeps its role (no
     promotion, no demotion); a missing one is added, a President on the sheet where the club has another in the app
     comes in as Vice (counted in the load's summary); department, title, city, phone and year fill only what's empty."""
     from kbtu import roster
@@ -4631,7 +4631,7 @@ def test_phone_asked_at_signup(env):
 
 
 def test_student_government_mark(env):
-    """The Student Government a mark and first in the clubs list, no rights beyond any club's."""
+    """The Student Government: a mark and first in the clubs list, no rights beyond any club's."""
     c, cfg = env
     login(c, 31, "student")
     h = tma(31)
@@ -4647,7 +4647,7 @@ def test_student_government_mark(env):
 
 
 def test_bot_binds_club_channel(env, monkeypatch):
-    """A chat picked in the bot by a club's President or Vice "is this your club's?"; yes puts it on
+    """A chat picked in the bot by a club's President or Vice: "is this your club's?"; yes puts it on
     the club's page (the first public channel its main one) with a link into Studio, no sends it to the catalog. A plain
     member is never asked; someone else's tap does nothing."""
     from kbtu import media
@@ -4703,7 +4703,7 @@ def test_bot_binds_club_channel(env, monkeypatch):
 
 
 def test_org_names(env):
-    """Org names, one style "KBTU" off either end on create and rename, an acronym the name carried
+    """Org names, one style: "KBTU" off either end on create and rename, an acronym the name carried
     goes to the abbr (in brackets, or before a dash), else the initials without "KBTU"."""
     import dataclasses
     for typed, name, abbr in [("KBTU Open Mic", "Open Mic", "OM"), ("Debate Club | kbtu", "Debate Club", "DC"),

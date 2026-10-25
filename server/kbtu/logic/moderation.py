@@ -74,7 +74,7 @@ def add_comment(con, v: Viewer, kind: str, tid: int, body: object, as_org: objec
     if one(con, "SELECT COUNT(*) FROM comments WHERE user_id = ? AND created_at > ?", v.id, core.now() - 60)[0] >= COMMENTS_A_MINUTE:
         raise ApiError("rate_limited")
     askers: list[tuple[int]] = []
-    if kind == "event":  # the bot a question pings the club's Head+ (hourly at most); an answer (the club's
+    if kind == "event":  # the bot: a question pings the club's Head+ (hourly at most); an answer (the club's
         # Head+ write, as the club or as themselves) pings the askers
         if lead:
             askers = [(u,) for u in sorted({r["user_id"] for r in _asking(con, tid)})]

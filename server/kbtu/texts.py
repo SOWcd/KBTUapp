@@ -470,7 +470,7 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
 
 
 # ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" and a year of StudEx's
-# real memos in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
+# real memos: in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
 # one email to youth_policy@kbtu.kz, sent on Wednesday 9:00-18:00 from the sender's KBTU address.
 MEMO_TO = "youth_policy@kbtu.kz"
 WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")

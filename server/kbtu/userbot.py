@@ -201,7 +201,7 @@ class Mirror:
             await self.guard(self.post(m))
 
     async def translations(self, ent, channel: int) -> None:
-        """A post's translations written by the channel itself in its comments the replies are read in
+        """A post's translations written by the channel itself in its comments: the replies are read in
         memory, those sent as the channel kept, everyone else's dropped at once: never stored, never logged. Each post
         at most every COMMENT_GAP, for mirror.COMMENT_DAYS."""
         from telethon.errors import FloodWaitError, RPCError
