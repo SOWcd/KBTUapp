@@ -673,10 +673,12 @@
   </div>
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
   <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')}</p>
-  <!-- the bottom, under the thumb: find a room or place, or get out -->
+  <!-- the bottom, under the thumb (owner's layout, Oct 26): the way out small on the left, the search, and on the right
+       the app's own map button, lit: a tap there closes the map, as the button opened it -->
   <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
-    <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} />{t('map.find')}</button>
-    <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={24} /></button>
+    <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
+    <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} /><span class="ellipsis">{t('map.find')}</span></button>
+    <button class="shut" onclick={() => close(overlay.id)} aria-label={t('common.close')}><MapIcon size={22} strokeWidth={1.9} /></button>
   </div>
   {#if card}
     <div class="rcard" data-cover>
@@ -810,13 +812,17 @@
     transition: opacity 0.25s; }
   .note.away { opacity: 0; pointer-events: none; }
   /* the bottom: the search bar and the exit */
-  .dock { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px); display: flex; gap: 10px; transition: transform 0.55s var(--ease-spring), opacity 0.25s; }
+  /* where the app's nav and its map button stand (Nav.svelte), so the closing circle ends on this one */
+  .dock { position: absolute; z-index: 2; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 10px); display: flex; align-items: center; gap: 8px; transition: transform 0.55s var(--ease-spring), opacity 0.25s; }
   .dock.away { transform: translateY(130%); opacity: 0; pointer-events: none; }
-  .bar { position: relative; flex: 1; min-width: 0; height: 58px; border-radius: 29px; display: flex; align-items: center; gap: 12px; padding: 0 20px; font: 600 17px/1 var(--font-text); color: var(--text-2); }
+  .bar { position: relative; flex: 1; min-width: 0; height: 60px; border-radius: 30px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font: 600 16px/1 var(--font-text); color: var(--text-2); }
   .bar :global(svg) { color: var(--text); flex: none; }
-  .exit { position: relative; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
-  .bar, .exit { transition: transform 0.45s var(--ease-bounce); }
-  .bar:active, .exit:active { transform: scale(0.95); transition-duration: 80ms; }
+  .exit { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
+  /* lit like the nav's chosen tab: this is where you are */
+  .shut { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--text); color: var(--bg);
+    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6); }
+  .bar, .exit, .shut { transition: transform 0.45s var(--ease-bounce); }
+  .bar:active, .exit:active, .shut:active { transform: scale(0.95); transition-duration: 80ms; }
   /* the room found: a short panel with the way to it */
   .rcard { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; padding: 8px 16px calc(var(--safe-bottom) + 16px); border-radius: 36px 36px 0 0; background: var(--surface-solid); color: var(--text);
     box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08); animation: rise 0.6s var(--ease-spring); }
