@@ -29,6 +29,7 @@ export function applyTheme(t: Theme, telegramToo = true): void {
 /** Telegram's own surfaces (background, header, bottom bar) in a theme's colour */
 export const paintFor = (t: Theme) => paint(t === 'light' ? '#F3F5FB' : '#07080F');
 
+const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Android/.test(navigator.userAgent); // iPhone, Mac Safari
 let running: ViewTransition | null = null; // a second tap mid-way starts over; only the latest one tidies up
 
 // cubic-bezier(.3, 0, .2, 1), the circle's easing: the share of its duration it takes to reach progress p
@@ -53,6 +54,10 @@ export function reveal(change: () => void, done: () => void, from?: Element, loo
   const b = from?.getBoundingClientRect(), at = b && { x: b.left + b.width / 2, y: b.top + b.height / 2 };
   root.classList.toggle('vt-circle', !!at);
   root.classList.toggle('vt-lang', look === 'lang');
+  // WebKit's OLD snapshot drops backdrop-filter too: the bars turned clear at the tap, the page sharp through them, long
+  // before the circle came (owner's video, Oct 25). Solid glass looks the same as blurred glass at a glance, so there
+  // it goes solid before the old look is captured
+  if (webkit) root.classList.add('vt-solid');
   const vt = (running = document.startViewTransition(() => { root.classList.add('vt-solid'); flushSync(change); }));
   let painted = false;
   const paint = () => { if (!painted && running === vt) { painted = true; done(); } };
