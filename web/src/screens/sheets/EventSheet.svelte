@@ -32,6 +32,7 @@
   import { burst } from '../../ui/burst';
   import { fly } from '../../ui/fly';
   import { onMount } from 'svelte';
+  import AiBadge from '../../ui/AiBadge.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
@@ -447,7 +448,7 @@
     {#if about}
       <h3 class="t-cap sec">{t('event.about')}</h3>
       <p class="t-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
-      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}>{raw ? t('ai.showTr') : t('ai.translated')}</button>{/if}
+      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}
     {/if}
     {#if detail?.discuss && !preview && !cancelled}
       <!-- the talk lives under the channel post, with Telegram's replies and reactions (owner, Oct 17) -->

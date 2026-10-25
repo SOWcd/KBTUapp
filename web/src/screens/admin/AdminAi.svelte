@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Admin → AI (owner, Oct 21: "where is the AI section?"): the translator of event and club texts (PLAN 9, ai.py on
-  // Cloudflare Workers AI): on or off, what it did today (Cloudflare's day, UTC), its last error, how much is done,
-  // waits or failed three times; the failed can get three more tries.
+  // Admin → AI (owner, Oct 21: "where is the AI section?"): the translator of event and club texts (PLAN 9, ai.py):
+  // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
+  // get three more tries); and the AI chain (llm.py), each link's answers and failures today.
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminAi } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -28,8 +28,14 @@
     <section class="top surface">
       <span class="st" class:on={ai.on}><i></i>{ai.on ? t('ai.on') : t('ai.off')}</span>
       <b class="num">{ai.today}</b><span class="t-foot">{t('ai.today')}</span>
-      <p class="t-foot model">{ai.model}</p>
     </section>
+    <h3 class="sec">{t('ai.chain')}</h3>
+    <div class="rows surface">
+      {#each ai.chain as l (l)}
+        {@const u = ai.usage[new Date().toISOString().slice(0, 10)]?.[l]}
+        <div class="r link"><span class="ellipsis model">{l}</span><i class="num">{u ? `${u[0]} ✓ · ${u[1]} ✕` : '—'}</i></div>
+      {:else}<p class="t-foot none">{t('ai.noChain')}</p>{/each}
+    </div>
     <div class="nums">
       <span class="surface"><b class="num">{ai.events.done}</b><i>{t('ai.events')}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
       <span class="surface"><b class="num">{ai.clubs.done}</b><i>{t('ai.clubs')}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
@@ -55,7 +61,9 @@
     background: var(--danger-soft); color: var(--danger-text); font: 650 var(--fs-sub)/1 var(--font-text); }
   .st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .st.on { background: var(--success-soft); color: var(--success-text); }
-  .model { margin-top: 8px; font-family: ui-monospace, monospace; }
+  .model { font: 500 13px/1.2 ui-monospace, monospace; }
+  .link { display: flex; justify-content: space-between; gap: 10px; }
+  .none { padding: 12px 14px; }
   .nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .nums span { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: var(--r-l); }
   .nums b { font: 750 26px/1 var(--font-display); }
