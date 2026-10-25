@@ -269,10 +269,10 @@
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     const snap = { me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team };
-    JSON.stringify(snap); // read deeply, so any change schedules a save
+    const json = JSON.stringify(snap); // read deeply, so any change schedules a save; the same string is what gets saved
     if (!booted || data.error || session.failed || session.banned) return;
     clearTimeout(keepTimer);
-    keepTimer = setTimeout(() => writeCache($state.snapshot(snap)), 1000);
+    keepTimer = setTimeout(() => writeCache(json), 1000); // no $state.snapshot: a clone through the proxies cost more than the save
   });
 
   // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)

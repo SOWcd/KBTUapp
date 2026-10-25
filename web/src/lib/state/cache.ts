@@ -18,10 +18,11 @@ export function readCache(): Snapshot | null {
   } catch { return null; }
 }
 
-export function writeCache(data: Snapshot): void {
+/** data: the Snapshot already as JSON (App serializes it anyway to watch for changes) */
+export function writeCache(data: string): void {
   const k = key();
   if (!k) return;
-  try { localStorage.setItem(k, JSON.stringify({ v: VERSION, at: Date.now(), data })); } catch { /* storage full or blocked: next time from the network */ }
+  try { localStorage.setItem(k, `{"v":${VERSION},"at":${Date.now()},"data":${data}}`); } catch { /* storage full or blocked: next time from the network */ }
 }
 
 export function clearCache(): void {
