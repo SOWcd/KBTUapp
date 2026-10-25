@@ -6,7 +6,8 @@ import sqlite3
 
 from ..db import tx
 
-from .core import ApiError, Viewer, log_action, need_student, one, rows
+from .core import (ApiError, Viewer, _by_id, _may, _org, _qs, _rights, can, log_action, media_shape, need_student, one,
+    org_ref, rows)
 
 
 # ---------------------------------------------------------------- news
@@ -213,8 +214,7 @@ def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
-from .appteam import _admin  # noqa: E402
 from .clubs import orgs  # noqa: E402
 from .moderation import _thread, comments  # noqa: E402
+from .oversight import _admin  # noqa: E402
 from .seats import notify  # noqa: E402
-from .shapes import _by_id, _may, _org, _qs, _rights, can, media_shape, org_ref  # noqa: E402

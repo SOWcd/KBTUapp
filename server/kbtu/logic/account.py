@@ -9,7 +9,8 @@ from pathlib import Path
 
 from ..db import tx
 
-from .core import ApiError, NO_END, PERSON, RANK, Viewer, log, log_action, need_student, one, rows
+from .core import (ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
+    need_student, one, org_ref, person_ref, rows, shown_name)
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
@@ -98,7 +99,7 @@ def me(con, v: Viewer) -> dict:
     # students' order. A deleted account's number stays empty, never given again.
     # A number given by migration 59 (the night's sign-ins) brings its "First 500" here, on the next open.
     if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
-            (u["is_founder"] or (u["card_no"] or awards.FIRST_N + 1) <= awards.FIRST_N)
+            (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
         first_fifty(con, v.id)  # the number and, with it, "First 500"
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
@@ -557,12 +558,11 @@ def save_schedule(con, uid: int, lessons: list) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import awards, core  # noqa: E402
-from .awards import ACHIEVEMENTS, first_fifty, unlocked  # noqa: E402
+from . import core, profiles  # noqa: E402
 from .clubs import orgs  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
+from .profiles import ACHIEVEMENTS, first_fifty, unlocked  # noqa: E402
 from .seats import _remind, _ticket_code, notify, promote, tickets  # noqa: E402
-from .shapes import _rights_from, avatar_of, clean_nick, org_ref, person_ref, shown_name  # noqa: E402
 from .teams import _ordered  # noqa: E402

@@ -9,8 +9,8 @@ from pathlib import Path
 
 from ..db import tx
 
-from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, log_action, need_student, one,
-    role_in, rows)
+from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, _may, _org, _rights_from, can,
+    log_action, need_student, one, person_ref, rights_of, role_in, rows, short_name)
 
 
 # ---------------------------------------------------------------- the club's own team (SPEC §2: the rank rule)
@@ -431,7 +431,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
             if r["dept_id"] and dept_of(con, o["id"], v.id) is None:
                 con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) SELECT id, ? FROM org_tags WHERE id = ? AND department = 1", (v.id, r["dept_id"]))
         else:
-            appteam.set_role(con, r["created_by"], v.id, o["id"], "president", "link")
+            oversight.set_role(con, r["created_by"], v.id, o["id"], "president", "link")
         con.execute("UPDATE join_requests SET status = 'accepted', decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'", (core.now(), o["id"], v.id))
     return org_shape(con, v, o)
 
@@ -447,10 +447,7 @@ def map_graph(con) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import appteam, core  # noqa: E402
-from .appteam import _admin  # noqa: E402
-from .clubs import org_shape  # noqa: E402
-from .dmpregistry import QUIET_FOR  # noqa: E402
-from .orgnames import _official  # noqa: E402
+from . import core, oversight  # noqa: E402
+from .clubs import _official, org_shape  # noqa: E402
+from .oversight import QUIET_FOR, _admin  # noqa: E402
 from .seats import notify  # noqa: E402
-from .shapes import _may, _org, _rights_from, can, person_ref, rights_of, short_name  # noqa: E402

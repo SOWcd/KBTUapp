@@ -6,7 +6,8 @@ import sqlite3
 
 from ..db import tx
 
-from .core import ApiError, PERSON, PERSON_COLS, Viewer, log_action, need_student, one, rows
+from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, log_action, need_student, one, org_ref,
+    person_ref, rows, shown_name)
 
 
 # ---------------------------------------------------------------- comments and reports (§4.10)
@@ -295,9 +296,8 @@ def purge_takedowns(con) -> list[str]:
 # when a function runs
 from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
-from .appteam import _mod  # noqa: E402
 from .clubs import org  # noqa: E402
 from .organizing import _asking  # noqa: E402
+from .oversight import _mod  # noqa: E402
 from .seats import _event, notify  # noqa: E402
-from .shapes import _org, can, org_ref, person_ref, shown_name  # noqa: E402
 from .teams import remove  # noqa: E402
