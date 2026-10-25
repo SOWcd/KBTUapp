@@ -541,7 +541,7 @@
     appear();
     const ro = new ResizeObserver(() => { clamp(); paint(); clearTimeout(reframeT); reframeT = window.setTimeout(reframe, 200); });
     const d = document.documentElement.dataset;
-    d.map = ''; // a toast floats above the floors (Toast.svelte)
+    d.map = ''; // the toast drops under the floor row there (Toast.svelte)
     ro.observe(stage);
     stage.addEventListener('wheel', wheel, { passive: false });
     return () => { delete d.map; ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };

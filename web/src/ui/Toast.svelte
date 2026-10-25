@@ -8,8 +8,8 @@
   import Emoji from './Emoji.svelte';
   import { glass } from './glass';
   // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way (review, Oct 22);
-  // the map hides the chrome too but keeps its toast low, above its floors
-  const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d && !('map' in d); };
+  // the map's bottom holds its place card, so there it drops under the floors (owner, Oct 25: it covered the card)
+  const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d || 'map' in d; };
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let pill = $state<HTMLElement>();
@@ -86,7 +86,7 @@
   }
   /* a sheet's footer holds its buttons: there the toast drops from the top, under Telegram's header, like an iOS push (owner, Oct 22) */
   .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop; }
-  :global(html[data-map]) .toast { bottom: calc(var(--safe-bottom) + 108px); } /* above the map's floors and its note */
+  :global(html[data-map]) .toast.top { top: calc(max(48px, var(--top)) + 70px); } /* under the map's floor row */
   .em { display: flex; flex: none; }
   .tx { min-width: 0; }
   .toast:global(.morph) .tx { white-space: nowrap; }
