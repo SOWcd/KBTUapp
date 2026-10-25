@@ -40,6 +40,7 @@
   import { ApiErr } from '../../lib/api';
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
+  import { nameOf } from '../../lib/short';
 
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
@@ -133,7 +134,7 @@
            (owner, Oct 24: not inside the list) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
-        <span class="name"><span class="h"><h1 class="ellipsis">{m.org.name}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
+        <span class="name"><span class="h"><h1 class="ellipsis">{nameOf(m.org)}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
           <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
       {/snippet}
       <div class="row">
@@ -145,7 +146,7 @@
       {#if picking}
         <div class="pick surface" transition:fold>
           {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
-            <button onclick={() => { haptic.tap(); ui.club = x.org.id; seg = 0; picking = false; }}><OrgLogo org={x.org} size={30} /><span class="tx"><b class="ellipsis">{x.org.name}</b><i class="t-foot ellipsis">{roleName(x.role, x.title)}</i></span></button>
+            <button onclick={() => { haptic.tap(); ui.club = x.org.id; seg = 0; picking = false; }}><OrgLogo org={x.org} size={30} /><span class="tx"><b class="ellipsis">{nameOf(x.org)}</b><i class="t-foot ellipsis">{roleName(x.role, x.title)}</i></span></button>
           {/each}
         </div>
       {/if}
