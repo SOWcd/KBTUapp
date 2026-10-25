@@ -3838,6 +3838,62 @@ def test_club_short_links(env):
     assert c.get("/exit", follow_redirects=False).headers["location"].endswith("startapp=exit")
 
 
+def test_custom_short_links(env):
+    """A club's Vice+ makes kbtu.sow.kz/<slug> for the club, one of its published events or its round, never outside the
+    app; names are first come, first served across club slugs and links, never the app's own; DMP's admin revokes any."""
+    c, cfg = env
+    ids = {n: login(c, i, n)["id"] for i, n in ((20, "pres"), (21, "vice"), (22, "head"), (23, "other"), (24, "boss"))}
+    H = {n: tma(i, n.title()) for i, n in ((20, "pres"), (21, "vice"), (22, "head"), (23, "other"), (24, "boss"))}
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Chess', 'CH', 'trophy_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, ids["pres"], "president"), (1, ids["vice"], "vice"), (1, ids["head"], "head"), (2, ids["other"], "president")])
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["boss"],))
+    start = int(time.time()) + 3600
+    ev = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Hack night", "place": "305", "startsAt": start, "endsAt": start + 7200,
+                                                                "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    add = lambda who, body, org=1: c.post(f"/api/orgs/{org}/links", headers=H[who], json=body)  # noqa: E731
+    assert add("head", {"slug": "join-it", "kind": "club"}).status_code == 403                  # Vice and above
+    assert add("other", {"slug": "join-it", "kind": "club"}).status_code == 403                 # someone else's club
+    assert add("vice", {"slug": "hack", "kind": "event", "eventId": ev["id"]}).status_code == 400  # a draft
+    c.post(f"/api/events/{ev['id']}/publish", headers=H["pres"])
+    other = c.post("/api/orgs/2/events", headers=H["other"], json={"title": "Blitz", "place": "305", "startsAt": start, "endsAt": start + 60,
+                                                                    "emoji": "trophy_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{other['id']}/publish", headers=H["other"])
+    assert add("vice", {"slug": "blitz", "kind": "event", "eventId": other["id"]}).status_code == 400  # another club's event
+    for bad in ("a", "-it", "it-", "i--t", "\u0430\u0431\u0432", "x" * 33, "it/../x", "https://evil.example"):
+        assert add("vice", {"slug": bad, "kind": "club"}).status_code == 400, bad
+    assert add("vice", {"slug": "evil", "kind": "url", "url": "https://evil.example"}).status_code == 400  # only into the app
+    for taken in ("admin", "api", "login", "assets", "static", "privacy", "chess"):              # the app's own, a club's slug
+        assert add("vice", {"slug": taken, "kind": "club"}).json()["message"] == "taken", taken
+    assert add("vice", {"slug": "Join-IT", "kind": "club"}).status_code == 200
+    assert add("vice", {"slug": "hack-night", "kind": "event", "eventId": ev["id"]}).status_code == 200
+    got = add("pres", {"slug": "it-casting", "kind": "round"}).json()
+    assert {(x["slug"], x["kind"], x["eventTitle"]) for x in got} == {("join-it", "club", None), ("hack-night", "event", "Hack night"), ("it-casting", "round", None)}
+    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # first come, first served
+    assert c.patch("/api/orgs/2", headers=H["other"], json={"slug": "hacknight"}).status_code == 200
+    assert add("vice", {"slug": "hacknight", "kind": "club"}).json()["message"] == "taken"      # nor a club's slug
+    assert logic.slug_for(con, "Join") == "join" and not logic._slug_free(con, "join-it", None)
+    assert c.get("/api/orgs/1/links", headers=H["head"]).status_code == 403
+    go = lambda p: c.get(p, follow_redirects=False).headers.get("location", "")  # noqa: E731
+    assert go("/join-it").endswith("?startapp=cl_1") and go("/HACK-NIGHT").endswith(f"?startapp=ev_{ev['id']}") and go("/it-casting").endswith("?startapp=rc_1")
+    assert go("/it").endswith("?startapp=cl_1")                                                   # the club's slug as before
+    # its own Vice takes one down; another club can't; the admin revokes any, and the log says which
+    assert c.delete("/api/links/join-it", headers=H["other"]).status_code == 403
+    assert c.delete("/api/links/join-it", headers=H["vice"]).status_code == 204
+    assert c.get("/join-it", follow_redirects=False).status_code == 200                          # the app itself now
+    assert "it-casting" in next(o for o in c.get("/api/admin/orgs", headers=H["boss"]).json() if o["id"] == 1)["shortLinks"]
+    assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 204
+    assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 404
+    assert [r[0] for r in con.execute("SELECT action FROM audit_log WHERE action LIKE 'link_%' ORDER BY id")] == ["link_create"] * 3 + ["link_delete", "link_revoke"]
+    # a deleted event takes its link along; a hidden club's links lead nowhere
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 1")
+    assert c.get("/hack-night", follow_redirects=False).status_code == 200
+    con.execute("DELETE FROM events WHERE id = ?", (ev["id"],))
+    assert not con.execute("SELECT 1 FROM short_links WHERE slug = 'hack-night'").fetchone()
+
+
 def test_door_guests(env):
     """A19: a walk-in without the app types their full name at the door (Member+, door open, a free event); the typist
     takes a wrong one back in 10 minutes; Head+ sees full names, a Member short ones. A student confirmed by Microsoft

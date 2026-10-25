@@ -260,5 +260,8 @@ export const server: Api = {
   decideJoin: (id, accept) => call('POST', `/join-requests/${id}/${accept ? 'accept' : 'reject'}`),
   setRecruiting: (org, on) => call('PATCH', `/orgs/${org}`, { recruiting: on }),
   updateOrg: (org, patch) => call('PATCH', `/orgs/${org}`, patch),
+  shortLinks: (org) => call('GET', `/orgs/${org}/links`),
+  addShortLink: (org, link) => call('POST', `/orgs/${org}/links`, link),
+  dropShortLink: (slug) => call('DELETE', `/links/${slug}`),
 
 };

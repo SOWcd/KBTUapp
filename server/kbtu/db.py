@@ -513,6 +513,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     (66, "UPDATE orgs SET recruiting = 0;"),
     # 53/68 (owner, Oct 24): a club's members are public unless the club hides the list (a support group, a faith club)
     (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
+    # a club's own short links kbtu.sow.kz/<slug> (owner, Oct 25): only into the app, the club, one of its events, its round
+    (68, """CREATE TABLE short_links (
+        slug       TEXT PRIMARY KEY,                   -- logic.SHORT; never an orgs.slug or one a club had before
+        org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL CHECK (kind IN ('club', 'event', 'round')),
+        event_id   INTEGER REFERENCES events(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        CHECK ((kind = 'event') = (event_id IS NOT NULL))
+    ) STRICT;
+    CREATE INDEX short_links_by_org ON short_links(org_id);"""),
 ]
 
 

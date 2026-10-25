@@ -18,6 +18,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import OrgLogo, { COVERS } from '../../ui/OrgLogo.svelte';
+  import ShortLinks from './ShortLinks.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -110,6 +111,8 @@
 
     <label class="switch hide"><span><b>{t('ce.hideMembers')}</b><i class="t-foot">{t('ce.hideMembersNote')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.hidden} /></label>
+
+    <ShortLinks org={id} />
   {/if}
 
   {#snippet footer()}

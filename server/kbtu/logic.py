@@ -4275,7 +4275,13 @@ TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i 
     0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
 SLUG = re.compile(r"[a-z0-9]{2,24}")
 RESERVED = {"api", "cal", "healthz", "exit", "privacy", "terms", "og", "media", "demo", "old", "assets", "emoji", "map", "admin",
-            "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events"}
+            "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events",
+            # and for the clubs' own links (Oct 25): what a phishing page would like to be
+            "favicon", "apple-touch-icon", "robots", "sitemap", "auth", "oauth", "logout", "signin", "signup", "register", "account",
+            "me", "profile", "dmp", "pay", "kaspi", "telegram", "tg", "security", "official", "news", "about", "wp-admin"}
+# a club's own short link (owner, Oct 25): a club slug, or words joined by single hyphens, 2-32 characters
+SHORT = re.compile(r"(?=.{2,32}$)[a-z0-9]+(?:-[a-z0-9]+)*")
+LINKS_MAX = 20  # a club's: the names are everyone's, first come, first served
 
 
 def slug_for(con, name: str, oid: int | None = None) -> str:
@@ -4306,10 +4312,60 @@ def org_by_slug(con, slug: str) -> int | None:
     return o[0] if o else None
 
 
+def start_by_slug(con, slug: str) -> str | None:
+    """What kbtu.sow.kz/<slug> opens, as the bot's startapp: a club by its slug, else a club's own short link."""
+    s = slug.lower()
+    if oid := org_by_slug(con, s):
+        return f"cl_{oid}"
+    sl = one(con, "SELECT l.* FROM short_links l JOIN orgs o ON o.id = l.org_id WHERE l.slug = ? AND o.status = 'active'", s)
+    return {"club": f"cl_{sl['org_id']}", "event": f"ev_{sl['event_id']}", "round": f"rc_{sl['org_id']}"}[sl["kind"]] if sl else None
+
+
+def org_links(con, v: Viewer, oid: int) -> list[dict]:
+    _may(con, v, oid, "profile")
+    return [{"slug": sl["slug"], "kind": sl["kind"], "eventId": sl["event_id"], "eventTitle": sl["title"], "createdAt": sl["created_at"]}
+            for sl in rows(con, "SELECT l.*, e.title FROM short_links l LEFT JOIN events e ON e.id = l.event_id WHERE l.org_id = ? ORDER BY l.created_at DESC, l.slug", oid)]
+
+
+def add_link(con, v: Viewer, oid: int, body: dict) -> list[dict]:
+    """Vice+ (the club's profile right) points kbtu.sow.kz/<slug> at the club, one of its published events, or its round;
+    never anywhere outside the app (a phishing page on our domain)."""
+    _may(con, v, oid, "profile")
+    s, kind, eid = str(body.get("slug") or "").strip().lower(), body.get("kind"), body.get("eventId")
+    if not SHORT.fullmatch(s) or kind not in ("club", "event", "round") or (kind == "event") != (eid is not None):
+        raise ApiError("bad_input")
+    if kind == "event" and not (type(eid) is int and one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ? AND status = 'published'", eid, oid)):
+        raise ApiError("bad_input")
+    with tx(con):
+        if not _slug_free(con, s, None):
+            raise ApiError("conflict", "taken")
+        if one(con, "SELECT COUNT(*) FROM short_links WHERE org_id = ?", oid)[0] >= LINKS_MAX:
+            raise ApiError("conflict", "limit")
+        con.execute("INSERT INTO short_links (slug, org_id, kind, event_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)", (s, oid, kind, eid, v.id, now()))
+        con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'link_create', ?, ?, ?)",
+                    (v.id, f"org:{oid}", json.dumps({"slug": s, "kind": kind}), now()))
+    return org_links(con, v, oid)
+
+
+def drop_link(con, v: Viewer, slug: str) -> None:
+    """Its club's Vice+ takes a link down; the app's admin (DMP) revokes anyone's."""
+    sl = one(con, "SELECT * FROM short_links WHERE slug = ?", slug.lower())
+    if not sl:
+        raise ApiError("not_found")
+    own = can(con, v, sl["org_id"], "profile")
+    if not own:
+        _admin(v)
+    with tx(con):
+        con.execute("DELETE FROM short_links WHERE slug = ?", (sl["slug"],))
+        con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)",
+                    (v.id, "link_delete" if own else "link_revoke", f"org:{sl['org_id']}", json.dumps({"slug": sl["slug"]}), now()))
+
+
 def _slug_free(con, s: str, oid: int | None) -> bool:
     """Not the app's, nobody's now, nobody's before (a changed slug keeps leading to its club: the old bios)."""
     held = one(con, "SELECT value FROM meta WHERE key = ?", f"slug:{s}")
-    return s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid) and (not held or held[0] == str(oid))
+    return s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid) and (not held or held[0] == str(oid)) \
+        and not one(con, "SELECT 1 FROM short_links WHERE slug = ?", s)
 
 
 OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))  # with the President: db migration 40
@@ -4389,7 +4445,8 @@ def _admin_org(con, o: sqlite3.Row) -> dict:
         WHERE m.org_id = ? AND m.role != 'member'""", o["id"])
     return {**org_ref(con, o), "hidden": o["status"] == "hidden", "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
             "team": sorted(({"id": m["id"], "role": m["role"], "username": m["tg_username"], "name": f"{m['tg_first_name']} {m['tg_last_name']}".strip(),
-                             "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"]))}
+                             "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"])),
+            "shortLinks": [r[0] for r in rows(con, "SELECT slug FROM short_links WHERE org_id = ? ORDER BY slug", o["id"])]}
 
 
 def admin_orgs(con, v: Viewer) -> list[dict]:
