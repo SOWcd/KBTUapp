@@ -95,9 +95,11 @@ def set_my_forum(con, v: Viewer, body: dict) -> dict:
     with tx(con):
         if "skills" in body:
             ids = body["skills"]
-            if not isinstance(ids, list) or len(ids) > MY_SKILLS or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
+            if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
                 raise ApiError("bad_input")
             ids = list(dict.fromkeys(ids))
+            if len(ids) > MY_SKILLS:
+                raise ApiError("bad_input")
             if len(rows(con, f"SELECT id FROM skills WHERE id IN ({','.join('?' * len(ids))})", *ids)) != len(ids) if ids else False:
                 raise ApiError("bad_input")
             con.execute("DELETE FROM user_skills WHERE user_id = ?", (v.id,))
@@ -209,10 +211,10 @@ def asks(con, v: Viewer, skill: object = None) -> list[dict]:
     """Live requests, mine first (whatever their state, until they run out), then the newest; a skill to filter by."""
     need_student(v)
     by = "AND EXISTS (SELECT 1 FROM ask_skills k WHERE k.ask_id = a.id AND k.skill_id = :skill)" if isinstance(skill, int) else ""
-    found = rows(con, f"""SELECT a.* FROM asks a WHERE a.expires_at > :now AND (a.user_id = :me OR (a.status = 'live'
+    found = con.execute(f"""SELECT a.* FROM asks a WHERE a.expires_at > :now AND (a.user_id = :me OR (a.status = 'live'
             AND {_UNBLOCKED.format(u='a.user_id')} AND a.id NOT IN (SELECT target_id FROM reports WHERE target = 'ask'
                 AND reporter_id = :me AND status = 'open'))) {by}
-        ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": _now(), "me": v.id, "skill": skill})
+        ORDER BY a.user_id = :me DESC, a.id DESC LIMIT 100""", {"now": _now(), "me": v.id, "skill": skill}).fetchall()
     return [_ask_shape(con, v, a) for a in found]
 
 
@@ -332,7 +334,7 @@ def decide_contact(con, uid: int, cid: int, yes: bool) -> str | None:
 def contacts(con, v: Viewer) -> list[dict]:
     """My offers both ways: pending ones to answer, and, once accepted, the other's Telegram to write to."""
     out = []
-    for c in rows(con, "SELECT * FROM contacts WHERE (from_id = :me OR to_id = :me) AND status != 'declined' ORDER BY id DESC LIMIT 50", {"me": v.id}):
+    for c in con.execute("SELECT * FROM contacts WHERE (from_id = :me OR to_id = :me) AND status != 'declined' ORDER BY id DESC LIMIT 50", {"me": v.id}).fetchall():
         other = c["to_id"] if c["from_id"] == v.id else c["from_id"]
         a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
         x = {"id": c["id"], "status": c["status"], "incoming": c["to_id"] == v.id, "ask": a["title"] if a else None, **_card(con, other)}
