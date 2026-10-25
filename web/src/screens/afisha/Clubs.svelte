@@ -22,6 +22,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import { byWeight, hit, weight } from '../../lib/clubs';
+  import { shortOf } from '../../lib/short';
   import type { Org } from '../../lib/api';
   import ClubRow from '../../ui/ClubRow.svelte';
   import GovMark from '../../ui/GovMark.svelte';
@@ -97,7 +98,7 @@
               <span class="kind"><ChatKind kind={c.kind} /></span>
             </span>
             <b>{c.title}</b>
-            {#if c.members}<small><TelegramMark size={10} />{compact(c.members)}</small>{/if}
+            {#if c.org}<em class="who">{shortOf(c.org)}</em>{:else if c.members}<small><TelegramMark size={10} />{compact(c.members)}</small>{/if}
           </button>
         {/each}
       </div>
@@ -182,6 +183,7 @@
   .ch-row { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 6px; }
   .chat { flex: none; width: 82px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
   .chat > b { width: 100%; font: 620 var(--fs-cap)/1.2 var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat .who { max-width: 100%; margin-top: -3px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-micro)/1.4 var(--font-text); font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat small { display: flex; align-items: center; gap: 3px; margin-top: -3px; font: 600 var(--fs-micro)/1 var(--font-text); color: var(--text-3); }
   .cav { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--surface-2);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 10px 20px -12px rgba(0, 0, 0, 0.7); }
