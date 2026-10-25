@@ -500,7 +500,7 @@
     if (iris && !gone) void tick().then(() => requestAnimationFrame(() => { if (!gone) mapCap = copyCap(); }));
   });
   // two capsules meet on the circle's edge: the real one and a still copy, each masked to its side, every frame
-  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean) {
+  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean, c = iris!.at) {
     const real = document.querySelector<HTMLElement>('.cap');
     const w = document.createElement('div');
     w.className = copy.theme;
@@ -510,7 +510,7 @@
     document.body.append(w);
     const side = (el: HTMLElement, inside: boolean, r: number) => {
       const b = el.getBoundingClientRect(), [i, o] = inside ? ['#000', 'transparent'] : ['transparent', '#000'];
-      const m = `radial-gradient(circle at ${iris!.at.x - b.left}px ${iris!.at.y - b.top}px, ${i} ${r}px, ${o} ${r}px)`;
+      const m = `radial-gradient(circle at ${c.x - b.left}px ${c.y - b.top}px, ${i} ${r}px, ${o} ${r}px)`;
       el.style.setProperty('mask', m); el.style.setProperty('-webkit-mask', m);
     };
     const frame = () => {
@@ -523,10 +523,10 @@
   }
   // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
   // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
-  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[]): HTMLElement {
+  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[], c = iris!.at): HTMLElement {
     const h = document.createElement('i');
     h.className = 'map-halo';
-    h.style.cssText = `left:${iris!.at.x}px;top:${iris!.at.y}px`;
+    h.style.cssText = `left:${c.x}px;top:${c.y}px`;
     document.body.append(h);
     h.animate({ width: [`${from * 2}px`, `${to * 2}px`], height: [`${from * 2}px`, `${to * 2}px`], opacity }, o).finished.catch(() => {}).finally(() => h.remove());
     return h;
@@ -544,6 +544,8 @@
     return () => { delete d.map; ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
   });
 
+  // the opening ring's glow (.map-halo), for the button that catches the closing circle
+  const ring = (a: number) => `0 0 0 2.5px rgba(255, 255, 255, ${0.95 * a}), 0 0 0 5px rgba(150, 180, 255, ${0.5 * a}), 0 0 0 9px rgba(130, 165, 255, ${0.24 * a}), 0 0 0 14px rgba(120, 160, 255, ${0.1 * a})`;
   function leave() {
     if (gone) return;
     gone = true;
@@ -551,19 +553,33 @@
     let a: Animation;
     if (iris) {
       // eases out into the button (owner's video, Oct 25: an ease-in close was fastest at its last frame and "hit like a
-      // hammer"); the page under comes back on the same curve
-      const o = { duration: 480, easing: 'cubic-bezier(.45, 0, .2, 1)' }, far = reach(iris.at);
-      const h = halo(far, 30, o, [1, 1, 0]);
-      if (mapCap) split(h, mapCap, true);
+      // hammer"); the page under comes back on the same curve. Owner, Oct 25: it shrank off the button's centre (the nav
+      // slides back in as it closes, the opening's point was stale) and the button didn't react: it closes on where the
+      // button comes to rest, to the button's own size, and the button takes the ring's glow, then lets it fade
+      const o = { duration: 480, easing: 'cubic-bezier(.45, 0, .2, 1)' };
+      const b = document.querySelector<HTMLElement>('.mapb'), dock = b?.parentElement;
+      const bt = b?.getBoundingClientRect(), dm = dock && getComputedStyle(dock).transform !== 'none' ? new DOMMatrix(getComputedStyle(dock).transform) : null;
+      const c = bt ? { x: bt.left + bt.width / 2 - (dm?.e ?? 0), y: bt.top + bt.height / 2 - (dm?.f ?? 0) } : iris.at;
+      const end = bt ? bt.width / 2 : 30, far = reach(c);
+      const circle = (r: number) => `circle(${r}px at ${c.x}px ${c.y}px)`;
+      const h = halo(far, end, o, [1, 1, 0], c);
+      if (mapCap) split(h, mapCap, true, c);
       undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
       stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
       const page = document.querySelector<HTMLElement>('.app > .tab.on');
       if (under && page) {
         const u = under;
-        page.animate({ transform: ['scale(0.94)', 'none'], opacity: [0.45, 1], transformOrigin: [`${iris.at.x}px ${iris.at.y}px`, `${iris.at.x}px ${iris.at.y}px`] }, o);
+        page.animate({ transform: ['scale(0.94)', 'none'], opacity: [0.45, 1], transformOrigin: [`${c.x}px ${c.y}px`, `${c.x}px ${c.y}px`] }, o);
         u.cancel(); // the forwards hold goes, the new animation starts where it left the page
       }
-      a = panel.animate({ clipPath: [iris(far), iris(30)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
+      a = panel.animate({ clipPath: [circle(far), circle(end)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
+      // the button catches it: the ring's glow (the same stepped rings, over its own shadow) and a small give, then back
+      const own = b ? getComputedStyle(b).boxShadow : 'none', with_ = (a: number) => own === 'none' ? ring(a) : `${ring(a)}, ${own}`;
+      b?.animate([
+        { boxShadow: with_(0), transform: 'scale(1)' },
+        { boxShadow: with_(1), transform: 'scale(1.08)', offset: 0.3 },
+        { boxShadow: with_(0), transform: 'scale(1)' },
+      ], { duration: 900, delay: o.duration * 0.82, easing: 'ease-out' });
     } else a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
