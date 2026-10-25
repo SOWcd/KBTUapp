@@ -3942,7 +3942,7 @@ def test_club_abbr(env):
     c, cfg = env
     pres, vice, ali, dmp, boss = (login(c, 70 + i, n) for i, n in enumerate(("pres", "vice", "ali", "dmp", "boss")))
     con = db.connect(cfg.db_path)
-    film = "Клуб кино и театра"  # "Club of film and theatre" in Russian
+    film = "\u041a\u043b\u0443\u0431 \u043a\u0438\u043d\u043e \u0438 \u0442\u0435\u0430\u0442\u0440\u0430"  # "Club of film and theatre" in Russian
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic Club of KBTU', 'OM', 'laptop_3d', 0)")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'film', 'club', ?, 'F', 'popcorn_3d', 0)", (film,))
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, abbr, emoji, created_at) VALUES (3, 'go', 'club', 'Go Club', 'G', 'Baduk', 'laptop_3d', 0)")
@@ -3952,7 +3952,7 @@ def test_club_abbr(env):
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
     logic.fill_abbrs(con)
     logic.fill_abbrs(con)   # every start: nothing left to fill
-    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMCK", "ККТ", "Baduk"]
+    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMCK", "\u041a\u041a\u0422", "Baduk"]
     assert logic.initials("Studex") == "STUDEX" and logic.initials("The Club") == "CLUB"
     assert con.execute("SELECT abbr FROM orgs WHERE id = ?", (logic.create_org(con, None, "Robotics and AI Society", "R", "laptop_3d", False),)).fetchone()[0] == "RAS"
 
