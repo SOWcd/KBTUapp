@@ -153,7 +153,7 @@
   // a non-member's tab 2 has one page (the catalogue): clamp where it's used, so the saved page (Studio by default) comes
   // back by itself after sign-in
   const pageIdx = (tab: Tab) => Math.min(ui.page[tab], PAGES[tab].length - 1);
-  $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.club; void ui.page.profile; persistNav(); });
+  $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.club; void ui.page.profile; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));

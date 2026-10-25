@@ -7,11 +7,11 @@ export type Tab = 'afisha' | 'club' | 'profile';
 export const TABS: Tab[] = ['afisha', 'club', 'profile'];
 const NAV_KEY = 'kb-nav';
 
-function restore(): { tab: Tab; page: Record<Tab, number> } {
-  const dflt = { tab: 'afisha' as Tab, page: { afisha: 1, club: 1, profile: 1 } };
+function restore(): { tab: Tab; page: Record<Tab, number>; club: number | null } {
+  const dflt = { tab: 'afisha' as Tab, page: { afisha: 1, club: 1, profile: 1 }, club: null };
   try {
     const v = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (v && TABS.includes(v.tab) && v.page) return { tab: v.tab, page: { ...dflt.page, ...v.page } };
+    if (v && TABS.includes(v.tab) && v.page) return { tab: v.tab, page: { ...dflt.page, ...v.page }, club: typeof v.club === 'number' ? v.club : null };
   } catch { /* blocked or corrupted */ }
   return dflt;
 }
@@ -22,12 +22,12 @@ export const ui = $state({
   page: start.page,
   navMini: false,          // bottom nav shrinks to icons while scrolling down
   awake: 0,                // bumps on interaction: the capsule shows the page switcher for a moment
-  club: null as number | null, // tab 2: the club picked in Studio, the same on Team (null = the top one)
+  club: start.club,        // tab 2: the club picked in Studio, the same on Team (null = the top one); kept across launches (owner, Oct 26)
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; owner, Oct 17: no sign otherwise)
 });
 
 export function persistNav(): void {
-  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, page: ui.page })); } catch { /* blocked */ }
+  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, page: ui.page, club: ui.club })); } catch { /* blocked */ }
 }
 
 export function goTab(tab: Tab): void {
