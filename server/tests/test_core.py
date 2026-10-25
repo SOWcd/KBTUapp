@@ -4540,6 +4540,28 @@ def test_roster_app_wins(env):
     assert con.execute("SELECT g.name FROM member_tags t JOIN org_tags g ON g.id = t.tag_id WHERE t.user_id = ?", (ali["id"],)).fetchone()[0] == "Board"
 
 
+def test_bot_and_calendar_titles_translated(env):
+    """PLAN 9's deferred part: the bot's messages and my calendar feed show an event's title in my language when it has
+    a translation (made up here), else as typed."""
+    c, cfg = env
+    pres, ali = login(c, 92, "pres"), login(c, 93, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    ru = "\u041d\u043e\u0447\u044c \u043d\u0430\u0441\u0442\u043e\u043b\u043e\u043a"  # "Board games night" in Russian
+    i18n = json.dumps({"en": {"title": "Board games night", "description": ""}, "kk": {"title": "Kk title", "description": ""}})
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at, i18n, lang)
+        VALUES (1, 1, 'published', ?, '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0, ?, 'ru')""", (ru, int(time.time()) + 86400, pres["id"], i18n))
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'TABCDEF', 0, 0)", (ali["id"],))
+    logic.notify(con, ali["id"], "rate", "rate:1")
+    ping = lambda lang: con.execute("SELECT b.*, ? AS lang FROM bot_outbox b WHERE kind = 'rate'", (lang,)).fetchone()  # noqa: E731
+    assert "Board games night" in bot._render(con, ping("en"))[0] and ru in bot._render(con, ping("ru"))[0]
+    con.execute("UPDATE users SET lang = 'en' WHERE id = ?", (ali["id"],))
+    token = c.post("/api/me/calendar", headers=tma(93, "Ali")).json()["page"].rsplit("/", 1)[1]
+    assert "SUMMARY:Board games night" in c.get(f"/cal/{token}.ics").text
+    con.execute("UPDATE users SET lang = 'ru' WHERE id = ?", (ali["id"],))
+    assert ru in c.get(f"/cal/{token}.ics").text                                               # the source language as typed
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""

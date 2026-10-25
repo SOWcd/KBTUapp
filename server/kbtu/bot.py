@@ -128,18 +128,18 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             return None
         return (*texts.bot_message(lang, "join_yes" if ref[2] == "yes" else "join_no", org=r["name"]), f"cl_{r['org_id']}")
     if kind == "rate":  # rate:<event>, an hour after the end, to those checked in; not if rated already or reminders are off
-        e = one(con, "SELECT title FROM events WHERE id = ? AND status = 'published'", int(ref[1]))
+        e = one(con, "SELECT title, i18n FROM events WHERE id = ? AND status = 'published'", int(ref[1]))
         if not e or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0] \
                 or one(con, "SELECT 1 FROM event_ratings WHERE event_id = ? AND user_id = ?", int(ref[1]), m["user_id"]):
             return None
-        return (*texts.bot_message(lang, kind, title=e["title"]), f"ev_{ref[1]}")
+        return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang)), f"ev_{ref[1]}")
     if kind == "event_update":  # upd:<id>; gone if the organizer deleted it or the event is no longer on
-        u = one(con, """SELECT e.id, e.title, o.name FROM event_updates x JOIN events e ON e.id = x.event_id JOIN orgs o ON o.id = e.org_id
+        u = one(con, """SELECT e.id, e.title, e.i18n, o.name FROM event_updates x JOIN events e ON e.id = x.event_id JOIN orgs o ON o.id = e.org_id
             WHERE x.id = ? AND e.status = 'published'""", int(ref[1]))
-        return (*texts.bot_message(lang, kind, title=u["title"], org=u["name"]), f"ev_{u['id']}") if u else None
+        return (*texts.bot_message(lang, kind, title=logic.title_in(u, lang), org=u["name"]), f"ev_{u['id']}") if u else None
     if kind in ("broadcast", "important"):  # post:<id>, to every club member / to its club's members; gone if taken down
-        post = one(con, "SELECT p.title, o.name FROM posts p JOIN orgs o ON o.id = p.org_id WHERE p.id = ? AND p.hidden_at IS NULL", int(ref[1]))
-        return (*texts.bot_message(lang, kind, org=post["name"], title=post["title"]), "news") if post else None
+        post = one(con, "SELECT p.title, p.i18n, o.name FROM posts p JOIN orgs o ON o.id = p.org_id WHERE p.id = ? AND p.hidden_at IS NULL", int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=post["name"], title=logic.title_in(post, lang)), "news") if post else None
     if kind == "friend_request":  # fq:<asker>:<day>; gone once answered or taken back
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))
         if not p or not one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", int(ref[1]), m["user_id"]):
@@ -173,11 +173,11 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         tier = f" · {texts.TIERS[lang if lang in texts.TIERS else 'ru'][level - 1]}" if len(a[2]) > 1 else ""
         return (*texts.bot_message(lang, kind, name=texts.ACH_NAMES[lang if lang in texts.ACH_NAMES else "ru"][code], tier=tier), f"aw_{code}")
     if kind == "photo_report":  # ph:<event>, to those who came, once: the guests' album filled up
-        e = one(con, "SELECT id, title FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
+        e = one(con, "SELECT id, title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
         n = one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", int(ref[1]))[0]
-        return (*texts.bot_message(lang, kind, title=e["title"], n=n), f"ph_{e['id']}") if e and n else None
+        return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang), n=n), f"ph_{e['id']}") if e and n else None
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
-        e = one(con, "SELECT e.id, e.title, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
+        e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))
         if not e or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]:  # follows the reminders switch
             return None
@@ -185,35 +185,35 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             return None
         if kind == "comment_answer" and not one(con, "SELECT 1 FROM comments WHERE id = ? AND deleted_at IS NULL", int(ref[2])):
             return None
-        return (*texts.bot_message(lang, kind, title=e["title"], org=e["name"]), f"cm_{e['id']}")
+        return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang), org=e["name"]), f"cm_{e['id']}")
     if kind == "comment_reply":  # cr:<post|event>:<id>:<hour>, to whoever was answered; follows the reminders switch
         if ref[1] == "event":
-            x = one(con, "SELECT title FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[2]))
+            x = one(con, "SELECT title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[2]))
         else:
-            x = one(con, "SELECT title FROM posts WHERE id = ? AND hidden_at IS NULL", int(ref[2]))
+            x = one(con, "SELECT title, i18n FROM posts WHERE id = ? AND hidden_at IS NULL", int(ref[2]))
         if not x or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]:
             return None
-        return (*texts.bot_message(lang, kind, title=x["title"]), f"{'cm' if ref[1] == 'event' else 'cp'}_{ref[2]}")
+        return (*texts.bot_message(lang, kind, title=logic.title_in(x, lang)), f"{'cm' if ref[1] == 'event' else 'cp'}_{ref[2]}")
     if kind in ("volunteer_yes", "volunteer_no"):  # vo:<event>:<when>; quiet if the decision changed since or the event is over
         e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.starts_at > ?",
                 int(ref[1]), logic.now())
         x = e and one(con, "SELECT status FROM volunteers WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"])
         if not x or x["status"] != kind.split("_")[1]:
             return None
-        return (*texts.bot_message(lang, kind, org=e["org_name"], title=e["title"], when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
+        return (*texts.bot_message(lang, kind, org=e["org_name"], title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
     if kind in ("leaders_invite", "meeting_invite"):  # li: / mi:<event>, to everyone invited; quiet once they've answered or it's over
         e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.starts_at > ?",
                 int(ref[1]), logic.now())
         if not e or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"]):
             return None
-        return (*texts.bot_message(lang, kind, org=e["org_name"], title=e["title"], when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
+        return (*texts.bot_message(lang, kind, org=e["org_name"], title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
     if kind == "friend_invite":  # fi:<event>:<inviter>; gone if the event is off or has started, or they're in already
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND starts_at > ?", int(ref[1]), logic.now())
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))
         if not e or not p or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')",
                                  e["id"], m["user_id"]):
             return None
-        return (*texts.bot_message(lang, kind, name=logic.shown_name(p), title=e["title"], when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)),
+        return (*texts.bot_message(lang, kind, name=logic.shown_name(p), title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)),
                 f"ev_{e['id']}")
     if kind == "round_open":  # ro:<round>, to a club's followers who aren't in it; gone once it stops taking applications
         r = one(con, "SELECT r.*, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.status = 'open' AND r.closes_at > ?", int(ref[1]), logic.now())
@@ -250,20 +250,20 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         return (*texts.bot_message(lang, kind, org=o["name"], n=n), f"memo_{ref[1]}") if o and n else None
     if kind == "saved_tomorrow":  # sv:<day>: my saved events tomorrow I'm not going to (gone if I signed up meanwhile)
         day = int(ref[1])
-        evs = rows(con, """SELECT e.id, e.title, e.starts_at FROM saved_events s JOIN events e ON e.id = s.event_id WHERE s.user_id = ?
+        evs = rows(con, """SELECT e.id, e.title, e.i18n, e.starts_at FROM saved_events s JOIN events e ON e.id = s.event_id WHERE s.user_id = ?
             AND e.status = 'published' AND e.starts_at >= ? AND e.starts_at < ? AND NOT EXISTS (SELECT 1 FROM registrations r
             WHERE r.event_id = e.id AND r.user_id = s.user_id AND r.status IN ('going', 'hold', 'waitlist')) ORDER BY e.starts_at""",
                    m["user_id"], (day + 1) * 86400 - 5 * 3600, (day + 2) * 86400 - 5 * 3600)
         if not evs:
             return None
-        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {e['title']}, {texts.when(e['starts_at'], lang)}" for e in evs))
+        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
         return text, button, f"ev_{evs[0]['id']}"
     if kind == "place_tba":  # tba:<day>, to an event's maker: all their coming events still without a place
-        evs = rows(con, "SELECT id, title, starts_at FROM events WHERE created_by = ? AND status = 'published' AND place = '' AND starts_at > ? ORDER BY starts_at",
+        evs = rows(con, "SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published' AND place = '' AND starts_at > ? ORDER BY starts_at",
                    m["user_id"], logic.now())
         if not evs:
             return None
-        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {e['title']}, {texts.when(e['starts_at'], lang)}" for e in evs))
+        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
         return text, button, f"ev_{evs[0]['id']}"
     if kind == "friend_new":  # fn:<the other one>:<day>; gone if they're no longer friends by then
         other = int(ref[1])
@@ -287,7 +287,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket (owner, Oct 6)
         kind += "_team"
-    text, button = texts.bot_message(lang, kind, title=e["title"], when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang), org=e["org_name"])
+    text, button = texts.bot_message(lang, kind, title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang), org=e["org_name"])
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
 
 
