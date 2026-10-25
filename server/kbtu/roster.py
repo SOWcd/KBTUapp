@@ -120,7 +120,7 @@ COLS = ("sheet", "position", "title", "role", "dept", "full_name", "school", "ye
 def load(con, items: list[dict], orgmap: dict) -> dict:
     """The converter's rows, each sheet into the org the map names (a slug, or {"new": {name, short, emoji}}: created
     official). Again with the same file: nothing more. Then everyone already in the app whose row it is joins."""
-    from .logic import create_org
+    from .logic import create_org, org_name
     missing = sorted({r["sheet"] for r in items} - set(orgmap))
     if missing:
         raise ValueError(f"sheets without an org in the map: {missing}")
@@ -135,7 +135,7 @@ def load(con, items: list[dict], orgmap: dict) -> dict:
                 org[sheet] = o["id"]
             else:
                 new = to["new"]
-                o = one(con, "SELECT id FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", new["name"])
+                o = one(con, "SELECT id FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", org_name(new["name"])[0])  # as create_org names it
                 if not o:
                     made.append(new["name"])
                 org[sheet] = o["id"] if o else create_org(con, None, new["name"], new["short"], new.get("emoji", "sparkles_3d"), True)
