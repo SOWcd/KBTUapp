@@ -713,11 +713,19 @@ def _fold(line: str) -> str:
     return "\r\n".join([*out, cur])
 
 
-def _vevent(e: sqlite3.Row, link: str) -> list[str]:
-    """One event (with its org's name as org_name) as VEVENT lines; a cancelled one says so, and calendars strike it."""
+def title_in(row: sqlite3.Row, lang: str | None) -> str:
+    """A title in a reader's language (PLAN 9, deferred then): an event's or a post's translation (ai.py, mirror.py) where
+    there is one, else as typed. For the bot's messages and the calendar, which knew only the source language."""
+    tr = json.loads(row["i18n"]) if "i18n" in row.keys() and row["i18n"] else {}
+    return (tr.get(lang) or {}).get("title") or row["title"]
+
+
+def _vevent(e: sqlite3.Row, link: str, lang: str | None = None) -> list[str]:
+    """One event (with its org's name as org_name) as VEVENT lines, its title in lang where translated; a cancelled one
+    says so, and calendars strike it."""
     utc = lambda ts: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))  # noqa: E731
     return ["BEGIN:VEVENT", f"UID:ev{e['id']}@kbtu-app", f"DTSTAMP:{utc(now())}", f"DTSTART:{utc(e['starts_at'])}", f"DTEND:{utc(end_of(e))}",
-            "SUMMARY:" + _ics_text(e["title"]), "LOCATION:" + _ics_text(e["place"]), "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
+            "SUMMARY:" + _ics_text(title_in(e, lang)), "LOCATION:" + _ics_text(e["place"]), "DESCRIPTION:" + _ics_text(f"{e['org_name']}\n{link}"),
             "URL:" + link, *(["STATUS:CANCELLED"] if e["status"] == "cancelled" else []), "END:VEVENT"]
 
 
@@ -745,13 +753,13 @@ def cal_token(con, v: Viewer) -> str:
 def cal_feed(con, token: str, link) -> str:
     """Everything I go to, from a month ago on: the phone's calendar refreshes it on its own (hourly asked), so a new
     registration shows up and a cancelled one goes; a cancelled event stays, struck through."""
-    u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE u.cal_token = ?", token) if token else None
+    u = one(con, "SELECT u.id, u.lang FROM users u JOIN students s ON s.user_id = u.id WHERE u.cal_token = ?", token) if token else None
     if not u:
         raise ApiError("not_found")
     evs = rows(con, """SELECT e.*, o.name AS org_name FROM registrations r JOIN events e ON e.id = r.event_id JOIN orgs o ON o.id = e.org_id
         WHERE r.user_id = ? AND r.status IN ('going', 'hold') AND e.status IN ('published', 'cancelled') AND e.hidden_at IS NULL
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? ORDER BY e.starts_at LIMIT 300""", u["id"], NO_END, now() - 30 * 86400)
-    return _calendar([x for e in evs for x in _vevent(e, link(e["id"]))], "X-WR-CALNAME:KBTU App", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H")
+    return _calendar([x for e in evs for x in _vevent(e, link(e["id"]), u["lang"])], "X-WR-CALNAME:KBTU App", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H")
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
