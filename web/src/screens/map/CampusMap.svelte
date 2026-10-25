@@ -250,47 +250,97 @@
 
   // another floor keeps the view: the floors share one frame, so the same part of the building stays on screen and
   // only the tiles change (owner, Oct 6: "switching floors resets the map's size")
-  function pick(n: number) { if (n === cur) return; haptic.select(); halt(); cur = n; tiles = []; touched++; pickTiles(); }
-
-  // ---- floors by a sideways swipe (PLAN 97, owner Oct 26): along the floor rail, or on the map while it's zoomed out
-  // (at its home scale, nothing to pan); a finger to the right goes a floor up, to the left down, and the rail's knob
-  // follows it. The tab Pager's feel (Pager.svelte: a 5 px lock, mostly sideways, a flick over 0.3 px/ms or a third of
-  // the way, a settle from the finger's own speed, a rubber band at the ends); one finger only, a second (a pinch)
-  // calls it off.
-  // How it's drawn (owner's iPhone video, Oct 26: floors drawn over each other, halves "eaten", the swap popping): for
-  // the swipe, both floors are plain pictures at their pixel places in ONE moving strip, sized to hold them (WebKit
-  // paints a moving layer only within its own box), a plan's width apart so they never overlap, over an opaque cover;
-  // the map under it changes floor only once the strip has landed, and the strip goes only after the new floor's
-  // picture is decoded and painted under it. The old plan (an SVG, no picture to slide) crossfades instead. ----
+  // ---- floors (PLAN 97; owner's iPhone videos, Oct 26 and IMG_6661): a tap on the rail, a drag along it, or a sideways
+  // swipe on the map while it's zoomed out (at its home scale, nothing to pan).
+  // Directions: on the map a swipe is a page turn, the finger to the left brings the floor above in from the right (the
+  // owner: "left-right the other way round"); on the rail the knob stays under the finger, as the rail reads B 1 2 3 4 5.
+  // The knob is a liquid glass lens while it moves (iOS 26's segmented control): it clears, swells a little and
+  // magnifies the numbers under it; at rest it's the solid pill again. Its place is one registered number, --kp, that
+  // both the knob and the lens's magnified copy of the rail read, so they move in one step on the compositor's clock.
+  // The map's change is always one slide: both floors as plain pictures at their pixel places in ONE strip sized to hold
+  // them (WebKit paints a moving layer only within its own box), a plan's width apart, over an opaque cover; the floor
+  // under it changes once the strip lands and the strip goes once the new picture is painted. The old plan (an SVG, no
+  // picture to slide) crossfades. The tab Pager's feel for the swipe (a 5 px lock, mostly sideways, a flick over
+  // 0.3 px/ms or a third of the way, a rubber band at the ends); a second finger (a pinch) calls it off. ----
   type StripPic = { n: number; l: number; t: number; w: number; h: number };
   let strip = $state<{ pics: StripPic[]; box: { l: number; t: number; w: number; h: number }; d: number } | null>(null);
   let stripEl = $state<HTMLDivElement>();
-  let knob: HTMLSpanElement;
-  let sw: { x0: number; y0: number; px: number; py: number; dx: number; on: boolean; hist: [number, number][]; n: number | null; dir: number } | null = null;
-  let sliding = false;
-  const floorBy = (dir: number) => { const i = railFloors.indexOf(cur) + dir; return i >= 0 && i < railFloors.length ? railFloors[i] : null; };
-  const knobAt = (pos: number, ease = '') => { knob.style.transition = ease || 'none'; knob.style.left = `calc(4px + ${pos} * var(--fb))`; };
-  function swipeStart(px: number, py: number) { sw = sliding ? null : { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [], n: null, dir: 0 }; }
-  /** the strip for a swipe toward dir: this floor where the map shows it, the next a plan's width beside it */
-  function makeStrip(dir: number) {
-    const n = floorBy(dir);
-    if (ver !== 'main') { strip = null; return n; }
-    const W = stage.clientWidth, pw = W * s, ph = pw * AR, d = Math.max(W, Math.round(pw * 0.78 + W * 0.12));
-    const pics: StripPic[] = [{ n: cur, l: x, t: y, w: pw, h: ph }];
-    if (n != null) pics.push({ n, l: x - dir * d, t: y, w: pw, h: ph }); // on the side the finger moves away from
-    const l = Math.min(...pics.map((p) => p.l)), r = Math.max(...pics.map((p) => p.l + p.w));
-    strip = { pics: pics.map((p) => ({ ...p, l: p.l - l })), box: { l, t: y, w: r - l, h: ph }, d };
-    return n;
+  let railEl: HTMLDivElement;
+  let kp = $state(0), kt = $state('0s'), lens = $state(false);
+  let sw: { x0: number; y0: number; px: number; py: number; dx: number; on: boolean; hist: [number, number][]; n: number | null; up: number; rail: boolean; k0: number } | null = null;
+  let sliding = false, lensT = 0;
+  const SPRING = 'cubic-bezier(.3,1.25,.4,1)';
+  const idxOf = (n: number) => railFloors.indexOf(n);
+  const floorBy = (up: number) => railFloors[idxOf(cur) + up] ?? null;
+  /** the knob to a place on the rail (in floors), at once or on a curve; the lens is on while it moves */
+  function knobTo(pos: number, ms = 0, ease = SPRING) {
+    clearTimeout(lensT); lens = true;
+    kt = ms ? `${ms}ms ${ease}` : '0s'; kp = pos;
+    if (ms) lensT = setTimeout(() => { if (!sw?.on) lens = false; }, ms + 60);
   }
-  // the floors a swipe can bring, decoded ahead (a decode inside the gesture cost a 70-80 ms frame at its start)
+  // the knob follows the floor wherever it comes from (a search, a route step, the old plan's narrower rail)
+  $effect(() => { const i = idxOf(cur); if (!untrack(() => sw?.on || sliding)) { kt = '0s'; kp = i; } });
+  // every floor's picture decoded ahead: a slide never waits on one (a decode inside the gesture cost a 70-80 ms frame)
   const ahead: HTMLImageElement[] = [];
   $effect(() => {
     if (ver !== 'main') return;
-    const at = railFloors.indexOf(cur);
     ahead.length = 0;
-    for (const n of [railFloors[at - 1], railFloors[at + 1]]) if (n != null) { const im = new Image(); im.src = `${TILES}f${n}/o.webp`; void im.decode().catch(() => {}); ahead.push(im); }
+    for (const n of railFloors) { const im = new Image(); im.src = `${TILES}f${n}/o.webp`; void im.decode().catch(() => {}); ahead.push(im); }
   });
+  /** the strip for a move to floor n: this floor where the map shows it, n a plan's width to its right (up) or left */
+  function makeStrip(n: number | null, up: number) {
+    if (ver !== 'main') { strip = null; return; }
+    const W = stage.clientWidth, pw = W * s, ph = pw * AR, d = Math.max(W, Math.round(pw * 0.78 + W * 0.12));
+    const pics: StripPic[] = [{ n: cur, l: x, t: y, w: pw, h: ph }];
+    if (n != null) pics.push({ n, l: x + up * d, t: y, w: pw, h: ph });
+    const l = Math.min(...pics.map((p) => p.l)), r = Math.max(...pics.map((p) => p.l + p.w));
+    strip = { pics: pics.map((p) => ({ ...p, l: p.l - l })), box: { l, t: y, w: r - l, h: ph }, d };
+  }
   const stripTo = (px: number, ease = '') => { if (stripEl) { stripEl.style.transition = ease; stripEl.style.transform = `translate3d(${px}px,0,0)`; } };
+  /** over to floor n: the strip slides from where it is (`from` px) and the knob lands with it, on one curve */
+  async function goTo(n: number, from = 0, v = 0) {
+    if (n === cur) return;
+    haptic.select(); halt(); sliding = true;
+    const up = Math.sign(idxOf(n) - idxOf(cur));
+    if (!strip || strip.pics[1]?.n !== n) { makeStrip(n, up); await tick(); stripTo(from); }
+    const d = strip?.d ?? stage.clientWidth, rest = Math.abs(-up * d - from);
+    const ms = Math.round(Math.max(240, Math.min(380, (1.6 * rest) / Math.max(v, 1))));
+    const y1 = Math.max(0.25, Math.min(1, (0.25 * v * ms) / Math.max(rest, 1)));
+    const ease = v > 0.3 ? `cubic-bezier(.25,${y1.toFixed(2)},.25,1)` : 'cubic-bezier(.32,.72,0,1)';
+    knobTo(idxOf(n), ms, ease);
+    if (!strip) { void crossfade(n, ms); return; }
+    void stripEl?.offsetWidth; // the start place painted before the move, or a tap's strip jumps instead of sliding
+    stripTo(-up * d, `transform ${ms}ms ${ease}`);
+    let done = false;
+    const land = async () => {
+      if (done) return;
+      done = true;
+      cur = n; tiles = []; touched++; pickTiles();
+      await tick();
+      // the strip goes once the map under it shows the new floor; every wait has a ceiling (a webview holding frames back)
+      const most = (p: Promise<unknown>, ms: number) => Promise.race([p, new Promise((ok) => setTimeout(ok, ms))]);
+      const img = stage.querySelector<HTMLImageElement>('.plan img.ov');
+      if (img && !img.complete) await most(new Promise((ok) => { img.addEventListener('load', ok, { once: true }); img.addEventListener('error', ok, { once: true }); }), 400);
+      await most(img?.decode().catch(() => {}) ?? Promise.resolve(), 200);
+      await most(new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))), 60);
+      strip = null; sliding = false;
+    };
+    stripEl?.addEventListener('transitionend', land, { once: true });
+    setTimeout(land, ms + 300); // no transitionend (a hidden tab): it lands anyway
+  }
+  /** the old plan: out, the floor changes, in */
+  async function crossfade(n: number, ms: number) {
+    plan.style.transition = `opacity ${ms / 2}ms ease-in`; plan.style.opacity = '0';
+    await new Promise((ok) => setTimeout(ok, ms / 2));
+    cur = n; touched++;
+    await tick();
+    plan.style.transition = `opacity ${ms / 2}ms ease-out`; plan.style.opacity = '';
+    setTimeout(() => { plan.style.transition = ''; sliding = false; }, ms / 2);
+  }
+  function pick(n: number) { if (!sliding) void goTo(n); }
+  function swipeStart(px: number, py: number, rail = false) {
+    sw = sliding ? null : { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [], n: null, up: 0, rail, k0: idxOf(cur) };
+  }
   /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
   function swipeMove(px: number, py: number): boolean {
     if (!sw) return false;
@@ -305,76 +355,54 @@
     const now = performance.now();
     sw.hist.push([now, dx]);
     while (sw.hist.length > 2 && now - sw.hist[0][0] > 90) sw.hist.shift();
-    const dir = dx > 0 ? 1 : -1; // to the right: up
-    if (dir !== sw.dir) { sw.dir = dir; sw.n = makeStrip(dir); }
+    if (sw.rail) { // the knob under the finger, a rubber band past the ends; the map waits for the let-go
+      const fb = (railEl.querySelector('button:not(.gone)') as HTMLElement).offsetWidth || 42, last = railFloors.length - 1;
+      let p = sw.k0 + dx / fb;
+      if (p < 0) p = -(1 - 1 / (1 - p * 0.6)); else if (p > last) p = last + (1 - 1 / (1 + (p - last) * 0.6));
+      knobTo(p);
+      return true;
+    }
+    const up = dx < 0 ? 1 : -1; // to the left: up
+    if (up !== sw.up) { sw.up = up; sw.n = floorBy(up); makeStrip(sw.n, up); }
     const d = strip?.d ?? stage.clientWidth;
-    const v = sw.n != null ? dx : (dx / (1 + Math.abs(dx) / 90)) * 0.6;
-    stripTo(v);
-    knobAt(railFloors.indexOf(cur) + (sw.n != null ? Math.min(1, Math.abs(dx) / d) * dir : 0)); // the knob goes along
+    stripTo(sw.n != null ? dx : (dx / (1 + Math.abs(dx) / 90)) * 0.6);
+    knobTo(sw.k0 + (sw.n != null ? Math.min(1, Math.abs(dx) / d) * up : 0));
     return true;
   }
-  /** the finger let go (or a second came): over to the next floor, or back */
+  /** the finger let go (or a second came): over to a floor, or back */
   function swipeEnd(cancel = false) {
     const z = sw; sw = null;
     if (!z?.on) return;
-    const h = z.hist, d = strip?.d ?? stage.clientWidth, idx = railFloors.indexOf(cur);
+    const h = z.hist;
     const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
-    const go = !cancel && z.n != null && (Math.abs(vx) > 0.3 ? (vx > 0) === (z.dx > 0) : Math.abs(z.dx) > d / 3);
-    if (!go) {
-      if (z.n == null && !cancel) haptic.rigid();
-      const back = 'cubic-bezier(.2,.9,.25,1.1)';
-      stripTo(0, `transform 320ms ${back}`);
-      knobAt(idx, `left 320ms ${back}`);
-      setTimeout(() => { if (!sw && !sliding) { strip = null; knob.style.transition = ''; } }, 340);
+    const back = () => {
+      stripTo(0, `transform 320ms ${SPRING}`); knobTo(z.k0, 320);
+      setTimeout(() => { if (!sw && !sliding) strip = null; }, 340);
+    };
+    if (z.rail) { // the nearest floor to where the knob was let go, a flick carrying it one further
+      const last = railFloors.length - 1;
+      const i = cancel ? z.k0 : Math.max(0, Math.min(last, Math.round(kp + (Math.abs(vx) > 0.5 ? Math.sign(vx) * 0.4 : 0))));
+      if (i === z.k0) { if (kp < -0.2 || kp > last + 0.2) haptic.rigid(); knobTo(i, 320); return; }
+      void goTo(railFloors[i]);
       return;
     }
-    haptic.select();
-    sliding = true;
-    const n = z.n!, rest = Math.abs(z.dir * d - z.dx), v = Math.abs(vx);
-    const ms = Math.round(Math.max(200, Math.min(320, (1.6 * rest) / Math.max(v, 1))));
-    const y1 = Math.max(0.25, Math.min(1, (0.25 * v * ms) / Math.max(rest, 1)));
-    const ease = `${ms}ms cubic-bezier(.25,${y1.toFixed(2)},.25,1)`;
-    knobAt(idx + z.dir, `left ${ease}`); // the knob lands with the plan, on the same curve
-    if (!strip) { void crossfade(n, ms); return; }
-    stripTo(z.dir * d, `transform ${ease}`);
-    let done = false;
-    const land = async () => {
-      if (done) return;
-      done = true;
-      halt(); cur = n; tiles = []; touched++; pickTiles();
-      await tick();
-      // the map under the strip is the new floor now; the strip goes once its picture is decoded and painted
-      // every wait has a ceiling: a webview that holds frames back (in the background, its offscreen test) still lands
-      const most = (p: Promise<unknown>, ms: number) => Promise.race([p, new Promise((ok) => setTimeout(ok, ms))]);
-      const img = stage.querySelector<HTMLImageElement>('.plan img.ov');
-      if (img && !img.complete) await most(new Promise((ok) => { img.addEventListener('load', ok, { once: true }); img.addEventListener('error', ok, { once: true }); }), 600);
-      await most(img?.decode().catch(() => {}) ?? Promise.resolve(), 300);
-      await most(new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))), 80);
-      strip = null; sliding = false; knob.style.transition = '';
-    };
-    stripEl?.addEventListener('transitionend', land, { once: true });
-    setTimeout(land, ms + 400); // no transitionend (a hidden tab): it lands anyway
+    const d = strip?.d ?? stage.clientWidth;
+    const go = !cancel && z.n != null && (Math.abs(vx) > 0.3 ? (vx > 0) === (z.dx > 0) : Math.abs(z.dx) > d / 3);
+    if (!go) { if (z.n == null && !cancel) haptic.rigid(); back(); return; }
+    void goTo(z.n!, z.dx, Math.abs(vx));
   }
-  /** the old plan: out, the floor changes, in */
-  async function crossfade(n: number, ms: number) {
-    plan.style.transition = `opacity ${ms / 2}ms ease-in`; plan.style.opacity = '0';
-    await new Promise((ok) => setTimeout(ok, ms / 2));
-    halt(); cur = n; touched++;
-    await tick();
-    plan.style.transition = `opacity ${ms / 2}ms ease-out`; plan.style.opacity = '';
-    setTimeout(() => { plan.style.transition = ''; sliding = false; knob.style.transition = ''; }, ms / 2);
-  }
-  // the rail: a swipe along it, or a tap on a floor (a swipe's let-go isn't a tap)
+  // the rail: a drag along it, or a tap on a floor (a drag's let-go isn't a tap)
   let railSwiped = false;
-  function railDown(e: PointerEvent) { if (rt.route) return; railSwiped = false; swipeStart(e.clientX, e.clientY); }
+  function railDown(e: PointerEvent) { if (rt.route) return; railSwiped = false; swipeStart(e.clientX, e.clientY, true); }
   function railMove(e: PointerEvent) {
     if (!swipeMove(e.clientX, e.clientY)) return;
-    // held only once it's a swipe: captured from the start, a tap's click would go to the rail, not the floor's button
+    // held only once it's a drag: captured from the start, a tap's click would go to the rail, not the floor's button
     if (!railSwiped) (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     railSwiped = true;
   }
   function railUp() { swipeEnd(); }
   function swipeable(el: HTMLElement) { // listeners in code: the rail stays a plain tablist for the screen reader
+    railEl = el as HTMLDivElement;
     const on = [['pointerdown', railDown], ['pointermove', railMove], ['pointerup', railUp], ['pointercancel', railUp]] as const;
     on.forEach(([k, f]) => el.addEventListener(k, f as EventListener));
     return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
@@ -694,8 +722,10 @@
     <button class="rb glass glass-pill" class:on={ver === 'old'} class:away={!!rt.route} use:glass onclick={() => { haptic.tap(); setVer(ver === 'old' ? 'main' : 'old'); }}
       aria-label={ver === 'old' ? t('map.newPlan') : t('map.oldPlan')} aria-pressed={ver === 'old'}><History size={20} /></button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
-    <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')}>
-      <span class="knob" bind:this={knob} style:left="calc(4px + {railFloors.indexOf(cur)} * var(--fb))" aria-hidden="true"></span>
+    <div class="rail glass glass-pill" class:away={!!rt.route} class:lens inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')}
+         style:--kp={kp} style:--kt={kt}>
+      <!-- the knob, and inside it the rail's numbers again, magnified around its middle: the lens while it moves -->
+      <span class="knob" aria-hidden="true"><span class="mag">{#each [0, 1, 2, 3, 4, 5] as n (n)}<i class:gone={!railFloors.includes(n)}>{n || t('map.bShort')}</i>{/each}</span></span>
       <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
            instead of jumping (owner, Oct 24 video) -->
       {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button role="tab" aria-selected={cur === n} class:on={cur === n}
@@ -822,10 +852,27 @@
   .rb.away { opacity: 0; pointer-events: none; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
   /* a floor button shrinks on a narrow phone so the row fits (two 46px buttons, two 10px gaps, 12px sides) */
-  .rail { --fb: min(42px, calc((100vw - 144px) / 6)); position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring); }
+  .rail { --fb: min(42px, calc((100vw - 144px) / 6)); position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring), --kp var(--kt, 0s); }
   .rail.away { opacity: 0; transform: translateY(-30px); pointer-events: none; }
-  .rail .knob { position: absolute; top: 4px; bottom: 4px; width: var(--fb); border-radius: 21px; transition: left 0.5s var(--ease-spring);
-    background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7); }
+  /* the knob's place, a registered number so a transition moves it and the lens's copy in one step */
+  @property --kp { syntax: '<number>'; inherits: true; initial-value: 0; }
+  .rail .knob { position: absolute; z-index: 0; left: 4px; top: 4px; bottom: 4px; width: var(--fb); border-radius: 21px; overflow: hidden;
+    transform: translate3d(calc(var(--kp) * var(--fb)), 0, 0); pointer-events: none;
+    background: linear-gradient(180deg, #fff, #e1e7ff); box-shadow: inset 0 -2px 5px rgba(80, 100, 200, 0.22), inset 0 1px 0 #fff, 0 6px 16px -6px rgba(140, 170, 255, 0.7);
+    transition: background-color 0.2s, box-shadow 0.2s, scale 0.25s var(--ease-spring); }
+  /* the lens: clear glass with a bright rim and a bent edge, a touch bigger, the numbers under it magnified */
+  .rail.lens .knob { z-index: 2; scale: 1.12 1.18; background: color-mix(in srgb, var(--surface-solid) 94%, #fff);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), inset 0 1.5px 1px rgba(255, 255, 255, 0.9), inset 0 -3px 6px rgba(255, 255, 255, 0.18),
+      inset 3px 0 6px -3px rgba(120, 170, 255, 0.55), inset -3px 0 6px -3px rgba(255, 140, 190, 0.5), 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 6px 16px -6px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px) saturate(1.6); -webkit-backdrop-filter: blur(8px) saturate(1.6); }
+  .rail .mag { position: absolute; left: 0; top: 0; height: 42px; display: flex; opacity: 0; transition: opacity 0.15s;
+    transform-origin: calc(var(--kp) * var(--fb) + var(--fb) / 2) 50%;
+    transform: translate3d(calc(var(--kp) * var(--fb) * -1), 0, 0) scale(1.32); }
+  .rail.lens .mag { opacity: 1; }
+  .rail .mag i { width: var(--fb); flex: none; display: grid; place-items: center; font: 750 16px/1 var(--font-display); font-style: normal; color: var(--text);
+    text-shadow: -0.7px 0 rgba(255, 90, 150, 0.6), 0.7px 0 rgba(90, 170, 255, 0.6); transition: width 0.5s var(--ease-spring); }
+  .rail .mag i.gone { width: 0; overflow: hidden; }
+  .rail.lens button.on { color: var(--text-2); }
   .rail button { position: relative; width: var(--fb); height: 42px; border-radius: 21px; display: grid; place-items: center; font: 750 16px/1 var(--font-display); color: var(--text-2); transition: color 0.25s, width 0.5s var(--ease-spring), opacity 0.3s; }
   .rail button.gone { width: 0; opacity: 0; overflow: hidden; pointer-events: none; }
   .rail button.on { color: #0a0f24; }
