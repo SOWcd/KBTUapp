@@ -522,8 +522,6 @@
     return () => { delete d.map; ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
   });
 
-  // the opening ring's glow (.map-halo), for the button that catches the closing circle
-  const ring = (a: number) => `0 0 0 2.5px rgba(255, 255, 255, ${0.95 * a}), 0 0 0 5px rgba(150, 180, 255, ${0.5 * a}), 0 0 0 9px rgba(130, 165, 255, ${0.24 * a}), 0 0 0 14px rgba(120, 160, 255, ${0.1 * a})`;
   function leave() {
     if (gone) return;
     gone = true;
@@ -540,7 +538,7 @@
       const c = bt ? { x: bt.left + bt.width / 2 - (dm?.e ?? 0), y: bt.top + bt.height / 2 - (dm?.f ?? 0) } : iris.at;
       const end = bt ? bt.width / 2 : 30, far = reach(c);
       const circle = (r: number) => `circle(${r}px at ${c.x}px ${c.y}px)`;
-      const h = halo(far, end, o, [1, 1, 0], c);
+      const h = halo(far, end, o, [1, 1, 1], c); // held to the end: the ripples take over from it at the button's size
       if (mapCap) split(h, mapCap, true, c);
       undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
       stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
@@ -551,13 +549,30 @@
         u.cancel(); // the forwards hold goes, the new animation starts where it left the page
       }
       a = panel.animate({ clipPath: [circle(far), circle(end)], opacity: [1, 1, 0] }, { ...o, fill: 'forwards' });
-      // the button catches it: the ring's glow (the same stepped rings, over its own shadow) and a small give, then back
-      const own = b ? getComputedStyle(b).boxShadow : 'none', with_ = (a: number) => own === 'none' ? ring(a) : `${ring(a)}, ${own}`;
-      b?.animate([
-        { boxShadow: with_(0), transform: 'scale(1)' },
-        { boxShadow: with_(1), transform: 'scale(1.08)', offset: 0.3 },
-        { boxShadow: with_(0), transform: 'scale(1)' },
-      ], { duration: 900, delay: o.duration * 0.82, easing: 'ease-out' });
+      // the button catches it (owner, Oct 25: "smoother, more alive, more professional"): the ring lands on the button's
+      // rim and goes on out as two soft ripples, the button gives under it and springs back, a glow swells inside it and
+      // fades. Only opacity and transform move (the stepped box-shadow repainted every frame and read as steps).
+      setTimeout(() => {
+        haptic.tap();
+        for (const [d, k] of [[0, 1.55], [130, 1.9]] as const) {
+          const r = document.createElement('i');
+          r.className = 'map-halo';
+          r.style.cssText = `left:${c.x}px;top:${c.y}px;width:${end * 2}px;height:${end * 2}px`;
+          document.body.append(r);
+          r.animate({ transform: ['scale(1)', `scale(${k})`], opacity: [d ? 0.55 : 1, 0] }, { duration: 760, delay: d, easing: 'cubic-bezier(.2, .7, .3, 1)', fill: 'both' })
+            .finished.catch(() => {}).finally(() => r.remove());
+        }
+        const g = document.createElement('i');
+        g.className = 'map-glow';
+        g.style.cssText = `left:${c.x}px;top:${c.y}px;width:${end * 3}px;height:${end * 3}px`;
+        document.body.append(g);
+        g.animate({ transform: ['scale(.5)', 'scale(1)', 'scale(1.15)'], opacity: [0, 1, 0], offset: [0, 0.3, 1] }, { duration: 820, easing: 'ease-out' })
+          .finished.catch(() => {}).finally(() => g.remove());
+        b?.animate([
+          { transform: 'scale(1)' }, { transform: 'scale(.9)', offset: 0.22 }, { transform: 'scale(1.06)', offset: 0.55 },
+          { transform: 'scale(.99)', offset: 0.8 }, { transform: 'scale(1)' },
+        ], { duration: 680, easing: 'cubic-bezier(.3, .7, .4, 1)' });
+      }, o.duration * 0.94);
     } else a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
@@ -663,6 +678,9 @@
     box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.95), 0 0 0 5px rgba(150, 180, 255, 0.5), 0 0 0 9px rgba(130, 165, 255, 0.24),
       0 0 0 14px rgba(120, 160, 255, 0.1), inset 0 0 0 4px rgba(150, 180, 255, 0.3), inset 0 0 0 9px rgba(130, 165, 255, 0.12);
   }
+  /* the glow the map button takes as it catches the closing circle: a soft light, faded in and out (opacity only) */
+  :global(.map-glow) { position: fixed; z-index: 9998; translate: -50% -50%; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(170, 195, 255, 0.55), rgba(120, 160, 255, 0.22) 45%, transparent 70%); }
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--bg); overflow: hidden; }
   /* on the way the floors are the step card's last row (owner, Oct 15: one panel, not two) */
   /* the main map's paper all round, white, or inverted with the plan in the dark look */
