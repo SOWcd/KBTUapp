@@ -90,7 +90,9 @@ export interface OrgRef { id: Id; slug: string; name: string; short: string; emo
 /** A club as the admin sees it (pilot): its leaders by Telegram name, and how many members it has. `student`: signed in
  *  with KBTU — a role counts only then. */
 export interface AdminMember { id: Id; role: OrgRole; username: string | null; name: string; student: boolean }
-export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean }
+export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean; shortLinks: string[] }
+/** a club's own kbtu.sow.kz/<slug>: only ever into the app (the club, one of its events, its round) */
+export interface ShortLink { slug: string; kind: 'club' | 'event' | 'round'; eventId: Id | null; eventTitle: string | null; createdAt: Ts }
 // a club's event in Admin's delete list, with what deleting it takes along
 export interface AdminEvent { id: Id; title: string; status: 'draft' | 'published' | 'cancelled'; startsAt: Ts | null; people: number; came: number; paid: number; photos: number }
 

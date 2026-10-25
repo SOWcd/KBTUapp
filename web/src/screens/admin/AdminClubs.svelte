@@ -105,6 +105,15 @@
       void loadAfisha();
     } catch (e) { oops(e); }
   }
+  // a club's own short link: DMP takes any down (one leading somewhere it shouldn't)
+  async function revoke(o: AdminOrg, slug: string) {
+    if (!(await sheets.ask({ title: t('adm.linkAsk', { link: `${location.host}/${slug}` }), ok: t('adm.linkGo'), cancel: t('tk.keep'), danger: true }))) return;
+    try {
+      await api.dropShortLink(slug);
+      orgs = orgs!.map((x) => (x.id === o.id ? { ...x, shortLinks: x.shortLinks.filter((s) => s !== slug) } : x));
+      haptic.warn();
+    } catch (e) { oops(e); }
+  }
   // hide, never delete (owner, Oct 16: a lost phone must not wipe the clubs); back with one tap
   async function hide(o: AdminOrg) {
     if (!o.hidden && !(await sheets.ask({ title: t('adm.hideAsk', { club: o.name }), text: t('adm.hideText'), ok: t('adm.hide'), cancel: t('tk.keep'), danger: true }))) return;
@@ -184,6 +193,10 @@
           {:else}
             <p class="t-foot none">{t('adm.noTeam')}</p>
           {/if}
+          {#each o.shortLinks as s (s)}
+            <div class="ev"><span class="tx"><b class="ellipsis selectable">{location.host}/{s}</b></span>
+              <button class="del" aria-label={t('adm.linkGo')} onclick={() => revoke(o, s)}><Trash size={18} /></button></div>
+          {/each}
           {#if open === o.id}
             <form class="assign" onsubmit={(e) => assign(o, e)}>
               <input class="who" bind:value={who} placeholder="@username" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="done" />

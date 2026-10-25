@@ -760,6 +760,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def update_org(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.update_org(con, v, oid, body)
 
+    @app.get("/api/orgs/{oid}/links")
+    def org_links(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.org_links(con, v, oid)
+
+    @app.post("/api/orgs/{oid}/links")
+    def add_link(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.add_link(con, v, oid, body)
+
+    @app.delete("/api/links/{slug}", status_code=204)
+    def drop_link(slug: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+        logic.drop_link(con, v, slug)  # the club's Vice+, or the admin revoking it
+
     # ------------------------------------------------------------ photos
 
     @app.post("/api/photos")
@@ -1283,12 +1295,12 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path):
             return f
-        oid = None
-        if logic.SLUG.fullmatch(path.strip("/").lower()):
+        to = None
+        if logic.SHORT.fullmatch(path.strip("/").lower()):
             with pool.conn() as con:  # only past the files (review: every asset took a connection)
-                oid = logic.org_by_slug(con, path.strip("/"))
-        if oid:  # kbtu.sow.kz/<club>: an Instagram bio's link (A5)
-            return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp=cl_{oid}", status_code=302)
+                to = logic.start_by_slug(con, path.strip("/"))
+        if to:  # kbtu.sow.kz/<club>: an Instagram bio's link (A5); or a club's own link to itself, an event, its round
+            return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp={to}", status_code=302)
         return page()  # SPA: the app routes itself
 
     return app
