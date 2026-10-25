@@ -14,6 +14,7 @@
 
   let pill = $state<HTMLElement>();
   let from = 0;
+  const at = new WeakMap<Element, [number, number]>();
   let top = $state(false);
   let fresh = $state(true); // nothing on screen yet: the entrance, not a morph
   $effect.pre(() => {
@@ -21,6 +22,9 @@
     fresh = !pill;
     if (fresh) top = atTop();
     from = pill?.offsetWidth ?? 0;
+    // where the leaving line and emoji stand, read before either leaves: the emoji going out of the flow first moved
+    // the line onto it, and a theme switch froze that in its snapshot (owner's video, Oct 26)
+    for (const c of pill?.children ?? []) at.set(c, [(c as HTMLElement).offsetLeft, (c as HTMLElement).offsetTop]);
   });
   $effect(() => {
     void toast.id;
@@ -37,7 +41,7 @@
 
   // the old line leaves where it stood: out of the flow at once, so the pill measures the new one
   function leave(node: HTMLElement) {
-    const { offsetLeft: l, offsetTop: t } = node;
+    const [l, t] = at.get(node) ?? [node.offsetLeft, node.offsetTop];
     node.style.cssText += `position:absolute;left:${l}px;top:${t}px;white-space:nowrap;`;
     return { duration: still() ? 0 : 160, css: (k: number) => `opacity:${k};filter:blur(${(1 - k) * 4}px)` };
   }
