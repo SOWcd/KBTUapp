@@ -760,8 +760,9 @@ def test_attendees_csv(env):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at)
-        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at, needs_phone)
+        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0, 1)""", (int(time.time()) + 86400, pres["id"]))
+    con.execute("UPDATE students SET phone = '+77001234567' WHERE user_id = ?", (ali["id"],))  # the event asks for it
     c.post("/api/events/1/registration", headers=tma(21, "Ali"))
     con.execute("UPDATE students SET phone = '+77001234567', email = '=HYPERLINK(1)' WHERE user_id = ?", (ali["id"],))
     assert c.post("/api/events/1/attendees/export", headers=tma(21, "Ali")).status_code == 403   # not the club's team
@@ -3838,6 +3839,76 @@ def test_club_short_links(env):
     assert c.get("/exit", follow_redirects=False).headers["location"].endswith("startapp=exit")
 
 
+def test_custom_short_links(env):
+    """A club's Vice+ makes kbtu.sow.kz/<slug> for the club, one of its published events or its round, never outside the
+    app; names are first come, first served across club slugs and links, never the app's own; DMP's admin revokes any."""
+    c, cfg = env
+    ids = {n: login(c, i, n)["id"] for i, n in ((20, "pres"), (21, "vice"), (22, "head"), (23, "other"), (24, "boss"))}
+    H = {n: tma(i, n.title()) for i, n in ((20, "pres"), (21, "vice"), (22, "head"), (23, "other"), (24, "boss"))}
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Chess', 'CH', 'trophy_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, ids["pres"], "president"), (1, ids["vice"], "vice"), (1, ids["head"], "head"), (2, ids["other"], "president")])
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["boss"],))
+    start = int(time.time()) + 3600
+    ev = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Hack night", "place": "305", "startsAt": start, "endsAt": start + 7200,
+                                                                "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    add = lambda who, body, org=1: c.post(f"/api/orgs/{org}/links", headers=H[who], json=body)  # noqa: E731
+    assert add("head", {"slug": "join-it", "kind": "club"}).status_code == 403                  # Vice and above
+    assert add("other", {"slug": "join-it", "kind": "club"}).status_code == 403                 # someone else's club
+    assert add("vice", {"slug": "hack", "kind": "event", "eventId": ev["id"]}).status_code == 400  # a draft
+    c.post(f"/api/events/{ev['id']}/publish", headers=H["pres"])
+    other = c.post("/api/orgs/2/events", headers=H["other"], json={"title": "Blitz", "place": "305", "startsAt": start, "endsAt": start + 60,
+                                                                    "emoji": "trophy_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{other['id']}/publish", headers=H["other"])
+    assert add("vice", {"slug": "blitz", "kind": "event", "eventId": other["id"]}).status_code == 400  # another club's event
+    for bad in ("a", "-it", "it-", "i--t", "\u0430\u0431\u0432", "x" * 33, "it/../x", "https://evil.example"):
+        assert add("vice", {"slug": bad, "kind": "club"}).status_code == 400, bad
+    assert add("vice", {"slug": "evil", "kind": "url", "url": "https://evil.example"}).status_code == 400  # only into the app
+    for taken in ("admin", "api", "login", "assets", "static", "privacy", "chess"):              # the app's own, a club's slug
+        assert add("vice", {"slug": taken, "kind": "club"}).json()["message"] == "taken", taken
+    assert add("vice", {"slug": "Join-IT", "kind": "club"}).status_code == 200
+    assert add("vice", {"slug": "hack-night", "kind": "event", "eventId": ev["id"]}).status_code == 200
+    got = add("pres", {"slug": "it-casting", "kind": "round"}).json()
+    assert {(x["slug"], x["kind"], x["eventTitle"]) for x in got} == {("join-it", "club", None), ("hack-night", "event", "Hack night"), ("it-casting", "round", None)}
+    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # first come, first served
+    assert c.patch("/api/orgs/2", headers=H["other"], json={"slug": "hacknight"}).status_code == 200
+    assert add("vice", {"slug": "hacknight", "kind": "club"}).json()["message"] == "taken"      # nor a club's slug
+    assert logic.slug_for(con, "Join") == "join" and not logic._slug_free(con, "join-it", None)
+    assert c.get("/api/orgs/1/links", headers=H["head"]).status_code == 403
+    go = lambda p: c.get(p, follow_redirects=False).headers.get("location", "")  # noqa: E731
+    assert go("/join-it").endswith("?startapp=cl_1") and go("/HACK-NIGHT").endswith(f"?startapp=ev_{ev['id']}") and go("/it-casting").endswith("?startapp=rc_1")
+    assert go("/it").endswith("?startapp=cl_1")                                                   # the club's slug as before
+    # its own Vice takes one down; another club can't; the admin revokes any, and the log says which
+    assert c.delete("/api/links/join-it", headers=H["other"]).status_code == 403
+    assert c.delete("/api/links/join-it", headers=H["vice"]).status_code == 204
+    assert go("/join-it").endswith("?startapp=cl_1")                                             # its posters open the club now
+    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # never another club's (review, Oct 26)
+    assert "it-casting" in next(o for o in c.get("/api/admin/orgs", headers=H["boss"]).json() if o["id"] == 1)["shortLinks"]
+    assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 204
+    assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 404
+    assert [r[0] for r in con.execute("SELECT action FROM audit_log WHERE action LIKE 'link_%' ORDER BY id")] == ["link_create"] * 3 + ["link_delete", "link_revoke"]
+    # a deleted event takes its link along; a hidden club's links lead nowhere
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 1")
+    assert c.get("/hack-night", follow_redirects=False).status_code == 200
+    con.execute("DELETE FROM events WHERE id = ?", (ev["id"],))
+    assert not con.execute("SELECT 1 FROM short_links WHERE slug = 'hack-night'").fetchone()
+    # an event deleted in the app keeps its link's name for its club, which may take it again
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 1")
+    ev2 = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Draft", "place": "305", "startsAt": start, "endsAt": start + 60,
+                                                                 "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{ev2['id']}/publish", headers=H["pres"])
+    assert add("vice", {"slug": "draft-ev", "kind": "event", "eventId": ev2["id"]}).status_code == 200
+    con.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", (ev2["id"],))
+    assert c.delete(f"/api/events/{ev2['id']}", headers=H["pres"]).status_code in (200, 204)
+    assert add("other", {"slug": "draft-ev", "kind": "club"}, 2).json()["message"] == "taken"
+    assert add("vice", {"slug": "draft-ev", "kind": "club"}).status_code == 200
+    assert logic.kz_phone("\u0667\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668") is None    # Arabic-Indic digits
+    assert logic.kz_phone("+7 701 234 56 7") is None and logic.kz_phone("701 234 56 78") == "+77012345678"
+    assert logic.kz_phone("8 (701) 234-56-78") == logic.kz_phone("+7 701 234 5678") == "+77012345678"
+
+
 def test_door_guests(env):
     """A19: a walk-in without the app types their full name at the door (Member+, door open, a free event); the typist
     takes a wrong one back in 10 minutes; Head+ sees full names, a Member short ones. A student confirmed by Microsoft
@@ -3933,3 +4004,41 @@ def test_club_people(env):
     assert c.get("/api/orgs/1/people", headers=tma(73)).status_code == 403                             # a stranger now can't
     assert len(c.get("/api/orgs/1/people", headers=tma(72)).json()) == 3                               # its own people can
     assert len(c.get("/api/orgs/1", headers=tma(73)).json()["leaders"]) == 2                           # the leaders still show
+
+
+def test_phone_asked_at_signup(env):
+    """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
+    such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    start = int(time.time()) + 3600
+    eids = []
+    for title in ("Trip", "Hike"):
+        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
+                                                                  "color": "#3B6BFF", "needsPhone": True}).json()
+        assert ev["needsPhone"] is True
+        c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
+        eids.append(ev["id"])
+    go = lambda eid, **b: c.post(f"/api/events/{eid}/registration", headers=tma(10), json=b)  # noqa: E731
+    assert ali["student"]["phone"] is None
+    r = go(eids[0])                                                       # none kept: asked, no seat taken
+    assert r.status_code == 400 and r.json()["message"] == "phone" and c.get(f"/api/events/{eids[0]}", headers=tma(10)).json()["my"] is None
+    assert go(eids[0], phone="12345").json()["message"] == "phone"
+    assert go(eids[0], phone="8 (701) 234-56-78").json()["my"]["status"] == "going"
+    assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
+    assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
+    # a club whose event never asked doesn't get the kept phone in its guest list (review, Oct 26)
+    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{plain['id']}/publish", headers=tma(20))
+    go(plain["id"])
+    v = logic.Viewer(pres["id"], "user", True)
+    assert [r["phone"] for r in logic.attendees_export(con, v, plain["id"])[1]] == [None]
+    assert [r["phone"] for r in logic.attendees_export(con, v, eids[0])[1]] == ["+77012345678"]
+    assert c.patch("/api/me", headers=tma(10), json={"phone": "nope"}).status_code == 400
+    assert c.patch("/api/me", headers=tma(10), json={"phone": "+7 702 000 00 00"}).json()["student"]["phone"] == "+77020000000"
+    assert c.patch("/api/me", headers=tma(10), json={"phone": None}).json()["student"]["phone"] is None
+    c.delete(f"/api/events/{eids[1]}/registration", headers=tma(10))
+    assert go(eids[1]).json()["message"] == "phone"                      # deleted: asked again

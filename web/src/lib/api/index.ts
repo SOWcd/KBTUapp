@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -14,7 +14,7 @@ export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
-  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null }): Promise<Me>;
+  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null }): Promise<Me>;  // phone: null deletes it
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back
   /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
@@ -28,7 +28,7 @@ export interface Api {
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;
   pastEvents(): Promise<EventCard[]>;
   event(id: Id): Promise<EventFull>;
-  register(id: Id, invitedBy?: Id): Promise<EventCard>;
+  register(id: Id, invitedBy?: Id, phone?: string): Promise<EventCard>; // phone: asked at the sign-up, kept (needsPhone)
   addSeats(id: Id, add: number): Promise<EventFull>;
   changePlace(id: Id, place: string): Promise<EventFull>;   // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline(id: Id, note?: string): Promise<EventCard>;      // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
@@ -219,6 +219,9 @@ export interface Api {
   setRecruiting(org: Id, on: boolean): Promise<Org>;
   /** the club's profile (Vice+): name, letters, emoji, cover, about, links */
   updateOrg(org: Id, patch: OrgPatch): Promise<Org>;
+  shortLinks(org: Id): Promise<ShortLink[]>;                                   // Vice+
+  addShortLink(org: Id, link: { slug: string; kind: ShortLink['kind']; eventId?: Id }): Promise<ShortLink[]>; // conflict 'taken' / 'limit'
+  dropShortLink(slug: string): Promise<void>;                                  // the club's Vice+, or the admin revoking it
 
 }
 

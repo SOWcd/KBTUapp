@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtPhone } from './phone';
+import { fmtPhone, kzPhone } from './phone';
 
 describe('fmtPhone', () => {
   it('reads every shape a number arrives in', () => {
@@ -13,5 +13,13 @@ describe('fmtPhone', () => {
     expect(fmtPhone('+7 70662')).toBe('+7 706 62');
     expect(fmtPhone('+7 ')).toBe('');
     expect(fmtPhone('')).toBe('');
+  });
+});
+
+describe('kzPhone', () => {
+  it('gives the kept shape only for a whole number', () => {
+    expect(kzPhone('8 (701) 234-56-78')).toBe('+77012345678');
+    expect(kzPhone('+7 701 234 56 7')).toBeNull();
+    expect(kzPhone('')).toBeNull();
   });
 });

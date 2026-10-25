@@ -35,7 +35,7 @@ import sys
 from . import config, db
 from pathlib import Path
 
-from .logic import RANK, Viewer, create_org, delete_me, deletion_hash, find_user, now, one, rows, set_role
+from .logic import RANK, Viewer, _slug_free, create_org, delete_me, deletion_hash, find_user, now, one, rows, set_role
 
 
 def _user(con, who: str):
@@ -63,7 +63,7 @@ def main(args: list[str]) -> None:
         slug, name, short, emoji = args[1:5]
         if not re.fullmatch(r"[a-z0-9]{2,24}", slug) or not 1 <= len(short) <= 2 or not re.fullmatch(r"[a-z0-9_]{1,40}", emoji):
             sys.exit("slug: [a-z0-9]{2,24}; short: 1–2 letters; emoji: a key of the 3D set, e.g. laptop_3d")
-        if one(con, "SELECT 1 FROM orgs WHERE slug = ?", slug):
+        if not _slug_free(con, slug, None):  # nor a short link's, nor an old one's
             sys.exit(f"{slug}: taken")
         create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
