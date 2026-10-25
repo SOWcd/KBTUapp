@@ -38,6 +38,9 @@
   const owner = $derived(admin && !!session.me?.founder);
   // the rows' numbers, fetched with the panel
   let clubsN = $state<number | null>(null);
+  // the forum (F1), while it's tried out: here only when the server has it on
+  let forum = $state(false);
+  $effect(() => { api.forumMe().then(() => (forum = true)).catch(() => {}); });
   let schoolsN = $state(0);
   $effect(() => { if (admin) api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
   let chatsN = $state<number | null>(null);
@@ -122,6 +125,7 @@
     else if (r.target === 'user') sheets.person(r.id); // a profile: its nick, own photo and "about me"
     else if (r.target === 'photo') sheets.event(r.where.id); // the album's event (the thumb is in the row)
     else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]); // no post screen: the row has its words, the thread its talk
+    else if (r.target === 'ask') sheets.forum(r.id);
   }
 </script>
 
@@ -222,6 +226,7 @@
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
+    {#if forum}<button class="r" onclick={() => sheets.forum()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('fo.title')}<i>{t('fo.adminSub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
     {#if admin}
     <!-- the AI page (owner, Oct 21): what the translator does, what failed -->

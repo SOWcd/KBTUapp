@@ -64,7 +64,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; mod
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
@@ -517,3 +517,20 @@ export interface FriendLinkUse { result: 'friends' | 'already' | 'used' | 'self'
 /** One application to volunteer, as the organizer sees it: full name and course, like applications to a club. */
 export interface VolunteerApp { person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null;
   note: string; status: 'asked' | 'yes' | 'no'; at: Ts }
+
+// ---- the forum: F1 find people (server logic/forum.py; staff only behind a flag for now)
+/** public: in everyone's suggestions (a moderator's yes, or enough people have it) */
+export interface Skill { id: Id; name: string; people?: number; public?: boolean }
+export interface ForumMe { skills: Skill[]; open: boolean; pings: boolean }
+/** A person before any contact: short name, year, skills; never their Telegram */
+export interface ForumCard { person: PersonRef; name: string; course: number | null; skills: Skill[] }
+export interface ForumOffer extends ForumCard { id: Id; status: 'pending' | 'accepted' }
+export interface Ask {
+  id: Id; kind: 'project' | 'help'; title: string; body: string; skills: Skill[]; createdAt: Ts; expiresAt: Ts; mine: boolean;
+  author: ForumCard; matches: number;
+  status?: 'live' | 'held' | 'hidden' | 'closed'; why?: string | null; found?: number | null; offers?: ForumOffer[]; // mine
+  offered?: 'pending' | 'accepted' | 'declined' | null;                                                         // others'
+}
+/** an offer either way; accepted: the other's Telegram to write to */
+export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
+export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }
