@@ -30,7 +30,6 @@ img { max-width: 100%; }
 @media (min-width: 600px) { #app { left: 50%; right: auto; width: 480px; transform: translateX(-50%); } }
 
 /* ---- type scale ---- */
-.t-hero { font: 800 34px/1.04 var(--font-display); letter-spacing: -0.035em; }
 .t-h1 { font: 800 28px/1.08 var(--font-display); letter-spacing: -0.03em; }
 .t-h2 { font: 760 22px/1.14 var(--font-display); letter-spacing: -0.025em; }
 .t-h3 { font: 700 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
@@ -43,7 +42,6 @@ img { max-width: 100%; }
 .dim { color: var(--text-2); }
 .faint { color: var(--text-3); }
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- materials ----
@@ -214,7 +212,6 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 :where(button:not(:disabled), [role='button']) { transition: transform 450ms var(--ease-bounce), opacity var(--t-fast) var(--ease); }
 /* not a container while a button inside it is pressed: :active reaches every ancestor (the Feed's slide, PLAN 81) */
 :where(button:not(:disabled), [role='button']):active:not(:has(:where(button, [role='button']):active)) { transform: scale(0.965); opacity: 0.9; transition-duration: 80ms; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* the theme switch (theme.svelte.ts): the circle is drawn by script on the new snapshot, so both snapshots sit still
    and the old one simply gets covered; without a circle (Telegram changed the scheme) the default fade runs.

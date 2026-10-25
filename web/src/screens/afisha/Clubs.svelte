@@ -5,9 +5,8 @@
   // and List show everything anyway). All / mine up top, search (a catalog of 50–100 clubs is unusable by scrolling),
   // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
   // as a list. Categories wait for the server (orgs have no category yet).
-  import Search from '@lucide/svelte/icons/search';
+  import SearchField from '../../ui/SearchField.svelte';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import X from '@lucide/svelte/icons/x';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import { data, toggleSub, toggleJoin, loadChats, chatsFor } from '../../lib/state/data.svelte';
@@ -74,11 +73,7 @@
     <h1 class="t-h1">{t('clubs.title')}</h1>
   </header>
 
-  <label class="search">
-    <Search size={18} />
-    <input bind:value={q} placeholder={t('clubs.search')} type="search" enterkeyhint="search" autocomplete="off" />
-    {#if q}<button onclick={() => (q = '')} aria-label={t('common.close')}><X size={16} /></button>{/if}
-  </label>
+  <SearchField bind:value={q} placeholder={t('clubs.search')} raised />
 
   {#if q.trim()}
     <div class="sec"><h2>{t('clubs.found')}</h2><span class="num">{found.length}</span></div>
@@ -178,11 +173,6 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
   .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-  .search { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: var(--r-m); background: var(--surface); color: var(--text-3); box-shadow: var(--shadow-card); }
-  .search input { flex: 1; min-width: 0; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text); }
-  .search input::placeholder { color: var(--text-3); }
-  .search input::-webkit-search-cancel-button { display: none; }
-  .search button { display: flex; color: var(--text-3); padding: 4px; }
   .sec { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 12px; }
   .sec h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
   .sec > span, .sec .all { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
