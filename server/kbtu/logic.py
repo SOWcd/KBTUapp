@@ -4353,12 +4353,16 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
 
 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
-    """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came)."""
+    """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
+    that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left
+    linked would keep saying they came (review, PLAN A19 "left")."""
     _staff_event(con, v, eid, "door")
-    cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?
-        WHERE event_id = ? AND user_id = ? AND checkin_manual = 1 AND checked_in_at > ?""", (now(), eid, uid, now() - UNDO))
-    if not cur.rowcount:
-        raise ApiError("conflict")
+    with tx(con):
+        cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?
+            WHERE event_id = ? AND user_id = ? AND checkin_manual = 1 AND checked_in_at > ?""", (now(), eid, uid, now() - UNDO))
+        if not cur.rowcount:
+            raise ApiError("conflict")
+        con.execute("DELETE FROM door_guests WHERE event_id = ? AND user_id = ?", (eid, uid))
 
 
 # A19 (owner, Oct 23 night): someone at the door without the app, or not on the list, types their own first and last
