@@ -97,7 +97,13 @@
   async function pin() {
     if (!p) return;
     menu = false;
-    try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); p.pinned = !p.pinned; void loadNews(); }
+    try {
+      await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d');
+      p.pinned = !p.pinned;
+      // one pin per club: the server unpinned the one before, and the open stories hold their own copies of the posts
+      if (p.pinned) for (const x of groups.flatMap((gr) => gr.items)) if (x.post && x.post.org.id === p.org.id && x.post.id !== p.id) x.post.pinned = false;
+      void loadNews();
+    }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function feature(days: number) {

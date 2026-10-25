@@ -49,6 +49,12 @@
       awards: { achievements: [], badges: [] }, friendship, friendsSince: friendship === 'friends' ? row.at : null, going: [] };
   });
   const me = $derived(session.me?.id === id);
+  // what they picked for their showcase leads, in their order; the rest after it as the server lists them
+  function showcaseFirst<T>(list: T[], key: (x: T) => string): T[] {
+    const pick = shown?.shelf ?? [];
+    const at = (x: T) => { const i = pick.indexOf(key(x)); return i < 0 ? pick.length : i; };
+    return [...list].sort((a, b) => at(a) - at(b));
+  }
   const shown = $derived(p ?? (late || me ? known : null));
 
   // friendship (§4.7): ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
@@ -96,7 +102,9 @@
 
 <Sheet {overlay} title={shown?.name ?? ''}>
   {#if shown}
-    <Hero p={shown} shelf={me || shown.friendship !== 'friends'} />
+    <!-- no award shelf on the card here: the sheet lists every award below it, the showcase first (PLAN 89: "Awards"
+         showed twice) -->
+    <Hero p={shown} shelf={false} />
 
     {#if !me && session.me?.student}
       <div class="act">
@@ -130,18 +138,19 @@
     {:else}
     <!-- everything they have earned, right under the card (owner, Oct 7: "not secret; the showcase is what they pick to
          show"): achievements with their level, then badges; what they haven't earned yet stays on their own Awards page -->
-    {@const earned = p.awards.achievements.filter((a) => a.level > 0)}
+    {@const earned = showcaseFirst(p.awards.achievements.filter((a) => a.level > 0), (a) => a.code)}
+    {@const badges = showcaseFirst(p.awards.badges, (b) => 'b' + b.eventId)}
     {#if p.going.length}
       <h3 class="sec">{t('person.goes')}</h3>
       <div class="going">{#each p.going as e (e.id)}<EventRow {e} />{/each}</div>
     {/if}
-    <h3 class="sec">{t('person.awards')}{earned.length + p.awards.badges.length ? ' · ' + (earned.length + p.awards.badges.length) : ''}</h3>
-    {#if earned.length + p.awards.badges.length}
+    <h3 class="sec">{t('person.awards')}{earned.length + badges.length ? ' · ' + (earned.length + badges.length) : ''}</h3>
+    {#if earned.length + badges.length}
       <div class="grid">
         {#each earned as a (a.code)}
           <button class="cell" onclick={() => sheets.award({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) }, me)}><Medal {a} size={52} /><i>{achName(a)}{#if tierName(a)}<br />{tierName(a)}{/if}</i></button>
         {/each}
-        {#each p.awards.badges as b (b.eventId)}
+        {#each badges as b (b.eventId)}
           <button class="cell" onclick={() => sheets.award({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) })}><Pin emoji={b.emoji} color={b.color} size={52} /><i>{b.title}</i></button>
         {/each}
       </div>
