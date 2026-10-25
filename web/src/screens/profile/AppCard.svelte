@@ -9,6 +9,7 @@
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { openLink } from '../../lib/tg';
+  import { glass } from '../../ui/glass';
   import { writeOwner, OWNER } from '../../lib/feedback';
 
   // the app's own Telegram (owner, Oct 5): news in the channel, talk in the topics group (BUGS / IDEAS / QUESTIONS)
@@ -20,11 +21,11 @@
 <div class="appc surface">
   <div class="ap-h"><span class="mk"><KbtuMark size={20} /></span><b>KBTU App</b></div>
   <div class="ap-t">
-    <button class="apt" onclick={() => openLink(TG_NEWS)}><span class="ic" style="--c:#2AABEE"><Megaphone size={17} /></span>
+    <button class="apt glass" use:glass={{ bloom: true }} onclick={() => openLink(TG_NEWS)}><span class="ic" style="--c:#2AABEE"><Megaphone size={17} /></span>
       <b>{t('app.channel')}</b><small>{t('app.channelSub')}</small><ArrowUpRight class="go" size={14} /></button>
-    <button class="apt" onclick={() => openLink(TG_TALK)}><span class="ic" style="--c:#7C5CFF"><MessagesSquare size={17} /></span>
+    <button class="apt glass" use:glass={{ bloom: true }} onclick={() => openLink(TG_TALK)}><span class="ic" style="--c:#7C5CFF"><MessagesSquare size={17} /></span>
       <b>{t('app.group')}</b><small>{t('app.groupSub')}</small><ArrowUpRight class="go" size={14} /></button>
-    <button class="apt" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic gh"><GitHubMark size={17} /></span>
+    <button class="apt glass" use:glass={{ bloom: true }} onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic gh"><GitHubMark size={17} /></span>
       <b>GitHub</b><small>{t('app.codeSub')}</small><ArrowUpRight class="go" size={14} /></button>
   </div>
   <!-- a word straight to the creator: its own long pill, his @username on it (owner, Oct 21) -->
@@ -37,11 +38,15 @@
   .ap-h b { font: 700 var(--fs-card)/1.2 var(--font-text); }
   .mk { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); }
   .ap-t { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .apt { position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 12px 10px 11px 12px; border-radius: 16px; text-align: left;
-    background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); }
+  /* liquid glass (owner, Oct 25: "something's missing"): the app's .glass, its rim light follows the phone's tilt, a
+     bloom where the finger lands; the icon floats a few px against the tilt (parallax) */
+  .apt { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; padding: 12px 10px 11px 12px; border-radius: 18px; text-align: left; color: var(--text-3); }
   .apt:active { transform: scale(0.97); }
-  .ic { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-bottom: 10px; border-radius: 10px; color: #fff; background: var(--c); }
-  .ic.gh { background: #24292F; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+  .ic { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-bottom: 10px; border-radius: 11px; color: #fff;
+    background: linear-gradient(160deg, color-mix(in srgb, var(--c) 62%, #fff), var(--c) 52%, color-mix(in srgb, var(--c) 78%, #000));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 4px rgba(0, 0, 0, 0.18), 0 8px 16px -8px var(--c);
+    translate: calc(var(--gx, 0) * -3px) calc(var(--gy, 0) * -3px); transition: translate 120ms linear; }
+  .ic.gh { --c: #3A4048; }
   .apt b { font: 650 var(--fs-body)/1.15 var(--font-text); color: var(--text); }
   .apt small { margin-top: 2px; font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
   .apt :global(.go) { position: absolute; top: 12px; right: 10px; }
