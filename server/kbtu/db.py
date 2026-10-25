@@ -524,6 +524,8 @@ MIGRATIONS: list[tuple[int, str]] = [
         CHECK ((kind = 'event') = (event_id IS NOT NULL))
     ) STRICT;
     CREATE INDEX short_links_by_org ON short_links(org_id);"""),
+    # PLAN 71: an event asks for the phone at sign-up (no up-front "My data" step); a phone already kept stays
+    (69, "ALTER TABLE events ADD COLUMN needs_phone INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 

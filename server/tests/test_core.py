@@ -3989,3 +3989,34 @@ def test_club_people(env):
     assert c.get("/api/orgs/1/people", headers=tma(73)).status_code == 403                             # a stranger now can't
     assert len(c.get("/api/orgs/1/people", headers=tma(72)).json()) == 3                               # its own people can
     assert len(c.get("/api/orgs/1", headers=tma(73)).json()["leaders"]) == 2                           # the leaders still show
+
+
+def test_phone_asked_at_signup(env):
+    """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
+    such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    start = int(time.time()) + 3600
+    eids = []
+    for title in ("Trip", "Hike"):
+        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
+                                                                  "color": "#3B6BFF", "needsPhone": True}).json()
+        assert ev["needsPhone"] is True
+        c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
+        eids.append(ev["id"])
+    go = lambda eid, **b: c.post(f"/api/events/{eid}/registration", headers=tma(10), json=b)  # noqa: E731
+    assert ali["student"]["phone"] is None
+    r = go(eids[0])                                                       # none kept: asked, no seat taken
+    assert r.status_code == 400 and r.json()["message"] == "phone" and c.get(f"/api/events/{eids[0]}", headers=tma(10)).json()["my"] is None
+    assert go(eids[0], phone="12345").json()["message"] == "phone"
+    assert go(eids[0], phone="8 (701) 234-56-78").json()["my"]["status"] == "going"
+    assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
+    assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
+    assert c.patch("/api/me", headers=tma(10), json={"phone": "nope"}).status_code == 400
+    assert c.patch("/api/me", headers=tma(10), json={"phone": "+7 702 000 00 00"}).json()["student"]["phone"] == "+77020000000"
+    assert c.patch("/api/me", headers=tma(10), json={"phone": None}).json()["student"]["phone"] is None
+    c.delete(f"/api/events/{eids[1]}/registration", headers=tma(10))
+    assert go(eids[1]).json()["message"] == "phone"                      # deleted: asked again

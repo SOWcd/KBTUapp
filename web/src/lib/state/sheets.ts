@@ -115,6 +115,7 @@ export const sheets = {
   /** a computer: the app is made for phones (once, until "continue") */
   pc: (_ok: () => void) => {},
   ask: (_q: Ask): Promise<boolean> => Promise.resolve(false),
-  /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled */
-  askText: (_q: Ask & { placeholder: string; max: number }): Promise<string | null> => Promise.resolve(null),
+  /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,
+   *  handed over as +7XXXXXXXXXX */
+  askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean }): Promise<string | null> => Promise.resolve(null),
 };

@@ -363,7 +363,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, body: dict = Body(default={}), con=Depends(conn), v: Viewer = Depends(viewer)):
         invited = body.get("invitedBy")
-        return logic.register(con, v, eid, invited if isinstance(invited, int) else None)
+        return logic.register(con, v, eid, invited if isinstance(invited, int) else None, body.get("phone"))
 
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
