@@ -113,7 +113,7 @@
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => lazy(() => import('./screens/sheets/ConsentSheet.svelte'), {});
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
-  sheets.clubEdit = (org) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org });
+  sheets.clubEdit = (org, at) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org, at });
   sheets.people = (org, title) => lazy(() => import('./screens/sheets/PeopleSheet.svelte'), { org, title });
   sheets.composer = (org, post) => lazy(() => import('./screens/club/PostComposer.svelte'), { org, post });
   sheets.createClub = () => lazy(() => import('./screens/sheets/CreateClubSheet.svelte'), {});
@@ -272,6 +272,8 @@
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
+    const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"
+    if (ce) { asStudent(() => sheets.clubEdit(Number(ce[1]), 'chats')); return; }
     const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders

@@ -636,22 +636,35 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
         return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists") if exc.code == "conflict" else "limit"), ""
 
 
-async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
-    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send."""
+def _picked_url(msg: dict) -> str | None:
+    """The chat a message names: picked in the picker (its @name), or sent as @name / a t.me link / an invite link."""
+    shared = msg.get("chat_shared") or {}
+    return f"https://t.me/{str(shared['username']).lower()}" if shared.get("username") else logic.chat_link(str(msg.get("text") or ""))
+
+
+async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict, ask: bool = True) -> dict | None:
+    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send.
+    A club's President or Vice is asked first whether it's their club's (owner, Oct 25: the catalog and Studio's chats
+    were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_bind)."""
     chat = msg.get("chat") or {}
-    if chat.get("type") != "private" or now() - int(msg.get("date") or 0) > FRESH:
+    if chat.get("type") != "private" or ask and now() - int(msg.get("date") or 0) > FRESH:
         return None
     lang, shared = _lang(con, msg), msg.get("chat_shared") or {}
     done = lambda kind, **f: {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML",  # noqa: E731
                                "reply_markup": {"remove_keyboard": True}}
-    u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
+    u = one(con, "SELECT u.id, u.role FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
     if not u:
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     if shared and not shared.get("username"):
         return done("chat_invite")  # a closed chat from the picker: its invite link, please
-    url = f"https://t.me/{str(shared['username']).lower()}" if shared else logic.chat_link(str(msg.get("text") or ""))
+    url = _picked_url(msg)
     if not url:
         return done("chat_private")
+    if ask and (mine := logic.chat_orgs(con, logic.Viewer(u["id"], u["role"], True))):
+        # the buttons answer the pick's own message, so the tap finds the chat in reply_to_message (as receipts do)
+        text, no = texts.bot_message(lang, "chat_whose_one" if len(mine) == 1 else "chat_whose", club=mine[0]["name"])
+        keys = [[{"text": f"✅ {o['name'][:56]}", "callback_data": f"oc:{o['id']}"}] for o in mine[:8]] + [[{"text": no, "callback_data": "oc:0"}]]
+        return {**_reply(chat["id"], text, keys=keys), "reply_parameters": {"message_id": msg["message_id"]}}
     out, title = await suggest(cfg, http, con, u["id"], url, shared.get("chat_id") if shared else None, shared.get("request_id") == 1 if shared else None)
     return done(f"chat_{'later' if out == 'slow' else out}", title=title)
 
@@ -716,6 +729,53 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
         return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))
     return say("receipt_ok", f"tk_{eid}", title=title)
+
+
+async def _bind(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
+    """A tap on "is this your club's channel?": the question turns into the answer (_bound)."""
+    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
+    msg, data = cq.get("message") or {}, str(cq.get("data") or "")
+    orig = msg.get("reply_to_message") or {}
+    if not re.fullmatch(r"oc:\d+", data) or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
+        return
+    if body := await _bound(cfg, http, con, orig, int(data[3:])):
+        await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"]})
+
+
+async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, oid: int) -> dict | None:
+    """The chat of the pick `orig` onto the club oid's page (logic.add_org_chat: the first public channel is its main
+    one), then a link into Studio for "show its posts in the feed"; oid 0: to the catalog as any suggestion."""
+    if not oid:
+        body = await _suggest(cfg, http, con, orig, ask=False)
+        return body and {**body, "reply_markup": {"inline_keyboard": []}}
+    chat = orig.get("chat") or {}
+    lang, url = _lang(con, orig), _picked_url(orig)
+    u = one(con, "SELECT u.id, u.role FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat.get("id"))
+    if not u or not url:
+        return None
+    def say(kind: str, keys: list | None = None, **f) -> dict:
+        return {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML", "reply_markup": {"inline_keyboard": keys or []}}
+    v, root = logic.Viewer(u["id"], u["role"], True), Path(cfg.db_path).resolve().parent / "media"
+    try:
+        o = logic.may_chats(con, v, oid)
+    except logic.ApiError:  # not the club's Vice+ (any more)
+        return say("chat_bind_no")
+    peek = await media.chat_peek(http, url)
+    if peek.get("image"):
+        try:
+            peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
+        except (media.BadImage, OSError):
+            pass
+    try:
+        _, gone = logic.add_org_chat(con, v, oid, url, peek)
+    except logic.ApiError as exc:
+        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
+            _unlink_photo(root, peek["photo"])
+        return say({"taken": "chat_bind_taken", "catalog": "chat_bind_catalog", "limit": "chat_bind_limit", "notchat": "chat_notchat"}.get(exc.message, "chat_later"), club=o["name"])
+    for p in gone:
+        _unlink_photo(root, p)
+    button = texts.bot_message(lang, "chat_bound", club=o["name"])[1]
+    return say("chat_bound", [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=ce_{oid}"}]], club=o["name"])
 
 
 async def _picked(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
@@ -825,7 +885,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 continue  # banned (owner, Oct 22): the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
-                    await _picked(cfg, http, con, upd["callback_query"])
+                    cq = upd["callback_query"]
+                    await (_bind if str(cq.get("data") or "").startswith("oc:") else _picked)(cfg, http, con, cq)
                     continue
                 if "chat_join_request" in upd:
                     await _join(cfg, http, con, upd["chat_join_request"])

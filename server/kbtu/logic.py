@@ -2321,6 +2321,12 @@ def may_chats(con, v: Viewer, oid: int) -> sqlite3.Row:
     return o
 
 
+def chat_orgs(con, v: Viewer) -> list[sqlite3.Row]:
+    """The orgs whose chats I link (may_chats: Vice+), for the bot's "is this your club's channel?" (owner, Oct 25)."""
+    return [o for o in rows(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ?
+        AND o.status != 'archived' ORDER BY o.name""", v.id) if can(con, v, o["id"], "profile")]
+
+
 def add_org_chat(con, v: Viewer, oid: int, url: str, peek: dict) -> tuple[list[dict], list[str]]:
     """A chat for the org by its link (chat_link: @name, a t.me link or an invite link), looked up on its t.me page
     (peek). A chat in the catalog becomes the org's (another org's stays theirs); a new one waits out of the catalog.

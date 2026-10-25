@@ -81,7 +81,7 @@ export const sheets = {
   /** DMP's registry: a club's roster; the whole registry in a sheet (for the admin) */
   roster: (_org: OrgRef, _onofficial?: (on: boolean) => void) => {},
   /** the club's profile (Vice+): name, letters, emoji, cover, about, links */
-  clubEdit: (_org: Id) => {},
+  clubEdit: (_org: Id, _at?: 'chats') => {},
   /** everyone in a club or school (the club sheet's "All members") */
   people: (_org: Id, _title: string) => {},
   /** starting a club (§4.6): my application or the form */

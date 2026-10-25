@@ -938,6 +938,7 @@ const kk: Dict = {
   'chats.linkLabel': "@username не сілтеме",
   'chats.send': "Ұсыну",
   'chats.pickInTg': "Telegram-дағы өз чаттарымнан таңдау",
+  'chats.ownClub': "Клубыңның арнасы ма? Оны «{club}» клубына байла →",
   'chats.sentSay': "«{title}» тексеруге жіберілді — рақмет!",
   'chats.why.waiting': "Бұл чат тексеруді күтіп тұр.",
   'chats.why.exists': "Бұл чат каталогта бар.",

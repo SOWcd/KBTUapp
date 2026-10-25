@@ -21,7 +21,12 @@
   import ShortLinks from './ShortLinks.svelte';
   import OrgChats from './OrgChats.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  let { overlay, id, at }: { overlay: Overlay; id: Id; at?: 'chats' } = $props();
+  // at 'chats' (the bot's "open in Studio" after linking a chat, the catalog sheet's "your club's channel?"): the
+  // chats list in view once the form is there
+  let chatsAt = $state<HTMLElement>();
+  let shown = false;
+  $effect(() => { if (at === 'chats' && o && chatsAt && !shown) { shown = true; setTimeout(() => chatsAt?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 320); } });
 
   let o = $state<Org | null>(null);
   // the logo (owner, Oct 5): one of my uploads, or null — then the emoji on its cover shows again
@@ -118,7 +123,7 @@
     <label class="switch hide"><span><b>{t('ce.hideMembers')}</b><i class="t-foot">{t('ce.hideMembersNote')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.hidden} /></label>
 
-    <OrgChats org={id} />
+    <div bind:this={chatsAt}><OrgChats org={id} /></div>
     <ShortLinks org={id} />
   {/if}
 

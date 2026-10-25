@@ -4614,3 +4614,59 @@ def test_student_government_mark(env):
     assert [(o["id"], o.get("gov")) for o in found] == [(gov, True), (big, None)]   # first though followed less
     g = c.get(f"/api/orgs/{gov}", headers=h).json()
     assert g["gov"] is True and not g.get("canOversee") and g["myRole"] is None
+
+
+def test_bot_binds_club_channel(env, monkeypatch):
+    """A chat picked in the bot by a club's President or Vice (owner, Oct 25): "is this your club's?"; yes puts it on
+    the club's page (the first public channel its main one) with a link into Studio, no sends it to the catalog. A plain
+    member is never asked; someone else's tap does nothing."""
+    from kbtu import media
+    c, cfg = env
+    vice, other, ali = login(c, 40, "vice"), login(c, 41, "other"), login(c, 42, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Chess', 'CH', 'laptop_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, vice["id"], "vice"), (1, ali["id"], "member"), (2, other["id"], "vice")])
+    pages = {"https://t.me/mic_news": {"title": "Open Mic News", "members": 900, "channel": True}}
+    async def peek(http, url):
+        return {"ok": True, "image": None, **pages.get(url, {"title": "Some Chat", "members": 10, "channel": False})}
+    monkeypatch.setattr(media, "chat_peek", peek)
+    sent = []
+    async def tg(cfg, http, method, body, files=None):
+        sent.append((method, body))
+    monkeypatch.setattr(bot, "_tg", tg)
+    class Http:
+        async def post(self, *a, **k):
+            return None
+    def pick(tg_id, n, **m):  # a message to the bot, each a while after the last (one t.me look per 10 s)
+        con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+        return {"message_id": n, "from": {"id": tg_id}, "chat": {"id": tg_id, "type": "private"}, "date": logic.now(), **m}
+    run = lambda coro: asyncio.run(coro)  # noqa: E731
+
+    news = pick(40, 7, chat_shared={"request_id": 1, "chat_id": -100777, "username": "Mic_News", "title": "Open Mic News"})
+    q = run(bot._suggest(cfg, None, con, news))
+    assert q["text"] == texts.bot_message("ru", "chat_whose_one", club="Open Mic")[0] and q["reply_parameters"] == {"message_id": 7}
+    assert [[b["callback_data"] for b in row] for row in q["reply_markup"]["inline_keyboard"]] == [["oc:1"], ["oc:0"]]
+    a = run(bot._bound(cfg, None, con, news, 1))
+    assert a["text"] == texts.bot_message("ru", "chat_bound", club="Open Mic")[0]
+    assert a["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp=ce_1")
+    assert [tuple(r) for r in con.execute("SELECT url, org_id, main, status FROM chats")] == [("https://t.me/mic_news", 1, 1, "org")]
+    assert run(bot._bound(cfg, None, con, news, 2))["text"] == texts.bot_message("ru", "chat_bind_no")[0]       # not Chess's Vice
+    taken = pick(41, 8, text="@mic_news")
+    assert run(bot._bound(cfg, None, con, taken, 2))["text"] == texts.bot_message("ru", "chat_bind_taken")[0]    # Open Mic's already
+
+    talk = pick(40, 9, text="@mic_talk")
+    assert run(bot._suggest(cfg, None, con, talk))["reply_markup"]["inline_keyboard"][-1][0]["callback_data"] == "oc:0"
+    no = run(bot._bound(cfg, None, con, talk, 0))                                     # "No, just the catalog"
+    assert no["text"] == texts.bot_message("ru", "chat_sent", title="Some Chat")[0] and no["reply_markup"] == {"inline_keyboard": []}
+    assert tuple(con.execute("SELECT org_id, status FROM chats WHERE url = 'https://t.me/mic_talk'").fetchone()) == (None, "pending")
+    assert run(bot._suggest(cfg, None, con, pick(42, 10, text="@ali_chat")))["text"].startswith("✅")             # a member: not asked
+
+    # the tap: the question turns into the answer; someone else's tap on it does nothing
+    tap = lambda who, data: {"id": "q", "from": {"id": who}, "data": data, "message": {"message_id": 11, "reply_to_message": pick(40, 12, text="@mic_more")}}  # noqa: E731
+    run(bot._bind(cfg, Http(), con, tap(41, "oc:1")))
+    assert sent == []
+    run(bot._bind(cfg, Http(), con, tap(40, "oc:1")))
+    assert [(m, b["message_id"], b["text"]) for m, b in sent] == [("editMessageText", 11, texts.bot_message("ru", "chat_bound", club="Open Mic")[0])]
+    assert tuple(con.execute("SELECT org_id FROM chats WHERE url = 'https://t.me/mic_more'").fetchone()) == (1,)

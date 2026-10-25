@@ -938,6 +938,7 @@ const en: Dict = {
   'chats.linkLabel': "@username or link",
   'chats.send': "Suggest",
   'chats.pickInTg': "Pick from my chats in Telegram",
+  'chats.ownClub': "Your club's channel? Link it to {club} →",
   'chats.sentSay': "«{title}» sent for review — thanks!",
   'chats.why.waiting': "This chat is already waiting for review.",
   'chats.why.exists': "This chat is already in the catalog.",

@@ -957,6 +957,7 @@ const ru = {
   'chats.linkLabel': "@username или ссылка",
   'chats.send': "Предложить",
   'chats.pickInTg': "Выбрать из своих чатов в Telegram",
+  'chats.ownClub': "Канал твоего клуба? Привяжи его к «{club}» →",
   'chats.sentSay': "«{title}» отправлен на проверку — спасибо!",
   'chats.why.waiting': "Этот чат уже ждёт проверки.",
   'chats.why.exists': "Этот чат уже в каталоге.",

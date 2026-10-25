@@ -8,12 +8,17 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { pickInTelegram } from '../../lib/chats';
+  import { data } from '../../lib/state/data.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   let link = $state(''), busy = $state(false), note = $state('');
+  // a club's President or Vice (owner, Oct 25): their club's own channel goes on its page, from Studio's chats
+  const mine = $derived(data.orgs.filter((o) => o.myRights?.includes('profile')));
+  function toStudio(id: number) { close(overlay.id); sheets.clubEdit(id, 'chats'); }
 
   async function send() {
     if (!link.trim() || busy) return;
@@ -35,11 +40,16 @@
   {#if note}<p class="t-foot note" role="alert">{note}</p>{/if}
   <div class="go"><Button kind="primary" size="l" full loading={busy} disabled={!link.trim()} onclick={send}>{t('chats.send')}</Button></div>
   <button class="tg" onclick={pickInTelegram}><TelegramMark size={16} />{t('chats.pickInTg')}</button>
+  {#each mine.slice(0, 3) as o (o.id)}
+    <button class="own surface" onclick={() => toStudio(o.id)}>{t('chats.ownClub', { club: o.name })}</button>
+  {/each}
 </Sheet>
 
 <style>
   .lead { color: var(--text-2); margin: 4px 0 14px; }
   .note { margin: 8px 4px 0; color: var(--danger-text); }
   .go { margin-top: 14px; }
+  .own { display: block; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-m); text-align: left; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--accent-text); }
+  .own:active { transform: scale(0.98); }
   .tg { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 12px; padding: 8px; font: 620 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
 </style>
