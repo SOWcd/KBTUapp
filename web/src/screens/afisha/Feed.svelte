@@ -145,7 +145,9 @@
 <style>
   .feed { position: absolute; inset: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
   .feed::-webkit-scrollbar { display: none; }
-  .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: #fff; background: var(--tint); }
+  /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
+     whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
+  .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: #fff; background: var(--tint); transform: none; opacity: 1; }
   .bg { position: absolute; inset: 0; }
   .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); }
   .bg video, .bg .still { width: 100%; height: 100%; object-fit: cover; transform: none; }
