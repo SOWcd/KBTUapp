@@ -237,10 +237,10 @@ def cal_feed(con, token: str, link) -> str:
 
 # ---------------------------------------------------------------- events
 
-def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None) -> bool:
-    """Drafts and hidden events only for the organizing team (and the admin); team-only events for members. `roles`:
-    _roles(), read once when checking a list."""
-    if one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'hidden'", e["org_id"]):
+def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None, hidden: set[int] | None = None) -> bool:
+    """Drafts and hidden events only for the organizing team (and the admin); team-only events for members. `roles`
+    (_roles()) and `hidden` (_hidden_orgs()): read once when checking a list."""
+    if (e["org_id"] in hidden) if hidden is not None else one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'hidden'", e["org_id"]):
         return False  # a club the admin hid: its events are gone for everyone (owner, Oct 16)
     roles = _roles(con, v) if roles is None else roles
     team = at_least(roles.get(e["org_id"]), "member")
@@ -251,6 +251,10 @@ def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None
     if e["visibility"] == "leaders":
         return team or at_least(max(roles.values(), key=RANK.__getitem__, default=None), e["leaders_from"] or "president")
     return True
+
+
+def _hidden_orgs(con) -> set[int]:
+    return {r[0] for r in rows(con, "SELECT id FROM orgs WHERE status = 'hidden'")}
 
 
 def sweep_holds(con) -> None:
@@ -277,15 +281,15 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
         sql += " AND starts_at < ?"; args.append(to)
     if hide_first:
         sql += " AND first_year = 0"
-    roles = _roles(con, v)
-    return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles)])
+    roles, hidden = _roles(con, v), _hidden_orgs(con)
+    return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)])
 
 
 def past_events(con, v: Viewer) -> list[dict]:
     found = rows(con, """SELECT * FROM events WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?
         ORDER BY starts_at DESC LIMIT 50""", NO_END, core.now())
-    roles = _roles(con, v)
-    return cards(con, v, [e for e in found if _visible(con, v, e, roles)])
+    roles, hidden = _roles(con, v), _hidden_orgs(con)
+    return cards(con, v, [e for e in found if _visible(con, v, e, roles, hidden)])
 
 
 def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
