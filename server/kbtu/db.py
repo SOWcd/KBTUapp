@@ -608,6 +608,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     ALTER TABLE users ADD COLUMN city TEXT;
     ALTER TABLE users ADD COLUMN city_hidden INTEGER NOT NULL DEFAULT 0;"""),
+    # what the report queue took down and an undo needs (owner, Oct 25): an album photo's row, a profile's nick, photo
+    # and "about me", kept 30 days with the file (it counts as shown, logic._drop_unused), then gone from disk too
+    (75, """CREATE TABLE takedowns (
+        id        INTEGER PRIMARY KEY,
+        target    TEXT NOT NULL CHECK (target IN ('photo', 'user')),
+        target_id INTEGER NOT NULL,
+        user_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,   -- whose it was: the photo's uploader, the person
+        data      TEXT NOT NULL,                                     -- JSON: the album row / nick, bio, avatar
+        file_id   INTEGER REFERENCES files(id),                      -- the picture kept for the undo
+        at        INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX takedowns_by_target ON takedowns(target, target_id);"""),
 ]
 
 

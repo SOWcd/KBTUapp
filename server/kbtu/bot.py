@@ -296,6 +296,7 @@ def purge(cfg: Config, con) -> None:
     """The accounts whose week ran out (logic.delete_due), and their files on disk (app.py keeps them in the same places)."""
     home = Path(cfg.db_path).resolve().parent
     receipts, photos = logic.delete_due(con)
+    photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
     for root, rels in ((home / "receipts", receipts), (home / "media", photos)):
         for rel in rels:
             for ext in (".webp", ".t.webp", ".jpg"):

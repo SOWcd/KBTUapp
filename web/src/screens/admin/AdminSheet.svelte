@@ -234,7 +234,7 @@
   </div>
   {#if down?.length}
     {#if downOpen}
-      <div class="chl surface" transition:fold>{#each down as x (x.target + x.id)}<div class="chr"><span class="ellipsis">{x.text}<i>{t(`adm.rep.${x.target}`)} · {ago(x.at)}</i></span><button class="undo" onclick={() => undo(x)}>{t('adm.restore')}</button></div>{/each}</div>
+      <div class="chl surface" transition:fold>{#each down as x (x.target + x.id)}<div class="chr">{#if x.target === 'photo'}<img class="th" src={x.text} alt="" />{/if}<span class="ellipsis">{x.target === 'photo' ? '' : x.text}<i>{t(`adm.rep.${x.target}`)} · {ago(x.at)}</i></span><button class="undo" onclick={() => undo(x)}>{t('adm.restore')}</button></div>{/each}</div>
     {/if}
   {/if}
 </Sheet>
@@ -320,6 +320,7 @@
   .chr { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 14px; }
   .chr + .chr { border-top: 1px solid var(--line); }
   .chr span { flex: 1; min-width: 0; font: 600 14.5px/1.3 var(--font-text); }
+  .th { flex: none; width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
   .chr i { margin-left: 6px; font-style: normal; font-weight: 500; color: var(--text-3); }
   .chr button.undo { flex: none; height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
 </style>

@@ -1022,7 +1022,7 @@ def _drop_unused(con, fid: int | None) -> list[str]:
     if fid and con.execute("""SELECT 1 FROM users WHERE avatar_file_id = :f UNION ALL SELECT 1 FROM orgs WHERE logo_file_id = :f
             UNION ALL SELECT 1 FROM events WHERE cover_file_id = :f UNION ALL SELECT 1 FROM receipts WHERE file_id = :f
             UNION ALL SELECT 1 FROM event_photos WHERE file_id = :f UNION ALL SELECT 1 FROM posts WHERE photo_file_id = :f
-            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f""", {"f": fid}).fetchone():
+            UNION ALL SELECT 1 FROM event_slides WHERE file_id = :f UNION ALL SELECT 1 FROM takedowns WHERE file_id = :f""", {"f": fid}).fetchone():
         return []
     return _drop_photo(con, fid)
 
@@ -1199,7 +1199,7 @@ _DEL_GONE = {
     ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
     ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
-    ("org_history", "user_id"),  # last: org_members' trigger writes it
+    ("takedowns", "user_id"), ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
 
@@ -1269,7 +1269,9 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
-        photos = [p for f in mine + avatars for p in _drop_unused(con, f)]
+        # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days (owner, Oct 25)
+        kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
+        photos = [p for f in mine + avatars + kept for p in _drop_unused(con, f)]
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))
@@ -2797,8 +2799,9 @@ def report_queue(con, v: Viewer) -> list[dict]:
 
 
 def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[str]:
-    """Take the thing down (a comment deleted, a post or an event hidden, a profile's own words and photo gone) or leave
-    it; either way its reports close. Returns a removed photo's files to delete from disk."""
+    """Take the thing down (a comment deleted, a post or an event hidden, an album photo out, a profile's own words and
+    photo gone) or leave it; either way its reports close. A photo and a profile's words are kept 30 days for an undo
+    (takedowns: restore, purge_takedowns). Returns files to delete from disk (none now; kept for the route's shape)."""
     _mod(v)
     if _about(con, target, tid) == v.id:
         raise ApiError("forbidden")
@@ -2808,14 +2811,16 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
             con.execute("UPDATE comments SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL", (now(), v.id, tid))
         elif target in ("post", "event"):
             con.execute(f"UPDATE {target}s SET hidden_at = ? WHERE id = ? AND hidden_at IS NULL", (now(), tid))
-        elif target == "photo":  # out of the album (its file stays for other rows naming the same picture; app.py removes it if none)
-            con.execute("DELETE FROM event_photos WHERE file_id = ?", (tid,))
-            photos = _drop_unused(con, tid)
-        elif target == "user":  # the nick, the own photo and "about me" go; the Telegram photo is back.
-            # ponytail: not in "taken down" (no undo): nothing to restore, they can set them again
-            photo = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", tid)
+        elif target == "photo":  # out of the album; the row and the file kept 30 days for an undo (purge_takedowns)
+            for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
+                con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
+                            (tid, p["added_by"], json.dumps(dict(p)), tid, now()))
+        elif target == "user":  # the nick, the own photo and "about me" go, the Telegram photo is back; kept 30 days for an undo
+            u = one(con, "SELECT nick, bio, avatar_tg, avatar_file_id FROM users WHERE id = ?", tid)
+            if u and (u["nick"] or u["bio"] or u["avatar_file_id"]):
+                con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('user', ?, ?, ?, ?, ?)",
+                            (tid, tid, json.dumps(dict(u)), u["avatar_file_id"], now()))
             con.execute("UPDATE users SET nick = NULL, avatar_tg = 1, avatar_file_id = NULL, bio = '' WHERE id = ?", (tid,))
-            photos = _drop_photo(con, photo[0] if photo else None)
         else:
             raise ApiError("bad_input")
     con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'",
@@ -2838,6 +2843,13 @@ def taken_down(con, v: Viewer) -> list[dict]:
             x = one(con, "SELECT body AS text FROM comments WHERE id = ? AND deleted_at IS NOT NULL", tid)
         elif kind in ("post", "event"):
             x = one(con, f"SELECT title AS text FROM {kind}s WHERE id = ? AND hidden_at IS NOT NULL", tid)  # kind from the list above
+        elif kind == "photo":  # the picture itself, as the queue showed it
+            x = one(con, """SELECT 'media/' || f.path || '.t.webp' AS text FROM takedowns k JOIN files f ON f.id = k.file_id
+                WHERE k.target = 'photo' AND k.target_id = ?""", tid)
+        elif kind == "user":  # what the person wrote about themselves
+            k = one(con, "SELECT data FROM takedowns WHERE target = 'user' AND target_id = ? ORDER BY id DESC", tid)
+            d = json.loads(k["data"]) if k else None
+            x = {"text": " · ".join(t for t in (d["nick"], d["bio"]) if t) or "\u2014"} if d else None
         else:
             x = None
         if x:
@@ -2845,18 +2857,46 @@ def taken_down(con, v: Viewer) -> list[dict]:
     return out
 
 
-def restore(con, v: Viewer, target: str, tid: int) -> None:
-    """Undo a take-down: the comment, post or event is back as it was; audited."""
+def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
+    """Undo a take-down: the comment, post or event is back as it was; an album photo back in its album; a profile's
+    nick, photo and "about me" back where the person hasn't set new ones since (a kept photo not used then goes).
+    Audited. Returns files to remove from disk."""
     _mod(v)
-    if target == "comment":
-        n = con.execute("UPDATE comments SET deleted_at = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL", (tid,)).rowcount
-    elif target in ("post", "event"):
-        n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL", (tid,)).rowcount
-    else:
-        raise ApiError("bad_input")
-    if not n:
-        raise ApiError("not_found")
-    con.execute("INSERT INTO audit_log (actor_id, action, target, at) VALUES (?, 'restore', ?, ?)", (v.id, f"{target}:{tid}", now()))
+    gone: list[str] = []
+    with tx(con):
+        if target == "comment":
+            n = con.execute("UPDATE comments SET deleted_at = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL", (tid,)).rowcount
+        elif target in ("post", "event"):
+            n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL", (tid,)).rowcount
+        elif target in ("photo", "user"):
+            k = one(con, "DELETE FROM takedowns WHERE id = (SELECT MAX(id) FROM takedowns WHERE target = ? AND target_id = ?) RETURNING *", target, tid)
+            n = 1 if k else 0
+            d = json.loads(k["data"]) if k else {}
+            if k and target == "photo" and one(con, "SELECT 1 FROM events WHERE id = ?", d["event_id"]):
+                con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",
+                            (d["event_id"], d["file_id"], d["sort"], d["added_by"]))
+            elif k and target == "user":
+                con.execute("""UPDATE users SET nick = COALESCE(nick, ?), bio = CASE WHEN bio = '' THEN ? ELSE bio END,
+                    avatar_file_id = COALESCE(avatar_file_id, ?), avatar_tg = CASE WHEN avatar_file_id IS NULL AND ? IS NOT NULL THEN 0 ELSE avatar_tg END
+                    WHERE id = ?""", (d["nick"], d["bio"], d["avatar_file_id"], d["avatar_file_id"], tid))
+            if k:
+                gone = _drop_unused(con, k["file_id"])  # an event gone meanwhile, a new photo set since: the kept one isn't shown
+        else:
+            raise ApiError("bad_input")
+        if not n:
+            raise ApiError("not_found")
+        con.execute("INSERT INTO audit_log (actor_id, action, target, at) VALUES (?, 'restore', ?, ?)", (v.id, f"{target}:{tid}", now()))
+    return gone
+
+
+TAKEDOWN_KEEP = 30 * 86400
+
+
+def purge_takedowns(con) -> list[str]:
+    """Daily: what was taken down 30 days ago and not restored is gone for good, its files from disk too (returned)."""
+    with tx(con):
+        kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE at <= ? RETURNING file_id", now() - TAKEDOWN_KEEP)]
+        return [p for f in kept for p in _drop_unused(con, f)]
 
 
 # ---------------------------------------------------------------- people and awards

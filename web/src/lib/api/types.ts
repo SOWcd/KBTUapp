@@ -49,7 +49,8 @@ export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
-export interface TakenDown { target: 'comment' | 'post' | 'event'; id: Id; text: string; at: Ts }
+/** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
+export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user'; id: Id; text: string; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number;
   days: { day: number; active: number; new: number; students: number }[];
