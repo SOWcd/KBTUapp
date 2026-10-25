@@ -34,6 +34,10 @@
     try { chats = await api.mainOrgChat(org, c.id); haptic.select(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
+  async function mirror(c: StudioChat, on: boolean) {
+    try { chats = await api.mirrorOrgChat(org, c.id, on); haptic.select(); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
   async function drop(c: StudioChat) {
     if (!(await sheets.ask({ title: t('oc.dropAsk', { title: c.title }), ok: t('oc.drop'), cancel: t('common.cancel'), danger: true }))) return;
     try { chats = await api.dropOrgChat(org, c.id); haptic.warn(); }
@@ -58,6 +62,11 @@
       {#if c.bot}<span class="pill on">{t('oc.bot')}</span>
       {:else}<button class="pill" onclick={() => { haptic.tap(); openLink(addBotLink(c)); }}>{t('oc.addBot')}</button>{/if}
     </div>
+    {#if c.main}
+      <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
+      <label class="switch mir"><span><b>{t('oc.mirror')}</b><i class="t-foot">{t('oc.mirrorNote')}</i></span>
+        <input type="checkbox" role="switch" checked={c.mirror} onchange={(e) => mirror(c, e.currentTarget.checked)} /></label>
+    {/if}
   </div>
 {/each}
 {#if chats.some((c) => !c.bot)}<p class="t-foot note">{t('oc.botNote')}</p>{/if}
@@ -82,5 +91,8 @@
   .acts { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 50px; }
   .pill { height: 30px; padding: 0 12px; border-radius: var(--r-full); display: inline-flex; align-items: center; background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
   .pill.on { background: var(--success-soft); color: var(--success-text); }
+  .mir { margin: 2px 0 0 50px; }
+  .mir b { display: block; font: 620 14.5px/1.25 var(--font-text); }
+  .mir i { display: block; margin-top: 2px; font-style: normal; }
   .add { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 </style>

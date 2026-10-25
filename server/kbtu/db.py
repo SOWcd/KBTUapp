@@ -537,6 +537,31 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE chats ADD COLUMN about TEXT;
     CREATE INDEX chats_by_org ON chats(org_id);
     CREATE UNIQUE INDEX chats_main ON chats(org_id) WHERE main = 1;"""),
+    # PLAN 86 part 2: an org's main public channel mirrored into its news by the userbot (userbot.py, mirror.py).
+    # chats.mirror: the club's switch in Studio; tg_channels: the channels the userbot joined itself (it leaves only
+    # those), with the last post it took; a mirrored post knows its channel post (tg_url, views, Telegram's reaction
+    # counts as JSON, a video or file only as a link) and every message it was made of (an album is one post)
+    (72, """ALTER TABLE chats ADD COLUMN mirror INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE tg_channels (
+        id        INTEGER PRIMARY KEY,                -- Telegram's channel id (Telethon's, without -100)
+        username  TEXT NOT NULL,                      -- lowercase, the t.me name it was joined by
+        joined_at INTEGER NOT NULL,
+        last_msg  INTEGER NOT NULL DEFAULT 0          -- the newest post taken: the catch-up after a restart starts there
+    ) STRICT;
+    ALTER TABLE posts ADD COLUMN tg_channel INTEGER;
+    ALTER TABLE posts ADD COLUMN tg_url TEXT;
+    ALTER TABLE posts ADD COLUMN tg_views INTEGER;
+    ALTER TABLE posts ADD COLUMN tg_reactions TEXT;
+    ALTER TABLE posts ADD COLUMN tg_media TEXT;
+    CREATE TABLE tg_post_msgs (
+        channel  INTEGER NOT NULL,
+        msg_id   INTEGER NOT NULL,
+        post_id  INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        grouped  INTEGER,                             -- the album it belongs to
+        PRIMARY KEY (channel, msg_id)
+    ) STRICT;
+    CREATE INDEX tg_post_msgs_by_post ON tg_post_msgs(post_id);
+    CREATE INDEX tg_post_msgs_by_album ON tg_post_msgs(channel, grouped);"""),
 ]
 
 

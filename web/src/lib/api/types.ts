@@ -25,7 +25,7 @@ export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'foru
  *  (an invite link) shows without a way in, `url` null. */
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
-export interface StudioChat extends OrgChat { url: string; bot: boolean }
+export interface StudioChat extends OrgChat { url: string; bot: boolean; mirror: boolean /* its posts in the club's news (the main channel) */ }
 export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 
 /** DMP's view of a club member (§3, §4.13): contacts only of Presidents and Vices. */
@@ -438,6 +438,9 @@ export interface Post {
   canEdit: boolean;             // the club's Head+: edit it, pin it
   editedAt: Ts | null;          // the text, label or photo changed after it went out
   canFeature?: boolean;         // moderators and the admin: a public post on top of List for everyone
+  /** a post of the club's Telegram channel (PLAN 86 part 2): Telegram's views and reactions instead of ours, comments
+   *  there; `media` a video or a file only linked to; a tap opens the post in Telegram */
+  tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
 }
 
 /** The composer's chips (the UI names them per language). Older posts may carry a free-text tag. */

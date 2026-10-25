@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]  # the repository: server/kbtu/config.py → KBTUapp/
@@ -23,6 +23,11 @@ class Config:
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
     cf_ai_token: str = ""
+    # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
+    # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
+    tg_api_id: str = ""
+    tg_api_hash: str = field(default="", repr=False)
+    tg_session: str = field(default="", repr=False)  # whoever has it is signed in as that account
     seed: bool = True           # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
@@ -57,4 +62,7 @@ def load() -> Config:
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
         cf_account_id=env.get("CF_ACCOUNT_ID", "").strip(),
         cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
+        tg_api_id=env.get("TG_API_ID", "").strip(),
+        tg_api_hash=env.get("TG_API_HASH", "").strip(),
+        tg_session=env.get("TG_SESSION", "").strip(),
     )

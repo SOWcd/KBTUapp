@@ -9,6 +9,8 @@
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
+  import Eye from '@lucide/svelte/icons/eye';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Post } from '../../lib/api';
   import Poster from '../../ui/Poster.svelte';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -17,7 +19,8 @@
   import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
+  import { compact } from '../../lib/chats';
   import { focusPos } from '../../lib/photo';
   import { tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -177,6 +180,15 @@
       </div>
     {/key}
 
+    {#if p.tg}
+      <!-- a Telegram channel's post: its counts there, a tap opens it (PLAN 86) -->
+      {@const tg = p.tg}
+      <div class="acts">
+        {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}
+        {#if tg.views}<span class="tgv"><Eye size={16} />{compact(tg.views)}</span>{/if}
+        <button class="tgo" onclick={() => openLink(tg.url)}><TelegramMark size={17} />{t(tg.media === 'video' ? 'tg.video' : tg.media === 'file' ? 'tg.file' : 'tg.open')}</button>
+      </div>
+    {:else}
     <div class="acts">
       <button class:on={p.mine.fire} onclick={() => react('fire')} aria-pressed={p.mine.fire}><Emoji name="fire_3d" size={20} /><b class="num">{p.reactions.fire}</b></button>
       <button class:on={p.mine.heart} onclick={() => react('heart')} aria-pressed={p.mine.heart}><Emoji name="blue_heart_3d" size={20} /><b class="num">{p.reactions.heart}</b></button>
@@ -184,6 +196,7 @@
         <button onclick={() => sheets.comments('post', p.id, p.title, (n) => (p.comments = n))} aria-label={t('cm.title')}><MessageCircle size={19} /><b class="num">{p.comments || ''}</b></button>
       {/if}
     </div>
+    {/if}
   {/if}
 </div>
 
@@ -218,5 +231,8 @@
   .acts button { height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.12); color: #fff; font: 650 14px/1 var(--font-text); }
   .acts button.on { background: rgba(255, 255, 255, 0.26); }
   .acts button:active { transform: scale(0.95); }
+  .tge { font-size: 18px; line-height: 1; }
+  .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; font: 650 14px/1 var(--font-text); color: rgba(255, 255, 255, 0.75); }
+  .acts .tgo { margin-left: auto; background: #fff; color: #0B0D14; }
   @keyframes in { from { opacity: 0; } }
 </style>
