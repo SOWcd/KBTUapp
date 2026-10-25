@@ -4,7 +4,7 @@ import './ui/base.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { boot, hapticTaps, tg } from './lib/tg';
-import { i18n } from './lib/i18n/index.svelte';
+import { i18n, loadLang, LANGS } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
 
@@ -30,5 +30,10 @@ window.addEventListener('vite:preloadError', (e) => {
 document.addEventListener('touchstart', () => {}, { passive: true });
 hapticTaps();
 
-mount(App, { target: document.getElementById('app')! });
-window.__kbStarted = true;
+// the app's language before the first render (Russian is in the bundle: at once); without the network, Russian words
+void loadLang(i18n.lang).catch(() => {}).then(() => {
+  mount(App, { target: document.getElementById('app')! });
+  window.__kbStarted = true;
+  // the other languages when idle, so a switch in Settings is as instant as before
+  setTimeout(() => { for (const l of LANGS) void loadLang(l).catch(() => {}); }, 3000);
+});

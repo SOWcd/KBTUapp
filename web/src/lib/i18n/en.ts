@@ -1,5 +1,6 @@
 // English. Plural rules: one / other.
 import type { Dict } from './ru';
+import { EN_SPOTS } from './spots';
 
 const en: Dict = {
   'tab.afisha': 'Events',
@@ -508,26 +509,7 @@ const en: Dict = {
   'route.liftDown': "Go to the lift{near} and down to {floor}",
   'route.toPlace': "Go here: {name}",
   'route.erase': "Erase",
-  'route.spot.canteen': "Canteen",
-  'route.spot.cowork': "Halyk Co-working",
-  'route.spot.kunaev': "Kunaev Hall",
-  'route.spot.farabi': "Al-Farabi Hall",
-  'route.spot.indep': "Independence Hall",
-  'route.spot.library': "Library",
-  'route.spot.career': "Career Center",
-  'route.spot.students': "Student Affairs",
-  'route.spot.site': "School of IT and Engineering",
-  'route.spot.energy': "School of Energy",
-  'route.spot.marine': "Maritime Academy",
-  'route.spot.gamedev': "Gamedev Lab",
-  'route.spot.honeywell': "Honeywell Lab",
-  'route.spot.security': "Security Service",
-  'route.spot.dispatch': "Dispatch Office",
-  'route.spot.rector': "Rector",
-  'route.spot.vrScience': "Vice-Rector for Science",
-  'route.spot.vrSocial': "Vice-Rector for Social Affairs",
-  'route.spot.legal': "Legal Department",
-  'route.spot.accounting': "Accounting",
+  ...EN_SPOTS,
   'route.admin': "administration area",
   'route.toRoom': "Go to room {room}",
   'route.toNear': "Go to room {near}: {room} isn't on the plan, it's somewhere near",

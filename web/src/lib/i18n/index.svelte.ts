@@ -2,8 +2,6 @@
 // `i18n.lang` is reactive state, so every t() in a template re-renders when it changes —
 // no reload (a reload looks like a crash).
 import ru, { type Dict, type Key, type Plural } from './ru';
-import kk from './kk';
-import en from './en';
 import { tg } from '../tg';
 
 export type Lang = 'ru' | 'kk' | 'en';
@@ -12,16 +10,25 @@ export const LANGS: Lang[] = ['ru', 'kk', 'en'];
 export const LANG_NAMES: Record<Lang, string> = { ru: 'Рус', kk: 'Қаз', en: 'Eng' };
 export type { Key };
 
-const DICTS: Record<Lang, Dict> = { ru, kk, en };
+// Russian is every missing key's fallback, so it ships in the boot bundle; the other two are their own chunks (a quarter
+// of what the app loaded at start): the app's language is loaded before the first render (main.ts), the rest when idle
+const DICTS: Partial<Record<Lang, Dict>> = { ru };
+const LOAD: Record<Exclude<Lang, 'ru'>, () => Promise<{ default: Dict }>> = { kk: () => import('./kk'), en: () => import('./en') };
 const KEY = 'kb-lang';
+
+/** Resolves once the language's dictionary is in memory (at once for one already there). */
+export function loadLang(lang: Lang): Promise<void> {
+  if (lang === 'ru' || DICTS[lang]) return Promise.resolve();
+  return LOAD[lang]().then((m) => { DICTS[lang] = m.default; });
+}
 
 function detect(): Lang {
   try {
     const saved = localStorage.getItem(KEY) as Lang | null;
-    if (saved && DICTS[saved]) return saved;
+    if (saved && LANGS.includes(saved)) return saved;
   } catch { /* storage blocked */ }
   const code = (tg.user?.language_code || '').slice(0, 2) as Lang;
-  return DICTS[code] ? code : 'ru';
+  return LANGS.includes(code) ? code : 'ru';
 }
 
 export const i18n = $state({ lang: detect() });
@@ -44,13 +51,13 @@ function fill(s: string, vars?: Record<string, string | number>): string {
 
 /** Plain string. Plural entries need tn(). */
 export function t(key: Key, vars?: Record<string, string | number>): string {
-  const e = DICTS[i18n.lang][key] ?? ru[key];
+  const e = DICTS[i18n.lang]?.[key] ?? ru[key];
   return fill(typeof e === 'string' ? e : e.other, vars);
 }
 
 /** Counted string: picks one / few / many / other by the language's own rules; {n} is the count. */
 export function tn(key: Key, n: number, vars?: Record<string, string | number>): string {
-  const e = DICTS[i18n.lang][key] ?? ru[key];
+  const e = DICTS[i18n.lang]?.[key] ?? ru[key];
   if (typeof e === 'string') return fill(e, { n, ...vars });
   const cat = rules[i18n.lang].select(n) as keyof Plural;
   return fill(e[cat] ?? e.other, { n: fmtNum(n), ...vars });
