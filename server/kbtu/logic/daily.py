@@ -91,7 +91,7 @@ def memo(con, v: Viewer, oid: int, later: bool = False) -> dict:
 
 
 def memo_item(con, v: Viewer, oid: int, body: dict) -> str:
-    """One item of the memo, written from the sheet's small form (owner, Oct 15: a request needs no event): `kind` and its
+    """One item of the memo, written from the sheet's small form (a request needs no event): `kind` and its
     fields as the editor's memo block has them, the day and hours, the place. The sheet shows it and puts it in the text."""
     _may(con, v, oid, "memo")
     kind, place = body.get("kind"), " ".join(str(body.get("place") or "").split())[:80]
@@ -157,7 +157,7 @@ def memo_week(con) -> None:
 
 def saved_day(con) -> None:
     """12:00 (Almaty) daily: whoever saved an event that's tomorrow and isn't going to it hears it once (all such events in
-    one message), with the 2-hour reminders' switch: "Save" with a purpose (owner, Oct 11; instead of a like)."""
+    one message), with the 2-hour reminders' switch: "Save" with a purpose (instead of a like)."""
     local = core.now() + 5 * 3600
     day = local // 86400
     if local % 86400 < 12 * 3600 or not _once(con, "saved_day", str(day)):
@@ -229,7 +229,7 @@ def admin_stats(con, v: Viewer) -> dict:
 
 
 def admin_day(con, v: Viewer, day: int) -> dict:
-    """One day of the chart (owner, Oct 21): how many opened the app and who, the newcomers marked. `people` is None for
+    """One day of the chart how many opened the app and who, the newcomers marked. `people` is None for
     a day before the visits were kept (or past their 30 days): only the nightly count is known."""
     _admin(v)
     lo = day * 86400 - 5 * 3600
@@ -252,7 +252,7 @@ _AI_ORGS = "FROM orgs WHERE status = 'active' AND trim(description) != ''"
 
 
 def admin_ai(con, v: Viewer) -> dict:
-    """The AI page in Admin (owner, Oct 21): the translator's state, what it has done and what waits or failed."""
+    """The AI page in Admin the translator's state, what it has done and what waits or failed."""
     _admin(v)
     from .. import ai  # the model's name; ai.py doesn't import logic
     ev, og = _AI_EVENTS, _AI_ORGS

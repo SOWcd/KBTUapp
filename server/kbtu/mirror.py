@@ -1,4 +1,4 @@
-"""An org's main Telegram channel in its news (PLAN 86 part 2, owner Oct 22 and 26): what the userbot (userbot.py) saw,
+"""An org's main Telegram channel in its news (PLAN 86 part 2): what the userbot (userbot.py) saw,
 written as the org's posts. Here only the database: the Telegram side hands over plain messages (Msg), so the rules
 are tested without Telegram.
 
@@ -227,7 +227,7 @@ def _fold_target(con, channel: int, date: int, lang: str, but: int | None = None
 
 
 def _set_tr(con, pid: int, lang: str, tb: tuple[str, str]) -> None:
-    """One language of a post from the channel itself; an AI translation it had is dropped (official only, owner)."""
+    """One language of a post from the channel itself; an AI translation it had is dropped (official only)."""
     p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
     have = json.loads(p["i18n"]) if p["i18n"] and p["tr_by"] == "tg" else {}
     have[lang] = {"title": tb[0], "body": tb[1]}

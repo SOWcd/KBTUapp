@@ -23,7 +23,7 @@ SHARE_EVENT = {
 }
 
 
-# Invites shared from the app (owner, Oct 4: no bare links in chats — a line of text and our bot's button under it)
+# Invites shared from the app (no bare links in chats — a line of text and our bot's button under it)
 SHARE_FRIEND = {
     "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья в KBTU App — увидите, кто куда идёт.", "🤝 Добавиться в друзья"),
     "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер.", "🤝 Досқа қосылу"),
@@ -469,8 +469,8 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 
-# ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" (Oct 11) and a year of StudEx's
-# real memos (Oct 12): in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
+# ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" and a year of StudEx's
+# real memos in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
 # one email to youth_policy@kbtu.kz, sent on Wednesday 9:00-18:00 from the sender's KBTU address.
 MEMO_TO = "youth_policy@kbtu.kz"
 WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
@@ -515,7 +515,7 @@ def channel_post(title: str, org: str, starts: int, place: str, price: int | Non
                  also: list[str] = ()) -> str:
     """A public event's post in the events channel (HTML), in Russian: the channel's language; `also`: the title in the
     other languages (ai.py), in italics under it. Signing up is a link in
-    the text, not a button: Telegram hides a post's comments under a button (owner, Oct 17)."""
+    the text, not a button: Telegram hides a post's comments under a button."""
     lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "", f"🗓 {when(starts, 'ru')}", f"📍 {html.escape(place_or_tba(place, 'ru'))}",
              f"💸 {price} ₸" if price else "🆓 Бесплатно"]
     if link and not cancelled:
@@ -627,7 +627,7 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
         where = " ".join(str(q.get("location") or "").split())
         asks.append(f"Разрешить {verb} оборудования (по списку) со стороны улицы {side}.\nСписок оборудования:\n{items}{dates}"
                     + (f"\nЛокация: {where}" if where else ""))
-    # printing is not DMP's: it goes in its own letter to the Publishing Center (print_letter, owner Oct 14)
+    # printing is not DMP's: it goes in its own letter to the Publishing Center (print_letter)
     if (f := memo.get("film")) is not None:
         note = " ".join(str(f.get("note") or "").split())
         asks.append(f"{MEMO2_FILM}\nДата: {_day_of(f.get('date'), start)}\nВремя: {f.get('from') or _hm(start)}-{f.get('to') or _hm(end)}"
@@ -635,7 +635,7 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
     return asks
 
 
-PRINT_TO = "ic@kbtu.kz"  # the Publishing Center takes print requests straight, files attached (owner, Oct 14)
+PRINT_TO = "ic@kbtu.kz"  # the Publishing Center takes print requests straight, files attached
 
 
 def print_items(pr: dict) -> list[str]:

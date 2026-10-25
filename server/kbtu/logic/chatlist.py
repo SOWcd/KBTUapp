@@ -22,12 +22,12 @@ def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
 
 
 def chats(con, v: Viewer) -> dict:
-    """Curated Telegram chats (§4.11), the biggest first (A8, owner Oct 23); "for you" are the ones aimed at my school and
+    """Curated Telegram chats (§4.11), the biggest first (A8); "for you" are the ones aimed at my school and
     course plus those for everyone (my school and course first, by size within); a club's or school's chat says whose
-    (PLAN 86; the app no longer ticks the ones I opened: the owner didn't understand it, Oct 22)."""
+    (PLAN 86; the app no longer ticks the ones I opened; the owner didn't understand it, Oct 22)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
-    # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (owner, Oct 21: any chat)
+    # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
     live = rows(con, "SELECT * FROM chats WHERE status = 'live' ORDER BY COALESCE(members, -1) DESC, title")
     found = {c["org_id"] for c in live if c["org_id"]}
     orgs = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
@@ -103,8 +103,8 @@ def chat_refreshed(con, cid: int, peek: dict) -> str | None:
     return c["photo"] if c["photo"] and c["photo"] != photo else None
 
 
-# A chat any student suggests (PLAN item 45, owner Oct 20: "as Telegram-native as possible"): picked in the bot's own
-# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21 (owner: "any group, any channel"): a closed
+# A chat any student suggests (PLAN item 45): picked in the bot's own
+# chat picker, sent to it, or typed in the app's sheet; any chat since Oct 21 a closed
 # one by its invite link, which only signed-in students then see (chats()) and the admin sees marked before approving.
 HANDLE = re.compile(r"(?:@|(?:https?://)?(?:t|telegram)\.me/(?:s/)?)([A-Za-z][A-Za-z0-9_]{3,31})/?", re.I)
 
@@ -123,7 +123,7 @@ INVITE = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:\+|joinchat/)([A-Za-z0
 
 
 def chat_link(text: str) -> str | None:
-    """Any chat a student can name (owner, Oct 21: "any group, any channel"): a public one by @name or its t.me link,
+    """Any chat a student can name a public one by @name or its t.me link,
     a closed one by its invite link (t.me/+…, t.me/joinchat/…); its t.me address, or None."""
     if name := chat_handle(text):
         return f"https://t.me/{name}"
@@ -132,8 +132,8 @@ def chat_link(text: str) -> str | None:
 
 
 def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
-    """Before the server looks the chat up on t.me: 10 suggestions a day (owner, Oct 20: a club head with several chats
-    mustn't hit it), nothing twice: "already in the catalog" or "already waiting" (owner, Oct 20)."""
+    """Before the server looks the chat up on t.me: 10 suggestions a day (a club head with several chats
+    mustn't hit it), nothing twice: "already in the catalog" or "already waiting"."""
     # a public name in any case; an invite hash is case-sensitive
     if c := one(con, f"SELECT status, url FROM chats WHERE {SAME_CHAT}", url, url, tg_chat):
         if c["status"] != "org":
@@ -185,7 +185,7 @@ def delete_chat(con, v: Viewer, cid: int) -> str | None:
     return c["photo"] if c and c["photo"] and photo_free(con, c["photo"]) else None
 
 
-# ---------------------------------------------------------------- an org's own chats (PLAN 86, owner Oct 22 and 26)
+# ---------------------------------------------------------------- an org's own chats (PLAN 86)
 # A club's or school's Telegram chats on its page: channels, groups, topics groups, open and closed. chats.org_id says
 # whose a chat is (a catalog row shows on the page too; one linked only from Studio waits as status 'org', out of the
 # catalog); one public channel is the MAIN one, with the big Subscribe button (and later the userbot mirror's source).
@@ -224,7 +224,7 @@ def may_chats(con, v: Viewer, oid: int) -> sqlite3.Row:
 
 
 def chat_orgs(con, v: Viewer) -> list[sqlite3.Row]:
-    """The orgs whose chats I link (may_chats: Vice+), for the bot's "is this your club's channel?" (owner, Oct 25)."""
+    """The orgs whose chats I link (may_chats: Vice+), for the bot's "is this your club's channel?"."""
     return [o for o in rows(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ?
         AND o.status != 'archived' ORDER BY o.name""", v.id) if can(con, v, o["id"], "profile")]
 
@@ -306,7 +306,7 @@ def drop_org_chat(con, v: Viewer, oid: int, cid: int) -> tuple[list[dict], list[
 
 
 def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
-    """AdminChats: whose a catalog chat is (owner, Oct 22: t.me/kbtusite is SITE's), or nobody's."""
+    """AdminChats: whose a catalog chat is (t.me/kbtusite is SITE's), or nobody's."""
     if v.role != "admin":
         raise ApiError("forbidden")
     if oid is not None and (not isinstance(oid, int) or isinstance(oid, bool) or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status != 'archived'", oid)):

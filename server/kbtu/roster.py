@@ -1,6 +1,6 @@
-"""The clubs' rosters from DMP's Student Union sheet (PLAN 95, owner Oct 26): DMP gave it and allowed its use; every
+"""The clubs' rosters from DMP's Student Union sheet (PLAN 95): DMP gave it and allowed its use; every
 row waits in roster_pending for its student and stays theirs (the city hidden or deleted any time). A one-off until
-everyone has signed up (owner): the table is dropped by hand then.
+everyone has signed up the table is dropped by hand then.
 
 Listed under my Telegram username but not signed in with Microsoft yet: a welcome with the clubs and positions only,
 and the way to sign in. A row is someone's when the Telegram username (or the KBTU e-mail) is theirs AND the sheet's
@@ -45,7 +45,7 @@ def _words(name: str | None) -> set[str]:
 
 
 def same_person(sheet_name: str | None, first: str, last: str) -> bool:
-    """The sheet's full name is this KBTU account's: two words shared, in any order (owner: a one-off, keep it simple)."""
+    """The sheet's full name is this KBTU account's: two words shared, in any order (a one-off, keep it simple)."""
     return len(_words(sheet_name) & _words(f"{first} {last}")) >= 2
 
 
@@ -181,7 +181,7 @@ def asks(con, uid: int) -> list[sqlite3.Row]:
 
 
 def join(con, uid: int, r: sqlite3.Row) -> bool:
-    """The row made real; what the app already has wins (owner, Oct 26): a membership held keeps its role, a missing one
+    """The row made real; what the app already has wins a membership held keeps its role, a missing one
     is added (a President on the sheet where the club already has another in the app: Vice), and the position as the
     club role's name, the department, the city, the year and the phone fill only what's empty. Then the row goes.
     True when a President on the sheet came in as Vice."""
@@ -221,7 +221,7 @@ def join(con, uid: int, r: sqlite3.Row) -> bool:
 
 def claim(con, uid: int, rid: int) -> None:
     """"Yes, it's me" on a row listed under another name (a typo, a new surname): whoever confirms hears it (the club's
-    President, or DMP's leads for a club without one). A student never removes a row (owner, Oct 26): a wrong one goes
+    President, or DMP's leads for a club without one). A student never removes a row a wrong one goes
     to support from the app."""
     from .logic import ApiError, notify
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)
@@ -275,8 +275,7 @@ def decide(con, v, rid: int, ok: bool) -> None:
 
 
 def mine(con, uid: int) -> dict | None:
-    """For /api/me. Not signed in with Microsoft yet but listed under my Telegram username: the welcome (owner, Oct 26:
-    the way in), only the clubs and positions, nothing more before Microsoft says who I am. Signed in: the clubs just
+    """For /api/me. Not signed in with Microsoft yet but listed under my Telegram username: the welcome (the way in), only the clubs and positions, nothing more before Microsoft says who I am. Signed in: the clubs just
     joined (a toast each, until seen) and the rows to ask about (no phone, no city: maybe someone else's)."""
     s, _ = _mine(con, uid)
     if not s:

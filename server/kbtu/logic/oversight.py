@@ -41,7 +41,7 @@ def _dmp_person(p: sqlite3.Row, role: str | None = None) -> dict:
 
 
 def registry_memos(con, v: Viewer) -> list[dict]:
-    """The memos clubs marked sent in the last 7 days (owner, Oct 13: DMP sees them in the app): the club, its events, who
+    """The memos clubs marked sent in the last 7 days (DMP sees them in the app): the club, its events, who
     said "sent" and when, newest first. One "Yes, sent" stamps its events at once, so one memo is (club, time). It's the
     club's word: the email itself is in DMP's mailbox, not here."""
     _overseer_only(con, v)
@@ -148,12 +148,12 @@ def _admin(v: Viewer) -> None:
 
 
 def _mod(v: Viewer) -> None:
-    """Moderators filter content (owner, Oct 22): the report queue, taking things down and back; the admin too."""
+    """Moderators filter content the report queue, taking things down and back; the admin too."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
 
 
-# ---------------------------------------------------------------- the app's team (owner, Oct 22)
+# ---------------------------------------------------------------- the app's team
 # The owner (admin + is_founder) has every right and alone gives or takes the admin role; an admin gives the
 # moderator role and bans; nobody touches the owner, himself, or (unless the owner) another admin. All of it audited.
 
@@ -217,7 +217,7 @@ def set_staff(con, v: Viewer, uid, role) -> dict:
 
 
 def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
-    """The platform ban (owner, Oct 22): no mutes, no strikes; the reason is required, he sees it, and the role goes.
+    """The platform ban no mutes, no strikes; the reason is required, he sees it, and the role goes.
     His posts stay (moderators hide what's bad); the bot stops writing to him."""
     if not isinstance(on, bool):
         raise ApiError("bad_input")
@@ -235,7 +235,7 @@ def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
 
 
 def ban_info(con, uid: int) -> dict:
-    """What a banned person sees: why, and whom to write (the owner)."""
+    """What a banned person sees: why, and whom to write."""
     u = one(con, "SELECT ban_reason FROM users WHERE id = ?", uid)
     o = one(con, "SELECT tg_username FROM users WHERE is_founder = 1 AND tg_id > 0")
     return {"reason": u["ban_reason"] if u else None, "contact": o["tg_username"] if o else None}
@@ -302,7 +302,7 @@ def admin_orgs(con, v: Viewer) -> list[dict]:
 
 
 def admin_hide_org(con, v: Viewer, oid: int, hidden: bool) -> dict:
-    """Hide a club, or bring it back: never a delete, so a lost phone can't wipe the clubs (owner, Oct 16). Hidden, it
+    """Hide a club, or bring it back: never a delete, so a lost phone can't wipe the clubs. Hidden, it
     leaves the lists, search and its members' profiles, and its events and posts go with it; nothing is removed."""
     _admin(v)
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND status != 'archived'", oid)
@@ -329,7 +329,7 @@ def admin_org_events(con, v: Viewer, oid: int) -> list[dict]:
 def admin_create_org(con, v: Viewer, body: dict) -> dict:
     _admin(v)
     name, short, emoji = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper(), str(body.get("emoji") or "")
-    # a school is never made by hand: KBTU's come from its site (seed_schools, owner Oct 14)
+    # a school is never made by hand: KBTU's come from its site (seed_schools)
     if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and body.get("kind", "club") == "club"):
         raise ApiError("bad_input")
     return _admin_org(con, _org(con, create_org(con, v.id, name, short, emoji, bool(body.get("official")))))

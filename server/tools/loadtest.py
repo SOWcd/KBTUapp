@@ -1,4 +1,4 @@
-"""Load test (Oct 7): a big seeded database, the real server under uvicorn, many students opening the app at once.
+"""Load test a big seeded database, the real server under uvicorn, many students opening the app at once.
 
     cd server && .venv/bin/python tools/loadtest.py [--students 5000] [--users 300] [--seconds 30] [--workers 1]
 

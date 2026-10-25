@@ -16,7 +16,7 @@ NO_END = 3 * 3600       # an event without an end counts as 3 h long
 DOOR_EARLY = 3 * 3600   # check-in opens 3 h before the start (§4.4) …
 DOOR_LATE = 6 * 3600    # … and, without an end, closes 6 h after the start
 RANK = {"member": 1, "head": 2, "vice": 3, "president": 4}
-# A club role's rights (SPEC §2): the toggles of its editor (owner, Oct 7: "as in Telegram"). Each needs a level; the
+# A club role's rights (SPEC §2): the toggles of its editor. Each needs a level; the
 # highest one a role has is its level, which ranks it for the rank rule (whom it acts on). A level without a club role,
 # and a role made before the toggles, has its level's rights; the President has them all.
 RIGHTS = {"door": "member", "events": "head", "posts": "head", "people": "head", "casting": "head", "team": "vice", "money": "vice", "memo": "vice", "profile": "vice"}
@@ -88,7 +88,7 @@ def overseer(con, v: Viewer) -> bool:
 
 # ---------------------------------------------------------------- shapes
 
-# the Student Government (owner, Oct 25): a mark "Student Government" and first in lists, no rights beyond any club's
+# the Student Government a mark "Student Government" and first in lists, no rights beyond any club's
 GOV_SLUG = "studentgovernment"
 
 
@@ -118,8 +118,7 @@ def _by_id(con, table: str, ids) -> dict[int, sqlite3.Row]:
 
 
 def _rights_from(role: str, rights: str | None) -> frozenset[str]:
-    """A club role's toggles, else its level's; the door is every member's, not a toggle (owner, Oct 15: "scanning
-    tickets at the entrance is for absolutely everyone")."""
+    """A club role's toggles, else its level's; the door is every member's, not a toggle."""
     return LEVEL_RIGHTS[role] if role == "president" or rights is None else frozenset(filter(None, rights.split(","))) | {"door"}
 
 
@@ -169,7 +168,7 @@ def short_name(p: sqlite3.Row) -> str:
 
 
 def shown_name(p: sqlite3.Row) -> str:
-    """The name everyone sees: the nickname when there is one (owner, Oct 5). Organizers get the real one too: the
+    """The name everyone sees: the nickname when there is one. Organizers get the real one too: the
     `fullName` of their lists, the door's `realName`."""
     return p["nick"] or short_name(p)
 
@@ -180,13 +179,13 @@ def avatar_of(p: sqlite3.Row) -> str | None:
 
 
 def person_ref(p: sqlite3.Row) -> dict:
-    # A9 (owner, Oct 23): the app's moderators and admins carry a badge everyone sees, like the founder's
+    # A9 the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
     return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff}
 
 
 def _door_ref(p: sqlite3.Row) -> dict:
-    """The door checks the real name beside a nick (owner, Oct 5), the short one a Member may see (§3)."""
+    """The door checks the real name beside a nick, the short one a Member may see (§3)."""
     return {**person_ref(p), "realName": short_name(p)}
 
 
@@ -222,7 +221,7 @@ def course_of(sid: str | None, t: int | None = None) -> int | None:
 
 
 def course_cap(sid: str | None) -> int:
-    """The last year of the degree the ID's letter names (owner, Oct 22): B bachelor 4, M master 2; any other letter 6.
+    """The last year of the degree the ID's letter names B bachelor 4, M master 2; any other letter 6.
     Nobody is ever marked graduated: the app can't know (repeaters, leave), so the year stops at the last one."""
     m = re.match(r"\d{2}([A-Z])", sid or "")
     return {"B": 4, "M": 2}.get(m.group(1) if m else "", 6)
@@ -250,8 +249,7 @@ def course_day(con) -> None:
 
 
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
-    """Whether this person gets one of the event's free seats: a 1st-year bachelor (a B after the year in the ID; owner,
-    Oct 22: masters have no such seats) while some are left."""
+    """Whether this person gets one of the event's free seats: a 1st-year bachelor (a B after the year in the ID; masters have no such seats) while some are left."""
     return bool(e["price"] and e["free_first"] and free_taken(con, e["id"]) < e["free_first"]
                 and one(con, "SELECT 1 FROM students WHERE user_id = ? AND course = 1 AND student_id GLOB '[0-9][0-9]B*'", uid))
 
@@ -296,7 +294,7 @@ def card(con, v: Viewer, e: sqlite3.Row) -> dict:
 
 def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
     """Event cards (types.ts EventCard). A list asks each thing once for all its events: card by card, the Afisha of a
-    few hundred events was 1200 queries and the slowest call of the app's start (load test, Oct 7)."""
+    few hundred events was 1200 queries and the slowest call of the app's start (load test)."""
     if not evs:
         return []
     ids = [e["id"] for e in evs]
@@ -360,7 +358,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
             "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"],
             "memo": json.loads(e["memo"]) if head and e["memo"] else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
-            "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (owner, Oct 17: the talk is there)
+            "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (the talk is there)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
             "updates": [{"id": u["id"], "body": u["body"], "at": u["created_at"], "canDelete": head}
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
