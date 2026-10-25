@@ -1,5 +1,6 @@
 // Kazakh. Draft by the developer; the Vector team proofreads. Kazakh plural rules: one / other.
 import type { Dict } from './ru';
+import { KK_SPOTS } from './spots';
 
 const kk: Dict = {
   'tab.afisha': 'Афиша',
@@ -509,26 +510,7 @@ const kk: Dict = {
   'route.liftDown': "{near}лифтке барып, түс: {floor}",
   'route.toPlace': "Саған осында: {name}",
   'route.erase': "Өшіру",
-  'route.spot.canteen': "Асхана",
-  'route.spot.cowork': "Halyk Co-working",
-  'route.spot.kunaev': "Қонаев аудиториясы",
-  'route.spot.farabi': "Әл-Фараби холы",
-  'route.spot.indep': "Тәуелсіздік залы",
-  'route.spot.library': "Кітапхана",
-  'route.spot.career': "Мансап орталығы",
-  'route.spot.students': "Студенттермен жұмыс",
-  'route.spot.site': "АТ және инженерия мектебі",
-  'route.spot.energy': "Энергетика мектебі",
-  'route.spot.marine': "Теңіз академиясы",
-  'route.spot.gamedev': "Gamedev зертханасы",
-  'route.spot.honeywell': "Honeywell зертханасы",
-  'route.spot.security': "Қауіпсіздік қызметі",
-  'route.spot.dispatch': "Диспетчерлік",
-  'route.spot.rector': "Ректор",
-  'route.spot.vrScience': "Ғылым жөніндегі проректор",
-  'route.spot.vrSocial': "Әлеуметтік мәселелер проректоры",
-  'route.spot.legal': "Заң департаменті",
-  'route.spot.accounting': "Бухгалтерия",
+  ...KK_SPOTS,
   'route.admin': "әкімшілік аймағы",
   'route.toRoom': "{room} аудиториясына бар",
   'route.toNear': "{near} аудиториясына бар: {room} жоспарда жоқ, ол осы маңда",

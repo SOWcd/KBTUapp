@@ -36,20 +36,22 @@
   // position of page i when the strip is shifted by v px (v < 0 = moving to the next page)
   function place(i: number, v: number, w: number) {
     const el = els[i]; if (!el) return;
+    // at rest the pages sit whole widths apart: no width needed (measuring it while a tab mounts laid the page out twice)
+    if (!w) { el.style.transform = `translate3d(${(i - cur) * 100}%,0,0)`; el.style.visibility = i === cur ? '' : 'hidden'; return; }
     const u = (i - cur) * w + v;
     el.style.transform = `translate3d(${u}px,0,0)`;
     // '' inherits: a page in a hidden tab stays hidden (an explicit 'visible' would show through)
     el.style.visibility = u > -w + 0.5 && u < w - 0.5 ? '' : 'hidden';
   }
   function layout(v: number, ease = '') {
-    const w = W();
+    const w = v ? W() : 0;
     for (let i = 0; i < count; i++) {
       const el = els[i]; if (!el) continue;
       el.style.transition = ease;
       place(i, v, w);
     }
     // the capsule's page switcher follows the finger; only the visible tab talks to it
-    if (active) window.dispatchEvent(new CustomEvent('kb:pager', { detail: { x: cur - v / w, ease } }));
+    if (active) window.dispatchEvent(new CustomEvent('kb:pager', { detail: { x: v ? cur - v / w : cur, ease } }));
   }
 
   /** Animate to page i; commit index after the animation. */
@@ -156,7 +158,10 @@
     root.addEventListener('touchcancel', end);
     const onResize = () => { w0 = 0; layout(0); };
     addEventListener('resize', onResize);
-    return () => removeEventListener('resize', onResize);
+    // the width for the first drag, read where layout is already done (a ResizeObserver's first callback)
+    const ro = new ResizeObserver(() => { w0 = root.clientWidth || innerWidth; ro.disconnect(); });
+    ro.observe(root);
+    return () => { removeEventListener('resize', onResize); ro.disconnect(); };
   });
 </script>
 

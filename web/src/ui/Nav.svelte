@@ -45,6 +45,8 @@
     b.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.84)', offset: 0.35 }, { transform: 'scale(1.06)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
     sheets.map();
   }
+  // the map's chunk on the press, not the click: by the release it has been loading for the whole press
+  const warm = () => { void import('../screens/map/CampusMap.svelte').catch(() => {}); };
   function pick(i: number) { if (drag?.on) return; goTab(TABS[i]); ui.awake++; }
 </script>
 
@@ -66,7 +68,7 @@
 <!-- the map beside the tabs, under the thumb on every screen (owner, Oct 25: the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
 <button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }} use:chrome
-        onclick={openMap}>
+        onpointerdown={warm} onclick={openMap}>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <MapIcon size={22} strokeWidth={1.9} />
 </button>

@@ -6,8 +6,7 @@
 // (design/map/tools/basement). A Mini App always loads from the network, so the promise is "opens at once", not
 // "offline": the main map's overviews are fetched quietly soon after the first launch.
 import ru from './i18n/ru';
-import kk from './i18n/kk';
-import en from './i18n/en';
+import { KK_SPOTS, EN_SPOTS } from './i18n/spots';
 import f1 from '../assets/map/floor-1.svg?url';
 import f2 from '../assets/map/floor-2.svg?url';
 import f3 from '../assets/map/floor-3.svg?url';
@@ -73,7 +72,7 @@ export const SPOTS: Spot[] = [
   { k: 'accounting', room: '523', adm: true },
 ];
 /** The named place a text means: "Canteen", "halyk co-working"; a number in it is a room or an address, never a spot */
-const named = (s: Spot) => [ru, kk, en].map((d) => d[`route.spot.${s.k}` as 'route.spot.canteen'] as string);
+const named = (s: Spot) => [ru, KK_SPOTS, EN_SPOTS].map((d) => d[`route.spot.${s.k}` as 'route.spot.canteen'] as string);
 export const spotOf = (text: string): Spot | null =>
   /\d/.test(text) ? null : SPOTS.find((s) => s.re?.test(text) || named(s).includes(text.trim())) ?? null;
 /** Floor 4's south side (Tole bi) is the administration, shut to students; Al-Farabi Hall (470) is not (owner, Oct 24) */

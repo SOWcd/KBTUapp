@@ -68,7 +68,9 @@
   let shown = $state(0);
   const onStack = () => { if (stack) shown = Math.round(stack.scrollLeft / stack.clientWidth); };
   // the order flips at the hour mark: back to the first card, so the dots tell the truth
-  $effect(() => { void cards.join(); if (stack) { stack.scrollLeft = 0; shown = 0; } });
+  // (a stack just made is at 0 already: writing scrollLeft there laid out the whole page mid-mount, 181 ms at start)
+  let made: HTMLDivElement | undefined;
+  $effect(() => { void cards.join(); if (stack) { if (made !== stack) made = stack; else stack.scrollLeft = 0; shown = 0; } });
   const weekCount = $derived(data.events.filter((e) => e.status !== 'cancelled' && (e.endsAt ?? e.startsAt + 3 * 3600) > now && dayNo(e.startsAt) >= today && dayNo(e.startsAt) < today + 7).length);
 
   function head(d: number): string {

@@ -44,9 +44,6 @@
   import Me from './screens/profile/Me.svelte';
   import Friends from './screens/profile/Friends.svelte';
   import Settings from './screens/profile/Settings.svelte';
-  import EventSheet from './screens/sheets/EventSheet.svelte';
-  import ClubSheet from './screens/sheets/ClubSheet.svelte';
-  import PersonSheet from './screens/sheets/PersonSheet.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import { warmMap } from './lib/map';
@@ -62,11 +59,16 @@
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
     load().then((m) => { clearTimeout(slow); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
-  sheets.event = (id, from) => open(EventSheet, { id, from });
-  sheets.preview = (e) => open(EventSheet, { id: e.id, preview: e });
+  // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
+  // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
+  const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
+  const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
+  const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
+  sheets.event = (id, from) => lazy(eventSheet, { id, from });
+  sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
-  sheets.person = (id) => open(PersonSheet, { id });
-  sheets.club = (id) => open(ClubSheet, { id });
+  sheets.person = (id) => lazy(personSheet, { id });
+  sheets.club = (id) => lazy(clubSheet, { id });
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id });
@@ -269,10 +271,10 @@
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     const snap = { me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team };
-    JSON.stringify(snap); // read deeply, so any change schedules a save
+    const json = JSON.stringify(snap); // read deeply, so any change schedules a save; the same string is what gets saved
     if (!booted || data.error || session.failed || session.banned) return;
     clearTimeout(keepTimer);
-    keepTimer = setTimeout(() => writeCache($state.snapshot(snap)), 1000);
+    keepTimer = setTimeout(() => writeCache(json), 1000); // no $state.snapshot: a clone through the proxies cost more than the save
   });
 
   // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
@@ -362,6 +364,7 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
+    void eventSheet(); void personSheet(); void clubSheet();
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
