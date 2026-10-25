@@ -180,7 +180,8 @@
     </div>
 
     {#key p.id}
-      <div class="txt">
+      <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable (owner, Oct 25) -->
+      <div class="txt" class:card={p.body}>
         <h2>{p.title}</h2>
         {#if p.body}<p class="scroll" data-noswipe>{p.body}</p>{/if}
       </div>
@@ -233,6 +234,9 @@
   .txt { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 84px); display: flex; flex-direction: column; gap: 10px; pointer-events: none; animation: in 240ms ease-out both; }
   .txt h2 { margin: 0; font: 760 26px/1.12 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   .txt p { margin: 0; max-height: 34vh; overflow-y: auto; pointer-events: auto; white-space: pre-line; font: 450 15.5px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.88); touch-action: pan-y; }
+  .txt.card { left: 12px; right: 12px; padding: 16px 16px 14px; gap: 8px; border-radius: 22px; background: rgba(12, 13, 18, 0.62); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  .txt.card h2 { font-size: 21px; }
+  .txt.card p { max-height: 30vh; color: rgba(255, 255, 255, 0.92); }
   .acts { position: absolute; left: 14px; right: 14px; bottom: calc(var(--safe-bottom) + 22px); display: flex; gap: 8px; }
   .acts button { height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.12); color: #fff; font: 650 14px/1 var(--font-text); }
   .acts button.on { background: rgba(255, 255, 255, 0.26); }
