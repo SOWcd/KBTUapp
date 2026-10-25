@@ -95,6 +95,12 @@ async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Respo
 def _render(con, m) -> tuple[str, str | None, str] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
+    ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
+    reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
+
+    def listed(evs):  # a line per event, the first one opened
+        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
+        return text, button, f"ev_{evs[0]['id']}"
     if kind == "id_clash":  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
@@ -130,8 +136,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         return (*texts.bot_message(lang, "join_yes" if ref[2] == "yes" else "join_no", org=r["name"]), f"cl_{r['org_id']}")
     if kind == "rate":  # rate:<event>, an hour after the end, to those checked in; not if rated already or reminders are off
         e = one(con, "SELECT title, i18n FROM events WHERE id = ? AND status = 'published'", int(ref[1]))
-        if not e or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0] \
-                or one(con, "SELECT 1 FROM event_ratings WHERE event_id = ? AND user_id = ?", int(ref[1]), m["user_id"]):
+        if not e or not reminders() or one(con, "SELECT 1 FROM event_ratings WHERE event_id = ? AND user_id = ?", int(ref[1]), m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang)), f"ev_{ref[1]}")
     if kind == "event_update":  # upd:<id>; gone if the organizer deleted it or the event is no longer on
@@ -171,8 +176,8 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         a = next((x for x in logic.ACHIEVEMENTS if x[0] == code), None)
         if not a:
             return None
-        tier = f" · {texts.TIERS[lang if lang in texts.TIERS else 'ru'][level - 1]}" if len(a[2]) > 1 else ""
-        return (*texts.bot_message(lang, kind, name=texts.ACH_NAMES[lang if lang in texts.ACH_NAMES else "ru"][code], tier=tier), f"aw_{code}")
+        tier = f" · {texts.pick(texts.TIERS, lang)[level - 1]}" if len(a[2]) > 1 else ""
+        return (*texts.bot_message(lang, kind, name=texts.pick(texts.ACH_NAMES, lang)[code], tier=tier), f"aw_{code}")
     if kind == "photo_report":  # ph:<event>, to those who came, once: the guests' album filled up
         e = one(con, "SELECT id, title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
         n = one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", int(ref[1]))[0]
@@ -180,7 +185,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
         e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))
-        if not e or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]:  # follows the reminders switch
+        if not e or not reminders():
             return None
         if kind == "comment_question" and not logic._asking(con, e["id"], m["user_id"]):  # answered or read before the card went out
             return None
@@ -192,7 +197,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             x = one(con, "SELECT title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[2]))
         else:
             x = one(con, "SELECT title, i18n FROM posts WHERE id = ? AND hidden_at IS NULL", int(ref[2]))
-        if not x or not one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]:
+        if not x or not reminders():
             return None
         return (*texts.bot_message(lang, kind, title=logic.title_in(x, lang)), f"{'cm' if ref[1] == 'event' else 'cp'}_{ref[2]}")
     if kind in ("volunteer_yes", "volunteer_no"):  # vo:<event>:<when>; quiet if the decision changed since or the event is over
@@ -201,21 +206,20 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         x = e and one(con, "SELECT status FROM volunteers WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"])
         if not x or x["status"] != kind.split("_")[1]:
             return None
-        return (*texts.bot_message(lang, kind, org=e["org_name"], title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
+        return (*texts.bot_message(lang, kind, org=e["org_name"], **ev(e)), f"ev_{e['id']}")
     if kind in ("leaders_invite", "meeting_invite"):  # li: / mi:<event>, to everyone invited; quiet once they've answered or it's over
         e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.starts_at > ?",
                 int(ref[1]), logic.now())
         if not e or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], m["user_id"]):
             return None
-        return (*texts.bot_message(lang, kind, org=e["org_name"], title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)), f"ev_{e['id']}")
+        return (*texts.bot_message(lang, kind, org=e["org_name"], **ev(e)), f"ev_{e['id']}")
     if kind == "friend_invite":  # fi:<event>:<inviter>; gone if the event is off or has started, or they're in already
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND starts_at > ?", int(ref[1]), logic.now())
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))
         if not e or not p or one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')",
                                  e["id"], m["user_id"]):
             return None
-        return (*texts.bot_message(lang, kind, name=logic.shown_name(p), title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang)),
-                f"ev_{e['id']}")
+        return (*texts.bot_message(lang, kind, name=logic.shown_name(p), **ev(e)), f"ev_{e['id']}")
     if kind == "round_open":  # ro:<round>, to a club's followers who aren't in it; gone once it stops taking applications
         r = one(con, "SELECT r.*, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.status = 'open' AND r.closes_at > ?", int(ref[1]), logic.now())
         if not r or one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], m["user_id"]):
@@ -255,17 +259,11 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             AND e.status = 'published' AND e.starts_at >= ? AND e.starts_at < ? AND NOT EXISTS (SELECT 1 FROM registrations r
             WHERE r.event_id = e.id AND r.user_id = s.user_id AND r.status IN ('going', 'hold', 'waitlist')) ORDER BY e.starts_at""",
                    m["user_id"], (day + 1) * 86400 - 5 * 3600, (day + 2) * 86400 - 5 * 3600)
-        if not evs:
-            return None
-        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
-        return text, button, f"ev_{evs[0]['id']}"
+        return listed(evs) if evs else None
     if kind == "place_tba":  # tba:<day>, to an event's maker: all their coming events still without a place
         evs = rows(con, "SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published' AND place = '' AND starts_at > ? ORDER BY starts_at",
                    m["user_id"], logic.now())
-        if not evs:
-            return None
-        text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
-        return text, button, f"ev_{evs[0]['id']}"
+        return listed(evs) if evs else None
     if kind == "friend_new":  # fn:<the other one>:<day>; gone if they're no longer friends by then
         other = int(ref[1])
         p = one(con, logic.PERSON + " WHERE u.id = ?", other)
@@ -282,13 +280,13 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             return None
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
-                                   ban=texts.BAN[lang if lang in texts.BAN else "ru"] if q["ban"] else ""), f"tm_{q['org_id']}")
+                                   ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
     e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
     if not e or (kind != "event_cancelled" and e["status"] != "published"):
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket (owner, Oct 6)
         kind += "_team"
-    text, button = texts.bot_message(lang, kind, title=logic.title_in(e, lang), when=texts.when(e["starts_at"], lang), place=texts.place_or_tba(e["place"], lang), org=e["org_name"])
+    text, button = texts.bot_message(lang, kind, org=e["org_name"], **ev(e))
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
 
 
@@ -297,10 +295,8 @@ def purge(cfg: Config, con) -> None:
     home = Path(cfg.db_path).resolve().parent
     receipts, photos = logic.delete_due(con)
     photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
-    for root, rels in ((home / "receipts", receipts), (home / "media", photos)):
-        for rel in rels:
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (root / f"{rel}{ext}").unlink(missing_ok=True)
+    media.drop(home / "receipts", receipts)
+    media.drop(home / "media", photos)
 
 
 async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
@@ -316,8 +312,7 @@ async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
                 pass
         if old := logic.chat_refreshed(con, c["id"], peek):
             if not one(con, "SELECT 1 FROM files WHERE path = ?", old):  # never a file something else still shows
-                for ext in (".webp", ".t.webp", ".jpg"):
-                    (root / f"{old}{ext}").unlink(missing_ok=True)
+                media.drop(root, [old])
 
 
 async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat: int) -> bool:
@@ -348,15 +343,22 @@ async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat
         return False
     root = Path(cfg.db_path).resolve().parent / "media"
     old = logic.chat_card(con, cid, card)
-    for p in (old, card.get("photo")):  # the one replaced, or the new one when the chat was gone meanwhile
-        if p and logic.photo_free(con, p):
-            _unlink_photo(root, p)
+    _drop_free(con, root, old, card.get("photo"))  # the one replaced, or the new one when the chat was gone meanwhile
     return True
 
 
-def _unlink_photo(root: Path, path: str) -> None:
-    for ext in (".webp", ".t.webp", ".jpg"):
-        (root / f"{path}{ext}").unlink(missing_ok=True)
+def _drop_free(con, root: Path, *paths: str | None) -> None:
+    """Saved pictures nothing shows (no files row names them) gone from disk."""
+    media.drop(root, [p for p in paths if p and logic.photo_free(con, p)])
+
+
+async def _avatar(peek: dict, root: Path) -> None:
+    """A chat's t.me picture saved as its avatar (peek["photo"]); a broken picture or a full disk: none."""
+    if peek.get("image"):
+        try:
+            peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
+        except (media.BadImage, OSError):
+            pass
 
 
 async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
@@ -587,6 +589,12 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
 
 
+def _student(con, tg_id: int | None) -> sqlite3.Row | None:
+    """Who writes to the bot, if a student signed in with KBTU (a typed-in row waiting for Microsoft is nobody yet)."""
+    return one(con, """SELECT u.id, u.role, u.lang, s.first_name, s.last_name FROM users u
+        JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?""", tg_id)
+
+
 def _lang(con, msg: dict) -> str:
     u = one(con, "SELECT lang FROM users WHERE tg_id = ?", (msg.get("chat") or {}).get("id"))
     return u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
@@ -596,7 +604,7 @@ def _chat_picker(con, cfg: Config, msg: dict) -> dict:
     """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them (owner, Oct 21:
     "any group, any channel"); a closed one then needs its invite link, since we can't make one. A student only."""
     chat, lang = msg["chat"], _lang(con, msg)
-    if not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"]):
+    if not _student(con, chat["id"]):
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     channel, group = texts.bot_message(lang, "chat_buttons")
     pick = lambda rid, label: [{"text": label, "request_chat": {"request_id": rid, "chat_is_channel": rid == 1,  # noqa: E731
@@ -620,20 +628,13 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
             return "later", ""
         if peek["members"] is None:
             return "notchat", ""
-        if peek["image"]:
-            try:
-                peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
-            except (media.BadImage, OSError):
-                pass
+        await _avatar(peek, root)
         kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
         title = logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
-        if peek.get("photo") and logic.photo_free(con, peek["photo"]):  # a club's row took the suggestion: it keeps its own avatar
-            _unlink_photo(root, peek["photo"])
+        _drop_free(con, root, peek.get("photo"))  # a club's row took the suggestion: it keeps its own avatar
         return "sent", title
     except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
-        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (root / f"{peek['photo']}{ext}").unlink(missing_ok=True)
+        _drop_free(con, root, peek.get("photo"))
         return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists") if exc.code == "conflict" else "limit"), ""
 
 
@@ -646,14 +647,14 @@ def _picked_url(msg: dict) -> str | None:
 async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict, ask: bool = True) -> dict | None:
     """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send.
     A club's President or Vice is asked first whether it's their club's (owner, Oct 25: the catalog and Studio's chats
-    were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_bind)."""
+    were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_tapped)."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private" or ask and now() - int(msg.get("date") or 0) > FRESH:
         return None
     lang, shared = _lang(con, msg), msg.get("chat_shared") or {}
     done = lambda kind, **f: {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML",  # noqa: E731
                                "reply_markup": {"remove_keyboard": True}}
-    u = one(con, "SELECT u.id, u.role FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
+    u = _student(con, chat["id"])
     if not u:
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     if shared and not shared.get("username"):
@@ -695,8 +696,7 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
         return None
-    u = one(con, """SELECT u.id, u.lang, s.first_name, s.last_name FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0
-        WHERE u.tg_id = ?""", chat["id"])
+    u = _student(con, chat["id"])
     lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
     if not u:
@@ -735,7 +735,7 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
         return None
-    u = one(con, "SELECT u.id, u.role, u.lang FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat["id"])
+    u = _student(con, chat["id"])
     lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
     if not u:
@@ -775,17 +775,6 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     return say("receipt_ok", f"tk_{eid}", title=title)
 
 
-async def _bind(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
-    """A tap on "is this your club's channel?": the question turns into the answer (_bound)."""
-    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
-    msg, data = cq.get("message") or {}, str(cq.get("data") or "")
-    orig = msg.get("reply_to_message") or {}
-    if not re.fullmatch(r"oc:\d+", data) or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
-        return
-    if body := await _bound(cfg, http, con, orig, int(data[3:])):
-        await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"]})
-
-
 async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, oid: int) -> dict | None:
     """The chat of the pick `orig` onto the club oid's page (logic.add_org_chat: the first public channel is its main
     one), then a link into Studio for "show its posts in the feed"; oid 0: to the catalog as any suggestion."""
@@ -794,7 +783,7 @@ async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, o
         return body and {**body, "reply_markup": {"inline_keyboard": []}}
     chat = orig.get("chat") or {}
     lang, url = _lang(con, orig), _picked_url(orig)
-    u = one(con, "SELECT u.id, u.role FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?", chat.get("id"))
+    u = _student(con, chat.get("id"))
     if not u or not url:
         return None
     def say(kind: str, keys: list | None = None, **f) -> dict:
@@ -805,32 +794,31 @@ async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, o
     except logic.ApiError:  # not the club's Vice+ (any more)
         return say("chat_bind_no")
     peek = await media.chat_peek(http, url)
-    if peek.get("image"):
-        try:
-            peek["photo"] = (await asyncio.to_thread(media.save, peek["image"], root))["path"]
-        except (media.BadImage, OSError):
-            pass
+    await _avatar(peek, root)
     try:
         _, gone = logic.add_org_chat(con, v, oid, url, peek)
     except logic.ApiError as exc:
-        if peek.get("photo") and logic.photo_free(con, peek["photo"]):
-            _unlink_photo(root, peek["photo"])
+        _drop_free(con, root, peek.get("photo"))
         return say({"taken": "chat_bind_taken", "catalog": "chat_bind_catalog", "limit": "chat_bind_limit", "notchat": "chat_notchat"}.get(exc.message, "chat_later"), club=o["name"])
-    for p in gone:
-        _unlink_photo(root, p)
+    media.drop(root, gone)
     button = texts.bot_message(lang, "chat_bound", club=o["name"])[1]
     return say("chat_bound", [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=ce_{oid}"}]], club=o["name"])
 
 
-async def _picked(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
-    """A tap on one of the "which event" buttons: the receipt is the message those buttons answer."""
+async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
+    """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:), "whose channel" for a
+    chat (oc:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     orig = msg.get("reply_to_message") or {}
-    if not re.fullmatch(r"rc:\d+", data) or not _file(orig) or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
+    m = re.fullmatch(r"(rc|oc):(\d+)", data)
+    if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
         return
-    body = await _receipt(cfg, http, con, orig, int(data[3:]))
-    if body:  # the question turns into the answer
+    if m[1] == "oc":
+        body = await _bound(cfg, http, con, orig, int(m[2]))
+    else:
+        body = await _receipt(cfg, http, con, orig, int(m[2])) if _file(orig) else None
+    if body:
         await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
 
@@ -929,8 +917,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 continue  # banned (owner, Oct 22): the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
-                    cq = upd["callback_query"]
-                    await (_bind if str(cq.get("data") or "").startswith("oc:") else _picked)(cfg, http, con, cq)
+                    await _tapped(cfg, http, con, upd["callback_query"])
                     continue
                 if "chat_join_request" in upd:
                     await _join(cfg, http, con, upd["chat_join_request"])

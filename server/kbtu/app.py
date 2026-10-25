@@ -1229,7 +1229,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         elif kind in ("fr", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's one-time award link (logic.grant_link)
                 code = body.get("code")
-                start, fields = f"gl_{logic.grant_link(con, v, code)}", {"award": texts.ACH_NAMES[lang if lang in texts.ACH_NAMES else "ru"][code]}
+                start, fields = f"gl_{logic.grant_link(con, v, code)}", {"award": texts.pick(texts.ACH_NAMES, lang)[code]}
             elif kind == "rc":  # a club's open recruitment round (casting.py): anyone may pass it on
                 r = logic.one(con, "SELECT r.closes_at, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.org_id = ? AND r.status = 'open' AND r.closes_at > ?",
                               ref, logic.now())

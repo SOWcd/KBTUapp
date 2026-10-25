@@ -2245,13 +2245,13 @@ def test_receipt_reading(env, monkeypatch):
     assert ask["reply_parameters"] == {"message_id": 3} and len(ask["reply_markup"]["inline_keyboard"]) == 2
     fake({})                                                                           # read, but nothing there: not a receipt (a selfie)
     tap = {"id": "q", "from": {"id": 12}, "data": f"rc:{ev2['id']}", "message": {"message_id": 4, "chat": {"id": 12}, "reply_to_message": doc(12, 3)}}
-    asyncio.run(bot._picked(cfg, http, con, tap))
+    asyncio.run(bot._tapped(cfg, http, con, tap))
     assert texts.bot_message("ru", "receipt_not")[0] in http.posts[1][1]["text"]
     assert c.get(f"/api/events/{ev2['id']}", headers=tma(12)).json()["my"]["status"] == "hold"  # refused, nothing kept
     assert c.post(f"/api/events/{ev2['id']}/receipt", headers=tma(12), content=pdf(505)).json()["message"] == "not_receipt"
     fake({"amount": 500, "no": "777000111222333444", "recipient": look("Arman A."), "paid_at": made + 60})
     http.posts.clear()
-    asyncio.run(bot._picked(cfg, http, con, tap))
+    asyncio.run(bot._tapped(cfg, http, con, tap))
     assert [m for m, _ in http.posts] == ["answerCallbackQuery", "editMessageText"] and "Quiz" in http.posts[1][1]["text"]
     assert c.get(f"/api/events/{ev2['id']}", headers=tma(12)).json()["my"]["status"] == "going"
     assert c.get(f"/api/events/{eid}", headers=tma(12)).json()["my"]["status"] == "hold"  # the other one still waits
@@ -4695,9 +4695,9 @@ def test_bot_binds_club_channel(env, monkeypatch):
 
     # the tap: the question turns into the answer; someone else's tap on it does nothing
     tap = lambda who, data: {"id": "q", "from": {"id": who}, "data": data, "message": {"message_id": 11, "reply_to_message": pick(40, 12, text="@mic_more")}}  # noqa: E731
-    run(bot._bind(cfg, Http(), con, tap(41, "oc:1")))
+    run(bot._tapped(cfg, Http(), con, tap(41, "oc:1")))
     assert sent == []
-    run(bot._bind(cfg, Http(), con, tap(40, "oc:1")))
+    run(bot._tapped(cfg, Http(), con, tap(40, "oc:1")))
     assert [(m, b["message_id"], b["text"]) for m, b in sent] == [("editMessageText", 11, texts.bot_message("ru", "chat_bound", club="Open Mic")[0])]
     assert tuple(con.execute("SELECT org_id FROM chats WHERE url = 'https://t.me/mic_more'").fetchone()) == (1,)
 
