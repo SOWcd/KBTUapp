@@ -38,6 +38,13 @@ def _fit(im: Image.Image, side: int) -> Image.Image:
     return out
 
 
+def drop(root: Path, paths) -> None:
+    """A saved picture's files (store: the picture, its thumbnail, a JPEG) gone from disk; one already gone, or None, is fine."""
+    for rel in filter(None, paths):
+        for ext in (".webp", ".t.webp", ".jpg"):
+            (root / f"{rel}{ext}").unlink(missing_ok=True)
+
+
 def save(data: bytes, root: Path) -> dict:
     with _busy:
         return store(_decode(data), data, root)

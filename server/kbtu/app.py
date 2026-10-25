@@ -15,10 +15,11 @@ import hmac
 import json
 import logging
 import re
+import sqlite3
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import anyio
 import httpx
@@ -44,6 +45,14 @@ _imgs = anyio.CapacityLimiter(2)
 
 async def _img(fn, *args):
     return await anyio.to_thread.run_sync(fn, *args, limiter=_imgs)
+
+
+async def _picture(fn, *args):
+    """An uploaded picture through fn (media.save, receipt.take) in _img's threads; not a picture: bad_input."""
+    try:
+        return await _img(fn, *args)
+    except media.BadImage:
+        raise ApiError("bad_input", "not_an_image") from None
 
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
 # typed in by the student (the KBTU-password sign-in is gone since Oct 19): a name in any alphabet (hyphen, apostrophe, space), and a student ID like
@@ -73,6 +82,58 @@ class _Route(APIRoute):
         if isinstance(response_model, DefaultPlaceholder) and get_typed_return_annotation(endpoint) is None and status_code != 204:
             response_model = Any
         super().__init__(path, endpoint, response_model=response_model, status_code=status_code, **kw)
+
+
+# ------------------------------------------------------------ who is calling
+
+def conn(request: Request) -> Iterator[sqlite3.Connection]:
+    with request.app.state.pool.conn() as con:
+        yield con
+
+
+# every route's connection and caller (create() keeps the pool and the config in app.state)
+Con = Annotated[sqlite3.Connection, Depends(conn)]
+
+def viewer(request: Request, con: Con) -> Viewer:
+    cfg = request.app.state.cfg
+    head = request.headers.get("authorization", "")
+    tg = auth.check_init_data(head[4:], cfg.bot_token) if head.startswith("tma ") else None
+    if not tg:
+        raise ApiError("forbidden", "init_data")
+    request.state.tg = tg
+    return _upsert(con, tg, cfg.admins)
+
+def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
+    """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
+    t = logic.now()
+    photo = tg.get("photo_url") if str(tg.get("photo_url") or "").startswith("https://t.me/") else None
+    fresh = (tg.get("username"), tg.get("first_name") or "", tg.get("last_name") or "", photo)
+    dm = int(bool(tg.get("allows_write_to_pm")))
+    u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
+    if u is None:
+        lang = str(tg.get("language_code") or "")[:2]
+        con.execute("""INSERT OR IGNORE INTO users (tg_id, tg_username, tg_first_name, tg_last_name, tg_photo_url, lang, role, can_dm, created_at, seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (tg["id"], *fresh, lang if lang in ("ru", "kk", "en") else "ru",
+                                                     "admin" if tg["id"] in admins else "user", dm, t, t))
+        u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
+        logic.visit(con, u["id"], t)
+    else:
+        # ADMIN_TG_IDS are always admins; everyone else's role is given in the app (owner, Oct 22)
+        role = "admin" if tg["id"] in admins and not u["banned_at"] else u["role"]  # a ban outranks the env
+        dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
+        if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
+                or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
+            con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
+                WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
+            logic.visit(con, u["id"], t)
+            u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
+    if u["banned_at"]:
+        raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
+    # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (owner, Oct 20: Microsoft only)
+    return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
+
+
+Me = Annotated[Viewer, Depends(viewer)]
 
 
 def create(cfg: config.Config | None = None) -> FastAPI:
@@ -116,110 +177,68 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         # an id past SQLite's 64-bit integers (only a hand-made request sends one): a bad request, not a crash
         return JSONResponse({"error": "bad_input", "message": ""}, status_code=400)
 
-    # ------------------------------------------------------------ who is calling
-
     pool = db.Pool(cfg.db_path)
-
-    def conn() -> Iterator:
-        with pool.conn() as con:
-            yield con
-
-    def viewer(request: Request, con=Depends(conn)) -> Viewer:
-        head = request.headers.get("authorization", "")
-        tg = auth.check_init_data(head[4:], cfg.bot_token) if head.startswith("tma ") else None
-        if not tg:
-            raise ApiError("forbidden", "init_data")
-        request.state.tg = tg
-        return _upsert(con, tg)
-
-    def _upsert(con, tg: dict) -> Viewer:
-        """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
-        t = logic.now()
-        photo = tg.get("photo_url") if str(tg.get("photo_url") or "").startswith("https://t.me/") else None
-        fresh = (tg.get("username"), tg.get("first_name") or "", tg.get("last_name") or "", photo)
-        dm = int(bool(tg.get("allows_write_to_pm")))
-        u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
-        if u is None:
-            lang = str(tg.get("language_code") or "")[:2]
-            con.execute("""INSERT OR IGNORE INTO users (tg_id, tg_username, tg_first_name, tg_last_name, tg_photo_url, lang, role, can_dm, created_at, seen_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (tg["id"], *fresh, lang if lang in ("ru", "kk", "en") else "ru",
-                                                         "admin" if tg["id"] in cfg.admins else "user", dm, t, t))
-            u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
-            logic.visit(con, u["id"], t)
-        else:
-            # ADMIN_TG_IDS are always admins; everyone else's role is given in the app (owner, Oct 22)
-            role = "admin" if tg["id"] in cfg.admins and not u["banned_at"] else u["role"]  # a ban outranks the env
-            dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
-            if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
-                    or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
-                con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
-                    WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
-                logic.visit(con, u["id"], t)
-                u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
-        if u["banned_at"]:
-            raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
-        # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (owner, Oct 20: Microsoft only)
-        return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
+    app.state.pool, app.state.cfg = pool, cfg  # conn() and viewer() find them there
 
     # ------------------------------------------------------------ me and sign-in
 
     @app.get("/api/me")
-    def get_me(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def get_me(con: Con, v: Me):
         return logic.me(con, v)
 
     @app.patch("/api/me")
-    def patch_me(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def patch_me(con: Con, v: Me, body: dict = Body(...)):
         return logic.update_me(con, v, body)
 
     @app.get("/api/me/delete")
-    def delete_info(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_info(con: Con, v: Me):
         return logic.delete_info(con, v)
 
     @app.post("/api/me/delete")
-    def ask_delete(body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
         """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
-    def consent(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def consent(con: Con, v: Me, body: dict = Body(...)):
         return logic.consent(con, v, body.get("version"))
 
     @app.post("/api/me/dm")
-    def dm_on(body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
         return logic.dm_on(con, v, (body or {}).get("event"))
 
     @app.post("/api/me/keep")
-    def keep_me(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def keep_me(con: Con, v: Me):
         return logic.keep_me(con, v)
 
     # ------------------------------------------------------------ admin: clubs and their teams (pilot)
 
     @app.get("/api/admin/orgs")
-    def admin_orgs(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_orgs(con: Con, v: Me):
         return logic.admin_orgs(con, v)
 
     @app.get("/api/admin/orgs/{oid}/events")
-    def admin_org_events(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_org_events(oid: int, con: Con, v: Me):
         return logic.admin_org_events(con, v, oid)
 
     @app.post("/api/admin/orgs")
-    def admin_create_org(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_create_org(con: Con, v: Me, body: dict = Body(...)):
         return logic.admin_create_org(con, v, body)
 
     @app.post("/api/admin/orgs/{oid}/president-link")
-    def admin_president_link(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_president_link(oid: int, con: Con, v: Me):
         return logic.president_link(con, v, oid)  # the QR the admin shows a President face to face (owner, Oct 16)
 
     @app.put("/api/admin/orgs/{oid}/hidden")
-    def admin_hide_org(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_hide_org(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.admin_hide_org(con, v, oid, bool(body.get("hidden")))
 
     @app.put("/api/admin/orgs/{oid}/role")
-    def admin_set_role(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_set_role(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.admin_set_role(con, v, oid, body)
 
     @app.post("/api/kbtu/manual")
-    def kbtu_manual(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def kbtu_manual(con: Con, v: Me, body: dict = Body(...)):
         """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
         empty, measured Oct 20), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
         (owner, Oct 20): no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
@@ -266,12 +285,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.me(con, Viewer(v.id, v.role, True))
 
     @app.post("/api/ms/start")
-    def ms_start(v: Viewer = Depends(viewer)):
+    def ms_start(v: Me):
         """The Microsoft sign-in link for me (msauth.py); the Mini App opens it outside Telegram"""
         return {"url": msauth.link(cfg.token_key, v.id, cfg.domain)}
 
     @app.get("/api/ms/verifier")
-    def ms_verifier(state: str, con=Depends(conn)):
+    def ms_verifier(state: str, con: Con):
         """The PKCE verifier. No "link to <name>?" question (owner, Oct 23: minimum steps)"""
         uid = msauth.state_uid(cfg.token_key, state)
         if not uid or not logic.one(con, "SELECT 1 FROM users WHERE id = ?", uid):
@@ -302,62 +321,61 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ the clubs' rosters (PLAN 95, roster.py)
 
     @app.post("/api/roster/seen", status_code=204)
-    def roster_seen(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def roster_seen(con: Con, v: Me):
         roster.seen(con, v.id)
 
     @app.post("/api/roster/{rid}/claim", status_code=204)
-    def roster_claim(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def roster_claim(rid: int, con: Con, v: Me):
         logic.need_student(v)
         roster.claim(con, v.id, rid)
 
     @app.get("/api/roster/requests")
-    def roster_requests(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def roster_requests(con: Con, v: Me):
         return logic.roster_requests(con, v)
 
     @app.post("/api/roster/requests/{rid}", status_code=204)
-    def roster_decide(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def roster_decide(rid: int, con: Con, v: Me, body: dict = Body(...)):
         if not isinstance(body.get("ok"), bool):
             raise ApiError("bad_input")
         roster.decide(con, v, rid, body["ok"])
 
     @app.get("/api/me/schedule")
-    def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def my_schedule(con: Con, v: Me):
         return logic.schedule(con, v)
 
-
     @app.get("/api/me/tickets")
-    def my_tickets(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def my_tickets(con: Con, v: Me):
         return logic.tickets(con, v)
 
     # ------------------------------------------------------------ events
 
     @app.get("/api/events")
-    def list_events(frm: int | None = Query(None, alias="from"), to: int | None = None, org: int | None = None,
-                    con=Depends(conn), v: Viewer = Depends(viewer)):
+    def list_events(con: Con, v: Me, frm: int | None = Query(None, alias="from"), to: int | None = None,
+            org: int | None = None):
         return logic.events(con, v, frm, to, org)
 
     @app.get("/api/events/past")
-    def list_past(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def list_past(con: Con, v: Me):
         return logic.past_events(con, v)
 
     @app.post("/api/me/unlocked")
-    def seen_unlock(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def seen_unlock(con: Con, v: Me, body: dict = Body(...)):
         logic.seen_unlock(con, v, body.get("code"), body.get("level"))
         return {"unlocked": logic.unlocked(con, v)}
 
     @app.post("/api/me/calendar")
-    def my_calendar(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def my_calendar(con: Con, v: Me):
         """My calendar feed: the page that subscribes (Apple) and the feed itself (Google's "add by URL")."""
         t = logic.cal_token(con, v)
         return {"page": f"https://{cfg.domain}/cal/{t}", "feed": f"webcal://{cfg.domain}/cal/{t}.ics"}
 
     @app.get("/cal/{token}.ics")
-    def calendar_feed(token: str, con=Depends(conn)):
+    def calendar_feed(token: str, con: Con):
         body = logic.cal_feed(con, token, lambda eid: f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}")
         return Response(body, media_type="text/calendar; charset=utf-8", headers={"Cache-Control": "no-store"})
 
     @app.get("/cal/{token}")
-    def calendar_page(token: str, request: Request, con=Depends(conn)):
+    def calendar_page(token: str, request: Request, con: Con):
         """Opened from the app in the phone's browser: hands webcal:// to the calendar at once, a button if it asks."""
         logic.cal_feed(con, token, str)  # 404 for a token that isn't (or no longer is) anyone's
         lang = next((x for x in ("ru", "kk", "en") if x in request.headers.get("accept-language", "")[:5].lower()), "ru")
@@ -371,7 +389,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/events/{eid}/ics")
-    def event_ics(eid: int, k: str = "", con=Depends(conn)):
+    def event_ics(eid: int, con: Con, k: str = ""):
         # no session: Telegram hands the link to the phone's browser, which gives the file to the calendar
         if not hmac.compare_digest(k, logic.ics_sig(eid)):
             raise ApiError("not_found")
@@ -379,46 +397,46 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                         headers={"Content-Disposition": f'inline; filename="kbtu-event-{eid}.ics"', "Cache-Control": "no-store"})
 
     @app.get("/api/events/{eid}")
-    def get_event(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def get_event(eid: int, con: Con, v: Me):
         return logic.event(con, v, eid)
 
     @app.post("/api/events/{eid}/registration")
-    def register(eid: int, body: dict = Body(default={}), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
         invited = body.get("invitedBy")
         return logic.register(con, v, eid, invited if isinstance(invited, int) else None, body.get("phone"))
 
     @app.delete("/api/events/{eid}/registration")
-    def unregister(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unregister(eid: int, con: Con, v: Me):
         return logic.unregister(con, v, eid)
 
     @app.put("/api/events/{eid}/saved", status_code=204)
-    def save(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def save(eid: int, con: Con, v: Me):
         logic.set_saved(con, v, eid, True)
 
     @app.delete("/api/events/{eid}/saved", status_code=204)
-    def unsave(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unsave(eid: int, con: Con, v: Me):
         logic.set_saved(con, v, eid, False)
 
     # ------------------------------------------------------------ orgs and news
 
     @app.get("/api/orgs")
-    def list_orgs(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def list_orgs(con: Con, v: Me):
         return logic.orgs(con, v)
 
     @app.get("/api/orgs/{oid}")
-    def get_org(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def get_org(oid: int, con: Con, v: Me):
         return logic.org(con, v, oid)
 
     # ------------------------------------------------------------ an org's own chats (PLAN 86)
 
     @app.get("/api/orgs/{oid}/chats")
-    def org_chats(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def org_chats(oid: int, con: Con, v: Me):
         """Studio's list: the invite links too, and whether our bot keeps each card."""
         logic.may_chats(con, v, oid)
         return logic.org_chats(con, oid, True)
 
     @app.post("/api/orgs/{oid}/chats")
-    async def add_org_chat(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def add_org_chat(oid: int, con: Con, v: Me, body: dict = Body(...)):
         """A chat for the org's page: @name, a t.me link or an invite link, looked up on t.me. Errors: bad_input (notchat:
         a person, a bot, no such chat), conflict taken (another org's) / limit, unavailable (Telegram didn't answer)."""
         logic.may_chats(con, v, oid)  # before going to Telegram
@@ -435,273 +453,266 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         try:
             out, gone = logic.add_org_chat(con, v, oid, url, peek)
         except logic.ApiError:
-            _drop_photo([peek["photo"]] if peek.get("photo") and logic.photo_free(con, peek["photo"]) else [])
+            media.drop(photos, [peek["photo"]] if peek.get("photo") and logic.photo_free(con, peek["photo"]) else [])
             raise
-        _drop_photo(gone)
+        media.drop(photos, gone)
         return out
 
     @app.put("/api/orgs/{oid}/chats/{cid}/main")
-    def main_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def main_org_chat(oid: int, cid: int, con: Con, v: Me):
         return logic.main_org_chat(con, v, oid, cid)
 
     @app.put("/api/orgs/{oid}/chats/{cid}/mirror")
-    def mirror_org_chat(oid: int, cid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def mirror_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
 
     @app.delete("/api/orgs/{oid}/chats/{cid}")
-    def drop_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def drop_org_chat(oid: int, cid: int, con: Con, v: Me):
         out, gone = logic.drop_org_chat(con, v, oid, cid)
-        _drop_photo(gone)
+        media.drop(photos, gone)
         return out
 
-    def _drop_photo(gone: list[str]) -> None:
-        for old in gone:
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{old}{ext}").unlink(missing_ok=True)
-
     @app.put("/api/orgs/{oid}/subscription")
-    def subscribe(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def subscribe(oid: int, con: Con, v: Me):
         return logic.subscribe(con, v, oid, True)
 
     @app.delete("/api/orgs/{oid}/subscription")
-    def unsubscribe(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unsubscribe(oid: int, con: Con, v: Me):
         return logic.subscribe(con, v, oid, False)
 
     @app.post("/api/orgs/{oid}/join-requests")
-    def apply(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def apply(oid: int, con: Con, v: Me):
         return logic.apply(con, v, oid)
 
     @app.delete("/api/orgs/{oid}/join-requests/mine")
-    def withdraw(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def withdraw(oid: int, con: Con, v: Me):
         return logic.withdraw(con, v, oid)
 
     @app.get("/api/posts")
-    def list_posts(scope: str = "all", con=Depends(conn), v: Viewer = Depends(viewer)):
+    def list_posts(con: Con, v: Me, scope: str = "all"):
         if scope.startswith("org:") and not scope[4:].isdigit():
             raise ApiError("bad_input")
         return logic.posts(con, v, scope)
 
     @app.post("/api/orgs/{oid}/posts")
-    def create_post(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def create_post(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.create_post(con, v, oid, body)
 
     @app.patch("/api/posts/{pid}")
-    def update_post(pid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def update_post(pid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_post(con, v, pid, body)
 
     @app.delete("/api/posts/{pid}", status_code=204)
-    def hide_post(pid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def hide_post(pid: int, con: Con, v: Me):
         logic.hide_post(con, v, pid)
 
     @app.post("/api/posts/read", status_code=204)
-    def read_posts(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def read_posts(con: Con, v: Me, body: dict = Body(...)):
         logic.read_posts(con, v, body.get("ids") if isinstance(body.get("ids"), list) else [])
 
     @app.put("/api/posts/{pid}/reactions/{kind}")
-    def react(pid: int, kind: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def react(pid: int, kind: str, con: Con, v: Me):
         return logic.react(con, v, pid, kind, True)
 
     @app.delete("/api/posts/{pid}/reactions/{kind}")
-    def unreact(pid: int, kind: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unreact(pid: int, kind: str, con: Con, v: Me):
         return logic.react(con, v, pid, kind, False)
 
     @app.get("/api/users/{uid}")
-    def person(uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def person(uid: int, con: Con, v: Me):
         return logic.person(con, v, uid)
 
     # ------------------------------------------------------------ Studio
 
     # ---- friends (§4.7) ----
     @app.get("/api/friends")
-    def friends(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def friends(con: Con, v: Me):
         return logic.friends(con, v)
 
     @app.get("/api/friends/find")
-    def find_friend(username: str = "", con=Depends(conn), v: Viewer = Depends(viewer)):
+    def find_friend(con: Con, v: Me, username: str = ""):
         return logic.find_student(con, v, username)
 
     @app.post("/api/friends/requests")
-    def ask_friend(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def ask_friend(con: Con, v: Me, body: dict = Body(...)):
         uid = body.get("userId")
         if not isinstance(uid, int) or isinstance(uid, bool):
             raise ApiError("bad_input")
         return logic.ask_friend(con, v, uid)
 
     @app.post("/api/friends/requests/{uid}/{answer}")
-    def answer_friend(uid: int, answer: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def answer_friend(uid: int, answer: str, con: Con, v: Me):
         if answer not in ("accept", "decline"):
             raise ApiError("not_found")
         return logic.answer_friend(con, v, uid, answer == "accept")
 
     @app.delete("/api/friends/requests/{uid}", status_code=204)
-    def take_back_request(uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def take_back_request(uid: int, con: Con, v: Me):
         logic.take_back_request(con, v, uid)
 
     @app.delete("/api/friends/{uid}", status_code=204)
-    def unfriend(uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unfriend(uid: int, con: Con, v: Me):
         logic.unfriend(con, v, uid)
 
     @app.post("/api/friends/link")
-    def friend_link(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def friend_link(con: Con, v: Me):
         return logic.friend_link(con, v)
 
     @app.get("/api/friends/link/{token}")
-    def friend_link_used(token: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def friend_link_used(token: str, con: Con, v: Me):
         return logic.friend_link_used(con, v, token)
 
     @app.post("/api/friends/link/{token}")
-    def use_friend_link(token: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def use_friend_link(token: str, con: Con, v: Me):
         return logic.use_friend_link(con, v, token)
 
     # ------------------------------------------------------------ casting: a club's recruitment round (casting.py)
 
     @app.get("/api/orgs/{oid}/round")
-    def round_view(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_view(oid: int, con: Con, v: Me):
         return casting.view(con, v, oid)
 
     @app.post("/api/orgs/{oid}/round")
-    def round_open(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_open(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.open_round(con, v, oid, body)
 
     @app.patch("/api/rounds/{rid}")
-    def round_update(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_update(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.update_round(con, v, rid, body)
 
     @app.post("/api/rounds/{rid}/apply")
-    def round_apply(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_apply(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.apply(con, v, rid, body)
 
     @app.delete("/api/rounds/{rid}/apply")
-    def round_withdraw(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_withdraw(rid: int, con: Con, v: Me):
         return casting.withdraw(con, v, rid)
 
     @app.get("/api/rounds/{rid}/apps")
-    def round_apps(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_apps(rid: int, con: Con, v: Me):
         return casting.apps(con, v, rid)
 
     @app.post("/api/round-apps/{aid}/vote")
-    def round_vote(aid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_vote(aid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.vote(con, v, aid, body)
 
     @app.post("/api/round-apps/{aid}/decide")
-    def round_decide(aid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_decide(aid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.decide(con, v, aid, body)
 
     @app.get("/api/rounds/{rid}/slots")
-    def round_slots(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_slots(rid: int, con: Con, v: Me):
         return casting.slots(con, v, rid)
 
     @app.post("/api/rounds/{rid}/slots")
-    def round_add_slots(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_add_slots(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.add_slots(con, v, rid, body)
 
     @app.delete("/api/round-slots/{sid}")
-    def round_drop_slot(sid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_drop_slot(sid: int, con: Con, v: Me):
         return casting.drop_slot(con, v, sid)
 
     @app.post("/api/rounds/{rid}/invite")
-    def round_invite(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_invite(rid: int, con: Con, v: Me):
         return casting.invite(con, v, rid)
 
     @app.post("/api/rounds/{rid}/book")
-    def round_book(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_book(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.book(con, v, rid, body)
 
     @app.post("/api/round-apps/{aid}/came")
-    def round_came(aid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_came(aid: int, con: Con, v: Me, body: dict = Body(...)):
         return casting.showed(con, v, aid, body)
 
     @app.post("/api/rounds/{rid}/send")
-    def round_send(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def round_send(rid: int, con: Con, v: Me):
         return casting.send(con, v, rid)
 
     @app.get("/api/orgs/{oid}/memo")
-    def org_memo(oid: int, later: bool = False, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def org_memo(oid: int, con: Con, v: Me, later: bool = False):
         return logic.memo(con, v, oid, later)
 
     @app.get("/api/map/graph")
-    def map_graph(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def map_graph(con: Con, v: Me):
         return logic.map_graph(con)
 
     @app.post("/api/orgs/{oid}/memo/item")
-    def memo_item(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def memo_item(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return {"text": logic.memo_item(con, v, oid, body)}
 
     @app.post("/api/orgs/{oid}/memo/opened", status_code=204)
-    def memo_opened(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def memo_opened(oid: int, con: Con, v: Me):
         logic.memo_opened(con, v, oid)
 
     @app.post("/api/orgs/{oid}/memo/sent", status_code=204)
-    def memo_sent(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def memo_sent(oid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.memo_sent(con, v, oid, body.get("ids"))
 
     @app.post("/api/orgs/{oid}/memo/again/{eid}", status_code=204)
-    def memo_again(oid: int, eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def memo_again(oid: int, eid: int, con: Con, v: Me):
         logic.memo_again(con, v, oid, eid)
 
     @app.put("/api/orgs/{oid}/memo/sign")
-    def memo_sign(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def memo_sign(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.memo_sign(con, v, oid, body)
 
     @app.post("/api/events/{eid}/place")
-    def change_place(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def change_place(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.change_place(con, v, eid, body.get("place"))
 
     @app.get("/api/orgs/{oid}/events")
-    def org_events(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def org_events(oid: int, con: Con, v: Me):
         return logic.org_events(con, v, oid)
 
     @app.post("/api/orgs/{oid}/events")
-    def create_event(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def create_event(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.create_event(con, v, oid, body)
 
     @app.patch("/api/events/{eid}")
-    def update_event(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def update_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_event(con, v, eid, body)
 
     @app.post("/api/events/{eid}/volunteer")
-    def volunteer_apply(eid: int, body: dict = Body(default={}), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def volunteer_apply(eid: int, con: Con, v: Me, body: dict = Body(default={})):
         return logic.volunteer_apply(con, v, eid, body.get("note"))
 
     @app.delete("/api/events/{eid}/volunteer")
-    def volunteer_leave(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def volunteer_leave(eid: int, con: Con, v: Me):
         return logic.volunteer_leave(con, v, eid)
 
     @app.get("/api/events/{eid}/volunteers")
-    def volunteers(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def volunteers(eid: int, con: Con, v: Me):
         return logic.volunteers_list(con, v, eid)
 
     @app.put("/api/events/{eid}/volunteers/{uid}")
-    def volunteer_decide(eid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def volunteer_decide(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.volunteer_decide(con, v, eid, uid, body.get("yes"))
 
     @app.post("/api/events/{eid}/chat")
-    def chat_start(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def chat_start(eid: int, con: Con, v: Me):
         token = logic.chat_start(con, v, eid)  # the bot comes in as an admin that may add people, pin and delete
         return {"url": f"https://t.me/{cfg.bot_username}?startgroup=ec_{token}&admin=invite_users+pin_messages+delete_messages+restrict_members"}
 
     @app.post("/api/events/{eid}/publish")
-    def publish(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def publish(eid: int, con: Con, v: Me):
         return logic.publish_event(con, v, eid)
 
     @app.post("/api/events/{eid}/cancel")
-    def cancel(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def cancel(eid: int, con: Con, v: Me):
         return logic.cancel_event(con, v, eid)
 
     @app.delete("/api/events/{eid}", status_code=204)
-    def delete_event(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_event(eid: int, con: Con, v: Me):
         gone, photo = logic.delete_event(con, v, eid)
-        for root, rels in ((receipts, gone), (photos, photo)):
-            for rel in rels:
-                for ext in (".webp", ".t.webp", ".jpg"):
-                    (root / f"{rel}{ext}").unlink(missing_ok=True)
+        media.drop(receipts, gone)
+        media.drop(photos, photo)
 
     @app.get("/api/events/{eid}/attendees")
-    def attendees(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def attendees(eid: int, con: Con, v: Me):
         return logic.attendees(con, v, eid)
 
     @app.post("/api/events/{eid}/checkin")
-    def checkin(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def checkin(eid: int, con: Con, v: Me, body: dict = Body(...)):
         """A scanned or typed code, or {userId}: by name from the door list (no QR)."""
         uid, code = body.get("userId"), body.get("code")
         if isinstance(uid, int) and not isinstance(uid, bool):
@@ -711,105 +722,105 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.checkin(con, v, eid, code)
 
     @app.put("/api/events/{eid}/rating")
-    def rate_event(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def rate_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.rate_event(con, v, eid, body.get("score"), body.get("comment"))
 
     @app.post("/api/events/{eid}/updates")
-    def post_update(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def post_update(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.post_update(con, v, eid, body.get("body") if isinstance(body.get("body"), str) else "")
 
     @app.delete("/api/events/{eid}/updates/{uid}", status_code=204)
-    def delete_update(eid: int, uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_update(eid: int, uid: int, con: Con, v: Me):
         logic.delete_update(con, v, eid, uid)
 
     @app.delete("/api/events/{eid}/checkin/{uid}", status_code=204)
-    def undo_checkin(eid: int, uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def undo_checkin(eid: int, uid: int, con: Con, v: Me):
         logic.undo_checkin(con, v, eid, uid)
 
     @app.get("/api/events/{eid}/door")
-    def door(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def door(eid: int, con: Con, v: Me):
         return logic.door(con, v, eid)
 
     @app.get("/api/events/{eid}/door/guests")
-    def door_guests(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def door_guests(eid: int, con: Con, v: Me):
         return logic.door_guests(con, v, eid)
 
     @app.post("/api/events/{eid}/door/guests")
-    def add_door_guest(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_door_guest(eid: int, con: Con, v: Me, body: dict = Body(...)):
         """A walk-in by the full name they typed (A19)."""
         return logic.add_door_guest(con, v, eid, body.get("name"))
 
     @app.delete("/api/events/{eid}/door/guests/{gid}", status_code=204)
-    def undo_door_guest(eid: int, gid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def undo_door_guest(eid: int, gid: int, con: Con, v: Me):
         logic.undo_door_guest(con, v, eid, gid)
 
     @app.post("/api/orgs/{oid}/invites")
-    def invite(oid: int, body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def invite(oid: int, con: Con, v: Me, body: dict | None = Body(None)):
         return logic.invite(con, v, oid, body.get("dept") if isinstance(body, dict) else None)
 
     @app.post("/api/invites/{token}")
-    def accept_invite(token: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def accept_invite(token: str, con: Con, v: Me):
         return logic.accept_invite(con, v, token)
 
     @app.get("/api/orgs/{oid}/members")
-    def team(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def team(oid: int, con: Con, v: Me):
         return logic.team(con, v, oid)
 
     @app.get("/api/orgs/{oid}/people")
-    def people(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def people(oid: int, con: Con, v: Me):
         return logic.people(con, v, oid)
 
     @app.patch("/api/orgs/{oid}/members/{uid}")
-    def update_member(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def update_member(oid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_member(con, v, oid, uid, body)
 
     # Team 2.0 (§2b): the club's roles and tags, probation, removal by request, bans
     @app.get("/api/orgs/{oid}/team")
-    def team_setup(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def team_setup(oid: int, con: Con, v: Me):
         return logic.team_setup(con, v, oid)
 
     @app.post("/api/orgs/{oid}/roles")
-    def add_role(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_role(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.save_role(con, v, oid, body)
 
     @app.patch("/api/orgs/{oid}/roles/{rid}")
-    def edit_role(oid: int, rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def edit_role(oid: int, rid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.save_role(con, v, oid, body, rid)
 
     @app.delete("/api/orgs/{oid}/roles/{rid}")
-    def delete_role(oid: int, rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_role(oid: int, rid: int, con: Con, v: Me):
         return logic.delete_role(con, v, oid, rid)
 
     @app.post("/api/orgs/{oid}/tags")
-    def add_tag(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_tag(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.save_tag(con, v, oid, body)
 
     @app.patch("/api/orgs/{oid}/tags/{tid}")
-    def edit_tag(oid: int, tid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def edit_tag(oid: int, tid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.save_tag(con, v, oid, body, tid)
 
     @app.delete("/api/orgs/{oid}/tags/{tid}")
-    def delete_tag(oid: int, tid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_tag(oid: int, tid: int, con: Con, v: Me):
         return logic.delete_tag(con, v, oid, tid)
 
     @app.post("/api/orgs/{oid}/members/{uid}/remove")
-    def remove(oid: int, uid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def remove(oid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.remove(con, v, oid, uid, body)
 
     @app.post("/api/removals/{rid}", status_code=204)
-    def decide_removal(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def decide_removal(rid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.decide_removal(con, v, rid, body.get("approve"))
 
     @app.delete("/api/orgs/{oid}/bans/{uid}", status_code=204)
-    def unban(oid: int, uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def unban(oid: int, uid: int, con: Con, v: Me):
         logic.unban(con, v, oid, uid)
 
     @app.delete("/api/orgs/{oid}/members/{uid}", status_code=204)
-    def remove_member(oid: int, uid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def remove_member(oid: int, uid: int, con: Con, v: Me):
         logic.remove_member(con, v, oid, uid)
 
     @app.post("/api/orgs/{oid}/transfer")
-    def transfer(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def transfer(oid: int, con: Con, v: Me, body: dict = Body(...)):
         try:
             uid = int(body.get("userId"))
         except (TypeError, ValueError):
@@ -817,45 +828,42 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.transfer(con, v, oid, uid)
 
     @app.get("/api/orgs/{oid}/join-requests")
-    def join_requests(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def join_requests(oid: int, con: Con, v: Me):
         return logic.join_requests(con, v, oid)
 
     @app.post("/api/join-requests/{rid}/accept", status_code=204)
-    def accept(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def accept(rid: int, con: Con, v: Me):
         logic.decide_join(con, v, rid, True)
 
     @app.post("/api/join-requests/{rid}/reject", status_code=204)
-    def reject(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def reject(rid: int, con: Con, v: Me):
         logic.decide_join(con, v, rid, False)
 
     @app.patch("/api/orgs/{oid}")
-    def update_org(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def update_org(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_org(con, v, oid, body)
 
     @app.get("/api/orgs/{oid}/links")
-    def org_links(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def org_links(oid: int, con: Con, v: Me):
         return logic.org_links(con, v, oid)
 
     @app.post("/api/orgs/{oid}/links")
-    def add_link(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_link(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.add_link(con, v, oid, body)
 
     @app.delete("/api/links/{slug}", status_code=204)
-    def drop_link(slug: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def drop_link(slug: str, con: Con, v: Me):
         logic.drop_link(con, v, slug)  # the club's Vice+, or the admin revoking it
 
     # ------------------------------------------------------------ photos
 
     @app.post("/api/photos")
-    async def upload_photo(request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def upload_photo(request: Request, con: Con, v: Me):
         """The file itself is the body (no multipart). Decoding and re-encoding run off the event loop."""
         data = await read_upload(request)
         if not logic.organizes(con, v):  # before the work, not only after it
             raise ApiError("forbidden")
-        try:
-            saved = await _img(media.save, data, photos)
-        except media.BadImage:
-            raise ApiError("bad_input", "not_an_image") from None
+        saved = await _picture(media.save, data, photos)
         return logic.add_photo(con, v, saved)
 
     # an event's video (video.py): the size first, then the file in pieces at their offsets, then "done"; a piece sent
@@ -863,11 +871,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     uploads = Path(cfg.db_path).resolve().parent / "uploads"   # originals: never under /media, deleted once compressed
 
     @app.post("/api/videos")
-    def new_video(body: dict, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def new_video(body: dict, con: Con, v: Me):
         return logic.new_video(con, v, body.get("size"), body.get("wide", False))
 
     @app.put("/api/videos/{vid}")
-    async def video_piece(vid: int, at: int, request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def video_piece(vid: int, at: int, request: Request, con: Con, v: Me):
         x = logic.my_video(con, v, vid)
         if x["status"] != "uploading":
             raise ApiError("conflict")
@@ -886,145 +894,127 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return {"at": have + len(data)}
 
     @app.post("/api/videos/{vid}/done")
-    def video_done(vid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def video_done(vid: int, con: Con, v: Me):
         f = uploads / str(vid)
         return logic.video_uploaded(con, v, vid, f.stat().st_size if f.exists() else 0)
 
     @app.get("/api/videos/{vid}")
-    def video_state(vid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def video_state(vid: int, con: Con, v: Me):
         return logic.video_shape(logic.my_video(con, v, vid))
 
     @app.delete("/api/me/photo")
-    def drop_my_photo(con=Depends(conn), v: Viewer = Depends(viewer)):
-        for rel in logic.drop_my_photo(con, v):
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+    def drop_my_photo(con: Con, v: Me):
+        media.drop(photos, logic.drop_my_photo(con, v))
         return logic.me(con, v)
 
     # my own photo instead of Telegram's (owner, Oct 5): the body as in /api/photos; the one it replaces leaves the disk
     @app.post("/api/me/photo")
-    async def upload_my_photo(request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def upload_my_photo(request: Request, con: Con, v: Me):
         data = await read_upload(request)
         logic.need_student(v)  # before the work, not only after it
-        try:
-            saved = await _img(media.save, data, photos)
-        except media.BadImage:
-            raise ApiError("bad_input", "not_an_image") from None
-        for rel in logic.set_photo(con, v, saved):
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+        saved = await _picture(media.save, data, photos)
+        media.drop(photos, logic.set_photo(con, v, saved))
         return logic.me(con, v)
 
     # paid events (§4.3): the receipt is the body, like /api/photos; its image only through the API, to whom may see it
     @app.post("/api/events/{eid}/receipt")
-    async def upload_receipt(eid: int, request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def upload_receipt(eid: int, request: Request, con: Con, v: Me):
         data = await read_upload(request)
         logic.receipt_open(con, v, eid)  # before the work, not only after it
         try:  # Kaspi's PDF or a screenshot; read by OCR (~0.5 s) right here, no queue
-            saved, read = await _img(receipt.take, data, receipts)
-        except media.BadImage:
-            raise ApiError("bad_input", "not_an_image") from None
+            saved, read = await _picture(receipt.take, data, receipts)
         except receipt.NotReceipt:
             raise ApiError("bad_input", "not_receipt") from None
         return logic.add_receipt(con, v, eid, saved, read)
 
     @app.get("/api/receipts/{rid}/image")
-    def receipt_image(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def receipt_image(rid: int, con: Con, v: Me):
         return FileResponse(receipts / f"{logic.receipt_path(con, v, rid)}.webp", media_type="image/webp", headers={"Cache-Control": "private, no-store"})
 
     @app.post("/api/receipts/{rid}/review", status_code=204)
-    def review_receipt(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def review_receipt(rid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.review_receipt(con, v, rid, body.get("reject"))
 
     # comments under posts and events, reports (§4.10)
     @app.get("/api/{kind}s/{tid}/comments")
-    def get_comments(kind: str, tid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def get_comments(kind: str, tid: int, con: Con, v: Me):
         return logic.comments(con, v, kind, tid)
 
     @app.post("/api/{kind}s/{tid}/comments")
-    def add_comment(kind: str, tid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_comment(kind: str, tid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.add_comment(con, v, kind, tid, body.get("body"), body.get("asOrg"), body.get("replyTo"))
 
     @app.patch("/api/{kind}s/{tid}/comments")
-    def switch_comments(kind: str, tid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def switch_comments(kind: str, tid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_comments_on(con, v, kind, tid, body.get("on"))
 
     @app.delete("/api/comments/{cid}", status_code=204)
-    def delete_comment(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def delete_comment(cid: int, con: Con, v: Me):
         logic.delete_comment(con, v, cid)
 
     @app.post("/api/reports", status_code=204)
-    def report(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def report(con: Con, v: Me, body: dict = Body(...)):
         logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
 
     @app.get("/api/admin/taken-down")
-    def taken_down(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def taken_down(con: Con, v: Me):
         return logic.taken_down(con, v)
 
     @app.post("/api/admin/taken-down/{target}/{tid}/restore", status_code=204)
-    def restore(target: str, tid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        for rel in logic.restore(con, v, target, tid):  # a kept photo nothing shows after the undo
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+    def restore(target: str, tid: int, con: Con, v: Me):
+        media.drop(photos, logic.restore(con, v, target, tid))  # a kept photo nothing shows after the undo
 
     @app.get("/api/admin/reports")
-    def report_queue(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def report_queue(con: Con, v: Me):
         return logic.report_queue(con, v)
 
     @app.post("/api/admin/reports/{target}/{tid}", status_code=204)
-    def resolve_report(target: str, tid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
-        for rel in logic.resolve_report(con, v, target, tid, bool(body.get("remove"))):  # a profile's own photo
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+    def resolve_report(target: str, tid: int, con: Con, v: Me, body: dict = Body(...)):
+        media.drop(photos, logic.resolve_report(con, v, target, tid, bool(body.get("remove"))))
 
     @app.post("/api/events/{eid}/seats")
-    def add_seats(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def add_seats(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.add_seats(con, v, eid, body.get("add"))
 
     @app.post("/api/events/{eid}/decline")
-    def decline(eid: int, body: dict | None = Body(None), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def decline(eid: int, con: Con, v: Me, body: dict | None = Body(None)):
         return logic.decline(con, v, eid, (body or {}).get("note"))
 
     @app.get("/api/events/{eid}/meeting")
-    def meeting_answers(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def meeting_answers(eid: int, con: Con, v: Me):
         return logic.meeting_answers(con, v, eid)
 
     @app.get("/api/events/{eid}/leaders")
-    def leaders_answers(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def leaders_answers(eid: int, con: Con, v: Me):
         return logic.leaders_answers(con, v, eid)
 
     @app.get("/api/events/{eid}/invites")
-    def event_invites(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def event_invites(eid: int, con: Con, v: Me):
         return logic.event_invites(con, v, eid)
 
     @app.post("/api/events/{eid}/invites")
-    def invite_friend(eid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def invite_friend(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.invite_friend(con, v, eid, body.get("userId"))
 
     @app.post("/api/events/{eid}/photos")
-    async def add_album_photo(eid: int, request: Request, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def add_album_photo(eid: int, request: Request, con: Con, v: Me):
         """A photo for the guests' album: the file is the body, like /api/photos."""
         data = await read_upload(request)
         if not logic.can_add_album_photo(con, v, eid):  # before the work, not only after it
             raise ApiError("forbidden")
-        try:
-            saved = await _img(media.save, data, photos)
-        except media.BadImage:
-            raise ApiError("bad_input", "not_an_image") from None
+        saved = await _picture(media.save, data, photos)
         return logic.add_album_photo(con, v, eid, saved)
 
     @app.delete("/api/events/{eid}/photos/{fid}")
-    def remove_album_photo(eid: int, fid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def remove_album_photo(eid: int, fid: int, con: Con, v: Me):
         ev, gone = logic.remove_album_photo(con, v, eid, fid)
-        for rel in gone:
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{rel}{ext}").unlink(missing_ok=True)
+        media.drop(photos, gone)
         return ev
 
     # ------------------------------------------------------------ attendee list as a file
 
     @app.post("/api/events/{eid}/attendees/export", status_code=204)
-    async def export_attendees(eid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def export_attendees(eid: int, con: Con, v: Me):
         """The bot sends the CSV to the organizer's own chat: it opens on any phone and can be forwarded (a download
         link would need the app's sign-in, which Telegram's downloader doesn't carry)."""
         e, people = logic.attendees_export(con, v, eid)
@@ -1050,29 +1040,29 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ starting a club (§4.6)
 
     @app.get("/api/club-applications/mine")
-    def my_club_application(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def my_club_application(con: Con, v: Me):
         return {"application": logic.my_club_application(con, v)}
 
     @app.post("/api/club-applications")
-    def apply_club(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def apply_club(con: Con, v: Me, body: dict = Body(...)):
         return logic.apply_club(con, v, body)
 
     @app.get("/api/admin/club-applications")
-    def club_applications(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def club_applications(con: Con, v: Me):
         return logic.club_applications(con, v)
 
     @app.post("/api/admin/club-applications/{aid}")
-    def decide_club_application(aid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def decide_club_application(aid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.decide_club_application(con, v, aid, bool(body.get("approve")), body.get("reason"))
 
     # ------------------------------------------------------------ the chats directory (§4.11)
 
     @app.get("/api/chats")
-    def list_chats(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def list_chats(con: Con, v: Me):
         return logic.chats(con, v)
 
     @app.post("/api/chats/suggest")
-    async def suggest_chat(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def suggest_chat(con: Con, v: Me, body: dict = Body(...)):
         """A chat suggested from the app's own sheet (owner, Oct 21: not through the bot's chat): @name, a t.me link or an
         invite link. {status: sent | waiting | exists | limit | later | slow | notchat | bad, title}."""
         if not v.student:
@@ -1085,75 +1075,75 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return {"status": status, "title": title}
 
     @app.post("/api/chats/{cid}/opened", status_code=204)
-    def chat_opened(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def chat_opened(cid: int, con: Con, v: Me):
         logic.chat_opened(con, v, cid)
 
     @app.post("/api/admin/feature")
-    def feature(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def feature(con: Con, v: Me, body: dict = Body(...)):
         return logic.feature(con, v, body.get("postId"), body.get("days"))
 
     @app.post("/api/admin/grants")
-    def grant(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def grant(con: Con, v: Me, body: dict = Body(...)):
         return logic.grant(con, v, body.get("userId"), body.get("code"))
 
     @app.get("/api/admin/staff")
-    def staff(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def staff(con: Con, v: Me):
         return logic.staff(con, v)
 
     @app.get("/api/admin/staff/find")
-    def staff_find(username: str = "", con=Depends(conn), v: Viewer = Depends(viewer)):
+    def staff_find(con: Con, v: Me, username: str = ""):
         return logic.find_anyone(con, v, username)
 
     @app.post("/api/admin/staff")
-    def staff_set(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def staff_set(con: Con, v: Me, body: dict = Body(...)):
         return logic.set_staff(con, v, body.get("userId"), body.get("role"))
 
     @app.post("/api/admin/ban")
-    def ban(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def ban(con: Con, v: Me, body: dict = Body(...)):
         return logic.set_ban(con, v, body.get("userId"), body.get("on"), body.get("reason"))
 
     @app.get("/api/admin/audit")
-    def audit(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def audit(con: Con, v: Me):
         return logic.audit(con, v)
 
     @app.get("/api/admin/stats")
-    def admin_stats(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_stats(con: Con, v: Me):
         return logic.admin_stats(con, v)
 
     @app.get("/api/admin/grants")
-    def my_grants(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def my_grants(con: Con, v: Me):
         return logic.my_grants(con, v)
 
     @app.post("/api/admin/grants/scan")
-    def grant_scan(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def grant_scan(con: Con, v: Me, body: dict = Body(...)):
         return logic.grant_scan(con, v, body.get("qr"), body.get("code"))
 
     @app.post("/api/grant-links/{token}")
-    def use_grant_link(token: str, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def use_grant_link(token: str, con: Con, v: Me):
         return logic.use_grant_link(con, v, token)
 
     @app.post("/api/admin/grants/take-back")
-    def take_back(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def take_back(con: Con, v: Me, body: dict = Body(...)):
         return logic.take_back(con, v, body.get("userId"), body.get("code"))
 
     @app.delete("/api/admin/grants/{gid}", status_code=204)
-    def ungrant(gid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def ungrant(gid: int, con: Con, v: Me):
         logic.ungrant(con, v, gid)
 
     @app.get("/api/admin/stats/{day}")
-    def admin_day(day: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_day(day: int, con: Con, v: Me):
         return logic.admin_day(con, v, day)
 
     @app.get("/api/admin/ai")
-    def admin_ai(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_ai(con: Con, v: Me):
         return logic.admin_ai(con, v)
 
     @app.post("/api/admin/ai/retry", status_code=204)
-    def admin_ai_retry(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def admin_ai_retry(con: Con, v: Me):
         logic.ai_retry(con, v)
 
     @app.post("/api/admin/chats")
-    async def add_chat(body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def add_chat(con: Con, v: Me, body: dict = Body(...)):
         url = logic.chat_input(v, body)  # before going to Telegram
         async with httpx.AsyncClient(timeout=10) as http:
             peek = await media.chat_peek(http, url)
@@ -1166,47 +1156,45 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             out = logic.add_chat(con, v, body, peek)
         finally:  # a club's row joined the catalog with its own avatar, or the add was refused
             if peek.get("photo") and logic.photo_free(con, peek["photo"]):
-                _drop_photo([peek["photo"]])
+                media.drop(photos, [peek["photo"]])
         return out
 
     @app.put("/api/admin/chats/{cid}/org")
-    def chat_org(cid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def chat_org(cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_chat_org(con, v, cid, body.get("orgId"))
 
     @app.post("/api/admin/chats/{cid}/approve")
-    def approve_chat(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def approve_chat(cid: int, con: Con, v: Me):
         return logic.approve_chat(con, v, cid)
 
     @app.delete("/api/admin/chats/{cid}", status_code=204)
-    def delete_chat(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        if old := logic.delete_chat(con, v, cid):
-            for ext in (".webp", ".t.webp", ".jpg"):
-                (photos / f"{old}{ext}").unlink(missing_ok=True)
+    def delete_chat(cid: int, con: Con, v: Me):
+        media.drop(photos, [logic.delete_chat(con, v, cid)])
 
     # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
 
     @app.get("/api/registry/orgs")
-    def registry(back: int = 0, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def registry(con: Con, v: Me, back: int = 0):
         return logic.registry(con, v, back)
 
     @app.get("/api/registry/memos")
-    def registry_memos(con=Depends(conn), v: Viewer = Depends(viewer)):
+    def registry_memos(con: Con, v: Me):
         return logic.registry_memos(con, v)
 
     @app.get("/api/registry/orgs/{oid}/members")
-    def registry_roster(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+    def registry_roster(oid: int, con: Con, v: Me):
         return logic.registry_roster(con, v, oid)
 
     @app.get("/api/registry/search")
-    def registry_search(q: str = "", con=Depends(conn), v: Viewer = Depends(viewer)):
+    def registry_search(con: Con, v: Me, q: str = ""):
         return logic.registry_search(con, v, q)
 
     @app.post("/api/registry/orgs/{oid}/official")
-    def set_official(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    def set_official(oid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_official(con, v, oid, body.get("on"))
 
     @app.post("/api/registry/export", status_code=204)
-    async def registry_export(con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def registry_export(con: Con, v: Me):
         people = logic.registry_export(con, v)
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.registry_csv(u["lang"], people))
@@ -1214,7 +1202,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ share card
 
     @app.post("/api/share")
-    async def share(request: Request, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+    async def share(request: Request, con: Con, v: Me, body: dict = Body(...)):
         """A card for shareMessage (Bot API 8.0), built by the server from its own templates, so nothing the client
         sends ends up in a message from our bot: an event (a photo card), my friend invite, a club's invite or one of my
         achievements (a line of text and our bot's button; owner, Oct 4: no bare links in chats)."""
@@ -1387,7 +1375,6 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         return page()  # SPA: the app routes itself
 
     return app
-
 
 
 MS_HTML = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
