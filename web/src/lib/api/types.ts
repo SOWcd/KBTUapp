@@ -90,7 +90,9 @@ export interface OrgRef { id: Id; slug: string; name: string; short: string; emo
 /** A club as the admin sees it (pilot): its leaders by Telegram name, and how many members it has. `student`: signed in
  *  with KBTU — a role counts only then. */
 export interface AdminMember { id: Id; role: OrgRole; username: string | null; name: string; student: boolean }
-export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean }
+export interface AdminOrg extends OrgRef { team: AdminMember[]; members: number; hidden: boolean; shortLinks: string[] }
+/** a club's own kbtu.sow.kz/<slug>: only ever into the app (the club, one of its events, its round) */
+export interface ShortLink { slug: string; kind: 'club' | 'event' | 'round'; eventId: Id | null; eventTitle: string | null; createdAt: Ts }
 // a club's event in Admin's delete list, with what deleting it takes along
 export interface AdminEvent { id: Id; title: string; status: 'draft' | 'published' | 'cancelled'; startsAt: Ts | null; people: number; came: number; paid: number; photos: number }
 
@@ -226,6 +228,7 @@ export interface EventCard {
   leadersFrom?: 'president' | 'vice' | 'head' | null; // a leaders meeting: the lowest role invited
   meeting?: boolean;            // a club meeting (§2b): team-only, the whole club or one tag expected to answer and come
   firstYear: boolean;
+  needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
   externalUrl: string | null;
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
@@ -333,6 +336,7 @@ export interface EventInput {
   seats: number | null;
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
   firstYear: boolean;
+  needsPhone?: boolean;        // sign-up asks for the phone if none is kept
   albumOpen?: boolean;         // "Photos from participants" (who came adds to the album); left out = on
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1

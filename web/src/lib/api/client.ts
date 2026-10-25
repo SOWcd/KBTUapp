@@ -98,7 +98,7 @@ export const server: Api = {
   decline: (id, note) => call('POST', `/events/${id}/decline`, note ? { note } : {}),
   leadersAnswers: (id) => call('GET', `/events/${id}/leaders`),
   meetingAnswers: (id) => call('GET', `/events/${id}/meeting`),
-  register: (id, invitedBy) => call('POST', `/events/${id}/registration`, invitedBy ? { invitedBy } : {}),
+  register: (id, invitedBy, phone) => call('POST', `/events/${id}/registration`, { ...(invitedBy ? { invitedBy } : {}), ...(phone ? { phone } : {}) }),
   unregister: (id) => call('DELETE', `/events/${id}/registration`),
   setSaved: (id, on) => call(on ? 'PUT' : 'DELETE', `/events/${id}/saved`),
   tickets: () => call('GET', '/me/tickets'),
@@ -260,5 +260,8 @@ export const server: Api = {
   decideJoin: (id, accept) => call('POST', `/join-requests/${id}/${accept ? 'accept' : 'reject'}`),
   setRecruiting: (org, on) => call('PATCH', `/orgs/${org}`, { recruiting: on }),
   updateOrg: (org, patch) => call('PATCH', `/orgs/${org}`, patch),
+  shortLinks: (org) => call('GET', `/orgs/${org}/links`),
+  addShortLink: (org, link) => call('POST', `/orgs/${org}/links`, link),
+  dropShortLink: (slug) => call('DELETE', `/links/${slug}`),
 
 };

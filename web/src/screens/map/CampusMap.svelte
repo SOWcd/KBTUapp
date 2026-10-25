@@ -604,7 +604,9 @@
   .sheet { position: absolute; inset: 0; }
   .sheet img { position: absolute; display: block; pointer-events: none; -webkit-user-drag: none; }
   .sheet .ov { inset: 0; width: 100%; height: 100%; }
-    .theme-dark .sheet { filter: invert(0.95) hue-rotate(180deg); }
+  /* on each picture, not the sheet: iOS stopped drawing the sheet's filter once the iris animated the panel and the
+     stage over it (owner's screenshot, Oct 26: a white plan in the dark look) */
+  .theme-dark .sheet img { filter: invert(0.95) hue-rotate(180deg); }
   /* the room found: a ring that breathes out, its name in a blue flag above (mockup, Oct 24) */
   .spot { position: absolute; width: 3.4%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
     border: 3px solid var(--accent-text); background: rgba(59, 107, 255, 0.14); box-shadow: 0 0 22px rgba(59, 107, 255, 0.6); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attach, liftRush, openAt, routes, type Graph } from './route';
+import { attach, liftRush, openAt, routes, showsOpen, type Graph } from './route';
 import plan from '../../../server/kbtu/map_graph.json';
 
 // two floors: a corridor on each, the main stairs (g 1) at the left end, a backup-free side stairs (g 2) at the right, a lift (g 3)
@@ -32,6 +32,10 @@ describe('routes', () => {
     expect(openAt(n, new Date(2026, 9, 18, 12, 0))).toBe(false); // Sunday
     expect(openAt(night, new Date(2026, 9, 15, 23, 30))).toBe(true);
     expect(openAt(night, new Date(2026, 9, 16, 6, 0))).toBe(true);
+    const kaz = (plan as unknown as Graph).n.find((x) => x.id === 414)!, sun = new Date(2026, 9, 25, 13, 25); // owner, Oct 26
+    expect(openAt(kaz, sun)).toBe(true); // a way out on an exam Sunday
+    expect(showsOpen(kaz, sun)).toBe(false); // but shown closed
+    expect(showsOpen(kaz, new Date(2026, 9, 26, 13, 25))).toBe(true);
   });
   it('the nearest exit from 424 is down the central stairs and across the yard (owner, Oct 17)', () => {
     const real = plan as unknown as Graph, ar = 2965 / 3307, p = { f: 4, u: 0.503, v: 0.4385 };

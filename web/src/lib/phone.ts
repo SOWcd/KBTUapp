@@ -9,3 +9,9 @@ export function fmtPhone(v: string): string {
   if (!d) return '';
   return '+7 ' + [d.slice(0, 3), d.slice(3, 6), d.slice(6, 8), d.slice(8, 10)].filter(Boolean).join(' ');
 }
+
+/** The number as the server keeps it, "+77012345678"; null until all ten digits are there. */
+export function kzPhone(v: string): string | null {
+  const d = fmtPhone(v).replace(/\D/g, '');
+  return d.length === 11 ? '+' + d : null;
+}

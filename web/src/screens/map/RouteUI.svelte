@@ -27,7 +27,7 @@
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
   import { roomOf, floorOf, nearRooms, spotOf, adminZone, SPOTS } from '../../lib/map';
-  import { attach, routes, openAt, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
+  import { attach, routes, openAt, showsOpen, examOnly, liftRush, RUSH_WAIT, type Mode, type Pt } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
 
@@ -44,7 +44,7 @@
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   const exits = $derived(exitTiles(rt.graph));
   /** a picked entrance that won't open now: said by its name, the way still goes (owner, Oct 24: "I can stand by it") */
-  const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : openAt(n, new Date()) ? '' : t('pad.closed'); };
+  const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : showsOpen(n, new Date()) ? '' : t(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed'); };
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
    *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {

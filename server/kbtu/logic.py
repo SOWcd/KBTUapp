@@ -339,7 +339,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
             "cover": _event_cover(con, e, files),
             "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
             "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
-            "firstYear": bool(e["first_year"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "price": e["price"], "my": my, "visibility": e["visibility"],
+            "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "price": e["price"], "my": my, "visibility": e["visibility"],
             "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
             "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
             "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
@@ -927,6 +927,12 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         keys = [k for k in (patch["showcase"] if isinstance(patch["showcase"], list) else [])
                 if isinstance(k, str) and (k in codes or re.fullmatch(r"b\d{1,9}", k))]
         sets["showcase"] = ",".join(list(dict.fromkeys(keys))[:6])
+    if "phone" in patch:  # my kept phone (Settings → My data): changed, or null deletes it
+        need_student(v)
+        phone = None if patch["phone"] is None else kz_phone(patch["phone"])
+        if patch["phone"] is not None and not phone:
+            raise ApiError("bad_input")
+        con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
     if sets:
         con.execute(f"UPDATE users SET {', '.join(c + ' = ?' for c in sets)} WHERE id = ?", (*sets.values(), v.id))
     if "nRemind" in patch:  # the switch acts at once on reminders already queued: off drops them, on arms the upcoming ones
@@ -1331,7 +1337,8 @@ def promote(con, e: sqlite3.Row) -> None:
         notify(con, nxt["user_id"], "seat_hold" if pay else "seat_free", f"event:{e['id']}")  # a hold: pay within 30 min
 
 
-def register(con, v: Viewer, eid: int, invited_by: int | None = None) -> dict:
+def register(con, v: Viewer, eid: int, invited_by: int | None = None, phone: object = None) -> dict:
+    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71)."""
     need_student(v)
     sweep_holds(con)
     with tx(con):  # count and insert under one write lock: the last seat goes to one person
@@ -1347,6 +1354,12 @@ def register(con, v: Viewer, eid: int, invited_by: int | None = None) -> dict:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if r and r["status"] in ("going", "hold", "waitlist"):
             return card(con, v, e)
+        if e["needs_phone"] and phone is not None:
+            if not (phone := kz_phone(phone)):
+                raise ApiError("bad_input", "phone")
+            con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
+        elif e["needs_phone"] and not one(con, "SELECT phone FROM students WHERE user_id = ?", v.id)[0]:
+            raise ApiError("bad_input", "phone")  # the app asks for it and sends it with the same tap
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
@@ -1704,9 +1717,12 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         for k in ("name", "description"):  # the app showed a translation in the form: sent back unchanged, it's no edit
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
-        if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
-            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{before['slug']}", str(oid)))
-        con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
+        with tx(con):  # the name checked and taken at once (review, Oct 26)
+            if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
+                if not _slug_free(con, sets["slug"], oid):
+                    raise ApiError("conflict", "taken")
+                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{before['slug']}", str(oid)))
+            con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
         if "description" in sets and sets["description"] != before["description"]:
             con.execute("UPDATE orgs SET lang = NULL, ai_tries = 0 WHERE id = ?", (oid,))  # translated again (ai.py)
         if before["i18n"] and (gone := {k for k in ("name", "description") if k in sets and sets[k] != before[k]}):
@@ -3216,6 +3232,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         raise ApiError("bad_input")
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
             "emoji": emoji, "color": color, "seats": seats, "reg_until": reg_until, "first_year": int(bool(i.get("firstYear"))),
+            "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
             "meeting": int(meeting), "meeting_tag": tag, "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
@@ -3533,6 +3550,15 @@ def _focus(body: dict, keep: str | None) -> str | None:
     return f"{x:.3f},{y:.3f}"
 
 
+def kz_phone(raw: object) -> str | None:
+    """A Kazakhstan number as typed (8 701..., +7 701..., 701...) kept as +7XXXXXXXXXX; None if it isn't one."""
+    t = str(raw or "")
+    d = re.sub(r"[^0-9]", "", t)  # ASCII only: \d takes any script's digits (review, Oct 26)
+    # ten digits are the number without its +7, unless it came with a "+": "+7 701 234 56 7" is one digit short
+    d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else "7" + d if len(d) == 10 and not t.lstrip().startswith("+") else d
+    return "+" + d if re.fullmatch(r"7[0-9]{10}", d) else None
+
+
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
     """The price and where students send it (§4.3): only an official club's Vice+ set them, and they are fixed once the
     first receipt is in. Absent keeps them; a null price makes the event free. The phone is kept as +7XXXXXXXXXX.
@@ -3543,14 +3569,12 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     price, name, phone, first = body.get("price"), None, None, None
     if price is not None:
         name = " ".join(str(body.get("payToName") or "").split())
-        phone = re.sub(r"\D", "", str(body.get("payPhone") or ""))
-        phone = "7" + phone[1:] if len(phone) == 11 and phone[0] == "8" else "7" + phone if len(phone) == 10 else phone
+        phone = kz_phone(body.get("payPhone"))
         first = body.get("freeFirst") or None
         if (not isinstance(price, int) or isinstance(price, bool) or not 1 <= price <= 1_000_000
-                or not 2 <= len(name) <= 80 or not re.fullmatch(r"7\d{10}", phone)
+                or not 2 <= len(name) <= 80 or not phone
                 or not (first is None or (isinstance(first, int) and not isinstance(first, bool) and 1 <= first <= 5000))):
             raise ApiError("bad_input")
-        phone = "+" + phone
     new = {"price": price, "pay_to_name": name, "pay_phone": phone, "free_first": first}
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:
@@ -3720,6 +3744,8 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL
             UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
+        for sl in rows(con, "SELECT slug, org_id FROM short_links WHERE event_id = ?", eid):  # they go with it (cascade)
+            _keep_name(con, sl["slug"], sl["org_id"])
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
         # its channel post goes too (owner, Oct 18: it stayed), with the copy in the discussion group: the bot's next
@@ -3753,10 +3779,12 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
     e = _staff_event(con, v, eid, "events")
-    found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email, s.phone,
+    # the phone only where this event asked for it (review, Oct 26: one club's ask reached every club's list)
+    found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email,
+            CASE WHEN ? THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
-        WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", eid)
+        WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", e["needs_phone"], eid)
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'attendees_export', ?, ?, ?)",
                 (v.id, f"event:{eid}", json.dumps({"rows": len(found)}), now()))
     return e, found
@@ -4278,7 +4306,13 @@ TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i 
     0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
 SLUG = re.compile(r"[a-z0-9]{2,24}")
 RESERVED = {"api", "cal", "healthz", "exit", "privacy", "terms", "og", "media", "demo", "old", "assets", "emoji", "map", "admin",
-            "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events"}
+            "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events",
+            # and for the clubs' own links (Oct 25): what a phishing page would like to be
+            "favicon", "apple-touch-icon", "robots", "sitemap", "auth", "oauth", "logout", "signin", "signup", "register", "account",
+            "me", "profile", "dmp", "pay", "kaspi", "telegram", "tg", "security", "official", "news", "about", "wp-admin"}
+# a club's own short link (owner, Oct 25): a club slug, or words joined by single hyphens, 2-32 characters
+SHORT = re.compile(r"(?=.{2,32}$)[a-z0-9]+(?:-[a-z0-9]+)*")
+LINKS_MAX = 20  # a club's: the names are everyone's, first come, first served
 
 
 def slug_for(con, name: str, oid: int | None = None) -> str:
@@ -4332,10 +4366,73 @@ def org_by_slug(con, slug: str) -> int | None:
     return o[0] if o else None
 
 
+def start_by_slug(con, slug: str) -> str | None:
+    """What kbtu.sow.kz/<slug> opens, as the bot's startapp: a club by its slug, else a club's own short link."""
+    s = slug.lower()
+    if oid := org_by_slug(con, s):
+        return f"cl_{oid}"
+    sl = one(con, "SELECT l.* FROM short_links l JOIN orgs o ON o.id = l.org_id WHERE l.slug = ? AND o.status = 'active'", s)
+    if sl:
+        return {"club": f"cl_{sl['org_id']}", "event": f"ev_{sl['event_id']}", "round": f"rc_{sl['org_id']}"}[sl["kind"]]
+    gone = one(con, "SELECT o.id FROM meta m JOIN orgs o ON o.id = CAST(m.value AS INTEGER) WHERE m.key = ? AND o.status = 'active'", f"slug:{s}")
+    return f"cl_{gone[0]}" if gone else None  # a gone link's name leads to its club (_keep_name)
+
+
+def org_links(con, v: Viewer, oid: int) -> list[dict]:
+    _may(con, v, oid, "profile")
+    return [{"slug": sl["slug"], "kind": sl["kind"], "eventId": sl["event_id"], "eventTitle": sl["title"], "createdAt": sl["created_at"]}
+            for sl in rows(con, "SELECT l.*, e.title FROM short_links l LEFT JOIN events e ON e.id = l.event_id WHERE l.org_id = ? ORDER BY l.created_at DESC, l.slug", oid)]
+
+
+def add_link(con, v: Viewer, oid: int, body: dict) -> list[dict]:
+    """Vice+ (the club's profile right) points kbtu.sow.kz/<slug> at the club, one of its published events, or its round;
+    never anywhere outside the app (a phishing page on our domain)."""
+    _may(con, v, oid, "profile")
+    s, kind, eid = str(body.get("slug") or "").strip().lower(), body.get("kind"), body.get("eventId")
+    if not SHORT.fullmatch(s) or kind not in ("club", "event", "round") or (kind == "event") != (eid is not None):
+        raise ApiError("bad_input")
+    if kind == "event" and not (type(eid) is int and one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ? AND status = 'published'", eid, oid)):
+        raise ApiError("bad_input")
+    with tx(con):
+        held = one(con, "SELECT value FROM meta WHERE key = ?", f"slug:{s}")
+        if held and held[0] == str(oid):  # its own old name (a gone link, an old club slug) comes back to it
+            con.execute("DELETE FROM meta WHERE key = ?", (f"slug:{s}",))
+        if not _slug_free(con, s, None):
+            raise ApiError("conflict", "taken")
+        if one(con, "SELECT COUNT(*) FROM short_links WHERE org_id = ?", oid)[0] >= LINKS_MAX:
+            raise ApiError("conflict", "limit")
+        con.execute("INSERT INTO short_links (slug, org_id, kind, event_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)", (s, oid, kind, eid, v.id, now()))
+        con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'link_create', ?, ?, ?)",
+                    (v.id, f"org:{oid}", json.dumps({"slug": s, "kind": kind}), now()))
+    return org_links(con, v, oid)
+
+
+def drop_link(con, v: Viewer, slug: str) -> None:
+    """Its club's Vice+ takes a link down; the app's admin (DMP) revokes anyone's."""
+    sl = one(con, "SELECT * FROM short_links WHERE slug = ?", slug.lower())
+    if not sl:
+        raise ApiError("not_found")
+    own = can(con, v, sl["org_id"], "profile")
+    if not own:
+        _admin(v)
+    with tx(con):
+        con.execute("DELETE FROM short_links WHERE slug = ?", (sl["slug"],))
+        _keep_name(con, sl["slug"], sl["org_id"])
+        con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)",
+                    (v.id, "link_delete" if own else "link_revoke", f"org:{sl['org_id']}", json.dumps({"slug": sl["slug"]}), now()))
+
+
+def _keep_name(con, s: str, oid: int) -> None:
+    """A gone short link's name stays its club's and leads to the club (review, Oct 26: printed posters of one club
+    would open another's), as a changed club slug does."""
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{s}", str(oid)))
+
+
 def _slug_free(con, s: str, oid: int | None) -> bool:
     """Not the app's, nobody's now, nobody's before (a changed slug keeps leading to its club: the old bios)."""
     held = one(con, "SELECT value FROM meta WHERE key = ?", f"slug:{s}")
-    return s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid) and (not held or held[0] == str(oid))
+    return s not in RESERVED and not one(con, "SELECT 1 FROM orgs WHERE slug = ? AND id IS NOT ?", s, oid) and (not held or held[0] == str(oid)) \
+        and not one(con, "SELECT 1 FROM short_links WHERE slug = ?", s)
 
 
 OFFICIAL_ROLES = (("Vice", "#7C4DFF", "vice"), ("Head", "#3B6BFF", "head"))  # with the President: db migration 40
@@ -4363,7 +4460,7 @@ def seed_schools(con, root: Path) -> None:
             names = {s[lang]["name"].lower() for lang in ("ru", "kk", "en")}
             o = next((o for o in rows(con, "SELECT * FROM orgs WHERE kind = 'school'") if o["slug"] == s["slug"] or o["name"].strip().lower() in names), None)
             if o is None:
-                slug = s["slug"] if not one(con, "SELECT 1 FROM orgs WHERE slug = ?", s["slug"]) else None
+                slug = s["slug"] if _slug_free(con, s["slug"], None) else None
                 o = _org(con, create_org(con, None, s["ru"]["name"], s["short"], s["emoji"], True, slug, "school"))
             logo = o["logo_file_id"]
             if logo is None:
@@ -4415,7 +4512,8 @@ def _admin_org(con, o: sqlite3.Row) -> dict:
         WHERE m.org_id = ? AND m.role != 'member'""", o["id"])
     return {**org_ref(con, o), "hidden": o["status"] == "hidden", "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
             "team": sorted(({"id": m["id"], "role": m["role"], "username": m["tg_username"], "name": f"{m['tg_first_name']} {m['tg_last_name']}".strip(),
-                             "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"]))}
+                             "student": bool(m["student"])} for m in team), key=lambda m: (-RANK[m["role"]], m["name"])),
+            "shortLinks": [r[0] for r in rows(con, "SELECT slug FROM short_links WHERE org_id = ? ORDER BY slug", o["id"])]}
 
 
 def admin_orgs(con, v: Viewer) -> list[dict]:

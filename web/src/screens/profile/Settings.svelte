@@ -1,8 +1,10 @@
 <script lang="ts">
   // Profile → Settings, the third page (mockup v24, owner Oct 21; until then a sheet behind a gear). Language and theme,
-  // what the bot sends (switches right here), the phone, the student's own rows, "About the app" (who sees what, the
-  // rules, the code: an overlay, so Telegram's Back closes it), deleting the account last and quiet.
+  // what the bot sends (switches right here), the phone, "My data" (only what an event asked for, once there is
+  // some: PLAN 71), "About the app" (who sees what, the rules, the code: an overlay, so Telegram's Back closes it),
+  // deleting the account last and quiet.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
@@ -12,8 +14,9 @@
   import { t, i18n, setLang, LANGS, LANG_NAMES } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
-  import { haptic, openLink, tg } from '../../lib/tg';
+  import { haptic, openLink, tg, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { fmtPhone } from '../../lib/phone';
 
   const me = $derived(session.me);
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
@@ -36,6 +39,26 @@
     haptic.tap();
     try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
     openLink(/^(ios|macos)$/.test(tg.platform) ? cal.page : 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(cal.feed));
+  }
+
+  // the app's icon on the home screen: the row only while it can be added and isn't yet
+  let home = $state('unsupported');
+  void homeScreen.status().then((s) => (home = s));
+  $effect(() => on('homeScreenAdded', () => { home = 'added'; say(t('set.homeDone'), 'rocket_3d'); }));
+
+  // My data (PLAN 71): the phone an event asked for, seen, changed or deleted here (null deletes it)
+  async function savePhone(phone: string | null, done: string) {
+    try { session.me = await api.updateMe({ phone }); haptic.ok(); say(done, 'sparkles_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
+  async function editPhone() {
+    haptic.tap();
+    const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 707 123 45 67', max: 16, tel: true });
+    if (p) await savePhone(p, t('pd.saved'));
+  }
+  async function dropPhone() {
+    haptic.tap();
+    if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
   }
 
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
@@ -70,16 +93,21 @@
   <div class="rows surface">
     <button class="r" onclick={() => sheets.settings('power')}>
       <span class="lb">{t('power.title')}<i>{t(power.mode === 'auto' ? (power.lite ? 'power.sub.autoOn' : 'power.sub.autoOff') : power.mode === 'on' ? 'power.sub.on' : 'power.sub.off')}</i></span><ChevronRight size={18} /></button>
+    {#if home === 'unknown' || home === 'missed'}
+      <button class="r" onclick={() => { haptic.tap(); homeScreen.add(); }}><span class="lb">{t('set.home')}<i>{t('set.homeSub')}</i></span><ChevronRight size={18} /></button>
+    {/if}
     {#if me?.student}
       <button class="r" onclick={subscribe}><span class="lb">{t('me.calendar')}<i>{t('set.calendarSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
   </div>
 
-  {#if me?.student && !me.student.ms}
-    <!-- signed in through the old portal, not confirmed with the KBTU Microsoft account yet (owner, Oct 20) -->
+  {#if me?.student?.phone}
+    <h2 class="sec">{t('pd.title')}</h2>
     <div class="rows surface">
-      <button class="r" onclick={() => sheets.login()}><span class="lb">{t('me.myData')}<i>{t('me.msSub')}</i></span><ChevronRight size={18} /></button>
+      <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{me.student.phone.startsWith('+7') ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
+        <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
     </div>
+    <p class="note">{t('pd.note')}</p>
   {/if}
 
   <div class="rows surface about">
@@ -112,6 +140,8 @@
   .seg button { height: 30px; padding: 0 12px; border-radius: var(--r-full); font: 620 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
   .seg button.on { background: var(--text); color: var(--bg); }
   .note { margin: 0 4px; font: 500 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  button.lb { text-align: left; }
+  .x { display: flex; padding: 8px; margin-right: -8px; color: var(--danger-text); }
   .about { margin-top: 20px; }
   .mk { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); }
   .del { align-self: center; margin-top: 18px; padding: 8px 14px; font: 600 var(--fs-body)/1 var(--font-text); color: var(--danger-text); }
