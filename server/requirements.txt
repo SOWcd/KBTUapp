@@ -8,3 +8,4 @@ httptools==0.9.0
 httpx==0.28.1
 pillow==12.3.0
 pypdfium2==5.14.0
+telethon==1.44.0    # the userbot: channel mirror, chats directory (owner yes, Oct 22)
