@@ -2,7 +2,7 @@
   // A club, from anywhere its name or logo shows (SPEC §8.3: one sheet for "Subscribe" and "Join"): who they
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
   // club that closed applications can still be written to: its Telegram, else its first link (§4.5). Its Vice+ change
-  // the logo and the rest by tapping the logo (owner, Oct 5: testers looked for it here, not in Studio).
+  // the logo and the rest by tapping the logo (testers looked for it here, not in Studio).
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
@@ -60,7 +60,7 @@
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
     api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});
   });
-  const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club (owner, Oct 20)
+  const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club
   const contact = $derived(o?.links.find((u) => social(u).kind === 'telegram') ?? o?.links[0]);
   // the second button: apply, the pending application, or "write to the club" once it's closed
   const join = $derived(!!o && joinable && !!(o.round || o.myRequest || o.recruiting || contact));
@@ -113,7 +113,7 @@
               <button class="pst" onclick={() => tap(c.url!)}><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
                 <span><b class="ellipsis">{c.title}</b><small>{line}</small></span></button>
             {:else}
-              <!-- closed: shown, but nobody gets in from here (owner, Oct 26) -->
+              <!-- closed: shown, but nobody gets in from here -->
               <div class="pst shut"><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
                 <span><b class="ellipsis">{c.title}</b><small>{line}</small></span><Lock size={17} /></div>
             {/if}
@@ -124,7 +124,7 @@
         </div>
       {/if}
     {:else if fetched && (o.myRights?.includes('profile') || session.me?.role === 'admin')}
-      <!-- none yet: shown to who can link them (owner, Oct 26: even the app's creator couldn't find how) -->
+      <!-- none yet: shown to who can link them (even the app's creator couldn't find how) -->
       <h3 class="t-cap sec">{t('oc.title')}</h3>
       <div class="nochat surface"><p class="t-foot">{t('oc.emptyHint')}</p>
         <Button kind="secondary" size="m" full onclick={() => sheets.clubEdit(o.id, 'chats')}>{t('oc.linkChat')}</Button></div>

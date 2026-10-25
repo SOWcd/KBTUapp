@@ -1,7 +1,7 @@
 <script lang="ts">
   // Starting a club (SPEC §4.6). Said up front: clubs open after the creator's check, so the form asks for the idea —
   // the name (a real club's as the example), its look (LookPick, as the event editor), one description and the club's
-  // networks (LinksEdit; owner, Oct 24: no "why / first month", a button per network). After sending: "on the check";
+  // networks (LinksEdit; no "why / first month", a button per network). After sending: "on the check";
   // a yes opens the club (I'm its President), a no shows the reason and when a new application is possible.
   import { api, ApiErr, type ClubApplication } from '../../lib/api';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
@@ -31,7 +31,7 @@
   const form = $derived(mine !== undefined && (!mine || again || (mine.status === 'rejected' && !waiting)));
 
   let f = $state({ name: '', emoji: PICK_EMOJI[0], cover: COVERS[2], description: '', links: [] as LinkDraft[] });
-  // the example: a real club's name, picked once (owner, Oct 24: "e.g. Chess club" read as a template)
+  // the example: a real club's name, picked once ("e.g. Chess club" read as a template)
   const clubs = data.orgs.filter((o) => o.kind === 'club');
   const example = clubs.length ? clubs[Math.floor(Math.random() * clubs.length)].name : t('nc.namePh');
   const short = $derived(initials(f.name));

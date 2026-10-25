@@ -118,7 +118,7 @@
     {#if valid && !my?.checkedInAt}<p class="hint">{t('tk.hint')}</p>{/if}
     <!-- the receipt looks wrong (§4.3): why, and another file in its place, in the pay sheet -->
     {#if valid && my?.receiptFlags?.length}<button class="pill glass glass-pill doubt" use:glass onclick={() => { close(overlay.id); sheets.pay(id); }}><TriangleAlert size={17} />{t('tk.receiptDoubt')}</button>{/if}
-    <!-- the bot may not write yet: no reminders, no ticket in the chat (owner, Oct 24) -->
+    <!-- the bot may not write yet: no reminders, no ticket in the chat -->
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
     <div class="acts">
       {#if valid && !started}

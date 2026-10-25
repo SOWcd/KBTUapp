@@ -3,10 +3,9 @@
 // and height, as uniq-rooms.json has them; all floors share one frame, so a staircase sits at the same (u, v) on each.
 
 /** k: stairs, lift, exit (else a corridor point); g: the staircase's or lift's id on all its floors; r: rooms whose door
- *  opens here; b: backup, only when there is no other way (owner, Oct 11); e: an evacuation door, opened only then (owner, Oct 24:
- *  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun; s: seconds up to this stair node from
- *  the one below, 0 for a level door: the yard is floor 0 by the west stairs and floor 1 by Halyk Coworking (owner, Oct 24);
- *  q: its Sunday hours hold only on first-year exam days (owner, Oct 26: Kazybek bi) */
+ *  opens here; b: backup, only when there is no other way; e: an evacuation door, opened only then (*  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun; s: seconds up to this stair node from
+ *  the one below, 0 for a level door: the yard is floor 0 by the west stairs and floor 1 by Halyk Coworking;
+ *  q: its Sunday hours hold only on first-year exam days (Kazybek bi) */
 export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[]; s?: number; q?: boolean };
 export type Graph = { n: MapNode[]; e: [number, number][]; ver: number };
 export type Mode = 'fast' | 'lift' | 'alt';
@@ -14,7 +13,7 @@ export type Pt = { f: number; u: number; v: number; node?: MapNode };
 export type Leg = { f: number; pts: Pt[]; up?: MapNode; to?: number };
 export type Route = { mode: Mode; secs: number; legs: Leg[]; via: number[] };
 
-// ponytail: LIFT_WAIT is a guess for a busy campus lift (owner, Oct 24); measure one at a break and tune
+// ponytail: LIFT_WAIT is a guess for a busy campus lift; measure one at a break and tune
 // ponytail: one guessed scale for the whole plan (about 250 m across, the wings ~170 m apart); calibrate against a measured corridor
 export const PLAN_M = 250;
 const WALK = 1.2, STAIR = 20, LIFT_WAIT = 75, LIFT_FLOOR = 8, BACKUP = 600; // m/s, s per flight, s, s, s for a backup point
@@ -30,13 +29,12 @@ export function openAt(n: MapNode, d: Date): boolean {
   return a <= b ? m >= a && m < b : m >= a || m < b;
 }
 /** Exam days only (q) on a Sunday: the app can't tell which Sundays, so the door shows closed; a way out still takes it,
- *  since anyone inside on a Sunday came for an exam and that day the uni opens Kazybek bi, not the guard post (owner, Oct 26) */
+ *  since anyone inside on a Sunday came for an exam and that day the uni opens Kazybek bi, not the guard post */
 export const examOnly = (n: MapNode, d: Date) => !!n.q && d.getDay() === 0;
 export const showsOpen = (n: MapNode, d: Date) => openAt(n, d) && !examOnly(n, d);
 
-/** The lifts' rush (owner, Oct 24): classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
- *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (owner,
- *  Oct 24, a Saturday evening said "rush"). The phone's own clock, which in Almaty is campus time. */
+/** The lifts' rush: classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
+ *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (*  Oct 24, a Saturday evening said "rush"). The phone's own clock, which in Almaty is campus time. */
 export const RUSH_WAIT = 180;
 export const liftRush = (d: Date): boolean => {
   const day = d.getDay(), h = d.getHours(), m = d.getMinutes();
@@ -107,13 +105,13 @@ function shortest(g: Graph, adj: Map<number, Arc[]>, from: At[], to: Map<number,
 }
 
 /** The ways from a to b: the fastest by stairs, by lift (when the floor changes), and another staircase's when it differs
- *  and is at most 30% longer (owner, Oct 15). b may be a set of points (the exits open now). */
+ *  and is at most 30% longer. b may be a set of points (the exits open now). */
 export function routes(g: Graph, ar: number, a: { at: At[]; pt: Pt }, b: { at: At[]; pt?: Pt }): Route[] {
   const adj = arcs(g, ar), by = new Map(g.n.map((n) => [n.id, n])), to = new Map(b.at.map(([id, w]) => [id, w]));
   const make = (mode: Mode, r: { secs: number; ids: number[] } | null): Route | null => {
     if (!r) return null;
     // between the room's number and the corridor: the spot on the corridor, or an elbow to its door point, so the line
-    // runs along the room and turns out through the door, not across walls (owner, Oct 15: an "L", not a diagonal)
+    // runs along the room and turns out through the door, not across walls (an "L", not a diagonal)
     const ns = r.ids.map((id) => by.get(id)!), end = (p: Pt, at: At[], d: MapNode, next?: MapNode): Pt[] => {
       const q = at.find((x) => x[0] === d.id)?.[2];
       if (q) return [{ f: p.f, ...q }];
@@ -138,7 +136,7 @@ export function routes(g: Graph, ar: number, a: { at: At[]; pt: Pt }, b: { at: A
   if (!fast) return [];
   const out = [fast];
   if (fast.legs.length > 1) {
-    // lifts are for everyone, not a step-free mode (owner, Oct 24): ride the nearest lift and take a flight by it when it
+    // lifts are for everyone, not a step-free mode: ride the nearest lift and take a flight by it when it
     // stops short (3 -> 1, then down to 0), never a walk to the far wing for a lift that goes all the way. A flight costs
     // more here so the lift wins wherever it is near; with stairs right by the start, as few flights as can be (lifts
     // only where they reach, else a flight at the end: the basement's 94 has no lift).

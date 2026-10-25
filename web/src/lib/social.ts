@@ -19,7 +19,7 @@ export function social(url: string): { kind: SocialKind; label: string } {
 /** The server's rule for a saved link. */
 export const LINK = /^https:\/\/[A-Za-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/;
 
-// The club's editor (owner, Oct 5: "why not just a username?"): pick a network and type the username, or paste a
+// The club's editor: pick a network and type the username, or paste a
 // whole link, https:// optional. Saved as full links, as before.
 export const NETS = [
   { kind: 'telegram', label: 'Telegram', base: 't.me/' },

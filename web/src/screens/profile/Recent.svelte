@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Where I've been in the last 30 days, in Awards (Oct 13: the "N events" number opens it; My events page gone):
+  // Where I've been in the last 30 days, in Awards (the "N events" number opens it; My events page gone):
   // in the week after one, its faces ask how it was, one tap rates it here.
   import { api, type EventCard } from '../../lib/api';
   import { FACES } from '../../lib/faces';

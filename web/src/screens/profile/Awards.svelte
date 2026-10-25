@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Awards (SPEC §4.11), a sheet from the badge's numbers (Oct 13: no longer Profile's third page): the whole collection. On top, the one closest to its next level (the reason to go to
+  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection. On top, the one closest to its next level (the reason to go to
   // one more event); then every achievement as a card — the medal in its tier's rim, the tier, the way to the next level,
   // how rare it is — earned first; then the badges. "Showcase" turns the page into a picker: up to 6 achievements or
   // badges for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.

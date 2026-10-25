@@ -7,16 +7,15 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { showsOpen, examOnly, type Graph, type MapNode } from '../../lib/route';
   const fl = (n: number) => (n ? tr('route.floor', { n }) : tr('route.basement'));
-  /** " · administration area" after a room on floor 4's south side (owner, Oct 24), else nothing */
+  /** " · administration area" after a room on floor 4's south side, else nothing */
   export const adminNote = (r: string | null | undefined) => (adminZone(r) ? ' \u00b7 ' + tr('route.admin') : '');
   /** the places people know by name, with where they are */
   export function placeTiles(adm = false): PadTile[] {
     return SPOTS.filter((s) => !!s.adm === adm).map((s) => { const name = tr(`route.spot.${s.k}` as 'route.spot.canteen'); return { v: name, label: name, sub: s.room ? `${s.room} \u00b7 ${fl(floorOf(s.room) ?? 0)}${adminNote(s.room)}` : fl(s.f ?? 0) }; });
   }
-  /** the places, then the offices under their own title (owner, Oct 24: "not really needed, can stay") */
+  /** the places, then the offices under their own title */
   export const placeGroups = () => [{ title: tr('pad.places'), tiles: placeTiles() }, { title: tr('pad.admin'), tiles: placeTiles(true) }];
-  /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (owner, Oct 24:
-   *  "from one entrance to another, through the building") */
+  /** the entrances as tiles (not the night post), each open till when or closed now; on A and B alike (*  "from one entrance to another, through the building") */
   export function exitTiles(g: Graph | null): PadTile[] {
     const now = new Date(), seen = new Set<string>();
     const till = (x: MapNode) => x.h?.[now.getDay() === 0 ? 2 : now.getDay() === 6 ? 1 : 0]?.split('-')[1] ?? '';
@@ -25,19 +24,19 @@
         : { v: n.name!, label: n.name!, door: true, off: !showsOpen(n, now), sub: showsOpen(n, now) ? tr('pad.till', { time: till(n) }) : examOnly(n, now) ? tr('pad.exam') : tr('pad.closed') });
   }
   /** an entrance's line under the number: its floor and, when it won't open, why; picking it is still fine, A or B
-   *  (owner, Oct 24: "I can stand by a closed door") */
+   *  */
   export const doorHint = (n: MapNode, floor: string) =>
     tr('pad.entrance', { floor }) + (n.e ? ' \u00b7 ' + tr('pad.evac') : showsOpen(n, new Date()) ? '' : ' \u00b7 ' + tr(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed').toLowerCase());
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
     .sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
-  // a real room as the example, a new one each time (owner, Oct 24: not always 305)
+  // a real room as the example, a new one each time (not always 305)
   const EX = ALL.filter((r) => /^[1-5]\d\d$/.test(r));
   const suggest = (typed: string) => { const q = normRoom(typed); return q.length < 2 ? [] : ALL.filter((r) => r.startsWith(q) && r !== q); };
 </script>
 
 <script lang="ts">
-  // The map's own keypad (owner, Oct 24, mockup design/mock/map.html): every input on the map is a room number or a
+  // The map's own keypad (mockup design/mock/map.html): every input on the map is a room number or a
   // named place, so no system keyboard at all (B7: the iOS keyboard jerked the route card). A big number that pops in
   // digit by digit, the rooms that start so under it (five, one row, no scrolling), round keys that flash under the
   // finger, a letter key cycling a-b-v-g (251a); the named places on a second side as tiles, not a sideways row (owner:
@@ -56,7 +55,7 @@
   } = $props();
 
   const example = EX[Math.floor(Math.random() * EX.length)] ?? '305';
-  const LET = ['\u0430', '\u0431', '\u0432']; // a, b, v as typed on a door; no g on the plan (owner, Oct 24)
+  const LET = ['\u0430', '\u0431', '\u0432']; // a, b, v as typed on a door; no g on the plan
   let typed = $state(untrack(() => start)), fresh = $state(-1), side = $state<'num' | 'place'>('num'), shook = $state(0);
   const word = $derived(/[^\d\u0430-\u0433]/.test(typed));
   const res = $derived(check(typed));
@@ -94,7 +93,7 @@
 </script>
 
 <div class="scrim" onclick={onclose} aria-hidden="true"></div>
-<!-- the point being set shows by its colour (owner, Oct 24: "which one am I setting now?"): A green, B blue -->
+<!-- the point being set shows by its colour: A green, B blue -->
 <div class="msheet pt-{point}" data-cover role="dialog" aria-label={title}>
   <span class="grab" aria-hidden="true"></span>
   <div class="head"><h2><span class="pt" aria-hidden="true">{point === 'a' ? t('pad.a') : t('pad.b')}</span>{title}</h2><button class="xb" onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
@@ -103,7 +102,7 @@
     <button role="tab" aria-selected={side === 'num'} class:on={side === 'num'} onclick={() => flip('num')}>{t('pad.number')}</button>
     <button role="tab" aria-selected={side === 'place'} class:on={side === 'place'} onclick={() => flip('place')}><MapPin size={16} />{placeTab}</button>
   </div>
-  <!-- the place side is only its tiles: no number to show there (owner, Oct 24) -->
+  <!-- the place side is only its tiles: no number to show there -->
   {#if side === 'num'}
   {#key shook}
     <div class="disp" class:word class:shake={shook > 0} role="status">
@@ -192,14 +191,14 @@
   .pad button.x:global(.hit) { background: var(--surface-2); color: var(--text); }
   .pad button.l { font: 650 22px/1 var(--font-text); }
   .pad button.l.off { opacity: 0.25; }
-  /* minmax(0): a long name must not widen its column and scroll the sheet sideways (owner, Oct 24) */
+  /* minmax(0): a long name must not widen its column and scroll the sheet sideways */
   .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-x: hidden; grid-auto-rows: max-content; gap: 8px; align-content: start; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
   .tiles::-webkit-scrollbar { display: none; }
   .cap { grid-column: 1 / -1; margin: 4px 2px 0; font: 650 12px/1 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
   .tile { min-height: 58px; padding: 8px 10px; border-radius: 18px; background: var(--surface); display: flex; align-items: center; gap: 10px; text-align: left;
     font: 620 13.5px/1.2 var(--font-text); color: var(--text); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
   .tile > span:last-child { min-width: 0; }
-  /* a long name: two lines at most, the floor line one (owner, Oct 24: names spilled over the next row) */
+  /* a long name: two lines at most, the floor line one (names spilled over the next row) */
   .tile b { font-weight: 640; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; hyphens: auto; }
   .tile small::first-letter { text-transform: uppercase; }
   .tile small { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-3); font: 500 12px/1.2 var(--font-text); }
@@ -207,7 +206,7 @@
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }
   /* a closed door's why in full on two lines ("evacuation only", "exam days only"); an evacuation door dimmed and struck
-     like a closed one with its red mark: it must not invite a tap (owner, Oct 24) */
+     like a closed one with its red mark: it must not invite a tap */
   .tile.off small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .tile.evac .ti { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
   .tile.evac small { color: var(--danger-text); }

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Achievement medal. The rim tells the tier: bronze / silver / gold, and Legend is iridescent —
   // iridescence lives inside one object, never smeared over text (owner's taste). "First 500" is a struck coin, its
-  // number instead of an emoji (owner, Oct 13: an emoji can't say it; server sends "n500").
+  // number instead of an emoji (an emoji can't say it; server sends "n500").
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();

@@ -20,7 +20,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   if (r.status === 204) return undefined as T;
   const data = await r.json().catch(() => null);
-  // banned mid-session (owner, Oct 22): the app hears it from any call, not only at launch
+  // banned mid-session: the app hears it from any call, not only at launch
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   return localize(data) as T;

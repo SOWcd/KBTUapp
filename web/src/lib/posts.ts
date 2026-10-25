@@ -7,9 +7,8 @@ export const POST_TAGS: PostTag[] = ['important', 'recruiting', 'results', 'news
 export const tagName = (tag: string | null): string | null =>
   tag && (POST_TAGS as string[]).includes(tag) ? t(`tag.${tag}` as 'tag.news') : tag;
 
-/** News as stories (owner, Oct 24): one circle per club, the broadcasts (DMP, KBTU App) first, then clubs with something
- *  unread, then by their newest. A circle holds the club's posts and its new events (owner, Oct 24: "a club publishes an
- *  event, it shows as that club's circle; tap it and you see what's on"), oldest first, opening at the first unseen, as
+/** News as stories: one circle per club, the broadcasts (DMP, KBTU App) first, then clubs with something
+ *  unread, then by their newest. A circle holds the club's posts and its new events, oldest first, opening at the first unseen, as
  *  Telegram's stories do. Posts of the last 30 days; events published in the last 14 and not over yet. Older posts stay
  *  on the club's page. An event is "seen" on this device (`seen`), a post read on the server. */
 export type Story = { post: Post; ev?: never } | { ev: EventCard; post?: never };

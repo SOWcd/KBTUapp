@@ -12,7 +12,7 @@
   import { t } from '../../lib/i18n/index.svelte';
 
   let { memo = $bindable(), seats, date, only }: { memo: MemoAsks; seats: string; date: string; only?: keyof MemoAsks } = $props();
-  // only: the memo sheet's one item (owner, Oct 15): that request's fields, no switches
+  // only: the memo sheet's one item: that request's fields, no switches
   const bare = $derived(!!only);
   $effect(() => { if (only && !memo[only]) toggle(only, true); });
 
@@ -43,7 +43,7 @@
 </script>
 
 <section class="memo" class:bare>
-  <!-- folded by default (owner, Oct 13: six switches crowd the editor); the row says what is asked, so a closed one
+  <!-- folded by default (six switches crowd the editor); the row says what is asked, so a closed one
        hides nothing -->
   {#if !bare}<button class="head surface" aria-expanded={open} onclick={() => { haptic.tap(); open = !open; }}>
     <span class="tx"><b>{t('memo.fold')}</b><i>{asked.length ? asked.map((k) => t(`memo.${k}`)).join(', ') : t('memo.none')}</i></span>

@@ -1,10 +1,10 @@
 <script lang="ts">
   // Events → List (the home page). Title + count, the featured post, then the
   // days as timelines: classes from the portal schedule (one slim row each; back-to-back ones of a subject
-  // joined into one row with a "×2"/"×3" chip, lib/classes.ts; owner, Oct 13: tall blocks took too much room)
+  // joined into one row with a "×2"/"×3" chip, lib/classes.ts; tall blocks took too much room)
   // and events, in time order, so an event shows in the gap between classes where it really is. No date strip (owner, Oct 24: people
-  // scroll); the headers don't stick either (a slab mid-screen over the rows, owner's screenshot).
-  // Mockup v24 (owner, Oct 21): "Today" up top with a stack of live cards you swipe like Wallet passes: the event I'm
+  // scroll); the headers don't stick either (a slab mid-screen over the rows).
+  // Mockup v24: "Today" up top with a stack of live cards you swipe like Wallet passes: the event I'm
   // going to with its countdown and ticket, and the class on now or next with its room, what's left of it and the rest
   // of the day. The class card comes first while a class is on or within the hour, else the event (most students have
   // no timetable yet: PLAN 49, schedules). Neither: no stack.
@@ -49,7 +49,7 @@
   const days = $derived.by<Day[]>(() => {
     const by = new Map<number, Item[]>();
     for (const e of data.events) { const d = dayNo(e.startsAt); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
-    // all days: the coming week's class days too (the owner missed his Wednesday, Oct 5), later only event days
+    // all days: the coming week's class days too (the owner missed his Wednesday), later only event days
     // today's classes stay here too: their rows are where "I won't go" is tapped (and taken back), and the stack shows
     // only the next three
     const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -165,7 +165,7 @@
           <!-- a tap: "I won't go" (the capsule leaves it out), or back again -->
           <div class="cl" class:past={it.end < clock} class:skip={skipped.has(it.key)} role="button" tabindex="0"
                onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(k) => k.key === 'Enter' && skipClass(it.key, it.c)}>
-            <!-- a lettered tile, its colour per kind (owner, Oct 14: the icons didn't say "lecture" or "practice") -->
+            <!-- a lettered tile, its colour per kind (the icons didn't say "lecture" or "practice") -->
             <span class="cl-k {k ?? ''}" title={it.c.kind ?? undefined}>{k ? t(`list.kind.${k}`) : ''}</span>
             <span class="cl-t num"><b>{it.c.begins}</b>–{it.c.ends}</span>
             <span class="cl-s ellipsis">{shortSubject(subjectOf(it.c))}</span>
@@ -262,7 +262,7 @@
   .rm { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 18px; background: #fff; color: #0B1433; box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.6); }
   .rm small { font: 600 var(--fs-micro)/1 var(--font-text); color: #4A5680; }
   .rm b { max-width: 64px; font: 800 26px/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .rm b.sm { font-size: 15px; } /* the dorm, a long room: whole, not cut to one letter (owner, Oct 26) */
+  .rm b.sm { font-size: 15px; } /* the dorm, a long room: whole, not cut to one letter */
   .now-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .now-t small { display: flex; align-items: center; gap: 6px; font: 650 var(--fs-cap)/1.2 var(--font-text); color: var(--accent-text); }
   .now-t small i { display: none; width: 7px; height: 7px; border-radius: 50%; background: #46D6FF; box-shadow: 0 0 0 3px rgba(70, 214, 255, 0.25); }

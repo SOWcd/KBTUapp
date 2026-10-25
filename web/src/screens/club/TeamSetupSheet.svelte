@@ -1,6 +1,6 @@
 <script lang="ts">
   // Team 2.0 (SPEC §2b), from Team: the club's own roles — a name, a colour and toggles of rights, as admin rights in
-  // Telegram (owner, Oct 7: "what does Head's rights even mean?"), made by whoever runs the team, only with rights they
+  // Telegram, made by whoever runs the team, only with rights they
   // have and below their own level — and its tags, groups of people ("people"). The team runner also sees who is banned
   // and can lift it. Who has a tag is set here too, in the tag (owner, Oct 14: not on the fly in a person's card, where
   // a stray tap tagged someone).
@@ -69,7 +69,7 @@
     try { await api.unban(org, user); haptic.ok(); await load(); }
     catch (e) { oops(e); }
   }
-  // a role I can't edit opens to read: what it may and may not do (owner, Oct 13: "tap Manager and see its rights")
+  // a role I can't edit opens to read: what it may and may not do
   let peek = $state<Id | null>(null);
   // a role I may edit: its level is below mine
   const mayEdit = (r: ClubRole) => vice && !!mine && RANK[r.level] < RANK[mine];
@@ -91,7 +91,7 @@
   }
   const toggle = (k: Right, on: boolean) => { haptic.tap(); frights = on ? [...frights, k] : frights.filter((x) => x !== k); };
   const rightName = (k: Right) => t(`right.${k}` as 'right.door');
-  // the door is every member's, not a toggle (owner, Oct 15)
+  // the door is every member's, not a toggle
   const TOGGLES = RIGHTS.filter((x) => x.key !== 'door');
   const summary = (r: ClubRole) => { const on = r.rights.filter((k) => k !== 'door'); return on.length ? on.map(rightName).join(', ') : t('ts.noRights'); };
 </script>
@@ -140,7 +140,7 @@
     <h3 class="t-cap">{t('ts.roles')}</h3>
     <p class="t-foot hint">{t('ts.rolesHint')}</p>
     <div class="items">
-      <!-- the three official roles first (owner, Oct 15): the President, one per club, is the level itself -->
+      <!-- the three official roles first: the President, one per club, is the level itself -->
       <div class="it"><span class="dot" style="--c:#FFB23D"></span><span class="rn"><b class="ellipsis">{ROLE_NAME.president}</b><i class="ellipsis">{t('ts.president')}</i></span><span class="n num">1</span></div>
       {#each setup?.roles ?? [] as r (r.id)}
         {#if kind === 'role' && fid === r.id}{@render form()}

@@ -27,7 +27,7 @@
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
   const pick = $derived(org);
   const club = $derived(mine.find((m) => m.org.id === pick)?.org);
-  // "Important" messages the club's members (once a day per club), so it's Vice+'s (owner, Oct 13)
+  // "Important" messages the club's members (once a day per club), so it's Vice+'s
   const vice = $derived(may(mine.find((m) => m.org.id === pick), 'team'));
   const events = $derived(may(mine.find((m) => m.org.id === pick), 'events'));
   const broadcast = $derived(!!data.orgs.find((o) => o.id === pick)?.canBroadcast || club?.kind === 'office' || club?.kind === 'app');
@@ -53,7 +53,7 @@
   let uploading = $state(false);
   let busy = $state(false);
   // the title is the post's headline (the bot's message, the comments): a tap without one says so and puts the cursor
-  // there, never a grey button that doesn't say why (a tester, Oct 5)
+  // there, never a grey button that doesn't say why (a tester)
   let titleEl = $state<HTMLInputElement>();
   let tried = $state(false);
   const noTitle = $derived(title.trim().length < 2);
@@ -108,11 +108,11 @@
 <Sheet {overlay} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
 
-  <!-- the club chosen in Studio, no picker (owner, Oct 24: "why a choice where none is needed") -->
+  <!-- the club chosen in Studio, no picker -->
   {#if club}
     <p class="from"><OrgLogo org={club} size={22} /><b>{club.name}</b></p>
   {/if}
-  <!-- an event announces itself in News once published: no post for it as well (owner, Oct 13) -->
+  <!-- an event announces itself in News once published: no post for it as well -->
   {#if !was && events}<button class="tip" onclick={() => sheets.editor(pick)}><CalendarPlus size={18} /><span>{t('post.eventTip')}</span><ChevronRight size={16} /></button>{/if}
 
   {#if photo}

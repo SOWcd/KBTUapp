@@ -2,7 +2,7 @@
 // which opens the KBTU sign-in sheet and runs the action by itself after sign-in (SPEC §2).
 import { api, ApiErr, type Me } from '../api';
 
-// banned: the platform ban (owner, Oct 22), why and whom to write; the app shows only that
+// banned: the platform ban, why and whom to write; the app shows only that
 export const session = $state({ me: null as Me | null, ready: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null });
 
 import { clearCache } from './cache';
@@ -27,7 +27,7 @@ let loginHook: ((after: () => void) => void) | null = null;
 export function setLoginHook(fn: (after: () => void) => void): void { loginHook = fn; }
 
 // Microsoft's return link opens the app anew, and the action's closure is gone by then: `again` is the action as a start
-// param (rc_<club>, newclub), kept on the phone and replayed after that sign-in (review, Oct 23)
+// param (rc_<club>, newclub), kept on the phone and replayed after that sign-in
 const AGAIN = 'kb-again';
 export function asStudent(action: () => void, again?: string): void {
   if (session.me?.student) return action();

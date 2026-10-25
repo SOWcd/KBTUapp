@@ -1,14 +1,14 @@
 <script lang="ts">
   // Live phrase: a 3D emoji and a short line, floats over the nav for ~2.5 s (state/ui.svelte.ts say()).
-  // One pill while phrases keep coming (owner, Oct 24, A1): a new phrase doesn't replay the entrance, the pill MORPHS
+  // One pill while phrases keep coming (A1): a new phrase doesn't replay the entrance, the pill MORPHS
   // into it, its width springs to the new line while the old line and emoji fade out in place. The entrance: the pill
   // grows out of its emoji, the emoji bounces in, the line comes into focus. Transforms, opacity, clip-path and one
   // width tween per phrase: nothing runs while it just sits there.
   import { toast } from '../lib/state/ui.svelte';
   import Emoji from './Emoji.svelte';
   import { glass } from './glass';
-  // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way (review, Oct 22);
-  // the map's bottom holds its place card, so there it drops under the floors (owner, Oct 25: it covered the card)
+  // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way;
+  // the map's bottom holds its place card, so there it drops under the floors (it covered the card)
   const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d || 'map' in d; };
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -23,7 +23,7 @@
     if (fresh) top = atTop();
     from = pill?.offsetWidth ?? 0;
     // where the leaving line and emoji stand, read before either leaves: the emoji going out of the flow first moved
-    // the line onto it, and a theme switch froze that in its snapshot (owner's video, Oct 26)
+    // the line onto it, and a theme switch froze that in its snapshot
     for (const c of pill?.children ?? []) at.set(c, [(c as HTMLElement).offsetLeft, (c as HTMLElement).offsetTop]);
   });
   $effect(() => {
@@ -54,7 +54,7 @@
     return { duration: still() ? 0 : 520, easing: (k: number) => 1 - Math.pow(1 - k, 3),
       css: (k: number) => `clip-path:inset(0 ${(1 - k) * r}px 0 0 round 999px);opacity:${Math.min(1, k * 3)}` };
   }
-  // the exit mirrors it (owner, Oct 25): the line is wiped back into the emoji, then that circle pops away
+  // the exit mirrors it: the line is wiped back into the emoji, then that circle pops away
   function shrink(node: HTMLElement, { top }: { top: boolean }) {
     const r = node.offsetWidth - node.offsetHeight, h = node.offsetHeight / 2;
     return { duration: still() ? 0 : 480, css: (k: number) => {
@@ -84,7 +84,7 @@
     transform: translateX(-50%); pointer-events: none;
     animation: pop 420ms var(--ease-spring) both;
   }
-  /* a sheet's footer holds its buttons: there the toast drops from the top, under Telegram's header, like an iOS push (owner, Oct 22) */
+  /* a sheet's footer holds its buttons: there the toast drops from the top, under Telegram's header, like an iOS push */
   .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop; }
   :global(html[data-map]) .toast.top { top: calc(max(48px, var(--top)) + 70px); } /* under the map's floor row */
   .em { display: flex; flex: none; }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The org's Telegram chats on its page (PLAN 86, owner Oct 22 and 26): its Vice+ add them by @name, a link or an
+  // The org's Telegram chats on its page (PLAN 86): its Vice+ add them by @name, a link or an
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Trash from '@lucide/svelte/icons/trash-2';

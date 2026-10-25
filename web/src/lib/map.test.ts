@@ -16,9 +16,9 @@ it('finds the floor of a room, never of an address', () => {
   expect(roomOf('305 \u0438 306')).toBe('305');
   expect(roomOf('305\u043a\u0430\u0431')).toBe('305');
   expect(floorOf('251a')).toBe(2);
-  // Independence Hall's wing is 7xx on floor 2 (owner, Oct 15); the basement's 70 stays below
+  // Independence Hall's wing is 7xx on floor 2; the basement's 70 stays below
   expect(floorOf('728')).toBe(2);
-  expect(roomOf('Independence Hall')).toBe(null); // the round hall, a place without a number (owner, Oct 24)
+  expect(roomOf('Independence Hall')).toBe(null); // the round hall, a place without a number
   expect(floorOf('Independence Hall')).toBe(2);
   expect(floorOf('Halyk Arena')).toBe(null); // an arena in town, not the co-working's floor
   expect(roomOf('Kunaev Hall')).toBe('400a');
@@ -50,7 +50,7 @@ describe('nearRooms', () => {
   });
 });
 
-// the second building (owner, Oct 17): its 312 is not the main one's; it opens 2GIS with its own number
+// the second building: its 312 is not the main one's; it opens 2GIS with its own number
 it('the second building', () => {
   const p = '312 (\u041a\u043e\u0440\u043f\u0443\u0441 \u21162, \u0443\u043b. \u0422\u043e\u043b\u0435 \u0431\u0438)'; // "312 (Korpus No2, Tole bi st.)"
   expect(atBldg2(p)).toBe(true);

@@ -88,7 +88,7 @@
     <section class="chats">
       <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
       <div class="ch-row hscroll" data-noswipe>
-        <!-- any student brings a chat in: the bot opens Telegram's own chat picker (owner, Oct 20) -->
+        <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
         <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
         {#each chats.forYou as c (c.id)}
           <button class="chat" onclick={() => tapChat(c)}>
@@ -220,7 +220,7 @@
   .allb { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 52px; margin-top: 16px; padding: 0 14px 0 16px;
     border-radius: var(--r-l); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
   .allb:active { transform: scale(0.98); }
-  /* the schools, folded into one row (owner, Oct 25) */
+  /* the schools, folded into one row */
   .fold { margin-top: 10px; }
   .srow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px 8px 12px; text-align: left; color: var(--text-3); }
   .srow b { flex: 1; font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }

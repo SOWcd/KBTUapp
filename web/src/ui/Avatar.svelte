@@ -24,7 +24,7 @@
 
 {#snippet face()}
   {#if person.avatar && !broken}
-    <!-- the person's tone under the photo while it loads (owner, Oct 25: his own profile showed a white square first) -->
+    <!-- the person's tone under the photo while it loads (his own profile showed a white square first) -->
     <img src={person.avatar} alt="" width={size} height={size} decoding="async" loading={size >= 64 ? 'eager' : 'lazy'} style="background:{tone}"
       onerror={() => (broken = true)} />
   {:else}

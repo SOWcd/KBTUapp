@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Every club, from the Clubs tab's "All clubs · N" (owner, Oct 25: 44 tiles were chaos): compact rows, a search, the
+  // Every club, from the Clubs tab's "All clubs · N" (44 tiles were chaos): compact rows, a search, the
   // biggest first (members, then followers), empty clubs last; the Student Government first. Schools have their own row.
   import SearchField from '../../ui/SearchField.svelte';
   import type { Org } from '../../lib/api';

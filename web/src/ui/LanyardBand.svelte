@@ -1,6 +1,6 @@
 <script lang="ts">
-  // A club's own art on its lanyard (owner, Oct 20, drafts in KBTUapp-OLD/design/lanyards). `wide`: the profile's
-  // card keeps its size (owner: "the old size was ideal"), so the art is the card's background: the symbol big on the
+  // A club's own art on its lanyard (drafts in KBTUapp-OLD/design/lanyards). `wide`: the profile's
+  // card keeps its size, so the art is the card's background: the symbol big on the
   // right, the pom-poms or the ball beside the QR; else a band on top of the full-screen badge, the art in the middle.
   // Art: the panther and the Knights emblem cut from the clubs' logos; Knights' ball is three sports in one (they play
   // basketball, football and volleyball: a student's idea from their tryout poster, Oct 20), white line art like the emblem.

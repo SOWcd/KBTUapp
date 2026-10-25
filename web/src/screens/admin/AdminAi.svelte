@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → AI (owner, Oct 21: "where is the AI section?"): the translator of event and club texts (PLAN 9, ai.py on
+  // Admin → AI: the translator of event and club texts (PLAN 9, ai.py on
   // Cloudflare Workers AI): on or off, what it did today (Cloudflare's day, UTC), its last error, how much is done,
   // waits or failed three times; the failed can get three more tries.
   import Sparkles from '@lucide/svelte/icons/sparkles';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // An event's volunteer applications (owner, Oct 15), the organizers' (the "events" right): waiting first, each with its
+  // An event's volunteer applications, the organizers' (the "events" right): waiting first, each with its
   // "why", full name and course; write to them, then yes or no, the bot tells them. No more yeses than places.
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type Id, type VolunteerApp } from '../../lib/api';

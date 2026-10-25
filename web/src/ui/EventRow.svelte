@@ -20,7 +20,7 @@
   const over = $derived(!cancelled && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
 </script>
 
-<!-- a club's own event looks like one: an outline instead of a card, the team mark by its time (owner, Oct 6) -->
+<!-- a club's own event looks like one: an outline instead of a card, the team mark by its time -->
 <button class="row press" class:cancelled class:inner={inner(e)} onpointerdown={() => { if (!onopen) prefetchEvent(e.id); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.querySelector('.poster')))}>
   <Poster item={e} size={68} radius={16} dim={cancelled} />
   <span class="txt">

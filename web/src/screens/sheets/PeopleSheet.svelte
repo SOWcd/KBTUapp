@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Everyone in a club or school (owner, Oct 24: President and Vice on the club sheet, one button for the rest): names
+  // Everyone in a club or school (President and Vice on the club sheet, one button for the rest): names
   // and roles, highest first; a tap opens the person's card. A club may hide the list (ClubEditSheet): then a line.
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The news on top of Afisha's List, as a row of circles (owner, Oct 24; PLAN 46): the broadcasts (DMP, KBTU App),
+  // The news on top of Afisha's List, as a row of circles (PLAN 46): the broadcasts (DMP, KBTU App),
   // every club I'm in or follow that posted in the last 30 days, and every club with a new event (lib/posts.ts); a ring while something is unread. A tap plays that
   // club's posts full screen (Stories.svelte), then the next clubs'.
   import { untrack } from 'svelte';
@@ -9,7 +9,7 @@
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full (owner, Oct 26: "EC" looked like a bug)
+  import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full ("EC" looked like a bug)
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha' && ui.page.afisha === 1) void untrack(loadNews); });

@@ -1,9 +1,9 @@
-// Short names where long ones blow up the layout (owner, Oct 25): a school by its abbreviation everywhere but its own
+// Short names where long ones blow up the layout: a school by its abbreviation everywhere but its own
 // page; a club by its own short name (Studio, prefilled with its initials) where it sits inline in a tight line.
 import type { OrgRef } from './api';
 import { data } from './state/data.svelte';
 
-/** Up to this a club's full name fits a tight line too: "Echo Community" as "EC" looked like a bug (owner, Oct 26) */
+/** Up to this a club's full name fits a tight line too: "Echo Community" as "EC" looked like a bug */
 const FITS = 18;
 /** A school's short name always (everyone says SITE); a club's only when its full name is long; the full one until it has one. */
 export const shortOf = (o: Pick<OrgRef, 'name' | 'abbr'> & { kind?: OrgRef['kind'] }): string =>

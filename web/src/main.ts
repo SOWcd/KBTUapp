@@ -14,7 +14,7 @@ applyTheme(initialTheme(tg.colorScheme()));
 boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#07080F');
 
 // A deploy replaces the lazily loaded screens, so an app opened before it fails to load its next sheet and the tap
-// does nothing (owner, Oct 6: "the QR sometimes doesn't open, after a restart it does"): reload into the new build.
+// does nothing: reload into the new build.
 // At most once a minute, so a real outage can't loop.
 window.addEventListener('vite:preloadError', (e) => {
   try {
@@ -26,7 +26,7 @@ window.addEventListener('vite:preloadError', (e) => {
 });
 
 // WebKit (every iPhone, Telegram's webview too) applies :active only when a touch listener sits on the element or above
-// it; without one, buttons outside the swipeable tabs and sheets didn't react to a press at all (owner, Oct 13).
+// it; without one, buttons outside the swipeable tabs and sheets didn't react to a press at all.
 document.addEventListener('touchstart', () => {}, { passive: true });
 hapticTaps();
 

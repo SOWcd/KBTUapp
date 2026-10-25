@@ -4,7 +4,7 @@
   // history and can still reject it). The receipt comes as Kaspi's PDF or a screenshot, here or through the bot
   // (Kaspi → Share → Telegram → the bot): back in the app after that, the seat that became a ticket opens it. A receipt
   // that looks wrong (the server's flags) keeps the ticket and says why at once, with another file to send in its place
-  // until the organizer looks at it (owner, Oct 11); the ticket opens this sheet for that too.
+  // until the organizer looks at it; the ticket opens this sheet for that too.
   // ponytail: no "Open Kaspi" button: Kaspi has no public link that opens a transfer, so the number is one tap to copy.
   import { onMount } from 'svelte';
   import Copy from '@lucide/svelte/icons/copy';
@@ -43,7 +43,7 @@
   let busy = $state(false);
   let picker = $state<HTMLInputElement>();
   function paid() {
-    haptic.ok(); burst(false, undefined, e?.emoji); say(t('pay.done'), 'party_popper_3d'); // the ticket: a moment (owner's list)
+    haptic.ok(); burst(false, undefined, e?.emoji); say(t('pay.done'), 'party_popper_3d'); // the ticket: a moment
     close(overlay.id);
     sheets.ticket(id);
   }

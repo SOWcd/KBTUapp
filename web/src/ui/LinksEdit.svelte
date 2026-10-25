@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club's links (owner, Oct 5 and Oct 24): a network's button asks for that username (or a pasted link), any site
+  // A club's links (Oct 5 and Oct 24): a network's button asks for that username (or a pasted link), any site
   // too; six at most. The caller turns the drafts into links with linkUrl.
   import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';
