@@ -6,7 +6,7 @@ This audit only measures; it changes no code. Main at 78f0d21.
 
 - The real server (`server/tools/qa.py`, port 8792) with its made-up database. Built web/dist served from it, also with
   source maps (`vite build --sourcemap`) so profiles name source lines.
-- Chrome 14x headless, Playwright `iPhone 13` profile (390x664, DPR 3, touch), **CPU throttled 4x** (a mid phone).
+- Chrome 156 headless, Playwright `iPhone 13` profile (390x664, DPR 3, touch), **CPU throttled 4x** (a mid phone).
   Cold start also on a 9 Mbit/s, 40 ms network with the cache off.
 - Every step is a real CDP touch (held 100-250 ms) or a click. Each step records a 1.2-3.5 s window with:
   rAF frame intervals (p50, p95, max, dropped frames), `long-animation-frame` entries with their
