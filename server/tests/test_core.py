@@ -3947,6 +3947,12 @@ def test_door_guests(env):
     con.execute("UPDATE students SET first_name = 'Mem' WHERE user_id = ?", (other["id"],))  # two students named Mem Testov
     ms(mem["id"])
     assert came(mem["id"]) == []                                                       # nobody can tell which one came
+    # the check-in a typed name made is taken back within 10 minutes: the name goes with it, and nothing links again
+    assert c.delete(f"/api/events/1/checkin/{ali['id']}", headers=M).status_code == 204
+    assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
+    assert "Ali Testov" not in [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()]
+    logic.link_door_guests(con, ali["id"])
+    assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
     logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()
 
