@@ -87,8 +87,8 @@ export function roomOf(place: string | null | undefined): string | null {
   if (b) return normRoom(b[1]);
   return /\d/.test(p) ? null : HALLS.find(([re]) => re.test(p))?.[1] ?? null;
 }
-/** Its floor: the room's first digit (or a named place's floor) ("305" → 3), 0 for the basement's 1-99; 7xx is Independence Hall's wing on floor 2
- * . Compare with null: 0 is a floor. */
+/** Its floor: the room's first digit (or a named place's floor) ("305" → 3), 0 for the basement's 1-99; 7xx is
+ *  Independence Hall's wing on floor 2. Compare with null: 0 is a floor. */
 export function floorOf(place: string | null | undefined): number | null {
   const r = roomOf(place);
   if (r == null) return place && spotOf(place)?.k === 'indep' ? 2 : null; // the schedule's Independence Hall; not any "Halyk" or "canteen" (an arena, a home)
@@ -96,12 +96,12 @@ export function floorOf(place: string | null | undefined): number | null {
 }
 
 /** The dormitory: the portal names classes held there "DMiS ..." (PE: "DMiS OFP (Rugby)..."); the schedule shows a
- *  small "Dorm" that opens it in 2GIS instead (*  since Oct 7 the official card of KBTU's Dorm No. 3, the link he sent). The escapes are the Russian letters of DMiS. */
+ *  small "Dorm" that opens it in 2GIS instead (the official card of KBTU's Dorm No. 3). The escapes are the Russian letters of DMiS. */
 export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
 export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
 
 /** KBTU's second building, away from the main one: the portal writes "312 (Korpus No. 2 ...)". It has no
- *  map here, so its rooms never open the main one; the schedule shows "312 · B2" that opens it in 2GIS (the link he sent).
+ *  map here, so its rooms never open the main one; the schedule shows "312 · B2" that opens it in 2GIS.
  *  The escape is "korpus", in Russian and Kazakh alike. */
 export const BLDG2_2GIS = 'https://2gis.kz/almaty/geo/70000001117579717/76.909355,43.253443';
 const BLDG2 = /(?:\u043a\u043e\u0440\u043f\u0443\u0441|building)\s*(?:\u2116|no\.?)?\s*2(?!\d)|(?<!\d)2\s*-?\s*\u043a\u043e\u0440\u043f\u0443\u0441/i;
@@ -120,8 +120,7 @@ export function warmMap(): void {
 }
 
 /** A room the plan doesn't number: the nearest numbers below and above it on its floor (within 10), both when they sit
- *  close together, else the nearer one ("376 isn't there but 377 is: zoom there"; Oct 15: routes lead
- *  there too). rooms: the floor's room -> where its number is printed; ar: the plan's height to its width. [room, [u, v]] */
+ *  close together, else the nearer one ("376 isn't there but 377 is: zoom there"; routes lead there too). rooms: the floor's room -> where its number is printed; ar: the plan's height to its width. [room, [u, v]] */
 export function nearRooms(rooms: Record<string, number[][]>, room: string, ar: number): [string, number[]][] {
   const n = parseInt(room, 10), by = Object.entries(rooms)
     .map(([k, at]) => ({ k, d: parseInt(k, 10) - n, at: at[0] })).filter((x) => x.d && Math.abs(x.d) <= 10);

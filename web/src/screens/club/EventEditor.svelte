@@ -1,10 +1,8 @@
 <script lang="ts">
-  // Studio → a new event or an edit, full screen. One scrolling form with a live preview on top and the
-  // phone's own date and time pickers. A new event or a draft: "Publish" or "Save draft"; a published one:
-  // "Save" (the server tells registered people when the time or place moves). Leaving with changes asks.
-  // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
-  // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
-  // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
+  // Studio: a new event or an edit, full screen: one form under a live preview, the phone's own date and time pickers.
+  // New or draft: Publish / Save draft; published: Save (the server tells registered people when time or place moves).
+  // Leaving with changes asks. Paid (§4.3, an official club's Vice+): the price and the Kaspi recipient, fixed once
+  // someone has paid, and free seats for 1st-years. A registration deadline can close "Going" before the start.
   import { onMount } from 'svelte';
   import { fmtPhone } from '../../lib/phone';
   import MemoAsksForm from './MemoAsks.svelte';
@@ -40,14 +38,14 @@
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
   const canPrice = $derived(official && may(mine, 'money'));
-  // the name Kaspi prints for the recipient ("Alikhan S.", my short name): mine, as the one setting it up usually takes the money
+  // the recipient's name as Kaspi prints it ("Alikhan S."): mine, since whoever sets it up usually takes the money
   const myKaspiName = session.me?.student ? session.me.name : '';
 
   const EMOJI = PICK_EMOJI;
-  // eleven around the colour wheel and night (10-12, no RGB picker); BRAND when nothing else is set
+  // eleven around the colour wheel plus night; no RGB picker; BRAND when nothing is set
   const COLORS = ['#F2542D', '#FF8A3D', '#FFB23D', '#7CB518', '#2FBF71', '#14B8A6', '#18A9DB', '#3B6BFF', '#7C4DFF', '#AF52DE', '#FF4FA3', '#2A2340'];
   const BRAND = '#3B6BFF';
-  // a 2GIS link anywhere in what was pasted into the place field (2GIS → Share → Copy gives name, address, link)
+  // a 2GIS link inside a pasted place (2GIS → Share → Copy gives name, address and link)
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
@@ -60,9 +58,8 @@
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
   let base = $state(JSON.stringify(blank)); // the form with nothing to lose
-  // only after a touch of mine (owner, Oct 13: an untouched new event asked "Leave without saving?"; iOS rewrites a
-  // date or time input's value as it renders, so the form differed from its blank by itself): the first touch takes the
-  // form as it stands then (capture: before the change lands) as the base
+  // the base is the form at my first touch (capture: before the change lands), not the blank: iOS rewrites a date or
+  // time input as it renders, so an untouched form already differs from its blank
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
   const dirty = $derived(touched && JSON.stringify(f) !== base);
@@ -106,10 +103,9 @@
     reg: !f.deadline ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
-  // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
+  // a room from DMP is asked in the weekly memo (the block at the end)
 
-  // Examples instead of "e.g. …": a real title and place from the events in the app, another one each time
-  // the editor opens; built-in ones until the app has events of its own.
+  // placeholders are a real title and place from the app's events (built-in ones until there are any), new each time
   const pick = (xs: string[]) => xs[Math.floor(Math.random() * xs.length)];
   const realTitles = data.events.map((e) => e.title).filter((x) => x.length <= 40);
   const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place.length <= 30).map((e) => e.place))];

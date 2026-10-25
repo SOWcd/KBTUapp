@@ -103,7 +103,7 @@ export function boot(bg: string): void {
   tgTry((w) => w.ready());
   tgTry((w) => w.expand());
   if (can('7.7')) tgTry((w) => w.disableVerticalSwipes?.());
-  // full screen on a phone only: on a computer it filled the whole monitor with the phone layout (a student's screenshot)
+  // full screen on a phone only: on a computer it filled the whole monitor with the phone layout
   if (can('8.0') && !onComputer) tgTry((w) => w.requestFullscreen?.());
   // portrait only: the phone turned sideways keeps the app upright; Telegram on phones, 8.0+
   if (can('8.0') && !onComputer) tgTry((w) => w.lockOrientation?.());
@@ -122,8 +122,8 @@ export function on(event: string, cb: () => void): () => void {
   return () => tgTry((w) => w.offEvent(event, cb));
 }
 
-/** The app's icon on the phone's home screen (Bot API 8.0): Telegram's own dialog, one tap (wanted an
- *  arrow to the ••• menu; the API does it without one). Status: 'unsupported' | 'unknown' | 'added' | 'missed'. */
+/** The app's icon on the phone's home screen (Bot API 8.0): Telegram's own dialog, one tap.
+ *  Status: 'unsupported' | 'unknown' | 'added' | 'missed'. */
 export const homeScreen = {
   status: (): Promise<string> => new Promise((r) => {
     if (!can('8.0')) return r('unsupported');

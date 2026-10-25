@@ -14,7 +14,7 @@ import { dayNo, nowTs } from '../time';
 export const data = $state({
   events: [] as EventCard[],
   eventsReady: false,
-  chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
+  chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens
   orgs: [] as Org[],
   schedule: [] as ClassItem[],
   posts: [] as Post[],
@@ -126,8 +126,8 @@ export function eventDetails(id: Id): Promise<EventFull> {
   return a && Date.now() - a.at < 10_000 ? a.p : api.event(id);
 }
 
-// a person's card, fetched from the touch (B4: the card opened as a plain one, then jumped into its skin) and kept for
-// the session, so a second look opens whole at once while it refreshes
+// a person's card, fetched from the touch (else it opened plain, then jumped into its skin) and kept for the session:
+// a second look opens whole at once while it refreshes
 const people = new Map<Id, { at: number; p: Promise<PersonCard>; card?: PersonCard }>();
 export function prefetchPerson(id: Id): void {
   const a = people.get(id);
@@ -250,8 +250,7 @@ export function toggleSub(id: Id): void {
   });
 }
 
-// ---- classes I won't go to: one
-// class on one day, kept on this phone (the portal's timetable stays as it is); past days are dropped ----
+// ---- classes I won't go to: one class on one day, kept on this phone (the timetable stays); past days dropped ----
 const SKIP_KEY = 'kb-skip';
 /** a class on a day (the local day number): the same subject at the same time is the same class */
 export const classKey = (day: number, c: ClassItem): string => `${day}|${c.begins}|${c.subject}`;
