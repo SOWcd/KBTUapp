@@ -207,11 +207,13 @@ def _untitled(con, pid: int, fallback: str) -> bool:
     return one(con, "SELECT title FROM posts WHERE id = ?", pid)["title"] == fallback[:TITLE]
 
 
-def _langs(p) -> tuple[str, set[str]]:
-    """A post's own language and the ones the channel itself gave it (folded posts, its comments); our AI's don't count."""
-    own = ai.lang_of(f"{p['title']} {p['body']}")
+def _langs(con, p) -> tuple[str | None, set[str]]:
+    """A post's own language and the ones the channel itself gave it (folded posts, its comments); our AI's don't count.
+    A picture with no words of its own (SITE posts the photo, then the kk, ru and en texts) has none: all three fold in."""
+    bare = not p["body"].strip() and _untitled(con, p["id"], (one(con, "SELECT title FROM chats WHERE org_id = ? AND main = 1", p["org_id"]) or {"title": ""})["title"])
+    own = None if bare else ai.lang_of(f"{p['title']} {p['body']}")
     tr = set(json.loads(p["i18n"])) if p["i18n"] and p["tr_by"] == "tg" else set()
-    return own, tr | {own}
+    return own, tr | ({own} if own else set())
 
 
 def _fold_target(con, channel: int, date: int, lang: str, but: int | None = None) -> int | None:
@@ -219,7 +221,7 @@ def _fold_target(con, channel: int, date: int, lang: str, but: int | None = None
     (two posts in one language are two announcements); the nearest in time."""
     for p in rows(con, """SELECT * FROM posts WHERE tg_channel = ? AND hidden_at IS NULL AND id IS NOT ? AND abs(created_at - ?) <= ?
             ORDER BY abs(created_at - ?)""", channel, but, date, FOLD_GAP, date):
-        if lang not in _langs(p)[1]:
+        if lang not in _langs(con, p)[1]:
             return p["id"]
     return None
 
@@ -230,7 +232,7 @@ def _set_tr(con, pid: int, lang: str, tb: tuple[str, str]) -> None:
     have = json.loads(p["i18n"]) if p["i18n"] and p["tr_by"] == "tg" else {}
     have[lang] = {"title": tb[0], "body": tb[1]}
     con.execute("UPDATE posts SET i18n = ?, lang = ?, tr_by = 'tg' WHERE id = ?",
-                (json.dumps(have, ensure_ascii=False), _langs(p)[0], pid))
+                (json.dumps(have, ensure_ascii=False), _langs(con, p)[0], pid))
 
 
 def to_comment(con, channel: int) -> list[int]:
@@ -240,7 +242,7 @@ def to_comment(con, channel: int) -> list[int]:
     for p in rows(con, """SELECT p.*, (SELECT MIN(msg_id) FROM tg_post_msgs t WHERE t.post_id = p.id AND t.lang IS NULL) AS first
             FROM posts p WHERE p.tg_channel = ? AND p.hidden_at IS NULL AND p.created_at BETWEEN ? AND ?""",
                       channel, now() - COMMENT_DAYS * 86400, now() - FOLD_GAP):
-        if p["first"] and len(_langs(p)[1]) < len(ai.LANGS) and (p["title"].strip() or p["body"].strip()):
+        if p["first"] and len(_langs(con, p)[1]) < len(ai.LANGS) and (p["title"].strip() or p["body"].strip()):
             out.append(p["first"])
     return out
 
@@ -256,7 +258,7 @@ def comments(con, channel: int, msg_id: int, texts: list[str]) -> int:
         for text in texts:
             p = one(con, "SELECT * FROM posts WHERE id = ?", t["post_id"])
             lang = ai.lang_of(text) if text.strip() else None
-            if lang and lang not in _langs(p)[1]:
+            if lang and lang not in _langs(con, p)[1]:
                 _set_tr(con, p["id"], lang, _split(text, p["title"]))
                 n += 1
     return n

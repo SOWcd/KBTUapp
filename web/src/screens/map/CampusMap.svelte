@@ -401,7 +401,7 @@
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
     return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap });
   })();
-  const BACK_AFTER = 180; // ms into the iris (owner, Oct 26: at its end felt late)
+  const BACK_AFTER = 180; // ms into the iris. Owner, Oct 26: exactly right, lands on the animation: keep it for good
   untrack(() => { if (iris) overlay.holdBack = true; }); // until a moment into the circle (appear); set before the first frame
   // the map's own capsule, copied whenever it changes (the floor), for the way back: closing, the real one is the
   // old page's at once, the copy shows inside the shrinking circle

@@ -4348,6 +4348,12 @@ def test_mirror_languages(env):
     assert con.execute("SELECT 1 FROM posts WHERE id = ?", (temp,)).fetchone() is None
     assert json.loads(con.execute("SELECT i18n FROM posts WHERE id = ?", (first,)).fetchone()[0])["en"]["title"] == "Photos from the day"
 
+    # a photo on its own, then the same text in kk, ru and en (SITE, Oct 26): one post, all three its languages
+    pic = mirror.take(con, 700, mirror.Msg(id=40, date=t0 + 5000, media="video"))
+    for i, x in enumerate((kk, ru, "Football, but agentic\nOn Friday")):
+        assert mirror.take(con, 700, mirror.Msg(id=41 + i, date=t0 + 5000, text=x)) == pic
+    assert set(json.loads(con.execute("SELECT i18n FROM posts WHERE id = ?", (pic,)).fetchone()[0])) == {"kk", "ru", "en"}
+
     # the channel's own comments: the post `two` (English only) gets kk and ru from them, nothing else
     assert 13 in mirror.to_comment(con, 700) and 10 in mirror.to_comment(con, 700)              # pid still lacks ru
     assert mirror.comments(con, 700, 13, [kk, ru, "Another one in English"]) == 2
