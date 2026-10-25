@@ -10,6 +10,9 @@
   import Camera from '@lucide/svelte/icons/camera';
   import Users from '@lucide/svelte/icons/users';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Lock from '@lucide/svelte/icons/lock';
+  import FolderPlus from '@lucide/svelte/icons/folder-plus';
+  import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -26,7 +29,8 @@
   import { sheets } from '../../lib/state/sheets';
   import { social } from '../../lib/social';
   import { dayMonth, relDay } from '../../lib/time';
-  import { openLink } from '../../lib/tg';
+  import { openLink, haptic } from '../../lib/tg';
+  import { compact, APP_FOLDER } from '../../lib/chats';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -44,6 +48,11 @@
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
+  // its Telegram chats (PLAN 86): the main channel as a card with Subscribe, the rest as rows; a closed one has no way in
+  const chats = $derived(fetched?.chats ?? []);
+  const main = $derived(chats.find((c) => c.main && c.url));
+  const rest = $derived(chats.filter((c) => c !== main));
+  const tap = (url: string) => { haptic.tap(); openLink(url); };
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   $effect(() => {
     api.org(id).then((x) => (fetched = x)).catch(() => {});
@@ -83,6 +92,36 @@
           <button class="link" onclick={() => openLink(url)}><SocialIcon kind={s.kind} size={19} /><span class="ellipsis">{s.label}</span></button>
         {/each}
       </div>
+    {/if}
+
+    {#if chats.length || o.kind === 'app'}
+      <h3 class="t-cap sec">{t('oc.title')}</h3>
+      {#if main}
+        <div class="mc surface">
+          <div class="mh"><ChatAvatar title={main.title} photo={main.photo} kind={main.kind} size={52} />
+            <span><b class="ellipsis">{main.title}</b><small>{main.members ? tn('clubs.subscribers', main.members).replace(String(main.members), compact(main.members)) : t('chats.channel')}</small></span></div>
+          {#if main.about}<p class="t-foot ab clamp-2">{main.about}</p>{/if}
+          <Button kind="primary" size="m" full icon={send} onclick={() => tap(main.url!)}>{t('oc.subscribe')}</Button>
+        </div>
+      {/if}
+      {#if rest.length || o.kind === 'app'}
+        <div class="posts" class:gap={!!main}>
+          {#each rest as c (c.id)}
+            {@const line = [c.closed ? t('oc.closed') : t(`chats.${c.kind}`), c.members ? tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ')}
+            {#if c.url}
+              <button class="pst" onclick={() => tap(c.url!)}><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
+                <span><b class="ellipsis">{c.title}</b><small>{line}</small></span></button>
+            {:else}
+              <!-- closed: shown, but nobody gets in from here (owner, Oct 26) -->
+              <div class="pst shut"><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
+                <span><b class="ellipsis">{c.title}</b><small>{line}</small></span><Lock size={17} /></div>
+            {/if}
+          {/each}
+          {#if o.kind === 'app'}
+            <button class="pst fold" onclick={() => tap(APP_FOLDER)}><span class="fi"><FolderPlus size={20} /></span><span><b>{t('oc.folder')}</b></span><ChevronRight size={18} /></button>
+          {/if}
+        </div>
+      {/if}
     {/if}
 
     {#if leaders.length}
@@ -179,6 +218,19 @@
   .pst b { font: 620 15px/1.25 var(--font-text); color: var(--text); }
   .pst small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
   .all { color: var(--accent-text); }
+  .mc { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
+  .mh { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .mh > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .mh b { font: 680 16px/1.25 var(--font-text); }
+  .mh small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
+  .ab { margin: -2px 2px 0; color: var(--text-2); }
+  .gap { margin-top: 10px; }
+  .pst > span { flex: 1; }
+  .shut :global(svg) { flex: none; color: var(--text-3); }
+  .shut:active { background: none; }
+  .fold, .fold b { color: var(--text-2); font-weight: 560; }
+  .fi { flex: none !important; width: 44px; height: 44px; display: grid !important; place-items: center; border-radius: 50%; background: var(--surface-2); }
+  .fold :global(svg) { flex: none; }
   .all span { flex: 1; }
   .all b { color: var(--accent-text); }
   .all :global(svg) { flex: none; }

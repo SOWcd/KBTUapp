@@ -1,9 +1,11 @@
 <script lang="ts">
   // Admin → Chats (§4.11): the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
-  // since the admin panel became a hub (owner, Oct 14).
+  // since the admin panel became a hub (owner, Oct 14). The admin says whose a chat is (PLAN 86: then it shows on that
+  // club's or school's page too; owner, Oct 22: t.me/kbtusite is SITE's).
   import Plus from '@lucide/svelte/icons/plus';
   import X from '@lucide/svelte/icons/x';
-  import { api, ApiErr, type Chat } from '../../lib/api';
+  import { api, ApiErr, type AdminOrg, type Chat } from '../../lib/api';
+  import { session } from '../../lib/state/session.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -25,6 +27,14 @@
   }
   async function decline(c: Chat) {
     try { await api.deleteChat(c.id); pending = pending.filter((p) => p.id !== c.id); haptic.soft(); say(t('say.chatDeclined'), 'waving_hand_3d_default'); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
+  const admin = $derived(session.me?.role === 'admin');
+  let orgs = $state<AdminOrg[]>([]);
+  $effect(() => { if (admin) api.adminOrgs().then((l) => (orgs = l.sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {}); });
+  async function whose(c: Chat, ev: Event) {
+    const v = (ev.currentTarget as HTMLSelectElement).value;
+    try { const x = await api.setChatOrg(c.id, v ? Number(v) : null); chats = (chats ?? []).map((y) => (y.id === c.id ? x : y)); haptic.ok(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   let chatForm = $state(false);
@@ -60,7 +70,10 @@
     </div>{/each}</div>
   {/if}
   {#if chats?.length}
-    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{schoolShort(c.school)}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span><button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
+    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{schoolShort(c.school)}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span>
+      {#if admin}<select class="whose" aria-label={t('oc.whose')} value={c.org ? String(c.org.id) : ''} onchange={(ev) => whose(c, ev)}>
+        <option value="">{t('oc.nobody')}</option>{#each orgs as o (o.id)}<option value={String(o.id)}>{o.abbr || o.name}</option>{/each}</select>{/if}
+      <button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
   {/if}
   {#if chatForm}
     <form class="new" onsubmit={addChat}>
@@ -101,6 +114,7 @@
   .chr .ellipsis { flex: 1; min-width: 0; font: 600 14.5px/1.3 var(--font-text); }
   .chr i { margin-left: 6px; font-style: normal; font-weight: 500; color: var(--text-3); }
   .chr button { flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-3); }
+  .whose { flex: none; width: auto; max-width: 96px; height: 30px; padding: 0 8px; border-radius: var(--r-full); background: var(--surface-2); font: 600 12.5px/1 var(--font-text); color: var(--text-2); }
   .addchat { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 44px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
   .gh { margin: 4px 2px 8px; }
   .pv { flex: 1; min-width: 0; text-align: left; font: 600 14.5px/1.3 var(--font-text); color: var(--text); }

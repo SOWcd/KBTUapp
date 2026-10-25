@@ -19,7 +19,13 @@ export interface ClubApplication {
 export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
-export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean }
+export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean;
+  org?: OrgRef | null /* whose chat it is (PLAN 86) */ }
+/** A club's or school's own chat on its page (PLAN 86): `main` its one channel with the Subscribe button; a closed one
+ *  (an invite link) shows without a way in, `url` null. */
+export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
+/** The same in Studio: the invite link too, and whether our bot keeps the card. */
+export interface StudioChat extends OrgChat { url: string; bot: boolean }
 export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 
 /** DMP's view of a club member (§3, §4.13): contacts only of Presidents and Vices. */
@@ -105,6 +111,7 @@ export interface Org extends OrgRef {
   recruiting: boolean;          // takes join applications (the club closes it in Studio)
   membersHidden: boolean;       // the club hides its member list from outsiders (owner, Oct 24)
   leaders?: Member[];           // President and Vice, from api.org only
+  chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
   round?: { id: Id; closesAt: Ts; applied: boolean } | null; // a recruitment round taking applications (casting) and whether I applied
   subscribed: boolean;

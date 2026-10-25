@@ -7,7 +7,7 @@
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import Sheet from '../../ui/Sheet.svelte';
   import ChatKind from '../../ui/ChatKind.svelte';
-  import { schoolShort } from '../../lib/short';
+  import { schoolShort, shortOf } from '../../lib/short';
 
   let { overlay, chats }: { overlay: Overlay; chats: Chat[] } = $props();
   const label = (c: Chat) => c.school && c.course ? `${schoolShort(c.school)} · ${t('chats.course', { n: c.course })}` : (c.school && schoolShort(c.school)) ?? (c.course ? t('chats.course', { n: c.course }) : t('chats.everyone'));
@@ -27,7 +27,7 @@
       {#each items as c (c.id)}
         <button class="row" onclick={() => void openChat(c)}>
           <span class="ci" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}<span class="kind"><ChatKind kind={c.kind} size={18} /></span></span>
-          <span class="tx"><b class="ellipsis">{c.title}</b><i>{t(`chats.${c.kind}`)}{c.members ? ' · ' + tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''}</i></span>
+          <span class="tx"><b class="ellipsis">{c.title}</b><i>{#if c.org}<em class="who">{shortOf(c.org)}</em>{/if}{t(`chats.${c.kind}`)}{c.members ? ' · ' + tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''}</i></span>
         </button>
       {/each}
     </div>
@@ -52,5 +52,7 @@
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .tx b { font: 640 15px/1.25 var(--font-text); }
   .tx i { font: 500 12.5px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
+  /* whose chat it is (PLAN 86): the club's or school's short name */
+  .who { margin-right: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 11.5px/1.4 var(--font-text); font-style: normal; }
   .sug { display: block; width: 100%; height: 44px; margin-top: 14px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
 </style>
