@@ -4870,3 +4870,80 @@ def test_chat_avatars_on_disk(env, monkeypatch):
     assert asyncio.run(bot.chat_card(cfg, Http(), con, cid, -100123)) is True
     row = con.execute("SELECT title, about, members, photo FROM chats WHERE id = ?", (cid,)).fetchone()
     assert tuple(row)[:3] == ("Jam News", "Every Friday", 77) and row[3] not in (first, second) and on_disk(row[3]) and not on_disk(second)
+
+
+def test_paths_no_test_ran(env):
+    """What a trace of the whole suite showed no test running: a round's settings changed while it's live and an
+    application taken back; a friend request taken back; a volunteer leaving; past events (a hidden club's left out);
+    a club tag deleted; the roster's e-mails; a chat's t.me page read."""
+    import httpx
+    from kbtu import media, roster
+    c, cfg = env
+    for uid, name in ((20, "pres"), (21, "ann"), (22, "bob")):
+        login(c, uid, name)
+    con = db.connect(cfg.db_path)
+    ids = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (20, 21, 22)}
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    logic.set_role(con, None, ids[20], oid, "president", "test")
+    P, A, B = tma(20), tma(21), tma(22)
+
+    # a live round: its settings change, its questions stay once someone applied; an applicant withdraws; then it closes
+    hr = c.post(f"/api/orgs/{oid}/tags", headers=P, json={"name": "HR", "color": "#2FBF71", "department": True}).json()["tags"][0]["id"]
+    body = {"title": "Recruitment", "picks": 1, "closesAt": int(time.time()) + 7 * 86400, "departments": [{"tagId": hr}],
+            "questions": [{"kind": "long", "text": "Why us?"}]}
+    r = c.post(f"/api/orgs/{oid}/round", headers=P, json=body).json()
+    q = str(r["questions"][0]["id"])
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=A, json={"departments": [hr], "answers": {q: "I play"}}).status_code == 200
+    changed = c.patch(f"/api/rounds/{r['id']}", headers=P, json={**body, "title": "Recruitment 2026", "questions": [{"kind": "long", "text": "Other"}]}).json()
+    assert changed["title"] == "Recruitment 2026" and [x["text"] for x in changed["questions"]] == ["Why us?"]  # answers still match
+    assert c.patch(f"/api/rounds/{r['id']}", headers=A, json={"close": True}).status_code == 403
+    assert c.delete(f"/api/rounds/{r['id']}/apply", headers=A).json()["mine"] is None                  # taken back: not mine any more
+    assert con.execute("SELECT stage FROM round_apps WHERE user_id = ?", (ids[21],)).fetchone()[0] == "withdrawn"
+    assert c.patch(f"/api/rounds/{r['id']}", headers=P, json={"close": True}).json()["open"] is False
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=B, json={"departments": [hr], "answers": {q: "x"}}).status_code == 409  # closed
+
+    # a friend request taken back: nothing pending, and it can be asked again
+    assert c.post("/api/friends/requests", headers=A, json={"userId": ids[22]}).json()["friendship"] == "requested"
+    assert c.delete(f"/api/friends/requests/{ids[22]}", headers=A).status_code in (200, 204)
+    assert not con.execute("SELECT 1 FROM friend_requests WHERE from_id = ? AND status = 'pending'", (ids[21],)).fetchone()
+
+    # a volunteer leaves before anyone decided
+    ev = {"title": "Open day", "place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50, "volunteers": 2}
+    e = c.post(f"/api/orgs/{oid}/events", headers=P, json=ev).json()
+    c.post(f"/api/events/{e['id']}/publish", headers=P)
+    assert c.post(f"/api/events/{e['id']}/volunteer", headers=A, json={"note": "I can"}).status_code == 200
+    c.delete(f"/api/events/{e['id']}/volunteer", headers=A)
+    assert not con.execute("SELECT 1 FROM volunteers WHERE event_id = ? AND user_id = ?", (e["id"], ids[21])).fetchone()
+
+    # past events: an ended one shows; a hidden club's doesn't
+    con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 7200, int(time.time()) - 3600, e["id"]))
+    assert [x["id"] for x in c.get("/api/events/past", headers=B).json()] == [e["id"]]
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = ?", (oid,))
+    assert c.get("/api/events/past", headers=B).json() == []
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = ?", (oid,))
+
+    # a club tag deleted: gone from the team's setup and from whoever wore it
+    tags = c.post(f"/api/orgs/{oid}/tags", headers=P, json={"name": "SMM", "color": "#18A9DB"}).json()["tags"]
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (oid, ids[22]))
+    smm = next(t["id"] for t in tags if t["name"] == "SMM")
+    con.execute("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", (smm, ids[22]))
+    assert c.delete(f"/api/orgs/{oid}/tags/{smm}", headers=A).status_code == 403
+    assert [t["name"] for t in c.delete(f"/api/orgs/{oid}/tags/{smm}", headers=P).json()["tags"]] == ["HR"]
+    assert not con.execute("SELECT 1 FROM member_tags WHERE user_id = ?", (ids[22],)).fetchone()
+
+    # the roster's e-mails: lowercased, the obviously broken ones dropped
+    assert [roster.email_of(x) for x in (" Ann@KBTU.kz ", "no-at.kz", "a@b", None, "x y@kbtu.kz")] == ["ann@kbtu.kz", None, None, None, None]
+
+    # a chat's t.me page: title, about, members, channel or group, the avatar only from Telegram's file host
+    page = ('<meta property="og:title" content="Chess &amp; Co"><meta property="og:description" content="Fridays at 6">'
+            '<meta property="og:image" content="https://cdn4.telesco.pe/file/abc.jpg"><div class="tgme_page_extra">1 204 subscribers</div>')
+    def handler(r):
+        return httpx.Response(200, content=b"IMG") if "telesco.pe" in str(r.url) else httpx.Response(200, text=page)
+    async def peek(text=None):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler if text is None else (lambda r: httpx.Response(200, text=text)))) as http:
+            return await media.chat_peek(http, "https://t.me/chess_co")
+    got = asyncio.run(peek())
+    assert (got["ok"], got["title"], got["about"], got["members"], got["channel"], got["image"]) == (True, "Chess & Co", "Fridays at 6", 1204, True, b"IMG")
+    stock = asyncio.run(peek('<meta property="og:title" content="Group"><meta property="og:description" content="You can view and join @g right away.">'
+                             '<meta property="og:image" content="https://telegram.org/img/t_logo.png"><div class="tgme_page_extra">35 members</div>'))
+    assert (stock["about"], stock["image"], stock["members"], stock["channel"]) == (None, None, 35, False)  # Telegram's stock line and logo
