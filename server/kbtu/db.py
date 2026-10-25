@@ -620,6 +620,10 @@ MIGRATIONS: list[tuple[int, str]] = [
         at        INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX takedowns_by_target ON takedowns(target, target_id);"""),
+    # referrals (PLAN, owner Oct 26): who brought me, by their invite link (r_<badge code>); the first link wins.
+    # 77, not 76: 76 is the forum (sower4d/forum-people), to be merged first
+    (77, """ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;"""),
 ]
 
 

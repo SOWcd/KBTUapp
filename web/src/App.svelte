@@ -273,6 +273,8 @@
       return;
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
+    if (rf) { void api.refer(rf[1]).catch(() => {}); return; }
     if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"

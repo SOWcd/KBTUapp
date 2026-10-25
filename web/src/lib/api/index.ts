@@ -144,7 +144,8 @@ export interface Api {
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
   report(target: 'comment' | 'post' | 'event' | 'user' | 'photo', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
-  reports(): Promise<ReportItem[]>;                                                  // admin
+  reports(): Promise<ReportItem[]>;
+  refer(code: string): Promise<void>;                                                // opened by someone's invite link                                                  // admin
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean): Promise<void>; // admin: take it down or leave it

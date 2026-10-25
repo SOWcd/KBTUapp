@@ -55,6 +55,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "n500", (1,), False),  # not an emoji: the medal strikes the number (web ui/Medal, owner Oct 13)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (owner, Oct 13: no emoji twice)
+    ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
 ]
 
 
@@ -64,6 +65,7 @@ def _counts(con, uid: int) -> dict[str, int]:
     first_in = one(con, """SELECT COUNT(*) FROM registrations r WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND r.checked_in_at =
         (SELECT MIN(x.checked_in_at) FROM registrations x WHERE x.event_id = r.event_id)""", uid)[0]
     soul = one(con, "SELECT COUNT(*) FROM registrations WHERE invited_by = ? AND checked_in_at IS NOT NULL", uid)[0]
+    referral = brought(con, uid)
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
     seasons = [_season_start(t) for t in times]  # the best semester counts: every semester is a new chance
@@ -71,7 +73,13 @@ def _counts(con, uid: int) -> dict[str, int]:
     streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
-            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0)}
+            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral}
+
+
+def brought(con, uid: int) -> int:
+    """Students my invite link brought: only those who finished the KBTU sign-in count (a Telegram account alone is free)."""
+    return one(con, """SELECT COUNT(*) FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 0
+        WHERE u.referred_by = ?""", uid)[0]
 
 
 def _levels(con, uid: int) -> dict[str, int]:
