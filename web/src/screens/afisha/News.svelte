@@ -119,7 +119,9 @@
         {#if !p.canEdit && session.me?.student}<button onclick={() => { menu = null; sheets.report('post', p.id, p.title); }}>{t('cm.report')}</button>{/if}
       </div>
     {/if}
-    {#if p.photo}<img class="pic" src={p.photo.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
+    <!-- the card crops it: a tap shows it whole (owner, Oct 26) -->
+    {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
+      <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{p.title}</h3>
     {#if p.body}
       <p class="bd" class:fold={long(p) && !open.has(p.id)}>{p.body}</p>
@@ -211,7 +213,8 @@
   @keyframes glow { 50% { box-shadow: 0 0 0 7px transparent; } }
   :global(html.lowfx) .new { animation: none; } /* power saving: a box-shadow glow repaints every frame */
   .more { flex: none; display: flex; padding: 4px; margin: -4px -6px -4px 0; color: var(--text-3); }
-  .pic { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 16px; background: var(--surface-2); }
+  .pic { display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 16px; background: var(--surface-2); }
+  .pic img { width: 100%; height: 100%; object-fit: cover; }
   .tt { font: 720 17px/1.25 var(--font-display); letter-spacing: -0.015em; }
   .bd { font: 450 15px/1.45 var(--font-text); color: var(--text-2); white-space: pre-line; overflow-wrap: anywhere; }
   .bd.fold { display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
