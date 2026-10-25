@@ -19,6 +19,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, org, source = 'club' }: { overlay: Overlay; org: Id; source?: string } = $props();
 
@@ -180,7 +181,7 @@
       <div class="me">
         {#if me}<Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={44} tappable={false} />{/if}
         <span class="tx"><b>{me?.student ? `${me.student.lastName} ${me.student.firstName}` : me?.name}</b>
-          <i>{[me?.student?.course ? t('person.course', { n: me.student.course }) : '', me?.student?.school].filter(Boolean).join(' · ')}</i>
+          <i>{[me?.student?.course ? t('person.course', { n: me.student.course }) : '', schoolShort(me?.student?.school)].filter(Boolean).join(' · ')}</i>
           <i>{[me?.student?.email, me?.tg.username ? '@' + me.tg.username : ''].filter(Boolean).join(' · ')}</i></span>
       </div>
     </section>

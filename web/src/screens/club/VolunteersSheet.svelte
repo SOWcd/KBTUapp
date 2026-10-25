@@ -13,6 +13,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, id, need }: { overlay: Overlay; id: Id; need: number } = $props();
   let list = $state<VolunteerApp[] | null>(null);
@@ -29,7 +30,7 @@
       haptic.error(); say(t(e instanceof ApiErr && e.message === 'full' ? 'vol.full' : 'common.error'), 'pleading_face_3d');
     }
   }
-  const line = (x: VolunteerApp) => [x.course && t('person.course', { n: x.course }), x.school, relDay(x.at)].filter(Boolean).join(' · ');
+  const line = (x: VolunteerApp) => [x.course && t('person.course', { n: x.course }), schoolShort(x.school), relDay(x.at)].filter(Boolean).join(' · ');
 </script>
 
 <Sheet {overlay} full title={t('vol.list')}>

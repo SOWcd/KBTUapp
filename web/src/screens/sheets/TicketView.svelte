@@ -20,6 +20,7 @@
   import { glass } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import { nameOf } from '../../lib/short';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -91,7 +92,7 @@
       <div class="pass glass" bind:this={pass} style="--tint:{e.tint}" use:glass role="group" aria-label={t('event.ticket')}
            onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
         <button class="head" onclick={() => sheets.event(id)}>
-          <span class="org"><OrgLogo org={e.org} size={24} /><span class="ellipsis">{e.org.name}</span></span>
+          <span class="org"><OrgLogo org={e.org} size={24} /><span class="ellipsis">{nameOf(e.org)}</span></span>
           <span class="ttl clamp-2">{e.title}</span>
         </button>
         <div class="facts">

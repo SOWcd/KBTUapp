@@ -18,6 +18,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import { data, loadRegistry } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
+  import { nameOf, schoolShort, shortOf } from '../../lib/short';
 
   let { inSheet = false }: { inSheet?: boolean } = $props();
   // the month: this one (loaded with the app, so the page opens full), or up to a year back (the numbers DMP used to
@@ -72,8 +73,8 @@
       {#each hits as h (h.person.id)}
         <div class="hit surface">
           <Avatar person={h.person} size={40} />
-          <span class="tx"><b>{withNick(h.fullName, h.person)}</b><i>{h.studentId}{h.course ? ' · ' + t('person.year', { n: h.course }) : ''}{h.school ? ' · ' + h.school : ''}</i>
-            <span class="clubs">{#each h.clubs as c (c.org.id)}<button class="club" onclick={() => sheets.roster(c.org)}><OrgLogo org={c.org} size={16} />{c.org.name} · {ROLE_NAME[c.role]}</button>{/each}</span></span>
+          <span class="tx"><b>{withNick(h.fullName, h.person)}</b><i>{h.studentId}{h.course ? ' · ' + t('person.year', { n: h.course }) : ''}{h.school ? ' · ' + schoolShort(h.school) : ''}</i>
+            <span class="clubs">{#each h.clubs as c (c.org.id)}<button class="club" onclick={() => sheets.roster(c.org)}><OrgLogo org={c.org} size={16} />{shortOf(c.org)} · {ROLE_NAME[c.role]}</button>{/each}</span></span>
         </div>
       {:else}<p class="t-foot none">{t('reg.nobody')}</p>{/each}
     </div>
@@ -84,7 +85,7 @@
         {#each memos as m (`${m.org.id}:${m.sentAt}`)}
           <div class="memo surface">
             <OrgLogo org={m.org} size={36} />
-            <span class="tx"><b class="ellipsis">{m.org.name}</b><i>{t('reg.memoSent', { who: m.by ?? '—', when: `${relDay(m.sentAt)} ${time(m.sentAt)}` })}</i>
+            <span class="tx"><b class="ellipsis">{nameOf(m.org)}</b><i>{t('reg.memoSent', { who: m.by ?? '—', when: `${relDay(m.sentAt)} ${time(m.sentAt)}` })}</i>
               {#each m.events as e (e.id)}<button class="ev" onclick={() => sheets.event(e.id)}><span class="ellipsis">{e.title}</span><span class="num">{relDay(e.startsAt)}</span></button>{/each}</span>
           </div>
         {/each}
@@ -101,7 +102,7 @@
         <button class="org surface" onclick={() => sheets.roster(o.org, (on) => (o.org = { ...o.org, official: on }))}>
           <OrgLogo org={o.org} size={44} />
           <span class="tx">
-            <b class="ellipsis">{o.org.name}{#if o.org.official}<BadgeCheck size={15} />{/if}</b>
+            <b class="ellipsis">{nameOf(o.org)}{#if o.org.official}<BadgeCheck size={15} />{/if}</b>
             <i class="ellipsis">{o.president ? t('reg.president', { name: o.president.fullName }) : t('reg.noPresident')}</i>
             <span class="nums"><span><b class="num">{o.members}</b>{tn('reg.members', o.members)}</span><span><b class="num">{o.month.events}</b>{tn('reg.events', o.month.events)}</span>
               <span><b class="num">{o.month.registrations}</b>{tn('reg.regs', o.month.registrations)}</span><span><b class="num">{o.month.came}</b>{tn('reg.came', o.month.came)}</span></span>

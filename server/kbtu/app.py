@@ -80,6 +80,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def after(con) -> None:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
+        logic.fill_abbrs(con)
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once
     db.init(cfg.db_path, after=after)

@@ -19,6 +19,7 @@
   import { glass } from '../../ui/glass';
   import Sheet from '../../ui/Sheet.svelte';
   import Award from '../../ui/Award.svelte';
+  import { nameOf } from '../../lib/short';
 
   let { overlay, it, mine = false }: { overlay: Overlay; it: ShelfItem; mine?: boolean } = $props();
   let sharing = $state(false);
@@ -81,7 +82,7 @@
       {/if}
     {/if}
   {:else if b}
-    <p class="tier">{b.org.name} · {dayMonth(b.at)}</p>
+    <p class="tier">{nameOf(b.org)} · {dayMonth(b.at)}</p>
     <p class="t-callout how">{t('aw.badgeHow')}</p>
   {:else if it.founder || it.idea}
     <p class="t-callout how">{t('seal.one')}</p>

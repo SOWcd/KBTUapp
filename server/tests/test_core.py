@@ -3933,3 +3933,35 @@ def test_club_people(env):
     assert c.get("/api/orgs/1/people", headers=tma(73)).status_code == 403                             # a stranger now can't
     assert len(c.get("/api/orgs/1/people", headers=tma(72)).json()) == 3                               # its own people can
     assert len(c.get("/api/orgs/1", headers=tma(73)).json()["leaders"]) == 2                           # the leaders still show
+
+
+def test_club_abbr(env):
+    """A club's short name (owner, Oct 25): the clubs made before take their initials at start and keep a set one; a new
+    club has its initials from the first day; Vice+ edit it (one word, 2-8 characters), a member can't; DMP and the
+    admin may set any club's, and only that."""
+    c, cfg = env
+    pres, vice, ali, dmp, boss = (login(c, 70 + i, n) for i, n in enumerate(("pres", "vice", "ali", "dmp", "boss")))
+    con = db.connect(cfg.db_path)
+    film = "Клуб кино и театра"  # "Club of film and theatre" in Russian
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic Club of KBTU', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'film', 'club', ?, 'F', 'popcorn_3d', 0)", (film,))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, abbr, emoji, created_at) VALUES (3, 'go', 'club', 'Go Club', 'G', 'Baduk', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, pres["id"], "president"), (1, vice["id"], "vice"), (1, ali["id"], "member"), (9, dmp["id"], "head")])
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    logic.fill_abbrs(con)
+    logic.fill_abbrs(con)   # every start: nothing left to fill
+    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMCK", "ККТ", "Baduk"]
+    assert logic.initials("Studex") == "STUDEX" and logic.initials("The Club") == "CLUB"
+    assert con.execute("SELECT abbr FROM orgs WHERE id = ?", (logic.create_org(con, None, "Robotics and AI Society", "R", "laptop_3d", False),)).fetchone()[0] == "RAS"
+
+    patch = lambda uid, body: c.patch("/api/orgs/1", headers=tma(uid), json=body)  # noqa: E731
+    assert c.get("/api/orgs/1", headers=tma(72)).json()["abbr"] == "OMCK"
+    assert patch(72, {"abbr": "MIC"}).status_code == 403                         # a member can't
+    assert patch(71, {"abbr": "MIC"}).json()["abbr"] == "MIC"                    # the Vice can
+    for bad in ("M", "TOO LONG", "NINECHARS", ""):
+        assert patch(70, {"abbr": bad}).status_code == 400, bad
+    assert patch(73, {"abbr": "OMC"}).json()["abbr"] == "OMC"                    # DMP on any club
+    assert patch(73, {"abbr": "OMC", "name": "Mic Night"}).status_code == 403    # and nothing else
+    assert patch(74, {"abbr": "MIC"}).json()["abbr"] == "MIC"                    # the admin too

@@ -83,7 +83,7 @@ export interface Media {
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
-  abbr?: string /* a school's short name, set by api/client.ts from i18n */;
+  abbr?: string | null /* the short name (lib/short.ts): a club's own, a school's set by api/client.ts from i18n */;
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */;
   orig?: Record<string, string> /* the fields as typed, before api/client.ts showed a translation */ }
 
@@ -115,7 +115,7 @@ export interface Org extends OrgRef {
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
-export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; membersHidden?: boolean; logoId?: Id | null; slug?: string } // slug: the President's (A5)
+export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
 
 /** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
  *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */

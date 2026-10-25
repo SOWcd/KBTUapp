@@ -513,6 +513,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     (66, "UPDATE orgs SET recruiting = 0;"),
     # 53/68 (owner, Oct 24): a club's members are public unless the club hides the list (a support group, a faith club)
     (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
+    # a club's short name where a long one won't fit (owner, Oct 25): its Vice+ or DMP set it; the clubs made before
+    # take their initials at start (logic.fill_abbrs: SQLite can't uppercase Cyrillic); a school's comes from schools.json
+    (68, "ALTER TABLE orgs ADD COLUMN abbr TEXT;"),
 ]
 
 

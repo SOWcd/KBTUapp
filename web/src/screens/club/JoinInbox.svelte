@@ -20,6 +20,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
 
@@ -52,7 +53,7 @@
     try { Object.assign(o, await api.setRecruiting(org, on)); say(phrase(on ? 'say.recruitOn' : 'say.recruitOff'), on ? 'raising_hands_3d_default' : 'sparkles_3d'); }
     catch { o.recruiting = !on; say(t('common.error'), 'pleading_face_3d'); }
   }
-  const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), r.school].filter(Boolean).join(' · ');
+  const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), schoolShort(r.school)].filter(Boolean).join(' · ');
 </script>
 
 <Sheet {overlay} full title={t('cast.card')}>

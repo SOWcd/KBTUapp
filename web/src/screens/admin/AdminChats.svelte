@@ -10,6 +10,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
@@ -59,7 +60,7 @@
     </div>{/each}</div>
   {/if}
   {#if chats?.length}
-    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{c.school ?? ''}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span><button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
+    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{schoolShort(c.school)}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span><button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
   {/if}
   {#if chatForm}
     <form class="new" onsubmit={addChat}>

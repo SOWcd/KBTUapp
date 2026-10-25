@@ -54,6 +54,7 @@
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets } from '../../lib/state/sheets';
   import { focusPos } from '../../lib/photo';
+  import { nameOf } from '../../lib/short';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   let { overlay, id, preview, from }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null } = $props();
@@ -304,7 +305,7 @@
       <section class="lead">
         <h3 class="t-cap sec">{t('lead.answers')} · {answers.reduce((n, a) => n + a.people.filter((p) => p.answer === 'yes').length, 0)} / {answers.reduce((n, a) => n + a.people.length, 0)}</h3>
         {#each answers as a (a.org.id)}
-          <div class="lc"><span class="ln"><OrgLogo org={a.org} size={20} /><b class="ellipsis">{a.org.name}</b></span>
+          <div class="lc"><span class="ln"><OrgLogo org={a.org} size={20} /><b class="ellipsis">{nameOf(a.org)}</b></span>
             <span class="lp">{#each a.people as p (p.person.id)}<span class="pa {p.answer}">{p.answer === 'yes' ? '✓' : p.answer === 'no' ? '✕' : '…'} {p.fullName}</span>{/each}</span></div>
         {/each}
       </section>
