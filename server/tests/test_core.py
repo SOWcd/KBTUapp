@@ -1824,8 +1824,8 @@ def test_club_profile(env):
     assert c.patch("/api/orgs/1", headers=M, json=patch).status_code == 403
     o = c.patch("/api/orgs/1", headers=V, json=patch).json()
     assert (o["name"], o["short"], o["emoji"], o["cover"], o["description"], o["links"], o["recruiting"]) == \
-        ("IT Club KBTU", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)
-    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT Club KBTU"   # one field at a time
+        ("IT Club", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)
+    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT Club"   # one field at a time
     assert c.patch("/api/orgs/1", headers=V, json={"name": "go club"}).json()["message"] == "taken"
     for bad in ({"links": ["javascript:alert(1)"]}, {"links": ["https://a.kz"] * 7}, {"cover": 9}, {"short": "ABC"}, {"emoji": "../x"},
                 {"name": "X"}, {"description": "x" * 601}, {}, {"description": "ok", "cover": True}):
@@ -4029,12 +4029,12 @@ def test_club_abbr(env):
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
     logic.fill_abbrs(con)
     logic.fill_abbrs(con)   # every start: nothing left to fill
-    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMCK", "\u041a\u041a\u0422", "Baduk"]
+    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMC", "\u041a\u041a\u0422", "Baduk"]
     assert logic.initials("Studex") == "STUDEX" and logic.initials("The Club") == "CLUB"
     assert con.execute("SELECT abbr FROM orgs WHERE id = ?", (logic.create_org(con, None, "Robotics and AI Society", "R", "laptop_3d", False),)).fetchone()[0] == "RAS"
 
     patch = lambda uid, body: c.patch("/api/orgs/1", headers=tma(uid), json=body)  # noqa: E731
-    assert c.get("/api/orgs/1", headers=tma(72)).json()["abbr"] == "OMCK"
+    assert c.get("/api/orgs/1", headers=tma(72)).json()["abbr"] == "OMC"
     assert patch(72, {"abbr": "MIC"}).status_code == 403                         # a member can't
     assert patch(71, {"abbr": "MIC"}).json()["abbr"] == "MIC"                    # the Vice can
     for bad in ("M", "TOO LONG", "NINECHARS", ""):
@@ -4484,7 +4484,7 @@ def test_roster_load_and_join(env):
     got = roster.load(con, items, orgmap)
     assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
-    assert con.execute("SELECT official FROM orgs WHERE name = 'Chess Club KBTU'").fetchone()[0] == 1
+    assert con.execute("SELECT official FROM orgs WHERE name = 'Chess Club'").fetchone()[0] == 1          # no "KBTU" in a name
 
     me = c.get("/api/me", headers=h(71)).json()                                         # Ali: joined, told once
     assert [(m["org"]["slug"], m["role"], m["title"]) for m in me["memberships"]] == [("mic", "head", "Head of SMM")]
@@ -4670,3 +4670,34 @@ def test_bot_binds_club_channel(env, monkeypatch):
     run(bot._bind(cfg, Http(), con, tap(40, "oc:1")))
     assert [(m, b["message_id"], b["text"]) for m, b in sent] == [("editMessageText", 11, texts.bot_message("ru", "chat_bound", club="Open Mic")[0])]
     assert tuple(con.execute("SELECT org_id FROM chats WHERE url = 'https://t.me/mic_more'").fetchone()) == (1,)
+
+
+def test_org_names(env):
+    """Org names, one style (owner, Oct 25): "KBTU" off either end on create and rename, an acronym the name carried
+    goes to the abbr (in brackets, or before a dash), else the initials without "KBTU"."""
+    import dataclasses
+    for typed, name, abbr in [("KBTU Open Mic", "Open Mic", "OM"), ("Debate Club | kbtu", "Debate Club", "DC"),
+                              ("IEEE KBTU Chapter", "IEEE", "IEEE"), ("AIESEC in KBTU", "AIESEC", "AIESEC"),
+                              ("KBTU’s Music Club", "Music Club", "MC"), ("Society of Petroleum Engineers (SPE)", "Society of Petroleum Engineers", "SPE"),
+                              ("SPE – Society of Petroleum Engineers", "Society of Petroleum Engineers", "SPE"),
+                              ("Chess (beginners)", "Chess (beginners)", "CB"), ("Data KBTU Club", "Data KBTU Club", "DC"),
+                              ("3D Printing (KBTU)", "3D Printing", "3P"), ("KBTU", "KBTU", "KBTU"),
+                              ("\u041a\u0411\u0422\u0423 \u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0415\u0411\u0410\u0422\u042b")]:
+        assert (logic.org_name(typed)[0], logic.guess_abbr(typed)) == (name, abbr), typed
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}))))
+    A = tma(20)
+    c.get("/api/me", headers=A)
+    club = c.post("/api/admin/orgs", headers=A, json={"name": "KBTU Society of Petroleum Engineers (SPE)", "short": "sp", "emoji": "trophy_3d"}).json()
+    assert (club["name"], club["abbr"], club["slug"]) == ("Society of Petroleum Engineers", "SPE", "societyofpetroleumengi")
+    login(c, 21, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT ?, id, 'president', 0 FROM users WHERE tg_id = 21", (club["id"],))
+    con.close()
+    def edit(body):
+        assert c.patch(f"/api/orgs/{club['id']}", headers=tma(21), json=body).status_code == 200
+        o = c.get(f"/api/orgs/{club['id']}", headers=tma(21)).json()
+        return o["name"], o["abbr"]
+    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum Club", "SPE")             # renamed: the abbr it had stays
+    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum Club", "PC")         # one the new name carries
+    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")     # an abbr sent with it wins

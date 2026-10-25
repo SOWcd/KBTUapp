@@ -1744,8 +1744,11 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         sets["recruiting"] = body["recruiting"] if isinstance(body["recruiting"], bool) else bad
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
-    if "name" in body:
-        sets["name"] = text("name") if 2 <= len(text("name")) <= 60 else bad
+    if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too (owner, Oct 25)
+        named, acro = org_name(text("name"))
+        sets["name"] = named if 2 <= len(text("name")) <= 60 else bad
+        if acro and "abbr" not in body:
+            sets["abbr"] = acro
         if sets["name"] is not bad and one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived' AND id != ?", sets["name"], oid):
             raise ApiError("conflict", "taken")
     if "slug" in body:  # the short link is the President's (owner, Oct 23)
@@ -2067,7 +2070,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
             raise ApiError("conflict", "pending")
         if last and last["status"] == "rejected" and last["decided_at"] + CLUB_REAPPLY > now():
             raise ApiError("rate_limited")
-        if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", name):
+        if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", org_name(name)[0]):  # as it'll be named
             raise ApiError("conflict", "taken")
         aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, links, why, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, json.dumps(links), why, now())).lastrowid
@@ -4605,9 +4608,11 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     admin, never by an application) is official from the start and never closes; its President has a club
     President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>). Recruiting starts closed:
     the club opens it in Studio (owner, Oct 24)."""
+    abbr = guess_abbr(name)
+    name = org_name(name)[0]  # no "KBTU", the short form to abbr (owner, Oct 25)
     slug = slug or slug_for(con, name)
     cur = con.execute("INSERT INTO orgs (slug, kind, name, short, abbr, emoji, official, created_by, created_at, recruiting) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
-                      (slug, kind, name, short, initials(name), emoji, int(official or kind == "school"), actor, now()))
+                      (slug, kind, name, short, abbr, emoji, int(official or kind == "school"), actor, now()))
     for rn, color, lv in OFFICIAL_ROLES:
         con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (?, ?, ?, ?, 1, ?)", (cur.lastrowid, rn, color, lv, now()))
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'org_create', ?, ?, ?)",
@@ -4657,19 +4662,57 @@ LINK_WORDS = {*"\u0438 \u0432 \u0432\u043e \u043d\u0430 \u043f\u043e \u0434\u043
 
 def initials(name: str) -> str:
     """A club's short name until it types its own: the first letters of its words, uppercase; one word stays whole
-    (the first three letters of a long one)."""
+    (the first three letters of a long one). "KBTU" is no letter of it (owner, Oct 25)."""
     words = re.findall(r"[^\W_]+", name)
-    words = [w for w in words if w.lower() not in LINK_WORDS] or words
+    words = [w for w in words if w.lower() not in LINK_WORDS and w.upper() not in KBTU] or words
     if len(words) == 1:
         return (words[0] if len(words[0]) <= 8 else words[0][:3]).upper()
     return "".join(w[0] for w in words).upper()[:8]
+
+
+# Org names, one style (owner, Oct 25): no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
+# one is the abbr. Done to a name as it's created or renamed; the names already there were fixed by hand.
+KBTU = {"KBTU", "\u041a\u0411\u0422\u0423"}  # and in Cyrillic
+_KB = r"(?:kbtu|\u043a\u0431\u0442\u0443)"
+_SEP = r"[\s\-\u2013\u2014|:,.]"
+_HEAD = re.compile(rf"^{_KB}(?:['\u2019]s)?\b{_SEP}*", re.I)
+# "... in KBTU", "... at KBTU", "... \u0432 / \u043f\u0440\u0438 \u041a\u0411\u0422\u0423": the little word goes too
+_TAIL = re.compile(rf"(?:\s+(?:in|at|of|\u0432|\u043f\u0440\u0438))?{_SEP}*\(?\b{_KB}(?:\s+chapter)?\)?$", re.I)
+
+
+def _acronym(w: str) -> bool:
+    """One word of 2-8 capitals (digits too, "3D" no: a letter first), and not KBTU."""
+    return 2 <= len(w) <= 8 and bool(re.fullmatch(r"[^\W\d_][^\W_]*", w)) and w.isupper() and w not in KBTU
+
+
+def org_name(name: str) -> tuple[str, str | None]:
+    """A name as typed -> (the name, the acronym it carried, for the abbr): "KBTU" off either end ("KBTU Open Mic",
+    "Debate Club | KBTU", "IEEE KBTU Chapter"); "Society of Petroleum Engineers (SPE)" and "SPE \u2013 Society of ..."
+    give SPE and keep the long name. A name that would be left under 2 characters stays as typed."""
+    typed = " ".join(name.split())
+    def bare(n: str) -> str:
+        for _ in range(3):
+            n = _TAIL.sub("", _HEAD.sub("", n)).strip()
+        return n
+    n, acro = bare(typed), None
+    if (m := re.fullmatch(r"(.+?)\s*\(\s*([^\s()]+)\s*\)", n)) and _acronym(m[2]):
+        n, acro = bare(m[1]), m[2]
+    elif (m := re.fullmatch(r"(\S+)(?:\s*[\u2013\u2014]\s*|\s+[-|:]\s+)(.+)", n)) and _acronym(m[1]):
+        acro, n = m[1], bare(m[2])
+    return (n, acro) if len(n) >= 2 else (typed, None)
+
+
+def guess_abbr(name: str) -> str:
+    """The short name an org starts with: the acronym its name carried, else its initials."""
+    n, acro = org_name(name)
+    return acro or initials(n)
 
 
 def fill_abbrs(con) -> None:
     """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays."""
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
-            con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (initials(o["name"]), o["id"]))
+            con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
 
 
 def org_by_slug(con, slug: str) -> int | None:
