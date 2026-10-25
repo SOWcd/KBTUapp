@@ -226,6 +226,7 @@ export interface EventCard {
   leadersFrom?: 'president' | 'vice' | 'head' | null; // a leaders meeting: the lowest role invited
   meeting?: boolean;            // a club meeting (§2b): team-only, the whole club or one tag expected to answer and come
   firstYear: boolean;
+  needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
   externalUrl: string | null;
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
@@ -333,6 +334,7 @@ export interface EventInput {
   seats: number | null;
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
   firstYear: boolean;
+  needsPhone?: boolean;        // sign-up asks for the phone if none is kept
   albumOpen?: boolean;         // "Photos from participants" (who came adds to the album); left out = on
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1

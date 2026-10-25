@@ -166,8 +166,14 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     if (!before || before.status === 'cancelled') return;
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
+    // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
+    const phone = !leaving && before.needsPhone && !session.me?.student?.phone
+      ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 707 123 45 67', max: 16, tel: true })
+      : undefined;
+    if (phone === null) return;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id);
+      const after = leaving ? await api.unregister(id) : await api.register(id, undefined, phone);
+      if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);
       const st = after.my?.status;
       if (leaving) { haptic.warn(); burst(true); say(phrase('say.cancel'), 'crying_face_3d'); }

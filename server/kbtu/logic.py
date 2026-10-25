@@ -339,7 +339,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
             "cover": _event_cover(con, e, files),
             "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
             "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
-            "firstYear": bool(e["first_year"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "price": e["price"], "my": my, "visibility": e["visibility"],
+            "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "price": e["price"], "my": my, "visibility": e["visibility"],
             "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
             "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
             "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
@@ -927,6 +927,12 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         keys = [k for k in (patch["showcase"] if isinstance(patch["showcase"], list) else [])
                 if isinstance(k, str) and (k in codes or re.fullmatch(r"b\d{1,9}", k))]
         sets["showcase"] = ",".join(list(dict.fromkeys(keys))[:6])
+    if "phone" in patch:  # my kept phone (Settings → My data): changed, or null deletes it
+        need_student(v)
+        phone = None if patch["phone"] is None else kz_phone(patch["phone"])
+        if patch["phone"] is not None and not phone:
+            raise ApiError("bad_input")
+        con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
     if sets:
         con.execute(f"UPDATE users SET {', '.join(c + ' = ?' for c in sets)} WHERE id = ?", (*sets.values(), v.id))
     if "nRemind" in patch:  # the switch acts at once on reminders already queued: off drops them, on arms the upcoming ones
@@ -1331,7 +1337,8 @@ def promote(con, e: sqlite3.Row) -> None:
         notify(con, nxt["user_id"], "seat_hold" if pay else "seat_free", f"event:{e['id']}")  # a hold: pay within 30 min
 
 
-def register(con, v: Viewer, eid: int, invited_by: int | None = None) -> dict:
+def register(con, v: Viewer, eid: int, invited_by: int | None = None, phone: object = None) -> dict:
+    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71)."""
     need_student(v)
     sweep_holds(con)
     with tx(con):  # count and insert under one write lock: the last seat goes to one person
@@ -1347,6 +1354,12 @@ def register(con, v: Viewer, eid: int, invited_by: int | None = None) -> dict:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if r and r["status"] in ("going", "hold", "waitlist"):
             return card(con, v, e)
+        if e["needs_phone"] and phone is not None:
+            if not (phone := kz_phone(phone)):
+                raise ApiError("bad_input", "phone")
+            con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
+        elif e["needs_phone"] and not one(con, "SELECT phone FROM students WHERE user_id = ?", v.id)[0]:
+            raise ApiError("bad_input", "phone")  # the app asks for it and sends it with the same tap
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
@@ -3213,6 +3226,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         raise ApiError("bad_input")
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
             "emoji": emoji, "color": color, "seats": seats, "reg_until": reg_until, "first_year": int(bool(i.get("firstYear"))),
+            "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
             "meeting": int(meeting), "meeting_tag": tag, "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
@@ -3530,6 +3544,13 @@ def _focus(body: dict, keep: str | None) -> str | None:
     return f"{x:.3f},{y:.3f}"
 
 
+def kz_phone(raw: object) -> str | None:
+    """A Kazakhstan number as typed (8 701..., +7 701..., 701...) kept as +7XXXXXXXXXX; None if it isn't one."""
+    d = re.sub(r"\D", "", str(raw or ""))
+    d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else "7" + d if len(d) == 10 else d
+    return "+" + d if re.fullmatch(r"7\d{10}", d) else None
+
+
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
     """The price and where students send it (§4.3): only an official club's Vice+ set them, and they are fixed once the
     first receipt is in. Absent keeps them; a null price makes the event free. The phone is kept as +7XXXXXXXXXX.
@@ -3540,14 +3561,12 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     price, name, phone, first = body.get("price"), None, None, None
     if price is not None:
         name = " ".join(str(body.get("payToName") or "").split())
-        phone = re.sub(r"\D", "", str(body.get("payPhone") or ""))
-        phone = "7" + phone[1:] if len(phone) == 11 and phone[0] == "8" else "7" + phone if len(phone) == 10 else phone
+        phone = kz_phone(body.get("payPhone"))
         first = body.get("freeFirst") or None
         if (not isinstance(price, int) or isinstance(price, bool) or not 1 <= price <= 1_000_000
-                or not 2 <= len(name) <= 80 or not re.fullmatch(r"7\d{10}", phone)
+                or not 2 <= len(name) <= 80 or not phone
                 or not (first is None or (isinstance(first, int) and not isinstance(first, bool) and 1 <= first <= 5000))):
             raise ApiError("bad_input")
-        phone = "+" + phone
     new = {"price": price, "pay_to_name": name, "pay_phone": phone, "free_first": first}
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:

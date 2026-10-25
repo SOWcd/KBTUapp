@@ -513,6 +513,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (66, "UPDATE orgs SET recruiting = 0;"),
     # 53/68 (owner, Oct 24): a club's members are public unless the club hides the list (a support group, a faith club)
     (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
+    # PLAN 71: an event asks for the phone at sign-up (no up-front "My data" step); a phone already kept stays
+    (68, "ALTER TABLE events ADD COLUMN needs_phone INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 

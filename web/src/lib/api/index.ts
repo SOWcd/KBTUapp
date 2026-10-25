@@ -14,7 +14,7 @@ export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
-  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null }): Promise<Me>;
+  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null }): Promise<Me>;  // phone: null deletes it
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back
   /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
@@ -28,7 +28,7 @@ export interface Api {
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;
   pastEvents(): Promise<EventCard[]>;
   event(id: Id): Promise<EventFull>;
-  register(id: Id, invitedBy?: Id): Promise<EventCard>;
+  register(id: Id, invitedBy?: Id, phone?: string): Promise<EventCard>; // phone: asked at the sign-up, kept (needsPhone)
   addSeats(id: Id, add: number): Promise<EventFull>;
   changePlace(id: Id, place: string): Promise<EventFull>;   // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline(id: Id, note?: string): Promise<EventCard>;      // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
