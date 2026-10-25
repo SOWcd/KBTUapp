@@ -97,8 +97,8 @@ def org_ref(con, o: sqlite3.Row, files: dict | None = None) -> dict:
     """A club wherever it shows: its mark is its uploaded logo, or else its emoji on its cover. `files`: the logos
     already read (_by_id), when building a list."""
     logo = media_shape(files[o["logo_file_id"]]) if files and o["logo_file_id"] in files else photo(con, o["logo_file_id"])
-    return {"id": o["id"], "slug": o["slug"], "name": o["name"], "short": o["short"], "emoji": o["emoji"],
-            "cover": o["cover"], "kind": o["kind"], "official": bool(o["official"]), "logo": logo["thumb"] if logo else None,
+    return {"id": o["id"], "slug": o["slug"], "name": o["name"], "short": o["short"], "abbr": o["abbr"],
+            "emoji": o["emoji"], "cover": o["cover"], "kind": o["kind"], "official": bool(o["official"]), "logo": logo["thumb"] if logo else None,
             # the app shows the viewer's language (api/client.ts); a club's description only where it shows (org_shape)
             **({"i18n": {k: {a: b for a, b in x.items() if a != "description"} for k, x in json.loads(o["i18n"]).items()}} if o["i18n"] else {})}
 
@@ -1668,9 +1668,10 @@ def decide_join(con, v: Viewer, rid: int, accept: bool) -> None:
 
 def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     """The club's own profile and settings (Vice+, §2): whether it takes applications, and what students see on its
-    sheet — the name, its logo (an upload of the editor's; null: the emoji on its cover again), emoji and cover, about,
-    up to 6 links. Only what is sent changes, all or nothing."""
-    _may(con, v, oid, "profile")
+    sheet — the name and its short one, its logo (an upload of the editor's; null: the emoji on its cover again), emoji
+    and cover, about, up to 6 links. Only what is sent changes, all or nothing. DMP may set any club's short name."""
+    if body.keys() != {"abbr"} or not overseer(con, v):
+        _may(con, v, oid, "profile")
     bad, sets = object(), {}
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
     if "recruiting" in body:
@@ -1690,6 +1691,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             raise ApiError("conflict", "taken")
     if "short" in body:
         sets["short"] = text("short").upper() if 1 <= len(text("short")) <= 2 else bad
+    if "abbr" in body:  # one word, 2-8 characters: it sits inline beside a role or a place
+        sets["abbr"] = text("abbr") if re.fullmatch(r"\S{2,8}", text("abbr")) else bad
     if "emoji" in body:
         sets["emoji"] = text("emoji") if re.fullmatch(r"[a-z0-9_]{1,40}", text("emoji")) else bad
     if "cover" in body:
@@ -4288,8 +4291,8 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>). Recruiting starts closed:
     the club opens it in Studio (owner, Oct 24)."""
     slug = slug or slug_for(con, name)
-    cur = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, official, created_by, created_at, recruiting) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-                      (slug, kind, name, short, emoji, int(official or kind == "school"), actor, now()))
+    cur = con.execute("INSERT INTO orgs (slug, kind, name, short, abbr, emoji, official, created_by, created_at, recruiting) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                      (slug, kind, name, short, initials(name), emoji, int(official or kind == "school"), actor, now()))
     for rn, color, lv in OFFICIAL_ROLES:
         con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (?, ?, ?, ?, 1, ?)", (cur.lastrowid, rn, color, lv, now()))
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'org_create', ?, ?, ?)",
@@ -4329,6 +4332,29 @@ def name_slugs(con) -> None:
         con.execute("INSERT INTO meta (key, value) VALUES ('slugs_named', '1')")
         for o in rows(con, "SELECT id, name FROM orgs WHERE slug GLOB 'club[0-9]*'"):
             con.execute("UPDATE orgs SET slug = ? WHERE id = ?", (slug_for(con, o["name"], o["id"]), o["id"]))
+
+
+# words a club's initials leave out (owner, Oct 25): "Club of Film and Theatre" is CFT; Russian and Kazakh ones as code
+# points (the code stays ASCII)
+LINK_WORDS = {*"\u0438 \u0432 \u0432\u043e \u043d\u0430 \u043f\u043e \u0434\u043b\u044f \u0441 \u0441\u043e \u043e \u043e\u0431 \u043e\u0442 \u043f\u0440\u0438 \u0437\u0430 \u0438\u0437 \u043a \u0436\u04d9\u043d\u0435 \u043c\u0435\u043d \u043f\u0435\u043d \u0431\u0435\u043d".split(),
+              "and", "of", "the", "for", "in", "on", "at", "a", "an", "to", "by"}
+
+
+def initials(name: str) -> str:
+    """A club's short name until it types its own: the first letters of its words, uppercase; one word stays whole
+    (the first three letters of a long one)."""
+    words = re.findall(r"[^\W_]+", name)
+    words = [w for w in words if w.lower() not in LINK_WORDS] or words
+    if len(words) == 1:
+        return (words[0] if len(words[0]) <= 8 else words[0][:3]).upper()
+    return "".join(w[0] for w in words).upper()[:8]
+
+
+def fill_abbrs(con) -> None:
+    """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays."""
+    with tx(con):
+        for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
+            con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (initials(o["name"]), o["id"]))
 
 
 def org_by_slug(con, slug: str) -> int | None:

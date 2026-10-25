@@ -4006,6 +4006,38 @@ def test_club_people(env):
     assert len(c.get("/api/orgs/1", headers=tma(73)).json()["leaders"]) == 2                           # the leaders still show
 
 
+def test_club_abbr(env):
+    """A club's short name (owner, Oct 25): the clubs made before take their initials at start and keep a set one; a new
+    club has its initials from the first day; Vice+ edit it (one word, 2-8 characters), a member can't; DMP and the
+    admin may set any club's, and only that."""
+    c, cfg = env
+    pres, vice, ali, dmp, boss = (login(c, 70 + i, n) for i, n in enumerate(("pres", "vice", "ali", "dmp", "boss")))
+    con = db.connect(cfg.db_path)
+    film = "\u041a\u043b\u0443\u0431 \u043a\u0438\u043d\u043e \u0438 \u0442\u0435\u0430\u0442\u0440\u0430"  # "Club of film and theatre" in Russian
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic Club of KBTU', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'film', 'club', ?, 'F', 'popcorn_3d', 0)", (film,))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, abbr, emoji, created_at) VALUES (3, 'go', 'club', 'Go Club', 'G', 'Baduk', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, pres["id"], "president"), (1, vice["id"], "vice"), (1, ali["id"], "member"), (9, dmp["id"], "head")])
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    logic.fill_abbrs(con)
+    logic.fill_abbrs(con)   # every start: nothing left to fill
+    assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMCK", "\u041a\u041a\u0422", "Baduk"]
+    assert logic.initials("Studex") == "STUDEX" and logic.initials("The Club") == "CLUB"
+    assert con.execute("SELECT abbr FROM orgs WHERE id = ?", (logic.create_org(con, None, "Robotics and AI Society", "R", "laptop_3d", False),)).fetchone()[0] == "RAS"
+
+    patch = lambda uid, body: c.patch("/api/orgs/1", headers=tma(uid), json=body)  # noqa: E731
+    assert c.get("/api/orgs/1", headers=tma(72)).json()["abbr"] == "OMCK"
+    assert patch(72, {"abbr": "MIC"}).status_code == 403                         # a member can't
+    assert patch(71, {"abbr": "MIC"}).json()["abbr"] == "MIC"                    # the Vice can
+    for bad in ("M", "TOO LONG", "NINECHARS", ""):
+        assert patch(70, {"abbr": bad}).status_code == 400, bad
+    assert patch(73, {"abbr": "OMC"}).json()["abbr"] == "OMC"                    # DMP on any club
+    assert patch(73, {"abbr": "OMC", "name": "Mic Night"}).status_code == 403    # and nothing else
+    assert patch(74, {"abbr": "MIC"}).json()["abbr"] == "MIC"                    # the admin too
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""

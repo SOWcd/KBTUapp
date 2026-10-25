@@ -7,9 +7,10 @@
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import Sheet from '../../ui/Sheet.svelte';
   import ChatKind from '../../ui/ChatKind.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, chats }: { overlay: Overlay; chats: Chat[] } = $props();
-  const label = (c: Chat) => c.school && c.course ? `${c.school} · ${t('chats.course', { n: c.course })}` : c.school ?? (c.course ? t('chats.course', { n: c.course }) : t('chats.everyone'));
+  const label = (c: Chat) => c.school && c.course ? `${schoolShort(c.school)} · ${t('chats.course', { n: c.course })}` : (c.school && schoolShort(c.school)) ?? (c.course ? t('chats.course', { n: c.course }) : t('chats.everyone'));
   const groups = $derived.by(() => {
     const m = new Map<string, Chat[]>();
     for (const c of chats) { const k = label(c); if (!m.has(k)) m.set(k, []); m.get(k)!.push(c); }

@@ -4,11 +4,12 @@
   import type { OrgRef } from '../lib/api';
   import { skinOf } from '../lib/awards';
   import OrgLogo from './OrgLogo.svelte';
+  import { nameOf } from '../lib/short';
   let { org }: { org: OrgRef } = $props();
 </script>
 
 {#if skinOf(org) === 'studex'}<span class="tag sx" aria-label={org.name}><b><i>STUD</i>EX</b></span>
-{:else}<span class="tag"><OrgLogo {org} size={20} /><span class="ellipsis">{org.name}</span></span>{/if}
+{:else}<span class="tag"><OrgLogo {org} size={20} /><span class="ellipsis">{nameOf(org)}</span></span>{/if}
 
 <style>
   .tag { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; height: 30px; padding: 0 12px 0 5px; border-radius: var(--r-full);

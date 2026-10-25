@@ -18,6 +18,7 @@
   import Qr from '../../ui/Qr.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, share = false }: { overlay: Overlay; share?: boolean } = $props();
 
@@ -50,7 +51,7 @@
   let miss = $state('');
   let looking = $state(false);
   let asking = $state(false);
-  const line = $derived(found ? [found.course ? t('person.course', { n: found.course }) : '', found.school].filter(Boolean).join(' · ') : '');
+  const line = $derived(found ? [found.course ? t('person.course', { n: found.course }) : '', schoolShort(found.school)].filter(Boolean).join(' · ') : '');
   async function find(ev: Event) {
     ev.preventDefault();
     if (!q.trim()) return;

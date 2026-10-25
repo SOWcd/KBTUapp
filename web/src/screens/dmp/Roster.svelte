@@ -19,6 +19,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import { schoolShort, shortOf } from '../../lib/short';
 
   let { overlay, org, onofficial }: { overlay: Overlay; org: OrgRef; onofficial?: (on: boolean) => void } = $props();
   let list = $state<RosterMember[] | null>(null);
@@ -42,12 +43,22 @@
     } catch { el.checked = official; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
     finally { busy = false; }
   }
+
+  // DMP sets any club's short name (owner, Oct 25); the club's Vice+ in its profile
+  let abbr = $state(untrack(() => shortOf(org)));
+  async function rename() {
+    const v = (await sheets.askText({ title: t('ce.abbr'), text: t('ce.abbrHint'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: abbr, max: 8 }))?.trim();
+    if (!v || v === abbr) return;
+    try { abbr = shortOf(await api.updateOrg(org.id, { abbr: v })); haptic.ok(); }
+    catch { haptic.error(); say(t('ce.abbrHint'), 'pleading_face_3d'); }
+  }
 </script>
 
 <Sheet {overlay} full title={org.name}>
   <div class="hd"><OrgLogo {org} size={48} /><span><h2 class="t-h2">{org.name}{#if official}<span class="ok"><BadgeCheck size={20} /></span>{/if}</h2><p class="t-foot">{list ? tn('reg.people', list.length) + (quiet ? ' · ' + tn('reg.quietN', quiet) : '') : ' '}</p></span></div>
   {#if org.kind === 'club'}
     <label class="switch off"><span><b>{t('reg.official')}</b><i class="t-foot">{t('reg.officialNote')}</i></span><input type="checkbox" role="switch" checked={official} onchange={toggle} disabled={busy} /></label>
+    <button class="switch off abbr" onclick={rename}><span><b>{t('ce.abbr')}</b><i class="t-foot">{abbr}</i></span></button>
   {/if}
   {#if list}
     <div class="list">
@@ -56,7 +67,7 @@
           <Avatar person={m.person} size={40} />
           <span class="tx">
             <span class="top"><b class="ellipsis">{withNick(m.fullName, m.person)}</b><span class="role" class:hi={m.role === 'president' || m.role === 'vice'}>{ROLE_NAME[m.role]}</span></span>
-            <i>{m.studentId}{m.course ? ' · ' + t('person.year', { n: m.course }) : ''}{m.school ? ' · ' + m.school : ''}</i>
+            <i>{m.studentId}{m.course ? ' · ' + t('person.year', { n: m.course }) : ''}{m.school ? ' · ' + schoolShort(m.school) : ''}</i>
             <i>{t('reg.since', { date: dayMonth(m.joinedAt) })}{#if m.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}</i>
             {#if m.username || m.email || m.phone}
               <span class="contacts">
@@ -78,6 +89,7 @@
   .hd { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
   .ok { display: inline-flex; margin-left: 6px; vertical-align: -2px; color: var(--accent-text); }
   .off { margin-bottom: 12px; }
+  .abbr { width: 100%; text-align: left; }
   .list { display: flex; flex-direction: column; gap: 2px; }
   .m { display: flex; gap: 12px; align-items: flex-start; padding: 10px 2px; border-bottom: 1px solid var(--line); }
   .m:last-child { border-bottom: 0; }

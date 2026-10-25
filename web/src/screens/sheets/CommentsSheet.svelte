@@ -20,6 +20,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import { nameOf } from '../../lib/short';
 
   let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
 
@@ -141,7 +142,7 @@
           {#if c.org}<OrgLogo org={c.org} size={34} />{:else if c.person}<Avatar person={c.person} size={34} />{/if}
           <div class="cb">
             <span class="ch">
-              <b class="ellipsis">{c.org?.name ?? c.person?.name}</b>{#if c.org}<span class="tag">{t('cm.club')}</span>{/if}<i>{ago(c.at)}</i>
+              <b class="ellipsis">{c.org ? nameOf(c.org) : c.person?.name}</b>{#if c.org}<span class="tag">{t('cm.club')}</span>{/if}<i>{ago(c.at)}</i>
               <button class="more" onclick={() => open(c)} aria-label={t('common.more')} aria-expanded={menu === c.id}><Ellipsis size={16} /></button>
             </span>
             {#if c.replyTo}<button class="quote" onclick={() => jump(c.replyTo!.id)}><b>{c.replyTo.name}</b><span class="ellipsis">{c.replyTo.body}</span></button>{/if}
@@ -168,7 +169,7 @@
           </button>
         {/if}
         {#if replying}
-          <div class="to"><span class="quote"><b>{t('cm.replyTo', { name: replying.org?.name ?? replying.person?.name ?? '' })}</b><span class="ellipsis">{replying.body}</span></span>
+          <div class="to"><span class="quote"><b>{t('cm.replyTo', { name: replying.org ? nameOf(replying.org) : replying.person?.name ?? '' })}</b><span class="ellipsis">{replying.body}</span></span>
             <button class="x" onclick={() => (replying = null)} aria-label={t('common.cancel')}><X size={16} /></button></div>
         {/if}
         <div class="row">

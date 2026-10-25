@@ -25,9 +25,9 @@
   let o = $state<Org | null>(null);
   // the logo (owner, Oct 5): one of my uploads, or null — then the emoji on its cover shows again
   let logo = $state<{ id?: Id; url: string } | null>(null);
-  let f = $state({ name: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
+  let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
   $effect(() => {
-    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden }; logo = x.logo ? { url: x.logo } : null; })
+    api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, abbr: x.abbr ?? '', emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden }; logo = x.logo ? { url: x.logo } : null; })
       .catch(() => { say(t('common.error'), 'pleading_face_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
@@ -49,6 +49,7 @@
     const p: OrgPatch = {};
     if (!o) return p;
     if (f.name.trim() !== o.name) p.name = f.name.trim();
+    if (f.abbr.trim() !== (o.abbr ?? '')) p.abbr = f.abbr.trim();
     if (f.emoji !== o.emoji) p.emoji = f.emoji;
     if (f.cover !== o.cover) p.cover = f.cover;
     if (f.description.trim() !== (o.description ?? '')) p.description = f.description.trim();
@@ -58,7 +59,7 @@
     return p;
   });
   const changed = $derived(Object.keys(patch).length > 0);
-  const ready = $derived(changed && f.name.trim().length >= 2 && linksOk);
+  const ready = $derived(changed && f.name.trim().length >= 2 && (f.abbr.trim() === (o?.abbr ?? '') || /^\S{2,8}$/.test(f.abbr.trim())) && linksOk);
   const preview = $derived(o ? { ...o, name: f.name || o.name, emoji: f.emoji, cover: f.cover, logo: logo?.url ?? null } : null);
 
   let busy = $state(false);
@@ -98,6 +99,10 @@
     </div>
     <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" /></label>
     <p class="t-foot note">{t('ce.nameHint')}</p>
+    {#if o.kind !== 'school'}<!-- a school's comes from KBTU's site (schools.json) -->
+      <label class="field"><span class="t-cap">{t('ce.abbr')}</span><input bind:value={f.abbr} maxlength="8" /></label>
+      <p class="t-foot note">{t('ce.abbrHint')}</p>
+    {/if}
     {#if !logo}
       <p class="t-foot note">{t('ce.logoOr')}</p>
       <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={() => COVERS[f.cover], (c) => (f.cover = COVERS.indexOf(c))} colors={COVERS} size={26} /></div>

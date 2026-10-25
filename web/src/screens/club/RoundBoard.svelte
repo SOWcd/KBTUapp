@@ -26,6 +26,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
 
@@ -152,7 +153,7 @@
     <div class="who">
       <Avatar person={a.person} size={56} />
       <span class="tx"><b>{a.fullName}</b>
-        <i>{[a.course ? t('person.course', { n: a.course }) : '', a.school].filter(Boolean).join(' · ')}</i>
+        <i>{[a.course ? t('person.course', { n: a.course }) : '', schoolShort(a.school)].filter(Boolean).join(' · ')}</i>
         <i>{[a.email, a.username ? '@' + a.username : ''].filter(Boolean).join(' · ')}</i></span>
     </div>
     {#if a.username}<button class="tg" onclick={() => openLink('https://t.me/' + a.username)}><TelegramMark size={16} />{t('cast.write')}</button>{/if}

@@ -29,6 +29,7 @@
   import { withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
+  import { schoolShort } from '../../lib/short';
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
@@ -170,7 +171,7 @@
         <div class="capp surface">
           <button class="ch" aria-expanded={capp === a.id} onclick={() => { haptic.select(); capp = capp === a.id ? null : a.id; refusing = null; }}>
             <OrgLogo org={{ id: 0, slug: '', name: a.name, short: a.short, emoji: a.emoji, cover: a.cover, kind: 'club', official: false }} size={40} />
-            <span><em>{t('adm.cappTag')}</em><b class="ellipsis">{a.name}</b><i class="ellipsis">{a.applicant ? withNick(a.applicant.fullName, a.applicant.person) : '—'}{a.applicant?.course ? ' · ' + t('person.course', { n: a.applicant.course }) : ''}{a.applicant?.school ? ' · ' + a.applicant.school : ''}</i></span>
+            <span><em>{t('adm.cappTag')}</em><b class="ellipsis">{a.name}</b><i class="ellipsis">{a.applicant ? withNick(a.applicant.fullName, a.applicant.person) : '—'}{a.applicant?.course ? ' · ' + t('person.course', { n: a.applicant.course }) : ''}{a.applicant?.school ? ' · ' + schoolShort(a.applicant.school) : ''}</i></span>
             <span class="chev"><ChevronRight size={18} /></span>
           </button>
           {#if capp === a.id}

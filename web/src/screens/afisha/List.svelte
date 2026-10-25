@@ -29,6 +29,7 @@
   import Chip from '../../ui/Chip.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import { ui } from '../../lib/state/ui.svelte';
+  import { nameOf, shortOf } from '../../lib/short';
 
   let openPost = $state(false);
 
@@ -118,7 +119,7 @@
             <button class="open" onclick={() => sheets.event(going.id)} aria-label={going.title}></button>
             <div class="ev-top"><span class="ev-k"><i></i>{t('event.youGo')}</span><span class="ev-ob"><Emoji name={going.emoji ?? going.org.emoji} size={54} /></span></div>
             <b class="ev-t clamp-2">{going.title}</b>
-            <span class="ev-m">{placeOf(going.place)} · {going.org.name}</span>
+            <span class="ev-m">{placeOf(going.place)} · {shortOf(going.org)}</span>
             <div class="ev-cd"><b class="num">{soon(going.startsAt, now)}</b><small class="num">{t('list.at', { time: time(going.startsAt) })}</small></div>
             <div class="ev-act">
               {#if floorOf(going.place) != null}<button onclick={() => sheets.map(going.place)}><MapPin size={16} />{t('route.open')}</button>{/if}
@@ -135,7 +136,7 @@
 
   {#if featured}
     <button class="pin surface press" onclick={() => (openPost = !openPost)}>
-      <span class="pin-top"><Chip tone="warning">{tagName(featured.tag) ?? t('common.more')}</Chip><span class="t-foot">{featured.org.name}</span></span>
+      <span class="pin-top"><Chip tone="warning">{tagName(featured.tag) ?? t('common.more')}</Chip><span class="t-foot">{nameOf(featured.org)}</span></span>
       <span class="t-title">{featured.title}</span>
       <span class="t-body dim" class:clamp-2={!openPost}>{featured.body}</span>
     </button>

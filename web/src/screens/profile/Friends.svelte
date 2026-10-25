@@ -23,13 +23,14 @@
   import Emoji from '../../ui/Emoji.svelte';
   import Poster from '../../ui/Poster.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { schoolShort } from '../../lib/short';
 
   const me = $derived(session.me);
   const f = $derived(data.friends);
   const here = $derived(ui.tab === 'profile' && ui.page.profile === 0);
   $effect(() => { if (here && me?.student) void loadFriends(); });
 
-  const line = (r: FriendRow) => [r.course ? t('person.course', { n: r.course }) : '', r.school].filter(Boolean).join(' · ');
+  const line = (r: FriendRow) => [r.course ? t('person.course', { n: r.course }) : '', schoolShort(r.school)].filter(Boolean).join(' · ');
   /** The next event this friend goes to, if any (the cards are sorted by start). */
   const nextOf = (r: FriendRow): EventCard | undefined => f?.going.find((e) => e.friends.some((p) => p.id === r.person.id));
   const firstNames = (e: EventCard) => e.friends.map((p) => p.name.split(' ')[0]);

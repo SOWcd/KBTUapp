@@ -526,6 +526,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX short_links_by_org ON short_links(org_id);"""),
     # PLAN 71: an event asks for the phone at sign-up (no up-front "My data" step); a phone already kept stays
     (69, "ALTER TABLE events ADD COLUMN needs_phone INTEGER NOT NULL DEFAULT 0;"),
+    # a club's short name where a long one won't fit (owner, Oct 25): its Vice+ or DMP set it; the clubs made before
+    # take their initials at start (logic.fill_abbrs: SQLite can't uppercase Cyrillic); a school's comes from schools.json
+    (70, "ALTER TABLE orgs ADD COLUMN abbr TEXT;"),
 ]
 
 

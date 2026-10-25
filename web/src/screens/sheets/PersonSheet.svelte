@@ -22,6 +22,7 @@
   import { ROLE_NAME } from '../../lib/perms';
   import { haptic, openLink } from '../../lib/tg';
   import TelegramMark from '../../ui/TelegramMark.svelte';
+  import { nameOf } from '../../lib/short';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -151,7 +152,7 @@
       <h3 class="sec">{t('person.clubs')}</h3>
       <div class="clubs">
         {#each p.clubs as m (m.org.id)}
-          <span class="club"><OrgLogo org={m.org} size={20} /><b>{m.org.name}</b>{#if m.role}<i>{roleName(m.role, m.title)}</i>{/if}</span>
+          <span class="club"><OrgLogo org={m.org} size={20} /><b>{nameOf(m.org)}</b>{#if m.role}<i>{roleName(m.role, m.title)}</i>{/if}</span>
         {/each}
       </div>
     {/if}
@@ -161,7 +162,7 @@
       <h3 class="sec">{t('person.past')}</h3>
       <div class="past">
         {#each p.past as h, i (i)}
-          <div class="was"><OrgLogo org={h.org} size={28} /><span class="tx"><b class="ellipsis">{h.org.name}</b>
+          <div class="was"><OrgLogo org={h.org} size={28} /><span class="tx"><b class="ellipsis">{nameOf(h.org)}</b>
             <i>{h.role ? ROLE_NAME[h.role] + ' · ' : ''}{monthYear(h.since)}{monthYear(h.since) === monthYear(h.until) ? '' : ' – ' + monthYear(h.until)}</i></span></div>
         {/each}
       </div>

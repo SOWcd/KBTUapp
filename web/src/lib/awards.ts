@@ -5,6 +5,7 @@ import { t, tn } from './i18n/index.svelte';
 import { RANK, roleName } from './perms';
 import { dayMonth } from './time';
 import { data } from './state/data.svelte';
+import { nameOf, schoolShort, shortOf } from './short';
 
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
@@ -71,8 +72,8 @@ export function hero(p: PersonCard): HeroData {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
     name: p.name,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
-    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, top.title)} · ` : '') + top.org.name : 'Student',
-    line: [p.course ? t('person.course', { n: p.course }) : '', p.school].filter(Boolean).join(' · '),
+    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, top.title)} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
+    line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school)].filter(Boolean).join(' · '),
     bio: p.bio,
     no: p.no == null ? '—' : String(p.no).padStart(5, '0'),
     // the shelf under the badge replaced "0 events · 1 award · 2 clubs" (owner, Oct 14: zeros read as a reproach, the

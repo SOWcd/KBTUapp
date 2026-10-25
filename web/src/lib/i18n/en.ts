@@ -780,6 +780,8 @@ const en: Dict = {
   'ce.sub': "This is how students see the club",
   'ce.links': "Links",
   'ce.nameHint': "The name isn't translated — English works best, everyone understands it.",
+  'ce.abbr': "Short name",
+  'ce.abbrHint': "2–8 characters, no spaces: shown where the full name doesn't fit, like a member's badge.",
   'ce.aboutHint': "Write in any language — AI translates it into the other two.",
   'ce.linksNote': "Pick a network and type the username, or paste a whole link. Up to six.",
   'ce.site': "Website",

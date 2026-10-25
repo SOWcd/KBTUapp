@@ -22,6 +22,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Chip from '../../ui/Chip.svelte';
   import Emoji from '../../ui/Emoji.svelte';
+  import { nameOf } from '../../lib/short';
 
   const me = $derived(session.me);
   const here = $derived(ui.tab === 'afisha' && ui.page.afisha === 2);
@@ -97,7 +98,7 @@
   <article class="post" class:cast class:unread={cast && !p.read}>
     <header class="ph">
       <OrgLogo org={p.org} size={36} />
-      <span class="who"><b class="ellipsis">{p.org.name}</b><i><span class="when">{#if !cast}{why(p)}{/if}{ago(p.createdAt)}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</span>{#if p.pinned}<span class="pinned"><Pin size={12} />{t('news.pinned')}</span>{/if}</i></span>
+      <span class="who"><b class="ellipsis">{nameOf(p.org)}</b><i><span class="when">{#if !cast}{why(p)}{/if}{ago(p.createdAt)}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</span>{#if p.pinned}<span class="pinned"><Pin size={12} />{t('news.pinned')}</span>{/if}</i></span>
       {#if cast && !p.read}<span class="new">{t('news.new')}</span>{/if}
       {#if p.tag}<Chip tone={p.tag === 'important' ? 'warning' : 'accent'}>{tagName(p.tag)}</Chip>{/if}
       {#if p.canEdit || p.canDelete || p.canFeature || session.me?.student}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
@@ -146,7 +147,7 @@
         {#if 'post' in it}{@render card(it.post, false)}
         {:else}
           <article class="post">
-            <header class="ph"><OrgLogo org={it.ev.org} size={36} /><span class="who"><b class="ellipsis">{it.ev.org.name}</b><i><span class="when">{t('news.newEvent')} · {ago(it.at)}</span></i></span></header>
+            <header class="ph"><OrgLogo org={it.ev.org} size={36} /><span class="who"><b class="ellipsis">{nameOf(it.ev.org)}</b><i><span class="when">{t('news.newEvent')} · {ago(it.at)}</span></i></span></header>
             <EventRow e={it.ev} showDate dateLine={relDay(it.ev.startsAt)} />
           </article>
         {/if}

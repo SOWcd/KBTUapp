@@ -22,6 +22,7 @@
   import { tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Emoji from '../../ui/Emoji.svelte';
+  import { nameOf } from '../../lib/short';
 
   // at: open on that post of the first club (a club page's news list), else its first unread
   let { overlay, groups, start = 0, at }: { overlay: Overlay; groups: StoryGroup[]; start?: number; at?: number } = $props();
@@ -50,7 +51,7 @@
     if (read.size) void api.readPosts([...read]).catch(() => {}).then(loadMe);
   }
   $effect(() => { if (overlay.closing) leave(); });
-  $effect(() => { overlay.title = g?.org.name ?? ''; overlay.theme = 'dark'; }); // the capsule names the club
+  $effect(() => { overlay.title = g ? nameOf(g.org) : ''; overlay.theme = 'dark'; }); // the capsule names the club
 
   // read once on screen; sent in one go a moment later
   const read = new Set<number>();
