@@ -5,8 +5,9 @@
 /** k: stairs, lift, exit (else a corridor point); g: the staircase's or lift's id on all its floors; r: rooms whose door
  *  opens here; b: backup, only when there is no other way (owner, Oct 11); e: an evacuation door, opened only then (owner, Oct 24:
  *  Abylai Khan's), never a way out otherwise; h: an exit's hours Mon-Fri, Sat, Sun; s: seconds up to this stair node from
- *  the one below, 0 for a level door: the yard is floor 0 by the west stairs and floor 1 by Halyk Coworking (owner, Oct 24) */
-export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[]; s?: number };
+ *  the one below, 0 for a level door: the yard is floor 0 by the west stairs and floor 1 by Halyk Coworking (owner, Oct 24);
+ *  q: its Sunday hours hold only on first-year exam days (owner, Oct 26: Kazybek bi) */
+export type MapNode = { id: number; f: number; u: number; v: number; k?: 's' | 'l' | 'x'; g?: number; name?: string; r?: string[]; b?: boolean; e?: boolean; h?: string[]; s?: number; q?: boolean };
 export type Graph = { n: MapNode[]; e: [number, number][]; ver: number };
 export type Mode = 'fast' | 'lift' | 'alt';
 export type Pt = { f: number; u: number; v: number; node?: MapNode };
@@ -28,6 +29,10 @@ export function openAt(n: MapNode, d: Date): boolean {
   const [a, b] = h.split('-').map((x) => +x.slice(0, 2) * 60 + +x.slice(3)), m = d.getHours() * 60 + d.getMinutes();
   return a <= b ? m >= a && m < b : m >= a || m < b;
 }
+/** Exam days only (q) on a Sunday: the app can't tell which Sundays, so the door shows closed; a way out still takes it,
+ *  since anyone inside on a Sunday came for an exam and that day the uni opens Kazybek bi, not the guard post (owner, Oct 26) */
+export const examOnly = (n: MapNode, d: Date) => !!n.q && d.getDay() === 0;
+export const showsOpen = (n: MapNode, d: Date) => openAt(n, d) && !examOnly(n, d);
 
 /** The lifts' rush (owner, Oct 24): classes end at :50 and start at :00, so from :45 to :05 the lifts are packed; a guessed
  *  extra wait then. Only Monday to Friday between the 8:00 and 19:00 classes: no rush at the weekend or at night (owner,

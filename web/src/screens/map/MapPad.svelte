@@ -5,7 +5,7 @@
   import { t as tr } from '../../lib/i18n/index.svelte';
   import { SPOTS, floorOf, normRoom, adminZone } from '../../lib/map';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
-  import { openAt, type Graph, type MapNode } from '../../lib/route';
+  import { showsOpen, examOnly, type Graph, type MapNode } from '../../lib/route';
   const fl = (n: number) => (n ? tr('route.floor', { n }) : tr('route.basement'));
   /** " · administration area" after a room on floor 4's south side (owner, Oct 24), else nothing */
   export const adminNote = (r: string | null | undefined) => (adminZone(r) ? ' \u00b7 ' + tr('route.admin') : '');
@@ -22,12 +22,12 @@
     const till = (x: MapNode) => x.h?.[now.getDay() === 0 ? 2 : now.getDay() === 6 ? 1 : 0]?.split('-')[1] ?? '';
     return (g?.n ?? []).filter((n) => n.k === 'x' && !n.b && n.name && !seen.has(n.name) && seen.add(n.name))
       .map((n) => n.e ? { v: n.name!, label: n.name!, door: true, evac: true, off: true, sub: tr('pad.evac') }
-        : { v: n.name!, label: n.name!, door: true, off: !openAt(n, now), sub: openAt(n, now) ? tr('pad.till', { time: till(n) }) : tr('pad.closed') });
+        : { v: n.name!, label: n.name!, door: true, off: !showsOpen(n, now), sub: showsOpen(n, now) ? tr('pad.till', { time: till(n) }) : examOnly(n, now) ? tr('pad.exam') : tr('pad.closed') });
   }
   /** an entrance's line under the number: its floor and, when it won't open, why; picking it is still fine, A or B
    *  (owner, Oct 24: "I can stand by a closed door") */
   export const doorHint = (n: MapNode, floor: string) =>
-    tr('pad.entrance', { floor }) + (n.e ? ' \u00b7 ' + tr('pad.evac') : openAt(n, new Date()) ? '' : ' \u00b7 ' + tr('pad.closed').toLowerCase());
+    tr('pad.entrance', { floor }) + (n.e ? ' \u00b7 ' + tr('pad.evac') : showsOpen(n, new Date()) ? '' : ' \u00b7 ' + tr(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed').toLowerCase());
   // every number the main map prints, for "rooms that start so"
   const ALL = [...new Set((uniqRooms as unknown as Record<string, unknown>[]).flatMap((f) => Object.keys(f)))]
     .sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
@@ -206,9 +206,9 @@
   .ti { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--accent-soft); color: var(--accent-text); }
   .tile.door .ti { background: rgba(63, 214, 138, 0.15); color: var(--success); }
   .tile.off { opacity: 0.4; }
-  /* an evacuation door: dimmed and struck like a closed one, its red mark and "evacuation only" in full on two lines;
-     it must not invite a tap (owner, Oct 24) */
-  .tile.evac small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  /* a closed door's why in full on two lines ("evacuation only", "exam days only"); an evacuation door dimmed and struck
+     like a closed one with its red mark: it must not invite a tap (owner, Oct 24) */
+  .tile.off small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .tile.evac .ti { background: rgba(255, 69, 58, 0.15); color: var(--danger); }
   .tile.evac small { color: var(--danger-text); }
   .tile.off b { text-decoration: line-through; }

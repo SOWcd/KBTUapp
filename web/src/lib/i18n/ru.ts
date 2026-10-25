@@ -456,6 +456,7 @@ const ru = {
   'pad.near': "{room} нет на плане — покажу, где она примерно",
   'pad.entrance': "Вход · {floor}",
   'pad.evac': "только при эвакуации",
+  'pad.exam': "только в дни экзаменов",
   'pad.closed': "закрыт",
   'pad.till': "до {time}",
   'pad.arrived': "Ты на месте",

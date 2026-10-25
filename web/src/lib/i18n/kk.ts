@@ -455,6 +455,7 @@ const kk: Dict = {
   'pad.near': "{room} жоспарда жоқ — шамамен қайда екенін көрсетемін",
   'pad.entrance': "Кіреберіс · {floor}",
   'pad.evac': "тек эвакуацияда",
+  'pad.exam': "тек емтихан күндері",
   'pad.closed': "жабық",
   'pad.till': "{time} дейін",
   'pad.arrived': "Келдің",
