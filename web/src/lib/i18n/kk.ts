@@ -13,7 +13,6 @@ const kk: Dict = {
   'page.feed': 'Лента',
   'page.list': 'Тізім',
   'page.clubs': 'Клубтар',
-  'page.registry': "Тізілім",
   'reg.memos': "Аптадағы қызметтік хаттар",
   'reg.memoSent': "Жіберілді · {who} · {when}",
   'reg.memoNote': "Клуб қосымшада белгіледі. Хаттың өзі — ДМП поштасында.",

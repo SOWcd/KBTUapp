@@ -13,7 +13,6 @@ const en: Dict = {
   'page.feed': 'Feed',
   'page.list': 'List',
   'page.clubs': 'Clubs',
-  'page.registry': "Registry",
   'reg.memos': "Memos this week",
   'reg.memoSent': "Sent · {who} · {when}",
   'reg.memoNote': "Marked by the club in the app. The email itself is in DMP\u2019s mailbox.",

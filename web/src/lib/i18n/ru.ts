@@ -13,7 +13,6 @@ const ru = {
   'page.feed': 'Лента',
   'page.list': 'Список',
   'page.clubs': 'Клубы',
-  'page.registry': "Реестр",
   'reg.memos': "Служебки за неделю",
   'reg.memoSent': "Отправлено · {who} · {when}",
   'reg.memoNote': "Отмечено клубом в приложении. Само письмо — в почте ДМП.",
