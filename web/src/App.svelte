@@ -143,13 +143,23 @@
   // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
   const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
 
+  // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds (DMP staff have the registry
+  // where the others have Studio, and no Team page)
+  type ClubPage = 'clubs' | 'registry' | 'studio' | 'club' | 'team';
+  const clubPages = $derived<ClubPage[]>(member && session.me?.oversee ? ['clubs', 'registry', 'studio'] // DMP staff: the registry takes the Team page's place (§4.13)
+    : member ? ['clubs', staff ? 'studio' : 'club', 'team'] : ['clubs']);
+  const CLUB_CAP: Record<ClubPage, () => CapPage> = {
+    clubs: () => ({ label: t('page.clubs'), icon: Shapes }), registry: () => ({ label: t('page.registry'), icon: BookUser }),
+    studio: () => ({ label: t('tab.studio'), icon: LayoutDashboard }), club: () => ({ label: t('tab.club'), icon: Flag }), team: () => ({ label: t('page.team'), icon: Users }),
+  };
+  /** Tab 2 on the first of these pages it has (else its catalogue). */
+  function toClub(...want: ClubPage[]) {
+    ui.tab = 'club';
+    ui.page.club = Math.max(0, clubPages.findIndex((k) => k === want.find((w) => clubPages.includes(w))));
+  }
   const PAGES = $derived<Record<Tab, CapPage[]>>({
     afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }, { label: t('page.news'), icon: Newspaper }],
-    club: member && session.me?.oversee  // DMP staff: the clubs registry takes the Team page's place (§4.13)
-      ? [{ label: t('page.clubs'), icon: Shapes }, { label: t('page.registry'), icon: BookUser }, { label: t('tab.studio'), icon: LayoutDashboard }]
-      : member
-      ? [{ label: t('page.clubs'), icon: Shapes }, staff ? { label: t('tab.studio'), icon: LayoutDashboard } : { label: t('tab.club'), icon: Flag }, { label: t('page.team'), icon: Users }]
-      : [{ label: t('page.clubs'), icon: Shapes }],
+    club: clubPages.map((k) => CLUB_CAP[k]()),
     profile: [{ label: t('page.friends'), icon: UsersRound, dot: (session.me?.counters.friendRequests ?? 0) > 0 }, { label: t('page.me'), icon: IdCardLanyard }, { label: t('me.settings'), icon: Settings2 }],
   });
   // a non-member's tab 2 has one page (the catalogue): clamp where it's used, so the saved page (Studio by default) comes
@@ -242,12 +252,12 @@
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (p === 'clubs') { ui.tab = 'club'; ui.page.club = 0; return; } // the bot's "other clubs recruit now"
+    if (p === 'clubs') { toClub('clubs'); return; } // the bot's "other clubs recruit now"
     const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
-    // tm_<club>: the bot's removal messages open that club's Team (§2b)
-    const team = (org: number) => { ui.club = org; ui.tab = 'club'; ui.page.club = 2; };
+    // tm_<club>: the bot's removal messages open that club's Team (§2b); DMP staff have none in the tab: Studio for now
+    const team = (org: number) => { ui.club = org; toClub('team', 'studio', 'club'); };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }
 
@@ -330,7 +340,7 @@
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
         haptic.ok(); burst(); say(t('pres.done', { club: o.name }), 'party_popper_3d');
-        ui.club = o.id; ui.tab = 'club'; ui.page.club = 1;
+        ui.club = o.id; toClub('studio', 'club');
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
     });
   }

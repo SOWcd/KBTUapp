@@ -56,7 +56,12 @@
 
   /** Animate to page i; commit index after the animation. */
   export function slideTo(i: number, ms = 300) {
-    if (i === cur || i < 0 || i >= count) { layout(0, `transform ${ms}ms cubic-bezier(.2,.85,.25,1)`); return; }
+    if (i === cur || i < 0 || i >= count) {
+      // back where it was: a settle under way toward another page is called off, or its commit would report that page
+      if (busy) { clearTimeout(timer); busy = false; target = cur; }
+      layout(0, `transform ${ms}ms cubic-bezier(.2,.85,.25,1)`);
+      return;
+    }
     if (!visited[i]) visited[i] = true;
     busy = true; target = i;
     const d = i - cur;
@@ -78,8 +83,10 @@
     });
   });
 
-  // external index changes (capsule switcher, re-tapping the tab)
-  $effect(() => { const i = index; if (i !== cur && !busy) slideTo(i); });
+  // external index changes (capsule switcher, re-tapping the tab, a deep link); one during a settle retargets it: dropped,
+  // the settle's commit wrote the page it was heading to back over the new one (PLAN, DMP deep links: a tm_ link on a
+  // cold start landed on Studio while the club tab grew from 1 page to 3 and slid to the saved page)
+  $effect(() => { const i = index; if (i !== (busy ? target : cur)) slideTo(i); });
 
   $effect(() => {
     if (!active) return;
