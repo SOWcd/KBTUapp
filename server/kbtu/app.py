@@ -32,7 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, msauth, receipt, roster, texts, video
+from . import auth, bot, casting, config, db, llm, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -1136,7 +1136,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/admin/ai")
     def admin_ai(con: Con, v: Me):
-        return logic.admin_ai(con, v)
+        return logic.admin_ai(con, v, [x.name for x in llm.links(cfg)])
 
     @app.post("/api/admin/ai/retry", status_code=204)
     def admin_ai_retry(con: Con, v: Me):

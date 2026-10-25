@@ -3533,21 +3533,43 @@ def test_translations(env):
             ai.parse(bad, {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)
     assert ai.parse('{"kk": {"title": "' + "\u0430" * 300 + '"}, "en": {"title": "b"}}', {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)["kk"]["title"] == "\u0430" * 80
 
-    def call(answer: httpx.Response):
+    # the AI chain (llm.py): the next link when one is limited, busy or unusable; a limited one rests, an unusable one doesn't
+    import dataclasses
+    from kbtu import llm
+    chained = dataclasses.replace(env[1], cf_account_id="acc", cf_ai_token="cf", munito_keys=("m1", "m2"), groq_key="gq",
+                                  ai_chain="cf:model-a,munito:model-b,groq:model-c")
+    assert [x.name for x in llm.links(chained)] == ["cf:model-a", "munito:model-b", "munito2:model-b", "groq:model-c"]
+    assert not llm.available(env[1])                                                   # no keys: no chain, the translator stays off
+    good_answer = {"choices": [{"finish_reason": "stop", "message": {"content": '{"kk": {"title": "\u0422"}, "en": {"title": "N"}}'}}]}
+    def call(answers: dict):
+        seen = []
+        def handler(r):
+            key = r.headers["authorization"].split()[1]
+            seen.append(key)
+            return answers.get(key) or httpx.Response(200, json=good_answer)
         async def go():
-            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: answer)) as http:
-                return await ai.translate(http, "acc", "tok", {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
-        return asyncio.run(go())
-    ok = {"result": {"choices": [{"finish_reason": "stop", "message": {"content": '{"kk": {"title": "\u0422"}, "en": {"title": "N"}}'}}]}}
-    assert call(httpx.Response(200, json=ok)) == ("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}})  # the empty description isn't sent
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await ai.translate(chained, http, {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
+        return asyncio.run(go()), seen
+    llm._rest.clear()
+    assert call({}) == (("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}}), ["cf"])     # the empty description isn't sent
+    assert call({"cf": httpx.Response(429, headers={"retry-after": "120"})})[1] == ["cf", "m1"]
+    assert call({})[1] == ["m1"]                                                         # cf rests its two minutes
+    assert call({"m1": httpx.Response(503)})[1] == ["m1", "m2"]                          # Munito's second key
+    llm._rest.clear()
+    assert call({"cf": httpx.Response(200, json={"choices": [{"message": {"content": "no json here"}}]})})[1] == ["cf", "m1"]
+    assert call({})[1] == ["cf"]                                                         # a bad answer doesn't rest the link
+    assert call({"cf": httpx.Response(400, json={"errors": [{"code": 4006}]})})[1] == ["cf", "m1"]  # Cloudflare's day spent
+    assert call({})[1] == ["m1"]                                                         # it rests for hours
+    llm._rest.clear()
+    busy = {k: httpx.Response(503) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Busy):
-        call(httpx.Response(429, json={"errors": []}))                    # a minute's rate limit: wait, no try counted
-    with pytest.raises(ai.Busy):
-        call(httpx.Response(502, text="<html>bad gateway</html>", headers={"content-type": "application/json"}))
-    with pytest.raises(ai.Limit):
-        call(httpx.Response(400, json={"errors": [{"code": 4006, "message": "daily free allocation"}]}))
+        call(busy)
+    llm._rest.clear()
+    junk = {k: httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]}) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Failed):
-        call(httpx.Response(200, json={"result": {"choices": [{"finish_reason": "length", "message": {"content": None}}]}}))
+        call(junk)
+    llm._rest.clear()
 
     c, cfg = env
     pres = login(c, 20, "pres")
@@ -3625,7 +3647,7 @@ def test_admin_day_and_ai(env):
     assert prof[ali["id"]] and not prof[guest["id"]]
     assert c.get(f"/api/users/{guest['id']}", headers=tma(30)).status_code == 404
     ai = c.get("/api/admin/ai", headers=tma(1)).json()
-    assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
+    assert set(ai) >= {"on", "today", "chain", "usage", "events", "clubs", "failed"}
     assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
 
