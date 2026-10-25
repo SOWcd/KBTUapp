@@ -122,6 +122,7 @@
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
+  sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
   sheets.adminTeam = () => lazy(() => import('./screens/admin/AdminTeam.svelte'), {});

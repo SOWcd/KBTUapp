@@ -93,12 +93,17 @@ def overseer(con, v: Viewer) -> bool:
 
 # ---------------------------------------------------------------- shapes
 
+# the Student Government (owner, Oct 25): a mark "Student Government" and first in lists, no rights beyond any club's
+GOV_SLUG = "studentgovernment"
+
+
 def org_ref(con, o: sqlite3.Row, files: dict | None = None) -> dict:
     """A club wherever it shows: its mark is its uploaded logo, or else its emoji on its cover. `files`: the logos
     already read (_by_id), when building a list."""
     logo = media_shape(files[o["logo_file_id"]]) if files and o["logo_file_id"] in files else photo(con, o["logo_file_id"])
     return {"id": o["id"], "slug": o["slug"], "name": o["name"], "short": o["short"], "abbr": o["abbr"],
             "emoji": o["emoji"], "cover": o["cover"], "kind": o["kind"], "official": bool(o["official"]), "logo": logo["thumb"] if logo else None,
+            **({"gov": True} if o["slug"] == GOV_SLUG else {}),
             # the app shows the viewer's language (api/client.ts); a club's description only where it shows (org_shape)
             **({"i18n": {k: {a: b for a, b in x.items() if a != "description"} for k, x in json.loads(o["i18n"]).items()}} if o["i18n"] else {})}
 
@@ -1621,7 +1626,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
 
 def orgs(con, v: Viewer) -> list[dict]:
     found = org_shapes(con, v, rows(con, "SELECT * FROM orgs WHERE status = 'active' AND kind NOT IN ('office','app')"))
-    return sorted(found, key=lambda o: (not o["subscribed"], -o["subscribers"]))
+    return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 
 def org(con, v: Viewer, oid: int) -> dict:

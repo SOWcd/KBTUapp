@@ -89,6 +89,7 @@ export interface Media {
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
+  gov?: boolean /* the Student Government: a mark and first in lists, no rights (owner, Oct 25) */;
   abbr?: string | null /* the short name (lib/short.ts): a club's own, a school's set by api/client.ts from i18n */;
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */;
   orig?: Record<string, string> /* the fields as typed, before api/client.ts showed a translation */ }

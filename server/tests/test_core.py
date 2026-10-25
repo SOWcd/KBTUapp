@@ -4598,3 +4598,19 @@ def test_phone_asked_at_signup(env):
     assert c.patch("/api/me", headers=tma(10), json={"phone": None}).json()["student"]["phone"] is None
     c.delete(f"/api/events/{eids[1]}/registration", headers=tma(10))
     assert go(eids[1]).json()["message"] == "phone"                      # deleted: asked again
+
+
+def test_student_government_mark(env):
+    """The Student Government (owner, Oct 25): a mark and first in the clubs list, no rights beyond any club's."""
+    c, cfg = env
+    login(c, 31, "student")
+    h = tma(31)
+    con = db.connect(cfg.db_path)
+    big = logic.create_org(con, None, "Chess Club", "CH", "trophy_3d", True, "chess")
+    gov = logic.create_org(con, None, "Student Government", "SG", "trophy_3d", True, logic.GOV_SLUG)
+    con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) SELECT id, ?, 0 FROM users", (big,))
+    con.close()
+    found = [o for o in c.get("/api/orgs", headers=h).json() if o["id"] in (big, gov)]
+    assert [(o["id"], o.get("gov")) for o in found] == [(gov, True), (big, None)]   # first though followed less
+    g = c.get(f"/api/orgs/{gov}", headers=h).json()
+    assert g["gov"] is True and not g.get("canOversee") and g["myRole"] is None
