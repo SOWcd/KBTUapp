@@ -1252,8 +1252,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         avatars = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind = 'avatar' AND owner_id = ?", v.id)]
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL,
+            skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
+        con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
+        con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         photos = [p for f in mine + avatars for p in _drop_unused(con, f)]
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
