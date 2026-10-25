@@ -261,8 +261,33 @@
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
-  function goTo(n: number) { if (n === cur) return; haptic.select(); halt(); cur = n; tiles = []; touched++; pickTiles(); }
-  function pick(n: number) { goTo(n); }
+  // the change itself (owner, Oct 25: "the picture just swaps, give it a push so you feel the floor changed"): a lift's
+  // depth. Going up, the floor you leave sinks away under you and the new one comes down from above, settling to size;
+  // going down, the other way. Both pictures scale about the middle of the screen; opacity and transform only.
+  async function goTo(n: number) {
+    if (n === cur) return;
+    haptic.select(); halt();
+    const up = Math.sign(idxOf(n) - idxOf(cur)), was = ver === 'main' ? plan.querySelector<HTMLImageElement>('.sheet img.ov') : null;
+    let ghost: HTMLImageElement | null = null;
+    if (was) { ghost = was.cloneNode() as HTMLImageElement; ghost.classList.add('ghost'); was.parentElement!.prepend(ghost); }
+    cur = n; tiles = []; touched++; pickTiles();
+    if (!ghost) return;
+    await tick();
+    const k = s / base, o = `${(stage.clientWidth / 2 - x) / k}px ${(stage.clientHeight / 2 - y) / k}px`;
+    const fresh = plan.querySelector<HTMLImageElement>('.sheet img.ov:not(.ghost)');
+    const ease = { duration: 480, easing: 'cubic-bezier(.3, .75, .25, 1)' };
+    ghost.style.transformOrigin = o;
+    ghost.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, ease).finished.catch(() => {}).finally(() => ghost.remove());
+    if (fresh) { fresh.style.transformOrigin = o; fresh.animate({ transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] }, ease); }
+  }
+  // every floor's picture decoded ahead, so the new one is there the moment the floor changes
+  const ahead: HTMLImageElement[] = [];
+  $effect(() => {
+    if (ver !== 'main') return;
+    ahead.length = 0;
+    for (const f of railFloors) { const im = new Image(); im.src = `${TILES}f${f}/o.webp`; void im.decode().catch(() => {}); ahead.push(im); }
+  });
+  function pick(n: number) { void goTo(n); }
   function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
   /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
   function swipeMove(px: number, py: number): boolean {
@@ -296,7 +321,7 @@
     const step = Math.round(kp + fling) - z.k0, far = Math.abs(kp - z.k0) > 0.3 || fling !== 0;
     const i = cancel ? z.k0 : Math.max(0, Math.min(last, z.rail ? z.k0 + step : far ? z.k0 + Math.sign(kp + fling - z.k0) : z.k0)); // the map: one floor a swipe
     if (i === z.k0) { if (!cancel && (kp < -0.15 || kp > last + 0.15)) haptic.rigid(); kp = i; jelly(knob); return; }
-    goTo(railFloors[i]);
+    void goTo(railFloors[i]);
   }
   // the rail: a drag along it, or a tap on a floor (a drag's let-go isn't a tap)
   let railSwiped = false;
