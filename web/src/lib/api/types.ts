@@ -480,6 +480,7 @@ export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
 export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
 
 export interface PersonCard extends PersonRef {
+  forum?: ForumMe;              // their skills and "open to projects", for those who see the forum
   no: number | null;            // the card number (as Me.no)
   course: number | null;
   school: string | null;

@@ -713,6 +713,7 @@ const ru = {
   'adm.rep.user': "Профиль",
   'adm.rep.photo': "Фото",
   'fo.title': "Поиск людей",
+  'fo.skillsOf': "Скиллы",
   'fo.adminSub': "Форум — пока только для команды",
   'fo.find': "Найти людей",
   'fo.offers': "Предложения",

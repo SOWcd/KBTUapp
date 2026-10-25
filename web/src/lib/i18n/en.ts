@@ -694,6 +694,7 @@ const en: Dict = {
   'adm.rep.user': "Profile",
   'adm.rep.photo': "Photo",
   'fo.title': "Find people",
+  'fo.skillsOf': "Skills",
   'fo.adminSub': "The forum, for the team while it's tried out",
   'fo.find': "Find people",
   'fo.offers': "Offers",

@@ -694,6 +694,7 @@ const kk: Dict = {
   'adm.rep.user': "Профиль",
   'adm.rep.photo': "Фото",
   'fo.title': "Адам іздеу",
+  'fo.skillsOf': "Дағдылар",
   'fo.adminSub': "Форум — әзірге тек команда үшін",
   'fo.find': "Адам табу",
   'fo.offers': "Ұсыныстар",
