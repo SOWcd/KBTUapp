@@ -120,7 +120,7 @@
   --warning-text: #965A00;
   --warning-soft: rgba(255, 178, 61, 0.18);
   --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-pill-bg: rgba(255, 255, 255, 0.5); /* a pill is clearer than a sheet: there is little to read on it */
+  --glass-pill-bg: rgba(255, 255, 255, 0.34); /* a pill is clearer than a sheet: there is little to read on it */
   --glass-clear: rgba(255, 255, 255, 0.42);
   --glass-solid: rgba(255, 255, 255, 0.97);
   --glass-bloom: rgba(255, 255, 255, 0.95);
