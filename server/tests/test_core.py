@@ -4307,6 +4307,98 @@ def test_userbot_reads_telethon_messages(env):
     assert con.execute("SELECT COUNT(*) FROM tg_post_msgs").fetchone()[0] == 4
 
 
+def test_mirror_languages(env):
+    """A school's channel in three languages (owner, Oct 26): the same announcement posted in kk, ru and en within half an
+    hour is one post with the other two as its translations (an album whose caption comes after its photos too); two
+    posts in one language stay two; a translation's edit and deletion touch only its language. A one-language post takes
+    the translations the channel wrote in its comments; only without any, after 2 h, our AI, and the channel's own
+    replace it later."""
+    from kbtu import mirror
+    c, cfg = env
+    login(c, 80, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'site', 'school', 'SITE', 'S', 'laptop_3d', 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1)")
+    mirror.joined(con, 700, "kbtusite")
+    t0 = logic.now() - 5 * 3600
+    kk = "\u0414\u04d9\u0440\u0456\u0441 \u0443\u0430\u049b\u044b\u0442\u044b \u04e9\u0437\u0433\u0435\u0440\u0434\u0456\n\u0421\u04d9\u0440\u0441\u0435\u043d\u0431\u0456 \u043a\u04af\u043d\u0456"  # Kazakh (letters Russian lacks)
+    ru = "\u0420\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u043b\u043e\u0441\u044c\n\u0412 \u0441\u0440\u0435\u0434\u0443"
+    pid = mirror.take(con, 700, mirror.Msg(id=10, date=t0, text=kk, views=50))
+    assert mirror.take(con, 700, mirror.Msg(id=11, date=t0 + 60, text=ru, views=7)) == pid
+    assert mirror.take(con, 700, mirror.Msg(id=12, date=t0 + 120, text="Timetable changed\nOn Wednesday")) == pid
+    got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(80)).json()}
+    assert list(got) == [pid] and got[pid]["title"].startswith("\u0414\u04d9\u0440\u0456\u0441") and got[pid]["tg"]["views"] == 50  # the first message's counts
+    assert got[pid]["i18n"] == {"ru": {"title": ru.split("\n")[0], "body": ru.split("\n")[1]}, "en": {"title": "Timetable changed", "body": "On Wednesday"}}
+    two = mirror.take(con, 700, mirror.Msg(id=13, date=t0 + 180, text="Another announcement"))    # English again: another post
+    late = mirror.take(con, 700, mirror.Msg(id=14, date=t0 + 7200, text=ru))                     # two hours later: another post
+    assert len({pid, two, late}) == 3
+
+    # a translation's edit and deletion touch only its language; the post's own edit stays the post's
+    mirror.take(con, 700, mirror.Msg(id=12, date=0, text="Timetable changed again\nOn Thursday"))
+    p = con.execute("SELECT title, i18n FROM posts WHERE id = ?", (pid,)).fetchone()
+    assert p["title"].startswith("\u0414\u04d9\u0440\u0456\u0441") and json.loads(p["i18n"])["en"]["title"] == "Timetable changed again"
+    assert mirror.gone(con, 700, [11]) == []
+    assert set(json.loads(con.execute("SELECT i18n FROM posts WHERE id = ?", (pid,)).fetchone()[0])) == {"en"}
+
+    # an album whose caption comes after its photos, in another language than a post a minute before
+    first = mirror.take(con, 700, mirror.Msg(id=20, date=t0 + 4000, text=kk + " 2"))
+    temp = mirror.take(con, 700, mirror.Msg(id=21, date=t0 + 4020, grouped=5))
+    assert temp != first
+    assert mirror.take(con, 700, mirror.Msg(id=22, date=t0 + 4020, grouped=5, text="Photos from the day")) == first
+    assert con.execute("SELECT 1 FROM posts WHERE id = ?", (temp,)).fetchone() is None
+    assert json.loads(con.execute("SELECT i18n FROM posts WHERE id = ?", (first,)).fetchone()[0])["en"]["title"] == "Photos from the day"
+
+    # the channel's own comments: the post `two` (English only) gets kk and ru from them, nothing else
+    assert 13 in mirror.to_comment(con, 700) and 10 in mirror.to_comment(con, 700)              # pid still lacks ru
+    assert mirror.comments(con, 700, 13, [kk, ru, "Another one in English"]) == 2
+    tw = con.execute("SELECT i18n, tr_by FROM posts WHERE id = ?", (two,)).fetchone()
+    assert set(json.loads(tw["i18n"])) == {"kk", "ru"} and tw["tr_by"] == "tg" and 13 not in mirror.to_comment(con, 700)
+
+    # our AI only for a post with none of its own, after 2 h; the channel's comments replace it
+    assert logic.ai_next(con) == ("post", late, {"title": ru.split("\n")[0], "body": ru.split("\n")[1]})
+    fresh = mirror.take(con, 700, mirror.Msg(id=30, date=logic.now() - 600, text="Just now"))
+    logic.ai_save(con, "post", late, {"title": ru.split("\n")[0], "body": ru.split("\n")[1]}, "ru",
+                  {"kk": {"title": "k", "body": "kb"}, "en": {"title": "e", "body": "eb"}})
+    assert con.execute("SELECT tr_by FROM posts WHERE id = ?", (late,)).fetchone()[0] == "ai"
+    assert logic.ai_next(con) is None                                                             # the fresh one waits its 2 h
+    mirror.comments(con, 700, 14, ["Schedule changed, official"])
+    lt = con.execute("SELECT i18n, tr_by FROM posts WHERE id = ?", (late,)).fetchone()
+    assert json.loads(lt["i18n"]) == {"en": {"title": "Schedule changed, official", "body": ""}} and lt["tr_by"] == "tg"
+    assert fresh
+
+
+def test_userbot_reads_only_the_channels_comments(env):
+    """userbot.Mirror.translations: the replies under a post are read in memory and only those sent as the channel itself
+    kept; a student's comment never reaches the database."""
+    import datetime
+    from types import SimpleNamespace as NS
+    from telethon.tl.types import PeerChannel, PeerUser
+    from kbtu import mirror, userbot
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'site', 'school', 'SITE', 'S', 'laptop_3d', 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1)")
+    mirror.joined(con, 700, "kbtusite")
+    mirror.take(con, 700, mirror.Msg(id=10, date=logic.now() - 3600, text="Open day on Saturday"))
+    ru = "\u0414\u0435\u043d\u044c \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0434\u0432\u0435\u0440\u0435\u0439"
+    secret = "\u043c\u043e\u0439 \u043d\u043e\u043c\u0435\u0440 +7 700 000 0000"  # a student's comment in Russian
+
+    class Client:
+        def iter_messages(self, ent, reply_to=None, limit=None):
+            assert reply_to == 10
+            async def gen():
+                for m in (NS(from_id=PeerUser(5), message=secret), NS(from_id=PeerChannel(700), message=ru), NS(from_id=PeerChannel(999), message="other channel")):
+                    yield m
+            return gen()
+    work = userbot.Mirror(cfg, Client(), con)
+    asyncio.run(work.translations(None, 700))
+    p = con.execute("SELECT i18n FROM posts").fetchone()
+    assert json.loads(p["i18n"]) == {"ru": {"title": ru, "body": ""}}
+    dump = "\n".join(con.iterdump())
+    assert "+7 700 000 0000" not in dump and "other channel" not in dump
+    asyncio.run(work.translations(None, 700))                                                     # asked again within 2 h: no call
+
+
 def test_userbot_off(env, caplog):
     """The userbot stays off, saying why in one line, while any of its three settings is missing (nothing else changes)."""
     import dataclasses

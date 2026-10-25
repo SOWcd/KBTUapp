@@ -920,7 +920,7 @@ async def _translator(cfg: Config) -> None:
                     kind, rid, was = job
                     try:
                         src, tr = await ai.translate(http, cfg.cf_account_id, cfg.cf_ai_token, was,
-                                                     logic.AI_LIMITS if kind == "event" else logic.AI_ORG_LIMITS)
+                                                     logic.AI_LIMIT[kind])
                         logic.ai_save(con, kind, rid, was, src, tr)
                     except ai.Limit:
                         logic.ai_note(con, error="daily limit")

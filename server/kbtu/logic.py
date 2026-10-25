@@ -517,22 +517,32 @@ def channel_discussion(con, post: int) -> sqlite3.Row | None:
 # ------------------------------------------------------------ translations (ai.py, PLAN 9)
 # The postman's translator takes one text at a time: an upcoming public event (never drafts, team-only ones or
 # meetings: only what anyone may read goes to Cloudflare, as the privacy policy says), else an active club's
-# description. An edit clears lang (update_event, update_org), so the row comes back; 3 failed calls leave it as typed.
+# description, else a public channel's mirrored post that got no translation from the channel itself (mirror.py) in
+# AI_POST_WAIT. An edit clears lang (update_event, update_org, mirror.take), so the row comes back; 3 failed calls
+# leave it as typed.
 
 AI_TRIES = 3
 AI_LIMITS = {"title": 80, "description": 2000}
 AI_ORG_LIMITS = {"description": 600}
+AI_POST_LIMITS = {"title": 120, "body": 2000}
+AI_POST_WAIT = 7200       # a channel's post waits 2 h for its own translations (folded posts, its comments) before AI
+AI_LIMIT = {"event": AI_LIMITS, "org": AI_ORG_LIMITS, "post": AI_POST_LIMITS}
 
 
 def ai_next(con) -> tuple[str, int, dict[str, str]] | None:
-    """("event" | "org", id, its texts as they are now), or None."""
+    """("event" | "org" | "post", id, its texts as they are now), or None."""
     e = one(con, """SELECT e.id, e.title, e.description FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.lang IS NULL AND e.ai_tries < ? AND e.status = 'published' AND e.visibility = 'public' AND e.meeting = 0
           AND e.hidden_at IS NULL AND o.status = 'active' AND COALESCE(e.ends_at, e.starts_at) > ? ORDER BY e.updated_at DESC LIMIT 1""", AI_TRIES, now())
     if e:
         return "event", e["id"], {"title": e["title"], "description": e["description"]}
     o = one(con, "SELECT id, description FROM orgs WHERE lang IS NULL AND ai_tries < ? AND status = 'active' AND trim(description) != '' ORDER BY id DESC LIMIT 1", AI_TRIES)
-    return ("org", o["id"], {"description": o["description"]}) if o else None
+    if o:
+        return "org", o["id"], {"description": o["description"]}
+    p = one(con, """SELECT p.id, p.title, p.body FROM posts p JOIN orgs o ON o.id = p.org_id WHERE p.tg_url IS NOT NULL AND p.lang IS NULL
+        AND p.tr_by IS NULL AND p.ai_tries < ? AND p.hidden_at IS NULL AND o.status = 'active' AND p.created_at BETWEEN ? AND ?
+        ORDER BY p.created_at DESC LIMIT 1""", AI_TRIES, now() - 7 * 86400, now() - AI_POST_WAIT)
+    return ("post", p["id"], {"title": p["title"], "body": p["body"]}) if p else None
 
 
 def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[str, dict[str, str]]) -> None:
@@ -543,6 +553,11 @@ def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[st
                         (json.dumps({k: {"title": x.get("title", was["title"]), "description": x.get("description", "")} for k, x in tr.items()}, ensure_ascii=False),
                          src, rid, was["title"], was["description"])).rowcount
             if not n:
+                return
+        elif kind == "post":  # unless the channel's own translations came meanwhile
+            if not con.execute("UPDATE posts SET i18n = ?, lang = ?, tr_by = 'ai' WHERE id = ? AND title = ? AND body = ? AND tr_by IS NULL",
+                               (json.dumps({k: {"title": x.get("title", was["title"]), "body": x.get("body", "")} for k, x in tr.items()}, ensure_ascii=False),
+                                src, rid, was["title"], was["body"])).rowcount:
                 return
         else:
             o = one(con, "SELECT i18n FROM orgs WHERE id = ? AND description = ? AND lang IS NULL", rid, was["description"])
@@ -558,7 +573,7 @@ def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[st
 
 def ai_failed(con, kind: str, rid: int, why: str) -> None:
     with tx(con):
-        con.execute(f"UPDATE {'events' if kind == 'event' else 'orgs'} SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))  # the table from the two above
+        con.execute(f"UPDATE {({'event': 'events', 'post': 'posts'}).get(kind, 'orgs')} SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))  # a table from the three above
         _ai_note(con, error=f"{kind} {rid}: {why}"[:200])
 
 
@@ -1781,12 +1796,18 @@ def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "comments": comments.get(p["id"], 0),
         "reactions": {k: reactions.get((p["id"], k), 0) for k in ("fire", "heart")}, "mine": {k: (p["id"], k) in mine for k in ("fire", "heart")},
         "read": p["id"] in read, "createdAt": p["created_at"],
+        **({"i18n": _tg_i18n(p)} if p["i18n"] else {}),  # a channel's post in the viewer's language (mirror.py)
     } for p in found]
 
 
 def _tg_shape(p: sqlite3.Row) -> dict | None:
     from . import mirror  # mirror.py imports this module
     return mirror.shape(p)
+
+
+def _tg_i18n(p: sqlite3.Row) -> dict | None:
+    from . import mirror
+    return mirror.i18n(p)
 
 
 def posts(con, v: Viewer, scope: str) -> list[dict]:

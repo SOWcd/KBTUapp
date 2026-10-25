@@ -29,7 +29,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 // what the server has in the viewer's language (PLAN 9): a school's name, description and short name (kbtu.edu.kz), a
 // club's description and an event's title and description (ai.py). The text as typed stays in `orig`, so a second pass
 // (another language, a copy from the cache) starts from it and the editors save it, never a translation.
-const SHOWN = ['name', 'title', 'description'] as const;
+const SHOWN = ['name', 'title', 'description', 'body'] as const; // body: a channel's post (PLAN 86)
 export function localize(x: unknown): unknown {
   if (Array.isArray(x)) x.forEach(localize);
   else if (x && typeof x === 'object') {
