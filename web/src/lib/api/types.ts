@@ -192,6 +192,10 @@ export interface Me {
   skin: Id | 'sower' | null;
   /** "Delete my account" asked: when it goes (a week later); null: not asked, or changed my mind. */
   deleteAt: Ts | null;
+  city: { name: string; hidden: boolean } | null;  // from the club's roster (PLAN 95); hidden: off my profile
+  /** the clubs' rosters (PLAN 95): welcome = listed under my Telegram username, Microsoft sign-in still to do (clubs and
+   *  positions only); joined = just joined (a toast, then rosterSeen); ask = listed under another name */
+  roster: { welcome?: RosterSpot[]; joined?: { org: OrgRef; title: string | null }[]; ask?: (RosterSpot & { id: Id; dept: string | null })[] } | null;
   unlocked: { code: string; level: number }[]; // new achievement levels the app hasn't celebrated yet (the unlock moment)
 }
 
@@ -469,10 +473,15 @@ export interface Badge { eventId: Id; title: string; org: OrgRef; emoji: string;
 export interface Awards { achievements: Achievement[]; badges: Badge[] }
 
 /** Profile card (§4.12) — what the viewer is allowed to see. */
+export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
+/** "Yes, it's me" on a roster row under another name, for the club's President (or DMP) to confirm */
+export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
+
 export interface PersonCard extends PersonRef {
   no: number | null;            // the card number (as Me.no)
   course: number | null;
   school: string | null;
+  city?: string | null;         // from the club's roster, unless they hid it
   bio: string;
   attended: number;
   clubs: (Omit<Membership, 'role'> & { role: OrgRole | null /* only to the club's own team */ })[];

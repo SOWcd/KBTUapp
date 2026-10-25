@@ -9,6 +9,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
+  import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
@@ -92,6 +93,9 @@
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
+  sheets.rosterWelcome = (spots) => lazy(() => import('./screens/sheets/RosterWelcome.svelte'), { spots });
+  sheets.rosterAsk = (row) => lazy(() => import('./screens/sheets/RosterAsk.svelte'), { row });
+  sheets.rosterRequests = (ondone) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
@@ -194,6 +198,27 @@
   // ---- Back button: closes the top overlay ----
   $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
 
+  // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
+  // a row under another name; each sheet once per launch, after the start's own moments ----
+  const rosterShown = new Set<string>();
+  $effect(() => {
+    const r = session.me?.roster;
+    if (!booted || !r) return;
+    untrack(() => {
+      if (r.joined?.length) {
+        r.joined.forEach((j, i) => setTimeout(() => { haptic.ok(); say(j.title ? t('ro.joined', { org: nameOf(j.org), title: j.title }) : t('ro.joinedPlain', { org: nameOf(j.org) }), 'party_popper_3d'); }, 600 + i * 2200));
+        void api.rosterSeen().catch(() => {});
+        if (session.me) session.me.roster = { ...r, joined: [] };
+      }
+      const key = r.welcome?.length ? 'welcome' : r.ask?.length ? `ask:${r.ask[0].id}` : '';
+      if (!key || rosterShown.has(key)) return;
+      rosterShown.add(key);
+      // after whatever the start shows (an award, the consent): it waits until nothing else is open
+      const show = () => (overlays.some((o) => !o.closing) ? setTimeout(show, 1200) : r.welcome?.length ? sheets.rosterWelcome(r.welcome) : sheets.rosterAsk(r.ask![0]));
+      setTimeout(show, 1800);
+    });
+  });
+
   // ---- greeting ----
   function greet() {
     const h = parts(nowTs()).h;
@@ -245,6 +270,7 @@
       return;
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const rc = p.match(/^rc_(\d+)$/); // a club's recruitment round: a shared card, the bot's "X is recruiting"
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders

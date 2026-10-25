@@ -21,6 +21,9 @@
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft (owner, Oct 20)
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
+  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
+                                tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
+                                a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin redelete                               after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -48,7 +51,15 @@ def _user(con, who: str):
 def main(args: list[str]) -> None:
     con = db.connect(config.load().db_path)
     cmd = args[0] if args else ""
-    if cmd == "users":
+    if cmd == "roster" and len(args) == 4 and args[1] == "load":
+        from . import roster
+        try:
+            got = roster.load(con, json.loads(Path(args[2]).read_text(encoding="utf-8")), json.loads(Path(args[3]).read_text(encoding="utf-8")))
+        except ValueError as exc:
+            sys.exit(str(exc))
+        print(f"rows {got['rows']}, new {got['added']}, clubs made {len(got['orgs_made'])}, joined now {got['joined']}, "
+              f"a President on the sheet made Vice (the club has one in the app) {got['president_as_vice']}")  # counts only
+    elif cmd == "users":
         for u in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, u.role, s.user_id IS NOT NULL AS student
                 FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0 ORDER BY u.created_at"""):
             print(f"{u['tg_id']:>12}  @{u['tg_username'] or '-':<20} {u['tg_first_name']:<16} {'student' if u['student'] else 'guest':<8} {u['role']}")

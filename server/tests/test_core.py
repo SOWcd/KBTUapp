@@ -4429,6 +4429,105 @@ def test_membership_oversee(env):
     assert [m["oversee"] for m in c.get("/api/me", headers=tma(91)).json()["memberships"]] == [False]
 
 
+def test_roster_name_match():
+    """PLAN 95's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
+    letters, a patronymic more; one shared word isn't enough."""
+    from kbtu import roster
+    erlan, nurlan = "\u0415\u0440\u043b\u0430\u043d", "\u041d\u0443\u0440\u043b\u0430\u043d\u043e\u0432"   # Yerlan Nurlanov in Russian
+    assert roster.same_person("Nurlanov Yerlan Serikovich", erlan, nurlan)
+    assert roster.same_person("Zhanna Ospanova", "Janna", "OSPANOVA") and roster.same_person("Akhmetov Daniyar", "Daniar", "Ahmetov")
+    assert roster.same_person("\u049a\u0430\u0441\u044b\u043c \u0410\u043b\u0438", "Kasym", "Ali")                  # Kazakh Q
+    assert not roster.same_person("Ivanov Petr", "Pavel", "Ivanov") and not roster.same_person(None, "A", "B")
+    assert [roster.classify(p) for p in ("member", "President", "Vice president", "Head of SMM", "HR", "ex president")] == [
+        ("member", None, None), ("president", None, None), ("vice", None, None), ("head", "Head of SMM", "SMM"), ("member", "HR", None),
+        ("member", "ex president", None)]
+    assert (roster.course_of("23BD", 2026), roster.course_of("3rd year"), roster.tg_of("@Some_User"), roster.tg_of("+77001234567")) == (4, 3, "some_user", None)
+
+
+def test_roster_load_and_join(env):
+    """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
+    whose username and name match joins at once (role, position as the club role's name, department, city, year,
+    phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
+    username but another name: asked without the phone or city, "Yes, it's me" goes to the President, who confirms."""
+    from kbtu import roster
+    c, cfg = env
+    pres = login(c, 70, "pres")
+    ali = login(c, 71, "ali")          # Ali Testov (login()'s made-up students)
+    bek = login(c, 72, "bek")
+    guest = c.get("/api/me", headers=tma(73, "Guest")).json()
+    con = db.connect(cfg.db_path)
+    U = {71: "Ali_T", 72: "bek_t", 73: "new_one"}   # their Telegram usernames, as Telegram signs them
+    h = lambda uid: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": "X", "username": U[uid]}, BOT)}  # noqa: E731
+    for uid in U:
+        c.get("/api/me", headers=h(uid))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": None, "school": "SITE",  # noqa: E731
+                       "year": "2", "course": 2, "city": None, "phone": None, "tg": None, "email": None, **k}
+    items = [row(full_name="Testov Ali Made", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
+             row(full_name="Someone Else", tg="bek_t", position="HR", title="HR", city="Aktau", phone="+77010000001"),
+             row(full_name="Not Yet Here", tg="new_one", position="Vice president", role="vice", city="Shymkent"),
+             {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
+    orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
+    got = roster.load(con, items, orgmap)
+    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
+    assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
+    assert con.execute("SELECT official FROM orgs WHERE name = 'Chess Club KBTU'").fetchone()[0] == 1
+
+    me = c.get("/api/me", headers=h(71)).json()                                         # Ali: joined, told once
+    assert [(m["org"]["slug"], m["role"], m["title"]) for m in me["memberships"]] == [("mic", "head", "Head of SMM")]
+    assert me["roster"]["joined"][0]["title"] == "Head of SMM" and me["city"] == {"name": "Taraz", "hidden": False} and me["student"]["phone"] == "+77010000000"
+    assert c.post("/api/roster/seen", headers=h(71)).status_code == 204 and c.get("/api/me", headers=h(71)).json()["roster"] is None
+    assert con.execute("""SELECT g.name FROM member_tags t JOIN org_tags g ON g.id = t.tag_id WHERE t.user_id = ? AND g.department = 1""", (ali["id"],)).fetchone()[0] == "SMM"
+    assert c.get(f"/api/users/{ali['id']}", headers=tma(70)).json()["city"] == "Taraz"
+    c.patch("/api/me", headers=h(71), json={"cityHidden": True})
+    assert c.get(f"/api/users/{ali['id']}", headers=tma(70)).json()["city"] is None
+    assert c.patch("/api/me", headers=h(71), json={"city": None}).json()["city"] is None   # deleted
+
+    welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
+    assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"
+
+    ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
+    assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
+    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
+    assert c.get("/api/me", headers=h(72)).json()["roster"] is None                       # asked: waits for the President
+    assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
+    assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
+    req = c.get("/api/roster/requests", headers=tma(70)).json()
+    assert [(r["sheetName"], r["name"]) for r in req] == [("Someone Else", "Bek Testov")]
+    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=h(72), json={"ok": True}).status_code == 403
+    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
+    me = c.get("/api/me", headers=h(72)).json()
+    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("member", "HR")] and me["city"]["name"] == "Aktau"
+
+
+def test_roster_app_wins(env):
+    """PLAN 95, students already in the app (owner, Oct 26): what the app has wins. A membership held keeps its role (no
+    promotion, no demotion); a missing one is added, a President on the sheet where the club has another in the app
+    comes in as Vice (counted in the load's summary); department, title, city, phone and year fill only what's empty."""
+    from kbtu import roster
+    c, cfg = env
+    pres, ali, bek = login(c, 60, "pres"), login(c, 61, "ali"), login(c, 62, "bek")
+    con = db.connect(cfg.db_path)
+    for uid, name in ((61, "ali_u"), (62, "bek_u")):
+        c.get("/api/me", headers={"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": "X", "username": name}, BOT)})
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "vice")])
+    con.execute("UPDATE users SET city = 'Almaty' WHERE id = ?", (ali["id"],))
+    con.execute("UPDATE students SET phone = '+77010000009', course = 3 WHERE user_id = ?", (ali["id"],))
+    row = lambda **k: {"sheet": "S", "position": "President", "title": None, "role": "president", "dept": None, "school": None, "year": "1",  # noqa: E731
+                       "course": 1, "city": "Taraz", "phone": "+77010000001", "email": None, **k}
+    got = roster.load(con, [row(full_name="Ali Testov", tg="ali_u", dept="Board"), row(full_name="Bek Testov", tg="bek_u")], {"S": "mic"})
+    assert (got["joined"], got["president_as_vice"]) == (2, 1)
+    roles = dict(con.execute("SELECT user_id, role FROM org_members WHERE org_id = 1").fetchall())
+    assert roles == {pres["id"]: "president", ali["id"]: "vice", bek["id"]: "vice"}            # one President: the app's
+    a = con.execute("SELECT u.city, s.phone, s.course FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ?", (ali["id"],)).fetchone()
+    assert tuple(a) == ("Almaty", "+77010000009", 3)                                           # ours stayed
+    b = con.execute("SELECT u.city, s.phone FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ?", (bek["id"],)).fetchone()
+    assert tuple(b) == ("Taraz", "+77010000001")                                               # empty ones filled
+    assert con.execute("SELECT g.name FROM member_tags t JOIN org_tags g ON g.id = t.tag_id WHERE t.user_id = ?", (ali["id"],)).fetchone()[0] == "Board"
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""

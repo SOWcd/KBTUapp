@@ -571,6 +571,43 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE posts ADD COLUMN tr_by TEXT;
     ALTER TABLE posts ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE tg_post_msgs ADD COLUMN lang TEXT;"""),
+    # PLAN 95: the clubs' rosters from DMP's Student Union sheet (owner, Oct 26), each row waiting for its student:
+    # joined at once when the Telegram username (or e-mail) AND the name match the KBTU account (roster.py), asked when
+    # only the username does; claimed_by: "Yes, it's me" anyway, waiting for the club's President (or DMP); rejected_by:
+    # declined by them, kept for the right person. users.city from it (hideable, deletable). A one-off until everyone
+    # has signed up (owner): dropped by hand later
+    (74, """CREATE TABLE roster_pending (
+        id         INTEGER PRIMARY KEY,
+        key        TEXT NOT NULL UNIQUE,              -- the sheet's row, so a second load adds nothing
+        org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        sheet      TEXT NOT NULL,
+        position   TEXT,                              -- as written
+        title      TEXT,                              -- the position as a club role's name (none for a plain member)
+        role       TEXT NOT NULL CHECK (role IN ('member', 'head', 'vice', 'president')),
+        dept       TEXT,
+        full_name  TEXT,
+        school     TEXT,
+        year       TEXT,                              -- as written: 2, 23BD, 3rd year
+        course     INTEGER,
+        city       TEXT,
+        phone      TEXT,                              -- +7XXXXXXXXXX
+        tg         TEXT,                              -- lowercase, no @
+        email      TEXT,                              -- lowercase
+        rejected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
+        created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX roster_by_tg ON roster_pending(tg);
+    CREATE INDEX roster_by_email ON roster_pending(email);
+    CREATE INDEX roster_by_org ON roster_pending(org_id);
+    CREATE TABLE roster_toasts (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        title   TEXT,
+        at      INTEGER NOT NULL
+    ) STRICT;
+    ALTER TABLE users ADD COLUMN city TEXT;
+    ALTER TABLE users ADD COLUMN city_hidden INTEGER NOT NULL DEFAULT 0;"""),
 ]
 
 

@@ -6,5 +6,10 @@ import { openLink } from './tg';
 export const OWNER = 'Sowers';
 
 export function writeOwner(): void {
-  openLink(`https://t.me/${OWNER}?text=${encodeURIComponent(t('fb.draft'))}`);
+  writeSupport(t('fb.draft'));
+}
+
+/** The same chat with a draft of the screen's own (e.g. DMP's list has me wrong, PLAN 95). */
+export function writeSupport(draft: string): void {
+  openLink(`https://t.me/${OWNER}?text=${encodeURIComponent(draft)}`);
 }
