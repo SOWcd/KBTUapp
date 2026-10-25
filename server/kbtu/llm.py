@@ -22,9 +22,9 @@ URLS = {
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
 }
-CHAIN = ("cf:@cf/deepseek-ai/deepseek-v4-pro,munito:deepseek-v4.1-flash,openrouter:nvidia/nemotron-3-ultra:free,"
-         "groq:openai/gpt-oss-120b,cf:@cf/moonshotai/kimi-k2.6,munito:glm-5.3-flash,groq:qwen/qwen3.8-27b,"
-         "cf:@cf/zai-org/glm-5.3-flash,groq:openai/gpt-oss-20b")
+CHAIN = ("cf:@cf/deepseek-ai/deepseek-v4-pro-0813,munito:deepseek-ai/deepseek-v4.1-flash-1017,"
+         "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free,groq:openai/gpt-oss-120b,cf:@cf/moonshotai/kimi-k2.6,"
+         "munito:zai-org/glm-5.3-flash,groq:qwen/qwen3.8-27b,cf:@cf/zai-org/glm-5.3-flash,groq:openai/gpt-oss-20b")
 REST = 60             # a limited or busy link without a Retry-After rests this long
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
@@ -133,6 +133,27 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         _count(con, link.name, True)
         return text, link.name
     raise BadAnswers() if answered else Busy()
+
+
+MUNITO_ADMIN = "https://api.munito.ai/admin/v1"
+
+
+async def munito_account(cfg, http: httpx.AsyncClient) -> dict:
+    """Munito's own view of each key (the keys can read their account): today's usage and the limits, as Munito
+    gives them; a key that won't say is left out. Never the key itself."""
+    out = {}
+    for i, key in enumerate(cfg.munito_keys):
+        got = {}
+        for part in ("usage", "limits"):
+            try:
+                r = await http.get(f"{MUNITO_ADMIN}/{part}", headers={"Authorization": f"Bearer {key}"}, timeout=10)
+                if r.status_code == 200:
+                    got[part] = r.json()
+            except (httpx.HTTPError, ValueError):
+                pass
+        if got:
+            out[f"munito{i + 1 if i else ''}"] = got
+    return out
 
 
 def usage(con, days: int = 7) -> dict[str, dict[str, list[int]]]:

@@ -15,6 +15,9 @@
   let ai = $state<AdminAi | null>(null), busy = $state(false);
   const load = () => api.adminAi().then((x) => (ai = x)).catch(() => say(t('common.error'), 'pleading_face_3d'));
   $effect(() => { void load(); });
+  // Munito's answers as rows: plain fields as they are, anything nested as short JSON
+  const flat = (x: unknown): [string, string][] => (x && typeof x === 'object' ? Object.entries(x as Record<string, unknown>) : [])
+    .map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v)]);
   async function retry() {
     busy = true;
     try { await api.aiRetry(); haptic.ok(); say(t('ai.retried'), 'sparkles_3d'); await load(); }
@@ -36,6 +39,14 @@
         <div class="r link"><span class="ellipsis model">{l}</span><i class="num">{u ? `${u[0]} ✓ · ${u[1]} ✕` : '—'}</i></div>
       {:else}<p class="t-foot none">{t('ai.noChain')}</p>{/each}
     </div>
+    {#each Object.entries(ai.accounts ?? {}) as [key, acc] (key)}
+      <h3 class="sec">{key}</h3>
+      <div class="rows surface">
+        {#each ['usage', 'limits'] as const as part (part)}
+          {#each flat(acc[part]) as [k, val] (k)}<div class="r link"><span class="ellipsis model">{part}.{k}</span><i class="num">{val}</i></div>{/each}
+        {/each}
+      </div>
+    {/each}
     <div class="nums">
       <span class="surface"><b class="num">{ai.events.done}</b><i>{t('ai.events')}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
       <span class="surface"><b class="num">{ai.clubs.done}</b><i>{t('ai.clubs')}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
