@@ -118,7 +118,7 @@
         <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
     {/if}
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (owner, Oct 21: nothing else) -->
-    <div class="r psy"><span class="pi"><MessageCircleHeart size={20} /></span><span class="lb">{t('psy.kbtu')}</span>
+    <div class="r psy"><span class="pi"><MessageCircleHeart size={18} /></span><span class="lb">{t('psy.kbtu')}</span>
       <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
   </div>
 
@@ -176,11 +176,10 @@
   .term .r { box-shadow: inset 0 1px 0 var(--line); }
   .psy { min-height: 56px; }
   .book { position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 10px 0 12px; border-radius: var(--r-full);
-    background: color-mix(in srgb, var(--psy) 16%, transparent); color: var(--psy); font: 650 var(--fs-sub)/1 var(--font-text); }
+    background: var(--surface-2); color: var(--text); font: 650 var(--fs-sub)/1 var(--font-text); }
   .book:active { transform: scale(0.94); }
-  .term { --psy: #FF8FB8; }
-  :global(:root[data-theme='light']) .term, :global(.theme-light) .term { --psy: #C2185B; } /* 5.6:1 on white */
-  .pi { display: flex; color: var(--psy); }
+  /* the psychologist in the app's own blue, its icon on a tile like the calendar row's (owner, Oct 25: no pink accent) */
+  .pi { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--accent-soft); color: var(--accent-text); }
 
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

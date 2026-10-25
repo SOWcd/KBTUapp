@@ -1149,7 +1149,7 @@ const kk: Dict = {
   'acad.late': "Кеш тіркелу, ақылы",
   'acad.withdraw': "Withdrawal: пәннен бас тарту",
   'acad.midterm': "Мидтерм",
-  'acad.holiday': "Мереке, демалыс күні",
+  'acad.holiday': "Демалыс",
   'acad.regSpring': "Көктемгі семестрге тіркелу",
   'acad.regYear': "2027–2028 оқу жылына тіркелу",
   'acad.reg': "Пәндерге тіркелу",
