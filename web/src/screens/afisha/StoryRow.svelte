@@ -9,6 +9,7 @@
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full (owner, Oct 26: "EC" looked like a bug)
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha' && ui.page.afisha === 1) void untrack(loadNews); });
@@ -20,7 +21,7 @@
     {#each groups as g, i (g.org.id)}
       <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
         <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>
-        <b class="ellipsis">{g.org.abbr ?? g.org.name}</b>
+        <b class="ellipsis">{nameOf(g.org)}</b>
       </button>
     {/each}
   </div>

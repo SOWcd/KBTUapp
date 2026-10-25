@@ -3,8 +3,11 @@
 import type { OrgRef } from './api';
 import { data } from './state/data.svelte';
 
-/** A club's or school's short name, its full one until it has one. */
-export const shortOf = (o: Pick<OrgRef, 'name' | 'abbr'>): string => o.abbr || o.name;
+/** Up to this a club's full name fits a tight line too: "Echo Community" as "EC" looked like a bug (owner, Oct 26) */
+const FITS = 18;
+/** A school's short name always (everyone says SITE); a club's only when its full name is long; the full one until it has one. */
+export const shortOf = (o: Pick<OrgRef, 'name' | 'abbr'> & { kind?: OrgRef['kind'] }): string =>
+  o.abbr && (o.kind === 'school' || o.name.length > FITS) ? o.abbr : o.name;
 
 /** An org's name in a list or a card: a school by its abbreviation, a club in full. */
 export const nameOf = (o: Pick<OrgRef, 'name' | 'abbr' | 'kind'>): string => (o.kind === 'school' ? shortOf(o) : o.name);

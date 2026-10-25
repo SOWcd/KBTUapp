@@ -20,6 +20,8 @@ it('shows a school by its abbreviation whatever language the portal wrote it in'
 it('keeps a club in full in lists and short only where asked', () => {
   expect(nameOf({ kind: 'club', name: 'Open Mic Club', abbr: 'OMC' })).toBe('Open Mic Club');
   expect(nameOf({ kind: 'school', name: 'School of Law', abbr: 'SL' })).toBe('SL');
-  expect(shortOf({ name: 'Open Mic Club', abbr: 'OMC' })).toBe('OMC');
+  expect(shortOf({ name: 'Open Mic Club', abbr: 'OMC' })).toBe('Open Mic Club'); // fits: in full
+  expect(shortOf({ name: 'Department of Youth Policy', abbr: 'DYP' })).toBe('DYP');
+  expect(shortOf({ kind: 'school', name: 'School of Law', abbr: 'SL' })).toBe('SL');
   expect(shortOf({ name: 'New Club', abbr: null })).toBe('New Club');
 });
