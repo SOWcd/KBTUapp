@@ -22,3 +22,11 @@ export const pickInTelegram = (): void => { haptic.tap(); openLink('https://t.me
 
 /** 8400 → "8.4K", in the app's language (Russian and Kazakh write it their way). */
 export const compact = (n: number): string => new Intl.NumberFormat(i18n.lang === 'kk' ? 'kk-KZ' : i18n.lang === 'en' ? 'en-US' : 'ru-RU', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+
+/** The KBTU App's chats as one Telegram folder (owner, Oct 26): Telegram offers to add it. A row on the app's own page. */
+export const APP_FOLDER = 'https://t.me/addlist/VtFWmJ1lMboxZjli';
+
+/** Studio's "Add our bot" to a club's chat (PLAN 86): a group by a start link that says which chat it is; a channel
+ *  takes a bot only as an admin (the least: inviting, so Telegram tells the bot the chat's own link). */
+export const addBotLink = (c: { id: number; kind: Chat['kind'] }): string =>
+  c.kind === 'channel' ? 'https://t.me/KBTUappBot?startchannel&admin=invite_users' : `https://t.me/KBTUappBot?startgroup=oc_${c.id}`;

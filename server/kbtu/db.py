@@ -529,6 +529,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     # a club's short name where a long one won't fit (owner, Oct 25): its Vice+ or DMP set it; the clubs made before
     # take their initials at start (logic.fill_abbrs: SQLite can't uppercase Cyrillic); a school's comes from schools.json
     (70, "ALTER TABLE orgs ADD COLUMN abbr TEXT;"),
+    # PLAN 86: a club's or school's own Telegram chats on its page (owner, Oct 22 and 26): chats.org_id says whose a chat
+    # is, main = its one channel with the Subscribe button (later the mirror's source), about = the chat's own line; one
+    # linked only from Studio waits as status 'org', out of the shared catalog
+    (71, """ALTER TABLE chats ADD COLUMN org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
+    ALTER TABLE chats ADD COLUMN main INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE chats ADD COLUMN about TEXT;
+    CREATE INDEX chats_by_org ON chats(org_id);
+    CREATE UNIQUE INDEX chats_main ON chats(org_id) WHERE main = 1;"""),
 ]
 
 
