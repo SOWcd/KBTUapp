@@ -94,6 +94,8 @@ export const sheets = {
   give: () => {},
   adminClubs: () => {},
   adminChats: () => {},
+  /** every club, the biggest first (the Clubs tab's "All clubs · N") */
+  allClubs: () => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work (owner, Oct 21) */

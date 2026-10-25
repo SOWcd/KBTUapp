@@ -22,6 +22,13 @@
   import { type Chat } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
+  import { byWeight, hit, weight } from '../../lib/clubs';
+  import type { Org } from '../../lib/api';
+  import ClubRow from '../../ui/ClubRow.svelte';
+  import GovMark from '../../ui/GovMark.svelte';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import { slide } from 'svelte/transition';
 
 
   let q = $state('');
@@ -31,25 +38,33 @@
   function tapChat(c: Chat) {
     void openChat(c);
   }
-  // clubs come first; KBTU's eleven schools after them under their own heading, no tab of their own (owner, Oct 14:
-  // "schools matter less than clubs"; Oct 20: "there, but not up front")
-  let view = $state<'all' | 'mine'>('all');
-  const norm = (s: string) => s.toLowerCase().replace(/\u0451/g, '\u0435'); // Russian yo → ye, so both spellings match
-  const hit = (o: (typeof data.orgs)[number]) => [o.name, o.abbr ?? ''].some((x) => norm(x).includes(norm(q.trim())));
-  const list = $derived(data.orgs.filter((o) => (view !== 'mine' || o.subscribed) && (!q.trim() || hit(o))));
-  const clubs = $derived(list.filter((o) => o.kind !== 'school'));
-  const schools = $derived(list.filter((o) => o.kind === 'school'));
-  const subsCount = $derived(data.orgs.filter((o) => o.subscribed).length);
-  // what's next at each club: its soonest event, else "recruiting" when it takes applications
+  // Owner, Oct 25 (video IMG_6648: 44 tiles, most empty, then 11 schools in full): priorities, not a catalogue. Mine (I'm
+  // in it or follow it), Soon (an event coming, or taking applications), Popular (the six biggest by members and
+  // followers), then "All clubs · N" for the rest (AllClubs.svelte) and the schools folded into one row. The Student
+  // Government first wherever it shows. A search goes over everything as plain rows.
+  const clubsOnly = $derived(data.orgs.filter((o) => o.kind !== 'school'));
+  const schools = $derived(data.orgs.filter((o) => o.kind === 'school'));
+  const found = $derived(q.trim() ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
+  const mine = $derived(clubsOnly.filter((o) => o.myRole || o.subscribed).sort(byWeight));
+  const mineIds = $derived(new Set(mine.map((o) => o.id)));
+  // what's next at each club: its soonest event (and when, for Soon's order)
   const next = $derived.by(() => {
-    const m = new Map<number, string>(), now = nowTs();
+    const m = new Map<number, { at: number; text: string }>(), now = nowTs();
     for (const e of [...data.events].sort((a, b) => a.startsAt - b.startsAt))
-      if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id)) m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
+      if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id))
+        m.set(e.org.id, { at: e.startsAt, text: `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}` });
     return m;
   });
-  // recruiting now (was the Join page): a round first (soonest deadline), then one-tap applications; not my own clubs
-  const recruit = $derived(session.me?.student ? data.orgs.filter((o) => (o.round || o.recruiting) && !o.myRole)
-    .sort((a, b) => +(a.kind === 'school') - +(b.kind === 'school') || (a.round ? a.round.closesAt : Infinity) - (b.round ? b.round.closesAt : Infinity)) : []);
+  // Soon: not mine (their tiles show what's next), an event first by its time, then recruiting (a round by its deadline)
+  const SOON = 6;
+  const soon = $derived(data.orgs.filter((o) => !mineIds.has(o.id) && !o.myRole && (next.has(o.id) || o.round || o.recruiting))
+    .map((o) => ({ o, at: next.get(o.id)?.at ?? o.round?.closesAt ?? Infinity }))
+    .sort((a, b) => +!a.o.gov - +!b.o.gov || a.at - b.at).slice(0, SOON).map((x) => x.o));
+  const soonLine = (o: Org) => next.get(o.id)?.text ?? (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : t('clubs.openNow'));
+  const canApply = (o: Org) => !!session.me?.student && !o.myRole && (!!o.round || o.recruiting);
+  // Popular: the six biggest that aren't mine, with someone in them or following
+  const popular = $derived(clubsOnly.filter((o) => !mineIds.has(o.id) && (o.gov || weight(o) > 0)).sort(byWeight).slice(0, 6));
+  let schoolsOpen = $state(false);
   // a chat without a picture: its letters on a colour of its own
   const tint = (title: string) => COVERS[[...title].reduce((h, c) => h + c.charCodeAt(0), 0) % COVERS.length];
 </script>
@@ -57,10 +72,6 @@
 <div class="page scroll">
   <header class="hd">
     <h1 class="t-h1">{t('clubs.title')}</h1>
-    <div class="seg" role="tablist">
-      <button class:on={view === 'all'} onclick={() => (view = 'all')}>{t('clubs.all')}</button>
-      <button class:on={view === 'mine'} onclick={() => (view = 'mine')}>{t('clubs.mineShort')}{subsCount ? ' · ' + subsCount : ''}</button>
-    </div>
   </header>
 
   <label class="search">
@@ -69,21 +80,11 @@
     {#if q}<button onclick={() => (q = '')} aria-label={t('common.close')}><X size={16} /></button>{/if}
   </label>
 
-  {#if recruit.length && !q.trim()}
-    <div class="sec"><h2>{t('clubs.openNow')}</h2><span class="num">{recruit.length}</span></div>
-    <div class="recruit surface">
-      {#each recruit as o (o.id)}
-        <div class="rc">
-          <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
-          <OrgLogo org={o} size={44} />
-          <span class="txt"><b class="ellipsis">{o.name}</b><small class="ellipsis">{o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : tn('club.members', o.members)}</small></span>
-          <span class="go">
-            {#if o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
-            {:else if o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>
-            {:else}<Button kind={o.myRequest ? 'neutral' : 'primary'} size="s" onclick={() => toggleJoin(o.id)}>{o.myRequest ? t('join.sent') : t('join.apply')}</Button>{/if}
-          </span>
-        </div>
-      {/each}
+  {#if q.trim()}
+    <div class="sec"><h2>{t('clubs.found')}</h2><span class="num">{found.length}</span></div>
+    <div class="rows surface">
+      {#each found as o (o.id)}<ClubRow org={o} name={o.kind === 'school' ? o.abbr ?? o.name : o.name} sub={o.kind === 'school' && o.abbr ? o.name : tn('clubs.subscribers', o.subscribers)} />
+      {:else}<p class="t-foot empty">{t('clubs.nothing')}</p>{/each}
     </div>
   {/if}
 
@@ -108,42 +109,67 @@
     </section>
   {/if}
 
-  <!-- the clubs as tiles, then KBTU's schools as a list (owner, Oct 14 and 20: there, but not up front) -->
-  {#if clubs.length || !schools.length}
-    <div class="sec"><h2>{t('clubs.clubs')}</h2><span class="num">{clubs.length}</span></div>
-    <div class="grid">
-      {#each clubs as o (o.id)}
-        {@const nx = next.get(o.id) ?? (o.recruiting ? t('clubs.recruiting') : '')}
-        <div class="club surface">
-          <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
-          <span class="ghost" aria-hidden="true"><OrgLogo org={{ ...o, logo: null }} size={88} /></span>
-          <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
-            {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
-          <OrgLogo org={o} size={52} />
-          <span class="txt">
-            <span class="nm"><b class="clamp-2">{o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={15} /></span>{/if}</span>
-            <small>{tn('clubs.subscribers', o.subscribers)}</small>
-            {#if nx}<em class="cnx"><i></i><span>{nx}</span></em>{/if}
-          </span>
-        </div>
-      {:else}
-        <p class="t-foot empty">{t('clubs.nothing')}</p>
-      {/each}
+  {#snippet tile(o: Org)}
+    {@const nx = next.get(o.id)?.text ?? (o.recruiting ? t('clubs.recruiting') : '')}
+    <div class="club surface">
+      <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
+      <span class="ghost" aria-hidden="true"><OrgLogo org={{ ...o, logo: null }} size={88} /></span>
+      <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
+        {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
+      <OrgLogo org={o} size={52} />
+      <span class="txt">
+        <span class="nm"><b class="clamp-2">{o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={15} /></span>{/if}</span>
+        {#if o.gov}<GovMark />{/if}
+        <small>{o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers)}</small>
+        {#if nx}<em class="cnx"><i></i><span>{nx}</span></em>{/if}
+      </span>
     </div>
-  {/if}
-  {#if schools.length}
-    <div class="sec"><h2>{t('clubs.schools')}</h2></div>
-    <div class="schools surface">
-      {#each schools as o (o.id)}
-        <div class="school">
-          <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
-          <OrgLogo org={o} size={40} />
-          <span class="txt"><b>{o.abbr ?? o.name}</b>{#if o.abbr}<small class="ellipsis">{o.name}</small>{/if}</span>
-          <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
-            {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
-        </div>
-      {/each}
-    </div>
+  {/snippet}
+
+  {#if !q.trim()}
+    {#if mine.length}
+      <div class="sec"><h2>{t('clubs.mineShort')}</h2><span class="num">{mine.length}</span></div>
+      <div class="grid">{#each mine as o (o.id)}{@render tile(o)}{/each}</div>
+    {/if}
+
+    {#if soon.length}
+      <div class="sec"><h2>{t('clubs.soon')}</h2></div>
+      <div class="rows surface">
+        {#each soon as o (o.id)}
+          <ClubRow org={o} sub={soonLine(o)} hot={next.has(o.id)}>
+            {#snippet end()}
+              {#if canApply(o) && o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
+              {:else if canApply(o) && o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>
+              {:else if canApply(o)}<Button kind={o.myRequest ? 'neutral' : 'primary'} size="s" onclick={() => toggleJoin(o.id)}>{o.myRequest ? t('join.sent') : t('join.apply')}</Button>
+              {:else}<button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
+                {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>{/if}
+            {/snippet}
+          </ClubRow>
+        {/each}
+      </div>
+    {/if}
+
+    {#if popular.length}
+      <div class="sec"><h2>{t('clubs.popular')}</h2></div>
+      <div class="grid">{#each popular as o (o.id)}{@render tile(o)}{/each}</div>
+    {/if}
+
+    <button class="allb surface" onclick={() => sheets.allClubs()}><span>{t('clubs.allBtn', { n: clubsOnly.length })}</span><ChevronRight size={18} /></button>
+
+    {#if schools.length}
+      <div class="rows surface fold">
+        <button class="srow" class:shown={schoolsOpen} onclick={() => (schoolsOpen = !schoolsOpen)} aria-expanded={schoolsOpen}>
+          <span class="stack" aria-hidden="true">{#each schools.slice(0, 3) as o (o.id)}<OrgLogo org={o} size={30} />{/each}</span>
+          <b>{t('clubs.schools')} · {schools.length}</b>
+          <span class="chev"><ChevronDown size={18} /></span>
+        </button>
+        {#if schoolsOpen}
+          <div transition:slide={{ duration: 260 }}>
+            {#each schools as o (o.id)}<ClubRow org={o} name={o.abbr ?? o.name} sub={o.abbr ? o.name : ''} />{/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
   <div class="cta"><CreateClubCard /></div>
   <div class="tail"></div>
@@ -194,23 +220,25 @@
   .cnx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { grid-column: 1 / -1; padding: 20px 4px; }
 
-  /* recruiting now: one list, the button its own target */
-  .recruit { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .rc { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 12px 8px 10px; }
-  .rc + .rc { box-shadow: inset 0 1px 0 var(--line); }
-  .rc:active:not(:has(.go :active)) { background: var(--surface-2); }
-  .rc .txt { flex: 1; pointer-events: none; }
-  .rc .txt b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
-  .go { position: relative; z-index: 2; flex: none; }
-  /* schools: one list */
-  .schools { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .school { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 12px 8px 10px; text-align: left; color: var(--text-3); }
-  .school .bell { position: relative; top: auto; right: auto; z-index: 2; flex: none; }
-  .school .txt { pointer-events: none; }
-  .school + .school { box-shadow: inset 0 1px 0 var(--line); }
-  .school:active { background: var(--surface-2); }
-  .school .txt b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
-  .school .txt { flex: 1; }
+  /* plain rows (Soon, a search, the schools): ClubRow */
+  .rows { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
+  .rows .empty { padding: 20px 14px; }
+  .rows .bell { position: relative; top: auto; right: auto; }
+  /* everything else a tap away */
+  .allb { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 52px; margin-top: 16px; padding: 0 14px 0 16px;
+    border-radius: var(--r-l); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
+  .allb:active { transform: scale(0.98); }
+  /* the schools, folded into one row (owner, Oct 25) */
+  .fold { margin-top: 10px; }
+  .srow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px 8px 12px; text-align: left; color: var(--text-3); }
+  .srow b { flex: 1; font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
+  .chev { display: flex; transition: transform 0.26s ease; }
+  .srow.shown .chev { transform: rotate(180deg); }
+  .srow:active { background: var(--surface-2); }
+  .fold > div { box-shadow: inset 0 1px 0 var(--line); }
+  .stack { display: flex; }
+  .stack > :global(*) { box-shadow: 0 0 0 2px var(--surface); border-radius: 50%; }
+  .stack > :global(* + *) { margin-left: -10px; }
   .cta { margin-top: 24px; }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>
