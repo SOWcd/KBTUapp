@@ -396,13 +396,18 @@ RECEIPT_WHY = {
 }
 
 
+def pick(table: dict, lang: str):
+    """A table's entry for the language, Russian when it has none."""
+    return table[lang if lang in table else "ru"]
+
+
 def receipt_why(lang: str, flags: list[str]) -> str:
-    words = RECEIPT_WHY[lang if lang in RECEIPT_WHY else "ru"]
+    words = pick(RECEIPT_WHY, lang)
     return ", ".join(words[f] for f in flags if f in words)
 
 
 def bot_message(lang: str, kind: str, **fields: object) -> tuple[str, str | None]:
-    text, button = BOT[lang if lang in BOT else "ru"][kind]
+    text, button = pick(BOT, lang)[kind]
     return text.format(**{k: html.escape(str(v)) for k, v in fields.items()}), button
 
 
