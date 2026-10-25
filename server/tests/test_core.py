@@ -4701,3 +4701,72 @@ def test_org_names(env):
     assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum Club", "SPE")             # renamed: the abbr it had stays
     assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum Club", "PC")         # one the new name carries
     assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")     # an abbr sent with it wins
+
+
+def test_portal_schedule(env, monkeypatch):
+    """The week from the portal's schedule page saved on the phone (PLAN 26): a Web Archive or an .mht sent to the bot.
+    A made-up page (tests/fixtures/portal_week.html): the phone's one-day layout ignored, the days by name, times as
+    written or from the pixels, no label: over 1 h 40 a lecture. Only a page with the student's own name is taken; the
+    file isn't kept and the student ID on it is never stored."""
+    import plistlib
+    from email.message import EmailMessage
+    from kbtu import portal
+    page = (Path(__file__).parent / "fixtures" / "portal_week.html").read_bytes()
+    archive = plistlib.dumps({"WebMainResource": {"WebResourceData": page, "WebResourceTextEncodingName": "UTF-8",
+                                                   "WebResourceMIMEType": "text/html", "WebResourceURL": "https://uninet.kbtu.kz/student/schedule"}},
+                             fmt=plistlib.FMT_BINARY)
+    mht = EmailMessage()
+    mht["MIME-Version"] = "1.0"
+    mht.make_mixed()
+    mht.add_attachment(page, maintype="text", subtype="html", disposition="inline")  # Chrome: UTF-8, no charset
+    mht.add_attachment(b"\x89PNG", maintype="image", subtype="png")
+    mht = mht.as_bytes().replace(b"multipart/mixed", b"multipart/related")
+    want = [(1, "10:00", "11:40", "Physical Education", "practice", "Gym", "Coach Example"),
+            (1, "14:00", "15:00", "Imaginary Algebra", "practice", "251", "Teacher One"),
+            (3, "12:00", "14:00", "History of Made-Up Things", "lecture", "388", "Teacher Two"),
+            (3, "15:00", "17:00", "Unlabelled Long Course", "lecture", "305", "Teacher Three"),
+            (6, "08:00", "09:00", "Unlabelled Short Course", "practice", None, "Teacher Four")]
+    for data in (page, archive, mht):
+        w = portal.parse(portal.page_html(data))
+        assert w.name == "Testov A." and [(x.weekday, x.begins, x.ends, x.subject, x.kind, x.room, x.teacher) for x in w.lessons] == want
+    for bad in (b"%PDF-1.4", b"bplist00junk", b"<html><body>Grades</body></html>"):
+        with pytest.raises(portal.NotSchedule):
+            portal.parse(portal.page_html(bad))
+    same = portal.same_person
+    assert same("Testov A.", "Ali", "Testov") and same("Ali Testov", "Ali", "Testov") and same("Ali T.", "Ali", "Testov")
+    assert same("\u0422\u0435\u0441\u0442\u043e\u0432 \u0410.", "Ali", "Testov")         # a Cyrillic page, a Latin Microsoft name
+    assert not same("Testov B.", "Ali", "Testov") and not same("Other A.", "Ali", "Testov") and not same(None, "Ali", "Testov")
+
+    c, cfg = env
+    login(c, 50, "ali")                                                  # Ali Testov
+    login(c, 51, "bek")                                                  # Bek Testov: someone else
+    files = {"F1": archive, "F2": mht, "F3": b"<html><body>no grid</body></html>"}
+    class Resp:
+        def __init__(self, body):
+            self.body, self.content = body, body if isinstance(body, bytes) else b""
+        def json(self):
+            return self.body
+    class Http:
+        async def get(self, url, params=None):
+            if url.endswith("/getFile"):
+                return Resp({"ok": True, "result": {"file_path": params["file_id"]}})
+            return Resp(files[url.rsplit("/", 1)[1]])
+    con = db.connect(cfg.db_path)
+    def send(tg, fid, name="Schedule.webarchive", size=7_000_000):
+        msg = {"message_id": 1, "from": {"id": tg}, "chat": {"id": tg, "type": "private"}, "date": logic.now(),
+               "document": {"file_id": fid, "file_name": name, "file_size": size}}
+        assert bot._sched_file(msg)
+        return asyncio.run(bot._schedule(cfg, Http(), con, msg))["text"]
+    assert send(99, "F1") == texts.bot_message("ru", "sched_signin")[0]
+    assert send(51, "F1") == texts.bot_message("ru", "sched_other")[0]            # Bek sends Ali's page: refused
+    assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]   # his own stays
+    assert send(50, "F3", "page.html") == texts.bot_message("ru", "sched_not")[0]
+    assert send(50, "F1", size=30_000_000) == texts.bot_message("ru", "sched_big")[0]
+    assert send(50, "F1") == texts.bot_message("ru", "sched_ok", n=5)[0]
+    got = c.get("/api/me/schedule", headers=tma(50)).json()
+    assert [(x["weekday"], x["begins"], x["subject"], x["kind"]) for x in got] == [(w[0], w[1], w[3], w[4]) for w in want]
+    assert send(50, "F2", "Schedule.mht") == texts.bot_message("ru", "sched_ok", n=5)[0]       # again from Android: replaced, not doubled
+    assert len(c.get("/api/me/schedule", headers=tma(50)).json()) == 5
+    dump = "\n".join(con.iterdump())
+    assert "00X000000" not in dump and "Phone Only Course" not in dump           # the student ID is never kept; the phone layout ignored
+    assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})

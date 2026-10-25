@@ -96,6 +96,10 @@ export const sheets = {
   adminChats: () => {},
   /** every club, the biggest first (the Clubs tab's "All clubs · N") */
   allClubs: () => {},
+  /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
+  schedHowTo: (_first?: boolean) => {},
+  /** my whole week of classes */
+  week: () => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work (owner, Oct 21) */
