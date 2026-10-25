@@ -1184,6 +1184,21 @@ def test_album_reports(env):
     assert len(c.get("/api/events/1", headers=P).json()["photos"]) == 1 and c.get("/api/events/1", headers=Z).json()["photos"] == []
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM event_photos").fetchone()[0] == 0 and c.get("/api/admin/reports", headers=B).json() == []
+    # kept 30 days for an undo (owner, Oct 25): the file stays, "taken down" lists it, Restore puts it back in the album
+    path = con.execute("SELECT path FROM files WHERE id = ?", (ph["id"],)).fetchone()[0]
+    on_disk = lambda: (Path(cfg.db_path).parent / "media" / f"{path}.webp").exists()  # noqa: E731
+    assert on_disk() and [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("photo", ph["id"])]
+    assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 204
+    assert [(p["id"], p["by"]) for p in c.get("/api/events/1", headers=P).json()["photos"]] == [(ph["id"], "Ali T.")]
+    assert c.post("/api/reports", headers=P, json={"target": "photo", "id": ph["id"], "reason": "insult"}).status_code == 204
+    assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
+    con.execute("UPDATE takedowns SET at = at - 29 * 86400")
+    bot.purge(cfg, con)
+    assert on_disk()                                                                         # 29 days: still there
+    con.execute("UPDATE takedowns SET at = at - 2 * 86400")
+    bot.purge(cfg, con)                                                                      # 31: gone, from disk too
+    assert not on_disk() and not con.execute("SELECT 1 FROM files WHERE id = ?", (ph["id"],)).fetchone()
+    assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 404
     e = c.get("/api/events/1", headers=P).json()
     body = {k: e[k] for k in ("title", "description", "startsAt", "endsAt", "place", "placeUrl", "emoji", "color", "seats", "firstYear")}
     assert c.patch("/api/events/1", headers=P, json={**body, "albumOpen": False}).status_code == 200
@@ -1280,7 +1295,7 @@ def test_comments(env):
     assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": False}).status_code == 204
     assert c.get("/api/admin/taken-down", headers=B).json() == []
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 404               # nothing to undo
-    assert c.post(f"/api/admin/taken-down/user/{first}/restore", headers=B).status_code == 400
+    assert c.post(f"/api/admin/taken-down/user/{first}/restore", headers=B).status_code == 404   # nothing of theirs kept
 
     assert c.delete(f"/api/comments/{first}", headers=P).status_code == 204                                    # gone again (the club)
     assert c.get("/api/admin/taken-down", headers=B).json() == []                                              # the club's call, not the admin's
@@ -1376,13 +1391,22 @@ def test_nick_and_photo(env):
     q = c.get("/api/admin/reports", headers=B).json()
     assert [(x["target"], x["text"], x["where"]) for x in q] == [("user", "Ali the Great", {"kind": "person", "id": ali["id"]})]
     assert c.post(f"/api/admin/reports/user/{ali['id']}", headers=B, json={"remove": True}).status_code == 204
-    assert not (Path(cfg.db_path).parent / newer).exists()                                 # the photo left the disk too
+    assert (Path(cfg.db_path).parent / newer).exists()                                     # kept 30 days for an undo
     me = c.get("/api/me", headers=A).json()
     assert (me["nick"], me["name"], me["avatar"], me["photo"]) == (None, real, "https://t.me/i/userpic/320/ali.jpg",
                                                                    {"telegram": True, "tg": "https://t.me/i/userpic/320/ali.jpg", "own": None})
+    assert [(x["target"], x["id"], x["text"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("user", ali["id"], "Ali the Great")]
+    assert c.post(f"/api/admin/taken-down/user/{ali['id']}/restore", headers=B).status_code == 204   # a wrong call undone
+    me = c.get("/api/me", headers=A).json()
+    assert (me["nick"], me["avatar"]) == ("Ali the Great", newer) and c.get("/api/admin/taken-down", headers=B).json() == []
+    assert c.post(f"/api/admin/taken-down/user/{ali['id']}/restore", headers=B).status_code == 404   # once
+    c.post(f"/api/admin/reports/user/{ali['id']}", headers=B, json={"remove": True})                  # down again, kept again
+    assert con.execute("SELECT COUNT(*) FROM takedowns WHERE user_id = ?", (ali["id"],)).fetchone()[0] == 1
     c.patch("/api/me", headers=A, json={"nick": "Ali again"})
     c.post("/api/me/photo", headers=A, content=raw.getvalue())
     assert delete_now(c, cfg, A) is None
+    # deleting the account takes the kept copy at once (owner, Oct 25): the nick and words, the photo off the disk
+    assert not con.execute("SELECT 1 FROM takedowns WHERE user_id = ?", (ali["id"],)).fetchone() and not (Path(cfg.db_path).parent / newer).exists()
     u = con.execute("SELECT nick, avatar_tg, avatar_file_id FROM users WHERE id = ?", (ali["id"],)).fetchone()
     assert tuple(u) == (None, 1, None) and not con.execute("SELECT 1 FROM files WHERE kind = 'avatar' AND owner_id = ?", (ali["id"],)).fetchone()
 

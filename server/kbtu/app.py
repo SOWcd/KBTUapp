@@ -963,7 +963,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/taken-down/{target}/{tid}/restore", status_code=204)
     def restore(target: str, tid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
-        logic.restore(con, v, target, tid)
+        for rel in logic.restore(con, v, target, tid):  # a kept photo nothing shows after the undo
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (photos / f"{rel}{ext}").unlink(missing_ok=True)
 
     @app.get("/api/admin/reports")
     def report_queue(con=Depends(conn), v: Viewer = Depends(viewer)):
