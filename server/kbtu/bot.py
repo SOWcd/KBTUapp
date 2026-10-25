@@ -297,7 +297,9 @@ def purge(cfg: Config, con) -> None:
 
 async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
     root = Path(cfg.db_path).resolve().parent / "media"
-    for c in rows(con, "SELECT id, url FROM chats"):
+    for c in rows(con, "SELECT id, url, org_id, tg_chat_id FROM chats"):
+        if c["org_id"] and c["tg_chat_id"] and await chat_card(cfg, http, con, c["id"], c["tg_chat_id"]):
+            continue  # our bot sits in it: Telegram's own card
         peek = await media.chat_peek(http, c["url"])
         if peek["image"]:
             try:
@@ -308,6 +310,55 @@ async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
             if not one(con, "SELECT 1 FROM files WHERE path = ?", old):  # never a file something else still shows
                 for ext in (".webp", ".t.webp", ".jpg"):
                     (root / f"{old}{ext}").unlink(missing_ok=True)
+
+
+async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat: int) -> bool:
+    """An org's chat our bot sits in (PLAN 86): its card from Telegram (getChat: title, about, avatar; getChatMemberCount),
+    never a message. False when Telegram won't say (the bot was removed: the t.me page again)."""
+    api = f"https://api.telegram.org/bot{cfg.bot_token}"
+    try:
+        r = (await http.post(f"{api}/getChat", json={"chat_id": tg_chat})).json()
+        if not r.get("ok"):
+            if r.get("error_code") in (400, 403):  # no such chat for us any more
+                logic.bot_left(con, tg_chat)
+            return False
+        ch, card = r["result"], {"title": r["result"].get("title"), "about": r["result"].get("description") or ""}
+        n = (await http.post(f"{api}/getChatMemberCount", json={"chat_id": tg_chat})).json()
+        card["members"] = n.get("result") if n.get("ok") else None
+        if fid := (ch.get("photo") or {}).get("big_file_id"):
+            f = (await http.post(f"{api}/getFile", json={"file_id": fid})).json()
+            if f.get("ok") and f["result"].get("file_path") and int(f["result"].get("file_size") or 0) <= media.MAX_BYTES:
+                img = await http.get(f"https://api.telegram.org/file/bot{cfg.bot_token}/{f['result']['file_path']}")
+                if img.status_code == 200:
+                    root = Path(cfg.db_path).resolve().parent / "media"
+                    try:
+                        card["photo"] = (await asyncio.to_thread(media.save, img.content, root))["path"]
+                    except media.BadImage:
+                        pass
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        log.warning("chat card: %s", type(exc).__name__)
+        return False
+    if (old := logic.chat_card(con, cid, card)) and logic.photo_free(con, old):
+        for ext in (".webp", ".t.webp", ".jpg"):
+            (Path(cfg.db_path).resolve().parent / "media" / f"{old}{ext}").unlink(missing_ok=True)
+    return True
+
+
+async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
+    """Our bot added to a chat or taken out of it (my_chat_member). Added by someone who may edit a club's chats, to a
+    chat on its page: the bot keeps that card from now on (a group added by Studio's link says which: its /start)."""
+    chat, status = upd.get("chat") or {}, (upd.get("new_chat_member") or {}).get("status")
+    if status in ("left", "kicked"):
+        logic.bot_left(con, chat["id"])
+        return
+    if status not in ("member", "administrator") or chat.get("type") not in ("channel", "group", "supergroup"):
+        return
+    invite = None
+    if status == "administrator":  # an admin bot is told the chat's primary invite link
+        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
+        invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
+    if cid := logic.bot_added(con, int((upd.get("from") or {}).get("id") or 0), chat, invite):
+        await chat_card(cfg, http, con, cid, chat["id"])
 
 
 def _refused(r: dict) -> bool:
@@ -664,8 +715,13 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     chat = msg["chat"]
     if new := msg.get("migrate_to_chat_id"):
         con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
+        con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
         return
     words = str(msg.get("text") or "").split()
+    if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
+        if cid := logic.bot_added(con, int((msg.get("from") or {}).get("id") or 0), chat, cid=int(words[1][3:])):
+            await chat_card(cfg, http, con, cid, chat["id"])
+        return
     if len(words) != 2 or not re.fullmatch(r"/start(@\w+)?", words[0]) or not words[1].startswith("ec_"):
         return
     e = logic.chat_claim(con, words[1][3:], int((msg.get("from") or {}).get("id") or 0), chat["id"])
@@ -727,7 +783,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": '["message","callback_query","chat_join_request"]'}, timeout=WAIT + 10)
+                           params={"offset": offset, "timeout": WAIT, "allowed_updates": '["message","callback_query","chat_join_request","my_chat_member"]'}, timeout=WAIT + 10)
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
@@ -752,6 +808,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if "chat_join_request" in upd:
                     await _join(cfg, http, con, upd["chat_join_request"])
+                    continue
+                if "my_chat_member" in upd:
+                    await _member(cfg, http, con, upd["my_chat_member"])
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
                     if not await _discussion(cfg, http, con, msg):

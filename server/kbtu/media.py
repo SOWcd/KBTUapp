@@ -106,20 +106,22 @@ def poster_jpg(color: str, emoji: Path) -> bytes:
     return out.getvalue()
 
 
-_OG = re.compile(r'<meta property="og:(title|image)" content="([^"]*)"')
+_OG = re.compile(r'<meta property="og:(title|image|description)" content="([^"]*)"')
 _EXTRA = re.compile(r'class="tgme_page_extra">\s*([\d\s]+)\s+(subscribers?|members?)')
 
 
 async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
     """A Telegram chat's public face from its t.me page (works for public links and invite links alike): title, avatar
     bytes, members. Empty fields when the page has none or Telegram is unreachable; the caller keeps what it had."""
-    out: dict = {"title": None, "image": None, "members": None, "ok": False}
+    out: dict = {"title": None, "image": None, "members": None, "about": None, "ok": False}
     try:
         r = await http.get(url, follow_redirects=True)
         out["ok"] = r.status_code == 200  # False: Telegram didn't answer (a timeout, a 429), not "no such chat"
         page = r.text
         og = {k: html.unescape(v) for k, v in _OG.findall(page)}
         out["title"] = og.get("title") or None
+        # the chat's own line; Telegram's stock "You can view and join ... right away" when it has none
+        out["about"] = og.get("description") if og.get("description") and not re.match(r"You can (view|contact)", og["description"]) else None
         if m := _EXTRA.search(page):
             out["members"] = int(re.sub(r"\D", "", m.group(1)))
             out["channel"] = m.group(2).startswith("subscriber")  # a channel counts subscribers, a group members

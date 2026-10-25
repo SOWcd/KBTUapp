@@ -388,6 +388,52 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def get_org(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.org(con, v, oid)
 
+    # ------------------------------------------------------------ an org's own chats (PLAN 86)
+
+    @app.get("/api/orgs/{oid}/chats")
+    def org_chats(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        """Studio's list: the invite links too, and whether our bot keeps each card."""
+        logic.may_chats(con, v, oid)
+        return logic.org_chats(con, oid, True)
+
+    @app.post("/api/orgs/{oid}/chats")
+    async def add_org_chat(oid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        """A chat for the org's page: @name, a t.me link or an invite link, looked up on t.me. Errors: bad_input (notchat:
+        a person, a bot, no such chat), conflict taken (another org's) / limit, unavailable (Telegram didn't answer)."""
+        logic.may_chats(con, v, oid)  # before going to Telegram
+        url = logic.chat_link(str(body.get("link") or "")[:200])
+        if not url:
+            raise logic.ApiError("bad_input")
+        async with httpx.AsyncClient(timeout=10) as http:
+            peek = await media.chat_peek(http, url)
+        if peek["image"]:
+            try:
+                peek["photo"] = (await _img(media.save, peek["image"], photos))["path"]
+            except media.BadImage:
+                pass
+        try:
+            out, gone = logic.add_org_chat(con, v, oid, url, peek)
+        except logic.ApiError:
+            _drop_photo([peek["photo"]] if peek.get("photo") and logic.photo_free(con, peek["photo"]) else [])
+            raise
+        _drop_photo(gone)
+        return out
+
+    @app.put("/api/orgs/{oid}/chats/{cid}/main")
+    def main_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.main_org_chat(con, v, oid, cid)
+
+    @app.delete("/api/orgs/{oid}/chats/{cid}")
+    def drop_org_chat(oid: int, cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        out, gone = logic.drop_org_chat(con, v, oid, cid)
+        _drop_photo(gone)
+        return out
+
+    def _drop_photo(gone: list[str]) -> None:
+        for old in gone:
+            for ext in (".webp", ".t.webp", ".jpg"):
+                (photos / f"{old}{ext}").unlink(missing_ok=True)
+
     @app.put("/api/orgs/{oid}/subscription")
     def subscribe(oid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
         return logic.subscribe(con, v, oid, True)
@@ -1090,6 +1136,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             except media.BadImage:
                 pass
         return logic.add_chat(con, v, body, peek)
+
+    @app.put("/api/admin/chats/{cid}/org")
+    def chat_org(cid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.set_chat_org(con, v, cid, body.get("orgId"))
 
     @app.post("/api/admin/chats/{cid}/approve")
     def approve_chat(cid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
