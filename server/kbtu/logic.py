@@ -1714,9 +1714,12 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         for k in ("name", "description"):  # the app showed a translation in the form: sent back unchanged, it's no edit
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
-        if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
-            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{before['slug']}", str(oid)))
-        con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
+        with tx(con):  # the name checked and taken at once (review, Oct 26)
+            if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
+                if not _slug_free(con, sets["slug"], oid):
+                    raise ApiError("conflict", "taken")
+                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{before['slug']}", str(oid)))
+            con.execute(f"UPDATE orgs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), oid))  # keys from the list above
         if "description" in sets and sets["description"] != before["description"]:
             con.execute("UPDATE orgs SET lang = NULL, ai_tries = 0 WHERE id = ?", (oid,))  # translated again (ai.py)
         if before["i18n"] and (gone := {k for k in ("name", "description") if k in sets and sets[k] != before[k]}):
@@ -3546,9 +3549,11 @@ def _focus(body: dict, keep: str | None) -> str | None:
 
 def kz_phone(raw: object) -> str | None:
     """A Kazakhstan number as typed (8 701..., +7 701..., 701...) kept as +7XXXXXXXXXX; None if it isn't one."""
-    d = re.sub(r"\D", "", str(raw or ""))
-    d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else "7" + d if len(d) == 10 else d
-    return "+" + d if re.fullmatch(r"7\d{10}", d) else None
+    t = str(raw or "")
+    d = re.sub(r"[^0-9]", "", t)  # ASCII only: \d takes any script's digits (review, Oct 26)
+    # ten digits are the number without its +7, unless it came with a "+": "+7 701 234 56 7" is one digit short
+    d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else "7" + d if len(d) == 10 and not t.lstrip().startswith("+") else d
+    return "+" + d if re.fullmatch(r"7[0-9]{10}", d) else None
 
 
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
@@ -3736,6 +3741,8 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             UNION SELECT cover_file_id FROM events WHERE id = ? AND cover_file_id IS NOT NULL
             UNION SELECT file_id FROM event_slides WHERE event_id = ?""", eid, eid, eid)]
         post = one(con, "SELECT channel_msg FROM events WHERE id = ?", eid)
+        for sl in rows(con, "SELECT slug, org_id FROM short_links WHERE event_id = ?", eid):  # they go with it (cascade)
+            _keep_name(con, sl["slug"], sl["org_id"])
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
         # its channel post goes too (owner, Oct 18: it stayed), with the copy in the discussion group: the bot's next
@@ -3769,10 +3776,12 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
     e = _staff_event(con, v, eid, "events")
-    found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email, s.phone,
+    # the phone only where this event asked for it (review, Oct 26: one club's ask reached every club's list)
+    found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email,
+            CASE WHEN ? THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
-        WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", eid)
+        WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", e["needs_phone"], eid)
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'attendees_export', ?, ?, ?)",
                 (v.id, f"event:{eid}", json.dumps({"rows": len(found)}), now()))
     return e, found
@@ -4337,7 +4346,10 @@ def start_by_slug(con, slug: str) -> str | None:
     if oid := org_by_slug(con, s):
         return f"cl_{oid}"
     sl = one(con, "SELECT l.* FROM short_links l JOIN orgs o ON o.id = l.org_id WHERE l.slug = ? AND o.status = 'active'", s)
-    return {"club": f"cl_{sl['org_id']}", "event": f"ev_{sl['event_id']}", "round": f"rc_{sl['org_id']}"}[sl["kind"]] if sl else None
+    if sl:
+        return {"club": f"cl_{sl['org_id']}", "event": f"ev_{sl['event_id']}", "round": f"rc_{sl['org_id']}"}[sl["kind"]]
+    gone = one(con, "SELECT o.id FROM meta m JOIN orgs o ON o.id = CAST(m.value AS INTEGER) WHERE m.key = ? AND o.status = 'active'", f"slug:{s}")
+    return f"cl_{gone[0]}" if gone else None  # a gone link's name leads to its club (_keep_name)
 
 
 def org_links(con, v: Viewer, oid: int) -> list[dict]:
@@ -4356,6 +4368,9 @@ def add_link(con, v: Viewer, oid: int, body: dict) -> list[dict]:
     if kind == "event" and not (type(eid) is int and one(con, "SELECT 1 FROM events WHERE id = ? AND org_id = ? AND status = 'published'", eid, oid)):
         raise ApiError("bad_input")
     with tx(con):
+        held = one(con, "SELECT value FROM meta WHERE key = ?", f"slug:{s}")
+        if held and held[0] == str(oid):  # its own old name (a gone link, an old club slug) comes back to it
+            con.execute("DELETE FROM meta WHERE key = ?", (f"slug:{s}",))
         if not _slug_free(con, s, None):
             raise ApiError("conflict", "taken")
         if one(con, "SELECT COUNT(*) FROM short_links WHERE org_id = ?", oid)[0] >= LINKS_MAX:
@@ -4376,8 +4391,15 @@ def drop_link(con, v: Viewer, slug: str) -> None:
         _admin(v)
     with tx(con):
         con.execute("DELETE FROM short_links WHERE slug = ?", (sl["slug"],))
+        _keep_name(con, sl["slug"], sl["org_id"])
         con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)",
                     (v.id, "link_delete" if own else "link_revoke", f"org:{sl['org_id']}", json.dumps({"slug": sl["slug"]}), now()))
+
+
+def _keep_name(con, s: str, oid: int) -> None:
+    """A gone short link's name stays its club's and leads to the club (review, Oct 26: printed posters of one club
+    would open another's), as a changed club slug does."""
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{s}", str(oid)))
 
 
 def _slug_free(con, s: str, oid: int | None) -> bool:
@@ -4412,7 +4434,7 @@ def seed_schools(con, root: Path) -> None:
             names = {s[lang]["name"].lower() for lang in ("ru", "kk", "en")}
             o = next((o for o in rows(con, "SELECT * FROM orgs WHERE kind = 'school'") if o["slug"] == s["slug"] or o["name"].strip().lower() in names), None)
             if o is None:
-                slug = s["slug"] if not one(con, "SELECT 1 FROM orgs WHERE slug = ?", s["slug"]) else None
+                slug = s["slug"] if _slug_free(con, s["slug"], None) else None
                 o = _org(con, create_org(con, None, s["ru"]["name"], s["short"], s["emoji"], True, slug, "school"))
             logo = o["logo_file_id"]
             if logo is None:

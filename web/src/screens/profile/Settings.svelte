@@ -96,7 +96,7 @@
   {#if me?.student?.phone}
     <h2 class="sec">{t('pd.title')}</h2>
     <div class="rows surface">
-      <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{fmtPhone(me.student.phone)}</i></button>
+      <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{me.student.phone.startsWith('+7') ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
         <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
     </div>
     <p class="note">{t('pd.note')}</p>

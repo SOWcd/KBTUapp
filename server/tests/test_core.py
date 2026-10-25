@@ -760,8 +760,9 @@ def test_attendees_csv(env):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at)
-        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at, needs_phone)
+        VALUES (1, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0, 1)""", (int(time.time()) + 86400, pres["id"]))
+    con.execute("UPDATE students SET phone = '+77001234567' WHERE user_id = ?", (ali["id"],))  # the event asks for it
     c.post("/api/events/1/registration", headers=tma(21, "Ali"))
     con.execute("UPDATE students SET phone = '+77001234567', email = '=HYPERLINK(1)' WHERE user_id = ?", (ali["id"],))
     assert c.post("/api/events/1/attendees/export", headers=tma(21, "Ali")).status_code == 403   # not the club's team
@@ -3882,7 +3883,8 @@ def test_custom_short_links(env):
     # its own Vice takes one down; another club can't; the admin revokes any, and the log says which
     assert c.delete("/api/links/join-it", headers=H["other"]).status_code == 403
     assert c.delete("/api/links/join-it", headers=H["vice"]).status_code == 204
-    assert c.get("/join-it", follow_redirects=False).status_code == 200                          # the app itself now
+    assert go("/join-it").endswith("?startapp=cl_1")                                             # its posters open the club now
+    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # never another club's (review, Oct 26)
     assert "it-casting" in next(o for o in c.get("/api/admin/orgs", headers=H["boss"]).json() if o["id"] == 1)["shortLinks"]
     assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 204
     assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 404
@@ -3892,6 +3894,19 @@ def test_custom_short_links(env):
     assert c.get("/hack-night", follow_redirects=False).status_code == 200
     con.execute("DELETE FROM events WHERE id = ?", (ev["id"],))
     assert not con.execute("SELECT 1 FROM short_links WHERE slug = 'hack-night'").fetchone()
+    # an event deleted in the app keeps its link's name for its club, which may take it again
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 1")
+    ev2 = c.post("/api/orgs/1/events", headers=H["pres"], json={"title": "Draft", "place": "305", "startsAt": start, "endsAt": start + 60,
+                                                                 "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{ev2['id']}/publish", headers=H["pres"])
+    assert add("vice", {"slug": "draft-ev", "kind": "event", "eventId": ev2["id"]}).status_code == 200
+    con.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", (ev2["id"],))
+    assert c.delete(f"/api/events/{ev2['id']}", headers=H["pres"]).status_code in (200, 204)
+    assert add("other", {"slug": "draft-ev", "kind": "club"}, 2).json()["message"] == "taken"
+    assert add("vice", {"slug": "draft-ev", "kind": "club"}).status_code == 200
+    assert logic.kz_phone("\u0667\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668") is None    # Arabic-Indic digits
+    assert logic.kz_phone("+7 701 234 56 7") is None and logic.kz_phone("701 234 56 78") == "+77012345678"
+    assert logic.kz_phone("8 (701) 234-56-78") == logic.kz_phone("+7 701 234 5678") == "+77012345678"
 
 
 def test_door_guests(env):
@@ -4015,6 +4030,13 @@ def test_phone_asked_at_signup(env):
     assert go(eids[0], phone="8 (701) 234-56-78").json()["my"]["status"] == "going"
     assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
     assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
+    # a club whose event never asked doesn't get the kept phone in its guest list (review, Oct 26)
+    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    c.post(f"/api/events/{plain['id']}/publish", headers=tma(20))
+    go(plain["id"])
+    v = logic.Viewer(pres["id"], "user", True)
+    assert [r["phone"] for r in logic.attendees_export(con, v, plain["id"])[1]] == [None]
+    assert [r["phone"] for r in logic.attendees_export(con, v, eids[0])[1]] == ["+77012345678"]
     assert c.patch("/api/me", headers=tma(10), json={"phone": "nope"}).status_code == 400
     assert c.patch("/api/me", headers=tma(10), json={"phone": "+7 702 000 00 00"}).json()["student"]["phone"] == "+77020000000"
     assert c.patch("/api/me", headers=tma(10), json={"phone": None}).json()["student"]["phone"] is None
