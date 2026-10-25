@@ -98,7 +98,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     photos = Path(cfg.db_path).resolve().parent / "media"   # next to the database: one volume to back up
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
-    logic.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
+    logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
 
     # ------------------------------------------------------------ errors
 

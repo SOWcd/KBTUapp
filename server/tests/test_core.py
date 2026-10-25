@@ -46,7 +46,7 @@ def env(tmp_path, monkeypatch):
     (dist / "map" / "u1" / "o.webp").write_bytes(b"RIFF")
     cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=str(tmp_path / "t.db"), web_dist=str(dist), background=False, seed=False)
 
-    monkeypatch.setattr(logic, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
+    monkeypatch.setattr(logic.awards, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
     DB[:] = [cfg.db_path]
     client = TestClient(server.create(cfg))
@@ -54,6 +54,12 @@ def env(tmp_path, monkeypatch):
 
 
 DB: list[str] = []  # the env's database (login() writes students straight into it)
+
+
+def set_clock(monkeypatch, fake) -> None:
+    """The rules' clock (logic.core.now, which every logic module reads), and logic.now the tests read too."""
+    monkeypatch.setattr(logic.core, "now", fake)
+    monkeypatch.setattr(logic, "now", fake)
 
 
 INTAKE = time.gmtime(time.time() + 5 * 3600).tm_year - (time.gmtime(time.time() + 5 * 3600).tm_mon < 9)  # this academic year's first-years entered then (Almaty)
@@ -274,11 +280,11 @@ def test_workers_share_state(env):
     """Several worker processes are several apps over one database file: the "To calendar" link's key comes from the
     env, so a link signed by one opens on another."""
     _, cfg = env
-    key = logic.ICS_KEY
+    key = logic.seats.ICS_KEY
     server.create(cfg)
-    assert logic.ICS_KEY == key
+    assert logic.seats.ICS_KEY == key
     server.create(config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=cfg.db_path, web_dist=cfg.web_dist, background=False, seed=False))
-    assert logic.ICS_KEY != key
+    assert logic.seats.ICS_KEY != key
 
 
 
@@ -1515,7 +1521,7 @@ def test_first_fifty(env, monkeypatch):
     the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
     stays empty, never given again: a return gets a new one."""
     c, cfg = env
-    monkeypatch.setattr(logic, "FIRST_N", 2)
+    monkeypatch.setattr(logic.awards, "FIRST_N", 2)
     con = db.connect(cfg.db_path)
     c.get("/api/me", headers=tma(69, "Boss"))
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 69")
@@ -1532,7 +1538,7 @@ def test_first_fifty(env, monkeypatch):
     assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 2
     assert c.get("/api/me", headers=tma(73, "Guest")).json()["no"] is None
     # migration 36: a card within the 500 that missed the award gets it quietly; then everyone has it = 100%
-    monkeypatch.setattr(logic, "FIRST_N", 500)
+    monkeypatch.setattr(logic.awards, "FIRST_N", 500)
     con.execute("DELETE FROM achievement_grants WHERE user_id = ?", (cc["id"],))
     con.execute("DELETE FROM achievement_levels WHERE user_id = ?", (cc["id"],))
     con.executescript(dict(db.MIGRATIONS)[36])
@@ -1652,14 +1658,14 @@ def test_course_day(env, monkeypatch):
                                         (sept - 300 * 86400,) * 3 + (sept - 10 * 86400, sept - 300 * 86400)):
         con.execute("UPDATE students SET student_id = ?, course = ?, synced_at = ? WHERE user_id = ?", (sid, course, synced, uid))
     courses = lambda: [con.execute("SELECT course FROM students WHERE user_id = ?", (u,)).fetchone()[0] for u in ids]  # noqa: E731
-    monkeypatch.setattr(logic, "now", lambda: sept - 60)                                    # Aug 31, 23:59: not yet
+    set_clock(monkeypatch, lambda: sept - 60)                                    # Aug 31, 23:59: not yet
     logic.course_day(con)
     assert courses() == [1, 2, 6, 1, 1]
-    monkeypatch.setattr(logic, "now", lambda: sept + 60)
+    set_clock(monkeypatch, lambda: sept + 60)
     logic.course_day(con)
     logic.course_day(con)
     assert courses() == [2, 3, 6, 1, 2]
-    monkeypatch.setattr(logic, "now", lambda: sept + 731 * 86400)                           # Sept 2029, 2028 missed
+    set_clock(monkeypatch, lambda: sept + 731 * 86400)                           # Sept 2029, 2028 missed
     logic.course_day(con)
     assert courses() == [4, 4, 6, 3, 2] and courses()[0] == logic.course_of("26B000001")
     assert logic.course_of("19B000006") == 4 and logic.course_of("20M000007") == 2 and logic.course_of("20X000008") == 6
@@ -1689,10 +1695,10 @@ def test_admin_stats(env, monkeypatch):
     st = c.get("/api/admin/stats", headers=tma(60, "Boss")).json()
     assert (st["online"], st["day"], st["week"], st["month"], st["users"], st["students"], st["newToday"]) == (1, 1, 2, 2, 2, 2, 1)
     midnight = (t + 5 * 3600) // 86400 * 86400 - 5 * 3600
-    monkeypatch.setattr(logic, "now", lambda: midnight + 3600 * 5)                          # 05:00: too late, today's visits would count
+    set_clock(monkeypatch, lambda: midnight + 3600 * 5)                          # 05:00: too late, today's visits would count
     logic.stats_day(con)
     assert not con.execute("SELECT 1 FROM stats_days").fetchone()
-    monkeypatch.setattr(logic, "now", lambda: midnight + 600)                               # 00:10
+    set_clock(monkeypatch, lambda: midnight + 600)                               # 00:10
     logic.stats_day(con)
     logic.stats_day(con)
     assert [tuple(r) for r in con.execute("SELECT day, active, students FROM stats_days")] == [((t + 5 * 3600) // 86400 - 1, 1, 0)]  # both signed in today
@@ -1764,10 +1770,10 @@ def test_club_applications(env, monkeypatch):
     assert c.get("/api/admin/club-applications", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
     real = logic.set_role
-    monkeypatch.setattr(logic, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(logic.appteam, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     with pytest.raises(RuntimeError):
         c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True})
-    monkeypatch.setattr(logic, "set_role", real)
+    monkeypatch.setattr(logic.appteam, "set_role", real)
     assert not con.execute("SELECT 1 FROM orgs WHERE name = 'Chess Club'").fetchone()
     assert c.get("/api/club-applications/mine", headers=A).json()["application"]["status"] == "pending"
     done = c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True}).json()
@@ -2545,7 +2551,7 @@ def test_memo(env, monkeypatch):
 
     # Wednesday 10:00 in Almaty: the President hears it once
     wed = monday - 5 * 86400 + 10 * 3600
-    monkeypatch.setattr(logic, "now", lambda: wed)
+    set_clock(monkeypatch, lambda: wed)
     logic.memo_week(con)
     logic.memo_week(con)
     sent = con.execute("SELECT kind, ref FROM bot_outbox WHERE kind = 'memo_ready'").fetchall()
@@ -2555,7 +2561,7 @@ def test_memo(env, monkeypatch):
     assert "IT Club" in text and start == "memo_1"
 
     # the place still to be confirmed: the organizer hears it 3 days before (Friday 10:00 for the Monday after)
-    monkeypatch.setattr(logic, "now", lambda: b["startsAt"] - 3 * 86400 - 3 * 3600)
+    set_clock(monkeypatch, lambda: b["startsAt"] - 3 * 86400 - 3 * 3600)
     logic.tba_day(con)
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'place_tba'").fetchone()
     assert row and "Quiz" in bot._render(con, row)[0]
@@ -2651,7 +2657,7 @@ def test_memo_v2(env, monkeypatch):
     assert len(c.get("/api/orgs/1/memo", headers=tma(20)).json()["events"]) == 2
 
     # Wednesday 10:00: the President and the secretary hear it, the Head doesn't
-    monkeypatch.setattr(logic, "now", lambda: monday - 5 * 86400 + 10 * 3600)
+    set_clock(monkeypatch, lambda: monday - 5 * 86400 + 10 * 3600)
     logic.memo_week(con)
     told = {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'memo_ready'")}
     assert told == {uid[20], uid[21]}
@@ -2843,7 +2849,7 @@ def test_saved_tomorrow(env, monkeypatch):
         c.put(f"/api/events/{e['id']}/saved", headers=tma(tg))
     con.execute("UPDATE users SET n_remind = 0 WHERE tg_id = 11")                # Bob turned reminders off
     assert {x["id"]: x["savedBy"] for x in c.get("/api/orgs/1/events", headers=tma(20)).json()}[e["id"]] == 2
-    monkeypatch.setattr(logic, "now", lambda: day * 86400 - 5 * 3600 + 12 * 3600 + 60)  # today 12:01
+    set_clock(monkeypatch, lambda: day * 86400 - 5 * 3600 + 12 * 3600 + 60)  # today 12:01
     logic.saved_day(con)
     logic.saved_day(con)
     rows_ = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'saved_tomorrow'").fetchall()
@@ -3353,7 +3359,7 @@ def test_offsite_backup(env, monkeypatch):
     sunday = 20002 * 86400                                              # 05:00 Almaty, Sunday 2024-10-06
     clock = [sunday]
     monkeypatch.setattr(bot.time, "time", lambda: clock[0])
-    monkeypatch.setattr(logic, "now", lambda: clock[0])
+    set_clock(monkeypatch, lambda: clock[0])
     monkeypatch.setattr(bot, "now", lambda: clock[0])
     jobs = []
     class Loop:
@@ -3663,7 +3669,7 @@ def test_forgetting(env, monkeypatch):
                 (ali["id"], t - 31 * 86400, t - 31 * 86400, ali["id"], t, t))
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'registry_search', 'registry', '{\"q\": \"Ali\"}', ?)", (ali["id"], t - 31 * 86400))
     midnight = (t + 5 * 3600) // 86400 * 86400 - 5 * 3600
-    monkeypatch.setattr(logic, "now", lambda: midnight + 600)
+    set_clock(monkeypatch, lambda: midnight + 600)
     logic.stats_day(con)
     assert [tuple(r) for r in con.execute("SELECT ref, payload FROM bot_outbox WHERE kind = 'x' ORDER BY ref")] == [("new", '{"t": 1}'), ("old", "{}")]
     assert con.execute("SELECT data FROM audit_log WHERE action = 'registry_search'").fetchone()[0] == "{}"
@@ -3801,13 +3807,13 @@ def test_profile_privacy(env, monkeypatch):
     assert "limited" not in full(14)                                                                   # an admin sees it all, uncounted
     assert c.get("/api/users/999999", headers=tma(13)).status_code == 404                             # nobody there: not counted
     assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(dan, ann)]  # only the stranger counts
-    monkeypatch.setattr(logic, "PROFILES_A_DAY", 2)
+    monkeypatch.setattr(logic.awards, "PROFILES_A_DAY", 2)
     assert c.get(f"/api/users/{ann}", headers=tma(13)).status_code == 200                              # the same one again: free
     assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
     assert c.get(f"/api/users/{cat}", headers=tma(13)).json()["error"] == "rate_limited"
     assert c.get(f"/api/users/{ann}", headers=tma(12)).status_code == 200                              # a clubmate is never counted
     later = int(time.time()) + 2 * 86400
-    monkeypatch.setattr(logic, "now", lambda: later)                                                   # two days on
+    set_clock(monkeypatch, lambda: later)                                                   # two days on
     assert c.get(f"/api/users/{cat}", headers=tma(13)).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE day < ?", ((later + 5 * 3600) // 86400 - 1,)).fetchone()[0] == 0
     c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
@@ -3819,7 +3825,7 @@ def test_report_limit(env, monkeypatch):
     """The day's limit counts new reports only: updating one still waiting is free (the one report sheet, Oct 22)."""
     c, cfg = env
     ann, bob, cat = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat")))
-    monkeypatch.setattr(logic, "REPORTS_A_DAY", 1)
+    monkeypatch.setattr(logic.moderation, "REPORTS_A_DAY", 1)
     rep = lambda uid, note=None: c.post("/api/reports", headers=tma(10), json={"target": "user", "id": uid, "reason": "spam", "note": note})  # noqa: E731
     assert rep(bob).status_code == 204 and rep(cat).json()["error"] == "rate_limited"
     assert rep(bob, "Fake name").status_code == 204                                                    # the open one, updated: free
