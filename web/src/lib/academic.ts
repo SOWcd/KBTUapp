@@ -44,7 +44,14 @@ export const ONLINE = ['2026-10-26', '2026-12-16', '2027-01-07', '2027-03-08', '
 
 /** first and last day of a row (both the deadline for "until") */
 export const span = (r: Row): [string, string] => { const [a, b = a] = r.at.split('/'); return [a || b, b]; };
-export const nameOf = (r: Row): string => t(`acad.${r.key}` as 'acad.midterm');
+// a day off by its name (owner, Oct 25: "not 'Day off', the real holiday"): the dates are fixed by the Labour Code
+// (art. 84), so a list beats an API that missed Christmas; a day KBTU moved (Mar 15) stays "Day off"
+const HOLIDAYS: Record<string, string> = { '01-01': 'newYear', '01-07': 'christmas', '03-08': 'women', '03-21': 'nauryz', '03-22': 'nauryz',
+  '05-01': 'unity', '05-07': 'defender', '05-09': 'victory', '07-06': 'capital', '08-30': 'constitution', '10-25': 'republic', '12-16': 'independence' };
+export const nameOf = (r: Row): string => {
+  const h = r.key === 'holiday' && HOLIDAYS[span(r)[0].slice(5)];
+  return h ? t(`hol.${h}` as 'hol.republic') : t(`acad.${r.key}` as 'acad.midterm');
+};
 export function whenOf(r: Row): string { const [a, b] = span(r); return r.at.startsWith('/') ? t('acad.until', { date: dayRange(b, b) }) : dayRange(a, b); }
 /** what is on now or comes next for everyone, past the long teaching period: the line under the row in Me */
 export const nextUp = (today = dateInput(nowTs())): Row | undefined =>
