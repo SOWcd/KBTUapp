@@ -247,6 +247,7 @@ export const server: Api = {
   addOrgChat: (org, link) => call('POST', `/orgs/${org}/chats`, { link }),
   mainOrgChat: (org, chat) => call('PUT', `/orgs/${org}/chats/${chat}/main`),
   dropOrgChat: (org, chat) => call('DELETE', `/orgs/${org}/chats/${chat}`),
+  mirrorOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
   deleteChat: (id) => call('DELETE', `/admin/chats/${id}`),
   approveChat: (id) => call('POST', `/admin/chats/${id}/approve`),
   registry: (back = 0) => call('GET', `/registry/orgs?back=${back}`),

@@ -182,6 +182,7 @@ export interface Api {
   addOrgChat(org: Id, link: string): Promise<StudioChat[]>; // @name, t.me link or invite link; bad_input notchat, conflict taken / limit, unavailable
   mainOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;  // a public channel only
   dropOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;
+  mirrorOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>; // the main channel's posts in the club's news
   registry(back?: number): Promise<RegistryOrg[]>;       // DMP Head+ and the admin (§4.13); a month `back` months ago (0–12)
   registryRoster(org: Id): Promise<RosterMember[]>;
   /** DMP Head+ (and the admin) give a club the ✓ or take it back; its President hears it from the bot */

@@ -8,6 +8,9 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import Eye from '@lucide/svelte/icons/eye';
+  import Play from '@lucide/svelte/icons/play';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type EventCard, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
@@ -18,7 +21,8 @@
   import EventRow from '../../ui/EventRow.svelte';
   import { tagName } from '../../lib/posts';
   import { focusPos } from '../../lib/photo';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
+  import { compact } from '../../lib/chats';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Chip from '../../ui/Chip.svelte';
   import Emoji from '../../ui/Emoji.svelte';
@@ -121,6 +125,16 @@
       <p class="bd" class:fold={long(p) && !open.has(p.id)}>{p.body}</p>
       {#if long(p) && !open.has(p.id)}<button class="unfold" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</button>{/if}
     {/if}
+    {#if p.tg}
+      <!-- the club's Telegram channel post: its counts, its comments and its video live there (PLAN 86) -->
+      {@const tg = p.tg}
+      {#if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t(tg.media === 'video' ? 'tg.video' : 'tg.file')}</button>{/if}
+      <footer class="re tgf">
+        {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}
+        {#if tg.views}<span class="tgv"><Eye size={15} />{compact(tg.views)}</span>{/if}
+        <button class="cm" onclick={() => openLink(tg.url)}><TelegramMark size={16} /><b>{t('tg.open')}</b></button>
+      </footer>
+    {:else}
     <footer class="re">
       <button class:on={p.mine.fire} onclick={() => react(p, 'fire')} aria-pressed={p.mine.fire}><span class="ej"><Emoji name="fire_3d" size={20} /></span><b class="num">{p.reactions.fire}</b></button>
       <button class:on={p.mine.heart} onclick={() => react(p, 'heart')} aria-pressed={p.mine.heart}><span class="ej"><Emoji name="blue_heart_3d" size={20} /></span><b class="num">{p.reactions.heart}</b></button>
@@ -128,6 +142,7 @@
         <button class="cm" onclick={() => sheets.comments('post', p.id, p.title, (n) => (p.comments = n))} aria-label={t('cm.title')}><MessageCircle size={18} /><b class="num">{p.comments || ''}</b></button>
       {/if}
     </footer>
+    {/if}
   </article>
 {/snippet}
 
@@ -209,6 +224,12 @@
   .re b { font: 680 13.5px/1 var(--font-text); }
   .re .cm { margin-left: auto; padding: 0 12px; color: var(--text-2); }
   .re .cm b:empty { display: none; }
+  .tgf { flex-wrap: wrap; row-gap: 6px; }
+  .tgf .cm b { white-space: nowrap; }
+  .tge { font-size: 17px; line-height: 1; }
+  .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 13px/1 var(--font-text); color: var(--text-3); }
+  .tgm { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; height: 34px; margin: 2px 0 8px; padding: 0 13px 0 10px; border-radius: var(--r-full);
+    background: var(--surface-2); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
   .re button.on b { color: var(--accent-text); }
   .ej { display: flex; }
   .re button.on .ej { animation: boop 420ms cubic-bezier(.2, 1.6, .4, 1); }
