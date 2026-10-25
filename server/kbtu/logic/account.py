@@ -444,7 +444,9 @@ _DEL_GONE = {
     ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
     ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
-    ("takedowns", "user_id"), ("org_history", "user_id"),  # last: org_members' trigger writes it
+    ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
+    ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
+    ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
 

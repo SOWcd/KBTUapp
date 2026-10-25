@@ -93,3 +93,29 @@ async def translate(http: httpx.AsyncClient, account: str, token: str, fields: d
         raise Failed("cut off")
     text = (choice.get("message") or {}).get("content") or res.get("response")
     return src, parse(text if isinstance(text, str) else None, fields, src, limits)
+
+
+# The forum's look at what people write (forum.py): one word back. Munito (PLAN "AI provider"): OpenAI-shaped, EU, no
+# retention; its preview model may vanish, so the stable one is next.
+SCREEN_URL = "https://api.munito.ai/inference/v1/chat/completions"
+SCREEN_MODELS = ("deepseek-v4.1-flash", "deepseek-v4-flash")
+SCREEN_PROMPT = ("You check posts on a university students' board where people look for help with projects and small "
+                 "favours. Answer FLAG if the text is abusive, hateful, sexual, a scam, an ad, asks for something illegal "
+                 "or dangerous, or shares someone's personal data; otherwise answer OK. One word only.")
+
+
+async def screen(http: httpx.AsyncClient, key: str, text: str) -> bool | None:
+    """True: fine; False: flagged; None: no answer (no key, a busy or broken provider): a moderator decides."""
+    if not key:
+        return None
+    for model in SCREEN_MODELS:
+        try:
+            r = await http.post(SCREEN_URL, headers={"Authorization": f"Bearer {key}"}, timeout=15,
+                                json={"model": model, "temperature": 0, "max_tokens": 5,
+                                      "messages": [{"role": "system", "content": SCREEN_PROMPT}, {"role": "user", "content": CONTROL.sub("", text)[:2000]}]})
+            word = r.json()["choices"][0]["message"]["content"].strip().upper() if r.status_code == 200 else ""
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+            word = ""
+        if word.startswith(("OK", "FLAG")):
+            return word.startswith("OK")
+    return None
