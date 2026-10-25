@@ -35,6 +35,9 @@
   import Mail from '@lucide/svelte/icons/mail';
   import Button from '../../ui/Button.svelte';
   import Crown from '@lucide/svelte/icons/crown';
+  import BookUser from '@lucide/svelte/icons/book-user';
+  import FileDown from '@lucide/svelte/icons/file-down';
+  import { ApiErr } from '../../lib/api';
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
 
@@ -103,6 +106,18 @@
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
   const todo = $derived(alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
+  // DMP picked (owner, Oct 26: DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
+  // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
+  const dmp = $derived(!!m?.oversee);
+  let memos = $state(0);
+  $effect(() => { if (dmp) api.registryMemos().then((l) => (memos = l.length)).catch(() => {}); });
+  let exporting = $state(false);
+  async function exportCsv() {
+    exporting = true; haptic.tap();
+    try { await api.registryExport(); haptic.ok(); say(t('reg.sent'), 'sparkles_3d'); }
+    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'pleading_face_3d'); }
+    finally { exporting = false; }
+  }
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
 
@@ -156,6 +171,15 @@
         {#each volunteering as e (e.id)}
           <button onclick={() => sheets.volunteers(e.id, e.needsVolunteers ?? 0)}><HandHeart size={20} /><span class="tx"><b class="ellipsis">{e.title}</b><i class="t-foot ellipsis">{t('studio.todoVol')}</i></span><b class="count">{e.volunteersAsked}</b><ChevronRight size={18} /></button>
         {/each}
+      </div>
+    {/if}
+
+    {#if dmp}
+      <h2 class="sec">{t('tab.dmp')}</h2>
+      <div class="todo surface">
+        <button onclick={() => sheets.registry()}><BookUser size={20} /><span class="tx"><b class="ellipsis">{t('reg.title')}</b><i class="t-foot ellipsis">{t('reg.studioSub')}</i></span>{#if data.registry?.length}<b class="count">{data.registry.length}</b>{/if}<ChevronRight size={18} /></button>
+        <button onclick={() => sheets.registry()}><Mail size={20} /><span class="tx"><b class="ellipsis">{t('reg.memos')}</b></span>{#if memos}<b class="count">{memos}</b>{/if}<ChevronRight size={18} /></button>
+        <button onclick={exportCsv} disabled={exporting}><FileDown size={20} /><span class="tx"><b class="ellipsis">{t('reg.export')}</b><i class="t-foot ellipsis">{t('reg.exportSub')}</i></span></button>
       </div>
     {/if}
 

@@ -4322,6 +4322,21 @@ def test_userbot_off(env, caplog):
     assert [r.getMessage() for r in caplog.records] == ["userbot: off (no TG_API_ID / TG_API_HASH / TG_SESSION)"]
 
 
+def test_membership_oversee(env):
+    """DMP is an org in Studio (owner, Oct 26): a membership says whether I lead in an overseeing org, so Studio shows
+    the registry with it picked; a plain member of DMP, or a club's Vice, doesn't get it."""
+    c, cfg = env
+    dana, ali = login(c, 90, "dana"), login(c, 91, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (1, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, dana["id"], "head"), (2, dana["id"], "vice"), (1, ali["id"], "member")])
+    mine = {m["org"]["id"]: m["oversee"] for m in c.get("/api/me", headers=tma(90)).json()["memberships"]}
+    assert mine == {1: True, 2: False} and c.get("/api/me", headers=tma(90)).json()["oversee"] is True
+    assert [m["oversee"] for m in c.get("/api/me", headers=tma(91)).json()["memberships"]] == [False]
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""
