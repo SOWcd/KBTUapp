@@ -202,6 +202,8 @@
     clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
     stage.setPointerCapture(e.pointerId);
+    if (pts.size) swipeEnd(true); // a second finger: a pinch, never a floor
+    else if (!rt.route && !rt.edit && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
     pts.set(e.pointerId, local(e));
     from = mid();
     if (pts.size === 1 && !rt.edit) {
@@ -212,6 +214,7 @@
   }
   function move(e: PointerEvent) {
     if (!pts.has(e.pointerId) || !from) return;
+    if (pts.size === 1 && swipeMove(e.clientX, e.clientY)) { press = null; lastTap = 0; return; }
     pts.set(e.pointerId, local(e));
     const m = mid();
     x += m.cx - from.cx; y += m.cy - from.cy;
@@ -220,6 +223,8 @@
     from = m;
   }
   function up(e: PointerEvent) {
+    if (sw?.on) { pts.delete(e.pointerId); from = pts.size ? mid() : null; press = null; swipeEnd(); return; }
+    sw = null;
     const p = pts.has(e.pointerId) ? local(e) : null;
     pts.delete(e.pointerId); from = pts.size ? mid() : null; if (!pts.size) settleSoon(120);
     // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15)
@@ -246,6 +251,90 @@
   // another floor keeps the view: the floors share one frame, so the same part of the building stays on screen and
   // only the tiles change (owner, Oct 6: "switching floors resets the map's size")
   function pick(n: number) { if (n === cur) return; haptic.select(); halt(); cur = n; tiles = []; touched++; pickTiles(); }
+
+  // ---- floors by a sideways swipe (PLAN 97, owner Oct 26): along the floor rail, or on the map while it's zoomed out
+  // (at its home scale, nothing to pan); left goes a floor down, right up. The map follows the finger with the next
+  // floor beside it, then slides over, or springs back on a short swipe: the tab Pager's feel (Pager.svelte: a 5 px
+  // lock, mostly sideways, a flick over 0.3 px/ms or a third of the width, a settle from the finger's own speed, a
+  // rubber band at the ends). One finger only: a second one (a pinch) calls it off. ----
+  let slide: HTMLDivElement;
+  let ghost = $state<{ n: number; side: number; style: string } | null>(null); // the floor coming in, beside the map
+  let sw: { x0: number; y0: number; px: number; py: number; dx: number; on: boolean; hist: [number, number][] } | null = null;
+  let sliding = false;
+  const floorBy = (dir: number) => { const i = railFloors.indexOf(cur) + dir; return i >= 0 && i < railFloors.length ? railFloors[i] : null; };
+  function swipeStart(px: number, py: number) { sw = sliding ? null : { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [] }; }
+  /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
+  function swipeMove(px: number, py: number): boolean {
+    if (!sw) return false;
+    const dx = px - sw.x0, dy = py - sw.y0;
+    if (!sw.on) {
+      if (dx * dx + dy * dy < 25) return false;
+      if (Math.abs(dx) <= Math.abs(dy) * 1.2) { sw = null; return false; } // up or down: the map pans as before
+      sw.on = true;
+      x = sw.px; y = sw.py; paint(); // the few pixels it panned before the lock go back
+    }
+    sw.dx = dx;
+    const now = performance.now();
+    sw.hist.push([now, dx]);
+    while (sw.hist.length > 2 && now - sw.hist[0][0] > 90) sw.hist.shift();
+    const n = floorBy(dx < 0 ? -1 : 1), side = dx < 0 ? 1 : -1;
+    if (n != null && (ghost?.n !== n)) ghost = { n, side, style: `width:${plan.style.width || '100%'};transform:${plan.style.transform}` };
+    if (n == null && ghost) ghost = null;
+    slide.style.transition = '';
+    slide.style.transform = `translate3d(${n != null ? dx : (dx / (1 + Math.abs(dx) / 90)) * 0.6}px,0,0)`;
+    return true;
+  }
+  /** the finger let go (or a second came): over to the next floor, or back */
+  function swipeEnd(cancel = false) {
+    const z = sw; sw = null;
+    if (!z?.on) return;
+    const W = stage.clientWidth, h = z.hist;
+    const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
+    const g = ghost;
+    const go = !cancel && !!g && (Math.abs(vx) > 0.3 ? (vx < 0) === (z.dx < 0) : Math.abs(z.dx) > W / 3);
+    if (!go) {
+      if (!g && !cancel) haptic.rigid();
+      slide.style.transition = 'transform 320ms cubic-bezier(.2,.9,.25,1.1)';
+      slide.style.transform = 'translate3d(0,0,0)';
+      setTimeout(() => { if (!sw && !sliding) ghost = null; }, 330);
+      return;
+    }
+    haptic.select();
+    sliding = true;
+    const d = Math.abs(g.side * W + z.dx), v = Math.abs(vx);
+    const ms = Math.round(Math.max(200, Math.min(320, (1.6 * d) / Math.max(v, 1))));
+    const y1 = Math.max(0.25, Math.min(1, (0.25 * v * ms) / Math.max(d, 1)));
+    slide.style.transition = `transform ${ms}ms cubic-bezier(.25,${y1.toFixed(2)},.25,1)`;
+    slide.style.transform = `translate3d(${-g.side * W}px,0,0)`;
+    let done = false;
+    const land = async () => {
+      if (done) return;
+      done = true;
+      halt(); cur = g.n; tiles = []; touched++; pickTiles();
+      await tick();
+      // the floor's own picture under the one that slid in, decoded first: the swap shows nothing
+      await stage.querySelector<HTMLImageElement>('.plan:not(.ghost) img.ov')?.decode().catch(() => {});
+      slide.style.transition = ''; slide.style.transform = '';
+      ghost = null; sliding = false;
+    };
+    slide.addEventListener('transitionend', land, { once: true });
+    setTimeout(land, ms + 400); // no transitionend (a hidden tab): it lands anyway
+  }
+  // the rail: a swipe along it, or a tap on a floor (a swipe's let-go isn't a tap)
+  let railSwiped = false;
+  function railDown(e: PointerEvent) { if (rt.route) return; railSwiped = false; swipeStart(e.clientX, e.clientY); }
+  function railMove(e: PointerEvent) {
+    if (!swipeMove(e.clientX, e.clientY)) return;
+    // held only once it's a swipe: captured from the start, a tap's click would go to the rail, not the floor's button
+    if (!railSwiped) (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    railSwiped = true;
+  }
+  function railUp() { swipeEnd(); }
+  function swipeable(el: HTMLElement) { // listeners in code: the rail stays a plain tablist for the screen reader
+    const on = [['pointerdown', railDown], ['pointermove', railMove], ['pointerup', railUp], ['pointercancel', railUp]] as const;
+    on.forEach(([k, f]) => el.addEventListener(k, f as EventListener));
+    return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
+  }
   function setVer(v: 'main' | 'old') { if (v === ver) return; haptic.select(); ver = v; if (v === 'old' && !cur) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); goHome(); }
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
@@ -485,6 +574,15 @@
   {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
   <div class="stage" bind:this={stage} role="img" aria-label={title} data-noswipe
        onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
+    <div class="slide" bind:this={slide}>
+    {#if ghost}
+      <!-- the floor a swipe brings in, beside the map in the same frame (the floors share one) -->
+      <div class="gw" style:transform="translateX({ghost.side * 100}%)" aria-hidden="true">
+        <div class="plan ghost" style={ghost.style} style:aspect-ratio={ver === 'main' ? `${uniq.w} / ${uniq.h}` : '1'}>
+          {#if ver === 'main'}<div class="sheet"><img class="ov" src="{TILES}f{ghost.n}/o.webp" alt="" draggable="false" /></div>{/if}
+        </div>
+      </div>
+    {/if}
     <div class="plan" bind:this={plan} style:aspect-ratio={ver === 'main' ? `${uniq.w} / ${uniq.h}` : '1'}>
       {#if ver === 'main'}
         <div class="sheet">
@@ -528,6 +626,7 @@
         {@html svg}
       {/if}
     </div>
+    </div>
   </div>
   <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
   <div class="side">
@@ -535,12 +634,12 @@
     <button class="rb glass glass-pill" class:on={ver === 'old'} class:away={!!rt.route} use:glass onclick={() => { haptic.tap(); setVer(ver === 'old' ? 'main' : 'old'); }}
       aria-label={ver === 'old' ? t('map.newPlan') : t('map.oldPlan')} aria-pressed={ver === 'old'}><History size={20} /></button>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
-    <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass role="tablist" aria-label={t('map.floors')}>
+    <div class="rail glass glass-pill" class:away={!!rt.route} inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')}>
       <span class="knob" style:left="calc(4px + {railFloors.indexOf(cur)} * var(--fb))" aria-hidden="true"></span>
       <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
            instead of jumping (owner, Oct 24 video) -->
       {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button role="tab" aria-selected={cur === n} class:on={cur === n}
-        class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => pick(n)}
+        class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => { if (!railSwiped) pick(n); }}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
     <!-- a tap turns the map light or dark at once (owner, Oct 24: the menu it opened looked foreign and lagged) -->
@@ -587,6 +686,9 @@
   .x { position: absolute; z-index: 2; left: 12px; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); width: 38px; height: 38px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-solid); color: var(--text); }
   .stage { position: absolute; inset: max(48px, var(--top)) 0 0; overflow: hidden; touch-action: none; cursor: grab; }
+  .slide { position: absolute; inset: 0; will-change: transform; }
+  .gw { position: absolute; inset: 0; pointer-events: none; }
+  .rail { touch-action: none; }
   .plan { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 1; transform-origin: 0 0; will-change: transform;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     --m-wall: #d70b19; --m-col: #b9d3bd; --m-col-line: #3a4a3d; --m-ink: #1c1c1e; --m-soft: #a1a1a6; --m-part: #a3192b; --m-dot: #c7c7cc; }
