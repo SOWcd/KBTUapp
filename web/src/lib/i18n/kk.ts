@@ -1116,7 +1116,7 @@ const kk: Dict = {
   'app.channel': "Арна",
   'app.channelSub': "жаңалықтар",
   'app.group': "Топ",
-  'app.groupSub': "баг пен идея",
+  'app.groupSub': "тақырыптар: баг, идея",
   'app.codeSub': "ашық код",
   'app.subscribe': "Жазылу",
   'app.join': "Қосылу",

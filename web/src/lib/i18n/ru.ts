@@ -1135,7 +1135,7 @@ const ru = {
   'app.channel': "Канал",
   'app.channelSub': "новости",
   'app.group': "Группа",
-  'app.groupSub': "баги и идеи",
+  'app.groupSub': "темы: баги, идеи",
   'app.codeSub': "открытый код",
   'app.subscribe': "Подписаться",
   'app.join': "Вступить",

@@ -1116,7 +1116,7 @@ const en: Dict = {
   'app.channel': "Channel",
   'app.channelSub': "news",
   'app.group': "Group",
-  'app.groupSub': "bugs and ideas",
+  'app.groupSub': "topics: bugs, ideas",
   'app.codeSub': "open code",
   'app.subscribe': "Subscribe",
   'app.join': "Join",
