@@ -12,7 +12,7 @@
   import { t, i18n, setLang, LANGS, LANG_NAMES } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
-  import { haptic, openLink, tg } from '../../lib/tg';
+  import { haptic, openLink, tg, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
   const me = $derived(session.me);
@@ -37,6 +37,11 @@
     try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
     openLink(/^(ios|macos)$/.test(tg.platform) ? cal.page : 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(cal.feed));
   }
+
+  // the app's icon on the home screen: the row only while it can be added and isn't yet
+  let home = $state('unsupported');
+  void homeScreen.status().then((s) => (home = s));
+  $effect(() => on('homeScreenAdded', () => { home = 'added'; say(t('set.homeDone'), 'rocket_3d'); }));
 
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
@@ -70,6 +75,9 @@
   <div class="rows surface">
     <button class="r" onclick={() => sheets.settings('power')}>
       <span class="lb">{t('power.title')}<i>{t(power.mode === 'auto' ? (power.lite ? 'power.sub.autoOn' : 'power.sub.autoOff') : power.mode === 'on' ? 'power.sub.on' : 'power.sub.off')}</i></span><ChevronRight size={18} /></button>
+    {#if home === 'unknown' || home === 'missed'}
+      <button class="r" onclick={() => { haptic.tap(); homeScreen.add(); }}><span class="lb">{t('set.home')}<i>{t('set.homeSub')}</i></span><ChevronRight size={18} /></button>
+    {/if}
     {#if me?.student}
       <button class="r" onclick={subscribe}><span class="lb">{t('me.calendar')}<i>{t('set.calendarSub')}</i></span><ChevronRight size={18} /></button>
     {/if}

@@ -39,6 +39,8 @@ interface WebApp {
   shareMessage?(id: string, cb?: (ok: boolean) => void): void;
   downloadFile?(p: { url: string; file_name: string }, cb?: (ok: boolean) => void): void;
   requestWriteAccess?(cb?: (ok: boolean) => void): void;
+  addToHomeScreen?(): void;
+  checkHomeScreenStatus?(cb: (s: string) => void): void;
   DeviceOrientation?: { start(p: { refresh_rate?: number }): void; stop(): void; beta: number | null; gamma: number | null };
 }
 
@@ -119,6 +121,17 @@ export function on(event: string, cb: () => void): () => void {
   tgTry((w) => w.onEvent(event, cb));
   return () => tgTry((w) => w.offEvent(event, cb));
 }
+
+/** The app's icon on the phone's home screen (Bot API 8.0): Telegram's own dialog, one tap (owner, Oct 26, wanted an
+ *  arrow to the ••• menu; the API does it without one). Status: 'unsupported' | 'unknown' | 'added' | 'missed'. */
+export const homeScreen = {
+  status: (): Promise<string> => new Promise((r) => {
+    if (!can('8.0')) return r('unsupported');
+    tgTry((w) => w.checkHomeScreenStatus?.(r));
+    setTimeout(() => r('unknown'), 1500); // a client that never answers
+  }),
+  add: () => can('8.0') && tgTry((w) => w.addToHomeScreen?.()),
+};
 
 export const backButton = {
   show: () => can('6.1') && tgTry((w) => w.BackButton.show()),
