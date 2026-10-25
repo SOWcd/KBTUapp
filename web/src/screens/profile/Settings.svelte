@@ -6,7 +6,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import { session } from '../../lib/state/session.svelte';
-  import { data, phrase } from '../../lib/state/data.svelte';
+  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, type Settings } from '../../lib/api';
@@ -56,6 +56,17 @@
     const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 707 123 45 67', max: 16, tel: true });
     if (p) await savePhone(p, t('pd.saved'));
   }
+  // the city from the club's roster (PLAN 95): off the profile, or gone
+  async function cityHidden(on: boolean) {
+    try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
+    catch { say(t('common.error'), 'pleading_face_3d'); }
+  }
+  async function dropCity() {
+    haptic.tap();
+    if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
+    try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); }
+    catch { say(t('common.error'), 'pleading_face_3d'); }
+  }
   async function dropPhone() {
     haptic.tap();
     if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
@@ -101,13 +112,21 @@
     {/if}
   </div>
 
-  {#if me?.student?.phone}
+  {#if me?.student?.phone || me?.city}
     <h2 class="sec">{t('pd.title')}</h2>
     <div class="rows surface">
-      <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{me.student.phone.startsWith('+7') ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
-        <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
+      {#if me.student?.phone}
+        <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{me.student.phone.startsWith('+7') ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
+          <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
+      {/if}
+      {#if me.city}
+        <div class="r"><span class="lb">{t('pd.city')}<i>{me.city.name}</i></span>
+          <button class="x" aria-label={t('pd.del')} onclick={dropCity}><Trash2 size={18} /></button></div>
+        <label class="r switch"><span><b>{t('pd.cityHide')}</b><i>{t('pd.cityNote')}</i></span>
+          <input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
+      {/if}
     </div>
-    <p class="note">{t('pd.note')}</p>
+    {#if me.student?.phone}<p class="note">{t('pd.note')}</p>{/if}
   {/if}
 
   <div class="rows surface about">

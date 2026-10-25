@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -14,7 +14,7 @@ export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
-  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null }): Promise<Me>;  // phone: null deletes it
+  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null; city?: null; cityHidden?: boolean }): Promise<Me>;  // phone, city: null deletes it
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back
   /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
@@ -182,7 +182,11 @@ export interface Api {
   addOrgChat(org: Id, link: string): Promise<StudioChat[]>; // @name, t.me link or invite link; bad_input notchat, conflict taken / limit, unavailable
   mainOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;  // a public channel only
   dropOrgChat(org: Id, chat: Id): Promise<StudioChat[]>;
-  mirrorOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>; // the main channel's posts in the club's news
+  mirrorOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>;
+  rosterSeen(): Promise<void>;                            // PLAN 95: the join toasts shown
+  rosterClaim(row: Id): Promise<void>;                    // "Yes, it's me" on a row under another name
+  rosterRequests(): Promise<RosterRequest[]>;             // the claims I confirm (President; DMP for a club without one)
+  rosterDecide(row: Id, ok: boolean): Promise<void>; // the main channel's posts in the club's news
   registry(back?: number): Promise<RegistryOrg[]>;       // DMP Head+ and the admin (§4.13); a month `back` months ago (0–12)
   registryRoster(org: Id): Promise<RosterMember[]>;
   /** DMP Head+ (and the admin) give a club the ✓ or take it back; its President hears it from the bot */

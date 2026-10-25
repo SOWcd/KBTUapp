@@ -47,6 +47,7 @@
   const vice = $derived(may(m, 'team'));  // applications
   const casting = $derived(may(m, 'casting'));  // recruitment rounds (PLAN "Casting")
   let round = $state<Round | null>(null);
+  let claims = $state(0);  // DMP's list: claims waiting for this club's President (refreshClaims, below)
   const refreshRound = () => { const o = m?.org.id; if (o && casting) api.round(o).then((x) => { if (m?.org.id === o) round = x; }).catch(() => {}); else round = null; };
   $effect(() => { void data.rev; void m?.org.id; void casting; refreshRound(); });
 
@@ -105,7 +106,7 @@
   let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
-  const todo = $derived(alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
+  const todo = $derived(claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
   // DMP picked (owner, Oct 26: DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -118,6 +119,10 @@
     catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'pleading_face_3d'); }
     finally { exporting = false; }
   }
+  // DMP's list (PLAN 95): students who say they're the one listed under another name, for the President (DMP: clubs
+  // with none) to confirm
+  const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests().then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
+  $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
 
@@ -149,6 +154,9 @@
     {#if todo}
       <h2 class="sec">{t('studio.todo')}</h2>
       <div class="todo surface">
+        {#if claims}
+          <button onclick={() => sheets.rosterRequests(refreshClaims)}><UsersRound size={20} /><span class="tx"><b class="ellipsis">{t('ro.reqTitle')}</b></span><b class="count">{claims}</b><ChevronRight size={18} /></button>
+        {/if}
         {#if alone}
           <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>
           <button class="me" onclick={() => iAmPres(m.org.id)}>{t('studio.todoPresMe')}</button>

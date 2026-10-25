@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
 import type { ShelfItem } from '../awards';
 import type { StoryGroup } from '../posts';
 
@@ -42,6 +42,10 @@ export const sheets = {
   manage: (_id: Id) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (_org: Id) => {},
+  /** the clubs' rosters (PLAN 95): the welcome before the KBTU sign-in, a row under another name, the claims I confirm */
+  rosterWelcome: (_spots: RosterSpot[]) => {},
+  rosterAsk: (_row: RosterSpot & { id: Id; dept: string | null }) => {},
+  rosterRequests: (_ondone?: () => void) => {},
   /** one memo item (a room, guests...) without an event, dated from the memo's week `from`; `oninsert` takes its text */
   /** an event's volunteer applications (the organizers) */
   volunteers: (_id: Id, _need: number) => {},

@@ -116,6 +116,12 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
         if not o or not p or not one(con, "SELECT 1 FROM join_requests WHERE org_id = ? AND user_id = ? AND status = 'pending'", int(ref[1]), int(ref[2])):
             return None
         return (*texts.bot_message(lang, kind, org=o["name"], name=logic.short_name(p)), f"jr_{ref[1]}")
+    if kind == "roster_claim":  # rq:<row>:<student>, to the club's President (or DMP): it's them under another name?
+        r = one(con, "SELECT r.title, o.name FROM roster_pending r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.claimed_by = ?", int(ref[1]), int(ref[2]))
+        p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))
+        if not r or not p:
+            return None
+        return (*texts.bot_message(lang, kind, org=r["name"], name=logic.short_name(p)), "rq")
     if kind == "join_decided":  # jr:<request>:yes|no, to the applicant
         r = one(con, "SELECT j.org_id, o.name FROM join_requests j JOIN orgs o ON o.id = j.org_id WHERE j.id = ?", int(ref[1]))
         if not r:

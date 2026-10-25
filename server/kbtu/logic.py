@@ -822,6 +822,9 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
 
 
 def me(con, v: Viewer) -> dict:
+    from . import roster
+    if v.student:
+        roster.match(con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms (owner, Oct 20)
@@ -867,7 +870,31 @@ def me(con, v: Viewer) -> dict:
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
         "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too (review)
+        "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
+        "roster": _roster_mine(con, v.id),
     }
+
+
+def roster_requests(con, v: Viewer) -> list[dict]:
+    """Claims I confirm (roster.requests) with the club and the student as the app shows them."""
+    from . import roster
+    out = []
+    for r in roster.requests(con, v):
+        o, p = one(con, "SELECT * FROM orgs WHERE id = ?", r["org"]), one(con, PERSON + " WHERE u.id = ?", r["user"])
+        if o and p:
+            out.append({**r, "org": org_ref(con, o), "person": person_ref(p)})
+    return out
+
+
+def _roster_mine(con, uid: int) -> dict | None:
+    """roster.mine with the clubs as the app shows them."""
+    from . import roster
+    got = roster.mine(con, uid)
+    if not got:
+        return None
+    orgs = {o["id"]: org_ref(con, o) for o in rows(con, "SELECT * FROM orgs WHERE id IN (" + ",".join(
+        str(int(x["org"])) for k in got for x in got[k]) + ")")}
+    return {k: [{**x, "org": orgs[x["org"]]} for x in got[k] if x["org"] in orgs] for k in got}
 
 
 # the clubs with a badge of their own (web: awards.ts `skinned`)
@@ -949,6 +976,14 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         if patch["phone"] is not None and not phone:
             raise ApiError("bad_input")
         con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
+    if "city" in patch and patch["city"] is not None:
+        raise ApiError("bad_input")  # it came from the club's roster (PLAN 95): it can only be deleted
+    if "city" in patch:  # Settings → My data
+        sets["city"] = None
+    if "cityHidden" in patch:  # off my profile, kept for me
+        if not isinstance(patch["cityHidden"], bool):
+            raise ApiError("bad_input")
+        sets["city_hidden"] = int(patch["cityHidden"])
     if sets:
         con.execute(f"UPDATE users SET {', '.join(c + ' = ?' for c in sets)} WHERE id = ?", (*sets.values(), v.id))
     if "nRemind" in patch:  # the switch acts at once on reminders already queued: off drops them, on arms the upcoming ones
@@ -1146,7 +1181,7 @@ _DEL_GONE = {
     ("students", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("friend_links", "user_id"), ("achievement_grants", "user_id"),
-    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"),
+    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
@@ -3108,7 +3143,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
     if not p or not s:
         raise ApiError("not_found")
-    u = one(con, "SELECT bio, showcase, show_going, card_no, is_founder, tg_username, skin_pick, skin_org FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT bio, showcase, show_going, card_no, is_founder, tg_username, skin_pick, skin_org, city, city_hidden FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
     # their @username, to their own club's team only (§3: the team sees it in its roster anyway): "Message on Telegram"
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
@@ -3131,6 +3166,7 @@ def person(con, v: Viewer, uid: int) -> dict:
                   WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid)] if close else []
     return {
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
+        "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
         "attended": len(attended(con, uid)),
         # the role shows only to the club's own team (owner, Oct 15): outside, just the club
         "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, "title": m["title"] if m["mine"] else None} for m in rows(con, """

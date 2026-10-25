@@ -38,7 +38,7 @@ export interface HeroData {
   name: string;
   status: string | null;   // the one mark by the name (Creator for now; DMP comes with the status field)
   title: string;           // the lanyard line: the status, else the top club title, else "Student"
-  line: string;            // course · school
+  line: string;            // course · school · city
   bio: string;
   no: string;              // the card number, zero-padded: the order of first KBTU sign-in; the Creator's is 00000 (owner, Oct 5)
   loaded: boolean;         // a card the app only partly knows yet (attended < 0): no counts rather than wrong zeros
@@ -73,7 +73,7 @@ export function hero(p: PersonCard): HeroData {
     name: p.name,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
     title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, top.title)} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
-    line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school)].filter(Boolean).join(' · '),
+    line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95
     bio: p.bio,
     no: p.no == null ? '—' : String(p.no).padStart(5, '0'),
     // the shelf under the badge replaced "0 events · 1 award · 2 clubs" (owner, Oct 14: zeros read as a reproach, the

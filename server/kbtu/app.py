@@ -31,7 +31,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, msauth, receipt, texts, video
+from . import auth, bot, casting, config, db, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -298,6 +298,27 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # linked at once, no code back from the app: a forwarded sign-in link is caught by hand and unlinked (owner, Oct 24)
             logic.ms_apply(con, uid, who)
             return {"ok": True}
+
+    # ------------------------------------------------------------ the clubs' rosters (PLAN 95, roster.py)
+
+    @app.post("/api/roster/seen", status_code=204)
+    def roster_seen(con=Depends(conn), v: Viewer = Depends(viewer)):
+        roster.seen(con, v.id)
+
+    @app.post("/api/roster/{rid}/claim", status_code=204)
+    def roster_claim(rid: int, con=Depends(conn), v: Viewer = Depends(viewer)):
+        logic.need_student(v)
+        roster.claim(con, v.id, rid)
+
+    @app.get("/api/roster/requests")
+    def roster_requests(con=Depends(conn), v: Viewer = Depends(viewer)):
+        return logic.roster_requests(con, v)
+
+    @app.post("/api/roster/requests/{rid}", status_code=204)
+    def roster_decide(rid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):
+        if not isinstance(body.get("ok"), bool):
+            raise ApiError("bad_input")
+        roster.decide(con, v, rid, body["ok"])
 
     @app.get("/api/me/schedule")
     def my_schedule(con=Depends(conn), v: Viewer = Depends(viewer)):
