@@ -42,7 +42,8 @@ export function goTab(tab: Tab): void {
  *  capsule's then, when the overlay has one of its own (the map's switch; the dark QR and ticket). `icon`: a small mark
  *  before the title for a full-screen mode (owner, Oct 7: the QR, the map, the scanner, settings). `byUser`: the close came
  *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any> }
+/** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 

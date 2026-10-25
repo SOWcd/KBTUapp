@@ -192,7 +192,7 @@
   });
 
   // ---- Back button: closes the top overlay ----
-  $effect(() => { if (overlays.some((o) => !o.closing)) backButton.show(); else backButton.hide(); });
+  $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
 
   // ---- greeting ----
   function greet() {

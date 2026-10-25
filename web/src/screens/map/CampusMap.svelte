@@ -380,7 +380,8 @@
       return;
     }
     const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }, far = reach(iris.at);
-    panel.animate({ clipPath: [iris(30), iris(far)] }, o);
+    // Telegram's Close turns into Back once the circle is open, not at the tap (owner, PLAN 80)
+    panel.animate({ clipPath: [iris(30), iris(far)] }, o).finished.catch(() => {}).finally(() => (overlay.holdBack = false));
     // the map breathes out to meet you: a touch larger at first, it settles as the circle opens
     stage.animate({ transform: ['scale(1.08)', 'none'], transformOrigin: [`${iris.at.x}px ${iris.at.y - stage.offsetTop}px`, `${iris.at.x}px ${iris.at.y - stage.offsetTop}px`] }, o);
     // the page under it steps back (iOS's way): it stays put under the map, so it's clear the map came over it
@@ -399,6 +400,7 @@
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
     return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap });
   })();
+  untrack(() => { if (iris) overlay.holdBack = true; }); // until the circle is open (appear); set before the first frame
   // the map's own capsule, copied whenever it changes (the floor), for the way back: closing, the real one is the
   // old page's at once, the copy shows inside the shrinking circle
   let mapCap: CapCopy | null = null;
