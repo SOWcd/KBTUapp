@@ -441,6 +441,8 @@ export interface Post {
   /** a post of the club's Telegram channel (PLAN 86 part 2): Telegram's views and reactions instead of ours, comments
    *  there; `media` a video or a file only linked to; a tap opens the post in Telegram */
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
+  /** a channel's post in the other languages: the channel's own (folded posts, its comments) or our AI's; applied by api/client.ts */
+  i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; body?: string }>>; orig?: Record<string, string>;
 }
 
 /** The composer's chips (the UI names them per language). Older posts may carry a free-text tag. */

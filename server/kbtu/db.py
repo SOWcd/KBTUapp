@@ -562,6 +562,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX tg_post_msgs_by_post ON tg_post_msgs(post_id);
     CREATE INDEX tg_post_msgs_by_album ON tg_post_msgs(channel, grouped);"""),
+    # a channel's post in three languages (owner, Oct 26): schools post kk/ru/en as separate posts (folded into one) or
+    # write the translations as the channel in the post's comments; only without either, our AI (ai.py). i18n holds
+    # the other languages, lang the source's (NULL: none yet), tr_by where they came from ('tg' official, 'ai');
+    # tg_post_msgs.lang: the language a folded message gave its post (NULL: the post's own text)
+    (73, """ALTER TABLE posts ADD COLUMN i18n TEXT;
+    ALTER TABLE posts ADD COLUMN lang TEXT;
+    ALTER TABLE posts ADD COLUMN tr_by TEXT;
+    ALTER TABLE posts ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tg_post_msgs ADD COLUMN lang TEXT;"""),
 ]
 
 

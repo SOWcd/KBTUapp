@@ -20,6 +20,7 @@ log = logging.getLogger("kbtu.userbot")
 JOIN_GAP = 240          # one join or leave every 4 minutes at most (fresh joins in a row get an account limited)
 SWEEP_GAP = 1800        # every 30 minutes: missed posts, edits and deletions, views and reaction counts
 RETRY = 60              # after a dropped connection
+COMMENT_GAP = 7200      # a post's comments looked at again after 2 hours at most
 
 
 def missing(cfg: Config) -> str | None:
@@ -82,6 +83,7 @@ class Mirror:
 
     def __init__(self, cfg: Config, client, con) -> None:
         self.client, self.con, self.root = client, con, Path(cfg.db_path).resolve().parent / "media"
+        self.asked: dict[tuple[int, int], float] = {}  # (channel, post): when its comments were last looked at
 
     def listen(self) -> None:
         from telethon import events
@@ -198,6 +200,25 @@ class Mirror:
         for m in reversed(picked):
             await self.guard(self.post(m))
 
+    async def translations(self, ent, channel: int) -> None:
+        """A post's translations written by the channel itself in its comments (owner, Oct 26): the replies are read in
+        memory, those sent as the channel kept, everyone else's dropped at once: never stored, never logged. Each post
+        at most every COMMENT_GAP, for mirror.COMMENT_DAYS."""
+        from telethon.errors import FloodWaitError, RPCError
+        from telethon.tl.types import PeerChannel
+        for mid in mirror.to_comment(self.con, channel):
+            if self.asked.get((channel, mid), 0) > time.time() - COMMENT_GAP:
+                continue
+            self.asked[(channel, mid)] = time.time()
+            try:
+                own = [m.message async for m in self.client.iter_messages(ent, reply_to=mid, limit=50)
+                       if isinstance(m.from_id, PeerChannel) and m.from_id.channel_id == channel and m.message]
+            except FloodWaitError:
+                raise
+            except RPCError:
+                continue  # no discussion group, comments off
+            mirror.comments(self.con, channel, mid, own)
+
     async def sweeps(self) -> None:
         """Every half hour, per mirrored channel: the posts missed while away, then the last week's posts again (views,
         reactions, an edit missed; one Telegram no longer has was deleted)."""
@@ -216,6 +237,7 @@ class Mirror:
                     async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50):
                         if m.date.timestamp() >= since:
                             await self.guard(self.post(m))
+                    await self.translations(ent, channel)
                     ids = mirror.recent(self.con, channel)
                     for i in range(0, len(ids), 100):
                         chunk = ids[i:i + 100]

@@ -13,12 +13,15 @@ import json
 import re
 from dataclasses import dataclass, field
 
+from . import ai
 from .logic import now, one, rows, tx
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
 FIRST_DAYS = 30           # ... of the last 30 days
 COUNT_DAYS = 7            # views and reactions refreshed for the posts of the last week
 TITLE, BODY = 120, 2000   # what an app post holds (logic.create_post)
+FOLD_GAP = 1800           # the same announcement in another language: posted within half an hour (SITE posts kk/ru/en)
+COMMENT_DAYS = 2          # how long the channel's own comments are looked at for a post's translations
 
 
 @dataclass
@@ -135,9 +138,35 @@ def take(con, channel: int, m: Msg) -> int | None:
     name = one(con, "SELECT username FROM tg_channels WHERE id = ?", channel)["username"]
     title = (one(con, "SELECT title FROM chats WHERE org_id = ? AND main = 1", oid) or {"title": name})["title"]
     with tx(con):
-        had = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
+        had = one(con, "SELECT post_id, lang FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
         album = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND grouped = ?", channel, m.grouped) if m.grouped and not had else None
         pid = (had or album)["post_id"] if (had or album) else None
+        lang = ai.lang_of(m.text) if m.text.strip() else None
+        if had and had["lang"]:  # a translation folded into another post: its edit is that language's text
+            if m.text.strip():
+                _set_tr(con, pid, had["lang"], _split(m.text, title))
+            _counted(con, channel, pid, m)
+            return pid
+        if pid is None and lang and (into := _fold_target(con, channel, m.date, lang)):
+            # the same announcement in another language: one post, this text as its translation
+            con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, ?)", (channel, m.id, into, m.grouped, lang))
+            _set_tr(con, into, lang, _split(m.text, title))
+            if m.photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
+                con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (_photo(con, m.photo), into))
+            _counted(con, channel, into, m)
+            return into
+        if album and lang and not one(con, "SELECT 1 FROM posts WHERE id = ? AND body != ''", pid) and _untitled(con, pid, title) \
+                and (into := _fold_target(con, channel, m.date, lang, but=pid)):
+            # an album's caption came after its photos: the whole album is a translation of an earlier post
+            con.execute("UPDATE tg_post_msgs SET post_id = ?, lang = ? WHERE post_id = ?", (into, lang, pid))
+            con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, ?)", (channel, m.id, into, m.grouped, lang))
+            gone_photo = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)["photo_file_id"]
+            if gone_photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
+                con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (gone_photo, into))
+            con.execute("DELETE FROM posts WHERE id = ?", (pid,))  # made a moment ago, nobody saw it yet
+            _set_tr(con, into, lang, _split(m.text, title))
+            _counted(con, channel, into, m)
+            return into
         if pid is None:
             t, b = _split(m.text, title)
             pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, comments_on, created_at,
@@ -152,6 +181,8 @@ def take(con, channel: int, m: Msg) -> int | None:
                     sets.update(title=t, body=b)
                     if had:
                         sets["edited_at"] = now()
+                    if p["tr_by"] == "ai":  # our translation was of the old text: done again
+                        sets.update(i18n=None, lang=None, tr_by=None, ai_tries=0)
             if m.photo and not p["photo_file_id"]:
                 sets["photo_file_id"] = _photo(con, m.photo)
             if m.media and not p["tg_media"]:
@@ -160,11 +191,75 @@ def take(con, channel: int, m: Msg) -> int | None:
                 con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), pid))  # keys from above
         if not had:
             con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped) VALUES (?, ?, ?, ?)", (channel, m.id, pid, m.grouped))
-        # an album's counts are its first message's (the one its link opens); Telegram keeps them per message
-        if (c := _counts(m)) and not one(con, "SELECT 1 FROM tg_post_msgs WHERE post_id = ? AND msg_id < ?", pid, m.id):
-            con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in c)} WHERE id = ?", (*c.values(), pid))  # keys from _counts
-        con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (m.id, channel))
+        _counted(con, channel, pid, m)
     return pid
+
+
+def _counted(con, channel: int, pid: int, m: Msg) -> None:
+    """Views and reactions from the post's first message (the one its link opens; Telegram keeps them per message: an
+    album's other pieces, a folded translation), and the channel's newest post taken."""
+    if (c := _counts(m)) and not one(con, "SELECT 1 FROM tg_post_msgs WHERE post_id = ? AND msg_id < ?", pid, m.id):
+        con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in c)} WHERE id = ?", (*c.values(), pid))  # keys from _counts
+    con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (m.id, channel))
+
+
+def _untitled(con, pid: int, fallback: str) -> bool:
+    return one(con, "SELECT title FROM posts WHERE id = ?", pid)["title"] == fallback[:TITLE]
+
+
+def _langs(p) -> tuple[str, set[str]]:
+    """A post's own language and the ones the channel itself gave it (folded posts, its comments); our AI's don't count."""
+    own = ai.lang_of(f"{p['title']} {p['body']}")
+    tr = set(json.loads(p["i18n"])) if p["i18n"] and p["tr_by"] == "tg" else set()
+    return own, tr | {own}
+
+
+def _fold_target(con, channel: int, date: int, lang: str, but: int | None = None) -> int | None:
+    """The channel's post this one translates: posted within FOLD_GAP of it, up, and without this language yet
+    (two posts in one language are two announcements); the nearest in time."""
+    for p in rows(con, """SELECT * FROM posts WHERE tg_channel = ? AND hidden_at IS NULL AND id IS NOT ? AND abs(created_at - ?) <= ?
+            ORDER BY abs(created_at - ?)""", channel, but, date, FOLD_GAP, date):
+        if lang not in _langs(p)[1]:
+            return p["id"]
+    return None
+
+
+def _set_tr(con, pid: int, lang: str, tb: tuple[str, str]) -> None:
+    """One language of a post from the channel itself; an AI translation it had is dropped (official only, owner)."""
+    p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
+    have = json.loads(p["i18n"]) if p["i18n"] and p["tr_by"] == "tg" else {}
+    have[lang] = {"title": tb[0], "body": tb[1]}
+    con.execute("UPDATE posts SET i18n = ?, lang = ?, tr_by = 'tg' WHERE id = ?",
+                (json.dumps(have, ensure_ascii=False), _langs(p)[0], pid))
+
+
+def to_comment(con, channel: int) -> list[int]:
+    """Posts that may still get their translations as the channel's own comments: a few days old at most, past the
+    folding half hour, one language short at least. The message the comments hang under (the post's own first one)."""
+    out = []
+    for p in rows(con, """SELECT p.*, (SELECT MIN(msg_id) FROM tg_post_msgs t WHERE t.post_id = p.id AND t.lang IS NULL) AS first
+            FROM posts p WHERE p.tg_channel = ? AND p.hidden_at IS NULL AND p.created_at BETWEEN ? AND ?""",
+                      channel, now() - COMMENT_DAYS * 86400, now() - FOLD_GAP):
+        if p["first"] and len(_langs(p)[1]) < len(ai.LANGS) and (p["title"].strip() or p["body"].strip()):
+            out.append(p["first"])
+    return out
+
+
+def comments(con, channel: int, msg_id: int, texts: list[str]) -> int:
+    """The channel's own comments under its post (only those: the caller drops everyone else's unread): one in a language
+    the post lacks is that language's text. How many languages it gave."""
+    n = 0
+    with tx(con):
+        t = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND msg_id = ? AND lang IS NULL", channel, msg_id)
+        if not t:
+            return 0
+        for text in texts:
+            p = one(con, "SELECT * FROM posts WHERE id = ?", t["post_id"])
+            lang = ai.lang_of(text) if text.strip() else None
+            if lang and lang not in _langs(p)[1]:
+                _set_tr(con, p["id"], lang, _split(text, p["title"]))
+                n += 1
+    return n
 
 
 def gone(con, channel: int, ids: list[int]) -> list[int]:
@@ -172,6 +267,12 @@ def gone(con, channel: int, ids: list[int]) -> list[int]:
     The posts taken down."""
     down = []
     with tx(con):
+        for t in rows(con, f"SELECT post_id, lang FROM tg_post_msgs WHERE channel = ? AND lang IS NOT NULL AND msg_id IN ({','.join('?' * len(ids))})",
+                      channel, *ids) if ids else []:
+            p = one(con, "SELECT i18n FROM posts WHERE id = ?", t["post_id"])
+            left = {k: x for k, x in (json.loads(p["i18n"]) if p["i18n"] else {}).items() if k != t["lang"]}
+            con.execute("UPDATE posts SET i18n = ?, lang = CASE WHEN ? THEN lang END, tr_by = CASE WHEN ? THEN tr_by END WHERE id = ?",
+                        (json.dumps(left, ensure_ascii=False) if left else None, bool(left), bool(left), t["post_id"]))
         for pid in {r[0] for r in rows(con, f"SELECT post_id FROM tg_post_msgs WHERE channel = ? AND msg_id IN ({','.join('?' * len(ids))})",
                                            channel, *ids)} if ids else set():
             con.execute(f"DELETE FROM tg_post_msgs WHERE channel = ? AND post_id = ? AND msg_id IN ({','.join('?' * len(ids))})", (channel, pid, *ids))
@@ -193,3 +294,8 @@ def shape(p) -> dict | None:
     if not p["tg_url"]:
         return None
     return {"url": p["tg_url"], "views": p["tg_views"], "reactions": json.loads(p["tg_reactions"]) if p["tg_reactions"] else [], "media": p["tg_media"]}
+
+
+def i18n(p) -> dict | None:
+    """A post's other languages for the app (api/client.ts localize: title and body), official or our AI's."""
+    return {k: {"title": x.get("title", ""), "body": x.get("body", "")} for k, x in json.loads(p["i18n"]).items()} if p["i18n"] else None
