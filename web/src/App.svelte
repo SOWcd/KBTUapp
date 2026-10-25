@@ -29,7 +29,6 @@
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
-  import BookUser from '@lucide/svelte/icons/book-user';
   import Flag from '@lucide/svelte/icons/flag';
   import Users from '@lucide/svelte/icons/users';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -81,14 +80,13 @@
   // Studio is for club teams only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
-  const registryPage = () => import('./screens/dmp/Registry.svelte');
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
     const s = session.me?.student;
     if (s && !session.me?.deleteAt && !['staff', 'admin', CONSENT_VERSION].includes(s.consent) && !overlays.length) sheets.consent();
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
-  const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); if (session.me.oversee) void registryPage(); };
+  const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
@@ -141,15 +139,14 @@
   const staff = $derived(!!session.me?.memberships.some((m) => m.role !== 'member'));
   // tab 2 is the clubs' tab for everyone (owner, Oct 24; PLAN 46): the catalogue first (joining and following live there),
   // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
-  const tab2Label = $derived(session.me?.oversee ? t('tab.dmp') : member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
+  const tab2Label = $derived(member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
 
-  // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds (DMP staff have the registry
-  // where the others have Studio, and no Team page)
-  type ClubPage = 'clubs' | 'registry' | 'studio' | 'club' | 'team';
-  const clubPages = $derived<ClubPage[]>(member && session.me?.oversee ? ['clubs', 'registry', 'studio'] // DMP staff: the registry takes the Team page's place (§4.13)
-    : member ? ['clubs', staff ? 'studio' : 'club', 'team'] : ['clubs']);
+  // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds. DMP is an org like any other
+  // (owner, Oct 26): its staff have the same three pages, and its registry sits in Studio with DMP picked
+  type ClubPage = 'clubs' | 'studio' | 'club' | 'team';
+  const clubPages = $derived<ClubPage[]>(member ? ['clubs', staff ? 'studio' : 'club', 'team'] : ['clubs']);
   const CLUB_CAP: Record<ClubPage, () => CapPage> = {
-    clubs: () => ({ label: t('page.clubs'), icon: Shapes }), registry: () => ({ label: t('page.registry'), icon: BookUser }),
+    clubs: () => ({ label: t('page.clubs'), icon: Shapes }),
     studio: () => ({ label: t('tab.studio'), icon: LayoutDashboard }), club: () => ({ label: t('tab.club'), icon: Flag }), team: () => ({ label: t('page.team'), icon: Users }),
   };
   /** Tab 2 on the first of these pages it has (else its catalogue). */
@@ -417,7 +414,6 @@
             {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<News />{/if}
           {:else if tab === 'club'}
             {#if !member || i === 0}<Clubs />
-            {:else if session.me?.oversee}{#if i === 1}{#await registryPage() then m}<m.default />{/await}{:else}{#await studioPage() then m}<m.default />{/await}{/if}
             {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
           {:else}
             {#if i === 0}<Friends />{:else if i === 1}<Me />{:else}<Settings />{/if}

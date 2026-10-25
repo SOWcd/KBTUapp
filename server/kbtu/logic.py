@@ -841,8 +841,9 @@ def me(con, v: Viewer) -> dict:
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
-        "memberships": [{"org": org_ref(con, m), "role": m["role"], "title": m["title"], "rights": _ordered(_rights_from(m["role"], m["rights"]))}
-                        for m in members],
+        # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked (owner, Oct 26)
+        "memberships": [{"org": org_ref(con, m), "role": m["role"], "title": m["title"], "rights": _ordered(_rights_from(m["role"], m["rights"])),
+                         "oversee": bool(m["can_oversee"] and m["role"] != "member")} for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "reports": sum(_about(con, t, i) != v.id for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"))

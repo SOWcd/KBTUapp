@@ -1,7 +1,7 @@
 <script lang="ts">
   // DMP's clubs registry (SPEC §4.13): every club with its live numbers for this month and its President — instead of
   // asking in chats who leads what and instead of monthly reports. A club opens its roster; a name or a student ID finds a
-  // member and their clubs; CSV sends every roster into my chat with the bot. A page in DMP's tab; a sheet for the admin.
+  // member and their clubs; CSV sends every roster into my chat with the bot. A sheet, from Studio (DMP) and the Admin panel.
   import Search from '@lucide/svelte/icons/search';
   import FileDown from '@lucide/svelte/icons/file-down';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';

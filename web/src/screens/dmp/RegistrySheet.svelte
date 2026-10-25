@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The registry for the admin (who isn't DMP staff): the same page in a tall sheet, opened from the Admin panel.
+  // The registry in a full sheet: from Studio with DMP picked (owner, Oct 26), and from the Admin panel for the admin.
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import Sheet from '../../ui/Sheet.svelte';

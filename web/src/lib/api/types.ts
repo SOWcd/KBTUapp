@@ -163,7 +163,7 @@ export interface StudentProfile {
 /** A club role's rights (SPEC §2): door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile';
-export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; rights?: Right[] }  // rights: in my own memberships
+export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; rights?: Right[]; oversee?: boolean }  // rights, oversee (DMP staff there): in my own memberships
 
 export interface Me {
   id: Id;
@@ -181,7 +181,7 @@ export interface Me {
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
-  oversee: boolean;             // DMP staff: gets the DMP tab
+  oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   bio: string;
   showcase: string[];
   settings: Settings;
