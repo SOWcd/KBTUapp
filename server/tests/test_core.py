@@ -4116,6 +4116,79 @@ def test_org_chats(env, monkeypatch):
     assert c.get("/api/orgs/2", headers=tma(82)).json()["chats"] == [] and len(c.get("/api/chats", headers=tma(82)).json()["all"]) == 1
 
 
+def _chats_club(env, monkeypatch):
+    """A club (Pres 80, Vice 81, member 82), the admin 89, a moderator 88, and t.me pages made up for the chats tests."""
+    import dataclasses
+    from kbtu import media
+    c, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({89}))))
+    pres, vice, ali = (login(c, 80 + i, n) for i, n in enumerate(("pres", "vice", "ali")))
+    login(c, 89, "admin"), login(c, 88, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 88")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (vice["id"], "vice"), (ali["id"], "member")])
+    pages = {"https://t.me/+Secret123": {"title": "Open Mic Team", "members": 14, "channel": False},
+             "https://t.me/+Waiting99": {"title": "Some Closed Group", "members": 40, "channel": False},
+             "https://t.me/kbtu_talk": {"title": "KBTU Talk", "members": 3000, "channel": False}}
+    async def peek(http, url):
+        return {"ok": True, "image": None, **pages.get(url, {"title": None, "members": None})}
+    monkeypatch.setattr(media, "chat_peek", peek)
+    con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+    return c, con
+
+
+def test_org_closed_chat_stays_off_catalog(env, monkeypatch):
+    """Review finding 1: a club's closed chat (an invite link) never reaches the catalog: a student's suggestion and the
+    admin's add are refused as "already in the app"; the moderator's list says whose a waiting chat is."""
+    c, con = _chats_club(env, monkeypatch)
+    secret = c.post("/api/orgs/1/chats", headers=tma(81), json={"link": "https://t.me/+Secret123"}).json()[0]["id"]
+    assert c.post("/api/chats/suggest", headers=tma(82), json={"link": "t.me/+Secret123"}).json()["status"] == "org"
+    r = c.post("/api/admin/chats", headers=tma(89), json={"url": "https://t.me/+Secret123", "kind": "group"})
+    assert r.status_code == 409 and r.json()["message"] == "org"
+    assert con.execute("SELECT status FROM chats WHERE id = ?", (secret,)).fetchone()[0] == "org"
+    assert c.get("/api/chats", headers=tma(82)).json()["all"] == []
+    # a public chat of the club may be suggested: it waits with its owner shown, and comes back owned when approved
+    c.post("/api/orgs/1/chats", headers=tma(81), json={"link": "@kbtu_talk"})
+    con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
+    assert c.post("/api/chats/suggest", headers=tma(82), json={"link": "@kbtu_talk"}).json()["status"] == "sent"
+    waiting = c.get("/api/chats", headers=tma(88)).json()["pending"]
+    assert [(x["title"], x["org"]["slug"]) for x in waiting] == [("KBTU Talk", "mic")]
+    assert c.post(f"/api/admin/chats/{waiting[0]['id']}/approve", headers=tma(88)).json()["org"]["slug"] == "mic"
+
+
+def test_org_drop_closed_pending_chat(env, monkeypatch):
+    """Review finding 2: a closed chat waiting for the catalog and given to the club, when the club removes it, goes:
+    never left waiting with nobody's name (its invite link would land in the catalog)."""
+    c, con = _chats_club(env, monkeypatch)
+    assert c.post("/api/chats/suggest", headers=tma(82), json={"link": "t.me/+Waiting99"}).json()["status"] == "sent"
+    cid = c.post("/api/orgs/1/chats", headers=tma(89), json={"link": "t.me/+Waiting99"}).json()[0]["id"]   # the admin gives it to the club
+    assert tuple(con.execute("SELECT status, org_id FROM chats WHERE id = ?", (cid,)).fetchone()) == ("pending", 1)
+    assert c.delete(f"/api/orgs/1/chats/{cid}", headers=tma(81)).json() == []
+    assert con.execute("SELECT 1 FROM chats WHERE id = ?", (cid,)).fetchone() is None
+    assert "pending" in c.get("/api/chats", headers=tma(88)).json() and c.get("/api/chats", headers=tma(88)).json()["pending"] == []
+
+
+def test_org_catalog_chat_is_the_admins_to_give(env, monkeypatch):
+    """Review finding 3: a catalog chat nobody owns isn't a Vice's to take (conflict catalog: ask the app's team); the
+    admin gives it, and a claimed chat counts toward the club's 12."""
+    c, con = _chats_club(env, monkeypatch)
+    talk = c.post("/api/admin/chats", headers=tma(89), json={"url": "https://t.me/kbtu_talk", "kind": "group"}).json()["id"]
+    r = c.post("/api/orgs/1/chats", headers=tma(81), json={"link": "@kbtu_talk"})
+    assert r.status_code == 409 and r.json()["message"] == "catalog"
+    assert con.execute("SELECT org_id FROM chats WHERE id = ?", (talk,)).fetchone()[0] is None
+    con.executemany("INSERT INTO chats (title, kind, url, created_at, status, org_id) VALUES (?, 'group', ?, 0, 'org', 1)",
+                    [(f"Chat {i}", f"https://t.me/chat_{i}") for i in range(12)])
+    r = c.post("/api/orgs/1/chats", headers=tma(89), json={"link": "@kbtu_talk"})   # the admin, but the club is full
+    assert r.status_code == 409 and r.json()["message"] == "limit"
+    con.execute("DELETE FROM chats WHERE url = 'https://t.me/chat_0'")
+    assert "KBTU Talk" in [x["title"] for x in c.post("/api/orgs/1/chats", headers=tma(89), json={"link": "@kbtu_talk"}).json()]
+    assert tuple(con.execute("SELECT org_id, status FROM chats WHERE id = ?", (talk,)).fetchone()) == (1, "live")  # still in the catalog
+    con.execute("UPDATE chats SET kind = 'channel' WHERE url = 'https://t.me/chat_1'")
+    assert logic.bot_added(con, 89, {"id": -100700, "type": "channel", "title": "Chat 1"}) is None   # the admin: never by a title
+    assert logic.bot_added(con, 81, {"id": -100700, "type": "channel", "title": "Chat 1"}) is not None
+
+
 def test_phone_asked_at_signup(env):
     """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""

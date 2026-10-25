@@ -26,7 +26,7 @@
     catch (e) {
       haptic.error();
       const why = !(e instanceof ApiErr) ? 'common.error' : e.code === 'unavailable' ? 'chats.why.later' : e.message === 'notchat' ? 'chats.why.notchat'
-        : e.message === 'taken' ? 'oc.why.taken' : e.message === 'limit' ? 'oc.why.limit' : e.code === 'bad_input' ? 'chats.why.bad' : 'common.error';
+        : e.message === 'taken' ? 'oc.why.taken' : e.message === 'catalog' ? 'oc.why.catalog' : e.message === 'limit' ? 'oc.why.limit' : e.code === 'bad_input' ? 'chats.why.bad' : 'common.error';
       say(t(why as 'common.error'), 'pleading_face_3d');
     } finally { busy = false; }
   }
@@ -39,7 +39,9 @@
     try { chats = await api.dropOrgChat(org, c.id); haptic.warn(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
-  const line = (c: StudioChat) => [c.main ? t('oc.main') : t(`chats.${c.kind}`), c.members ? tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ');
+  // a channel counts subscribers, a group members, as Telegram says
+  const count = (c: StudioChat) => (c.members ? tn(c.kind === 'channel' ? 'clubs.subscribers' : 'chats.members', c.members).replace(String(c.members), compact(c.members)) : '');
+  const line = (c: StudioChat) => [c.main ? t('oc.main') : t(`chats.${c.kind}`), count(c)].filter(Boolean).join(' · ');
 </script>
 
 <h3 class="t-cap cap">{t('oc.studio')}</h3>

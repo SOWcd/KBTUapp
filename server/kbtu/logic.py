@@ -2053,7 +2053,10 @@ def chats(con, v: Viewer) -> dict:
     mine = sorted((c for c in everything if st and fits(c)), key=lambda c: -aim(c))
     out = {"forYou": mine if st else [c for c in everything if c["school"] is None and c["course"] is None], "all": everything}
     if v.role in ("admin", "moderator"):  # the suggestions waiting for a look, newest first
-        out["pending"] = [{**_chat(c, set()), "at": c["created_at"]} for c in rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")]
+        waiting = rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")
+        found = {c["org_id"] for c in waiting if c["org_id"]}
+        whose = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
+        out["pending"] = [{**_chat(c, set(), whose), "at": c["created_at"]} for c in waiting]  # whose it is, for the moderator
     return out
 
 
@@ -2086,16 +2089,24 @@ def add_chat(con, v: Viewer, body: dict, peek: dict) -> dict:
     if len(title) < 2:
         raise ApiError("bad_input")
     kind = body["kind"]
-    if c := one(con, f"SELECT id FROM chats WHERE status = 'org' AND ({SAME_CHAT})", body["url"].strip(), body["url"].strip(), None):
+    if c := one(con, f"SELECT id, url FROM chats WHERE status = 'org' AND ({SAME_CHAT})", body["url"].strip(), body["url"].strip(), None):
+        if "/+" in c["url"]:
+            raise ApiError("conflict", "org")  # a club's closed chat stays off the catalog
         # a club's own channel joins the catalog as that row: still the club's
         con.execute("UPDATE chats SET title = ?, kind = ?, forum = ?, school = ?, course = ?, status = 'live' WHERE id = ?",
                     (title, "channel" if kind == "channel" else "group", int(kind == "forum"), str(body.get("school") or "").strip() or None, body.get("course"), c["id"]))
-        return _chat(one(con, "SELECT * FROM chats WHERE id = ?", c["id"]), set())
+        return _owned(con, c["id"])
     cid = con.execute("""INSERT INTO chats (title, kind, forum, url, photo, members, school, course, added_by, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (title, "channel" if kind == "channel" else "group", int(kind == "forum"), body["url"].strip(),
                                                   peek.get("photo"), peek.get("members"), str(body.get("school") or "").strip() or None,
                                                   body.get("course"), v.id, now())).lastrowid
-    return _chat(one(con, "SELECT * FROM chats WHERE id = ?", cid), set())
+    return _owned(con, cid)
+
+
+def _owned(con, cid: int) -> dict:
+    """A catalog chat with the chip of whose it is."""
+    c = one(con, "SELECT * FROM chats WHERE id = ?", cid)
+    return _chat(c, set(), {c["org_id"]: org_ref(con, _org(con, c["org_id"]))} if c["org_id"] else {})
 
 
 def chat_refreshed(con, cid: int, peek: dict) -> str | None:
@@ -2140,9 +2151,12 @@ def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
     """Before the server looks the chat up on t.me: 10 suggestions a day (owner, Oct 20: a club head with several chats
     mustn't hit it), nothing twice: "already in the catalog" or "already waiting" (owner, Oct 20)."""
     # a public name in any case; an invite hash is case-sensitive
-    if c := one(con, f"SELECT status FROM chats WHERE status != 'org' AND ({SAME_CHAT})", url, url, tg_chat):
-        raise ApiError("conflict", c["status"])  # live | pending
-    if one(con, "SELECT COUNT(*) FROM chats WHERE added_by = ? AND created_at > ?", uid, now() - 86400)[0] >= 10:
+    if c := one(con, f"SELECT status, url FROM chats WHERE {SAME_CHAT}", url, url, tg_chat):
+        if c["status"] != "org":
+            raise ApiError("conflict", c["status"])  # live | pending
+        if "/+" in c["url"]:
+            raise ApiError("conflict", "org")  # a club's closed chat: on its page already, never in the catalog (its invite link)
+    if one(con, "SELECT COUNT(*) FROM chats WHERE added_by = ? AND created_at > ? AND status != 'org'", uid, now() - 86400)[0] >= 10:
         raise ApiError("rate_limited")
 
 
@@ -2172,7 +2186,7 @@ def approve_chat(con, v: Viewer, cid: int) -> dict:
         con.execute("UPDATE chats SET status = 'live' WHERE id = ?", (cid,))
         if c["added_by"]:
             notify(con, c["added_by"], "chat_approved", f"ca:{cid}")
-    return _chat(one(con, "SELECT * FROM chats WHERE id = ?", cid), set())
+    return _owned(con, cid)
 
 
 def delete_chat(con, v: Viewer, cid: int) -> str | None:
@@ -2237,8 +2251,10 @@ def add_org_chat(con, v: Viewer, oid: int, url: str, peek: dict) -> tuple[list[d
         may_chats(con, v, oid)
         c = one(con, f"SELECT * FROM chats WHERE {SAME_CHAT}", url, url, None)
         if c and c["org_id"] not in (None, oid):
-            raise ApiError("conflict", "taken")
-        if not c and one(con, "SELECT COUNT(*) FROM chats WHERE org_id = ?", oid)[0] >= ORG_CHATS:
+            raise ApiError("conflict", "taken")  # the app's team sorts it out (the admin edits both clubs' lists)
+        if c and c["org_id"] is None and v.role != "admin":
+            raise ApiError("conflict", "catalog")  # a catalog chat is the admin's to give to a club
+        if (not c or c["org_id"] != oid) and one(con, "SELECT COUNT(*) FROM chats WHERE org_id = ?", oid)[0] >= ORG_CHATS:
             raise ApiError("conflict", "limit")
         if c:  # the catalog's row keeps its avatar (the daily look renews it)
             con.execute("UPDATE chats SET org_id = ? WHERE id = ?", (oid, c["id"]))
@@ -2291,11 +2307,16 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
     if oid is not None and (not isinstance(oid, int) or isinstance(oid, bool) or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status != 'archived'", oid)):
         raise ApiError("bad_input")
     with tx(con):
-        c = one(con, "SELECT * FROM chats WHERE id = ? AND status IN ('live', 'pending')", cid)
+        c = one(con, "SELECT * FROM chats WHERE id = ?", cid)
         if not c:
             raise ApiError("not_found")
+        if c["status"] == "org" and oid is None:
+            raise ApiError("bad_input")  # out of the catalog and nobody's: removed from the club's list instead
         if c["org_id"] != oid:
             con.execute("UPDATE chats SET org_id = ?, main = 0 WHERE id = ?", (oid, cid))
+            if c["main"] and (nxt := one(con, """SELECT id FROM chats WHERE org_id = ? AND kind = 'channel' AND url NOT LIKE '%/+%'
+                    ORDER BY COALESCE(members, -1) DESC LIMIT 1""", c["org_id"])):  # the old org's next public channel
+                con.execute("UPDATE chats SET main = 1 WHERE id = ?", (nxt["id"],))
             if oid and c["kind"] == "channel" and not _closed(c) and not one(con, "SELECT 1 FROM chats WHERE org_id = ? AND main = 1", oid):
                 con.execute("UPDATE chats SET main = 1 WHERE id = ?", (cid,))
             con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, 'chat_org', ?, ?, ?)", (v.id, f"chat:{cid}", str(oid or ""), now()))
@@ -2304,8 +2325,9 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
 
 
 def _unlink(con, c: sqlite3.Row) -> str | None:
-    """A chat off its org: its own row goes, a catalog row stays in the catalog, nobody's. Its avatar, to remove if free."""
-    if c["status"] == "org":
+    """A chat off its org: its own row goes, a catalog row stays in the catalog, nobody's. A closed one waiting for the
+    catalog only through its club goes too: nobody's, its invite link must not end up there. Its avatar, to remove if free."""
+    if c["status"] == "org" or (c["status"] == "pending" and _closed(c)):
         con.execute("DELETE FROM chats WHERE id = ?", (c["id"],))
         return c["photo"]
     con.execute("UPDATE chats SET org_id = NULL, main = 0 WHERE id = ?", (c["id"],))
@@ -2320,7 +2342,7 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
     """Our bot is in a chat now: which org chat it is, among those of the orgs the one who added it may edit (the admin:
     any) and not yet kept by the bot. A group by Studio's link says (its /start oc_<id>); a channel can't carry one, so
     by its @name, its invite link (getChat gives one to an admin bot), or its exact title (a closed channel's link on
-    the page may not be its primary one). The chat's id."""
+    the page may not be its primary one; not for the admin, who may edit every club: a title is no proof which). The chat's id."""
     u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
     if not u:
         return None
@@ -2330,7 +2352,7 @@ def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int
         if v.role != "admin" and not can(con, v, c["org_id"], "profile"):
             continue
         if cid or (name and c["url"].rstrip("/").lower() == f"https://t.me/{name}") or (invite and c["url"].rstrip("/") == invite.rstrip("/")) \
-                or (chat.get("type") == "channel" and c["kind"] == "channel" and c["title"] == chat.get("title")):
+                or (v.role != "admin" and chat.get("type") == "channel" and c["kind"] == "channel" and c["title"] == chat.get("title")):
             con.execute("UPDATE chats SET tg_chat_id = ? WHERE id = ?", (chat["id"], c["id"]))
             return c["id"]
     return None

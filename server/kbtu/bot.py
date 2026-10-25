@@ -338,10 +338,17 @@ async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         log.warning("chat card: %s", type(exc).__name__)
         return False
-    if (old := logic.chat_card(con, cid, card)) and logic.photo_free(con, old):
-        for ext in (".webp", ".t.webp", ".jpg"):
-            (Path(cfg.db_path).resolve().parent / "media" / f"{old}{ext}").unlink(missing_ok=True)
+    root = Path(cfg.db_path).resolve().parent / "media"
+    old = logic.chat_card(con, cid, card)
+    for p in (old, card.get("photo")):  # the one replaced, or the new one when the chat was gone meanwhile
+        if p and logic.photo_free(con, p):
+            _unlink_photo(root, p)
     return True
+
+
+def _unlink_photo(root: Path, path: str) -> None:
+    for ext in (".webp", ".t.webp", ".jpg"):
+        (root / f"{path}{ext}").unlink(missing_ok=True)
 
 
 async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
@@ -355,8 +362,11 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
         return
     invite = None
     if status == "administrator":  # an admin bot is told the chat's primary invite link
-        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
-        invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
+        try:
+            r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
+            invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
+        except (httpx.HTTPError, ValueError) as exc:  # matched by its name or title then
+            log.warning("bot added: %s", type(exc).__name__)
     if cid := logic.bot_added(con, int((upd.get("from") or {}).get("id") or 0), chat, invite):
         await chat_card(cfg, http, con, cid, chat["id"])
 
@@ -590,7 +600,8 @@ def _chat_picker(con, cfg: Config, msg: dict) -> dict:
 async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, url: str, tg_chat: int | None = None, channel: bool | None = None) -> tuple[str, str]:
     """A chat suggested by a student (the bot's picker, a message to the bot, or the app's sheet): checked, looked up on
     t.me (a person or a bot has no members line there), then waiting for the admins. (outcome, title): sent, waiting,
-    exists, limit, later (Telegram didn't answer), slow (within 10 s of the last), notchat."""
+    exists, org (a club's closed chat: on its page, never in the catalog), limit, later (Telegram didn't answer), slow
+    (within 10 s of the last), notchat."""
     root, peek = Path(cfg.db_path).resolve().parent / "media", {}
     try:
         logic.suggest_check(con, uid, url, tg_chat)
@@ -607,12 +618,15 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
             except (media.BadImage, OSError):
                 pass
         kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
-        return "sent", logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
+        title = logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
+        if peek.get("photo") and logic.photo_free(con, peek["photo"]):  # a club's row took the suggestion: it keeps its own avatar
+            _unlink_photo(root, peek["photo"])
+        return "sent", title
     except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
         if peek.get("photo") and logic.photo_free(con, peek["photo"]):
             for ext in (".webp", ".t.webp", ".jpg"):
                 (root / f"{peek['photo']}{ext}").unlink(missing_ok=True)
-        return (("waiting" if exc.message == "pending" else "exists") if exc.code == "conflict" else "limit"), ""
+        return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists") if exc.code == "conflict" else "limit"), ""
 
 
 async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:

@@ -12,7 +12,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import { schoolShort } from '../../lib/short';
+  import { schoolShort, shortOf } from '../../lib/short';
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
@@ -46,7 +46,7 @@
       const c = await api.addChat({ title: nch.title.trim(), url: nch.url.trim(), kind: nch.kind, school: nch.school.trim() || null, course: nch.course || null });
       chats = [...(chats ?? []), c]; chatForm = false; nch = { title: '', url: '', kind: 'group', school: '', course: 0 };
       haptic.ok(); say(t('adm.chatAdded'), 'raising_hands_3d_default');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? t('adm.chatBad') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? t('adm.chatBad') : e instanceof ApiErr && e.message === 'org' ? t('chats.why.org') : t('common.error'), 'pleading_face_3d'); }
     finally { busy = false; }
   }
   async function dropChat(c: Chat) {
@@ -64,7 +64,7 @@
     <div class="chl surface">{#each pending as c (c.id)}<div class="chr">
       <span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span>
       <!-- the link itself, so a look tells a real chat from a stray one -->
-      <button class="pv ellipsis" onclick={() => openLink(c.url)}>{c.title}<i>{c.url.includes('/+') ? t('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></button>
+      <button class="pv ellipsis" onclick={() => openLink(c.url)}>{c.title}<i>{c.org ? `${t('oc.whose')}: ${shortOf(c.org)} · ` : ''}{c.url.includes('/+') ? t('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></button>
       <Button kind="primary" size="s" onclick={() => approve(c)}>{t('adm.chatApprove')}</Button>
       <button onclick={() => decline(c)} aria-label={t('cm.delete')}><X size={16} /></button>
     </div>{/each}</div>

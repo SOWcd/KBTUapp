@@ -1135,7 +1135,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 peek["photo"] = (await _img(media.save, peek["image"], photos))["path"]
             except media.BadImage:
                 pass
-        return logic.add_chat(con, v, body, peek)
+        try:
+            out = logic.add_chat(con, v, body, peek)
+        finally:  # a club's row joined the catalog with its own avatar, or the add was refused
+            if peek.get("photo") and logic.photo_free(con, peek["photo"]):
+                _drop_photo([peek["photo"]])
+        return out
 
     @app.put("/api/admin/chats/{cid}/org")
     def chat_org(cid: int, body: dict = Body(...), con=Depends(conn), v: Viewer = Depends(viewer)):

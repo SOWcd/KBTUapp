@@ -172,7 +172,7 @@ export interface Api {
   aiRetry(): Promise<void>;
   chats(): Promise<Chats>;                                // the chats directory (§4.11)
   /** any chat suggested from the app: @name, a t.me link or an invite link (owner, Oct 21) */
-  suggestChat(link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }>;
+  suggestChat(link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'org' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }>;
   chatOpened(id: Id): Promise<void>;                      // the tick
   addChat(input: { title: string; url: string; kind: Chat['kind']; school: string | null; course: number | null }): Promise<Chat>; // moderators, admin
   deleteChat(id: Id): Promise<void>;                      // a suggestion declined too
