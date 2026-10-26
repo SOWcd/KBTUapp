@@ -4,7 +4,7 @@
   language with a button into the app; only to users who let the bot write (can_dm). A user who blocked
   the bot loses can_dm until Telegram says otherwise.
 - Ears: whatever someone writes to the bot (/start first of all) is answered with what the app is and a button
-  into it (owner, Oct 7: /start said nothing); a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
+  into it (/start said nothing); a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
 Until Oct 7 it also refreshed schedules with each student's stored KBTU session; no session outlives a request
 now (SPEC §4.1), the stored ones were ended, and migration 18 dropped their table."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, logic, media, offsite, portal, receipt, texts, userbot, video
+from . import ai, casting, db, llm, logic, media, offsite, portal, receipt, texts, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -37,7 +37,7 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 
 
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
-# (Oct 14), loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
+# loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
 # rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
 # the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks; Oct 25: Telegram's own
 # RestrictedEmoji, ~1000, last, only for what the others lack)
@@ -70,7 +70,7 @@ def premium(text: str) -> str:
 
 
 async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict | None = None) -> httpx.Response:
-    """A Telegram call whose text or caption (HTML) gets the pack's emoji (owner, Oct 18: everywhere the bot writes, the
+    """A Telegram call whose text or caption (HTML) gets the pack's emoji (everywhere the bot writes, the
     channel and groups too); refused for them (400), once more plain, and the pack is off until a restart."""
     global _custom_re
     url, key = f"https://api.telegram.org/bot{cfg.bot_token}/{method}", "caption" if "caption" in body else "text"
@@ -92,8 +92,9 @@ async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Respo
     return await _tg(cfg, http, "sendMessage", body)
 
 
-def _render(con, m) -> tuple[str, str | None, str] | None:
-    """(text, button, startapp) for one outbox row, or None when what it was about is gone."""
+def _render(con, m) -> tuple[str, str | None, str | list] | None:
+    """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
+    is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
@@ -113,6 +114,36 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             f[k + "tg"] = "@" + p["tg_username"] if p["tg_username"] else p["tg_first_name"]
             f[k + "id"] = p["tg_id"]
         return (*texts.bot_message(lang, kind, sid=ref[1], **f), "")
+    if kind == "ask_match":  # am:<request>: a project request for my skills; quiet once it's gone or my pings are off
+        a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
+        if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
+            return None
+        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
+            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
+        text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "", title=a["title"])
+        return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
+    if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
+        p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
+        if not p:
+            return None
+        a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
+        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
+        text = texts.bot_message(lang, "contact_ask" if a else "contact_ask_plain", name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        yes, no = texts.bot_message(lang, "contact_buttons")
+        return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
+    if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted'", int(ref[1]))
+        other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
+        p = other and one(con, logic.PERSON + " WHERE u.id = ?", other)
+        if not p:
+            return None
+        text, button = texts.bot_message(lang, kind, name=logic.short_name(p))
+        return text, None, [[{"text": button, "url": logic.telegram_of(con, other)}]]
+    if kind == "ask_hidden":  # ah:<request>, to its author: why it's gone from the lists
+        a = one(con, "SELECT title, why FROM asks WHERE id = ? AND status = 'hidden'", int(ref[1]))
+        why = texts.pick(texts.ASK_WHY, lang).get(a["why"] or "") if a else None
+        return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"fa_{ref[1]}") if why else None
     if kind in ("backup_failed", "backup_ok"):  # bf:<day> / bo:<day>, to the admins: no copy reached R2 two nights running; back again
         return (*texts.bot_message(lang, kind), "")
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
@@ -284,7 +315,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
     e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
     if not e or (kind != "event_cancelled" and e["status"] != "published"):
         return None
-    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket (owner, Oct 6)
+    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket
         kind += "_team"
     text, button = texts.bot_message(lang, kind, org=e["org_name"], **ev(e))
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
@@ -401,7 +432,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
                 if r.get("error_code") != 400:  # a flood wait, Telegram down, no right yet: the next round tries again
                     return
         con.execute("DELETE FROM meta WHERE key = ?", (f"channel_gone:{post}",))
-    # no button under the post: Telegram hides the comments then (owner, Oct 17); an edit without one takes the old one off
+    # no button under the post: Telegram hides the comments then; an edit without one takes the old one off
     for e, text, cover, sig in logic.channel_due(con, cfg.bot_username):
         jpg = root / f"{cover}.jpg" if cover else None
         if e["channel_msg"]:  # the post is there: its words (and the cover, when it was posted with one) change
@@ -432,8 +463,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
 
 
 def backup_day(cfg: Config, con) -> None:
-    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (owner, Oct 18:
-    there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
+    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
     db_path = Path(cfg.db_path).resolve()
     # the copies db.py makes before a migration: two weeks, as the nightly ones (H2: deleted accounts must not outlive them)
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
@@ -546,7 +576,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             if not m["can_dm"]:
                 mark(False, "no_dm")
                 continue
-            if m["banned_at"]:  # banned: the bot stops writing (owner, Oct 22)
+            if m["banned_at"]:  # banned: the bot stops writing
                 mark(False, "banned")
                 continue
             msg = _render(con, m)
@@ -555,7 +585,10 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 continue
             text, button, start = msg
             body = {"chat_id": m["tg_id"], "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
-            if button:
+            if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
+                body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
+                                                             if "start" in b else b for b in row] for row in start]}
+            elif button:
                 body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
             try:
                 r = await _send(cfg, http, body)
@@ -591,7 +624,7 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
         arg = "exit"
     if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "suggest a chat": Telegram's own chat picker (PLAN item 45)
         return _chat_picker(con, cfg, msg)
-    # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat (owner, Oct 15)
+    # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
     return {"chat_id": chat["id"], "text": text, "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
@@ -609,8 +642,7 @@ def _lang(con, msg: dict) -> str:
 
 
 def _chat_picker(con, cfg: Config, msg: dict) -> dict:
-    """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them (owner, Oct 21:
-    "any group, any channel"); a closed one then needs its invite link, since we can't make one. A student only."""
+    """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them; a closed one then needs its invite link, since we can't make one. A student only."""
     chat, lang = msg["chat"], _lang(con, msg)
     if not _student(con, chat["id"]):
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
@@ -654,7 +686,7 @@ def _picked_url(msg: dict) -> str | None:
 
 async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict, ask: bool = True) -> dict | None:
     """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send.
-    A club's President or Vice is asked first whether it's their club's (owner, Oct 25: the catalog and Studio's chats
+    A club's President or Vice is asked first whether it's their club's (the catalog and Studio's chats
     were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_tapped)."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private" or ask and now() - int(msg.get("date") or 0) > FRESH:
@@ -698,7 +730,7 @@ def _sched_file(msg: dict) -> dict | None:
 
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
-    """A student's week from the portal's schedule page (portal.py; PLAN 26, owner Oct 25: Share -> Web Archive ->
+    """A student's week from the portal's schedule page (portal.py; PLAN 26; Share -> Web Archive ->
     Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one). The file is
     read in memory and never kept; nothing of the page goes to the log; the student ID on it isn't read."""
     chat = msg.get("chat") or {}
@@ -815,9 +847,22 @@ async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, o
 
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:), "whose channel" for a
-    chat (oc:). The question turns into the answer; someone else's tap does nothing."""
+    chat (oc:); and on the forum's cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
+    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?", data):  # the forum's cards: Accept/Decline an offer, stop the pings
+        u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if not u or not msg:
+            return
+        if f[1] == "ps":
+            con.execute("UPDATE users SET ask_pings = 0 WHERE id = ?", (u["id"],))
+            said = "ask_stopped"
+        else:
+            st = logic.decide_contact(con, u["id"], int(f[2]), f[3] == "y")
+            said = {"accepted": "contact_yes", "declined": "contact_no"}.get(st or "", "contact_gone")
+        await _tg(cfg, http, "editMessageText", {"chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "parse_mode": "HTML",
+                                                 "text": texts.bot_message(u["lang"], said)[0], "reply_markup": {"inline_keyboard": []}})
+        return
     orig = msg.get("reply_to_message") or {}
     m = re.fullmatch(r"(rc|oc):(\d+)", data)
     if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
@@ -862,7 +907,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     """The channel's discussion group: Telegram forwards each post there by itself, and the comments are replies to that
     copy. Under an event's post the bot writes the first comment, the rules and "Sign up", and keeps its link for the
-    app's "Discuss" (owner, Oct 17). True: the message was such a copy. Needs the bot in that group, as an admin
+    app's "Discuss". True: the message was such a copy. Needs the bot in that group, as an admin
     (a bot that isn't one doesn't see the group's messages)."""
     channel = cfg.events_channel.lstrip("@").lower()
     if not channel or not msg.get("is_automatic_forward") or str((msg.get("sender_chat") or {}).get("username") or "").lower() != channel:
@@ -922,7 +967,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
             group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
             if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
-                continue  # banned (owner, Oct 22): the bot neither answers nor acts for him
+                continue  # banned: the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
                     await _tapped(cfg, http, con, upd["callback_query"])
@@ -1007,10 +1052,10 @@ async def _videos(cfg: Config) -> None:
 
 
 async def _translator(cfg: Config) -> None:
-    """Event and club texts into the other two languages (ai.py), one every few seconds; off without Cloudflare's keys.
-    The day's free neurons spent: back after Cloudflare's midnight (UTC)."""
-    on = bool(cfg.cf_account_id and cfg.cf_ai_token)
-    log.warning("ai translation: %s", "on" if on else "off (no CF_ACCOUNT_ID / CF_AI_TOKEN)")
+    """Event and club texts into the other two languages (ai.py), one every few seconds, on the AI chain (llm.py); off
+    without any of its keys. Every link resting: back in a few minutes."""
+    on = llm.available(cfg)
+    log.warning("ai translation: %s", "on" if on else "off (no AI keys)")
     try:  # never let the translator take the postman down with it (asyncio.gather)
         con = db.connect(cfg.db_path)
         logic.ai_note(con, on=on)
@@ -1026,12 +1071,8 @@ async def _translator(cfg: Config) -> None:
                 if job:
                     kind, rid, was = job
                     try:
-                        src, tr = await ai.translate(http, cfg.cf_account_id, cfg.cf_ai_token, was,
-                                                     logic.AI_LIMIT[kind])
+                        src, tr = await ai.translate(cfg, http, was, logic.AI_LIMIT[kind], con)
                         logic.ai_save(con, kind, rid, was, src, tr)
-                    except ai.Limit:
-                        logic.ai_note(con, error="daily limit")
-                        await asyncio.sleep(86400 - time.time() % 86400 + 300)
                     except ai.Busy as exc:
                         logic.ai_note(con, error=f"busy: {exc}")
                         await asyncio.sleep(300)

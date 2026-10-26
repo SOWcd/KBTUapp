@@ -32,6 +32,7 @@
   import { burst } from '../../ui/burst';
   import { fly } from '../../ui/fly';
   import { onMount } from 'svelte';
+  import AiBadge from '../../ui/AiBadge.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
@@ -68,6 +69,8 @@
   let hero = $state<HTMLDivElement>();
   let land = () => {};
   onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
+  let later = $state(false);
+  onMount(() => { const f = requestAnimationFrame(() => setTimeout(() => (later = true))); return () => cancelAnimationFrame(f); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
@@ -369,7 +372,9 @@
       <p class="rnote"><GraduationCap size={15} />{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>
     {/if}
 
-    <!-- volunteers (owner, Oct 15): a student applies with a short "why", the organizers answer; the team sees the count -->
+    <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
+    {#if later}
+    <!-- volunteers: a student applies with a short "why", the organizers answer; the team sees the count -->
     {#if detail?.volunteers && !preview && !cancelled && !started}
       {@const vo = detail.volunteers}
       <div class="vol surface">
@@ -447,10 +452,10 @@
     {#if about}
       <h3 class="t-cap sec">{t('event.about')}</h3>
       <p class="t-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
-      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}>{raw ? t('ai.showTr') : t('ai.translated')}</button>{/if}
+      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}
     {/if}
     {#if detail?.discuss && !preview && !cancelled}
-      <!-- the talk lives under the channel post, with Telegram's replies and reactions (owner, Oct 17) -->
+      <!-- the talk lives under the channel post, with Telegram's replies and reactions -->
       <button class="talk" onclick={() => openLink(detail!.discuss!)}>
         <span class="fi"><MessageCircle size={18} /></span>
         <span class="tk"><b>{t('cm.titleEvent')}</b><i>{t('cm.inTelegram')}</i></span>
@@ -466,8 +471,9 @@
       </button>
     {/if}
     {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
-    <!-- the one report sheet (owner, Oct 22): anyone but the event's own crew -->
+    <!-- the one report sheet: anyone but the event's own crew -->
     {#if !may(mem, 'door') && !preview && session.me?.student}<button class="rep" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</button>{/if}
+    {/if}
   {/if}
 
   {#snippet footer()}
@@ -500,7 +506,7 @@
         {:else if e.externalUrl}
           <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('event.external')}</Button>
         {:else if going && inner(e)}
-          <!-- a club's own event: no ticket, just the answer, changeable until it starts (owner, Oct 6) -->
+          <!-- a club's own event: no ticket, just the answer, changeable until it starts -->
           <div class="ans">
             {#if !started}<Button kind="secondary" size="l" full onclick={() => (e.meeting ? cantCome() : e.visibility === 'leaders' ? declineInvite(id) : toggleGoing(id))}>{t('lead.no')}</Button>{/if}
             <span class="yes"><Check size={18} strokeWidth={2.6} />{t('event.youGo')}</span>
@@ -577,7 +583,7 @@
 
   .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0; }
   .fact { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: var(--r-m); background: var(--surface-2); min-width: 0; text-align: left; }
-  /* off campus: the place opens in 2GIS, so it wears their mark and green (owner, Oct 4) */
+  /* off campus: the place opens in 2GIS, so it wears their mark and green */
   .gis { --gis: #19AA1E; background: linear-gradient(rgba(25, 170, 30, 0.14), rgba(25, 170, 30, 0.14)), var(--surface-2); box-shadow: inset 0 0 0 1px rgba(25, 170, 30, 0.4); transition: transform var(--t-fast) var(--ease); }
   :global(:root[data-theme='light']) .gis { --gis: #0F7A14; }
   .gis:active { transform: scale(0.97); }

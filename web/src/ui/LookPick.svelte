@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club's or an event's look, one picker for both (owner, Oct 24): the emoji grid, the colours under it. `lead` puts
+  // A club's or an event's look, one picker for both: the emoji grid, the colours under it. `lead` puts
   // a swatch of the caller's own first (the event's photo colour); no `emoji` binding hides the grid (a photo cover).
   import type { Snippet } from 'svelte';
   import EmojiPick from './EmojiPick.svelte';

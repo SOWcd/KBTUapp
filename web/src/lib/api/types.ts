@@ -33,7 +33,7 @@ export interface DmpPerson { person: PersonRef; fullName: string; studentId: str
 /** A club in DMP's registry with its live numbers for this month. */
 export interface RegistryOrg { org: OrgRef; members: number; president: DmpPerson | null; month: { events: number; registrations: number; came: number } }
 export interface RosterMember extends DmpPerson { role: OrgRole; joinedAt: Ts; lastCame: Ts | null; quiet: boolean /* no check-in at the club's events for 60 days */ }
-/** A memo a club marked sent in the last 7 days (DMP's registry, Oct 13): its events, who said "sent" and when. */
+/** A memo a club marked sent in the last 7 days (DMP's registry): its events, who said "sent" and when. */
 export interface SentMemo { org: OrgRef; sentAt: Ts; by: string | null; events: { id: Id; title: string; startsAt: Ts }[] }
 export interface RegistryHit extends DmpPerson { clubs: { org: OrgRef; role: OrgRole }[] }
 
@@ -45,7 +45,7 @@ export interface CommentThread { items: Comment[]; on: boolean; canModerate: boo
 export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
 /** The admin's queue: one row per reported thing still up. */
 /** Something the admin took down from the reports in the last 30 days, still down: Restore undoes it. */
-/** The app's team (owner, Oct 22): the owner (admin + founder), admins, moderators; and who is banned (why). */
+/** The app's team: the owner (admin + founder), admins, moderators; and who is banned (why). */
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
@@ -60,11 +60,13 @@ export interface AdminStats { online: number; day: number; week: number; month: 
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
 export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
-export interface AdminAi { on: boolean; today: number; error: string | null; model: string; events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
+export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number]>>;
+  accounts?: Record<string, { usage?: unknown; limits?: unknown }>; // Munito's own view per key, as Munito gives it
+  events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
@@ -90,7 +92,7 @@ export interface Media {
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
-  gov?: boolean /* the Student Government: a mark and first in lists, no rights (owner, Oct 25) */;
+  gov?: boolean /* the Student Government: a mark and first in lists, no rights */;
   abbr?: string | null /* the short name (lib/short.ts): a club's own, a school's set by api/client.ts from i18n */;
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */;
   orig?: Record<string, string> /* the fields as typed, before api/client.ts showed a translation */ }
@@ -111,7 +113,7 @@ export interface Org extends OrgRef {
   members: number;
   upcoming: number;
   recruiting: boolean;          // takes join applications (the club closes it in Studio)
-  membersHidden: boolean;       // the club hides its member list from outsiders (owner, Oct 24)
+  membersHidden: boolean;       // the club hides its member list from outsiders
   leaders?: Member[];           // President and Vice, from api.org only
   chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
@@ -134,7 +136,7 @@ export interface OrgPatch { name?: string; short?: string; emoji?: string; cover
 export interface Member { person: PersonRef; role: OrgRole; title: string | null }
 
 export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
-/** at the door (Member+): the real short name beside a nick (owner, Oct 5) */
+/** at the door (Member+): the real short name beside a nick */
 export type DoorRef = PersonRef & { realName: string };
 
 export interface Settings {
@@ -176,12 +178,14 @@ export interface Me {
   photo: { telegram: boolean /* "Photo from Telegram" */; tg: string | null; own: string | null };
   student: StudentProfile | null; // null = guest
   msPending?: { first: string; last: string; email: string } | null; // signed in with Microsoft, the student ID still to type
+  consentNow?: string; // GET /api/me only: the policy version in force
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)
   founder: boolean;
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests
+  referrals: { count: number; code: string } | null; // students my invite link brought (signed in with KBTU), my badge's code for the link
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   bio: string;
@@ -226,7 +230,7 @@ export interface EventCard {
   title: string;
   startsAt: Ts;
   endsAt: Ts | null;
-  publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card (Oct 13)
+  publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card
   place: string;
   placeUrl: string | null;      // 2GIS link for off-campus places
   cover: Media | null;          // photo or poster; null → emoji + colour
@@ -259,7 +263,7 @@ export interface EventCard {
 
 export interface EventFull extends EventCard {
   description: string;
-  /** volunteers (owner, Oct 15): `mine` my application's state; `asked` (organizers only) how many wait */
+  /** volunteers: `mine` my application's state; `asked` (organizers only) how many wait */
   volunteers?: { need: number; senior: boolean; taken: number; mine: 'asked' | 'yes' | 'no' | null; asked?: number } | null;
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
@@ -275,7 +279,7 @@ export interface EventFull extends EventCard {
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
   comments: number;             // questions and comments under the event (§4.10)
   commentsOn: boolean;
-  discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one (Oct 17)
+  discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one
   myRating: number | null;      // 1..5, my one-tap rating after the event
   canRate: boolean;             // checked in, the event is over, within 7 days
   ratings: RatingSummary | null; // the club's Head+ only: anonymous
@@ -480,6 +484,7 @@ export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
 export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
 
 export interface PersonCard extends PersonRef {
+  forum?: ForumMe;              // their skills and "open to projects", for those who see the forum
   no: number | null;            // the card number (as Me.no)
   course: number | null;
   school: string | null;
@@ -497,7 +502,7 @@ export interface PersonCard extends PersonRef {
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
   skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
-  username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram" (owner, Oct 6)
+  username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
 }
 
@@ -517,3 +522,23 @@ export interface FriendLinkUse { result: 'friends' | 'already' | 'used' | 'self'
 /** One application to volunteer, as the organizer sees it: full name and course, like applications to a club. */
 export interface VolunteerApp { person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null;
   note: string; status: 'asked' | 'yes' | 'no'; at: Ts }
+
+// ---- the forum: F1 find people (server logic/forum.py; staff only behind a flag for now)
+/** public: in everyone's suggestions (a moderator's yes, or enough people have it) */
+export interface Skill { id: Id; name: string; people?: number; public?: boolean }
+export interface ForumMe { skills: Skill[]; open: boolean; pings: boolean }
+/** A person before any contact: short name, year, skills; never their Telegram */
+export interface ForumCard { person: PersonRef; name: string; course: number | null; skills: Skill[] }
+export interface ForumOffer extends ForumCard { id: Id; status: 'pending' | 'accepted' }
+export interface Ask {
+  id: Id; kind: 'project' | 'help'; title: string; body: string; skills: Skill[]; createdAt: Ts; expiresAt: Ts; mine: boolean;
+  author: ForumCard; matches: number;
+  status?: 'live' | 'held' | 'hidden' | 'closed'; why?: string | null; found?: number | null; offers?: ForumOffer[]; // mine
+  offered?: 'pending' | 'accepted' | 'declined' | null;                                                         // others'
+}
+/** an offer either way; accepted: the other's Telegram to write to */
+export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
+/** What waits for a moderator: held requests (the AI said no or couldn't tell) and reported ones, each due a day on */
+export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
+export interface ForumMod { held: ModAsk[]; skills: Skill[] }
+export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }

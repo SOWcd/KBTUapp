@@ -1,4 +1,4 @@
-// A class's icon in the capsule (owner, Oct 12: "a fitting icon per class"): a Fluent 3D emoji picked by words in the
+// A class's icon in the capsule: a Fluent 3D emoji picked by words in the
 // subject's names in all three languages (the schedule's `names`, else `subject`); the first match wins, so the more
 // specific come first (physical culture before physics, networks before computers, history before languages).
 // No "sport": it hides in "transport". A lab with no match gets the microscope, anything else books. Lives under
@@ -37,7 +37,7 @@ export function classEmoji(c: Pick<ClassItem, 'subject' | 'kind' | 'names'>): st
   return /lab|лаб|зертхана/i.test(c.kind ?? '') ? 'microscope_3d' : 'books_3d';
 }
 
-// A class's short name in the List (owner, Oct 13: one row per class, the long names were cut off): the long phrases
+// A class's short name in the List (one row per class, the long names were cut off): the long phrases
 // a KBTU subject is made of, shortened when one is the whole name, so "Физическая культура 2" reads "Физ-ра 2" and a tail in
 // brackets stays. The full name is a tap away (the "I won't go" question names it). Common short forms only.
 const SHORT: [RegExp, string][] = [
@@ -67,8 +67,7 @@ export const shortSubject = (name: string): string => {
   return hit ? s.replace(hit[0], hit[1]) : s;
 };
 
-/** Lecture, lab or practice from the portal's lessonType, which comes in the student's language (owner, Oct 14:
- *  "a lecture or a practice" at a glance); null when the portal says nothing we know. */
+/** Lecture, lab or practice from the portal's lessonType, which comes in the student's language (*  "a lecture or a practice" at a glance); null when the portal says nothing we know. */
 export function lessonKind(kind: string | null): 'lecture' | 'lab' | 'practice' | null {
   if (!kind) return null;
   if (/лек|lect|дәріс|дарис/i.test(kind)) return 'lecture';

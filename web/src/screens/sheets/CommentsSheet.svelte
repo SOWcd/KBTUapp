@@ -2,7 +2,7 @@
   // Comments under a post or an event (SPEC §4.10): questions to the organizer ("where's the entrance?"). Oldest first,
   // the club's own answers marked; write at the bottom (as the club when I lead it); ⋯ on a comment takes it down (mine,
   // or any as the club's Head+) or reports it to the admin; the club's Head+ can turn the thread off. Someone else's
-  // comment swiped left, as in Telegram (owner, Oct 12: no "Reply" button), makes mine a reply (testers, Oct 5: "why
+  // comment swiped left, as in Telegram (no "Reply" button), makes mine a reply (testers, Oct 5: "why
   // can't I reply"): their words quoted above it, and the bot tells them. No nested threads: a reply sits in time order.
   import { untrack } from 'svelte';
   import SendHorizontal from '@lucide/svelte/icons/send-horizontal';

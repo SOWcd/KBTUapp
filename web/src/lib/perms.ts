@@ -5,14 +5,14 @@ export const RANK: Record<OrgRole, number> = { member: 1, head: 2, vice: 3, pres
 
 /** Role titles stay English in every language, as KBTU clubs use them. */
 // Club titles stay in English in every language: KBTU clubs print them so on lanyards and badges, and that's
-// how students say them (owner, Oct 4)
+// how students say them
 export const ROLE_NAME: Record<OrgRole, string> = { president: 'President', vice: 'Vice', head: 'Head', member: 'Member' };
 
 /** Highest role first. */
 export const byRank = (a: { role: OrgRole }, b: { role: OrgRole }): number => RANK[b.role] - RANK[a.role];
 
 /** A club role's rights (SPEC §2), the toggles of its editor in order, each with the level it needs: the highest one a role
- *  has ranks it (whom it acts on). A level without a club role has its level's (owner, Oct 7: "as in Telegram"). */
+ *  has ranks it (whom it acts on). A level without a club role has its level's. */
 export const RIGHTS: { key: Right; level: ClubLevel }[] = [
   { key: 'door', level: 'member' }, { key: 'events', level: 'head' }, { key: 'posts', level: 'head' }, { key: 'people', level: 'head' },
   { key: 'casting', level: 'head' }, { key: 'team', level: 'vice' }, { key: 'money', level: 'vice' }, { key: 'memo', level: 'vice' }, { key: 'profile', level: 'vice' },
@@ -35,7 +35,7 @@ export const atLeast = (role: OrgRole | null | undefined, min: OrgRole): boolean
 
 /** The club's own name for someone's role (§2b), else the level's. */
 export const roleName = (role: OrgRole, title?: string | null): string => title || ROLE_NAME[role];
-/** an organizer's line: the real name, the nick beside it (owner, Oct 5) */
+/** an organizer's line: the real name, the nick beside it */
 export const withNick = (real: string, p: { nick?: string | null }): string => (p.nick ? `${real} · ${p.nick}` : real);
 
 /** Colours for the clubs' own roles and tags (§2b): each reads as a dot in both themes. */
@@ -45,5 +45,5 @@ export const TEAM_COLORS = ['#3B6BFF', '#7C4DFF', '#FF4FA3', '#F2542D', '#FFB23D
 export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefined, theirs: OrgRole): boolean => may(m, 'people') && RANK[m!.role] > RANK[theirs];
 
 /** A club's own event (team-only, a club meeting) or DMP's leaders meeting: people come, nobody checks tickets, so it has
- *  none; the organizers mark who came by name (owner, Oct 6: "why do I need a ticket for a get-together?") */
+ *  none; the organizers mark who came by name */
 export const inner = (e: { visibility?: string }): boolean => e.visibility === 'members' || e.visibility === 'leaders';

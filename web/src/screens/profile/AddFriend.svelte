@@ -1,7 +1,7 @@
 <script lang="ts">
   // Add a friend (SPEC §4.7). My one-time QR on the badge's material: a friend points the camera and you're friends at
   // once. While the sheet is open it watches the link, shows who just joined, celebrates and turns over to the next
-  // code. The same invite goes out as our bot's card (a line and a button; no bare links, owner Oct 4). Or: look
+  // code. The same invite goes out as our bot's card (a line and a button; no bare links). Or: look
   // someone up by @username and send a request they answer.
   import { onDestroy } from 'svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';

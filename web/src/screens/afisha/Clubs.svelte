@@ -88,7 +88,7 @@
     <section class="chats">
       <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
       <div class="ch-row hscroll" data-noswipe>
-        <!-- any student brings a chat in: the bot opens Telegram's own chat picker (owner, Oct 20) -->
+        <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
         <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
         {#each chats.forYou as c (c.id)}
           <button class="chat" onclick={() => tapChat(c)}>
@@ -201,6 +201,7 @@
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .ghost { position: absolute; right: -18px; bottom: -22px; opacity: 0.1; transform: rotate(-12deg); pointer-events: none; }
   .bell { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
   .bell.on { background: var(--success-soft); color: var(--success-text); }
   .txt { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .nm { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
@@ -220,7 +221,7 @@
   .allb { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 52px; margin-top: 16px; padding: 0 14px 0 16px;
     border-radius: var(--r-l); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
   .allb:active { transform: scale(0.98); }
-  /* the schools, folded into one row (owner, Oct 25) */
+  /* the schools, folded into one row */
   .fold { margin-top: 10px; }
   .srow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px 8px 12px; text-align: left; color: var(--text-3); }
   .srow b { flex: 1; font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }

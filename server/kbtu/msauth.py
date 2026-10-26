@@ -1,4 +1,4 @@
-"""Signing in with the KBTU Microsoft account (PLAN item 44; owner, Oct 19). The app "KBTU App" lives in the owner's own
+"""Signing in with the KBTU Microsoft account (PLAN item 44). The app "KBTU App" lives in the owner's own
 Entra directory (not KBTU's), as a single-page app with PKCE and no secret. The Mini App asks start() for a link and
 opens it outside Telegram; Microsoft sends the student back to /ms.html, which takes this server's PKCE verifier for
 the state, trades the code for tokens in the browser (Microsoft redeems a single-page app's code only from a browser)
@@ -74,7 +74,7 @@ def claims(token: str) -> dict:
 
 async def identity(token: str) -> dict | None:
     """Who the token is for ({"refused": why} for a token of the wrong kind), when Graph accepts it, it was issued to our app in KBTU's directory, and it is a KBTU
-    member with a @kbtu.kz address (a guest in KBTU's directory carries its own outside address: review, Oct 19)"""
+    member with a @kbtu.kz address (a guest in KBTU's directory carries its own outside address)"""
     try:
         async with httpx.AsyncClient(timeout=15) as http:
             r = await http.get("https://graph.microsoft.com/v1.0/me", headers={"authorization": f"Bearer {token}"},
@@ -84,7 +84,7 @@ async def identity(token: str) -> dict | None:
             return None
         c, me = claims(token), r.json()
         # the sign-in name is always the directory's own (s_nurmatov@kbtu.kz); "mail" can be a student's own outside
-        # address (owner's test, Oct 20: refused because of it)
+        # address (refused because of it)
         email = (me.get("userPrincipalName") or "").lower()
         why = ("tenant" if c.get("tid") != KBTU else "app" if c.get("appid", c.get("azp")) != CLIENT
                else "guest" if me.get("userType", "Member") != "Member" else "domain" if not email.endswith("@kbtu.kz") else "")

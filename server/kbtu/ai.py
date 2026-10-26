@@ -1,21 +1,18 @@
-"""Event and club texts in three languages (PLAN 9): Cloudflare Workers AI translates what the organizer typed into the
+"""Event and club texts in three languages (PLAN 9): the AI chain (llm.py) translates what the organizer typed into the
 other two. The source language is read from the letters, not asked of the model (Kazakh and Russian share Cyrillic;
-short titles fool it). Gemma "thinks" before it answers, so it gets room for that on top of the translation."""
+short titles fool it). Models that "think" before they answer get room for that on top of the translation."""
 import json
 import re
 
 import httpx
 
+from . import llm
+
 LANGS = ("kk", "ru", "en")
-MODEL = "@cf/google/gemma-4-26b-a4b-it"
 NAMES = {"kk": "Kazakh (Cyrillic script)", "ru": "Russian", "en": "English"}
 KAZAKH = re.compile("[\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456\u04d8\u0492\u049a\u04a2\u04e8\u04b0\u04ae\u04ba\u0406]")  # letters Russian lacks
 CYRILLIC = re.compile(r"[\u0400-\u04FF]")
 CONTROL = re.compile("[\x00-\x08\x0b-\x1f\x7f]")
-
-
-class Limit(Exception):
-    """The day's free neurons are spent (Cloudflare resets them at 00:00 UTC)."""
 
 
 class Failed(Exception):
@@ -63,33 +60,48 @@ def parse(content: str | None, fields: dict[str, str], src: str, limits: dict[st
     return out
 
 
-async def translate(http: httpx.AsyncClient, account: str, token: str, fields: dict[str, str],
-                    limits: dict[str, int]) -> tuple[str, dict[str, dict[str, str]]]:
-    """(source language, its translations). Only non-empty fields are sent; the caller skips rows with none."""
+async def translate(cfg, http: httpx.AsyncClient, fields: dict[str, str], limits: dict[str, int], con=None) -> tuple[str, dict[str, dict[str, str]]]:
+    """(source language, its translations), from the first link of the AI chain (llm.py) whose answer parses. Only
+    non-empty fields are sent; the caller skips rows with none."""
     fields = {k: CONTROL.sub("", x).strip() for k, x in fields.items() if x and x.strip()}
     src = lang_of(" ".join(fields.values()))
     size = sum(len(x) for x in fields.values())
+
+    def usable(text: str) -> bool:
+        try:
+            parse(text, fields, src, limits)
+            return True
+        except Failed:
+            return False
     try:
-        r = await http.post(f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{MODEL}",
-                            headers={"Authorization": f"Bearer {token}"},
-                            json={"messages": prompt(fields, src), "max_tokens": 2500 + 3 * size, "temperature": 0.2})
-    except httpx.HTTPError as exc:
-        raise Busy(type(exc).__name__) from None
+        text, _ = await llm.chat(cfg, http, prompt(fields, src), max_tokens=2500 + 3 * size, check=usable, con=con)
+    except llm.Busy:
+        raise Busy("no link answered") from None
+    except llm.BadAnswers:
+        raise Failed("no usable answer") from None
+    return src, parse(text, fields, src, limits)
+
+
+# The forum's look at what people write (forum.py): one word back, from the AI chain's Munito links only (both keys,
+# its models in chain order): the privacy policy's forum part names Munito (EU, no retention) and nothing else, so no
+# other provider ever gets a forum text, whatever AI_CHAIN lists.
+SCREEN_PROMPT = ("You check posts on a university students' board where people look for help with projects and small "
+                 "favours. Answer FLAG if the text is abusive, hateful, sexual, a scam, an ad, asks for something illegal "
+                 "or dangerous, or shares someone's personal data; otherwise answer OK. One word only.")
+SCREEN_PROVIDERS = ("munitoeu",)
+SCREEN_CHAIN = "munitoeu:deepseek-ai/deepseek-v4-flash,munitoeu:zai-org/glm-5.3-flash"  # EU host only (llm.URLS)
+
+
+def _verdict(text: str) -> bool:
+    return text.strip().upper().startswith(("OK", "FLAG"))
+
+
+async def screen(cfg, http: httpx.AsyncClient, text: str, con=None) -> bool | None:
+    """True: fine; False: flagged; None: no answer (no Munito key, all its links busy or answering nonsense): a
+    moderator decides."""
     try:
-        body = r.json()
-    except ValueError:
-        body = None
-    body = body if isinstance(body, dict) else {}
-    errors = [e for e in body.get("errors") or [] if isinstance(e, dict)]
-    if any(e.get("code") == 4006 for e in errors):  # the day's free neurons
-        raise Limit()
-    if r.status_code == 429 or r.status_code >= 500:
-        raise Busy(f"http {r.status_code}")
-    if r.status_code != 200:
-        raise Failed(f"http {r.status_code}: {str(errors)[:150]}")
-    res = body.get("result") if isinstance(body.get("result"), dict) else {}
-    choice = (res.get("choices") or [{}])[0]  # the OpenAI shape; older models answer in "response"
-    if choice.get("finish_reason") == "length":
-        raise Failed("cut off")
-    text = (choice.get("message") or {}).get("content") or res.get("response")
-    return src, parse(text if isinstance(text, str) else None, fields, src, limits)
+        word, _ = await llm.chat(cfg, http, [{"role": "system", "content": SCREEN_PROMPT}, {"role": "user", "content": CONTROL.sub("", text)[:2000]}],
+                                 max_tokens=5, temperature=0, check=_verdict, con=con, only=SCREEN_PROVIDERS, chain=SCREEN_CHAIN, timeout=15)
+    except (llm.Busy, llm.BadAnswers):
+        return None
+    return word.strip().upper().startswith("OK")

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Suggest a chat, inside the app (owner, Oct 21: the bot's chat opened behind the app and nothing showed). Any
+  // Suggest a chat, inside the app (the bot's chat opened behind the app and nothing showed). Any
   // channel or group: @name, its t.me link, or a closed one's invite link; the server looks it up on t.me and it
   // waits for the admins (logic.suggest_chat). Telegram's own picker of my chats is only in the bot: a link below.
   import Plus from '@lucide/svelte/icons/plus';
@@ -16,7 +16,7 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let link = $state(''), busy = $state(false), note = $state('');
-  // a club's President or Vice (owner, Oct 25): their club's own channel goes on its page, from Studio's chats
+  // a club's President or Vice: their club's own channel goes on its page, from Studio's chats
   const mine = $derived(data.orgs.filter((o) => o.myRights?.includes('profile')));
   function toStudio(id: number) { close(overlay.id); sheets.clubEdit(id, 'chats'); }
 

@@ -18,7 +18,6 @@
   import { api, ApiErr, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
-  import { CONSENT_VERSION } from './lib/legal';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Ban from '@lucide/svelte/icons/ban';
@@ -26,7 +25,7 @@
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
   import Newspaper from '@lucide/svelte/icons/newspaper';
-  // top and bottom bars never repeat an icon (owner, Oct 21): the bottom is ticket / landmark / circle-user-round
+  // top and bottom bars never repeat an icon: the bottom is ticket / landmark / circle-user-round
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
@@ -52,12 +51,15 @@
 
   // sheets reachable from anywhere
   // A sheet in its own chunk needs the network the first time: offline, taps used to queue and all open on top of each
-  // other once it was back (owner's list). Now only the latest tap opens, and after 2 s the app says there's no network.
+  // other once it was back. Now only the latest tap opens, and after 2 s the app says there's no network.
   let want = 0;
+  // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
+  const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
   function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>): void {
-    const mine = ++want;
+    const mine = ++want, got = loaded.get(load);
+    if (got) { open(got.default, props); return; }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    load().then((m) => { clearTimeout(slow); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
@@ -84,7 +86,7 @@
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
     const s = session.me?.student;
-    if (s && !session.me?.deleteAt && !['staff', 'admin', CONSENT_VERSION].includes(s.consent) && !overlays.length) sheets.consent();
+    if (s && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent) && !overlays.length) sheets.consent();
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
@@ -125,6 +127,10 @@
   sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
   sheets.schedHowTo = (first) => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), { first });
   sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});
+  sheets.forum = (ask) => lazy(() => import('./screens/forum/Forum.svelte'), { ask });
+  sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
+  sheets.newAsk = (onmade) => lazy(() => import('./screens/forum/NewAsk.svelte'), { onmade });
+  sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
   sheets.adminTeam = () => lazy(() => import('./screens/admin/AdminTeam.svelte'), {});
@@ -144,12 +150,12 @@
   // ---- tab 2 depends on who you are ----
   const member = $derived((session.me?.memberships.length ?? 0) > 0);
   const staff = $derived(!!session.me?.memberships.some((m) => m.role !== 'member'));
-  // tab 2 is the clubs' tab for everyone (owner, Oct 24; PLAN 46): the catalogue first (joining and following live there),
+  // tab 2 is the clubs' tab for everyone (PLAN 46): the catalogue first (joining and following live there),
   // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
   const tab2Label = $derived(member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
 
   // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds. DMP is an org like any other
-  // (owner, Oct 26): its staff have the same three pages, and its registry sits in Studio with DMP picked
+  // its staff have the same three pages, and its registry sits in Studio with DMP picked
   type ClubPage = 'clubs' | 'studio' | 'club' | 'team';
   const clubPages = $derived<ClubPage[]>(member ? ['clubs', staff ? 'studio' : 'club', 'team'] : ['clubs']);
   const CLUB_CAP: Record<ClubPage, () => CapPage> = {
@@ -174,7 +180,7 @@
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
   const capTitle = $derived(ui.busy || capOf?.title || null);
-  // every state has an icon (owner, Oct 21): a spinner while a tap's work runs, a sparkle if a view forgot its own
+  // every state has an icon: a spinner while a tap's work runs, a sparkle if a view forgot its own
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : null);
   // over the Feed the nav and capsule turn into tinted dark glass (chrome.ts): at once on a tab switch,
   // and in step with the finger while the Events pager moves
@@ -273,6 +279,10 @@
       return;
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
+    if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
+    const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
+    if (rf) { void api.refer(rf[1]).catch(() => {}); return; }
     if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"
@@ -291,7 +301,7 @@
   }
 
   // the app was closed while away at Microsoft (the page returns to plain Telegram): someone new types the student ID
-  // now, then what the guest wanted before signing in runs (owner, Oct 24)
+  // now, then what the guest wanted before signing in runs
   function msBack() {
     // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
     // must not sign anyone up)
@@ -347,7 +357,7 @@
   function joinByLink(org: number, token: string) {
     const club = data.orgs.find((x) => x.id === org)?.name ?? '';
     asStudent(async () => {
-      // already in it (my own club's link, shared or opened again): nothing to join (owner, Oct 11)
+      // already in it (my own club's link, shared or opened again): nothing to join
       const mine = session.me?.memberships.find((m) => m.org.id === org);
       if (mine) { say(t('join.already', { club: mine.org.name }), 'raising_hands_3d_default'); sheets.club(org); return; }
       if (!(await sheets.ask({ title: t('join.linkAsk', { club }), text: t('join.linkText'), ok: t('join.linkOk'), cancel: t('common.cancel') }))) return;
@@ -392,7 +402,7 @@
   }
 
   // a computer: a sheet that the app is made for phones, with a code for the phone, until "continue on the computer"
-  // (owner, Oct 11: never forbid; Oct 13: warn properly, not a toast)
+  // (never forbid; warn properly, not a toast)
   function computerHint() {
     try { if (!onComputer || localStorage.getItem('kb-pc2')) return; } catch { return; }
     sheets.pc(() => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } });
@@ -403,7 +413,7 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
-    void eventSheet(); void personSheet(); void clubSheet();
+    for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
@@ -455,7 +465,7 @@
     </section>
   {/each}
 
-  <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them (owner, Oct 14);
+  <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
@@ -493,7 +503,7 @@
   /* clip, not just hidden: a hidden box can still be scrolled by code, and a sheet's scrollIntoView (the club's chats)
      scrolled the whole app 80 px up, the tab bar back into view over the sheet; hidden stays for older webviews */
   .app { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: var(--bg); isolation: isolate; }
-  /* one palette on every tab: a hue swap per tab looked childish (owner, Oct 24); the lights wander wide instead of
+  /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   /* opacity only, backwards fill: a lingering transform fill would pin the pager pages (prototype bug) */

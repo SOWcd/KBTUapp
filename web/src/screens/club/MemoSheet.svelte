@@ -23,7 +23,7 @@
 
   let draft = $state<MemoDraft | null>(null);
   let text = $state('');
-  let printText = $state(''); // the Publishing Center's own letter (ic@kbtu.kz): printing is not DMP's (owner, Oct 14)
+  let printText = $state(''); // the Publishing Center's own letter (ic@kbtu.kz): printing is not DMP's
   let later = $state(false);
   let signing = $state<MemoSign | null>(null);
   let opened = false; // I opened Outlook or copied: back in the app, ask whether it went
@@ -93,7 +93,7 @@
         <input type="checkbox" role="switch" bind:checked={later} onchange={load} /></label>
     {/if}
     {#if draft.text}
-      <!-- items without an event (owner, Oct 15): a small form writes the paragraph, it goes in before the signature -->
+      <!-- items without an event: a small form writes the paragraph, it goes in before the signature -->
       <h3 class="t-cap sec">{t('memo.add')}</h3>
       <div class="chips">
         {#each ITEMS as k (k)}<button class="chip" onclick={() => sheets.memoItem(org, k, draft!.from, put)}><Plus size={15} />{t(`memo.${k}`)}</button>{/each}

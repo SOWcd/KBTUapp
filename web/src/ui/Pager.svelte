@@ -130,7 +130,7 @@
     if (can && !visited[cur + dir]) visited[cur + dir] = true;
     layout(can ? dx : (dx / (1 + Math.abs(dx) / 90)) * 0.6);
   }
-  // iOS still calls a short flick a tap: the click after a swipe would open the ticket under the finger (owner, Oct 26)
+  // iOS still calls a short flick a tap: the click after a swipe would open the ticket under the finger
   let swiped = 0;
   const eat = (e: MouseEvent) => { if (performance.now() - swiped < 400) { e.stopPropagation(); e.preventDefault(); } };
   function end() {

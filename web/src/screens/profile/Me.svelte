@@ -1,8 +1,8 @@
 <script lang="ts">
-  // Profile → Me (owner, Oct 13: Friends | Me; Oct 21: Friends | Me | Settings, mockup v24). Guest: the sign-in card.
+  // Profile → Me (Friends | Me; Oct 21: Friends | Me | Settings, mockup v24). Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), then what's coming up for me (tickets and saved; nothing
   // when there's nothing), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
-  // under it (one row, a small button to their own booking page), and the app's card (AppCard; owner, Oct 25: it stays
+  // under it (one row, a small button to their own booking page), and the app's card (AppCard; it stays
   // on Me, not Settings).
   // The admin panel is the shield next to the pencil.
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -24,6 +24,7 @@
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
+  import Invite from './Invite.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
   import EventRow from '../../ui/EventRow.svelte';
@@ -59,10 +60,10 @@
 
 <div class="page scroll" bind:this={page}>
   {#if me?.student}
-    <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below (owner, Oct 17) -->
+    <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below -->
     <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
     {#if me.role === 'admin' || me.role === 'moderator'}
-      <!-- the admin panel (owner, Oct 14), with what waits for it; a moderator's is the content part (Oct 22) -->
+      <!-- the admin panel, with what waits for it; a moderator's is the content part -->
       <button class="gear adm" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
     {/if}
   {/if}
@@ -77,7 +78,7 @@
     </section>
   {/if}
   {#if me?.student && !me.student.ms}
-    <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings (owner, Oct 20) -->
+    <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings -->
     <button class="confirm surface" onclick={() => { haptic.tap(); sheets.login(); }}>
       <svg viewBox="0 0 21 21" width="26" height="26" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
       <span class="lb">{t('me.msTitle')}<i class="sub">{t('me.msText')}</i></span><ChevronRight size={18} /></button>
@@ -93,11 +94,11 @@
     <div class="list">{#each soon as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={e.my?.status === 'going' ? () => sheets.ticket(e.id) : undefined} />{/each}</div>
   {/if}
 
-  <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it (owner, Oct 7); out of term the row
-       names what comes next. Under it KBTU's psychologist (owner, Oct 5) -->
+  <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it; out of term the row
+       names what comes next. Under it KBTU's psychologist -->
   <div class="term surface">
     {#if sem}
-      <!-- v25 (owner, Oct 25: "make it beautiful"): one track with the term filled to this week and a glowing dot on it,
+      <!-- v25: one track with the term filled to this week and a glowing dot on it,
            the midterm a gold band, the exams red at the end; the next calendar day its own row, never cut -->
       {@const at = (w: number) => `${((w - 0.5) / (sem.weeks + 1)) * 100}%`}
       <button class="sem" onclick={() => sheets.academic()}>
@@ -117,11 +118,12 @@
       <button class="r" onclick={() => sheets.academic()}>
         <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
     {/if}
-    <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (owner, Oct 21: nothing else) -->
+    <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <div class="r psy"><span class="pi"><MessageCircleHeart size={18} /></span><span class="lb">{t('psy.kbtu')}</span>
       <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
   </div>
 
+  {#if me?.referrals}<Invite r={me.referrals} />{/if}
   <AppCard />
   <div class="tail"></div>
 </div>
@@ -149,6 +151,7 @@
   /* the pencil and the shield: in the lanyard's gap right of its strap */
   .gear { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
+  .gear::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; } /* a 44 px target, the circle stays 36 */
   .gear:active { transform: scale(0.92); }
   .gear.adm { right: calc(var(--gutter) + 44px); }
   .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
@@ -178,7 +181,7 @@
   .book { position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 10px 0 12px; border-radius: var(--r-full);
     background: var(--surface-2); color: var(--text); font: 650 var(--fs-sub)/1 var(--font-text); }
   .book:active { transform: scale(0.94); }
-  /* the psychologist in the app's own blue, its icon on a tile like the calendar row's (owner, Oct 25: no pink accent) */
+  /* the psychologist in the app's own blue, its icon on a tile like the calendar row's (no pink accent) */
   .pi { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--accent-soft); color: var(--accent-text); }
 
   .tail { flex: none; height: calc(var(--bottom) + 12px); }

@@ -58,7 +58,7 @@
     return { update: set };
   }
 
-  // our bot's card with a button, as from the event sheet (never a bare link: owner, Oct 4)
+  // our bot's card with a button, as from the event sheet (never a bare link)
   function share(id: number, title: string) {
     haptic.tap();
     shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, title)
@@ -174,7 +174,7 @@
 
   .side { position: absolute; right: 12px; bottom: calc(var(--bottom) + 8px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; }
-  /* a press on a ring never pans the Feed (B3, video); the labels still swipe (review: the whole column was dead) */
+  /* a press on a ring never pans the Feed (B3, video); the labels still swipe (the whole column was dead) */
   .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
   .ring.sm { width: 48px; height: 48px; }
   .act:active .ring { transform: scale(0.9); }

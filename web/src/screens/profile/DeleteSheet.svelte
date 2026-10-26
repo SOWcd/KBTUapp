@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Delete account (SPEC §4.8). First what goes for good, then a week to change your mind (owner, Oct 13): the bot
+  // Delete account (SPEC §4.8). First what goes for good, then a week to change your mind: the bot
   // says when at once, the account works as usual meanwhile, and "Keep my account" on Me takes it back. The KBTU
   // password it asked before shut out whoever no longer has one; the week guards against someone holding the phone.
   // Last, quietly, KBTU's psychological service: no hints, just there. What stays without the name (H2): the album photos

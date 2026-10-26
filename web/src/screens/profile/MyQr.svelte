@@ -2,7 +2,7 @@
   // My QR — the back of my badge. Opens over a blurred scrim like the ticket, follows the phone's tilt and
   // leans toward a pressing finger. The code holds only a link into the app (my profile; the friend invite
   // takes its place once friends exist, SPEC §4.7), in the brand gradient with the app's mark in the middle
-  // (the face is once, on top: owner, Oct 4) — big enough for any phone camera across a table. Back, a tap
+  // (the face is once, on top) — big enough for any phone camera across a table. Back, a tap
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
@@ -21,11 +21,11 @@
 
   let { overlay, link, p }: { overlay: Overlay; link: string; p: PersonCard } = $props();
   const h = $derived(hero(p));
-  // the back of the badge I wear: the same skin, its strap and clip on top (owner, Oct 14: it stayed in the old blue)
+  // the back of the badge I wear: the same skin, its strap and clip on top (it stayed in the old blue)
   const sower = $derived(p.skin === 'sower');
   const look = $derived(lookOf(p)); // the class and the strap's word
   // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look it was dark
-  // text on a darkened glass (owner, Oct 7)
+  // text on a darkened glass
   $effect(() => { overlay.title = t('me.qr'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 
   let wrap: HTMLDivElement;

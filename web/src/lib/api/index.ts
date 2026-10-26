@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -44,7 +44,7 @@ export interface Api {
   adminOrgEvents(org: Id): Promise<AdminEvent[]>;
   adminCreateOrg(i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg>;
   adminSetRole(org: Id, who: string, role: OrgRole | 'none'): Promise<AdminOrg>;
-  adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete (owner, Oct 16)
+  adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete
   adminPresLink(org: Id): Promise<{ token: string; expiresAt: Ts }>;  // the President's one-time link, shown as a QR
   org(id: Id): Promise<Org>;
   subscribe(id: Id, on: boolean): Promise<Org>;
@@ -143,8 +143,27 @@ export interface Api {
   addComment(kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread>; // 500 chars, 10 a minute
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
-  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
+  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
   reports(): Promise<ReportItem[]>;                                                  // admin
+  // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
+  forumMe(): Promise<ForumMe>;
+  setForumMe(patch: Partial<{ skills: Id[]; open: boolean; pings: boolean }>): Promise<ForumMe>;
+  skills(q: string): Promise<Skill[]>;
+  newSkill(name: string, force?: boolean): Promise<{ skill?: Skill; didYouMean?: Skill[] }>;
+  asks(skill?: Id | null): Promise<Ask[]>;
+  newAsk(a: AskInput): Promise<Ask>;
+  closeAsk(id: Id, found: boolean | null): Promise<Ask>;
+  askPeople(id: Id): Promise<ForumCard[]>;
+  findPeople(q: string, skill?: Id | null): Promise<ForumCard[]>;
+  contacts(): Promise<Contact[]>;
+  offer(to: { ask?: Id; to?: Id }): Promise<{ status: 'pending' }>;
+  answerOffer(id: Id, yes: boolean): Promise<Contact[]>;
+  block(user: Id, on?: boolean): Promise<void>;
+  forumMod(): Promise<ForumMod>;                                                     // moderators: held requests, new skills
+  releaseAsk(id: Id): Promise<Ask>;
+  hideAsk(id: Id): Promise<void>;
+  skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
+  refer(code: string): Promise<void>;                                                 // opened by someone's invite link
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean): Promise<void>; // admin: take it down or leave it
@@ -171,7 +190,7 @@ export interface Api {
   adminAi(): Promise<AdminAi>;
   aiRetry(): Promise<void>;
   chats(): Promise<Chats>;                                // the chats directory (§4.11)
-  /** any chat suggested from the app: @name, a t.me link or an invite link (owner, Oct 21) */
+  /** any chat suggested from the app: @name, a t.me link or an invite link */
   suggestChat(link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'org' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }>;
   chatOpened(id: Id): Promise<void>;                      // the tick
   addChat(input: { title: string; url: string; kind: Chat['kind']; school: string | null; course: number | null }): Promise<Chat>; // moderators, admin

@@ -1,6 +1,6 @@
 <script lang="ts">
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  // The profile hero, shared by Me and the person sheet (owner's pick of three, Oct 4): the profile as a KBTU
+  // The profile hero, shared by Me and the person sheet (owner's pick of three): the profile as a KBTU
   // event badge on a lanyard — clubs print their titles in English on theirs, so this one does too. It hangs
   // from the capsule or the sheet's grip, swings in from the clip, then follows the phone's tilt; the
   // holographic strip is the only iridescence and stays inside the card. Data: lib/awards.ts.
@@ -27,8 +27,8 @@
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
   let { p, qr = null, live = true, shelf = true }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean } = $props();
   const h = $derived(hero(p));
-  // the club badge they picked (a skin, owner Oct 13; picked in LookSheet), else the KBTU one
-  const sower = $derived(p.skin === 'sower'); // the creator's own (owner, Oct 13)
+  // the club badge they picked (a skin; picked in LookSheet), else the KBTU one
+  const sower = $derived(p.skin === 'sower'); // the creator's own
   const look = $derived(lookOf(p)); // the class and the strap's word
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
@@ -41,10 +41,10 @@
   });
   let swing: HTMLDivElement;
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // it swings in each time its screen opens (owner, Oct 4: not only when the app opens), never on scroll
+  // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
 
-  // On Me it also feels the Profile pages being swiped (owner, Oct 4: the swing-in on paging looked like a jerk):
+  // On Me it also feels the Profile pages being swiped (the swing-in on paging looked like a jerk):
   // it leans behind a moving page and sways when the page stops. A damped spring (8 rad/s, ζ 0.2) toward a lean
   // set by the page's speed (1e-4 rad per px/s, at most 0.09 rad: 3.5–6°, calm in 2 s), measured from where the badge really is, so a
   // drag, a flick and the capsule's slide all feel the same. CSS `rotate`, so it adds to the swing-in's transform.
@@ -76,7 +76,7 @@
       {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
-        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
+        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={() => sheets.look()} aria-label={t('look.title')}><Avatar person={h.person} size={74} tappable={false} /></button>
@@ -94,7 +94,7 @@
 
 {#if h.bio}<p class="t-callout bio">{h.bio}</p>{/if}
 
-<!-- the award shelf (owner, Oct 14): the showcase with empty places to fill, the count, and on mine the closest next
+<!-- the award shelf: the showcase with empty places to fill, the count, and on mine the closest next
      award; mine opens the whole collection. Someone else's shows only when there's something on it. -->
 {#if shelf && (mine || h.shelf.length)}
   <div class="shelf surface" class:wait={!h.loaded}>
@@ -111,7 +111,7 @@
 
 <style>
   .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; }
-  /* the word sits clear of the clip (it hid behind it at the bottom: owner, Oct 4) */
+  /* the word sits clear of the clip (it hid behind it at the bottom) */
   .strap { width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
@@ -160,14 +160,13 @@
   .knights { --role: #9CC2FF; }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
-  /* StudEx (owner, Oct 13; kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
+  /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,
     linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone (owner, Oct 13; Oct 14 after four drafts: "the rings from the corner, like a thrown
-     stone"): black, rings spreading from behind the QR's corner; the strap white with black letters */
+  /* SOWER, the creator's alone (Oct 14 after four drafts): black, rings spreading from behind the QR's corner; the strap white with black letters */
   .sower { --role: rgba(255, 255, 255, 0.92); }
   .sower .badge { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
   .sower .badge::before { content: ''; position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none;
@@ -182,7 +181,7 @@
   .shelf { margin-top: 14px; padding: 12px 14px 14px; border-radius: var(--r-xl); }
   .shelf.wait { animation: wait 1.2s ease-in-out infinite; }
   @keyframes wait { 50% { opacity: 0.6; } }
-  .sh { display: flex; align-items: center; gap: 6px; width: 100%; font: 650 15px/1.2 var(--font-text); color: var(--text); text-align: left; }
+  .sh { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 0; margin: -6px 0; /* a taller target, same place */ font: 650 15px/1.2 var(--font-text); color: var(--text); text-align: left; }
   .sh b { flex: 1; font-weight: 650; }
   .sh .num { font: 550 13.5px/1.2 var(--font-text); color: var(--text-2); }
   .sh :global(svg) { color: var(--text-3); }
@@ -190,5 +189,5 @@
   .row button { display: flex; transition: transform var(--t-fast) var(--ease); }
   .row button:active { transform: scale(0.9); }
   .empty { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); background: var(--surface-2); }
-  .nx { display: block; width: 100%; margin-top: 12px; text-align: left; color: var(--text-2); }
+  .nx { display: block; width: 100%; padding: 6px 0; margin: 6px 0 -6px; /* a taller target, same place */ text-align: left; color: var(--text-2); }
 </style>

@@ -4,7 +4,7 @@
   // buttons on everyone's Awards page). The face-to-face ones are a scanner that stays open, one grant a badge QR (the
   // same badge again only after 4 s: the camera keeps seeing it); "Bug hunter" is earned in a chat, so it goes there
   // as a one-time link. Each grant is undoable for a minute; "You gave" below, where after that minute one given by
-  // mistake is taken back, the whole award (owner, Oct 14: only from the admin panel, never from a person's profile).
+  // mistake is taken back, the whole award (only from the admin panel, never from a person's profile).
   import { api, ApiErr, type GrantItem } from '../../lib/api';
   import { say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -31,7 +31,7 @@
   api.myGrants().then((l) => (gave = l)).catch(() => {});
   $effect(() => { const i = setInterval(() => (tickNow = nowTs()), 5000); return () => clearInterval(i); });
 
-  // our camera in the sheet (owner, Oct 21: not Telegram's popup); Telegram's only when ours is refused or missing
+  // our camera in the sheet (not Telegram's popup); Telegram's only when ours is refused or missing
   let scanning = $state<GrantItem['code'] | null>(null);
   let live = $state<'off' | 'on' | 'failed'>('off');
   let hit = $state(0);

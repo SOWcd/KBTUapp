@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 MAX_BYTES = 15 * 1024 * 1024
 MAX_PIXELS = 50_000_000          # what a header may claim (Pillow refuses past twice this, warns between): a 48 MP iPhone JPEG, read smaller below (draft)
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
-DECODED = 16_000_000             # what is actually unpacked: 126 KB of PNG claiming 40 MP took ~460 MB (audit, Oct 21)
+DECODED = 16_000_000             # what is actually unpacked: 126 KB of PNG claiming 40 MP took ~460 MB
 JPEG_SIDE = 2400                 # a JPEG is decoded at 1/2, 1/4 or 1/8 straight from the file, keeping both sides at
                                  # least this (the receipt's OCR reads 2400 px; photos keep 1600) unless that would
                                  # still be over DECODED (a 24 MP 6000x4000 photo goes to 3000x2000)

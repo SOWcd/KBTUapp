@@ -65,7 +65,7 @@
     </button>
   {/each}
 </nav>
-<!-- the map beside the tabs, under the thumb on every screen (owner, Oct 25: the button at the top of Today was hard
+<!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
 <button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }} use:chrome
         onpointerdown={warm} onclick={openMap}>
@@ -84,8 +84,8 @@
   :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); }
   .nav, .mapb {
     position: relative; flex: none; height: 60px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
-    /* the capsule's clear glass (owner, Oct 4: on the big bar the dark frosted body read as plastic) */
-    /* calmer than it was (owner, Oct 13: what scrolled under it smeared through "crookedly"): a stronger blur, less
+    /* the capsule's clear glass (on the big bar the dark frosted body read as plastic) */
+    /* calmer than it was (what scrolled under it smeared through "crookedly"): a stronger blur, less
        saturation; still the one backdrop filter, the rim and glow below are plain paint */
     -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.04);
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
@@ -98,7 +98,7 @@
   .mapb > :global(svg) { position: relative; }
   .mapb:active { transform: scale(0.94); }
   .mapb.mini { width: 50px; height: 50px; }
-  /* an edge all the way round (owner, Oct 13: "the bar has no edges"), but lit like glass, not drawn (Oct 24: the even
+  /* an edge all the way round, but lit like glass, not drawn (the even
      bright outline looked fake): the shared rim's bright arc and its reflection over a faint edge, the colour fringes */
   .nav::after, .mapb::after {
     background:

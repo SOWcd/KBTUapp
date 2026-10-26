@@ -1,4 +1,4 @@
-"""Sign the userbot's Telegram account in once and print its session string (owner, Oct 22).
+"""Sign the userbot's Telegram account in once and print its session string.
 
 Run by the owner in his own terminal: it asks for the api_id, api_hash, phone and the login code, and prints a
 StringSession. Nothing is written to disk. The string goes into Coolify's env as TG_SESSION (with TG_API_ID and

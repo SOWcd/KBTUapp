@@ -11,10 +11,11 @@ import time
 from .. import receipt, texts
 from ..db import tx
 
-from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, at_least, log_action, need_student, one, rows)
+from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
+    friend_ids, full, log_action, need_student, one, person_ref, rows, taken)
 
 
-# ------------------------------------------------------------ volunteers (owner, Oct 15)
+# ------------------------------------------------------------ volunteers
 # An event asks for N volunteers (maybe not year 1); a student applies with a short "why", the organizer (the "events"
 # right) says yes or no, the bot tells them. A volunteer is the team's help: no ticket, no seat taken.
 
@@ -78,7 +79,7 @@ def volunteer_decide(con, v: Viewer, eid: int, uid: int, yes: object) -> list[di
     return volunteers_list(con, v, eid)
 
 
-# ------------------------------------------------------------ event chats (owner, Oct 15: no userbot)
+# ------------------------------------------------------------ event chats (no userbot)
 # "Create chat" opens t.me/<bot>?startgroup=ec_<token>&admin=...: Telegram lets the organizer make or pick a group and
 # adds the bot as its admin; the bot's /start there carries the token, so the group is this event's. The bot makes a
 # join-request link and lets in only those signed up, approved volunteers and the club's team. The group is the
@@ -121,7 +122,7 @@ def chat_join(con, chat_id: int, tg_id: int) -> bool | None:
     return bool(u and _chat_ok(con, e, u["id"]))
 
 
-# ------------------------------------------------------------ the events channel (owner, Oct 15: @KBTUevents)
+# ------------------------------------------------------------ the events channel (@KBTUevents)
 # Public events go to the channel once published: the cover, title, club, when, where, price and "Sign up"; a change of
 # any of that edits the post, a cancel marks it. A few a round, so the first run fills the channel without a flood.
 # ponytail: one post per event; a morning digest when there are many a day.
@@ -214,7 +215,7 @@ def event_ics(con, eid: int, link: str) -> str:
 
 
 def cal_token(con, v: Viewer) -> str:
-    """My calendar feed's secret (Oct 5): made once and kept, so a subscribed calendar stays subscribed."""
+    """My calendar feed's secret: made once and kept, so a subscribed calendar stays subscribed."""
     need_student(v)
     t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
     if not t:
@@ -241,7 +242,7 @@ def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None
     """Drafts and hidden events only for the organizing team (and the admin); team-only events for members. `roles`
     (_roles()) and `hidden` (_hidden_orgs()): read once when checking a list."""
     if (e["org_id"] in hidden) if hidden is not None else one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'hidden'", e["org_id"]):
-        return False  # a club the admin hid: its events are gone for everyone (owner, Oct 16)
+        return False  # a club the admin hid: its events are gone for everyone
     roles = _roles(con, v) if roles is None else roles
     team = at_least(roles.get(e["org_id"]), "member")
     if e["status"] == "draft" or e["hidden_at"]:
@@ -305,7 +306,7 @@ def event(con, v: Viewer, eid: int) -> dict:
 
 
 def _ticket_code(con) -> str:
-    """6 characters to read out and type at the door, no 0/O or 1/I/L (owner, Oct 4: 12 were too long, his QR
+    """6 characters to read out and type at the door, no 0/O or 1/I/L (12 were too long, his QR
     didn't scan). ~30 bits is enough: only a club's door staff can check a code, and the scanner shows the
     holder's face. The QR holds 'KBTU' + this, 10 characters: the smallest QR there is (§4.4)."""
     while True:
@@ -404,7 +405,7 @@ def receipt_open(con, v: Viewer, eid: int) -> None:
 def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, sqlite3.Row | None]:
     """Where a receipt goes: (registration, event, the receipt it replaces). A seat on hold takes one; a ticket takes
     another file in place of its receipt while the organizer hasn't looked at it and the event isn't over (the app
-    says when a receipt looks wrong: owner, Oct 11, "upload another?")."""
+    says when a receipt looks wrong, "upload another?")."""
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('hold', 'going')", eid, v.id)
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     old = None
@@ -537,5 +538,4 @@ def tickets(con, v: Viewer) -> list[dict]:
 from . import core  # noqa: E402
 from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
-from .shapes import _free_seat, _roles, can, card, cards, friend_ids, full, person_ref, taken  # noqa: E402
 from .teams import team  # noqa: E402

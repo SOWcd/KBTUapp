@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Student Government's mark (owner, Oct 25): a name, not a right; wherever the club shows
+  // The Student Government's mark: a name, not a right; wherever the club shows
   import Landmark from '@lucide/svelte/icons/landmark';
   import { t } from '../lib/i18n/index.svelte';
 </script>

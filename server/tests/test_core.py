@@ -46,7 +46,7 @@ def env(tmp_path, monkeypatch):
     (dist / "map" / "u1" / "o.webp").write_bytes(b"RIFF")
     cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=str(tmp_path / "t.db"), web_dist=str(dist), background=False, seed=False)
 
-    monkeypatch.setattr(logic.awards, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
     DB[:] = [cfg.db_path]
     client = TestClient(server.create(cfg))
@@ -170,7 +170,7 @@ def test_sign_in_rules(env, monkeypatch, capsys):
 def test_frontend(env):
     c, _ = env
     assert "<title>app</title>" in c.get("/clubs/it").text   # SPA fallback
-    r = c.get("/demo/", follow_redirects=False)              # the in-browser demo went (Oct 11): its old links open the app
+    r = c.get("/demo/", follow_redirects=False)              # the in-browser demo went: its old links open the app
     assert r.status_code == 302 and r.headers["location"].startswith("https://t.me/")
     r = c.get("/assets/a.js")
     assert "immutable" in r.headers["cache-control"]
@@ -657,7 +657,7 @@ def test_delete_with_a_ticket_out_of_sight(env):
 
 
 def test_delete_waits_for_a_paid_ticket(env):
-    """A ticket paid for an event still ahead: the deletion waits until it has passed (owner, Oct 22)."""
+    """A ticket paid for an event still ahead: the deletion waits until it has passed."""
     c, cfg = env
     ali = login(c, 21, "ali")
     con = db.connect(cfg.db_path)
@@ -693,7 +693,7 @@ def test_consent_again(env):
 
 
 def test_legal_pages(env):
-    """The privacy policy and the terms (owner, Oct 16): public pages in three languages, linked to each other."""
+    """The privacy policy and the terms: public pages in three languages, linked to each other."""
     c, _ = env
     for doc in ("privacy", "terms"):
         for lang in ("ru", "kk", "en"):
@@ -740,14 +740,14 @@ def test_admin_clubs(env):
     past = c.get(f"/api/users/{pid}", headers=P).json()["past"]
     assert [(x["org"]["id"], x["role"]) for x in past] == [(club["id"], None), (club["id"], None)]  # the role: to the club's team only
     assert [o["id"] for o in c.get("/api/admin/orgs", headers=A).json()] == [club["id"]]
-    # hide, never delete (owner, Oct 16): gone for everyone but the admin's list, and back with one more tap
+    # hide, never delete: gone for everyone but the admin's list, and back with one more tap
     hide = lambda on, h=A: c.put(f"/api/admin/orgs/{club['id']}/hidden", headers=h, json={"hidden": on})
     assert hide(True, P).status_code == 403
     assert hide(True).json()["hidden"] is True
     assert c.get(f"/api/orgs/{club['id']}", headers=P).status_code == 404 and c.get(f"/api/orgs/{club['id']}", headers=A).status_code == 200
     assert club["id"] not in [o["id"] for o in c.get("/api/orgs", headers=P).json()]
     assert hide(False).json()["hidden"] is False and c.get(f"/api/orgs/{club['id']}", headers=P).status_code == 200
-    # schools come from KBTU's site (seed_schools, owner Oct 14), never made by hand; their President by the same link
+    # schools come from KBTU's site (seed_schools), never made by hand; their President by the same link
     for kind in ("office", "school"):
         assert c.post("/api/admin/orgs", headers=A, json={"name": "School of IT", "short": "IT", "emoji": "laptop_3d", "kind": kind}).status_code == 400
     con = db.connect(cfg.db_path)
@@ -950,7 +950,7 @@ def test_posts(env):
 
 
 def test_invite_cards(env, monkeypatch):
-    """Invites go out as our bot's card (owner, Oct 4): a line of text and a button — the link only behind the button,
+    """Invites go out as our bot's card: a line of text and a button — the link only behind the button,
     never in the text; a club's card is for its Vice+ only."""
     import json
     import httpx
@@ -1014,7 +1014,7 @@ def test_checkin_by_name(env):
 
 
 def test_event_updates(env):
-    """An organizer's update (owner, Oct 4): Head+ only, pinned on the event for everyone, the bot tells the people going
+    """An organizer's update: Head+ only, pinned on the event for everyone, the bot tells the people going
     (our template, never the organizer's words), three a day at most; deleting it drops the queued message."""
     c, cfg = env
     pres, mem, ali = login(c, 80, "pres"), login(c, 81, "mem"), login(c, 82, "ali")
@@ -1041,8 +1041,8 @@ def test_event_updates(env):
 
 
 def test_ratings(env):
-    """One tap after the event (Oct 4): only people checked in, from the end until 7 days later; anonymous to the club
-    (average, counts, comments without names; from three ratings on, Oct 17); the bot asks an hour after the end unless reminders are off."""
+    """One tap after the event: only people checked in, from the end until 7 days later; anonymous to the club
+    (average, counts, comments without names; from three ratings on); the bot asks an hour after the end unless reminders are off."""
     c, cfg = env
     pres, ali, zhan = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan")
     con = db.connect(cfg.db_path)
@@ -1077,7 +1077,7 @@ def test_ratings(env):
 
 
 def test_calendar_file(env):
-    """"To calendar" on the ticket (Oct 4): the going get a signed link the phone's browser opens with no session."""
+    """"To calendar" on the ticket: the going get a signed link the phone's browser opens with no session."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
     con = db.connect(cfg.db_path)
@@ -1098,7 +1098,7 @@ def test_calendar_file(env):
 
 
 def test_album(env):
-    """The guests' album (Oct 4): who came adds up to 10 photos from the start until a week after the end, the team too;
+    """The guests' album: who came adds up to 10 photos from the start until a week after the end, the team too;
     the one who added it or the club's Head+ take one out; guests see none; deleting my data takes mine out."""
     import io
     from PIL import Image
@@ -1146,7 +1146,7 @@ def test_album(env):
 
 
 def test_album_reports(env):
-    """A photo can be reported (Oct 12): gone for the reporter at once, for everyone after two people, the admin's queue
+    """A photo can be reported: gone for the reporter at once, for everyone after two people, the admin's queue
     shows its thumb and "take down" deletes it; "Photos from participants" off = only the team adds; who added it shows."""
     import dataclasses
     import io
@@ -1190,7 +1190,7 @@ def test_album_reports(env):
     assert len(c.get("/api/events/1", headers=P).json()["photos"]) == 1 and c.get("/api/events/1", headers=Z).json()["photos"] == []
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM event_photos").fetchone()[0] == 0 and c.get("/api/admin/reports", headers=B).json() == []
-    # kept 30 days for an undo (owner, Oct 25): the file stays, "taken down" lists it, Restore puts it back in the album
+    # kept 30 days for an undo: the file stays, "taken down" lists it, Restore puts it back in the album
     path = con.execute("SELECT path FROM files WHERE id = ?", (ph["id"],)).fetchone()[0]
     on_disk = lambda: (Path(cfg.db_path).parent / "media" / f"{path}.webp").exists()  # noqa: E731
     assert on_disk() and [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("photo", ph["id"])]
@@ -1214,7 +1214,7 @@ def test_album_reports(env):
 
 
 def test_bring_a_friend(env):
-    """"Bring a friend" (Oct 4): my friends and where they stand; one bot card per friend and event; the friend's
+    """"Bring a friend": my friends and where they stand; one bot card per friend and event; the friend's
     registration credits the first one who asked ("Life of the party"); the card goes quiet once they're in."""
     c, cfg = env
     pres, ali, zhan, dana = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan"), login(c, 93, "dana")
@@ -1315,7 +1315,7 @@ def test_comments(env):
 
 
 def test_question_badges(env):
-    """Studio's "questions waiting" (owner, Oct 5: they stayed after he read and answered): a Head+'s answer as themselves
+    """Studio's "questions waiting" (they stayed after he read and answered): a Head+'s answer as themselves
     counts like the club's, their own words are never questions, and reading the thread clears it for the reader only."""
     c, cfg = env
     pres, vice, ali = login(c, 90, "pres"), login(c, 91, "vice"), login(c, 92, "ali")
@@ -1346,7 +1346,7 @@ def test_question_badges(env):
 
 
 def test_nick_and_photo(env):
-    """A nickname and my own photo (owner, Oct 5): everyone sees the nick, organizers the real name beside it; my photo
+    """A nickname and my own photo: everyone sees the nick, organizers the real name beside it; my photo
     turns "Photo from Telegram" off, on again is Telegram's; a report takes the nick, photo and "about me" down."""
     import dataclasses
     import io
@@ -1411,13 +1411,13 @@ def test_nick_and_photo(env):
     c.patch("/api/me", headers=A, json={"nick": "Ali again"})
     c.post("/api/me/photo", headers=A, content=raw.getvalue())
     assert delete_now(c, cfg, A) is None
-    # deleting the account takes the kept copy at once (owner, Oct 25): the nick and words, the photo off the disk
+    # deleting the account takes the kept copy at once: the nick and words, the photo off the disk
     assert not con.execute("SELECT 1 FROM takedowns WHERE user_id = ?", (ali["id"],)).fetchone() and not (Path(cfg.db_path).parent / newer).exists()
     u = con.execute("SELECT nick, avatar_tg, avatar_file_id FROM users WHERE id = ?", (ali["id"],)).fetchone()
     assert tuple(u) == (None, 1, None) and not con.execute("SELECT 1 FROM files WHERE kind = 'avatar' AND owner_id = ?", (ali["id"],)).fetchone()
 
 def test_calendar_feed(env):
-    """My calendar feed (Oct 5): one secret address per student, kept; everything I go to (a cancelled event struck
+    """My calendar feed: one secret address per student, kept; everything I go to (a cancelled event struck
     through); the page hands webcal:// to the phone's calendar; gone with my data."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
@@ -1445,7 +1445,7 @@ def test_calendar_feed(env):
 
 
 def test_unlock_moment(env):
-    """A check-in that brings a new achievement level (Oct 5): the date it was reached, the bot's message once, and the
+    """A check-in that brings a new achievement level: the date it was reached, the bot's message once, and the
     app's unlock moment until it has been celebrated."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
@@ -1521,7 +1521,7 @@ def test_first_fifty(env, monkeypatch):
     the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
     stays empty, never given again: a return gets a new one."""
     c, cfg = env
-    monkeypatch.setattr(logic.awards, "FIRST_N", 2)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 2)
     con = db.connect(cfg.db_path)
     c.get("/api/me", headers=tma(69, "Boss"))
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 69")
@@ -1538,7 +1538,7 @@ def test_first_fifty(env, monkeypatch):
     assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 2
     assert c.get("/api/me", headers=tma(73, "Guest")).json()["no"] is None
     # migration 36: a card within the 500 that missed the award gets it quietly; then everyone has it = 100%
-    monkeypatch.setattr(logic.awards, "FIRST_N", 500)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 500)
     con.execute("DELETE FROM achievement_grants WHERE user_id = ?", (cc["id"],))
     con.execute("DELETE FROM achievement_levels WHERE user_id = ?", (cc["id"],))
     con.executescript(dict(db.MIGRATIONS)[36])
@@ -1619,7 +1619,7 @@ def test_grants(env):
 
 
 def test_grant_scanner(env):
-    """The owner's batch scanner (PLAN "Creator awards", Oct 12): a badge QR is one grant, a wrong code finds nobody, a
+    """The owner's batch scanner (PLAN "Creator awards"): a badge QR is one grant, a wrong code finds nobody, a
     secret one only once; undo within a minute takes the level and its unsent card back; "You gave" lists them."""
     import dataclasses
     c, cfg = env
@@ -1670,7 +1670,7 @@ def test_course_day(env, monkeypatch):
     assert courses() == [4, 4, 6, 3, 2] and courses()[0] == logic.course_of("26B000001")
     assert logic.course_of("19B000006") == 4 and logic.course_of("20M000007") == 2 and logic.course_of("20X000008") == 6
     # migration 62 (its UPDATEs; the column exists already): course_year from synced_at (or an August ID's own year);
-    # a typed-in year (written since the portal closed, Oct 19) past the degree's last is capped, the portal's and staff's never
+    # a typed-in year (written since the portal closed) past the degree's last is capped, the portal's and staff's never
     oct20, oct10, spring26 = (calendar.timegm(d) for d in ((2026, 10, 20, 0, 0, 0), (2026, 10, 10, 0, 0, 0), (2026, 4, 1, 0, 0, 0)))
     for uid, sid, course, synced, ver in zip(ids, ("21B000001", "20B000002", "20M000003", "27B000004", "24M000005"), (6, 5, 4, 1, 3),
                                              (oct20, spring26, oct20, oct10, oct20), ("v3", "v3", "v3", "v3", "staff")):
@@ -1682,7 +1682,7 @@ def test_course_day(env, monkeypatch):
 
 
 def test_admin_stats(env, monkeypatch):
-    """The admin's stats (PLAN, Oct 12): online in 10 minutes, active day/week/month, students, new today; a row a night
+    """The admin's stats (PLAN): online in 10 minutes, active day/week/month, students, new today; a row a night
     just after midnight from seen_at, none later in the day; counts only."""
     import dataclasses
     c, cfg = env
@@ -1770,10 +1770,10 @@ def test_club_applications(env, monkeypatch):
     assert c.get("/api/admin/club-applications", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
     real = logic.set_role
-    monkeypatch.setattr(logic.appteam, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(logic.oversight, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     with pytest.raises(RuntimeError):
         c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True})
-    monkeypatch.setattr(logic.appteam, "set_role", real)
+    monkeypatch.setattr(logic.oversight, "set_role", real)
     assert not con.execute("SELECT 1 FROM orgs WHERE name = 'Chess Club'").fetchone()
     assert c.get("/api/club-applications/mine", headers=A).json()["application"]["status"] == "pending"
     done = c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True}).json()
@@ -1863,7 +1863,7 @@ def test_club_profile(env):
     assert c.get("/api/orgs/1", headers=M).json()["description"] == "We build things."                    # nothing half-saved
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'org_edit'").fetchone()[0] == 1
 
-    # the logo (owner, Oct 5): the editor's own upload goes on and shows wherever the club does; a stray id doesn't; null takes it off
+    # the logo: the editor's own upload goes on and shows wherever the club does; a stray id doesn't; null takes it off
     import io
     from PIL import Image
     raw = io.BytesIO()
@@ -1999,7 +1999,7 @@ def test_teambuilding_thunder(env):
 
 
 def test_message_teammate(env):
-    """"Message on Telegram" (owner, Oct 6): a profile carries the @username to the same club's team only."""
+    """"Message on Telegram": a profile carries the @username to the same club's team only."""
     c, cfg = env
     pres, mem, out = login(c, 95, "pres"), login(c, 96, "mem"), login(c, 97, "out")
     con = db.connect(cfg.db_path)
@@ -2271,7 +2271,7 @@ def test_receipt_reading(env, monkeypatch):
 def test_deadline_and_free_first(env):
     """A registration deadline closes "Going" (NULL: open until the start); a paid event's first N 1st-year students
     come free: going at once, no hold, no receipt; the waitlist hands a freed free seat to the next 1st-year; the
-    number can change after receipts are in, the payment details can't (owner, Oct 5)."""
+    number can change after receipts are in, the payment details can't."""
     import io
     from PIL import Image
     c, cfg = env
@@ -2433,7 +2433,7 @@ def test_team_two(env):
     assert c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"role": "head"}).json()[2]["role"] == "head"  # the old way still works
     c.patch(f"/api/orgs/1/members/{uid[10]}", headers=tma(21), json={"role": "member"})
 
-    # the toggles (owner, Oct 7: "as in Telegram"): a role is its rights; the highest ranks it; only rights I have, below my level
+    # the toggles: a role is its rights; the highest ranks it; only rights I have, below my level
     made = c.post("/api/orgs/1/roles", headers=tma(21), json={"name": "SMM", "color": "#FF4FA3", "rights": ["posts", "posts"]}).json()["roles"]
     r_smm = next(r for r in made if r["name"] == "SMM")
     assert (r_smm["rights"], r_smm["level"]) == (["door", "posts"], "head")  # the door is everyone's
@@ -2456,7 +2456,7 @@ def test_team_two(env):
     assert c.patch(f"/api/orgs/1/members/{uid[22]}", headers=tma(22), json={"tags": [tag]}).status_code == 200
     assert c.patch(f"/api/orgs/1/members/{uid[21]}", headers=tma(22), json={"tags": [tag]}).status_code == 403
     assert c.patch(f"/api/orgs/1/members/{uid[11]}", headers=tma(22), json={"tags": [tag + 99]}).status_code == 400
-    # the Vice and the President tag each other and themselves; a Vice takes a role of their own level (owner, Oct 12)
+    # the Vice and the President tag each other and themselves; a Vice takes a role of their own level
     assert c.patch(f"/api/orgs/1/members/{uid[20]}", headers=tma(21), json={"tags": [tag]}).status_code == 200
     assert c.patch(f"/api/orgs/1/members/{uid[20]}", headers=tma(20), json={"tags": []}).status_code == 200
     assert c.patch(f"/api/orgs/1/members/{uid[21]}", headers=tma(21), json={"roleId": treasurer}).status_code == 200
@@ -2511,7 +2511,7 @@ def test_streak_pauses():
 
 
 def test_memo(env, monkeypatch):
-    """PLAN "Memo in one tap" (Oct 11): next week's events that ask DMP for something become DMP's complex memos in one
+    """PLAN "Memo in one tap": next week's events that ask DMP for something become DMP's complex memos in one
     email, signed by whoever opens it; Wednesday morning the President and Vices hear it's ready. A place may be left
     to be confirmed: the memo then asks for any room, the organizer hears 7/3/1/0 days before, and typing the room in
     later sends nobody a message (the 2-hour reminder says it)."""
@@ -2573,7 +2573,7 @@ def test_memo(env, monkeypatch):
 
 
 def test_memo_v2(env, monkeypatch):
-    """Memo v2 (PLAN stage 2, Oct 12): one memo for the week with every request, a meeting's own line, the signature in
+    """Memo v2 (PLAN stage 2): one memo for the week with every request, a meeting's own line, the signature in
     kk, ru, en with the Latin name (fixed once); the secretary's "memo" right; sent events leave it until an edit;
     later events behind a switch; Wednesday's message to everyone with the right."""
     c, cfg = env
@@ -2625,7 +2625,7 @@ def test_memo_v2(env, monkeypatch):
     assert texts._dates(["2026-10-14", "2026-10-13", "2026-11-03"]) == f"13, 14 {texts.MONTHS['ru'][9]} \u0438 3 {texts.MONTHS['ru'][10]} 2026"
     seventh = next(x for x in t.split("\n") if x.startswith("7) "))
     assert "80" in seventh and "Poster" not in t                                            # the meeting's room: numbered on
-    # printing goes in its own letter to the Publishing Center (owner, Oct 14), signed in Russian
+    # printing goes in its own letter to the Publishing Center, signed in Russian
     pr = m["print"]
     assert pr["to"] == "ic@kbtu.kz" and "Hackday" in pr["subject"] and "General meeting" not in pr["subject"]
     for bit in ("1) ", "Poster", "A3", f"{texts.MEMO2_DENSITY[2]} ", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]), "+7 700 111 22 33"):
@@ -2641,7 +2641,7 @@ def test_memo_v2(env, monkeypatch):
     assert c.post("/api/orgs/1/memo/sent", headers=tma(21), json={"ids": [a["id"], 90]}).status_code == 204
     m = c.get("/api/orgs/1/memo", headers=tma(20)).json()
     assert m["events"] == [] and texts.MEMO2_BLANK.format(org="StudEx") in m["text"] and {x["id"] for x in m["sent"]} == {a["id"], 90} and m["sent"][0]["sentBy"]
-    # DMP sees it in the app (owner, Oct 13): the club, its events, who said "sent"; others may not look
+    # DMP sees it in the app: the club, its events, who said "sent"; others may not look
     assert c.get("/api/registry/memos", headers=tma(20)).status_code == 403
     login(c, 29, "dmp")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
@@ -2662,7 +2662,7 @@ def test_memo_v2(env, monkeypatch):
     told = {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'memo_ready'")}
     assert told == {uid[20], uid[21]}
 
-    # with nothing asked, the blank with the signature and the templates (owner, Oct 15)
+    # with nothing asked, the blank with the signature and the templates
     con.execute("UPDATE events SET memo = NULL WHERE org_id = 1")
     m = c.get("/api/orgs/1/memo", headers=tma(21)).json()
     assert m["text"].startswith(texts.MEMO2_TO) and texts.MEMO2_BLANK.format(org="StudEx") in m["text"] and m["signFrom"] in m["text"]
@@ -2674,7 +2674,7 @@ def test_memo_v2(env, monkeypatch):
 
 
 def test_place_changes(env, monkeypatch):
-    """PLAN "Place and time" (Oct 12): one KBTU room for another tells only those with reminders off (the 2-hour reminder
+    """PLAN "Place and time": one KBTU room for another tells only those with reminders off (the 2-hour reminder
     shows it); another venue tells everyone, edits within 10 minutes in one message; within 2 hours of the start, at
     once and only to who isn't checked in; Studio's "Change room" during the event; each new place a line in Updates."""
     c, cfg = env
@@ -2717,7 +2717,7 @@ def test_place_changes(env, monkeypatch):
 
 
 def test_comment_replies(env):
-    """Comment replies (PLAN, Oct 12): a reply quotes the comment it answers (only one still up in the same thread), and
+    """Comment replies (PLAN): a reply quotes the comment it answers (only one still up in the same thread), and
     its author hears it once an hour per thread; not for answering oneself, not twice for an asker the club answers."""
     c, cfg = env
     for tg, name in ((20, "pres"), (10, "ali"), (11, "zhan")):
@@ -2747,7 +2747,7 @@ def test_comment_replies(env):
 
 
 def test_casting(env):
-    """Casting (PLAN "Casting", Oct 11): a club opens a round with its tags as departments and a few questions; its
+    """Casting (PLAN "Casting"): a club opens a round with its tags as departments and a few questions; its
     followers hear it; students apply (a department's own question only if they picked it); the casting team (Head+ by
     default) sees the applications with what only the app knows, votes, takes one into a department; the results in one
     tap make the accepted members with the department's tag and tell everyone."""
@@ -2833,7 +2833,7 @@ def test_casting(env):
 
 
 def test_saved_tomorrow(env, monkeypatch):
-    """"Save" with a purpose (Oct 11, instead of a like): the day before, at noon, whoever saved an event and isn't going
+    """"Save" with a purpose (instead of a like): the day before, at noon, whoever saved an event and isn't going
     hears it once (with the reminders' switch); signing up meanwhile quiets it; the organizer sees how many saved it."""
     c, cfg = env
     for uid, name in ((20, "pres"), (10, "ann"), (11, "bob")):
@@ -2860,7 +2860,7 @@ def test_saved_tomorrow(env, monkeypatch):
 
 
 def test_badge_skin(env):
-    """Badge skins (owner, Oct 13): I show the badge of an official club I'm in, or the KBTU one; never picked, a club
+    """Badge skins: I show the badge of an official club I'm in, or the KBTU one; never picked, a club
     with a badge shows by itself; my pick holds, and others see it. Since Oct 20 anyone may try on any club's; the
     creator's own is his alone."""
     c, cfg = env
@@ -2876,21 +2876,21 @@ def test_badge_skin(env):
     assert c.patch("/api/me", headers=P, json={"skin": None}).json()["skin"] is None  # picked KBTU: it holds
     for bad in (2, 3, "1", True, "sower"):  # not official, not a club, not an id, not the creator
         assert c.patch("/api/me", headers=P, json={"skin": bad}).status_code == 400
-    assert c.patch("/api/me", headers=A, json={"skin": 1}).json()["skin"] == 1  # not in it: tried on all the same (Oct 20)
+    assert c.patch("/api/me", headers=A, json={"skin": 1}).json()["skin"] == 1  # not in it: tried on all the same
     con.execute("UPDATE users SET skin_pick = NULL, skin_org = NULL WHERE id = ?", (ali["id"],))
     con.commit()
     assert c.patch("/api/me", headers=P, json={"skin": 1}).json()["skin"] == 1
     assert c.get(f"/api/users/{pres['id']}", headers=A).json()["skin"] == 1
     con.execute("DELETE FROM org_members WHERE org_id = 1")
     con.commit()
-    assert c.get("/api/me", headers=P).json()["skin"] == 1  # a pick holds after leaving: anyone may wear it (Oct 20)
+    assert c.get("/api/me", headers=P).json()["skin"] == 1  # a pick holds after leaving: anyone may wear it
     con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] is None  # never picked: only a club I'm in comes by itself
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (3, 'kn', 'club', 'KBTU Knights', 'KN', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (3, ?, 'member', 0)", (pres["id"],))
     con.commit()
-    assert c.patch("/api/me", headers=P, json={"skin": 3}).json()["skin"] == 3  # Knights have one too (Oct 20)
+    assert c.patch("/api/me", headers=P, json={"skin": 3}).json()["skin"] == 3  # Knights have one too
     con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] == 3                        # and it comes by itself
@@ -2902,7 +2902,7 @@ def test_badge_skin(env):
 
 
 def test_important_post(env):
-    """An "Important" post (owner, Oct 13): Vice+ write it; the club's members (not the author) hear it from the bot, one
+    """An "Important" post: Vice+ write it; the club's members (not the author) hear it from the bot, one
     such message a day per club at most; other labels message nobody."""
     from kbtu import bot
     c, cfg = env
@@ -2929,13 +2929,13 @@ def test_important_post(env):
 
 
 def test_head_for_monitors(env):
-    """An uptime monitor's HEAD gets 200 like a GET (UptimeRobot showed the app down with 405, Oct 13)."""
+    """An uptime monitor's HEAD gets 200 like a GET (UptimeRobot showed the app down with 405)."""
     c, _ = env
     assert c.head("/").status_code == 200 and c.get("/").status_code == 200
 
 
 def test_share_poster(env):
-    """A coverless event's share card gets its own poster, not the app picture; no place, no dangling dot (Oct 13)."""
+    """A coverless event's share card gets its own poster, not the app picture; no place, no dangling dot."""
     c, _ = env
     r = c.get("/og/poster.jpg?c=3B6BFF&e=party_popper_3d")
     assert r.status_code == 200 and r.content[:2] == b"\xff\xd8"
@@ -2945,7 +2945,7 @@ def test_share_poster(env):
 
 
 def test_delete_cancelled_event(env):
-    """A cancelled event can be deleted unless it has payments; a live one can't (owner, Oct 13)."""
+    """A cancelled event can be deleted unless it has payments; a live one can't."""
     c, cfg = env
     pres = login(c, 20, "pres")
     con = db.connect(cfg.db_path)
@@ -2976,7 +2976,7 @@ def test_delete_cancelled_event(env):
 
 
 def test_grant_link(env):
-    """The admin's one-time award link: one student, once, celebrated (owner, Oct 13: Bug hunter comes from a chat)."""
+    """The admin's one-time award link: one student, once, celebrated (Bug hunter comes from a chat)."""
     c, cfg = env
     boss, ali = login(c, 60, "boss"), login(c, 61, "ali")
     con = db.connect(cfg.db_path)
@@ -2989,7 +2989,7 @@ def test_grant_link(env):
 
 
 def test_premium_emoji(monkeypatch):
-    """The pack's emoji (owner, Oct 14): the plain ones our texts use become <tg-emoji>, with or without U+FE0F; the rest stay."""
+    """The pack's emoji: the plain ones our texts use become <tg-emoji>, with or without U+FE0F; the rest stay."""
     import re as _re
     from kbtu import bot
     monkeypatch.setattr(bot, "_custom", {"🎉": "1", "⚠": "2"})
@@ -3000,7 +3000,7 @@ def test_premium_emoji(monkeypatch):
 
 
 def test_schools_seeded(env):
-    """KBTU's schools come from its site once (owner, Oct 14): crests, three languages; a school made by hand before is
+    """KBTU's schools come from its site once: crests, three languages; a school made by hand before is
     filled in, not doubled; an edit by hand drops that field's translations."""
     c, cfg = env
     con = db.connect(cfg.db_path)
@@ -3026,7 +3026,7 @@ def test_schools_seeded(env):
 
 
 def test_official_roles(env):
-    """Every club has the three official roles (owner, Oct 15): the President (the level) and the fixed Vice
+    """Every club has the three official roles: the President (the level) and the fixed Vice
     and Head, which can't be renamed, deleted or raised (their rights below the level may be tuned); a Vice or Head
     without a role name holds them, the old President too after handing the club over."""
     c, cfg = env
@@ -3053,7 +3053,7 @@ def test_official_roles(env):
 
 
 def test_volunteers(env):
-    """Volunteers (owner, Oct 15): an event asks for N, maybe not year 1; a student applies with a "why", the organizer
+    """Volunteers: an event asks for N, maybe not year 1; a student applies with a "why", the organizer
     says yes or no and the bot tells them; no more yeses than places."""
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "ali"), (22, "bota"), (23, "dan")):
@@ -3082,7 +3082,7 @@ def test_volunteers(env):
 
 
 def test_event_chat(env):
-    """An event's group without a userbot (owner, Oct 15): "Create chat" gives a startgroup link with a one-time token;
+    """An event's group without a userbot: "Create chat" gives a startgroup link with a one-time token;
     the bot's /start in the group from an organizer links it; join requests: those going and the team in, others not."""
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "ali"), (22, "bota")):
@@ -3109,7 +3109,7 @@ def test_event_chat(env):
 
 
 def test_events_channel(env, monkeypatch):
-    """The events channel (owner, Oct 15): a published public event is due once; an edit makes it due again; a cancel
+    """The events channel: a published public event is due once; an edit makes it due again; a cancel
     marks its post; a team-only one never goes."""
     c, cfg = env
     login(c, 20, "pres")
@@ -3161,7 +3161,7 @@ def test_events_channel(env, monkeypatch):
     con.execute("UPDATE events SET comments_on = 1 WHERE id = ?", (e["id"],))
     c.post(f"/api/events/{e['id']}/cancel", headers=tma(20))
     assert logic.channel_due(con)[0][1].startswith("❌")
-    # deleting the cancelled event deletes its post and the post's copy in the group (owner, Oct 18: it stayed)
+    # deleting the cancelled event deletes its post and the post's copy in the group (it stayed)
     assert c.delete(f"/api/events/{e['id']}", headers=tma(20)).status_code == 204
     assert logic.channel_gone(con) == [(7, "-100 70")]
     sent.clear()
@@ -3175,7 +3175,7 @@ def test_events_channel(env, monkeypatch):
 
 
 def test_map_graph(env):
-    """Indoor routes' graph (PLAN item 22): anyone reads Claude's draft; nobody saves it (owner, Oct 16: the editor is off)."""
+    """Indoor routes' graph (PLAN item 22): anyone reads Claude's draft; nobody saves it (the editor is off)."""
     c, _ = env
     login(c, 20, "ali")
     g = c.get("/api/map/graph", headers=tma(20)).json()
@@ -3184,7 +3184,7 @@ def test_map_graph(env):
 
 
 def test_exit_link(env):
-    """"Help me get out" (owner, Oct 15): kbtu.sow.kz/exit goes to the app's exit screen; /exit in the bot answers with
+    """"Help me get out": kbtu.sow.kz/exit goes to the app's exit screen; /exit in the bot answers with
     a message and its button, to forward anywhere."""
     c, cfg = env
     r = c.get("/exit", follow_redirects=False)
@@ -3198,7 +3198,7 @@ def test_exit_link(env):
 
 
 def test_premium_emoji_everywhere(env, monkeypatch):
-    """The pack's emoji in every HTML text the bot sends, channel and groups too (owner, Oct 18); refused: once more plain."""
+    """The pack's emoji in every HTML text the bot sends, channel and groups too; refused: once more plain."""
     import httpx
     _, cfg = env
     monkeypatch.setattr(bot, "_custom", {"💬": "42"})
@@ -3221,7 +3221,7 @@ def test_premium_emoji_everywhere(env, monkeypatch):
 
 
 def test_card_number_never_given_twice(env):
-    """Card numbers (owner, Oct 18): the last card's account purged, the next student still gets a new number."""
+    """Card numbers: the last card's account purged, the next student still gets a new number."""
     c, cfg = env
     for tg in (31, 32):
         login(c, tg, f"s{tg}")
@@ -3234,7 +3234,7 @@ def test_card_number_never_given_twice(env):
 
 
 def test_nightly_backup(env, monkeypatch):
-    """A copy of the database each night after 04:00 Almaty, once, the last 14 kept (owner, Oct 18: there were none)."""
+    """A copy of the database each night after 04:00 Almaty, once, the last 14 kept (there were none)."""
     _, cfg = env
     con = db.connect(cfg.db_path)
     day0 = 20000 * 86400 - 5 * 3600                                    # 00:00 Almaty
@@ -3249,7 +3249,7 @@ def test_nightly_backup(env, monkeypatch):
 
 
 def test_channel_refused_post_skipped(env):
-    """A post Telegram refuses for itself (a caption too long) is skipped, so the ones after it still go (review, Oct 18);
+    """A post Telegram refuses for itself (a caption too long) is skipped, so the ones after it still go;
     no rights stops the round instead, every post waits."""
     import httpx
     c, cfg = env
@@ -3286,7 +3286,7 @@ def test_channel_refused_post_skipped(env):
 
 
 def test_manual_sign_in(env, monkeypatch):
-    """Microsoft only (owner, Oct 20): the ID and year are typed only after a Microsoft sign-in; a row typed in before
+    """Microsoft only: the ID and year are typed only after a Microsoft sign-in; a row typed in before
     acts as nobody until Microsoft confirms it; an ID held by such a row goes to the Microsoft one, held by a confirmed
     one it's refused; the admins hear of both with both contacts. The admin adds someone with no Microsoft by hand."""
     c, cfg = env
@@ -3454,7 +3454,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(21, token()).status_code == 403                             # not a kbtu.kz sign-in name
     graph["userPrincipalName"] = "B_REAL@kbtu.kz"                             # "mail" may be a gmail: the sign-in name counts
     st = msauth.state_for(cfg.token_key, uid(21))
-    assert finish(21, token(), st=st).json() == {"ok": True}                  # linked at once (owner, Oct 24: no return code)
+    assert finish(21, token(), st=st).json() == {"ok": True}                  # linked at once (no return code)
     assert finish(21, token(), st=st).status_code == 403                      # each link once
     me = c.get("/api/me", headers=tma(21)).json()
     assert "msCode" not in me
@@ -3501,7 +3501,7 @@ def test_suggest_chat(env, monkeypatch):
     assert say(30, **{"chat_shared": {"request_id": 2, "chat_id": -100555, "title": "Closed"}}) == texts.bot_message("ru", "chat_invite")[0]
     assert [logic.chat_link(x) for x in ("@A_chat", "t.me/+AbCdEf12", "https://t.me/joinchat/AbCdEf12", "t.me/+x")] \
         == ["https://t.me/a_chat", "https://t.me/+AbCdEf12", "https://t.me/+AbCdEf12", None]
-    assert say(30, text="https://t.me/+AbCdEf12").startswith("✅")                  # a closed chat by its invite link (owner, Oct 21)
+    assert say(30, text="https://t.me/+AbCdEf12").startswith("✅")                  # a closed chat by its invite link
     con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "t.me/joinchat/AbCdEf12"}).json()["status"] == "waiting"  # the app's sheet
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "nope"}).json()["status"] == "bad"
@@ -3554,21 +3554,43 @@ def test_translations(env):
             ai.parse(bad, {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)
     assert ai.parse('{"kk": {"title": "' + "\u0430" * 300 + '"}, "en": {"title": "b"}}', {"title": "\u041d\u043e\u0447\u044c"}, "ru", L)["kk"]["title"] == "\u0430" * 80
 
-    def call(answer: httpx.Response):
+    # the AI chain (llm.py): the next link when one is limited, busy or unusable; a limited one rests, an unusable one doesn't
+    import dataclasses
+    from kbtu import llm
+    chained = dataclasses.replace(env[1], cf_account_id="acc", cf_ai_token="cf", munito_keys=("m1", "m2"), groq_key="gq",
+                                  ai_chain="cf:model-a,munito:model-b,groq:model-c")
+    assert [x.name for x in llm.links(chained)] == ["cf:model-a", "munito:model-b", "munito2:model-b", "groq:model-c"]
+    assert not llm.available(env[1])                                                   # no keys: no chain, the translator stays off
+    good_answer = {"choices": [{"finish_reason": "stop", "message": {"content": '{"kk": {"title": "\u0422"}, "en": {"title": "N"}}'}}]}
+    def call(answers: dict):
+        seen = []
+        def handler(r):
+            key = r.headers["authorization"].split()[1]
+            seen.append(key)
+            return answers.get(key) or httpx.Response(200, json=good_answer)
         async def go():
-            async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: answer)) as http:
-                return await ai.translate(http, "acc", "tok", {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
-        return asyncio.run(go())
-    ok = {"result": {"choices": [{"finish_reason": "stop", "message": {"content": '{"kk": {"title": "\u0422"}, "en": {"title": "N"}}'}}]}}
-    assert call(httpx.Response(200, json=ok)) == ("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}})  # the empty description isn't sent
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await ai.translate(chained, http, {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
+        return asyncio.run(go()), seen
+    llm._rest.clear()
+    assert call({}) == (("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}}), ["cf"])     # the empty description isn't sent
+    assert call({"cf": httpx.Response(429, headers={"retry-after": "120"})})[1] == ["cf", "m1"]
+    assert call({})[1] == ["m1"]                                                         # cf rests its two minutes
+    assert call({"m1": httpx.Response(503)})[1] == ["m1", "m2"]                          # Munito's second key
+    llm._rest.clear()
+    assert call({"cf": httpx.Response(200, json={"choices": [{"message": {"content": "no json here"}}]})})[1] == ["cf", "m1"]
+    assert call({})[1] == ["cf"]                                                         # a bad answer doesn't rest the link
+    assert call({"cf": httpx.Response(400, json={"errors": [{"code": 4006}]})})[1] == ["cf", "m1"]  # Cloudflare's day spent
+    assert call({})[1] == ["m1"]                                                         # it rests for hours
+    llm._rest.clear()
+    busy = {k: httpx.Response(503) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Busy):
-        call(httpx.Response(429, json={"errors": []}))                    # a minute's rate limit: wait, no try counted
-    with pytest.raises(ai.Busy):
-        call(httpx.Response(502, text="<html>bad gateway</html>", headers={"content-type": "application/json"}))
-    with pytest.raises(ai.Limit):
-        call(httpx.Response(400, json={"errors": [{"code": 4006, "message": "daily free allocation"}]}))
+        call(busy)
+    llm._rest.clear()
+    junk = {k: httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]}) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Failed):
-        call(httpx.Response(200, json={"result": {"choices": [{"finish_reason": "length", "message": {"content": None}}]}}))
+        call(junk)
+    llm._rest.clear()
 
     c, cfg = env
     pres = login(c, 20, "pres")
@@ -3627,7 +3649,7 @@ def one_val(con, sql: str, *args):
 
 
 def test_admin_day_and_ai(env):
-    """The admin's chart opens a day: who came in, newcomers marked (owner, Oct 21). The AI page counts
+    """The admin's chart opens a day: who came in, newcomers marked. The AI page counts
     what was translated, what waits and what failed, and gives the failed three more tries."""
     _, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({1}))))
@@ -3646,7 +3668,7 @@ def test_admin_day_and_ai(env):
     assert prof[ali["id"]] and not prof[guest["id"]]
     assert c.get(f"/api/users/{guest['id']}", headers=tma(30)).status_code == 404
     ai = c.get("/api/admin/ai", headers=tma(1)).json()
-    assert set(ai) >= {"on", "today", "model", "events", "clubs", "failed"}
+    assert set(ai) >= {"on", "today", "chain", "usage", "events", "clubs", "failed"}
     assert c.post("/api/admin/ai/retry", headers=tma(30)).status_code == 403
     assert c.post("/api/admin/ai/retry", headers=tma(1)).status_code == 204
 
@@ -3719,7 +3741,7 @@ def test_db_must_exist(tmp_path, monkeypatch):
 
 
 def test_app_team(env):
-    """The app's team (owner, Oct 22): the owner alone gives or takes the admin role; an admin gives the moderator role
+    """The app's team: the owner alone gives or takes the admin role; an admin gives the moderator role
     and bans, never touching the owner, himself or another admin; a moderator only filters content; a ban needs a
     reason, drops the role, shows him why, and the bot stops writing; the owner reads the audit log."""
     import httpx
@@ -3828,7 +3850,7 @@ def test_profile_privacy(env, monkeypatch):
     assert "limited" not in full(14)                                                                   # an admin sees it all, uncounted
     assert c.get("/api/users/999999", headers=tma(13)).status_code == 404                             # nobody there: not counted
     assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(dan, ann)]  # only the stranger counts
-    monkeypatch.setattr(logic.awards, "PROFILES_A_DAY", 2)
+    monkeypatch.setattr(logic.profiles, "PROFILES_A_DAY", 2)
     assert c.get(f"/api/users/{ann}", headers=tma(13)).status_code == 200                              # the same one again: free
     assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
     assert c.get(f"/api/users/{cat}", headers=tma(13)).json()["error"] == "rate_limited"
@@ -3843,7 +3865,7 @@ def test_profile_privacy(env, monkeypatch):
 
 
 def test_report_limit(env, monkeypatch):
-    """The day's limit counts new reports only: updating one still waiting is free (the one report sheet, Oct 22)."""
+    """The day's limit counts new reports only: updating one still waiting is free (the one report sheet)."""
     c, cfg = env
     ann, bob, cat = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat")))
     monkeypatch.setattr(logic.moderation, "REPORTS_A_DAY", 1)
@@ -3935,7 +3957,7 @@ def test_custom_short_links(env):
     assert c.delete("/api/links/join-it", headers=H["other"]).status_code == 403
     assert c.delete("/api/links/join-it", headers=H["vice"]).status_code == 204
     assert go("/join-it").endswith("?startapp=cl_1")                                             # its posters open the club now
-    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # never another club's (review, Oct 26)
+    assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # never another club's
     assert "it-casting" in next(o for o in c.get("/api/admin/orgs", headers=H["boss"]).json() if o["id"] == 1)["shortLinks"]
     assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 204
     assert c.delete("/api/links/it-casting", headers=H["boss"]).status_code == 404
@@ -4022,7 +4044,7 @@ def test_staff_badge_and_chat_order(env):
 
 
 def test_dm_on(env):
-    """Telegram's "allow messages" from inside the app (owner, Oct 24): the bot may write at once, and the event just
+    """Telegram's "allow messages" from inside the app: the bot may write at once, and the event just
     signed up for gets its confirmation with the ticket; nothing for an event I'm not going to."""
     c, cfg = env
     pres, ali = login(c, 20, "pres"), login(c, 21, "ali")
@@ -4045,7 +4067,7 @@ def test_dm_on(env):
 
 
 def test_club_people(env):
-    """Members are public: President and Vice on the club, everyone behind a button; a club may hide the list (Oct 24)."""
+    """Members are public: President and Vice on the club, everyone behind a button; a club may hide the list."""
     c, cfg = env
     pres, vice, ali, bob = login(c, 70, "pres"), login(c, 71, "vice"), login(c, 72, "ali"), login(c, 73, "bob")
     con = db.connect(cfg.db_path)
@@ -4064,7 +4086,7 @@ def test_club_people(env):
 
 
 def test_club_abbr(env):
-    """A club's short name (owner, Oct 25): the clubs made before take their initials at start and keep a set one; a new
+    """A club's short name: the clubs made before take their initials at start and keep a set one; a new
     club has its initials from the first day; Vice+ edit it (one word, 2-8 characters), a member can't; DMP and the
     admin may set any club's, and only that."""
     c, cfg = env
@@ -4365,7 +4387,7 @@ def test_userbot_reads_telethon_messages(env):
 
 
 def test_mirror_languages(env):
-    """A school's channel in three languages (owner, Oct 26): the same announcement posted in kk, ru and en within half an
+    """A school's channel in three languages: the same announcement posted in kk, ru and en within half an
     hour is one post with the other two as its translations (an album whose caption comes after its photos too); two
     posts in one language stay two; a translation's edit and deletion touch only its language. A one-language post takes
     the translations the channel wrote in its comments; only without any, after 2 h, our AI, and the channel's own
@@ -4405,7 +4427,7 @@ def test_mirror_languages(env):
     assert con.execute("SELECT 1 FROM posts WHERE id = ?", (temp,)).fetchone() is None
     assert json.loads(con.execute("SELECT i18n FROM posts WHERE id = ?", (first,)).fetchone()[0])["en"]["title"] == "Photos from the day"
 
-    # a photo on its own, then the same text in kk, ru and en (SITE, Oct 26): one post, all three its languages
+    # a photo on its own, then the same text in kk, ru and en (SITE): one post, all three its languages
     pic = mirror.take(con, 700, mirror.Msg(id=40, date=t0 + 5000, media="video"))
     for i, x in enumerate((kk, ru, "Football, but agentic\nOn Friday")):
         assert mirror.take(con, 700, mirror.Msg(id=41 + i, date=t0 + 5000, text=x)) == pic
@@ -4478,7 +4500,7 @@ def test_userbot_off(env, caplog):
 
 
 def test_membership_oversee(env):
-    """DMP is an org in Studio (owner, Oct 26): a membership says whether I lead in an overseeing org, so Studio shows
+    """DMP is an org in Studio: a membership says whether I lead in an overseeing org, so Studio shows
     the registry with it picked; a plain member of DMP, or a club's Vice, doesn't get it."""
     c, cfg = env
     dana, ali = login(c, 90, "dana"), login(c, 91, "ali")
@@ -4565,7 +4587,7 @@ def test_roster_load_and_join(env):
 
 
 def test_roster_app_wins(env):
-    """PLAN 95, students already in the app (owner, Oct 26): what the app has wins. A membership held keeps its role (no
+    """PLAN 95, students already in the app: what the app has wins. A membership held keeps its role (no
     promotion, no demotion); a missing one is added, a President on the sheet where the club has another in the app
     comes in as Vice (counted in the load's summary); department, title, city, phone and year fill only what's empty."""
     from kbtu import roster
@@ -4637,7 +4659,7 @@ def test_phone_asked_at_signup(env):
     assert go(eids[0], phone="8 (701) 234-56-78").json()["my"]["status"] == "going"
     assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
     assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
-    # a club whose event never asked doesn't get the kept phone in its guest list (review, Oct 26)
+    # a club whose event never asked doesn't get the kept phone in its guest list
     plain = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{plain['id']}/publish", headers=tma(20))
     go(plain["id"])
@@ -4652,7 +4674,7 @@ def test_phone_asked_at_signup(env):
 
 
 def test_student_government_mark(env):
-    """The Student Government (owner, Oct 25): a mark and first in the clubs list, no rights beyond any club's."""
+    """The Student Government: a mark and first in the clubs list, no rights beyond any club's."""
     c, cfg = env
     login(c, 31, "student")
     h = tma(31)
@@ -4668,7 +4690,7 @@ def test_student_government_mark(env):
 
 
 def test_bot_binds_club_channel(env, monkeypatch):
-    """A chat picked in the bot by a club's President or Vice (owner, Oct 25): "is this your club's?"; yes puts it on
+    """A chat picked in the bot by a club's President or Vice: "is this your club's?"; yes puts it on
     the club's page (the first public channel its main one) with a link into Studio, no sends it to the catalog. A plain
     member is never asked; someone else's tap does nothing."""
     from kbtu import media
@@ -4724,7 +4746,7 @@ def test_bot_binds_club_channel(env, monkeypatch):
 
 
 def test_org_names(env):
-    """Org names, one style (owner, Oct 25): "KBTU" off either end on create and rename, an acronym the name carried
+    """Org names, one style: "KBTU" off either end on create and rename, an acronym the name carried
     goes to the abbr (in brackets, or before a dash), else the initials without "KBTU"."""
     import dataclasses
     for typed, name, abbr in [("KBTU Open Mic", "Open Mic", "OM"), ("Debate Club | kbtu", "Debate Club", "DC"),
@@ -4968,3 +4990,272 @@ def test_paths_no_test_ran(env):
     stock = asyncio.run(peek('<meta property="og:title" content="Group"><meta property="og:description" content="You can view and join @g right away.">'
                              '<meta property="og:image" content="https://telegram.org/img/t_logo.png"><div class="tgme_page_extra">35 members</div>'))
     assert (stock["about"], stock["image"], stock["members"], stock["channel"]) == (None, None, 35, False)  # Telegram's stock line and logo
+
+
+def test_forum_find_people(env, monkeypatch):
+    """F1 find people (PLAN "F1 spec" + "Forum adversarial review"): the gate; the skills catalog; who is matched (open to
+    projects, never the author, staff, DMP's people or guests); pings (top 5, 1 a day, 2 a week, project only, never
+    twice); nobody's Telegram before Accept; blocks; expiry; a report hides only with 3 old accounts and the AI;
+    deleting an account takes all of it."""
+    import dataclasses
+    from kbtu import ai
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
+    con = db.connect(cfg.db_path)
+    L = lambda uid, name: logic.Viewer(login(c, uid, name)["id"], "user", True)  # noqa: E731
+    mod = L(80, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod.id,))
+    mod = logic.Viewer(mod.id, "moderator", True)
+    M, S = tma(80), tma(81)
+    stu = L(81, "stu")
+    assert c.get("/api/forum/me", headers=S).status_code == 403                                     # students: not yet
+    assert TestClient(server.create(cfg)).get("/api/forum/me", headers=M).status_code == 404         # the flag off: no forum
+    # the catalog: normalised names, the same one found, close ones offered, the AI's no refused
+    web = c.post("/api/forum/skills", headers=M, json={"name": "  WEB!! "}).json()["skill"]
+    assert web["name"] == "web" and web["public"]
+    assert [x["name"] for x in c.post("/api/forum/skills", headers=M, json={"name": "webb"}).json()["didYouMean"]] == ["web"]
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    assert c.post("/api/forum/skills", headers=M, json={"name": "nasty word"}).json()["message"] == "ai"
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=None))                    # no AI: made, but private
+    figma = c.post("/api/forum/skills", headers=M, json={"name": "Figma"}).json()["skill"]
+    assert not figma["public"] and "figma" not in [x["name"] for x in logic.skills(con, stu, "fig")]
+    assert logic.set_my_forum(con, mod, {"skills": [web["id"], figma["id"]] * 3})["skills"] == [{"id": figma["id"], "name": "figma"}, {"id": web["id"], "name": "web"}]
+    with pytest.raises(logic.ApiError):
+        logic.set_my_forum(con, mod, {"skills": list(range(1, 7))})                                  # 6: more than 5
+
+    # people: open ones with the skill; never the author, staff, DMP's people, guests or anyone not open
+    people = {n: L(82 + i, n) for i, n in enumerate(("bob", "cat", "dmp", "eve", "fay", "gus", "hal", "ivy", "jon"))}
+    for n, v in people.items():
+        logic.set_my_forum(con, v, {"skills": [web["id"]], "open": n != "cat", "pings": True})
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (9, ?, 'member', 0)", (people["dmp"].id,))
+    guest = c.get("/api/me", headers=tma(99, "Guest")).json()["id"]                                # Telegram only, no KBTU
+    con.execute("UPDATE users SET open_projects = 1 WHERE id = ?", (guest,))
+    con.execute("INSERT INTO user_skills (user_id, skill_id) VALUES (?, ?)", (guest, web["id"]))
+    logic.set_my_forum(con, mod, {"open": True, "pings": True})
+    found = {x["person"]["id"] for x in logic.search_people(con, stu, web["id"])}
+    want = {people[n].id for n in ("bob", "eve", "fay", "gus", "hal", "ivy", "jon")}
+    assert found == want                                                                             # not cat, dmp, the guest, the moderator
+
+    # a project request pings the best 5 with pings on, once; the rest of the day nobody gets another
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=True))
+    ask = c.post("/api/forum/asks", headers=M, json={"kind": "project", "title": "A site for the jam", "body": "React", "skills": [web["id"]]}).json()
+    assert ask["matches"] == 7 and ask["status"] == "live"
+    pinged = [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'ask_match'")]
+    assert len(pinged) == 5 and set(pinged) <= want
+    ask2 = c.post("/api/forum/asks", headers=M, json={"kind": "project", "title": "A logo too", "skills": [web["id"]]}).json()
+    assert {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'ask_match' AND ref = ?", (f"am:{ask2['id']}",))} == want - set(pinged)
+    con.execute("UPDATE ask_pings SET at = at - 2 * 86400")                                          # two days on: a second this week
+    help_ = c.post("/api/forum/asks", headers=M, json={"kind": "help", "title": "Who has a charger?", "days": 1}).json()
+    assert help_["skills"] == [] and not con.execute("SELECT 1 FROM bot_outbox WHERE ref = ?", (f"am:{help_['id']}",)).fetchone()  # help: no pings
+    assert c.post("/api/forum/asks", headers=M, json={"kind": "help", "title": "Fourth"}).json()["message"] == "asks"  # 3 open at most
+    logic.close_ask(con, mod, help_["id"], True)
+    ask3 = logic.create_ask(con, mod, {"kind": "project", "title": "A third", "skills": [web["id"]]}, True)
+    week = [r[0] for r in con.execute("SELECT user_id FROM ask_pings WHERE ask_id = ?", (ask3["id"],))]
+    assert len(week) == 5
+    con.execute("UPDATE ask_pings SET at = at - 3600 WHERE ask_id = ?", (ask3["id"],))
+    logic.close_ask(con, mod, ask3["id"], False)
+    ask4 = logic.create_ask(con, mod, {"kind": "project", "title": "A fourth", "skills": [web["id"]]}, True)
+    assert not set(r[0] for r in con.execute("SELECT user_id FROM ask_pings WHERE ask_id = ?", (ask4["id"],))) & set(week)  # 2 this week
+    logic.close_ask(con, mod, ask4["id"], None)
+    held = logic.create_ask(con, mod, {"kind": "help", "title": "No AI answer"}, None)                 # no AI: a moderator first
+    assert (held["status"], held["why"]) == ("held", "check") and all(a["id"] != held["id"] for a in logic.asks(con, stu))
+
+    # an offer: nothing of either side's Telegram before Accept, then each gets the other's
+    bob = people["bob"]
+    con.execute("UPDATE users SET tg_username = 'bob_tg' WHERE id = ?", (bob.id,))
+    con.execute("UPDATE users SET tg_username = 'mod_tg' WHERE id = ?", (mod.id,))
+    assert logic.contact(con, bob, aid=ask["id"]) == {"status": "pending"}
+    before = json.dumps([logic.contacts(con, mod), logic.contacts(con, bob), logic.asks(con, bob), logic.asks(con, mod), logic.search_people(con, stu, web["id"])])
+    assert "bob_tg" not in before and "mod_tg" not in before and "telegram" not in before
+    cid = con.execute("SELECT id FROM contacts").fetchone()[0]
+    assert logic.decide_contact(con, bob.id, cid, True) is None                                      # only the asked side decides
+    assert logic.decide_contact(con, mod.id, cid, True) == "accepted"
+    assert logic.contacts(con, bob)[0]["telegram"] == "https://t.me/mod_tg" and logic.contacts(con, mod)[0]["telegram"] == "https://t.me/bob_tg"
+    assert {r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'contact_ok'")} == {bob.id, mod.id}
+
+    # a block: no offers either way, out of each other's matches and lists
+    eve = people["eve"]
+    logic.block(con, eve, mod.id)
+    with pytest.raises(logic.ApiError):
+        logic.contact(con, eve, aid=ask["id"])
+    assert all(a["id"] != ask["id"] for a in logic.asks(con, eve))
+    assert eve.id not in {x["person"]["id"] for x in logic.ask_people(con, mod, ask["id"])}
+
+    # expiry: gone from the lists
+    con.execute("UPDATE asks SET expires_at = ? WHERE id = ?", (logic.now() - 1, ask2["id"]))
+    assert ask2["id"] not in [a["id"] for a in logic.asks(con, bob)]
+
+    # reports: three from accounts over two weeks old AND the AI agreeing hide it; younger accounts or no AI: it stays
+    rep = lambda h: c.post("/api/reports", headers=h, json={"target": "ask", "id": ask["id"], "reason": "spam"}).status_code  # noqa: E731
+    hs = [tma(82 + i) for i in (1, 3, 4)]                                                             # cat, eve, fay
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    assert all(rep(h) == 204 for h in hs)
+    assert logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"             # new accounts don't count
+    con.execute("UPDATE users SET created_at = created_at - 15 * 86400")
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=None))
+    assert rep(hs[0]) == 204 and logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"  # no AI: a moderator's
+    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    assert rep(hs[1]) == 204
+    assert tuple(con.execute("SELECT status, why FROM asks WHERE id = ?", (ask["id"],)).fetchone()) == ("hidden", "reports")
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (mod.id,)).fetchone()  # the author is told
+
+    # deleting an account takes its skills, requests, offers, blocks and pings
+    delete_now(c, cfg, tma(85))                                                                       # eve
+    for t, col in (("user_skills", "user_id"), ("blocks", "user_id"), ("ask_pings", "user_id"), ("contacts", "from_id")):
+        assert not con.execute(f"SELECT 1 FROM {t} WHERE {col} = ?", (eve.id,)).fetchone(), t
+
+
+def test_forum_bot_cards(env, monkeypatch):
+    """The forum's cards in the bot: an offer with Accept / Decline (only the asked side's tap counts), a ping with a
+    stop button that turns the pings off, and the keyboard the postman sends."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    a, b = (logic.Viewer(login(c, uid, n)["id"], "user", True) for uid, n in ((90, "ann"), (91, "ben")))
+    web = con.execute("SELECT id FROM skills WHERE name = 'web'").fetchone()[0]
+    logic.set_my_forum(con, b, {"skills": [web], "open": True, "pings": True})
+    ask = logic.create_ask(con, a, {"kind": "project", "title": "A site", "skills": [web]}, True)
+    row = lambda kind: {**dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone()), "lang": "en"}  # noqa: E731
+    text, _, keys = bot._render(con, row("ask_match"))
+    assert text == texts.bot_message("en", "ask_match", skill="web", title="A site")[0]
+    assert keys[0][0]["start"] == f"fa_{ask['id']}" and keys[1][0]["callback_data"] == "ps:0"
+    logic.contact(con, b, aid=ask["id"])
+    text, _, keys = bot._render(con, row("contact_ask"))
+    cid = con.execute("SELECT id FROM contacts").fetchone()[0]
+    assert "Ben" in text and "A site" in text and [k["callback_data"] for k in keys[0]] == [f"ct:{cid}:y", f"ct:{cid}:n"]
+    sent = []
+    async def tg(cfg, http, method, body, files=None):
+        sent.append(body)
+    monkeypatch.setattr(bot, "_tg", tg)
+    class Http:
+        async def post(self, *a, **k):
+            return None
+    tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
+                                                                    "message": {"message_id": 5, "chat": {"id": who}}}))
+    tap(91, f"ct:{cid}:y")                                                                            # Ben can't accept his own offer
+    assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending" and sent[-1]["text"] == texts.bot_message("ru", "contact_gone")[0]
+    tap(90, f"ct:{cid}:y")
+    assert con.execute("SELECT status FROM contacts").fetchone()[0] == "accepted"
+    assert bot._render(con, {**row("contact_ok"), "ref": f"co:{cid}:to"})[2][0][0]["url"].startswith("tg://user?id=")  # no username: by ID
+    tap(91, "ps:0")
+    assert con.execute("SELECT ask_pings FROM users WHERE id = ?", (b.id,)).fetchone()[0] == 0
+    assert bot._render(con, row("ask_match")) is None                                                 # pings off: quiet
+
+
+def test_forum_moderator_queue(env):
+    """What waits for the forum's moderators: requests the AI didn't pass and skills not public yet; release puts a
+    request live (and its pings out), hide takes it down and tells its author; only moderators see or act."""
+    import dataclasses
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
+    con = db.connect(cfg.db_path)
+    mod = logic.Viewer(login(c, 95, "mod")["id"], "moderator", True)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod.id,))
+    stu = logic.Viewer(login(c, 96, "stu")["id"], "user", True)
+    held = logic.create_ask(con, stu, {"kind": "help", "title": "Held one"}, None)
+    other = logic.create_ask(con, stu, {"kind": "help", "title": "Flagged one"}, False)
+    new = logic.add_skill(con, stu, "lockpicking")
+    q = c.get("/api/forum/mod", headers=tma(95)).json()
+    assert [a["id"] for a in q["held"]] == [held["id"], other["id"]] and [s["name"] for s in q["skills"]] == ["lockpicking"]
+    assert c.get("/api/forum/mod", headers=tma(96)).status_code == 403
+    with pytest.raises(logic.ApiError):
+        logic.mod_queue(con, stu)
+    assert c.post(f"/api/forum/asks/{held['id']}/release", headers=tma(95)).status_code == 200
+    assert con.execute("SELECT status FROM asks WHERE id = ?", (held["id"],)).fetchone()[0] == "live"
+    assert c.post(f"/api/forum/asks/{other['id']}/hide", headers=tma(95)).status_code == 204
+    assert con.execute("SELECT status, why FROM asks WHERE id = ?", (other["id"],)).fetchone()[:] == ("hidden", "moderator")
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (stu.id,)).fetchone()
+    assert c.patch(f"/api/forum/skills/{new['id']}", headers=tma(95), json={"approve": True}).json()["public"] is True
+    assert c.get("/api/forum/mod", headers=tma(95)).json() == {"held": [], "skills": []}
+    # three reports from old accounts, no AI word: a moderator's day, counted from the third report
+    t0 = int(time.time())
+    for i, uid in enumerate((97, 98, 99)):
+        rid = login(c, uid, f"r{uid}")["id"]
+        con.execute("UPDATE users SET created_at = ? WHERE id = ?", (t0 - 30 * 86400, rid))
+        con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, status, created_at) VALUES (?, 'ask', ?, 'spam', 'open', ?)",
+                    (rid, held["id"], t0 - 3600 + i * 60))
+        q = c.get("/api/forum/mod", headers=tma(95)).json()["held"]
+        assert q == [] if i < 2 else [(a["id"], a["status"], a["dueAt"]) for a in q] == [(held["id"], "reported", t0 - 3600 + 120 + 86400)]
+    # what the privacy policy promises: a request 30 days after it ran out, a ping's record after 30 days
+    con.execute("UPDATE asks SET expires_at = ? WHERE id = ?", (t0 - 31 * 86400, held["id"]))
+    con.execute("INSERT INTO ask_pings (ask_id, user_id, at) VALUES (?, ?, ?), (?, ?, ?)", (held["id"], mod.id, t0, other["id"], mod.id, t0 - 31 * 86400))
+    logic.forum_sweep(con)
+    assert [r[0] for r in con.execute("SELECT id FROM asks")] == [other["id"]] and not con.execute("SELECT 1 FROM ask_pings").fetchone()
+
+
+def test_forum_policy_behind_the_flag(env):
+    """The policy's forum part and its consent version count only with FORUM=1: off, the page has no section 11 and
+    v3 is in force; on, the section shows, /api/me asks for v4, and only v4 is taken."""
+    import dataclasses
+    c, cfg = env
+    login(c, 90, "stu")
+    assert "11." not in c.get("/privacy?lang=en").text and c.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT
+    on = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
+    page = on.get("/privacy?lang=en").text
+    assert "11. The forum" in page and "Version of 26 October" in page and "Version of 23" not in page and "<!--" not in page
+    assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT_FORUM
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).status_code == 400
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT_FORUM}).json()["student"]["consent"] == logic.CONSENT_FORUM
+    for lang in ("ru", "kk"):
+        assert on.get(f"/privacy?lang={lang}").text.count("<h2>11.") == 1 and "<h2>11." not in c.get(f"/privacy?lang={lang}").text
+
+
+def test_referrals(env):
+    """Invite links (PLAN): r_<badge code>, never a user ID; the first link wins, only before the KBTU
+    sign-in; it counts once the invitee is confirmed by Microsoft; "Recruiter" at 3; gone with the account."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann = login(c, 100, "ann")
+    code = ann["referrals"]["code"]
+    assert ann["referrals"] == {"count": 0, "code": code} and len(code) == 10
+    other = login(c, 101, "ole")["referrals"]["code"]
+    refer = lambda tg, cd: c.post("/api/referral", headers=tma(tg), json={"code": cd}).status_code  # noqa: E731
+    assert refer(100, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 100").fetchone()[0] is None  # not myself
+    assert refer(101, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 101").fetchone()[0] is None  # signed in already
+    assert refer(102, "nope") == 400
+    for tg in (102, 103, 104, 105):
+        c.get("/api/me", headers=tma(tg))
+        assert refer(tg, code) == 204
+    assert refer(102, other) == 204                                                     # the first link wins
+    assert con.execute("SELECT COUNT(*) FROM users WHERE referred_by = ?", (ann["id"],)).fetchone()[0] == 4
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 0          # Telegram accounts alone count nothing
+    def confirm(tg):  # typed in, then Microsoft (app.py's two steps)
+        uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]
+        con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+            VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid, f"25B{tg:06d}"))
+        logic.ms_link(con, uid, {"oid": f"o{tg}", "email": f"x{tg}@kbtu.kz", "first": "X", "last": "Testov"})
+    for tg in (102, 103):
+        confirm(tg)
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+    assert not con.execute("SELECT 1 FROM achievement_levels WHERE code = 'referral'").fetchone()
+    confirm(104)
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
+    delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+
+
+def test_forum_screen_munito_only(monkeypatch):
+    """The forum's AI look goes to Munito's links only (privacy policy, section 11), however the chain is set: with
+    Cloudflare, OpenRouter and Groq keys present and Munito busy, nobody else gets the text and a moderator decides."""
+    import httpx
+    from kbtu import ai, llm
+    monkeypatch.setattr(llm, "_rest", {})
+    cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                        cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", munito_keys=("m1", "m2"))
+    hosts, answer = [], {"code": 200, "word": "OK"}
+    def handler(r):
+        hosts.append(r.url.host)
+        if answer["code"] != 200:
+            return httpx.Response(answer["code"])
+        return httpx.Response(200, json={"choices": [{"message": {"content": answer["word"]}, "finish_reason": "stop"}]})
+    async def look(text):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await ai.screen(cfg, http, text)
+    assert asyncio.run(look("Need a tripod")) is True and set(hosts) == {"api.eu.munito.ai"}
+    answer["word"] = "FLAG"; assert asyncio.run(look("buy essays")) is False
+    hosts.clear(); answer["code"] = 429
+    assert asyncio.run(look("anything")) is None
+    assert hosts and set(hosts) == {"api.eu.munito.ai"}   # both keys tried, then no one else
+    llm._rest.clear(); hosts.clear(); answer.update(code=200, word="maybe")
+    assert asyncio.run(look("anything")) is None and set(hosts) == {"api.eu.munito.ai"}   # nonsense: no other provider either

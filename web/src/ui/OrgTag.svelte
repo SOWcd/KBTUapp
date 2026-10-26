@@ -1,6 +1,6 @@
 <script lang="ts">
   // Who puts an event on, on a photo (the Feed, the event sheet's header): the club's own mark and name; StudEx as its
-  // wordmark, the one on its lanyard (owner, Oct 13: a microphone emoji isn't StudEx).
+  // wordmark, the one on its lanyard (a microphone emoji isn't StudEx).
   import type { OrgRef } from '../lib/api';
   import { skinOf } from '../lib/awards';
   import OrgLogo from './OrgLogo.svelte';

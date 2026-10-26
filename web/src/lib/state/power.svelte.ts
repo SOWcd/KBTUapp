@@ -1,4 +1,4 @@
-// Power saving (owner, Oct 7: in Low Power Mode the app lagged on his iPhone; "it should notice, go light and say so").
+// Power saving (in Low Power Mode the app lagged on his iPhone; "it should notice, go light and say so").
 // The light look is `html.lowfx`: no live blur anywhere (base.css), no tilt light (glass.ts), no endless motion (the
 // Feed's slow zoom and floats, the legend medal's spin, shines and glows), no flights between screens (fly.ts), half
 // the emoji in a burst, the theme switches without the circle; everything still works the same. Settings has Auto

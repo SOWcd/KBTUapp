@@ -109,8 +109,8 @@
   --line: rgba(11, 20, 51, 0.07);
   --line-2: rgba(11, 20, 51, 0.13);
   --text: #0B1433;
-  --text-2: rgba(11, 20, 51, 0.62);
-  --text-3: rgba(11, 20, 51, 0.54); /* 3.8:1 (was 2.7); AA's 4.5 would make it text-2 */
+  --text-2: rgba(11, 20, 51, 0.70);
+  --text-3: rgba(11, 20, 51, 0.60); /* 4.56:1 or more on every light surface (AA); text-2 moved to 0.70 to stay apart */
   --accent-text: #2A57E6;
   --accent-soft: rgba(59, 107, 255, 0.12);
   --success-text: #117640; /* the chips' text: 4.6:1 on their own soft colour (was 3.4-3.9) */

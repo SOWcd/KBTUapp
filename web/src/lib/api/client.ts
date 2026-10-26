@@ -20,7 +20,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   if (r.status === 204) return undefined as T;
   const data = await r.json().catch(() => null);
-  // banned mid-session (owner, Oct 22): the app hears it from any call, not only at launch
+  // banned mid-session: the app hears it from any call, not only at launch
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   return localize(data) as T;
@@ -216,6 +216,24 @@ export const server: Api = {
   report: (target, id, reason, note) => call('POST', '/reports', { target, id, reason, note }),
   reports: () => call('GET', '/admin/reports'),
   takenDown: () => call('GET', '/admin/taken-down'),
+  forumMe: () => call('GET', '/forum/me'),
+  setForumMe: (patch) => call('PUT', '/forum/me', patch),
+  skills: (q) => call('GET', `/forum/skills?q=${encodeURIComponent(q)}`),
+  newSkill: (name, force) => call('POST', '/forum/skills', { name, force }),
+  asks: (skill) => call('GET', `/forum/asks${skill ? `?skill=${skill}` : ''}`),
+  newAsk: (a) => call('POST', '/forum/asks', a),
+  closeAsk: (id, found) => call('POST', `/forum/asks/${id}/close`, { found }),
+  askPeople: (id) => call('GET', `/forum/asks/${id}/people`),
+  findPeople: (q, skill) => call('GET', `/forum/people?q=${encodeURIComponent(q)}${skill ? `&skill=${skill}` : ''}`),
+  contacts: () => call('GET', '/forum/contacts'),
+  offer: (to) => call('POST', '/forum/contacts', to),
+  answerOffer: (id, yes) => call('POST', `/forum/contacts/${id}`, { yes }),
+  block: (user, on = true) => call('POST', '/forum/blocks', { user, on }),
+  forumMod: () => call('GET', '/forum/mod'),
+  releaseAsk: (id) => call('POST', `/forum/asks/${id}/release`),
+  hideAsk: (id) => call('POST', `/forum/asks/${id}/hide`),
+  skillMod: (id, change) => call('PATCH', `/forum/skills/${id}`, change),
+  refer: (code) => call('POST', '/referral', { code }),
   restore: (target, id) => call('POST', `/admin/taken-down/${target}/${id}/restore`),
   resolveReport: (target, id, remove) => call('POST', `/admin/reports/${target}/${id}`, { remove }),
   myClubApplication: () => call<{ application: ClubApplication | null }>('GET', '/club-applications/mine').then((r) => r.application),

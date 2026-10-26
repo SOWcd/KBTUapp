@@ -9,8 +9,8 @@ from pathlib import Path
 
 from ..db import tx
 
-from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, log_action, need_student, one,
-    role_in, rows)
+from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, _may, _org, _rights_from, can,
+    log_action, need_student, one, person_ref, rights_of, role_in, rows, short_name)
 
 
 # ---------------------------------------------------------------- the club's own team (SPEC §2: the rank rule)
@@ -103,10 +103,10 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
     return team(con, v, oid)
 
 
-# ---------------------------------------------------------------- Team 2.0 (owner, Oct 5; SPEC §2b)
+# ---------------------------------------------------------------- Team 2.0 (SPEC §2b)
 # A club's own roles are a name and colour on one of the levels, so every rights check stays on the level. Tags are
 # groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off
-# (the strikes that came with it went on Oct 22: never used, owner). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
+# (the strikes that came with it went on Oct 22; never used). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
 
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 
@@ -215,7 +215,7 @@ def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> di
         raise ApiError("bad_input")
     was = one(con, "SELECT department FROM org_tags WHERE id = ? AND org_id = ?", tid, oid) if tid is not None else None
     if dept is not None and bool(dept) != bool(was and was[0]) and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
-        raise ApiError("forbidden")  # a Head unmarking a department would sidestep its rules (review): Vice+ only
+        raise ApiError("forbidden")  # a Head unmarking a department would sidestep its rules: Vice+ only
     with tx(con):
         if tid is None and one(con, "SELECT COUNT(*) FROM org_tags WHERE org_id = ?", oid)[0] >= 30:
             raise ApiError("conflict", "many")
@@ -241,8 +241,8 @@ def delete_tag(con, v: Viewer, oid: int, tid: int) -> dict:
 
 def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
-    level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights: owner,
-    Oct 12); `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power: owner, Oct 12, the
+    level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights);
+    `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power, the
     President and the Vice tag each other; departments in it are left as they are); `dept` — the department (a tag
     marked so) or null for none (PLAN 47): Vice+ on anyone; a Head on those below them, only into or out of the Head's
     own department, never their own; `probation` — Head+ put someone
@@ -265,7 +265,7 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
                 if role not in RANK:
                     raise ApiError("bad_input")
                 given = LEVEL_RIGHTS[role]
-                rid = _official(con, oid, role)  # a Vice or Head level is its official role (owner, Oct 15)
+                rid = _official(con, oid, role)  # a Vice or Head level is its official role
                 if rid:
                     given = _rights_from(role, one(con, "SELECT rights FROM org_roles WHERE id = ?", rid)[0])
             if (RANK[role] != RANK[mine] if uid == v.id else RANK[role] >= RANK[mine]) or not given <= rights_of(con, v.id, oid):  # only rights I have myself (as in Telegram)
@@ -376,7 +376,7 @@ INVITE_TTL = 2 * 86400
 
 
 def invite(con, v: Viewer, oid: int, dept: object = None) -> dict:
-    """A fresh member link for one person (owner, Oct 14: sent in a DM, so it needn't live long; one that went
+    """A fresh member link for one person (sent in a DM, so it needn't live long; one that went
     somewhere it shouldn't lets in one person at most). 96 random bits. `dept`: the department the newcomer lands in;
     below Vice, only one's own."""
     _may(con, v, oid, "team")
@@ -431,7 +431,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
             if r["dept_id"] and dept_of(con, o["id"], v.id) is None:
                 con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) SELECT id, ? FROM org_tags WHERE id = ? AND department = 1", (v.id, r["dept_id"]))
         else:
-            appteam.set_role(con, r["created_by"], v.id, o["id"], "president", "link")
+            oversight.set_role(con, r["created_by"], v.id, o["id"], "president", "link")
         con.execute("UPDATE join_requests SET status = 'accepted', decided_at = ? WHERE org_id = ? AND user_id = ? AND status = 'pending'", (core.now(), o["id"], v.id))
     return org_shape(con, v, o)
 
@@ -447,10 +447,8 @@ def map_graph(con) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import appteam, core  # noqa: E402
-from .appteam import _admin  # noqa: E402
-from .clubs import org_shape  # noqa: E402
-from .dmpregistry import QUIET_FOR  # noqa: E402
-from .orgnames import _official  # noqa: E402
+from . import core, oversight  # noqa: E402
+from .clubs import _official, org_shape  # noqa: E402
+from .forum import asks  # noqa: E402
+from .oversight import QUIET_FOR, _admin  # noqa: E402
 from .seats import notify  # noqa: E402
-from .shapes import _may, _org, _rights_from, can, person_ref, rights_of, short_name  # noqa: E402

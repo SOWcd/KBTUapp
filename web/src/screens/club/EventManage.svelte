@@ -44,7 +44,7 @@
   const paying = $derived(going.filter((a) => !a.free).length);
   const byReceipts = $derived(going.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
   const unread = $derived(going.filter((a) => a.receipt && a.receipt.amount == null).length);
-  // the event's Telegram group (owner, Oct 15): open it, or "Create chat" adds our bot to a group the organizer picks
+  // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
   $effect(() => { if (head) api.event(id).then((x) => (chat = x.chat ?? null)).catch(() => {}); });
   async function openChat() {

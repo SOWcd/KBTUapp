@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Profile → Settings, the third page (mockup v24, owner Oct 21; until then a sheet behind a gear). Language and theme,
+  // Profile → Settings, the third page (mockup v24; until then a sheet behind a gear). Language and theme,
   // what the bot sends (switches right here), the phone, "My data" (only what an event asked for, once there is
   // some: PLAN 71), "About the app" (who sees what, the rules, the code: an overlay, so Telegram's Back closes it),
   // deleting the account last and quiet.

@@ -100,20 +100,25 @@ export const sheets = {
   schedHowTo: (_first?: boolean) => {},
   /** my whole week of classes */
   week: () => {},
+  /** the forum (F1 find people), a request opened in it */
+  forum: (_ask?: Id) => {},
+  forumSkills: (_onsaved?: () => void) => {},
+  newAsk: (_onmade?: () => void) => {},
+  askPeople: (_ask: Id, _title: string) => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
-  /** the AI page in Admin: the translator's state and work (owner, Oct 21) */
+  /** the AI page in Admin: the translator's state and work */
   adminAi: () => {},
-  /** the app's team: roles and bans (admin); the audit log (the owner) */
+  /** the app's team: roles and bans (admin); the audit log */
   adminTeam: () => {},
   adminAudit: () => {},
-  /** suggest any chat for the catalog: paste @name or a link (owner, Oct 21) */
+  /** suggest any chat for the catalog: paste @name or a link */
   suggestChat: () => {},
   registry: () => {},
   /** comments under a post or an event; `onchange` hears the new count */
   comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
-  /** the one report sheet (owner, Oct 22): `about` names the thing, `onsent` hears it went (a photo hides for me) */
-  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo', _id: Id, _about?: string, _onsent?: () => void) => {},
+  /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */
+  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', _id: Id, _about?: string, _onsent?: () => void) => {},
   /** "Bring a friend" to an event */
   invite: (_id: Id, _title: string) => {},
   /** "Bring a friend" from their card: my upcoming events */

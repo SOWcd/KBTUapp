@@ -1,5 +1,5 @@
 <script lang="ts">
-  // News as stories (owner, Oct 24; PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
+  // News as stories (PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
   // The post's own tools sit here now that the News page is gone: reactions, comments, and in ⋯ edit, pin, show on
@@ -180,7 +180,7 @@
     </div>
 
     {#key p.id}
-      <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable (owner, Oct 25) -->
+      <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
       <div class="txt" class:card={p.body}>
         <h2>{p.title}</h2>
         {#if p.body}<p class="scroll" data-noswipe>{p.body}</p>{/if}

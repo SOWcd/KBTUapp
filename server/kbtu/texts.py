@@ -23,11 +23,16 @@ SHARE_EVENT = {
 }
 
 
-# Invites shared from the app (owner, Oct 4: no bare links in chats — a line of text and our bot's button under it)
+# Invites shared from the app (no bare links in chats — a line of text and our bot's button under it)
 SHARE_FRIEND = {
     "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья в KBTU App — увидите, кто куда идёт.", "🤝 Добавиться в друзья"),
     "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер.", "🤝 Досқа қосылу"),
     "en": ("Be my friend", "👋 <b>{name}</b> invites you to be friends on KBTU App — you'll see where each other is going.", "🤝 Add as a friend"),
+}
+SHARE_REFER = {  # my invite link (referrals): it counts once they sign in with KBTU
+    "ru": ("Залетай в KBTU App", "📣 <b>{name}</b> зовёт тебя в KBTU App: все события, клубы и друзья КБТУ в одном месте.", "🚀 Открыть KBTU App"),
+    "kk": ("KBTU App-қа кел", "📣 <b>{name}</b> сені KBTU App-қа шақырады: ҚБТУ-дің барлық іс-шаралары, клубтары мен достары бір жерде.", "🚀 KBTU App ашу"),
+    "en": ("Join KBTU App", "📣 <b>{name}</b> invites you to KBTU App: KBTU's events, clubs and friends in one place.", "🚀 Open KBTU App"),
 }
 SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 Тебя назначают президентом <b>{club}</b> в KBTU App. Открой и войди через KBTU — ссылка одноразовая, работает 7 дней.", "Стать президентом"),
@@ -60,11 +65,11 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга"},
+           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала"},
     "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы"},
+           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы"},
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder"},
+           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter"},
 }
 TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "Аңыз"), "en": ("I", "II", "III", "Legend")}
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
@@ -90,7 +95,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for a friend ('fr'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"fr": SHARE_FRIEND, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_FRIEND else "ru"]
+    title, text, button = {"fr": SHARE_FRIEND, "rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_FRIEND else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 
@@ -182,6 +187,17 @@ BOT = {
         "chat_invite": ("🔒 Это закрытый чат — пришли сюда ссылку-приглашение на него (t.me/+…), и я передам его на проверку.", None),
         "chat_later": ("⏳ Telegram сейчас не ответил — попробуй через минуту.", None),
         "chat_notchat": ("🤔 Не нашёл такой канал или группу. Проверь @username.", None),
+        "ask_match": ("🙋 Нужен человек со скиллом «{skill}»: {title}", "Открыть"),
+        "ask_stop": ("🔕 Не присылать такие", None),
+        "ask_stopped": ("🔕 Хорошо, такие запросы больше не пришлю. Включить снова можно в KBTU App.", None),
+        "contact_ask": ("🤝 {name} хочет помочь с «{title}». Примешь — и вы оба получите контакты друг друга.", None),
+        "contact_ask_plain": ("🤝 {name} ({skills}) хочет с тобой связаться. Примешь — и вы оба получите контакты друг друга.", None),
+        "contact_buttons": ("✅ Принять", "Отклонить"),
+        "contact_ok": ("✅ Ты на связи с {name}. Можно писать!", "✍️ Написать"),
+        "contact_yes": ("✅ Принято — контакты отправлены вам обоим.", None),
+        "contact_no": ("Отклонено. Человек об этом не узнает.", None),
+        "contact_gone": ("Этот запрос уже неактуален.", None),
+        "ask_hidden": ("Твой запрос «{title}» скрыт: {why}.", "Открыть"),
         "chat_whose_one": ("📢 Это канал или группа «{club}»? Тогда он появится на странице клуба.", "Нет, просто в каталог"),
         "chat_whose": ("📢 Это канал или группа одного из твоих клубов? Тогда он появится на странице клуба.", "Нет, просто в каталог"),
         "chat_bound": ("✅ Готово — чат теперь на странице «{club}». Чтобы посты канала шли и в ленту приложения, включи это в Студии.", "⚙️ Открыть в Студии"),
@@ -273,6 +289,17 @@ BOT = {
         "chat_invite": ("🔒 Бұл жабық чат — оның шақыру сілтемесін (t.me/+…) осында жібер, мен оны тексеруге беремін.", None),
         "chat_later": ("⏳ Telegram қазір жауап бермеді — бір минуттан кейін қайтала.", None),
         "chat_notchat": ("🤔 Мұндай арна не топ табылмады. @username-ді тексер.", None),
+        "ask_match": ("🙋 «{skill}» дағдысы бар адам керек: {title}", "Ашу"),
+        "ask_stop": ("🔕 Мұндайларды жібермеу", None),
+        "ask_stopped": ("🔕 Жақсы, мұндай сұраулар енді келмейді. Қайта қосу — KBTU App-та.", None),
+        "contact_ask": ("🤝 {name} «{title}» бойынша көмектескісі келеді. Қабылдасаң — екеуің де бір-біріңнің байланысын аласыңдар.", None),
+        "contact_ask_plain": ("🤝 {name} ({skills}) сенімен байланысқысы келеді. Қабылдасаң — екеуің де бір-біріңнің байланысын аласыңдар.", None),
+        "contact_buttons": ("✅ Қабылдау", "Бас тарту"),
+        "contact_ok": ("✅ {name} екеуің байланыстасыңдар. Жаза бер!", "✍️ Жазу"),
+        "contact_yes": ("✅ Қабылданды — байланыстар екеуіңе де жіберілді.", None),
+        "contact_no": ("Бас тартылды. Ол адам бұл туралы білмейді.", None),
+        "contact_gone": ("Бұл сұрау енді өзекті емес.", None),
+        "ask_hidden": ("«{title}» сұрауың жасырылды: {why}.", "Ашу"),
         "chat_whose_one": ("📢 Бұл «{club}» арнасы не тобы ма? Онда ол клуб бетінде шығады.", "Жоқ, жай каталогқа"),
         "chat_whose": ("📢 Бұл сенің клубтарыңның бірінің арнасы не тобы ма? Онда ол клуб бетінде шығады.", "Жоқ, жай каталогқа"),
         "chat_bound": ("✅ Дайын — чат енді «{club}» бетінде. Арна посттары қосымшаның лентасында да шықсын десең, Студияда қос.", "⚙️ Студияда ашу"),
@@ -364,6 +391,17 @@ BOT = {
         "chat_invite": ("🔒 That's a closed chat — send its invite link here (t.me/+…) and I'll pass it on for review.", None),
         "chat_later": ("⏳ Telegram didn't answer just now — try again in a minute.", None),
         "chat_notchat": ("🤔 Couldn't find such a channel or group. Check the @username.", None),
+        "ask_match": ("🙋 Someone needs {skill}: {title}", "Open"),
+        "ask_stop": ("🔕 Don't send these", None),
+        "ask_stopped": ("🔕 Got it, no more requests like this. You can turn them back on in KBTU App.", None),
+        "contact_ask": ("🤝 {name} wants to help with “{title}”. Accept, and you both get each other's contact.", None),
+        "contact_ask_plain": ("🤝 {name} ({skills}) wants to get in touch. Accept, and you both get each other's contact.", None),
+        "contact_buttons": ("✅ Accept", "Decline"),
+        "contact_ok": ("✅ You're in touch with {name}. Go ahead and write!", "✍️ Write"),
+        "contact_yes": ("✅ Accepted: you both have each other's contact now.", None),
+        "contact_no": ("Declined. They won't be told.", None),
+        "contact_gone": ("This one isn't open any more.", None),
+        "ask_hidden": ("Your request “{title}” is hidden: {why}.", "Open"),
         "chat_whose_one": ("📢 Is this {club}'s channel or group? Then it shows on the club's page.", "No, just the catalog"),
         "chat_whose": ("📢 Is this one of your clubs' channels or groups? Then it shows on the club's page.", "No, just the catalog"),
         "chat_bound": ("✅ Done: the chat is on {club}'s page now. To show the channel's posts in the app's feed too, turn it on in Studio.", "⚙️ Open in Studio"),
@@ -396,6 +434,14 @@ RECEIPT_WHY = {
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
     "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
+}
+
+
+# why a forum request was hidden, said to its author (forum.hide_ask)
+ASK_WHY = {
+    "ru": {"reports": "на него пожаловались, и проверка это подтвердила", "moderator": "так решил модератор"},
+    "kk": {"reports": "оған шағымданды, тексеру мұны растады", "moderator": "модератор осылай шешті"},
+    "en": {"reports": "people reported it and the check agreed", "moderator": "a moderator decided so"},
 }
 
 
@@ -472,8 +518,8 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 
-# ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" (Oct 11) and a year of StudEx's
-# real memos (Oct 12): in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
+# ---- DMP's memo (служебная записка), from their template "ШАБЛОН СЛУЖЕБНЫЕ ЗАПИСКИ" and a year of StudEx's
+# real memos: in Russian, one memo for the week's events, every request numbered, the signature in kk, ru, en;
 # one email to youth_policy@kbtu.kz, sent on Wednesday 9:00-18:00 from the sender's KBTU address.
 MEMO_TO = "youth_policy@kbtu.kz"
 WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
@@ -518,7 +564,7 @@ def channel_post(title: str, org: str, starts: int, place: str, price: int | Non
                  also: list[str] = ()) -> str:
     """A public event's post in the events channel (HTML), in Russian: the channel's language; `also`: the title in the
     other languages (ai.py), in italics under it. Signing up is a link in
-    the text, not a button: Telegram hides a post's comments under a button (owner, Oct 17)."""
+    the text, not a button: Telegram hides a post's comments under a button."""
     lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "", f"🗓 {when(starts, 'ru')}", f"📍 {html.escape(place_or_tba(place, 'ru'))}",
              f"💸 {price} ₸" if price else "🆓 Бесплатно"]
     if link and not cancelled:
@@ -630,7 +676,7 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
         where = " ".join(str(q.get("location") or "").split())
         asks.append(f"Разрешить {verb} оборудования (по списку) со стороны улицы {side}.\nСписок оборудования:\n{items}{dates}"
                     + (f"\nЛокация: {where}" if where else ""))
-    # printing is not DMP's: it goes in its own letter to the Publishing Center (print_letter, owner Oct 14)
+    # printing is not DMP's: it goes in its own letter to the Publishing Center (print_letter)
     if (f := memo.get("film")) is not None:
         note = " ".join(str(f.get("note") or "").split())
         asks.append(f"{MEMO2_FILM}\nДата: {_day_of(f.get('date'), start)}\nВремя: {f.get('from') or _hm(start)}-{f.get('to') or _hm(end)}"
@@ -638,7 +684,7 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
     return asks
 
 
-PRINT_TO = "ic@kbtu.kz"  # the Publishing Center takes print requests straight, files attached (owner, Oct 14)
+PRINT_TO = "ic@kbtu.kz"  # the Publishing Center takes print requests straight, files attached
 
 
 def print_items(pr: dict) -> list[str]:

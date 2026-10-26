@@ -6,7 +6,8 @@ import sqlite3
 
 from ..db import tx
 
-from .core import ApiError, PERSON, PERSON_COLS, Viewer, log_action, need_student, one, rows
+from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, log_action, need_student, one, org_ref,
+    person_ref, rows, shown_name)
 
 
 # ---------------------------------------------------------------- comments and reports (§4.10)
@@ -73,7 +74,7 @@ def add_comment(con, v: Viewer, kind: str, tid: int, body: object, as_org: objec
     if one(con, "SELECT COUNT(*) FROM comments WHERE user_id = ? AND created_at > ?", v.id, core.now() - 60)[0] >= COMMENTS_A_MINUTE:
         raise ApiError("rate_limited")
     askers: list[tuple[int]] = []
-    if kind == "event":  # the bot (owner, Oct 5): a question pings the club's Head+ (hourly at most); an answer (the club's
+    if kind == "event":  # the bot: a question pings the club's Head+ (hourly at most); an answer (the club's
         # Head+ write, as the club or as themselves) pings the askers
         if lead:
             askers = [(u,) for u in sorted({r["user_id"] for r in _asking(con, tid)})]
@@ -116,7 +117,7 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    if target not in ("post", "comment", "event", "user", "photo") or reason not in ("spam", "insult", "danger", "other") \
+    if target not in ("post", "comment", "event", "user", "photo", "ask") or reason not in ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
@@ -127,8 +128,11 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
         if not p or p["added_by"] == v.id:
             raise ApiError("not_found")
         _thread(con, v, "event", p["event_id"])
-    elif target == "user":  # a profile: its nick, own photo and "about me" (owner, Oct 5)
+    elif target == "user":  # a profile: its nick, own photo and "about me"
         if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
+            raise ApiError("not_found")
+    elif target == "ask":  # a forum request (forum.py): not my own, still up
+        if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id):
             raise ApiError("not_found")
     elif target == "comment":
         c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
@@ -149,7 +153,8 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
 def _about(con, target: str, tid: int) -> int | None:
     """Whose the reported thing is: the person, a comment's author, a photo's uploader (a club's post or event: nobody's)."""
     r = (one(con, "SELECT ?", tid) if target == "user" else one(con, "SELECT user_id FROM comments WHERE id = ?", tid) if target == "comment"
-         else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo" else None)
+         else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo"
+         else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask" else None)
     return r[0] if r else None
 
 
@@ -169,6 +174,9 @@ def report_queue(con, v: Viewer) -> list[dict]:
         elif r["target"] == "photo":  # the picture itself is the thing to look at
             p = one(con, "SELECT p.event_id, f.path FROM event_photos p JOIN files f ON f.id = p.file_id WHERE p.file_id = ?", r["target_id"])
             text, where = (f"media/{p['path']}.t.webp", ("event", p["event_id"])) if p else (None, None)
+        elif r["target"] == "ask":  # a forum request: its words (forum.py hides it only with three reports and the AI, or here)
+            a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
+            text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
         elif r["target"] == "post":
             # no post screen of its own to open: its words are the thing to judge, title and body
             p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
@@ -207,6 +215,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
             for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                 con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
                             (tid, p["added_by"], json.dumps(dict(p)), tid, core.now()))
+        elif target == "ask":
+            hide_ask(con, tid, "moderator", v.id)
         elif target == "user":  # the nick, the own photo and "about me" go, the Telegram photo is back; kept 30 days for an undo
             u = one(con, "SELECT nick, bio, avatar_tg, avatar_file_id FROM users WHERE id = ?", tid)
             if u and (u["nick"] or u["bio"] or u["avatar_file_id"]):
@@ -295,9 +305,9 @@ def purge_takedowns(con) -> list[str]:
 # when a function runs
 from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
-from .appteam import _mod  # noqa: E402
 from .clubs import org  # noqa: E402
+from .forum import hide_ask  # noqa: E402
 from .organizing import _asking  # noqa: E402
+from .oversight import _mod  # noqa: E402
 from .seats import _event, notify  # noqa: E402
-from .shapes import _org, can, org_ref, person_ref, shown_name  # noqa: E402
 from .teams import remove  # noqa: E402

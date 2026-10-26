@@ -1,6 +1,6 @@
 <script lang="ts">
   // Networks as one-colour line marks in the icon set's stroke (Lucide has no brand icons); Telegram is its own mark, as
-  // everywhere in the app (owner, Oct 13: the paper plane "is some strange icon").
+  // everywhere in the app (the paper plane "is some strange icon").
   import type { SocialKind } from '../lib/social';
   import TelegramMark from './TelegramMark.svelte';
   let { kind, size = 20 }: { kind: SocialKind; size?: number } = $props();

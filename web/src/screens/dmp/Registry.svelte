@@ -37,7 +37,7 @@
   const monthTs = $derived.by(() => { const d = new Date((nowTs() + 5 * 3600) * 1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - back, 15) / 1000; });
   const people = $derived((orgs ?? []).reduce((s, o) => s + o.members, 0));
 
-  // the memos clubs marked sent this week (owner, Oct 13: DMP sees them in the app, not only in its mailbox)
+  // the memos clubs marked sent this week (DMP sees them in the app, not only in its mailbox)
   let memos = $state<SentMemo[]>([]);
   $effect(() => { api.registryMemos().then((l) => (memos = l)).catch(() => {}); });
 

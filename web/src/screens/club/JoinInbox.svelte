@@ -3,7 +3,7 @@
   // A club's applications (Vice+, §4.5), oldest first. The owner's flow: look at the person (the avatar opens
   // their card), write to them first ("come by, let's meet"), then accept or decline; the bot tells them.
   // The switch on top closes applications: nobody can apply, people can still write to the club.
-  // Studio's "Recruiting" tile opens this (owner, Oct 13): the casting (recruitment rounds) is a row here, not a tile of its own.
+  // Studio's "Recruiting" tile opens this: the casting (recruitment rounds) is a row here, not a tile of its own.
   // ponytail: "Write" needs a Telegram @username (no username, no chat link); a bot relay if that bites.
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Id, type JoinRequest, type Round } from '../../lib/api';

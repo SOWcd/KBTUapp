@@ -1,5 +1,4 @@
-"""A student's week of classes from the portal's own schedule page, saved on the phone and sent to the bot (PLAN 26,
-owner Oct 25): Safari's "Web Archive" (a binary plist, the page in WebMainResource) or Chrome's "Download page" (an
+"""A student's week of classes from the portal's own schedule page, saved on the phone and sent to the bot (PLAN 26): Safari's "Web Archive" (a binary plist, the page in WebMainResource) or Chrome's "Download page" (an
 .mht, MIME multipart, the page's HTML part UTF-8 with no charset). The page (uninet.kbtu.kz/student/schedule) holds the
 whole week in its computer layout, hidden on a phone: a column per day, each class a block placed by its top and height
 in pixels (an hour a fixed height from the first hour's label), with its kind as an icon's title, the course, the
@@ -135,7 +134,7 @@ KINDS = {"lecture": "lecture", "practice": "practice", "lab": "lab", "laboratory
          "\u043b\u0435\u043a\u0446\u0438\u044f": "lecture", "\u043f\u0440\u0430\u043a\u0442\u0438\u043a\u0430": "practice",
          "\u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u0430\u044f": "lab", "\u0434\u04d9\u0440\u0456\u0441": "lecture",
          "\u0442\u04d9\u0436\u0456\u0440\u0438\u0431\u0435": "practice", "\u0437\u0435\u0440\u0442\u0445\u0430\u043d\u0430\u043b\u044b\u049b": "lab"}
-LECTURE_OVER = 100  # minutes: a class with no label longer than this is a lecture (owner: lectures 2 h, practices 1 h, PE 1 h 40)
+LECTURE_OVER = 100  # minutes: a class with no label longer than this is a lecture (lectures 2 h, practices 1 h, PE 1 h 40)
 HHMM = re.compile(r"(\d{1,2}):(\d{2})")
 
 

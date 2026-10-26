@@ -1,12 +1,12 @@
 <script lang="ts">
-  // Admin → AI (owner, Oct 21: "where is the AI section?"): the translator of event and club texts (PLAN 9, ai.py on
-  // Cloudflare Workers AI): on or off, what it did today (Cloudflare's day, UTC), its last error, how much is done,
-  // waits or failed three times; the failed can get three more tries.
+  // Admin → AI: the translator of event and club texts (PLAN 9, ai.py):
+  // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
+  // get three more tries); and the AI chain (llm.py), each link's answers and failures today.
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminAi } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -15,6 +15,9 @@
   let ai = $state<AdminAi | null>(null), busy = $state(false);
   const load = () => api.adminAi().then((x) => (ai = x)).catch(() => say(t('common.error'), 'pleading_face_3d'));
   $effect(() => { void load(); });
+  // Munito's answers as rows: plain fields as they are, anything nested as short JSON
+  const flat = (x: unknown): [string, string][] => (x && typeof x === 'object' ? Object.entries(x as Record<string, unknown>) : [])
+    .map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v)]);
   async function retry() {
     busy = true;
     try { await api.aiRetry(); haptic.ok(); say(t('ai.retried'), 'sparkles_3d'); await load(); }
@@ -28,11 +31,25 @@
     <section class="top surface">
       <span class="st" class:on={ai.on}><i></i>{ai.on ? t('ai.on') : t('ai.off')}</span>
       <b class="num">{ai.today}</b><span class="t-foot">{t('ai.today')}</span>
-      <p class="t-foot model">{ai.model}</p>
     </section>
+    <h3 class="sec">{t('ai.chain')}</h3>
+    <div class="rows surface">
+      {#each ai.chain as l (l)}
+        {@const u = ai.usage[new Date().toISOString().slice(0, 10)]?.[l]}
+        <div class="r link"><span class="ellipsis model">{l}</span><i class="num">{u ? `${u[0]} ✓ · ${u[1]} ✕` : '—'}</i></div>
+      {:else}<p class="t-foot none">{t('ai.noChain')}</p>{/each}
+    </div>
+    {#each Object.entries(ai.accounts ?? {}) as [key, acc] (key)}
+      <h3 class="sec">{key}</h3>
+      <div class="rows surface">
+        {#each ['usage', 'limits'] as const as part (part)}
+          {#each flat(acc[part]) as [k, val] (k)}<div class="r link"><span class="ellipsis model">{part}.{k}</span><i class="num">{val}</i></div>{/each}
+        {/each}
+      </div>
+    {/each}
     <div class="nums">
-      <span class="surface"><b class="num">{ai.events.done}</b><i>{t('ai.events')}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
-      <span class="surface"><b class="num">{ai.clubs.done}</b><i>{t('ai.clubs')}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
+      <span class="surface"><b class="num">{ai.events.done}</b><i>{tn('ai.events', ai.events.done)}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
+      <span class="surface"><b class="num">{ai.clubs.done}</b><i>{tn('ai.clubs', ai.clubs.done)}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
     </div>
     {#if ai.error}<p class="err surface"><b>{t('ai.lastError')}</b><span class="selectable">{ai.error}</span></p>{/if}
     {#if ai.failed.length}
@@ -55,7 +72,9 @@
     background: var(--danger-soft); color: var(--danger-text); font: 650 var(--fs-sub)/1 var(--font-text); }
   .st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .st.on { background: var(--success-soft); color: var(--success-text); }
-  .model { margin-top: 8px; font-family: ui-monospace, monospace; }
+  .model { font: 500 13px/1.2 ui-monospace, monospace; }
+  .link { display: flex; justify-content: space-between; gap: 10px; }
+  .none { padding: 12px 14px; }
   .nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   .nums span { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: var(--r-l); }
   .nums b { font: 750 26px/1 var(--font-display); }

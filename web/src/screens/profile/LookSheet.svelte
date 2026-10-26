@@ -1,5 +1,5 @@
 <script lang="ts">
-  // My nickname and photo (owner, Oct 5; SPEC §3). The photo: "Photo from Telegram" (on: it refreshes by itself on every
+  // My nickname and photo (SPEC §3). The photo: "Photo from Telegram" (on: it refreshes by itself on every
   // open) or my own; uploading one turns the switch off, turning it on goes back to Telegram's (mine is kept for later).
   // The nick: everyone sees it; organizers see my real name beside it (the door, attendees, the club's team, DMP).
   import { untrack } from 'svelte';
@@ -21,10 +21,10 @@
   const real = $derived(me.student ? `${me.student.firstName} ${me.student.lastName.slice(0, 1)}.` : me.tg.firstName);
   let nick = $state(untrack(() => session.me?.nick ?? ''));
   let busy = $state<'' | 'photo' | 'tg' | 'nick' | 'skin'>('');
-  // badges as skins (owner, Oct 13): KBTU's, or that of a club I'm in that has one. In order of weight (owner, Oct 13:
+  // badges as skins: KBTU's, or that of a club I'm in that has one. In order of weight (owner, Oct 13:
   // "no chaos"): my own first, then my clubs by my role in them, KBTU's, the standard one, last
   const mine = $derived([...me.memberships].sort(byRank).map((m) => m.org).filter(skinned));
-  // then every other club's, to try on (owner, Oct 20)
+  // then every other club's, to try on
   const skins = $derived([...mine, ...data.orgs.filter((o) => skinned(o) && !mine.some((x) => x.id === o.id))]);
   async function pickSkin(id: number | 'sower' | null) {
     if (busy || id === me.skin) return;
@@ -64,10 +64,10 @@
   }
 </script>
 
-<!-- under my lanyard, which stays in sight above and changes as I pick (owner, Oct 17): so no big photo here -->
+<!-- under my lanyard, which stays in sight above and changes as I pick: so no big photo here -->
 <Sheet {overlay} see title={t('look.title')}>
   <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => upload(e.currentTarget.files?.[0])} />
-  <!-- one block (owner, Oct 18): a square "other photo" on the left (my own photo in it once I have one), the switch
+  <!-- one block: a square "other photo" on the left (my own photo in it once I have one), the switch
        on the right -->
   <div class="photo">
     <button class="sq" class:own={!!me.photo.own} class:busy={busy === 'photo'} disabled={!!busy} onclick={() => file?.click()} style={me.photo.own ? `background-image:url(${me.photo.own})` : ''}>
@@ -81,7 +81,7 @@
 
   {#if skins.length || me.founder}
     <h3 class="t-cap cap">{t('look.skin')}</h3>
-    <!-- each lanyard drawn small, as it hangs on the profile (owner, Oct 16: names alone said nothing; with many clubs
+    <!-- each lanyard drawn small, as it hangs on the profile (names alone said nothing; with many clubs
          the row scrolls) -->
     <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
       {#each [...(me.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
@@ -97,7 +97,7 @@
   {/if}
 
   <h3 class="t-cap cap">{t('look.nick')}</h3>
-  <label class="field nick"><input bind:value={nick} maxlength="24" placeholder={t('look.nickPh')} enterkeyhint="done" autocomplete="off"
+  <label class="field nick"><input bind:value={nick} maxlength="24" aria-label={t('look.nick')} placeholder={t('look.nickPh')} enterkeyhint="done" autocomplete="off"
     onkeydown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); void saveNick(); } }} />
     {#if me.nick}<button class="x" onclick={clearNick} disabled={!!busy} aria-label={t('look.dropNick')}><X size={16} /></button>{/if}</label>
   <p class="t-foot hint">{t('look.nickHint', { name: real })}</p>

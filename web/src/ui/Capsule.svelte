@@ -16,7 +16,7 @@
   // right of centre. On a phone Telegram's left button first shows the app name, then turns into
   // the narrower «Close» about 2.5 s after the webview opens; until then the window is 32 px
   // narrower on the left, then it grows into the freed space. «Close» is in Telegram's own language, and it is
-  // wider in most of them than in English: the Russian one ends ~9 px further right (two iPhones, Oct 4), close
+  // wider in most of them than in English: the Russian one ends ~9 px further right (two iPhones), close
   // enough to touch. So outside English and Kazakh (short words) the window gives up 10 px more on the left.
   import { onMount } from 'svelte';
   import { ui, TABS } from '../lib/state/ui.svelte';
@@ -79,7 +79,7 @@
     if (blob?.animate && tab !== seen.tab && i === seen.index) {
       const dir = TABS.indexOf(tab) > TABS.indexOf(seen.tab) ? 1 : -1;
       const wall = dir > 0 ? i === pages.length - 1 : i === 0;
-      const k = (wall ? -8 : 12) / blob.offsetWidth; // reach (or press) at the peak, px → fraction of the width
+      const k = (wall ? -8 : 12) / (blobW || blob.offsetWidth); // reach (or press) at the peak, px → fraction of the width
       const transformOrigin = dir > 0 !== wall ? '0% 50%' : '100% 50%'; // the edge that stays put
       const frames = Array.from({ length: 29 }, (_, f) => {
         const t = f * 0.025, s = f === 28 ? 0 : (Math.exp(-5 * t) * Math.sin(8.66 * t)) / 0.473; // ζ 0.5, peak 1 at 121 ms
@@ -90,7 +90,11 @@
     seen = { tab, index: i };
   });
 
+  // the pill's width, kept by an observer: read in the tab switch's effect it laid out the whole new tab early
+  let blobW = 0;
   onMount(() => {
+    const bro = new ResizeObserver(([e]) => (blobW = e.contentRect.width));
+    if (blob) bro.observe(blob);
     const onPager = (e: Event) => { const d = (e as CustomEvent).detail as { x: number; ease: string }; move(d.x, d.ease); if (!awake) wake(); };
     window.addEventListener('kb:pager', onPager);
     // any touch elsewhere brings the switcher back for a moment (a tap on the live capsule opens it instead)
@@ -98,15 +102,17 @@
     document.addEventListener('pointerdown', onTouch, true);
     const tick = setInterval(() => { if (live) now = Date.now() / 1000; }, 1000);
     const boot = booting ? setTimeout(() => (booting = false), BOOT_MS - performance.now()) : undefined;
-    return () => { window.removeEventListener('kb:pager', onPager); document.removeEventListener('pointerdown', onTouch, true); clearInterval(tick); clearTimeout(boot); };
+    return () => { bro.disconnect(); window.removeEventListener('kb:pager', onPager); document.removeEventListener('pointerdown', onTouch, true); clearInterval(tick); clearTimeout(boot); };
   });
 
-  // a title shrinks to fit before it is cut (owner, Oct 23: the award title was cut on a narrow capsule); 11 px is the floor
+  // a title shrinks to fit before it is cut (the award title was cut on a narrow capsule); 11 px is the floor
   function fit(node: HTMLElement) {
     const run = () => { node.style.fontSize = ''; const k = node.clientWidth / node.scrollWidth; if (k < 1) node.style.fontSize = `${Math.max(11, Math.floor(14 * k * 2) / 2)}px`; };
     const ro = new ResizeObserver(run); // the capsule widens after boot, on a narrow phone it starts smaller
     ro.observe(node.parentElement!);
-    const mo = new MutationObserver(run); // a new title
+    // a new title (a sheet opening): measured once the browser has laid it out, not at once (that laid out the sheet early)
+    const later = () => { const once = new ResizeObserver(() => { once.disconnect(); run(); }); once.observe(node); };
+    const mo = new MutationObserver(later);
     mo.observe(node, { childList: true, characterData: true, subtree: true });
     document.fonts?.ready.then(run); // the first measure may be in the fallback font
     return { destroy: () => { ro.disconnect(); mo.disconnect(); } };

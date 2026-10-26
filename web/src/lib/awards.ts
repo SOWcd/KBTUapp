@@ -21,9 +21,9 @@ export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; foun
 
 export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) });
 export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) });
-/** the Creator's seal by the name, up close: what it is and why (owner, Oct 5) */
+/** the Creator's seal by the name, up close: what it is and why */
 export const founderItem = (): ShelfItem => ({ key: 'founder', founder: true, name: t('person.founder'), sub: '' });
-/** the idea author's blue seal (owner, Oct 7) */
+/** the idea author's blue seal */
 export const ideaItem = (): ShelfItem => ({ key: 'idea', idea: true, name: t('person.idea'), sub: '' });
 /** A showcase key (an achievement code, or b<event id> for a badge) as an item of this person's, if they have it. */
 export function shelfItem(p: PersonCard, key: string): ShelfItem | null {
@@ -40,12 +40,12 @@ export interface HeroData {
   title: string;           // the lanyard line: the status, else the top club title, else "Student"
   line: string;            // course · school · city
   bio: string;
-  no: string;              // the card number, zero-padded: the order of first KBTU sign-in; the Creator's is 00000 (owner, Oct 5)
+  no: string;              // the card number, zero-padded: the order of first KBTU sign-in; the Creator's is 00000
   loaded: boolean;         // a card the app only partly knows yet (attended < 0): no counts rather than wrong zeros
   earned: number;          // achievements reached, of `total`
   total: number;
   next: string | null;     // the closest one to its next level, as a line: the reason to go to one more event
-  shelf: ShelfItem[];      // the showcase: up to 6 achievements and badges (owner, Oct 4)
+  shelf: ShelfItem[];      // the showcase: up to 6 achievements and badges
 }
 
 export const nextOf = (a: Achievement) => a.levels.find((l) => !l.reached);
@@ -53,7 +53,7 @@ const hiddenAch = (a: Achievement) => a.secret && a.level === 0;
 const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
 const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
 /** The closest one to its next level (started ones first, else the nearest goal); secrets don't count. */
-/** awards nobody works toward: the creator gives the bug hunter by hand, the first 500 is a one-off (owner, Oct 15) */
+/** awards nobody works toward: the creator gives the bug hunter by hand, the first 500 is a one-off */
 const GIVEN = ['bugs', 'first50'];
 export function closest(ach: Achievement[]): Achievement | undefined {
   const open = ach.filter((a) => !hiddenAch(a) && !GIVEN.includes(a.code) && nextOf(a));
@@ -93,7 +93,7 @@ export type Skin = 'studex' | 'cheer' | 'knights';
 const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['knights', /knight/i]];
 export const skinOf = (o?: OrgRef | null): Skin | null => (o?.official && SKINS.find(([, re]) => re.test(o.name))?.[0]) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
-/** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on, Oct 20) */
+/** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
 export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
 /** the word on each one's strap */

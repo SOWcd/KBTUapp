@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → Clubs and schools (owner, Oct 14: the admin panel was one long page; now each job its own sheet). The list
+  // Admin → Clubs and schools (the admin panel was one long page; now each job its own sheet). The list
   // with a search, one line a club; a tap opens it: the ✓, its team, a role by @username, the President's link, its
   // events (any deletable here only). A new club on top (schools come from the site).
   import { fold } from '../../ui/fold';
@@ -31,7 +31,7 @@
   $effect(() => { api.adminOrgs().then((l) => (orgs = l)).catch(() => (orgs = [])); });
   let busy = $state(false);
   let q = $state('');
-  // clubs and schools on their own tabs (owner, Oct 14: the admin comes for clubs; the 11 schools are seeded and rarely touched)
+  // clubs and schools on their own tabs (the admin comes for clubs; the 11 schools are seeded and rarely touched)
   let kind = $state<'club' | 'school'>('club');
   const ofKind = $derived((orgs ?? []).filter((o) => (o.kind === 'school') === (kind === 'school')));
   const schools = $derived((orgs ?? []).filter((o) => o.kind === 'school').length);
@@ -44,7 +44,7 @@
 
   // ---- a new club ----
   let adding = $state(false);
-  // a club (schools come from KBTU's site, never by hand: owner, Oct 14)
+  // a club (schools come from KBTU's site, never by hand)
   let nc = $state({ name: '', emoji: PICK_EMOJI[1], official: false });
   async function create(ev: Event) {
     ev.preventDefault();
@@ -114,7 +114,7 @@
       haptic.warn();
     } catch (e) { oops(e); }
   }
-  // hide, never delete (owner, Oct 16: a lost phone must not wipe the clubs); back with one tap
+  // hide, never delete (a lost phone must not wipe the clubs); back with one tap
   async function hide(o: AdminOrg) {
     if (!o.hidden && !(await sheets.ask({ title: t('adm.hideAsk', { club: o.name }), text: t('adm.hideText'), ok: t('adm.hide'), cancel: t('tk.keep'), danger: true }))) return;
     try {
@@ -124,7 +124,7 @@
       void loadAfisha();
     } catch (e) { oops(e); }
   }
-  // the President's link as a QR, to show face to face (owner, Oct 16: he goes round the schools' presidents)
+  // the President's link as a QR, to show face to face (he goes round the schools' presidents)
   let qrOf = $state<number | null>(null), qrToken = $state('');
   async function showQr(o: AdminOrg) {
     if (qrOf === o.id) { qrOf = null; return; }
@@ -185,7 +185,7 @@
           {#if o.team.length}
             <ul class="team">
               {#each o.team as m (m.id)}
-                <li><span class="rl">{ROLE_NAME[m.role]}</span>{#if m.username}<!-- a tap opens their Telegram chat (owner, Oct 16: write to the President from here) -->
+                <li><span class="rl">{ROLE_NAME[m.role]}</span>{#if m.username}<!-- a tap opens their Telegram chat (write to the President from here) -->
                   <button class="nm dm ellipsis" onclick={() => { haptic.tap(); openLink(`https://t.me/${m.username}`); }}>@{m.username}</button>
                 {:else}<span class="nm ellipsis">{m.name}</span>{/if}{#if !m.student}<span class="ns">{t('adm.notSigned')}</span>{/if}</li>
               {/each}
