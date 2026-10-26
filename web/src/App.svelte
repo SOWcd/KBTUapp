@@ -38,12 +38,6 @@
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
-  import Feed from './screens/afisha/Feed.svelte';
-  import Clubs from './screens/afisha/Clubs.svelte';
-  import News from './screens/afisha/News.svelte';
-  import Me from './screens/profile/Me.svelte';
-  import Friends from './screens/profile/Friends.svelte';
-  import Settings from './screens/profile/Settings.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import { warmMap } from './lib/map';
@@ -78,9 +72,19 @@
   sheets.pc = (ok) => lazy(() => import('./screens/sheets/PcSheet.svelte'), { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
+  // every page but the List (where the app opens) is its own chunk: less to read before the first screen; fetched when
+  // first shown, and all of them once the app is idle (warmPages), so a swipe or a tab tap doesn't open blank
+  const once = <T,>(load: () => Promise<T>) => { let p: Promise<T> | undefined; return () => (p ??= load()); };
+  const feedPage = once(() => import('./screens/afisha/Feed.svelte'));
+  const newsPage = once(() => import('./screens/afisha/News.svelte'));
+  const clubsPage = once(() => import('./screens/afisha/Clubs.svelte'));
+  const friendsPage = once(() => import('./screens/profile/Friends.svelte'));
+  const mePage = once(() => import('./screens/profile/Me.svelte'));
+  const settingsPage = once(() => import('./screens/profile/Settings.svelte'));
+  const warmPages = () => { for (const f of [feedPage, newsPage, clubsPage, friendsPage, mePage, settingsPage]) void f(); };
   // Studio is for club teams only: its page and views are their own chunks
-  const studioPage = () => import('./screens/club/Studio.svelte');
-  const teamPage = () => import('./screens/club/Team.svelte');
+  const studioPage = once(() => import('./screens/club/Studio.svelte'));
+  const teamPage = once(() => import('./screens/club/Team.svelte'));
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
     const s = session.me?.student;
@@ -411,7 +415,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 1800); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up
@@ -443,12 +447,12 @@
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
         {#snippet page(i)}
           {#if tab === 'afisha'}
-            {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<News />{/if}
+            {#if i === 0}{#await feedPage() then m}<m.default />{/await}{:else if i === 1}<ListPage />{:else}{#await newsPage() then m}<m.default />{/await}{/if}
           {:else if tab === 'club'}
-            {#if !member || i === 0}<Clubs />
+            {#if !member || i === 0}{#await clubsPage() then m}<m.default />{/await}
             {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
           {:else}
-            {#if i === 0}<Friends />{:else if i === 1}<Me />{:else}<Settings />{/if}
+            {#if i === 0}{#await friendsPage() then m}<m.default />{/await}{:else if i === 1}{#await mePage() then m}<m.default />{/await}{:else}{#await settingsPage() then m}<m.default />{/await}{/if}
           {/if}
         {/snippet}
       </Pager>
