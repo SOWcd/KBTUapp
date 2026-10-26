@@ -9,11 +9,11 @@
   import { haptic } from '../../lib/tg';
   import SearchField from '../../ui/SearchField.svelte';
 
-  let { changed }: { changed: () => void } = $props();
+  let { changed, round = 0 }: { changed: () => void; round?: number } = $props();
   let mod = $state<ForumMod | null>(null);
   let q = $state(''), found = $state<Skill[]>([]), open = $state<Skill | null>(null), name = $state(''), into = $state(''), targets = $state<Skill[]>([]);
   const load = () => api.forumMod().then((m) => (mod = m)).catch(() => (mod = null));
-  load();
+  $effect(() => { void round; load(); });
   const search = (s: string, then: (l: Skill[]) => void) => { if (s.trim()) api.skills(s.trim()).then(then).catch(() => then([])); else then([]); };
   $effect(() => search(q, (l) => (found = l)));
   $effect(() => search(into, (l) => (targets = l.filter((x) => x.id !== open?.id))));
