@@ -500,7 +500,9 @@
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }
-  .app { position: absolute; inset: 0; overflow: hidden; background: var(--bg); isolation: isolate; }
+  /* clip, not just hidden: a hidden box can still be scrolled by code, and a sheet's scrollIntoView (the club's chats)
+     scrolled the whole app 80 px up, the tab bar back into view over the sheet; hidden stays for older webviews */
+  .app { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: var(--bg); isolation: isolate; }
   /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
