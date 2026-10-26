@@ -106,19 +106,41 @@
   const settleSoon = (ms: number) => { clearTimeout(settleT); settleT = window.setTimeout(settle, ms); };
   /** keep the plan on screen, with half a screen of room past each edge: a corner, or a route under the card, can be
    *  dragged to the middle (owner, Oct 15) */
-  function clamped(s: number, x: number, y: number): [number, number] {
+  function bounds(s: number): [number, number, number, number] {
     const W = stage.clientWidth, H = stage.clientHeight, pw = W * s, ph = pw * AR; // as wide as the stage at s = 1
-    return [Math.min(Math.max(0, W - pw) + W / 2, Math.max(Math.min(0, W - pw) - W / 2, x)),
-      Math.min(Math.max(0, H - ph) + H / 2, Math.max(Math.min(0, H - ph) - H / 2, y))];
+    return [Math.min(0, W - pw) - W / 2, Math.max(0, W - pw) + W / 2, Math.min(0, H - ph) - H / 2, Math.max(0, H - ph) + H / 2];
+  }
+  function clamped(s: number, x: number, y: number): [number, number] {
+    const [x0, x1, y0, y1] = bounds(s);
+    return [Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y))];
   }
   const clamp = () => { [x, y] = clamped(s, x, y); };
   function reset() { halt(); s = 1; x = 0; y = Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
   /** the view a floor opens in: on the main map the building (u .12-.85 of UNI-Q's sheet, white margins round it) fills
    *  the width (owner, Oct 24: "why is it so far away"); the old plan has no margins, the whole of it */
   function home(): [number, number, number] {
-    const W = stage.clientWidth, H = stage.clientHeight, k = ver === 'main' ? 1.3 : 1;
-    return [k, ...clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, (H - W * AR * k) / 2)];
+    const k = ver === 'main' ? 1.3 : 1;
+    return [k, ...centered(k)];
   }
+  /** where the plan sits zoomed out at scale k: the building in the middle (home's place, at any scale) */
+  function centered(k: number): [number, number] {
+    const W = stage.clientWidth, H = stage.clientHeight;
+    return clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, (H - W * AR * k) / 2);
+  }
+  // one finger past where the plan may rest follows it less and less (a rubber band), and the plan springs back on the
+  // let-go, its size kept: zoomed out it may rest only in the middle, zoomed in anywhere within bounds() (owner: "the
+  // map doesn't listen": it stopped dead at an edge, then flew to the middle and zoomed by itself)
+  const out = () => !rt.edit && s < home()[0] * 1.05;
+  function rest(): [number, number, number, number] {
+    if (!out()) return bounds(s);
+    const [cx, cy] = centered(s);
+    return [cx, cx, cy, cy];
+  }
+  const band = (r: number, lo: number, hi: number, size: number) => {
+    const o = r < lo ? lo - r : r > hi ? r - hi : 0, k = size * 0.35 * (1 - 1 / (1 + o / size));
+    return r < lo ? lo - k : r > hi ? hi + k : r;
+  };
+  let rx = 0, ry = 0; // one finger's position for the plan without the band
   function goHome() { [s, x, y] = home(); settle(); paint(); }
 
   // the main map's tiles on screen at scale s and offset (x, y), from the level that size needs; none while the overview will do
@@ -191,7 +213,7 @@
   // ---- fingers: one drags, two pinch around their middle; a quick second tap zooms in or out ----
   const pts = new Map<number, { x: number; y: number }>();
   let from: { d: number; cx: number; cy: number } | null = null;
-  let lastTap = 0;
+  let lastTap = 0, tapAt = { x: 0, y: 0 };
   const local = (e: PointerEvent) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   function mid() {
     const [a, b] = [...pts.values()];
@@ -206,20 +228,20 @@
     else if (!rt.route && !rt.edit && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
     pts.set(e.pointerId, local(e));
     from = mid();
-    if (pts.size === 1 && !rt.edit) {
-      const now = performance.now();
-      if (now - lastTap < 300) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, from.cx, from.cy), 380); lastTap = 0; }
-      else lastTap = now;
-    }
+    rx = x; ry = y;
   }
   function move(e: PointerEvent) {
     if (!pts.has(e.pointerId) || !from) return;
     if (pts.size === 1 && swipeMove(e.clientX, e.clientY)) { press = null; lastTap = 0; return; }
     pts.set(e.pointerId, local(e));
     const m = mid();
-    x += m.cx - from.cx; y += m.cy - from.cy;
-    if (pts.size > 1 && from.d) zoomAt(m.d / from.d, m.cx, m.cy);
-    else { clamp(); paint(); }
+    if (pts.size > 1 && from.d) { x += m.cx - from.cx; y += m.cy - from.cy; zoomAt(m.d / from.d, m.cx, m.cy); rx = x; ry = y; }
+    else {
+      rx += m.cx - from.cx; ry += m.cy - from.cy;
+      const [x0, x1, y0, y1] = rest();
+      x = band(rx, x0, x1, stage.clientWidth); y = band(ry, y0, y1, stage.clientHeight);
+      paint();
+    }
     from = m;
   }
   function up(e: PointerEvent) {
@@ -227,10 +249,18 @@
     sw = null;
     const p = pts.has(e.pointerId) ? local(e) : null;
     pts.delete(e.pointerId); from = pts.size ? mid() : null; if (!pts.size) settleSoon(120);
-    // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15)
-    const dragged = !press || !p || Math.hypot(p.x - press.x, p.y - press.y) >= 8; // a tap (a double tap's first) isn't a let-go
-    const [hs, hx, hy2] = home();
-    if (!pts.size && !rt.edit && dragged && s < hs * 1.05 && Math.hypot(x - hx, y - hy2) > 4) zoomTo(hs, hx, hy2, 380);
+    // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15);
+    // either way at the size the fingers left it, and only from the rubber band's stretch
+    const tap = !!press && !!p && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 300;
+    if (!pts.size && !rt.edit && !tap) {
+      const [x0, x1, y0, y1] = rest(), tx = Math.min(x1, Math.max(x0, x)), ty = Math.min(y1, Math.max(y0, y));
+      if (Math.hypot(x - tx, y - ty) > 0.5) zoomTo(s, tx, ty, 380);
+    }
+    // a double tap: two taps, the second let go within 300 ms of the first and near it, zooms in (or back out)
+    if (tap && !pts.size && !rt.edit && p) {
+      if (lastTap && performance.now() - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, p.x, p.y), 380); lastTap = 0; }
+      else { lastTap = performance.now(); tapAt = p; }
+    } else if (!tap) lastTap = 0;
     if (rt.edit && press && p && !pts.size && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 400) {
       const W = stage.clientWidth * s, u = (p.x - x) / W, v = (p.y - y) / (W * AR);
       const hit = rt.graph?.n.filter((n) => n.f === cur).map((n) => ({ n, d: Math.hypot(x + n.u * W - p.x, y + n.v * W * AR - p.y) }))
@@ -294,8 +324,8 @@
     if (!sw) return false;
     const dx = px - sw.x0, dy = py - sw.y0;
     if (!sw.on) {
-      if (dx * dx + dy * dy < 25) return false;
-      if (Math.abs(dx) <= Math.abs(dy) * 1.2) { sw = null; return false; } // up or down: the map pans as before
+      if (dx * dx + dy * dy < 144) return false;
+      if (Math.abs(dx) <= Math.abs(dy) * 2) { sw = null; return false; } // not clearly sideways (a diagonal pan): the map pans as before
       sw.on = true; dragging = true;
       x = sw.px; y = sw.py; paint(); // the few pixels it panned before the lock go back
     }
@@ -318,7 +348,7 @@
     const h = z.hist, last = railFloors.length - 1;
     const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
     const fling = Math.abs(vx) > 0.4 ? Math.sign(vx) * (z.rail ? 0.4 : -0.6) : 0;
-    const step = Math.round(kp + fling) - z.k0, far = Math.abs(kp - z.k0) > 0.3 || fling !== 0;
+    const step = Math.round(kp + fling) - z.k0, far = Math.abs(kp - z.k0) > 0.5 || fling !== 0;
     const i = cancel ? z.k0 : Math.max(0, Math.min(last, z.rail ? z.k0 + step : far ? z.k0 + Math.sign(kp + fling - z.k0) : z.k0)); // the map: one floor a swipe
     if (i === z.k0) { if (!cancel && (kp < -0.15 || kp > last + 0.15)) haptic.rigid(); kp = i; jelly(knob); return; }
     void goTo(railFloors[i]);
