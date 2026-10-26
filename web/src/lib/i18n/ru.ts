@@ -650,6 +650,7 @@ const ru = {
   'list.kind.lecture': "Л",
   'list.kind.practice': "П",
   'list.kind.lab': "Лб",
+  'list.dayOff': "Сегодня выходной по академическому календарю: пары онлайн, асинхронно.",
   'list.room': "ауд.",
   'list.nowUntil': "Сейчас · до {time}",
   'list.minLeft': "ещё {n} мин",

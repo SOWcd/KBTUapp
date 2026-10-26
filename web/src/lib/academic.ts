@@ -42,6 +42,12 @@ export const TERMS: { key: 'fall' | 'spring' | 'summer'; rows: Row[] }[] = [
 /** classes on these days are held online, asynchronously (the PDF's footnote) */
 export const ONLINE = ['2026-10-26', '2026-12-16', '2027-01-07', '2027-03-08', '2027-03-15', '2027-03-22/2027-03-24', '2027-05-01', '2027-07-06'];
 
+/** no classes in rooms that day: a holiday, or a day whose classes are online and asynchronous (owner, Oct 26: the
+ * app showed a class "now" on the Oct 26 day off) */
+export const noClasses = (day: string): boolean =>
+  [...ONLINE, ...TERMS.flatMap((x) => x.rows.filter((r) => r.key === 'holiday' && !r.who).map((r) => r.at))]
+    .some((at) => { const [a, b = a] = at.split('/'); return a <= day && day <= b; });
+
 /** first and last day of a row (both the deadline for "until") */
 export const span = (r: Row): [string, string] => { const [a, b = a] = r.at.split('/'); return [a || b, b]; };
 // a day off by its name: the dates are fixed by the Labour Code

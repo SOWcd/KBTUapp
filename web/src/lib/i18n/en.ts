@@ -631,6 +631,7 @@ const en: Dict = {
   'list.kind.lecture': "L",
   'list.kind.practice': "P",
   'list.kind.lab': "Lab",
+  'list.dayOff': "A day off by the academic calendar: classes are online and asynchronous.",
   'list.room': "room",
   'list.nowUntil': "Now · until {time}",
   'list.minLeft': "{n} min left",

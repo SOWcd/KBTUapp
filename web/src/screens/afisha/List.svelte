@@ -22,7 +22,8 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import { onMount } from 'svelte';
-  import { soon, time } from '../../lib/time';
+  import { soon, time, dateInput } from '../../lib/time';
+  import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
   import { openLink } from '../../lib/tg';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
@@ -59,6 +60,8 @@
   });
   onMount(() => { const id = setInterval(() => (now = nowTs()), 30_000); return () => clearInterval(id); });
   const clock = $derived(now);
+  // a day off by the academic calendar on a class day: say why the classes are gone
+  const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
   const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
   const going = $derived(data.events.filter((e) => e.my?.status === 'going' && e.status !== 'cancelled' && (e.endsAt ?? e.startsAt + 3 * 3600) > now && e.startsAt - now < 7 * 86400)
     .sort((a, b) => a.startsAt - b.startsAt)[0]);
@@ -87,6 +90,7 @@
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
   </header>
   <StoryRow />
+  {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   {#if cards.length}
     <!-- data-edge: at the stack's end the swipe moves the pages (Pager) -->
@@ -211,6 +215,7 @@
   .pin-top { display: flex; align-items: center; gap: 8px; }
 
   .dayblk { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+  .off { margin: 4px 4px 12px; color: var(--text-2); }
   .dh { display: flex; align-items: baseline; gap: 8px; font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-bottom: 2px; }
   .dh .td { color: var(--accent-text); }
 

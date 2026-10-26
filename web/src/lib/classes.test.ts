@@ -21,3 +21,10 @@ test("a day's classes with their times, and what's left of today", () => {
   expect(classesOn(week, dayNo(wed))[1].b).toBe(at(2026, 9, 21, 12, 0));
   expect(classesLeft(week, wed).map((x) => x.c.subject)).toEqual(['Algorithms', 'Kazakh']); // the one on now first
 });
+
+test('no classes on a day off of the academic calendar', () => {
+  const mon = [c(1, '10:00', '11:40', 'PE')];
+  expect(classesOn(mon, dayNo(at(2026, 9, 26, 9, 0)))).toEqual([]);     // Mon, Oct 26 2026: classes online, asynchronous
+  expect(classesLeft(mon, at(2026, 9, 26, 10, 30))).toEqual([]);
+  expect(classesOn(mon, dayNo(at(2026, 10, 2, 9, 0)))).toHaveLength(1); // Mon, Nov 2: a normal day
+});

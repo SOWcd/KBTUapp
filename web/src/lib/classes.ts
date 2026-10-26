@@ -4,6 +4,7 @@
 // the event sheet take it as one class.
 import type { ClassItem } from './api';
 import { at, dayNo, OFFSET, parts } from './time';
+import { noClasses } from './academic';
 
 const mins = (hm: string): number => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
 
@@ -24,6 +25,7 @@ const DAY = 86400;
 export function classesOn(schedule: ClassItem[], d: number): Slot[] {
   const p = parts(d * DAY - OFFSET + 12 * 3600);
   const on = (hm: string) => { const [h, m] = hm.split(':').map(Number); return at(p.y, p.m, p.d, h, m); };
+  if (noClasses(`${p.y}-${String(p.m + 1).padStart(2, '0')}-${String(p.d).padStart(2, '0')}`)) return [];
   return schedule.filter((c) => c.weekday === (p.wd || 7)) // 1 = Monday … 7 = Sunday
     .map((c) => ({ c, b: on(c.begins), e: on(c.ends) })).sort((a, b) => a.b - b.b);
 }
