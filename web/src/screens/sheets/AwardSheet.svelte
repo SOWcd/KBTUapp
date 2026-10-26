@@ -2,7 +2,7 @@
   // One award up close (SPEC §4.11), over whatever profile it was tapped on. An achievement: the medal big with the
   // tilt light, what it takes, the way to the next level and how rare every level is; a secret one shows only its
   // hint until earned. A badge: the event it came from. The Creator's seal: what it is, in the words everyone
-  // reads, the creator included (owner, Oct 6: "show me what others see").
+  // reads, the creator included.
   // Mine and earned: Share sends our bot's card (aw_<code>: the reader sees their own way to it).
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';

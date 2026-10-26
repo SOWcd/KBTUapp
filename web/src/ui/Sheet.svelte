@@ -14,10 +14,10 @@
 
   // title: what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it (settings)
   // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
-  // Without one, text typed here and not sent asks before a hand closes it (owner, Oct 17: a pull lost a club's application).
+  // Without one, text typed here and not sent asks before a hand closes it (a pull lost a club's application).
   // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above
-  // (my lanyard while I dress it, owner Oct 17)
-  // Sizes by one rule (owner, Oct 24): WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
+  // (my lanyard while I dress it)
+  // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
   type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
@@ -91,7 +91,7 @@
     if (full || e.touches.length !== 1) return;
     const inBody = body.contains(e.target as Node);
     if (inBody && body.scrollTop > 0) return; // the list scrolls first
-    if ((e.target as Element).closest?.('textarea')) return; // a long text scrolls itself; dragging it closed the memo (owner, Oct 15)
+    if ((e.target as Element).closest?.('textarea')) return; // a long text scrolls itself; dragging it closed the memo
     startX = e.touches[0].clientX; startY = lastY = e.touches[0].clientY; lastT = performance.now(); v = 0;
     dragging = true; decided = false; currentY = 0;
   }

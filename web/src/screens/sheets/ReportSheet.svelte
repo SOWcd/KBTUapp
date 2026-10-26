@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One report sheet for everything (owner, Oct 22): a post, a comment, an event, a profile, a photo. A reason, a few
+  // One report sheet for everything: a post, a comment, an event, a profile, a photo. A reason, a few
   // words if they like, Send. The moderators see the reasons and the words, never who sent them.
   import Flag from '@lucide/svelte/icons/flag';
   import Check from '@lucide/svelte/icons/check';

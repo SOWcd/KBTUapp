@@ -1,6 +1,6 @@
 <script lang="ts">
   // The welcome for someone DMP's Student Union list has under their Telegram username, before they've signed in with
-  // KBTU (PLAN 95, owner Oct 26: the way in, a celebration, not a form). Only the clubs and positions: nothing else of
+  // KBTU (PLAN 95; the way in, a celebration, not a form). Only the clubs and positions: nothing else of
   // the row shows before Microsoft says who this is. "Take your place" is the usual KBTU sign-in; after it, the row
   // joins by itself when the name matches (a toast), else the club's President confirms.
   import { onMount } from 'svelte';

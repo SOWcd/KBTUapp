@@ -33,7 +33,7 @@ export interface DmpPerson { person: PersonRef; fullName: string; studentId: str
 /** A club in DMP's registry with its live numbers for this month. */
 export interface RegistryOrg { org: OrgRef; members: number; president: DmpPerson | null; month: { events: number; registrations: number; came: number } }
 export interface RosterMember extends DmpPerson { role: OrgRole; joinedAt: Ts; lastCame: Ts | null; quiet: boolean /* no check-in at the club's events for 60 days */ }
-/** A memo a club marked sent in the last 7 days (DMP's registry, Oct 13): its events, who said "sent" and when. */
+/** A memo a club marked sent in the last 7 days (DMP's registry): its events, who said "sent" and when. */
 export interface SentMemo { org: OrgRef; sentAt: Ts; by: string | null; events: { id: Id; title: string; startsAt: Ts }[] }
 export interface RegistryHit extends DmpPerson { clubs: { org: OrgRef; role: OrgRole }[] }
 
@@ -45,7 +45,7 @@ export interface CommentThread { items: Comment[]; on: boolean; canModerate: boo
 export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
 /** The admin's queue: one row per reported thing still up. */
 /** Something the admin took down from the reports in the last 30 days, still down: Restore undoes it. */
-/** The app's team (owner, Oct 22): the owner (admin + founder), admins, moderators; and who is banned (why). */
+/** The app's team: the owner (admin + founder), admins, moderators; and who is banned (why). */
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
@@ -92,7 +92,7 @@ export interface Media {
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
-  gov?: boolean /* the Student Government: a mark and first in lists, no rights (owner, Oct 25) */;
+  gov?: boolean /* the Student Government: a mark and first in lists, no rights */;
   abbr?: string | null /* the short name (lib/short.ts): a club's own, a school's set by api/client.ts from i18n */;
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { name?: string; description?: string; abbr?: string }>> /* applied by api/client.ts */;
   orig?: Record<string, string> /* the fields as typed, before api/client.ts showed a translation */ }
@@ -113,7 +113,7 @@ export interface Org extends OrgRef {
   members: number;
   upcoming: number;
   recruiting: boolean;          // takes join applications (the club closes it in Studio)
-  membersHidden: boolean;       // the club hides its member list from outsiders (owner, Oct 24)
+  membersHidden: boolean;       // the club hides its member list from outsiders
   leaders?: Member[];           // President and Vice, from api.org only
   chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
@@ -136,7 +136,7 @@ export interface OrgPatch { name?: string; short?: string; emoji?: string; cover
 export interface Member { person: PersonRef; role: OrgRole; title: string | null }
 
 export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
-/** at the door (Member+): the real short name beside a nick (owner, Oct 5) */
+/** at the door (Member+): the real short name beside a nick */
 export type DoorRef = PersonRef & { realName: string };
 
 export interface Settings {
@@ -230,7 +230,7 @@ export interface EventCard {
   title: string;
   startsAt: Ts;
   endsAt: Ts | null;
-  publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card (Oct 13)
+  publishedAt?: Ts | null;      // when it went out: News shows a new event of my clubs and follows as a card
   place: string;
   placeUrl: string | null;      // 2GIS link for off-campus places
   cover: Media | null;          // photo or poster; null → emoji + colour
@@ -263,7 +263,7 @@ export interface EventCard {
 
 export interface EventFull extends EventCard {
   description: string;
-  /** volunteers (owner, Oct 15): `mine` my application's state; `asked` (organizers only) how many wait */
+  /** volunteers: `mine` my application's state; `asked` (organizers only) how many wait */
   volunteers?: { need: number; senior: boolean; taken: number; mine: 'asked' | 'yes' | 'no' | null; asked?: number } | null;
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
@@ -279,7 +279,7 @@ export interface EventFull extends EventCard {
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
   comments: number;             // questions and comments under the event (§4.10)
   commentsOn: boolean;
-  discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one (Oct 17)
+  discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one
   myRating: number | null;      // 1..5, my one-tap rating after the event
   canRate: boolean;             // checked in, the event is over, within 7 days
   ratings: RatingSummary | null; // the club's Head+ only: anonymous
@@ -502,7 +502,7 @@ export interface PersonCard extends PersonRef {
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
   skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
-  username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram" (owner, Oct 6)
+  username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
 }
 

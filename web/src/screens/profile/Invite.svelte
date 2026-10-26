@@ -1,5 +1,5 @@
 <script lang="ts">
-  // My invite link (referrals, owner Oct 26): shared as our bot's card, my badge's code in it (never my ID); a student
+  // My invite link (referrals): shared as our bot's card, my badge's code in it (never my ID); a student
   // it brings counts once they sign in with KBTU, toward "Recruiter" (3, 10, 25, 50).
   import type { Me } from '../../lib/api';
   import { t, tn } from '../../lib/i18n/index.svelte';

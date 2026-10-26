@@ -1,7 +1,7 @@
 <script lang="ts">
   // A row of DMP's list under my Telegram username but another name (PLAN 95): the club and position only (the sheet's
   // name, phone and city may be someone else's). "Yes, it's me" (a typo, a new surname) asks the club's President to
-  // confirm; something else wrong goes to support. Closed: asked again next time. No student removes a row (owner).
+  // confirm; something else wrong goes to support. Closed: asked again next time. No student removes a row.
   import type { Id, RosterSpot } from '../../lib/api';
   import { api } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';

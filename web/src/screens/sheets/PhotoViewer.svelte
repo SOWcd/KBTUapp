@@ -89,7 +89,7 @@
   .by { font: 600 13px/1.2 var(--font-text); color: rgba(255, 255, 255, 0.75); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
   .pill { position: relative; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.12); }
   .pill:active { transform: scale(0.96); }
-  /* a round cross, not a worded pill (owner, Oct 25) */
+  /* a round cross, not a worded pill */
   .pill.x { width: 44px; padding: 0; display: grid; place-items: center; }
   .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
 </style>

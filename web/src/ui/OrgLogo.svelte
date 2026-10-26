@@ -9,7 +9,7 @@
 </script>
 
 <script lang="ts">
-  // A club's mark: its uploaded logo (owner, Oct 5), else its 3D emoji on its cover gradient. Without `size` it fills
+  // A club's mark: its uploaded logo, else its 3D emoji on its cover gradient. Without `size` it fills
   // its container (used in the middle of the ticket QR).
   import type { OrgRef } from '../lib/api';
   import Emoji from './Emoji.svelte';

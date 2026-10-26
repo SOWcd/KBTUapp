@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The privacy policy changed (H2, Oct 22: what a deleted account keeps without the name): every student agrees once
+  // The privacy policy changed (H2; what a deleted account keeps without the name): every student agrees once
   // more (lib/legal.ts); with the forum on, its part of the policy (v4). Closing it asks again at the next open;
   // deleting the account is the other way out.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';

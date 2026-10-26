@@ -4,7 +4,7 @@
   // "Save" (the server tells registered people when the time or place moves). Leaving with changes asks.
   // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
   // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
-  // come free. A registration deadline closes "Going" before the start (owner, Oct 5); it can close it early on a live one.
+  // come free. A registration deadline closes "Going" before the start; it can close it early on a live one.
   import { onMount } from 'svelte';
   import { fmtPhone } from '../../lib/phone';
   import MemoAsksForm from './MemoAsks.svelte';
@@ -44,14 +44,14 @@
   const myKaspiName = session.me?.student ? session.me.name : '';
 
   const EMOJI = PICK_EMOJI;
-  // eleven around the colour wheel and night (owner, Oct 13: 10-12, no RGB picker); BRAND when nothing else is set
+  // eleven around the colour wheel and night (10-12, no RGB picker); BRAND when nothing else is set
   const COLORS = ['#F2542D', '#FF8A3D', '#FFB23D', '#7CB518', '#2FBF71', '#14B8A6', '#18A9DB', '#3B6BFF', '#7C4DFF', '#AF52DE', '#FF4FA3', '#2A2340'];
   const BRAND = '#3B6BFF';
   // a 2GIS link anywhere in what was pasted into the place field (2GIS → Share → Copy gives name, address, link)
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
-  // a new event starts on a random emoji and colour (owner, Oct 13): fewer look alike when nobody picks
+  // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
     end: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
@@ -106,10 +106,10 @@
     reg: !f.deadline ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
-  // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request (Oct 11)
+  // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
 
   // Examples instead of "e.g. …": a real title and place from the events in the app, another one each time
-  // the editor opens (owner, Oct 4); built-in ones until the app has events of its own.
+  // the editor opens; built-in ones until the app has events of its own.
   const pick = (xs: string[]) => xs[Math.floor(Math.random() * xs.length)];
   const realTitles = data.events.map((e) => e.title).filter((x) => x.length <= 40);
   const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place.length <= 30).map((e) => e.place))];
@@ -373,7 +373,7 @@
 
     <section class="cover">
       <h2 class="t-cap">{t('ed.video')}</h2>
-      <!-- two real tiles shaped like their videos (owner, Oct 19: the old button looked like a thin line) -->
+      <!-- two real tiles shaped like their videos (the old button looked like a thin line) -->
       <div class="vslots">
         {#each ['tall', 'wide'] as const as slot (slot)}
           {@const x = vids[slot]}
@@ -479,7 +479,7 @@
       <span><b>{t('ed.albumOpen')}</b><i class="t-foot">{t('ed.albumOpenHint')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.albumOpen} />
     </label>
-    <!-- volunteers (owner, Oct 15): students apply, the organizers say yes or no in the event's management -->
+    <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
     <label class="switch">
       <span><b>{t('ed.vol')}</b><i class="t-foot">{t('ed.volHint')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.vol} />

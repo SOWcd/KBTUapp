@@ -1,4 +1,4 @@
-// Kazakhstan phone numbers as people read them, "+7 701 234 56 78" (owner, Oct 11: the editor showed "77012345678"),
+// Kazakhstan phone numbers as people read them, "+7 701 234 56 78" (the editor showed "77012345678"),
 // from whatever is typed, pasted or autofilled: iOS gives "8 (701) 234-56-78", the server keeps "+77012345678".
 
 /** The formatted number; the field's own "+7" and a trunk 8 never count as digits of the number. */

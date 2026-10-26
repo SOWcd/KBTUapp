@@ -1,7 +1,7 @@
 <script lang="ts">
   // Admin → Chats (§4.11): the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
-  // since the admin panel became a hub (owner, Oct 14). The admin says whose a chat is (PLAN 86: then it shows on that
-  // club's or school's page too; owner, Oct 22: t.me/kbtusite is SITE's).
+  // since the admin panel became a hub. The admin says whose a chat is (PLAN 86: then it shows on that
+  // club's or school's page too; t.me/kbtusite is SITE's).
   import Plus from '@lucide/svelte/icons/plus';
   import X from '@lucide/svelte/icons/x';
   import { api, ApiErr, type AdminOrg, type Chat } from '../../lib/api';

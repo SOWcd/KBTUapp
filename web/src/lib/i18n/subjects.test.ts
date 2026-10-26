@@ -4,7 +4,7 @@ import { classEmoji, shortSubject, lessonKind } from './subjects';
 const c = (subject: string, names: Record<string, string> | null = null, kind: string | null = null) => ({ subject, names, kind });
 
 test('a class gets its icon from its names in any language', () => {
-  // the owner's (Oct 12)
+  // the owner's
   expect(classEmoji(c('Физическая культура', { en: 'Physical culture', kk: 'Дене шынықтыру' }))).toBe('soccer_ball_3d');
   expect(classEmoji(c('General Kazakh language'))).toBe('speech_balloon_3d');
   expect(classEmoji(c('Архитектура компьютера', { en: 'Computer architecture' }))).toBe('desktop_computer_3d');

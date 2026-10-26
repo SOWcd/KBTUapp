@@ -16,7 +16,7 @@ export function burst(sad = false, from?: { x: number; y: number }, emoji?: stri
   const layer = document.createElement('div');
   layer.className = 'burst';
   document.body.append(layer);
-  // A real throw (owner, Oct 13: the old one was slow and stiff, and near an edge it stacked the emoji in a column):
+  // A real throw (the old one was slow and stiff, and near an edge it stacked the emoji in a column):
   // each emoji flies a parabola under gravity, sampled into keyframes; the fountain leans toward the screen's middle,
   // and a path that would leave the screen is narrowed as a whole, never squashed against the edge.
   const g = sad ? 1500 : 2400, lean = Math.max(-1, Math.min(1, (W / 2 - x) / (W / 2)));

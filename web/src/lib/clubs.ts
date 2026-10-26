@@ -1,4 +1,4 @@
-// The Clubs tab's orderings (owner, Oct 25): the Student Government first, then the biggest (members, then followers),
+// The Clubs tab's orderings: the Student Government first, then the biggest (members, then followers),
 // a club nobody's in or follows last; and the search both lists share.
 import type { Org } from './api';
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The admin panel (SPEC §2), a hub since Oct 14 (owner: "redo it completely", it was one long page of everything):
+  // The admin panel (SPEC §2), a hub since Oct 14 ("redo it completely", it was one long page of everything):
   // the numbers on top; "To decide" — clubs waiting for the check (§4.6) and reports (§4.10), each opened in place —
   // or a quiet "all clear"; then one row per job, each its own sheet: clubs and schools, creator awards, the chats
   // directory, DMP's registry; what I took down (30 days, the way back) folds under its row.
@@ -33,7 +33,7 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
-  // a moderator (owner, Oct 22) only filters content: the reports, what was taken down, the chats directory
+  // a moderator only filters content: the reports, what was taken down, the chats directory
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
   // the rows' numbers, fetched with the panel
@@ -57,7 +57,7 @@
     if (stats?.today != null) by.set(today, stats.today);
     return Array.from({ length: 30 }, (_, i) => ({ day: today - 29 + i, n: by.get(today - 29 + i) }));
   });
-  // a day tapped on the chart (owner, Oct 21): how many and who came in
+  // a day tapped on the chart: how many and who came in
   let picked = $state<AdminDay | null>(null), pickedDay = $state<number | null>(null);
   async function pickDay(day: number, toggle = true) {
     if (pickedDay === day && !toggle) return;
@@ -129,7 +129,7 @@
   }
 </script>
 
-<!-- the title is the capsule's, with the shield (owner, Oct 21: not twice) -->
+<!-- the title is the capsule's, with the shield (not twice) -->
 <Sheet {overlay} full title={t('me.admin')} icon={ShieldCheck}>
   {#if stats}
     <section class="stats surface">
@@ -221,7 +221,7 @@
   <div class="rows surface">
     {#if admin}
     <button class="r" onclick={() => sheets.adminClubs()}><span class="ic"><Building size={20} /></span><span class="lb">{t('adm.clubs')}{#if clubsN != null}<i>{tn('reg.clubs', clubsN)} · {tn('adm.schools', schoolsN)}</i>{/if}</span><ChevronRight size={18} /></button>
-    <!-- the app's team (owner, Oct 22): moderators, admins (the owner gives those), bans -->
+    <!-- the app's team: moderators, admins (the owner gives those), bans -->
     <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
@@ -229,7 +229,7 @@
     {#if forum}<button class="r" onclick={() => sheets.forum()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('fo.title')}<i>{t('fo.adminSub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
     {#if admin}
-    <!-- the AI page (owner, Oct 21): what the translator does, what failed -->
+    <!-- the AI page: what the translator does, what failed -->
     <button class="r" onclick={() => sheets.adminAi()}><span class="ic"><Sparkles size={20} /></span><span class="lb">{t('ai.title')}{#if stats?.ai}<i>{stats.ai.on ? `${t('ai.on')} · ${stats.ai.today} ${t('ai.today')}` : t('ai.off')}</i>{/if}</span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.registry()}><span class="ic"><BookUser size={20} /></span><span class="lb">{t('reg.title')}<i>{t('reg.sub')}</i></span><ChevronRight size={18} /></button>
     {/if}

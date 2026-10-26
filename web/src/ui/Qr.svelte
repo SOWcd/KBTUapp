@@ -5,9 +5,9 @@
 
 <script lang="ts">
   // A real, styled QR: round dots, rounded ink eyes and a clear square in the middle for the organizer's
-  // mark (the owner picked this look from four, Oct 4). Error correction Q (25 %) keeps it readable with the middle
+  // mark (the owner picked this look from four). Error correction Q (25 %) keeps it readable with the middle
   // (≤ 11 % of the modules) covered; H made the badge's link a busy 41×41, Q draws it 37×37 with bigger dots that also
-  // read from further away (owner, Oct 5; checked with zbarimg). All dots are one path: a single DOM node.
+  // read from further away (checked with zbarimg). All dots are one path: a single DOM node.
   import qrcode from 'qrcode-generator';
   import type { Snippet } from 'svelte';
 

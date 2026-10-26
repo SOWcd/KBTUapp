@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → the app's team (owner, Oct 22): the owner gives and takes the admin role, an admin gives the moderator role
+  // Admin → the app's team: the owner gives and takes the admin role, an admin gives the moderator role
   // and bans; nobody touches the owner, himself or (unless the owner) another admin. A ban needs a reason he will
   // read; it takes the role away. Found by @username among everyone who opened the app.
   import UsersRound from '@lucide/svelte/icons/users-round';

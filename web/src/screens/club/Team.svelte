@@ -56,7 +56,7 @@
     run(() => api.updateMember(org(), x.person.id, { dept: d }),
       d == null ? t('team.deptNone', { name: x.person.name }) : t('team.deptSet', { name: x.person.name, dept: tagOf.get(d)?.name ?? '' }), 'raising_hands_3d_default');
 
-  // a role of my own level on myself, a name only (owner, Oct 12); tags are picked in the tag (TeamSetupSheet)
+  // a role of my own level on myself, a name only; tags are picked in the tag (TeamSetupSheet)
   const ownLevel = $derived((setup?.roles ?? []).filter((r) => r.level === m?.role && r.rights.every((k) => may(m, k))));
   // the avatar is the profile; the row opens what I can do with them, or the profile when there's nothing (owner, Oct 14:
   // no "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
@@ -136,7 +136,7 @@
   {#if m}
     <header class="hd">
       <span class="org"><OrgLogo org={m.org} size={30} /><span><h1 class="t-h2 ellipsis">{t('page.team')}</h1><p class="t-foot ellipsis">{m.org.name}</p></span></span>
-      <!-- the list first; invite and roles are icons up here (owner, Oct 15: the invite row was too big, the hint noise) -->
+      <!-- the list first; invite and roles are icons up here (the invite row was too big, the hint noise) -->
       <span class="icons">
         {#if vice}<button class="ic" onclick={() => shareInvite(m.org)} aria-label={t('team.inviteTitle')}><LinkIcon size={19} /></button>{/if}
         {#if may(m, 'people') || vice || setup?.roles.length || setup?.tags.length}
@@ -174,7 +174,7 @@
           </div>
         {/if}
         <!-- one row whatever the count: the tags sit behind one chip that opens the phone's own list, and the chosen
-             one shows on it (owner, Oct 13: long department names in a scrolling row hid the chosen one; wrapped,
+             one shows on it (long department names in a scrolling row hid the chosen one; wrapped,
              six of them took half the screen and stood ragged) -->
         <div class="filters">
           {#if !depts.length}<button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>{/if}
@@ -225,7 +225,7 @@
                   {#if manage}
                     <span class="t-cap">{t('team.roleLabel')}</span>
                     <div class="ar">
-                      <!-- Member, or one of the club's roles, each its toggles (owner, Oct 7: no levels by name); only rights I have -->
+                      <!-- Member, or one of the club's roles, each its toggles (no levels by name); only rights I have -->
                       <button class="pill" class:on={x.role === 'member' && !x.title} disabled={busy || (x.role === 'member' && !x.title)} onclick={() => give(x, 'member')}>{ROLE_NAME.member}</button>
                       {#each (setup?.roles ?? []).filter((r) => canGive(m.role).includes(r.level) && r.rights.every((k) => may(m, k))) as r (r.id)}
                         <button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{r.name}</button>
@@ -262,13 +262,13 @@
   .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
   .page > :global(*) { flex-shrink: 0; }
-  /* the club's President: a crown on the avatar (owner, Oct 15) */
+  /* the club's President: a crown on the avatar */
   .av { position: relative; }
   .crown { position: absolute; right: -3px; top: -4px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface-solid); }
   .icons { display: flex; gap: 8px; flex: none; }
   .ic { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
-  .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows (owner, Oct 17) */
+  .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows */
   .hd { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .org > span { min-width: 0; }

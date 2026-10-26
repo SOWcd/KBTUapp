@@ -43,10 +43,10 @@
   /** an entrance by its name on the graph: a start too (A16: people come in from Tole bi, Kazybek bi, Panfilov) */
   const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   const exits = $derived(exitTiles(rt.graph));
-  /** a picked entrance that won't open now: said by its name, the way still goes (owner, Oct 24: "I can stand by it") */
+  /** a picked entrance that won't open now: said by its name, the way still goes */
   const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : showsOpen(n, new Date()) ? '' : t(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed'); };
   /** a room as a point on its floor: where its number is printed, else its door (r), else its nearest numbered
-   *  neighbour, "somewhere here" (owner, Oct 15: 435 isn't on the plan, lead to where it most likely is) */
+   *  neighbour, "somewhere here" (435 isn't on the plan, lead to where it most likely is) */
   function place(text: string): (Pt & { room: string; near?: string }) | null {
     const x = exitNamed(text);
     if (x) return { f: x.f, u: x.u, v: x.v, room: x.name! };
@@ -64,8 +64,8 @@
     const g = rt.graph, p = place(text);
     if (!g || !p) return [];
     const a = { at: attach(g, p, ar, p.room), pt: p as Pt };
-    if (out) { // the nearest exit open now, one answer (owner, Oct 15); the backup (the night post) whenever none other is open,
-      // its own hours or not (owner, Oct 24: Saturday 20-22 had no door at all and the button went dead)
+    if (out) { // the nearest exit open now, one answer; the backup (the night post) whenever none other is open,
+      // its own hours or not (Saturday 20-22 had no door at all and the button went dead)
       const now = new Date(), main = g.n.filter((x) => x.k === 'x' && !x.b && !x.e && openAt(x, now));
       const best = (main.length ? main : g.n.filter((x) => x.k === 'x' && x.b)).map((x) => ({ route: routes(g, ar, a, { at: [[x.id, 0]] })[0], exit: x }))
         .filter((o) => o.route).sort((p, q) => p.route.secs - q.route.secs)[0];
@@ -75,7 +75,7 @@
     return b ? routes(g, ar, a, { at: attach(g, b, ar, b.room), pt: b }).map((route) => ({ route })) : [];
   }
   const options = $derived(asked ? optionsFor(from, false) : []);
-  const rush = $derived(asked && liftRush(new Date())); // the break between classes: the lifts are packed (owner, Oct 24); read when the ways show
+  const rush = $derived(asked && liftRush(new Date())); // the break between classes: the lifts are packed; read when the ways show
   const secs = (r: Route) => r.secs + (r.mode === 'lift' && rush ? RUSH_WAIT : 0);
   /** the keypad's line under the number: where that is, or the exit it leads to */
   function check(text: string): PadCheck {
@@ -100,7 +100,7 @@
   $effect(() => { void cur; jelly(drop); }); // the floors' drop squashes as it slides, as the tab bar's does
   function show(i: number) { rt.step = i; const leg = rt.route!.legs[i]; go(leg.f, leg.pts); }
   function stop() { haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; onclose(); }
-  /** the step card's X: back to the ways, A kept (owner, Oct 24: looked at the fast one, wants the lift); the exit has one way */
+  /** the step card's X: back to the ways, A kept (looked at the fast one, wants the lift); the exit has one way */
   function toWays() { if (!asked) return stop(); haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; }
   const hours = (x: MapNode): string => { const d = new Date(), h = x.h?.[d.getDay() === 0 ? 2 : d.getDay() === 6 ? 1 : 0]; return h ? h.split('-')[1] : ''; };
   function floorName(n: number) { return n ? t('route.floor', { n }) : t('route.basement'); }
@@ -118,11 +118,11 @@
     return (chosen?.exit ? t('route.toExit', { name: chosen.exit.name! }) : p?.near ? t('route.toNear', { room: p.near, near: p.room })
       : roomOf(dest) ? t('route.toRoom', { room: roomOf(dest)! }) : t('route.toPlace', { name: spotOf(dest) ? dest : p?.room ?? dest })) + via;
   }
-  /** which stairs: " by" the room whose door is nearest to them, or nothing, "the stairs by 384" (a friend's note, Oct 16: a floor has several) */
+  /** which stairs: " by" the room whose door is nearest to them, or nothing, "the stairs by 384" (a friend's note; a floor has several) */
   function nearRoom(leg: Leg): string {
     const s = leg.up ?? leg.pts[leg.pts.length - 1], by = (n: MapNode) => Math.hypot(n.u - s.u, (n.v - s.v) * ar);
     const ok = (r: string) => /^\d/.test(r) && r !== roomOf(from); // not "the stairs by 351" to someone standing at 351
-    // only a door right by them: a far one names the stairs on the other side (owner, Oct 24: "the stairs by 728" sent left)
+    // only a door right by them: a far one names the stairs on the other side ("the stairs by 728" sent left)
     const doors = rt.graph!.n.filter((n) => n.f === leg.f && n.r?.some(ok) && by(n) < 0.1).sort((x, y) => by(x) - by(y));
     const r = doors[0]?.r!.find(ok);
     return r ? t('route.by', { room: r }) : '';
@@ -216,7 +216,7 @@
   {/if}
 {:else if chosen && rt.route}
   {@const n = rt.route.legs.length}
-  <!-- the step on the way (owner, Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
+  <!-- the step on the way (Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
   <div class="card step glass glass-sheet" data-cover use:glass={{ bloom: true }} use:refract>
     <div class="top"><span>{t('route.step', { i: rt.step + 1, n })} · {floorName(rt.route.legs[rt.step].f)} · {t('route.min', { n: mins(secs(rt.route)) })}</span>
       <button onclick={toWays} aria-label={t('common.close')}><X size={18} /></button></div>
@@ -226,7 +226,7 @@
       {#if rt.step < n - 1}<button class="p" onclick={() => { haptic.tap(); show(rt.step + 1); }} aria-label={t('route.next')}><ChevronRight size={22} /></button>
       {:else}<button class="p ok" onclick={() => { haptic.ok(); say(t('pad.arrived'), 'partying_face_3d'); stop(); }} aria-label={t('pad.arrived')}><Check size={22} /></button>{/if}
     </div>
-    <!-- on the way the floors are the card's last row, the rail is gone (owner, Oct 15 and again Oct 24: it hid the way) -->
+    <!-- on the way the floors are the card's last row, the rail is gone (Oct 15 and again Oct 24; it hid the way) -->
     <div class="fls" role="tablist" aria-label={t('map.floors')}>
       <span class="drop" bind:this={drop} style:left="calc(3px + (100% - 6px) * {cur} / 6)" aria-hidden="true"></span>
       {#each [0, 1, 2, 3, 4, 5] as f (f)}<button role="tab" aria-selected={cur === f} class:on={cur === f} class:r={rt.route.legs.some((l) => l.f === f)} onclick={() => pick(f)}>{f || t('map.bShort')}</button>{/each}
@@ -300,7 +300,7 @@
   .grow small, .min small { font: 500 13px/1.2 var(--font-text); color: var(--text-2); }
   .min { font: 800 22px/1 var(--font-display); white-space: nowrap; }
   .none { font: 500 14px/1.3 var(--font-text); color: var(--text-2); padding: 4px 2px; }
-  /* the step card as the tab bar's glass (owner, Oct 15: "more liquid glass"); off the floors row, a bar per step */
+  /* the step card as the tab bar's glass; off the floors row, a bar per step */
   .step { left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 14px); padding: 12px 12px 12px 16px; border-radius: 28px; animation: rise 0.6s var(--ease-spring);
     -webkit-backdrop-filter: blur(20px) saturate(170%) brightness(1.05); backdrop-filter: var(--refract, blur(20px) saturate(170%) brightness(1.05));
     background: rgba(18, 22, 36, 0.38); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6), 0 0 28px -8px rgba(90, 130, 255, 0.45); }

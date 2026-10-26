@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One item of the memo without an event (owner, Oct 15: "+ Room", "+ Guests"...): that request's fields, the day and
+  // One item of the memo without an event ("+ Room", "+ Guests"...): that request's fields, the day and
   // hours, and the paragraph the server writes from them, shown live; "Insert" puts it in the memo's text.
   import { untrack } from 'svelte';
   import { api, type Id, type MemoAsks } from '../../lib/api';

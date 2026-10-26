@@ -1,7 +1,7 @@
 <script lang="ts">
-  // The Creator's seal (owner: black and white): a glossy black disc, a silver rim and the app's colonnade, the same
-  // five columns as the icon (owner, Oct 5: the old one had four). By a name it opens what it is (AwardSheet). `idea`:
-  // the same seal in the brand's blue, for the one who came up with the app (owner, Oct 7: the idea was hers).
+  // The Creator's seal (black and white): a glossy black disc, a silver rim and the app's colonnade, the same
+  // five columns as the icon (the old one had four). By a name it opens what it is (AwardSheet). `idea`:
+  // the same seal in the brand's blue, for the one who came up with the app (the idea was hers).
   let { size = 16, idea = false }: { size?: number; idea?: boolean } = $props();
   const disc = $derived(idea ? ['#6F93FF', '#2F5BEA', '#14307F'] : ['#3C3C44', '#121216', '#000']);
   const id = $props.id(); // gradient ids per seal: a closed sheet's copy can't take the others' with it

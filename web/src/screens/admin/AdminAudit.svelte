@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → the audit log (owner, Oct 22): the owner reads everything done with power, the last 200: who, what, to whom.
+  // Admin → the audit log: the owner reads everything done with power, the last 200: who, what, to whom.
   import ScrollText from '@lucide/svelte/icons/scroll-text';
   import { api, type AuditRow } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';

@@ -44,7 +44,7 @@
     finally { busy = false; }
   }
 
-  // DMP sets any club's short name (owner, Oct 25); the club's Vice+ in its profile
+  // DMP sets any club's short name; the club's Vice+ in its profile
   let abbr = $state(untrack(() => shortOf(org)));
   async function rename() {
     const v = (await sheets.askText({ title: t('ce.abbr'), text: t('ce.abbrHint'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: abbr, max: 8 }))?.trim();

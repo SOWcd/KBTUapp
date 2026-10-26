@@ -1,5 +1,5 @@
 <script lang="ts">
-  // How the week gets into the app (PLAN 26, owner Oct 25): the portal's schedule page saved on the phone and sent to
+  // How the week gets into the app (PLAN 26): the portal's schedule page saved on the phone and sent to
   // the bot, which reads the whole week (server portal.py) and answers "found N classes". iPhone: Safari's Share ->
   // Options -> Web Archive -> Telegram; Android: Chrome's "Download page" (.mht). Offered right after the Microsoft
   // sign-in (`first`: "Later" says it stays on Home) and from the Home card until a schedule is there.

@@ -2,8 +2,8 @@
   // Tab 2 → Studio (Head+) or Club (Member): "To do" on top only when something waits (new applications, the memo on
   // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
   // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state
-  // (owner, Oct 15). Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
-  // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24 (owner, Oct 21): the club's
+  //. Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
+  // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
   // mark by its name, the next event with how full it is, the actions as tiles. "Link a channel" waits for its backend.
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
@@ -101,14 +101,14 @@
   const memoDue = $derived(may(m, 'memo') && nextWeek > 0 && ((dayNow + 3) % 7 === 1 || wednesday));
   const fresh = $derived(waiting + (round?.counts?.new ?? 0));
   const askRecruit = $derived(vice && !recruiting && !round && termJustStarted());
-  // the club's creator alone in it, often not its President (owner, Oct 17): invite them, then hand it over in Team
-  // "I am the President" hides it for that club on this device (owner, Oct 24)
+  // the club's creator alone in it, often not its President: invite them, then hand it over in Team
+  // "I am the President" hides it for that club on this device
   const PRES = 'kbtu.presOk';
   let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
   const todo = $derived(claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
-  // DMP picked (owner, Oct 26: DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
+  // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
   let memos = $state(0);
@@ -130,8 +130,8 @@
 <div class="page scroll">
   {#if m}
     <header class="hd">
-      <!-- the club's name switches clubs (owner, Oct 23, A3; no chips row); the pencil to its page stays top right, in glass
-           (owner, Oct 24: not inside the list) -->
+      <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right, in glass
+           (not inside the list) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis">{nameOf(m.org)}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
@@ -226,11 +226,11 @@
     {/if}
 
     <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
-         the memo to DMP; inviting lives on Team, editing the club up top (owner, Oct 17) -->
+         the memo to DMP; inviting lives on Team, editing the club up top -->
     {#if staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="qa">
         {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
-        <!-- the club's news, now circles on Afisha (owner, Oct 24): written from here -->
+        <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></button>{/if}
         {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
         {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></button>{/if}

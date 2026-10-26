@@ -44,7 +44,7 @@ export interface Api {
   adminOrgEvents(org: Id): Promise<AdminEvent[]>;
   adminCreateOrg(i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg>;
   adminSetRole(org: Id, who: string, role: OrgRole | 'none'): Promise<AdminOrg>;
-  adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete (owner, Oct 16)
+  adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete
   adminPresLink(org: Id): Promise<{ token: string; expiresAt: Ts }>;  // the President's one-time link, shown as a QR
   org(id: Id): Promise<Org>;
   subscribe(id: Id, on: boolean): Promise<Org>;
@@ -190,7 +190,7 @@ export interface Api {
   adminAi(): Promise<AdminAi>;
   aiRetry(): Promise<void>;
   chats(): Promise<Chats>;                                // the chats directory (§4.11)
-  /** any chat suggested from the app: @name, a t.me link or an invite link (owner, Oct 21) */
+  /** any chat suggested from the app: @name, a t.me link or an invite link */
   suggestChat(link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'org' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }>;
   chatOpened(id: Id): Promise<void>;                      // the tick
   addChat(input: { title: string; url: string; kind: Chat['kind']; school: string | null; course: number | null }): Promise<Chat>; // moderators, admin

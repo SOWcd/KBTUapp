@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The club's own short links (Vice+, owner Oct 25): kbtu.sow.kz/<slug> to the club, one of its upcoming events or its
+  // The club's own short links (Vice+): kbtu.sow.kz/<slug> to the club, one of its upcoming events or its
   // round, never anywhere outside the app. Made, copied and taken down here at once, not with the profile's Save.
   import Copy from '@lucide/svelte/icons/copy';
   import Trash from '@lucide/svelte/icons/trash-2';

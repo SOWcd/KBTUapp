@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Afisha → News, the page right of List (owner, Oct 24: "one news feed is the killer feature"; PLAN 58): KBTU's news in
+  // Afisha → News, the page right of List ("one news feed is the killer feature"; PLAN 58): KBTU's news in
   // one place, not only events: the broadcasts "From DMP and KBTU App" first (a gradient edge, "new" until seen; seeing
   // them clears the dot), then every club's and office's public posts with the new events of my clubs and follows, newest
   // first. Writing is in Studio. A post: the club, when, its label, a photo, the text (long ones fold), the two
@@ -34,7 +34,7 @@
   // loaded with the app (and kept for the next launch), so the page opens full; coming into view refreshes it quietly
   const casts = $derived(data.news?.casts ?? []);
   // every public post, not only my clubs' (the circles on List keep those): the copy the app loads with the Afisha and
-  // keeps for the next launch, so the page opens full (owner, Oct 24: it used to wait for its own request); each visit
+  // keeps for the next launch, so the page opens full (it used to wait for its own request); each visit
   // refreshes it quietly
   const posts = $derived(data.eventsReady ? data.posts : null);
   const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
@@ -88,13 +88,13 @@
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   // a new event of my clubs and follows (published in the last two weeks, still ahead) is a card among the posts, in time:
-  // clubs announce an event by publishing it, not with a post as well (owner, Oct 13)
+  // clubs announce an event by publishing it, not with a post as well
   const near = (id: number) => !!me?.memberships.some((m) => m.org.id === id) || data.orgs.some((o) => o.id === id && o.subscribed);
   const fresh = $derived(data.events.filter((e) => e.status === 'published' && (e.publishedAt ?? 0) > nowTs() - 14 * 86400 && near(e.org.id)));
   type Item = { at: number; post: Post } | { at: number; ev: EventCard };
   // by time only: a club's pin holds on its own page, not over everyone's news
   const feed = $derived<Item[] | null>(posts && [...posts.map((p) => ({ at: p.createdAt, post: p })), ...fresh.map((e) => ({ at: e.publishedAt!, ev: e }))].sort((a, b) => b.at - a.at));
-  // "your club" / "you follow" (owner, Oct 13); anyone else's post says only when
+  // "your club" / "you follow"; anyone else's post says only when
   const why = (p: Post) => (me?.memberships.some((m) => m.org.id === p.org.id) ? t('news.yourClub') + ' · ' : data.orgs.some((o) => o.id === p.org.id && o.subscribed) ? t('news.following') + ' · ' : '');
 </script>
 
@@ -115,11 +115,11 @@
         {/if}
         {#if p.canFeature}<button onclick={() => feature(p, p.featured ? 0 : 3)}>{p.featured ? t('news.unfeature') : t('news.feature')}</button>{/if}
         {#if p.canDelete}<button class="danger" onclick={() => { menu = null; void takeDown(p); }}>{t('news.hide')}</button>{/if}
-        <!-- anyone but its own club's writers: the one report sheet (owner, Oct 22) -->
+        <!-- anyone but its own club's writers: the one report sheet -->
         {#if !p.canEdit && session.me?.student}<button onclick={() => { menu = null; sheets.report('post', p.id, p.title); }}>{t('cm.report')}</button>{/if}
       </div>
     {/if}
-    <!-- the card crops it: a tap shows it whole (owner, Oct 26) -->
+    <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{p.title}</h3>

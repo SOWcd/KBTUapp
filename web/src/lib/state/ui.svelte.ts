@@ -22,8 +22,8 @@ export const ui = $state({
   page: start.page,
   navMini: false,          // bottom nav shrinks to icons while scrolling down
   awake: 0,                // bumps on interaction: the capsule shows the page switcher for a moment
-  club: start.club,        // tab 2: the club picked in Studio, the same on Team (null = the top one); kept across launches (owner, Oct 26)
-  busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; owner, Oct 17: no sign otherwise)
+  club: start.club,        // tab 2: the club picked in Studio, the same on Team (null = the top one); kept across launches
+  busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
 });
 
 export function persistNav(): void {
@@ -40,7 +40,7 @@ export function goTab(tab: Tab): void {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 /** `title`: what the capsule says while this overlay is on top (SPEC §8.2); '' = the one below speaks. `theme`: the
  *  capsule's then, when the overlay has one of its own (the map's switch; the dark QR and ticket). `icon`: a small mark
- *  before the title for a full-screen mode (owner, Oct 7: the QR, the map, the scanner, settings). `byUser`: the close came
+ *  before the title for a full-screen mode (the QR, the map, the scanner, settings). `byUser`: the close came
  *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
 /** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
 export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean }

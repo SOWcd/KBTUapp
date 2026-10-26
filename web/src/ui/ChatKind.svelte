@@ -10,7 +10,7 @@
 <i class="ck {kind}" style="--s:{size}px" title={t(`chats.${kind}`)}>
   <svg viewBox="0 0 24 24" aria-hidden="true">
     {#if kind === 'channel'}
-      <!-- a megaphone, Telegram's own sign for a channel (owner, Oct 25: the speaker read as "sound") -->
+      <!-- a megaphone, Telegram's own sign for a channel (the speaker read as "sound") -->
       <path d="M3.5 9.7c0-1 .8-1.7 1.7-1.7h2.6l8.9-4.3c.9-.4 1.8.2 1.8 1.1v14.4c0 1-.9 1.5-1.8 1.1L7.8 16H5.2c-1 0-1.7-.8-1.7-1.7Z" />
       <path class="bk" d="M6.4 16.6h3.3l1 3.3c.2.7-.3 1.4-1 1.4h-.9c-.6 0-1-.4-1.2-.9Z" />
       <path class="ln" d="M20.8 9.6v4.8" />
@@ -29,7 +29,7 @@
 </i>
 
 <style>
-  /* variant B of five (owner, Oct 25): dark glass with a lit rim, the glyph in the kind's colour */
+  /* variant B of five: dark glass with a lit rim, the glyph in the kind's colour */
   .ck {
     display: grid; place-items: center; width: var(--s); height: var(--s); border-radius: 50%; color: #3aa8ff;
     background: rgba(28, 36, 68, 0.88); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);

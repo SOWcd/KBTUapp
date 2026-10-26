@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club or school as one compact row (the Clubs tab's lists and "All clubs", owner Oct 25): its mark, its name with
+  // A club or school as one compact row (the Clubs tab's lists and "All clubs"): its mark, its name with
   // the ✓ and the Student Government mark, one line under it, and the bell (or what the list puts there instead).
   import type { Snippet } from 'svelte';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';

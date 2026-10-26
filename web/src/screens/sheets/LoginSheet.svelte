@@ -1,6 +1,6 @@
 <script lang="ts">
-  // KBTU sign-in (SPEC §4.1): Microsoft only (owner, Oct 20). One big button; pressing it accepts the terms, said under
-  // it with both links (owner, Oct 24: no checkbox); it opens outside
+  // KBTU sign-in (SPEC §4.1): Microsoft only. One big button; pressing it accepts the terms, said under
+  // it with both links (no checkbox); it opens outside
   // Telegram, comes back by /ms.html, and the app reloads me when it's in sight again; someone new then types only the
   // student ID and year (Microsoft doesn't know them: KBTU leaves employeeId empty). Typed in before Oct 20 (relink)
   // or through the old portal: the same button confirms the row they have.
@@ -42,11 +42,11 @@
   // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
   $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; } });
   $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha().then(offerWeek); close(overlay.id); setTimeout(() => after?.(), 380); } });
-  // signed in, no timetable yet, nothing else to do next: "load your schedule? 1 minute", skippable (PLAN 26, owner Oct 25)
+  // signed in, no timetable yet, nothing else to do next: "load your schedule? 1 minute", skippable (PLAN 26)
   const offerWeek = () => { if (!after && !data.schedule.length) setTimeout(() => sheets.schedHowTo(true), 500); };
 
   let m = $state({ lastName: '', firstName: '', studentId: '', course: 0 });
-  // the example ID starts with this intake's year, so a first-year sees their own (owner, Oct 23): the year of the last
+  // the example ID starts with this intake's year, so a first-year sees their own: the year of the last
   // August, as a 26B student still enters in spring 2027
   const yr = parts(nowTs()), sidEx = `${String(yr.m >= 7 ? yr.y : yr.y - 1).slice(2)}B123456`;
   const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{5,7}$/;
@@ -118,7 +118,7 @@
 </Sheet>
 
 <style>
-  .sid { text-transform: uppercase; } /* a typed "b" shows as "B"; it's sent upper-cased (owner, Oct 24) */
+  .sid { text-transform: uppercase; } /* a typed "b" shows as "B"; it's sent upper-cased */
   .wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
   .err { color: var(--danger-text); }
   .ms { display: flex; align-items: center; justify-content: center; gap: 12px; height: 56px; border-radius: var(--r-l); background: #fff; color: #1b1b1b;

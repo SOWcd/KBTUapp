@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The cover's focus (owner, Oct 4: good covers matter more than any effect). One photo fills a tall Feed slide,
+  // The cover's focus (good covers matter more than any effect). One photo fills a tall Feed slide,
   // the wide event sheet and a square list thumbnail, so instead of one crop the organizer marks what matters
   // and every frame keeps that point in view (object-position). Tap or drag on the photo, or use the arrow keys;
   // the three frames below update live.

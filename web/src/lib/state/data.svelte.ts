@@ -141,7 +141,7 @@ export function personCard(id: Id): { p: Promise<PersonCard>; card?: PersonCard 
   return people.get(id)!;
 }
 // a card after a friend action (or its stranger view when refused) replaces the old fetch whole: a reopen within 10 s
-// brought the old one back (review: an unfriended person with their friends-only data)
+// brought the old one back (an unfriended person with their friends-only data)
 export function keepPerson(c: PersonCard): void { people.set(c.id, { at: Date.now(), p: Promise.resolve(c), card: c }); }
 export function forgetPeople(): void { people.clear(); }
 
@@ -160,7 +160,7 @@ function errorText(e: unknown): string {
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
-  // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft (owner, Oct 24)
+  // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
   asStudent(async () => {
     const before = eventById(id);
     if (!before || before.status === 'cancelled') return;
@@ -189,7 +189,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
 }
 
 /** The bot can't write to someone who never opened it: Telegram's own "allow messages", asked when it pays off (just
- *  signed up), and the server knows at once and sends this event's confirmation (owner, Oct 24). Asked once by itself;
+ *  signed up), and the server knows at once and sends this event's confirmation. Asked once by itself;
  *  the ticket's "Turn on reminders" asks again. */
 export async function askDm(eid?: Id, again = false): Promise<void> {
   if (!session.me || session.me.canDm) return;
@@ -213,7 +213,7 @@ export function toggleSaved(id: Id): void {
     const on = !e.saved;
     e.saved = on; // optimistic
     haptic.tap();
-    if (on) burst(false, undefined, e.emoji); // "Save" with a purpose (owner, Oct 11): a moment, and the bot reminds the day before
+    if (on) burst(false, undefined, e.emoji); // "Save" with a purpose: a moment, and the bot reminds the day before
     try { await api.setSaved(id, on); say(phrase(on ? 'say.save' : 'say.unsave'), on ? 'sparkles_3d' : 'waving_hand_3d_default'); }
     catch { e.saved = !on; say(t('common.error'), 'pleading_face_3d'); }
   });
@@ -250,7 +250,7 @@ export function toggleSub(id: Id): void {
   });
 }
 
-// ---- classes I won't go to (owner, Oct 7: "a button 'I won't go to the class', so the capsule doesn't show it"): one
+// ---- classes I won't go to: one
 // class on one day, kept on this phone (the portal's timetable stays as it is); past days are dropped ----
 const SKIP_KEY = 'kb-skip';
 /** a class on a day (the local day number): the same subject at the same time is the same class */

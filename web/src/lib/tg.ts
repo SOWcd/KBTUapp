@@ -55,7 +55,7 @@ export const inTelegram = !!W && W.platform !== 'unknown' && !!W.initData;
 /** A computer (Telegram Desktop, macOS, the web clients): the app is made for phones and works there in a phone-sized
  *  window. Telegram's phone platforms are ios, android and android_x. */
 export const onComputer = inTelegram ? !/^(ios|android)/.test(W!.platform)
-  : typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; // a plain browser: a mouse, not a finger (Oct 13)
+  : typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; // a plain browser: a mouse, not a finger
 
 function can(v: string): boolean {
   try { return inTelegram && W!.isVersionAtLeast(v); } catch { return false; }
@@ -87,7 +87,7 @@ export const haptic = {
   error: () => buzz((h) => h.notificationOccurred('error')),
 };
 
-/** Every tap on something tappable is felt (owner, Oct 18: "the app should feel alive"), one listener instead of a
+/** Every tap on something tappable is felt, one listener instead of a
  *  haptic in every handler; a handler's own haptic (ok, error, select...) wins, data-nohaptic opts a part out. */
 export function hapticTaps(): void {
   document.addEventListener('click', (e) => {
@@ -103,9 +103,9 @@ export function boot(bg: string): void {
   tgTry((w) => w.ready());
   tgTry((w) => w.expand());
   if (can('7.7')) tgTry((w) => w.disableVerticalSwipes?.());
-  // full screen on a phone only: on a computer it filled the whole monitor with the phone layout (a student's screenshot, Oct 11)
+  // full screen on a phone only: on a computer it filled the whole monitor with the phone layout (a student's screenshot)
   if (can('8.0') && !onComputer) tgTry((w) => w.requestFullscreen?.());
-  // portrait only (owner, Oct 14): the phone turned sideways keeps the app upright; Telegram on phones, 8.0+
+  // portrait only: the phone turned sideways keeps the app upright; Telegram on phones, 8.0+
   if (can('8.0') && !onComputer) tgTry((w) => w.lockOrientation?.());
   paint(bg);
 }
@@ -122,7 +122,7 @@ export function on(event: string, cb: () => void): () => void {
   return () => tgTry((w) => w.offEvent(event, cb));
 }
 
-/** The app's icon on the phone's home screen (Bot API 8.0): Telegram's own dialog, one tap (owner, Oct 26, wanted an
+/** The app's icon on the phone's home screen (Bot API 8.0): Telegram's own dialog, one tap (wanted an
  *  arrow to the ••• menu; the API does it without one). Status: 'unsupported' | 'unknown' | 'added' | 'missed'. */
 export const homeScreen = {
   status: (): Promise<string> => new Promise((r) => {
@@ -160,7 +160,7 @@ export function shareMessage(preparedId: string): Promise<boolean> {
   });
 }
 
-/** Everything shared into chats is our bot's card — text and a button, never a bare link (owner, Oct 4): the server
+/** Everything shared into chats is our bot's card — text and a button, never a bare link: the server
  *  prepares it from its own templates (savePreparedInlineMessage, initData-checked), then Telegram shows the chat
  *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
  *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */

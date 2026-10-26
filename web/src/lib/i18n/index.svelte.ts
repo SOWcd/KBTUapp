@@ -73,7 +73,7 @@ export function fmtNum(n: number): string {
 /** Tenge amount: «3 000 ₸». */
 /** An event's place as shown; empty while it's to be confirmed (a room asked of DMP by memo) */
 export const placeOf = (place: string): string => place || t('event.placeTba');
-/** A class's subject in the app's language when the sign-in brought it (Oct 11), else as it came */
+/** A class's subject in the app's language when the sign-in brought it, else as it came */
 export const subjectOf = (c: { subject: string; names?: Partial<Record<Lang, string>> | null }): string => c.names?.[i18n.lang] || c.subject;
 
 export function money(n: number): string {

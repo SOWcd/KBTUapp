@@ -29,7 +29,7 @@
   $effect(() => { if (at === 'chats' && o && chatsAt && !shown) { shown = true; setTimeout(() => chatsAt?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 320); } });
 
   let o = $state<Org | null>(null);
-  // the logo (owner, Oct 5): one of my uploads, or null — then the emoji on its cover shows again
+  // the logo: one of my uploads, or null — then the emoji on its cover shows again
   let logo = $state<{ id?: Id; url: string } | null>(null);
   let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
   $effect(() => {
