@@ -20,6 +20,7 @@ OPEN_ASKS = 3            # live or waiting requests per person
 CONTACTS_A_DAY = 10
 SEARCHES_AN_HOUR = 30
 PING_TOP, PING_DAY, PING_WEEK = 5, 1, 2   # a project request pings its best five matches; nobody gets more than 1 a day, 2 a week
+KEEP = 30 * 86400        # a request this long after it ran out, and a ping's record, then gone (the privacy policy)
 DECIDE_IN = 86400  # a held or reported request waits a moderator's word this long (shown as a deadline)
 HIDE_AT, REPORTER_AGE = 3, 14 * 86400     # reports from accounts older than two weeks; with an AI flag or a moderator: hidden
 
@@ -411,6 +412,13 @@ def hide_ask(con, aid: int, why: str, by: int | None = None) -> None:
         notify(con, a["user_id"], "ask_hidden", f"ah:{aid}")
         con.execute("UPDATE reports SET status = 'actioned', resolved_by = ?, resolved_at = ? WHERE target = 'ask' AND target_id = ? AND status = 'open'",
                     (by, _now(), aid))
+
+
+def forum_sweep(con) -> None:
+    """What the privacy policy promises: a request goes 30 days after it ran out (its skills, offers and pings with
+    it), and the record of who was pinged after 30 days (the caps look back a week)."""
+    con.execute("DELETE FROM asks WHERE expires_at < ?", (_now() - KEEP,))
+    con.execute("DELETE FROM ask_pings WHERE at < ?", (_now() - KEEP,))
 
 
 def _now() -> int:

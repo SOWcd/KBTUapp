@@ -61,6 +61,7 @@ def stats_day(con) -> None:
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
+    forum_sweep(con)
     _prune_deletion_log(con)
 
 
@@ -129,5 +130,6 @@ def ai_retry(con, v: Viewer) -> None:
 from . import core  # noqa: E402
 from .account import _prune_deletion_log  # noqa: E402
 from .appteam import _admin  # noqa: E402
+from .forum import forum_sweep  # noqa: E402
 from .seats import notify  # noqa: E402
 from .translation import AI_TRIES, ai_state  # noqa: E402

@@ -18,7 +18,6 @@
   import { api, ApiErr, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import Pager from './ui/Pager.svelte';
-  import { CONSENT_VERSION } from './lib/legal';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Ban from '@lucide/svelte/icons/ban';
@@ -84,7 +83,7 @@
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
     const s = session.me?.student;
-    if (s && !session.me?.deleteAt && !['staff', 'admin', CONSENT_VERSION].includes(s.consent) && !overlays.length) sheets.consent();
+    if (s && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent) && !overlays.length) sheets.consent();
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };

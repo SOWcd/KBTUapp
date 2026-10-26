@@ -194,9 +194,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
+    # the policy version in force: its forum part counts only with the forum on (legal_page shows it then)
+    policy = logic.CONSENT_FORUM if cfg.forum else logic.CONSENT
+
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v)
+        return logic.me(con, v) | {"consentNow": policy}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -213,7 +216,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/consent")
     def consent(con: Con, v: Me, body: dict = Body(...)):
-        return logic.consent(con, v, body.get("version"))
+        return logic.consent(con, v, body.get("version"), policy)
 
     @app.post("/api/me/dm")
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
@@ -263,7 +266,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
                  for m, k in (("first", "firstName"), ("last", "lastName"))]
         first, last = (mine or typed for mine, typed in names)
-        if consent != logic.CONSENT:
+        if consent != policy:
             raise ApiError("bad_input", "consent")  # an app opened before the policy changed: it says to reopen
         if not (all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
@@ -1413,6 +1416,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
+        off = "noforum" if cfg.forum else "forum"  # the forum's part (and its version line) only with the forum on
+        body = re.sub(r"<!--/?(?:no)?forum-->\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
         other = "terms" if doc == "privacy" else "privacy"
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

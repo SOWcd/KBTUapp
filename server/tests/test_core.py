@@ -5056,3 +5056,25 @@ def test_forum_moderator_queue(env):
                     (rid, held["id"], t0 - 3600 + i * 60))
         q = c.get("/api/forum/mod", headers=tma(95)).json()["held"]
         assert q == [] if i < 2 else [(a["id"], a["status"], a["dueAt"]) for a in q] == [(held["id"], "reported", t0 - 3600 + 120 + 86400)]
+    # what the privacy policy promises: a request 30 days after it ran out, a ping's record after 30 days
+    con.execute("UPDATE asks SET expires_at = ? WHERE id = ?", (t0 - 31 * 86400, held["id"]))
+    con.execute("INSERT INTO ask_pings (ask_id, user_id, at) VALUES (?, ?, ?), (?, ?, ?)", (held["id"], mod.id, t0, other["id"], mod.id, t0 - 31 * 86400))
+    logic.forum_sweep(con)
+    assert [r[0] for r in con.execute("SELECT id FROM asks")] == [other["id"]] and not con.execute("SELECT 1 FROM ask_pings").fetchone()
+
+
+def test_forum_policy_behind_the_flag(env):
+    """The policy's forum part and its consent version count only with FORUM=1: off, the page has no section 11 and
+    v3 is in force; on, the section shows, /api/me asks for v4, and only v4 is taken."""
+    import dataclasses
+    c, cfg = env
+    login(c, 90, "stu")
+    assert "11." not in c.get("/privacy?lang=en").text and c.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT
+    on = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
+    page = on.get("/privacy?lang=en").text
+    assert "11. The forum" in page and "Version of 26 October" in page and "Version of 23" not in page and "<!--" not in page
+    assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT_FORUM
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).status_code == 400
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT_FORUM}).json()["student"]["consent"] == logic.CONSENT_FORUM
+    for lang in ("ru", "kk"):
+        assert on.get(f"/privacy?lang={lang}").text.count("<h2>11.") == 1 and "<h2>11." not in c.get(f"/privacy?lang={lang}").text

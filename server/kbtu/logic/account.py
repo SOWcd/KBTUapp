@@ -328,13 +328,14 @@ def delete_info(con, v: Viewer) -> dict:
 
 
 CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
+CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
 
 
-def consent(con, v: Viewer, version: object) -> dict:
+def consent(con, v: Viewer, version: object, now: str = CONSENT) -> dict:
     """The privacy policy changed (H2, Oct 22: what a deletion keeps): a student agrees again once; staff and students
     added by hand keep their marks."""
     need_student(v)
-    if version != CONSENT:
+    if version != now:
         raise ApiError("bad_input")
     con.execute("UPDATE students SET consent_version = ?, consent_at = ? WHERE user_id = ? AND consent_version NOT IN ('staff', 'admin')",
                 (version, core.now(), v.id))

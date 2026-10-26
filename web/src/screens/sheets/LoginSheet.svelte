@@ -4,7 +4,6 @@
   // Telegram, comes back by /ms.html, and the app reloads me when it's in sight again; someone new then types only the
   // student ID and year (Microsoft doesn't know them: KBTU leaves employeeId empty). Typed in before Oct 20 (relink)
   // or through the old portal: the same button confirms the row they have.
-  import { CONSENT_VERSION } from '../../lib/legal';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Sheet from '../../ui/Sheet.svelte';
   import Emoji from '../../ui/Emoji.svelte';
@@ -59,7 +58,7 @@
     if (!pending || !mReady) return;
     busy = true; error = '';
     try {
-      session.me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, CONSENT_VERSION);
+      session.me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, session.policy);
       haptic.ok();
       say(phrase('say.welcome', { name: session.me.student?.firstName ?? '' }), 'partying_face_3d');
       await loadAfisha();

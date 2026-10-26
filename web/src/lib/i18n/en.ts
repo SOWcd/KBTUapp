@@ -1294,6 +1294,7 @@ const en: Dict = {
   'del.paid': "You have a paid ticket for an event that hasn't happened yet: the account is deleted after it",
   'consent.title': "We updated the policy",
   'consent.text': "When an account is deleted, some data now stays, but without your name and without a link to you: visits to past events as numbers for the clubs, posts on behalf of a club, and photos in event albums (you can delete those).",
+  'consent.textForum': "New: the forum. Your skills, the “open to projects” switch and your requests are kept while you use it; a request is deleted 30 days after it ends. Your Telegram is shown to someone only after you both agree in the bot. Request texts and new skill names are checked by an AI service in the EU.",
   'consent.ok': "I agree",
   'me.guestLang': "Language",
   'me.guestTheme': "Theme",
