@@ -91,16 +91,20 @@ def _rest_for(r: httpx.Response) -> float:
 
 
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
-               check: Callable[[str], bool] | None = None, con=None) -> tuple[str, str]:
+               check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
+               timeout: float = TIMEOUT) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
-    link is asked; the one that answered doesn't rest for it. Busy: none answered; BadAnswers: none usable."""
+    link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
+    (what the privacy policy names for a text). Busy: none answered; BadAnswers: none usable."""
     answered = False
     for link in links(cfg):
+        if only is not None and link.provider not in only:
+            continue
         if _rest.get(link.name, 0) > time.time():
             continue
         t0 = time.time()
         try:
-            r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=TIMEOUT,
+            r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=timeout,
                                 json={"model": link.model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature})
         except httpx.HTTPError as exc:
             log.warning("ai %s: %s", link.name, type(exc).__name__)

@@ -5212,3 +5212,29 @@ def test_referrals(env):
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
     delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+
+
+def test_forum_screen_munito_only(monkeypatch):
+    """The forum's AI look goes to Munito's links only (privacy policy, section 11), however the chain is set: with
+    Cloudflare, OpenRouter and Groq keys present and Munito busy, nobody else gets the text and a moderator decides."""
+    import httpx
+    from kbtu import ai, llm
+    monkeypatch.setattr(llm, "_rest", {})
+    cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                        cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", munito_keys=("m1", "m2"))
+    hosts, answer = [], {"code": 200, "word": "OK"}
+    def handler(r):
+        hosts.append(r.url.host)
+        if answer["code"] != 200:
+            return httpx.Response(answer["code"])
+        return httpx.Response(200, json={"choices": [{"message": {"content": answer["word"]}, "finish_reason": "stop"}]})
+    async def look(text):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            return await ai.screen(cfg, http, text)
+    assert asyncio.run(look("Need a tripod")) is True and set(hosts) == {"api.munito.ai"}
+    answer["word"] = "FLAG"; assert asyncio.run(look("buy essays")) is False
+    hosts.clear(); answer["code"] = 429
+    assert asyncio.run(look("anything")) is None
+    assert hosts and set(hosts) == {"api.munito.ai"}   # both keys tried, then no one else
+    llm._rest.clear(); hosts.clear(); answer.update(code=200, word="maybe")
+    assert asyncio.run(look("anything")) is None and set(hosts) == {"api.munito.ai"}   # nonsense: no other provider either

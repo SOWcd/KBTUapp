@@ -23,7 +23,6 @@ class Config:
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
     cf_ai_token: str = ""
-    munito_key: str = field(default="", repr=False)  # the moderation look (ai.screen); empty: forum texts wait for a moderator
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
@@ -69,7 +68,6 @@ def load() -> Config:
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
         cf_account_id=env.get("CF_ACCOUNT_ID", "").strip(),
         cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
-        munito_key=env.get("MUNITO_API_KEY", "").strip(),
         forum=env.get("FORUM", "0") == "1",
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),

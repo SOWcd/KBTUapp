@@ -1312,7 +1312,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     async def screen(text: str) -> bool | None:
         async with httpx.AsyncClient() as http:
-            return await ai.screen(http, cfg.munito_key, text)
+            return await ai.screen(cfg, http, text)
 
     @app.get("/api/forum/me")
     def forum_me(con: Con, v: Forum):

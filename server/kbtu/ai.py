@@ -82,27 +82,25 @@ async def translate(cfg, http: httpx.AsyncClient, fields: dict[str, str], limits
     return src, parse(text, fields, src, limits)
 
 
-# The forum's look at what people write (forum.py): one word back. Munito (PLAN "AI provider"): OpenAI-shaped, EU, no
-# retention; its preview model may vanish, so the stable one is next.
-SCREEN_URL = "https://api.munito.ai/inference/v1/chat/completions"
-SCREEN_MODELS = ("deepseek-v4.1-flash", "deepseek-v4-flash")
+# The forum's look at what people write (forum.py): one word back, from the AI chain's Munito links only (both keys,
+# its models in chain order): the privacy policy's forum part names Munito (EU, no retention) and nothing else, so no
+# other provider ever gets a forum text, whatever AI_CHAIN lists.
 SCREEN_PROMPT = ("You check posts on a university students' board where people look for help with projects and small "
                  "favours. Answer FLAG if the text is abusive, hateful, sexual, a scam, an ad, asks for something illegal "
                  "or dangerous, or shares someone's personal data; otherwise answer OK. One word only.")
+SCREEN_PROVIDERS = ("munito",)
 
 
-async def screen(http: httpx.AsyncClient, key: str, text: str) -> bool | None:
-    """True: fine; False: flagged; None: no answer (no key, a busy or broken provider): a moderator decides."""
-    if not key:
+def _verdict(text: str) -> bool:
+    return text.strip().upper().startswith(("OK", "FLAG"))
+
+
+async def screen(cfg, http: httpx.AsyncClient, text: str, con=None) -> bool | None:
+    """True: fine; False: flagged; None: no answer (no Munito key, all its links busy or answering nonsense): a
+    moderator decides."""
+    try:
+        word, _ = await llm.chat(cfg, http, [{"role": "system", "content": SCREEN_PROMPT}, {"role": "user", "content": CONTROL.sub("", text)[:2000]}],
+                                 max_tokens=5, temperature=0, check=_verdict, con=con, only=SCREEN_PROVIDERS, timeout=15)
+    except (llm.Busy, llm.BadAnswers):
         return None
-    for model in SCREEN_MODELS:
-        try:
-            r = await http.post(SCREEN_URL, headers={"Authorization": f"Bearer {key}"}, timeout=15,
-                                json={"model": model, "temperature": 0, "max_tokens": 5,
-                                      "messages": [{"role": "system", "content": SCREEN_PROMPT}, {"role": "user", "content": CONTROL.sub("", text)[:2000]}]})
-            word = r.json()["choices"][0]["message"]["content"].strip().upper() if r.status_code == 200 else ""
-        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError):
-            word = ""
-        if word.startswith(("OK", "FLAG")):
-            return word.startswith("OK")
-    return None
+    return word.strip().upper().startswith("OK")
