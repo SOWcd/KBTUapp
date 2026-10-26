@@ -1,4 +1,4 @@
-"""Event videos (owner, Oct 14): a club adds a short vertical video to an event right in the editor; the Feed plays it.
+"""Event videos: a club adds a short vertical video to an event right in the editor; the Feed plays it.
 
 The phone sends the file as it is, in 8 MB pieces (Cloudflare refuses a request over 100 MB, and a piece lost on a
 bad connection is sent again, not the whole file); the postman's process compresses one video at a time. What we

@@ -3,7 +3,7 @@
 The only copy of the rules (the in-browser mock that repeated them went on Oct 11). Every function takes the connection and the caller (`Viewer`) and either returns
 JSON-ready data or raises ApiError. Writes that check and then change (seats, check-in) run in db.tx.
 
-Split by domain into the modules beside this file (owner, Oct 25); everything is re-exported here, so callers
+Split by domain into the modules beside this file; everything is re-exported here, so callers
 use kbtu.logic as before. A test that patches the clock or a limit patches the module that holds it (logic.core.now).
 """
 

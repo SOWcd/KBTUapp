@@ -1,5 +1,5 @@
 """Kaspi receipts (SPEC §4.3): whatever a student sends (Kaspi's PDF, a screenshot) becomes one picture, and what the
-receipt says is read off that picture. Kaspi's iPhone PDF has no text in it (iOS draws the glyphs: checked on the
+receipt says is read off that picture. Kaspi's iPhone PDF has no text in it (iOS draws the glyphs; checked on the
 owner's receipts, Oct 10), so everything goes through OCR: Tesseract with the rus and kaz "fast" models (Debian's
 tesseract-ocr-rus/-kaz), about half a second a receipt. Fields are found by their shape, not by the labels next to
 them, since Kaspi may speak Kazakh. Nothing read here rejects a receipt: it only raises flags for the organizer."""
@@ -57,7 +57,7 @@ def ready() -> str:
 
 
 class NotReceipt(Exception):
-    """OCR ran and found neither a sum nor a receipt number: not a Kaspi receipt (owner, Oct 12: people sent selfies)."""
+    """OCR ran and found neither a sum nor a receipt number: not a Kaspi receipt (people sent selfies)."""
 
 
 def take(data: bytes, root: Path) -> tuple[dict, dict | None]:
@@ -166,8 +166,7 @@ def _letters(s: str) -> str:
 
 def same_person(printed: str, expected: str) -> bool:
     """Whether the name read off the receipt is the one the organizer set ("Name S." as Kaspi prints it): the
-    initial must match, the name may differ by a letter or two (OCR). Typed without the initial (a first name alone:
-    the owner's own event, Oct 11), the first names are compared."""
+    initial must match, the name may differ by a letter or two (OCR). Typed without the initial (a first name alone; the owner's own event, Oct 11), the first names are compared."""
     lone = len(expected.split()) == 1
     if lone:
         printed = (printed.split() or [""])[0]

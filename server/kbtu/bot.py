@@ -4,7 +4,7 @@
   language with a button into the app; only to users who let the bot write (can_dm). A user who blocked
   the bot loses can_dm until Telegram says otherwise.
 - Ears: whatever someone writes to the bot (/start first of all) is answered with what the app is and a button
-  into it (owner, Oct 7: /start said nothing); a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
+  into it (/start said nothing); a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
 Until Oct 7 it also refreshed schedules with each student's stored KBTU session; no session outlives a request
 now (SPEC §4.1), the stored ones were ended, and migration 18 dropped their table."""
 from __future__ import annotations
@@ -37,7 +37,7 @@ FRESH = 300                 # an older message isn't answered: what piled up whi
 
 
 # Premium emoji (Bot API 9.4: a bot whose owner has Telegram Premium may send custom emoji): the pack the owner picked
-# (Oct 14), loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
+# loaded once a postman starts; each plain emoji our texts use that the pack also has goes out animated, the
 # rest stay plain. If Telegram ever refuses them (Premium ended), the message goes again plain and the pack is dropped.
 # the packs, first wins (owner, Oct 18: NewsEmoji, made for bots; the older pack fills what it lacks; Oct 25: Telegram's own
 # RestrictedEmoji, ~1000, last, only for what the others lack)
@@ -70,7 +70,7 @@ def premium(text: str) -> str:
 
 
 async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict | None = None) -> httpx.Response:
-    """A Telegram call whose text or caption (HTML) gets the pack's emoji (owner, Oct 18: everywhere the bot writes, the
+    """A Telegram call whose text or caption (HTML) gets the pack's emoji (everywhere the bot writes, the
     channel and groups too); refused for them (400), once more plain, and the pack is off until a restart."""
     global _custom_re
     url, key = f"https://api.telegram.org/bot{cfg.bot_token}/{method}", "caption" if "caption" in body else "text"
@@ -315,7 +315,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
     if not e or (kind != "event_cancelled" and e["status"] != "published"):
         return None
-    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket (owner, Oct 6)
+    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket
         kind += "_team"
     text, button = texts.bot_message(lang, kind, org=e["org_name"], **ev(e))
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
@@ -432,7 +432,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
                 if r.get("error_code") != 400:  # a flood wait, Telegram down, no right yet: the next round tries again
                     return
         con.execute("DELETE FROM meta WHERE key = ?", (f"channel_gone:{post}",))
-    # no button under the post: Telegram hides the comments then (owner, Oct 17); an edit without one takes the old one off
+    # no button under the post: Telegram hides the comments then; an edit without one takes the old one off
     for e, text, cover, sig in logic.channel_due(con, cfg.bot_username):
         jpg = root / f"{cover}.jpg" if cover else None
         if e["channel_msg"]:  # the post is there: its words (and the cover, when it was posted with one) change
@@ -463,8 +463,7 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
 
 
 def backup_day(cfg: Config, con) -> None:
-    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (owner, Oct 18:
-    there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
+    """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
     db_path = Path(cfg.db_path).resolve()
     # the copies db.py makes before a migration: two weeks, as the nightly ones (H2: deleted accounts must not outlive them)
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
@@ -569,7 +568,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             if not m["can_dm"]:
                 mark(False, "no_dm")
                 continue
-            if m["banned_at"]:  # banned: the bot stops writing (owner, Oct 22)
+            if m["banned_at"]:  # banned: the bot stops writing
                 mark(False, "banned")
                 continue
             msg = _render(con, m)
@@ -617,7 +616,7 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
         arg = "exit"
     if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "suggest a chat": Telegram's own chat picker (PLAN item 45)
         return _chat_picker(con, cfg, msg)
-    # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat (owner, Oct 15)
+    # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
     return {"chat_id": chat["id"], "text": text, "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
@@ -635,8 +634,7 @@ def _lang(con, msg: dict) -> str:
 
 
 def _chat_picker(con, cfg: Config, msg: dict) -> dict:
-    """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them (owner, Oct 21:
-    "any group, any channel"); a closed one then needs its invite link, since we can't make one. A student only."""
+    """Two buttons that open Telegram's own list of the student's chats: channels, groups. Any of them; a closed one then needs its invite link, since we can't make one. A student only."""
     chat, lang = msg["chat"], _lang(con, msg)
     if not _student(con, chat["id"]):
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
@@ -680,7 +678,7 @@ def _picked_url(msg: dict) -> str | None:
 
 async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict, ask: bool = True) -> dict | None:
     """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send.
-    A club's President or Vice is asked first whether it's their club's (owner, Oct 25: the catalog and Studio's chats
+    A club's President or Vice is asked first whether it's their club's (the catalog and Studio's chats
     were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_tapped)."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private" or ask and now() - int(msg.get("date") or 0) > FRESH:
@@ -724,7 +722,7 @@ def _sched_file(msg: dict) -> dict | None:
 
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
-    """A student's week from the portal's schedule page (portal.py; PLAN 26, owner Oct 25: Share -> Web Archive ->
+    """A student's week from the portal's schedule page (portal.py; PLAN 26; Share -> Web Archive ->
     Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one). The file is
     read in memory and never kept; nothing of the page goes to the log; the student ID on it isn't read."""
     chat = msg.get("chat") or {}
@@ -901,7 +899,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     """The channel's discussion group: Telegram forwards each post there by itself, and the comments are replies to that
     copy. Under an event's post the bot writes the first comment, the rules and "Sign up", and keeps its link for the
-    app's "Discuss" (owner, Oct 17). True: the message was such a copy. Needs the bot in that group, as an admin
+    app's "Discuss". True: the message was such a copy. Needs the bot in that group, as an admin
     (a bot that isn't one doesn't see the group's messages)."""
     channel = cfg.events_channel.lstrip("@").lower()
     if not channel or not msg.get("is_automatic_forward") or str((msg.get("sender_chat") or {}).get("username") or "").lower() != channel:
@@ -961,7 +959,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
             group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
             if sender and not group and one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", sender):
-                continue  # banned (owner, Oct 22): the bot neither answers nor acts for him
+                continue  # banned: the bot neither answers nor acts for him
             try:
                 if "callback_query" in upd:
                     await _tapped(cfg, http, con, upd["callback_query"])

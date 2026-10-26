@@ -47,7 +47,7 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
 def _asking(con, eid: int, reader: int = 0) -> list:
     """Students' comments under an event that wait for the club: after its last answer (as the club, or by any of its
     Head+ as themselves; their own words are never questions) and, for a `reader`, after they last read the thread
-    (owner, Oct 5: Studio's count stayed after he had read and answered). By ids, so the same second never hides one.
+    (Studio's count stayed after he had read and answered). By ids, so the same second never hides one.
     ponytail: an id freed by a deleted account's last comment can come back; a reader may then miss one question."""
     return rows(con, """WITH leads AS (SELECT m.user_id FROM org_members m JOIN events e ON e.org_id = m.org_id
             WHERE e.id = ? AND m.role IN ('president', 'vice', 'head')),
@@ -95,7 +95,7 @@ def decline(con, v: Viewer, eid: int, note: object = None) -> dict:
 
 
 def _team_door(e: sqlite3.Row) -> bool:
-    """A club meeting, or a free team-only event: no tickets (owner, Oct 6), so the door has the whole team (a meeting's
+    """A club meeting, or a free team-only event: no tickets, so the door has the whole team (a meeting's
     tag) to mark, and someone who came without signing up is let in by name."""
     return bool(e["meeting"]) or (e["visibility"] == "members" and not e["price"])
 
@@ -181,7 +181,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
 
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None) -> None:
     """A meeting's tag is one of the club's own, and a meeting has no price. A Head with a department calls only that
-    department (PLAN item 35, owner Oct 19); `was` (meeting, tag) before an edit: what someone else set stays as it is."""
+    department (PLAN item 35); `was` (meeting, tag) before an edit: what someone else set stays as it is."""
     if f["meeting"] and (priced or f["meeting_tag"] and not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", f["meeting_tag"], oid)):
         raise ApiError("bad_input")
     if f["meeting"] and (f["meeting"], f["meeting_tag"]) != was and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
@@ -223,7 +223,7 @@ def _focus(body: dict, keep: str | None) -> str | None:
 def kz_phone(raw: object) -> str | None:
     """A Kazakhstan number as typed (8 701..., +7 701..., 701...) kept as +7XXXXXXXXXX; None if it isn't one."""
     t = str(raw or "")
-    d = re.sub(r"[^0-9]", "", t)  # ASCII only: \d takes any script's digits (review, Oct 26)
+    d = re.sub(r"[^0-9]", "", t)  # ASCII only: \d takes any script's digits
     # ten digits are the number without its +7, unless it came with a "+": "+7 701 234 56 7" is one digit short
     d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else "7" + d if len(d) == 10 and not t.lstrip().startswith("+") else d
     return "+" + d if re.fullmatch(r"7[0-9]{10}", d) else None
@@ -396,9 +396,9 @@ def cancel_event(con, v: Viewer, eid: int) -> dict:
 
 
 def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
-    """A draft, or a cancelled event (owner, Oct 13: a test or a mistake shouldn't hang in Studio forever). Not one
+    """A draft, or a cancelled event (a test or a mistake shouldn't hang in Studio forever). Not one
     with payments: deleting it would take the receipts with it, the only record of money that changed hands.
-    The admin may delete any event, paid and photographed too: a club asks him to remove a test (owner, Oct 13; the
+    The admin may delete any event, paid and photographed too: a club asks him to remove a test (the
     button is in Admin only, its confirm names what goes). Returns the receipt images and photos to delete from disk:
     a receipt is personal and nobody could open it any more."""
     if v.role != "admin":
@@ -418,7 +418,7 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             _keep_name(con, sl["slug"], sl["org_id"])
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
-        # its channel post goes too (owner, Oct 18: it stayed), with the copy in the discussion group: the bot's next
+        # its channel post goes too (it stayed), with the copy in the discussion group: the bot's next
         # round deletes them (bot.post_channel), the event's row is gone by then
         thread = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"thread:{eid}")
         if post and post[0]:
@@ -449,7 +449,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
     e = _staff_event(con, v, eid, "events")
-    # the phone only where this event asked for it (review, Oct 26: one club's ask reached every club's list)
+    # the phone only where this event asked for it (one club's ask reached every club's list)
     found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email,
             CASE WHEN ? THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual
@@ -460,7 +460,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
 
 
 def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int) -> sqlite3.Row | str:
-    """A badge QR at the door (owner, Oct 4): someone who forgot to register, or was just passing by, comes in.
+    """A badge QR at the door: someone who forgot to register, or was just passing by, comes in.
     A ticket they hold is checked in as usual; a free event registers them on the spot (walk_in); a paid one
     needs a ticket."""
     if e["status"] != "published":
@@ -525,7 +525,7 @@ def _rating_view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
     out = {"myRating": mine["score"] if mine else None, "canRate": bool(came) and end_of(e) <= core.now() <= end_of(e) + RATE_FOR, "ratings": None}
     if head:
         rs = rows(con, "SELECT score, comment, created_at FROM event_ratings WHERE event_id = ? ORDER BY created_at DESC", e["id"])
-        if 0 < len(rs) < RATE_SHOW:  # so few the club could tell who wrote what: the count alone (owner, Oct 17)
+        if 0 < len(rs) < RATE_SHOW:  # so few the club could tell who wrote what: the count alone
             out["ratings"] = {"avg": None, "count": len(rs), "dist": [], "comments": []}
         elif rs:
             out["ratings"] = {"avg": round(sum(r["score"] for r in rs) / len(rs), 1), "count": len(rs),
@@ -535,7 +535,7 @@ def _rating_view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
 
 
 def rate_event(con, v: Viewer, eid: int, score: object, comment: object) -> dict:
-    """One tap after the event (Oct 4, from the Luma review): only those checked in, from the end until 7 days later;
+    """One tap after the event (from the Luma review): only those checked in, from the end until 7 days later;
     changing one's mind is fine. Anonymous to the club."""
     need_student(v)
     e = _event(con, v, eid)
@@ -594,7 +594,7 @@ PHOTO_REPORT_AT = 3                              # the third photo tells everyon
 
 
 def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
-    """The guests' album (Oct 4, from the Luma review). Students see it (guests don't: people's faces); who came adds
+    """The guests' album (from the Luma review). Students see it (guests don't: people's faces); who came adds
     photos, and so does the team; the one who added a photo or the club's Head+ take it out."""
     if not v.student:
         return {"photos": [], "canAddPhotos": False}
@@ -660,7 +660,7 @@ UPDATES_A_DAY = 3
 
 
 def post_update(con, v: Viewer, eid: int, body: str) -> list[dict]:
-    """An organizer's update (Head+, Oct 4: "the entrance is round the side"): pinned under the event's title for everyone,
+    """An organizer's update (Head+): pinned under the event's title for everyone,
     and the bot tells the people going, holding a seat or waiting — with our template, never the organizer's words (§9).
     Three a day per event at most, so it stays news and never spam."""
     e = _staff_event(con, v, eid, "events")
@@ -732,7 +732,7 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
     """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
     that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left
-    linked would keep saying they came (review, PLAN A19 "left")."""
+    linked would keep saying they came (PLAN A19 "left")."""
     _staff_event(con, v, eid, "door")
     with tx(con):
         cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?
@@ -742,7 +742,7 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
         con.execute("DELETE FROM door_guests WHERE event_id = ? AND user_id = ?", (eid, uid))
 
 
-# A19 (owner, Oct 23 night): someone at the door without the app, or not on the list, types their own first and last
+# A19 (Oct 23 night): someone at the door without the app, or not on the list, types their own first and last
 # name on the organiser's phone. When a student with that name confirms with Microsoft later, they count as came.
 GUEST_NAME = re.compile(r"[^\W\d_]+(?:[-'’][^\W\d_]+)*(?: [^\W\d_]+(?:[-'’][^\W\d_]+)*){1,3}")
 GUESTS_MAX = 500  # an event's walk-ins by name (a typo loop must not fill the table)
@@ -828,7 +828,7 @@ def link_door_guests(con, uid: int) -> None:
             if not r:
                 con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at)
                     VALUES (?, ?, 'going', ?, 1, ?, ?)""", (g["event_id"], uid, _ticket_code(con), core.now(), core.now()))
-            # as a check-in at the door: the rating ask and the levels it brings (review: written directly, they were lost)
+            # as a check-in at the door: the rating ask and the levels it brings (written directly, they were lost)
             _came(con, one(con, "SELECT * FROM events WHERE id = ?", g["event_id"]), uid, lambda g=g: con.execute(
                 """UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE event_id = ? AND user_id = ?""",
                 (g["created_at"], g["added_by"], core.now(), g["event_id"], uid)))

@@ -87,7 +87,7 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
     if not 2 <= len(title) <= 120 or len(text) > 2000 or (tag is not None and tag not in POST_TAGS) \
             or audience not in ("public", "clubs") or (audience == "clubs" and not o["can_broadcast"]):
         raise ApiError("bad_input")
-    if tag == "important":  # it messages the members, so Vice+ only (owner, Oct 13)
+    if tag == "important":  # it messages the members, so Vice+ only
         _may(con, v, oid, "team")
     pic = None
     if body.get("photoId") is not None:
@@ -110,7 +110,7 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
         elif tag == "important" and not one(con, """SELECT 1 FROM bot_outbox b JOIN posts p ON b.ref = 'post:' || p.id
                 WHERE b.kind = 'important' AND p.org_id = ? AND p.created_at > ?""", oid, core.now() - 86400):
             # the club's members hear an "Important" post (not its followers), one a day per club at most: the only club post
-            # the bot sends, so nobody mutes it (owner, Oct 13)
+            # the bot sends, so nobody mutes it
             for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND user_id != ?", oid, v.id):
                 notify(con, uid, "important", f"post:{pid}")
     return post_shape(con, v, one(con, "SELECT * FROM posts WHERE id = ?", pid))
@@ -183,7 +183,7 @@ def unread_broadcasts(con, v: Viewer) -> int:
 
 
 def feature(con, v: Viewer, pid: object, days: object) -> dict:
-    """A post for everyone on top of Events → List (the admin, §2; moderators only filter, owner Oct 22) for 1–14 days;
+    """A post for everyone on top of Events → List (the admin, §2; moderators only filter) for 1–14 days;
     0 takes it off. Public posts only: a broadcast to club members stays theirs. One at a time: featuring one ends the other."""
     _admin(v)
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid) if isinstance(pid, int) else None

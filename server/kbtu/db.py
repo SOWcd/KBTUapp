@@ -14,22 +14,22 @@ from pathlib import Path
 SCHEMA = (Path(__file__).with_name("schema.sql")).read_text(encoding="utf-8")
 # Changes after the base schema: (user_version they bring the file to, SQL). Append only; mirror in SPEC §5.
 MIGRATIONS: list[tuple[int, str]] = [
-    (2, "ALTER TABLE files ADD COLUMN color TEXT;"),   # a photo's average colour: the event sheet's tint (Oct 4)
+    (2, "ALTER TABLE files ADD COLUMN color TEXT;"),   # a photo's average colour: the event sheet's tint
     # a club's socials (Instagram, TikTok, YouTube, Telegram, a site), shown on its sheet; the old single link moves in
     (3, "ALTER TABLE orgs ADD COLUMN links TEXT NOT NULL DEFAULT '[]'; UPDATE orgs SET links = json_array(link) WHERE link IS NOT NULL;"),
-    # join applications (§4.5): the club opens or closes them in Studio (closed by default since 66); the "recruiting until" date goes (owner, Oct 4)
+    # join applications (§4.5): the club opens or closes them in Studio (closed by default since 66); the "recruiting until" date goes
     (4, "ALTER TABLE orgs ADD COLUMN recruiting INTEGER NOT NULL DEFAULT 1; UPDATE orgs SET recruiting = 0 WHERE kind IN ('school','office','app');"
         " ALTER TABLE orgs DROP COLUMN recruiting_until;"),
-    # the badge QR (§4.4, owner Oct 4): a random code per student, so nobody can make a QR from a user id;
+    # the badge QR (§4.4): a random code per student, so nobody can make a QR from a user id;
     # walk_in marks a registration made at the door with that QR
     (5, "ALTER TABLE users ADD COLUMN qr_code TEXT; CREATE UNIQUE INDEX users_qr ON users(qr_code);"
         " ALTER TABLE registrations ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0;"),
     # the point of the cover every frame keeps in view, "x,y" from 0 to 1 (Oct 4: one photo fills a tall Feed slide,
     # the wide sheet and a square thumbnail, so the organizer marks what matters instead of one crop)
     (6, "ALTER TABLE events ADD COLUMN cover_focus TEXT;"),
-    # checked in by name at the door (no QR: a dead phone), shown "by hand" to the organizer and in the CSV (Oct 4)
+    # checked in by name at the door (no QR: a dead phone), shown "by hand" to the organizer and in the CSV
     (7, "ALTER TABLE registrations ADD COLUMN checkin_manual INTEGER NOT NULL DEFAULT 0;"),
-    # an organizer's update on an event, pinned under its title; the bot only says there is one (Oct 4)
+    # an organizer's update on an event, pinned under its title; the bot only says there is one
     (8, """CREATE TABLE event_updates (
         id INTEGER PRIMARY KEY,
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -38,7 +38,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         created_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX event_updates_by_event ON event_updates(event_id, created_at);"""),
-    # one-tap rating after an event: only people checked in, anonymous to the club (Oct 4)
+    # one-tap rating after an event: only people checked in, anonymous to the club
     (9, """CREATE TABLE event_ratings (
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -47,24 +47,24 @@ MIGRATIONS: list[tuple[int, str]] = [
         created_at INTEGER NOT NULL,
         PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
-    # the personal calendar feed: everything I go to, subscribed once in the phone's calendar (Oct 5)
+    # the personal calendar feed: everything I go to, subscribed once in the phone's calendar
     (10, """ALTER TABLE users ADD COLUMN cal_token TEXT;
     CREATE UNIQUE INDEX users_cal_token ON users(cal_token);"""),
     # the unlock moment: the level the app has already celebrated (the bot's message goes once by its own ref)
     (11, "ALTER TABLE achievement_levels ADD COLUMN seen INTEGER NOT NULL DEFAULT 0;"),
     # a student's number on the card: the order of first KBTU sign-in, kept for good; the Creator's card shows 00000 and
-    # takes none, so "First 500" is the cards 00001-00500 (owner, Oct 5). Students so far: by when they signed in.
+    # takes none, so "First 500" is the cards 00001-00500. Students so far: by when they signed in.
     (12, """ALTER TABLE users ADD COLUMN card_no INTEGER;
     CREATE UNIQUE INDEX users_card_no ON users(card_no);
     UPDATE users SET card_no = (SELECT n FROM (SELECT s.user_id, ROW_NUMBER() OVER (ORDER BY s.verified_at, s.user_id) AS n
             FROM students s JOIN users x ON x.id = s.user_id WHERE x.is_founder = 0) r WHERE r.user_id = users.id)
         WHERE is_founder = 0 AND id IN (SELECT user_id FROM students);"""),
     # a registration deadline (NULL = until the start), and a paid event's free seats for 1st-year students: "the first
-    # 100 tickets free for the 1st course" (owner, Oct 5); `free` marks a registration holding one of them
+    # 100 tickets free for the 1st course"; `free` marks a registration holding one of them
     (13, """ALTER TABLE events ADD COLUMN reg_until INTEGER;
     ALTER TABLE events ADD COLUMN free_first INTEGER CHECK (free_first > 0);
     ALTER TABLE registrations ADD COLUMN free INTEGER NOT NULL DEFAULT 0;"""),
-    # Team 2.0 (owner, Oct 5; SPEC §2b): a club's own roles (a name and colour on one of the levels), tags (groups of
+    # Team 2.0 (SPEC §2b): a club's own roles (a name and colour on one of the levels), tags (groups of
     # people), probation with strikes, removal by request (a Head asks, the President or Vice decide), club bans
     (14, """CREATE TABLE org_roles (
         id INTEGER PRIMARY KEY,
@@ -122,7 +122,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         created_at INTEGER NOT NULL,
         PRIMARY KEY (org_id, user_id)
     ) STRICT;"""),
-    # Studio's "questions waiting" go once the reader has read them (owner, Oct 5: "they stay after I read and answer"):
+    # Studio's "questions waiting" go once the reader has read them:
     # the newest comment under an event when each of the club's Head+ last opened them (ids, not seconds: exact)
     (15, """CREATE TABLE comment_reads (
         event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -130,12 +130,12 @@ MIGRATIONS: list[tuple[int, str]] = [
         last_id INTEGER NOT NULL,
         PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
-    # a nickname and my own photo (owner, Oct 5; SPEC §3): everyone sees the nick, organizers the real name beside it;
+    # a nickname and my own photo (SPEC §3): everyone sees the nick, organizers the real name beside it;
     # avatar_tg is the "Photo from Telegram" switch, off once I upload my own (it goes in users.avatar_file_id)
     (16, """ALTER TABLE users ADD COLUMN nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24);
     ALTER TABLE users ADD COLUMN avatar_tg INTEGER NOT NULL DEFAULT 1;"""),
     # wrong KBTU passwords per account (§4.1: 5 in 15 min) in the database, so every worker process counts the same ones;
-    # two partial indexes the load test asked for (Oct 7): expired holds (swept before every Afisha) and "Life of the
+    # two partial indexes the load test asked for: expired holds (swept before every Afisha) and "Life of the
     # party" (friends someone brought), each a scan of all registrations without one
     (17, """CREATE TABLE login_fails (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -146,22 +146,22 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX regs_by_inviter ON registrations(invited_by) WHERE invited_by IS NOT NULL;"""),
     # no KBTU session is kept since Oct 7 (§4.1): the stored ones were ended at Keycloak, the table goes
     (18, "DROP TABLE IF EXISTS portal_sessions;"),
-    # Studio part 2 "Meetings" (owner's go, Oct 5; SPEC §2b): a team-only event the whole club (or one tag) is expected at;
+    # Studio part 2 "Meetings" (owner's go; SPEC §2b): a team-only event the whole club (or one tag) is expected at;
     # "Can't make it" says why (registrations.note); a missed meeting's strike names it, one per meeting per person
     (19, """ALTER TABLE events ADD COLUMN meeting INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE events ADD COLUMN meeting_tag INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
     ALTER TABLE registrations ADD COLUMN note TEXT CHECK (note IS NULL OR length(note) <= 140);
     ALTER TABLE strikes ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX one_strike_per_meeting ON strikes(event_id, user_id) WHERE event_id IS NOT NULL;"""),
-    # the server's own notes between starts: the achievements list the levels were last recorded for (Oct 6)
+    # the server's own notes between starts: the achievements list the levels were last recorded for
     (20, "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"),
     (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea' (SPEC §1)
     (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's (SPEC §2)
-    # what the club asks DMP for in its weekly memo (Oct 11, PLAN "Memo in one tap"): JSON, the editor's "For the memo" block
+    # what the club asks DMP for in its weekly memo (PLAN "Memo in one tap"): JSON, the editor's "For the memo" block
     (23, "ALTER TABLE events ADD COLUMN memo TEXT;"),
-    # the in-app room booking demo goes (Oct 11, owner's yes): DMP books rooms by memo (§4.12c)
+    # the in-app room booking demo goes (owner's yes): DMP books rooms by memo (§4.12c)
     (24, "DROP TABLE IF EXISTS room_requests;"),
-    # casting (PLAN "Casting", Oct 11): a club's recruitment round, its departments (the club's tags) and own questions, the
+    # casting (PLAN "Casting"): a club's recruitment round, its departments (the club's tags) and own questions, the
     # applications (what the student picked and answered; the rest is their KBTU profile) and the team's votes
     (25, """CREATE TABLE rounds (
         id INTEGER PRIMARY KEY,
@@ -217,7 +217,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         at INTEGER NOT NULL,
         PRIMARY KEY (app_id, user_id)
     ) STRICT;"""),
-    # casting's interviews (Oct 11): the team's time slots (one by one, or a group: capacity), each shortlisted
+    # casting's interviews: the team's time slots (one by one, or a group: capacity), each shortlisted
     # application's slot, when it was invited, whether they came
     (26, """CREATE TABLE round_slots (
         id INTEGER PRIMARY KEY,
@@ -231,9 +231,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE round_apps ADD COLUMN slot_id INTEGER REFERENCES round_slots(id) ON DELETE SET NULL;
     ALTER TABLE round_apps ADD COLUMN invited_at INTEGER;
     ALTER TABLE round_apps ADD COLUMN came INTEGER;"""),
-    # a class's subject in ru / kk / en (JSON), so the schedule follows the app's language (owner, Oct 11)
+    # a class's subject in ru / kk / en (JSON), so the schedule follows the app's language
     (27, "ALTER TABLE schedule_classes ADD COLUMN names TEXT;"),
-    # the album (owner's list, Oct 10): a photo can be reported (the table gains 'photo' in its CHECK: rebuilt), and an event
+    # the album: a photo can be reported (the table gains 'photo' in its CHECK: rebuilt), and an event
     # can keep its album to the team (album_open = 0: "Photos from participants" off)
     (28, """CREATE TABLE reports2 (
         id INTEGER PRIMARY KEY,
@@ -252,7 +252,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE reports2 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id);
     ALTER TABLE events ADD COLUMN album_open INTEGER NOT NULL DEFAULT 1;"""),
-    # memo v2 (PLAN stage 2, Oct 12): the sender's signature fixed once (JSON: nameEn, kk, ru, en), which events went to DMP,
+    # memo v2 (PLAN stage 2): the sender's signature fixed once (JSON: nameEn, kk, ru, en), which events went to DMP,
     # who opened the week's memo last; the right "memo" (the secretary's), given to every club role that runs the team
     (29, """ALTER TABLE org_members ADD COLUMN memo_sign TEXT;
     ALTER TABLE events ADD COLUMN memo_sent_at INTEGER;
@@ -260,18 +260,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE orgs ADD COLUMN memo_opened_at INTEGER;
     ALTER TABLE orgs ADD COLUMN memo_opened_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     UPDATE org_roles SET rights = rights || ',memo' WHERE ',' || rights || ',' LIKE '%,team,%';"""),
-    # comment replies (PLAN "Comment replies", Oct 12): the comment answered, quoted above the reply; its author hears it
+    # comment replies (PLAN "Comment replies"): the comment answered, quoted above the reply; its author hears it
     (30, "ALTER TABLE comments ADD COLUMN reply_to INTEGER REFERENCES comments(id) ON DELETE SET NULL;"),
-    # the admin's stats (PLAN "Admin stats", Oct 12): one row a day from users.seen_at, counts only, no per-person log
+    # the admin's stats (PLAN "Admin stats"): one row a day from users.seen_at, counts only, no per-person log
     (31, """CREATE TABLE stats_days (
         day INTEGER PRIMARY KEY,                -- days since 1970-01-01 in Almaty
         active INTEGER NOT NULL,                -- people who opened the app that day
         new INTEGER NOT NULL,                   -- people who opened it for the first time
         students INTEGER NOT NULL               -- signed in with KBTU by the day's end
     ) STRICT;"""),
-    # badge skins (owner, Oct 13): the club whose badge I show; NULL = the KBTU one. Only an official club I'm in counts
+    # badge skins: the club whose badge I show; NULL = the KBTU one. Only an official club I'm in counts
     (32, "ALTER TABLE users ADD COLUMN skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL;"),
-    # the creator's one-time award link (owner, Oct 13: a bug report comes in a chat, not face to face)
+    # the creator's one-time award link (a bug report comes in a chat, not face to face)
     (33, """CREATE TABLE grant_links (
         token TEXT PRIMARY KEY,
         code TEXT NOT NULL,
@@ -281,13 +281,13 @@ MIGRATIONS: list[tuple[int, str]] = [
         used_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         used_at INTEGER
     ) STRICT;"""),
-    # what I picked for my badge myself: NULL never (a new club's badge comes by itself, owner Oct 13), 'kbtu', 'org'
+    # what I picked for my badge myself: NULL never (a new club's badge comes by itself), 'kbtu', 'org'
     # (skin_org), 'sower' (the creator's own)
     (34, """ALTER TABLE users ADD COLUMN skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower'));
     UPDATE users SET skin_pick = 'org' WHERE skin_org IS NOT NULL;"""),
-    # "delete my account" waits a week (owner, Oct 13: a change of heart shouldn't cost the awards): when it goes
+    # "delete my account" waits a week (a change of heart shouldn't cost the awards): when it goes
     (35, "ALTER TABLE users ADD COLUMN delete_at INTEGER;"),
-    # "First 500" for the cards 1-500 that never got it (owner Oct 14: "95%" with fewer than 500 people): the pilot
+    # "First 500" for the cards 1-500 that never got it ("95%" with fewer than 500 people): the pilot
     # signed in while it was "First 50", and a card handed out by /me skipped the award; quietly, no notification
     (36, """INSERT INTO achievement_grants (user_id, code, note, created_at)
         SELECT u.id, 'first50', 'backfill', CAST(strftime('%s', 'now') AS INTEGER) FROM users u JOIN students s ON s.user_id = u.id
@@ -300,9 +300,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # it take the channel's own picture"); a topics group is a group with forum = 1 (Telegram draws it as a squircle)
     (37, "ALTER TABLE chats ADD COLUMN photo TEXT; ALTER TABLE chats ADD COLUMN forum INTEGER NOT NULL DEFAULT 0;"),
     # a club's name and description in Kazakh and English (JSON {"kk": {"name", "description"}, "en": ...}); the base
-    # columns are Russian. Filled for KBTU's schools from kbtu.edu.kz (logic.seed_schools, owner Oct 14)
+    # columns are Russian. Filled for KBTU's schools from kbtu.edu.kz (logic.seed_schools)
     (38, "ALTER TABLE orgs ADD COLUMN i18n TEXT;"),
-    # an event's short vertical video (video.py, owner Oct 14): uploading in pieces -> queued -> working (the postman
+    # an event's short vertical video (video.py): uploading in pieces -> queued -> working (the postman
     # compresses) -> ready or failed. `path`: media/<path>.mp4 and its poster as a photo of the same name
     (39, """CREATE TABLE videos (
       id         INTEGER PRIMARY KEY,
@@ -319,7 +319,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL
     ) STRICT;
     ALTER TABLE events ADD COLUMN video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL;"""),
-    # the three official roles every club has (owner, Oct 15): President (the level, one per club), "Vice"
+    # the three official roles every club has: President (the level, one per club), "Vice"
     # and "Head" as fixed roles (no rename, no delete; their rights below their level may be tuned). A role of that name
     # already there becomes the official one; Vices and Heads without a role name get it
     (40, """ALTER TABLE org_roles ADD COLUMN fixed INTEGER NOT NULL DEFAULT 0;
@@ -333,7 +333,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       WHERE role_id IS NULL AND role IN ('vice', 'head');"""),
     # unused since Oct 15 (requests without an event became the memo's templates); kept, migrations only append
     (41, "ALTER TABLE events ADD COLUMN memo_only INTEGER NOT NULL DEFAULT 0;"),
-    # volunteers (owner, Oct 15): how many an event needs (NULL: none), maybe not year 1; applications the organizer decides
+    # volunteers: how many an event needs (NULL: none), maybe not year 1; applications the organizer decides
     (42, """ALTER TABLE events ADD COLUMN volunteers INTEGER;
     ALTER TABLE events ADD COLUMN volunteers_senior INTEGER NOT NULL DEFAULT 0;
     CREATE TABLE volunteers (
@@ -344,20 +344,20 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL,
       decided_at INTEGER,
       PRIMARY KEY (event_id, user_id));"""),
-    # an event's Telegram group (owner, Oct 15, no userbot): the organizer adds the bot by a link carrying chat_token,
+    # an event's Telegram group (no userbot): the organizer adds the bot by a link carrying chat_token,
     # the bot keeps the group's id and its join-request link and lets in only those signed up
     (43, """ALTER TABLE events ADD COLUMN chat_id INTEGER;
     ALTER TABLE events ADD COLUMN chat_link TEXT;
     ALTER TABLE events ADD COLUMN chat_token TEXT;
     CREATE UNIQUE INDEX events_chat_token ON events(chat_token) WHERE chat_token IS NOT NULL;"""),
-    # the events channel (owner, Oct 15): the post of a public event, and what it says (an edit when that changes)
+    # the events channel: the post of a public event, and what it says (an edit when that changes)
     (44, """ALTER TABLE events ADD COLUMN channel_msg INTEGER;
     ALTER TABLE events ADD COLUMN channel_photo INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE events ADD COLUMN channel_sig TEXT;"""),
-    # indoor routes (owner, Oct 15): the graph of corridors, stairs, lifts and exits he edits on the map; one row
+    # indoor routes: the graph of corridors, stairs, lifts and exits he edits on the map; one row
     (45, """CREATE TABLE map_graph (id INTEGER PRIMARY KEY CHECK (id = 1), body TEXT NOT NULL, ver INTEGER NOT NULL,
     updated_by INTEGER, updated_at INTEGER NOT NULL);"""),
-    # typed in by the student while the portal is out of reach (owner, Oct 16): replaced by the portal's data on their
+    # typed in by the student while the portal is out of reach: replaced by the portal's data on their
     # first real sign-in; until then their student ID is only their word
     (46, "ALTER TABLE students ADD COLUMN manual INTEGER NOT NULL DEFAULT 0;"),
     # who was where and when (a club leader, Oct 16: "ex-head of X, Oct 25 - May 26"; owner: recorded by itself, never
@@ -382,9 +382,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER history_out AFTER DELETE ON org_members BEGIN
       UPDATE org_history SET until = CAST(strftime('%s', 'now') AS INTEGER) WHERE user_id = OLD.user_id AND org_id = OLD.org_id AND until IS NULL;
     END;"""),
-    # an event's talk lives under its channel post in Telegram (owner, Oct 17): the link to the bot's first comment there
+    # an event's talk lives under its channel post in Telegram: the link to the bot's first comment there
     (48, "ALTER TABLE events ADD COLUMN channel_link TEXT;"),
-    # the KBTU-password sign-in is gone (owner, Oct 19): its wrong-password counter with it
+    # the KBTU-password sign-in is gone: its wrong-password counter with it
     (49, "DROP TABLE IF EXISTS login_fails;"),
     # the KBTU Microsoft account a student signed in with (msauth.py): one account, one student
     (50, """ALTER TABLE students ADD COLUMN ms_oid TEXT;
@@ -392,9 +392,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # everything Microsoft gives about the student, as it came (owner, Oct 20: "keep all we get, it's free"; the way
     # from typing it in to signing up by itself)
     (51, "ALTER TABLE students ADD COLUMN ms_profile TEXT;"),
-    # a chat any student suggests through the bot waits for the admins (PLAN item 45, owner Oct 20); added_by is who
+    # a chat any student suggests through the bot waits for the admins (PLAN item 45); added_by is who
     (52, "ALTER TABLE chats ADD COLUMN status TEXT NOT NULL DEFAULT 'live';"),
-    # departments (PLAN item 47, owner Oct 20): a tag marked as a department, one per person; a club's latest casting
+    # departments (PLAN item 47): a tag marked as a department, one per person; a club's latest casting
     # round names its real ones (older rounds may hold tags that were never departments)
     (53, """ALTER TABLE org_tags ADD COLUMN department INTEGER NOT NULL DEFAULT 0;
         UPDATE org_tags SET department = 1 WHERE id IN (SELECT d.tag_id FROM round_departments d JOIN rounds r ON r.id = d.round_id
@@ -419,7 +419,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE orgs ADD COLUMN lang TEXT;
     ALTER TABLE orgs ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
     UPDATE orgs SET lang = 'ru' WHERE kind = 'school';"""),
-    # who opened the app on which day, for the admin's chart (owner, Oct 21: "tap a day, see who came in"); 30 days, then
+    # who opened the app on which day, for the admin's chart; 30 days, then
     # gone (stats_day); the privacy policy says so
     (57, """CREATE TABLE visits (
       day     INTEGER NOT NULL,   -- Almaty day number
@@ -431,7 +431,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     (58, """UPDATE students SET course = MAX(1, MIN(6, CAST(strftime('%Y', 'now', '+5 hours') AS INTEGER)
         - (CAST(strftime('%m', 'now', '+5 hours') AS INTEGER) < 9) - (2000 + CAST(substr(student_id, 1, 2) AS INTEGER)) + 1))
       WHERE consent_at >= 1792350000 AND student_id GLOB '[0-9][0-9][A-Z]*' AND consent_version NOT IN ('staff', 'admin');"""),
-    # card numbers at sign-in again (Oct 22): who signed in the night before, when a number waited for a first real
+    # card numbers at sign-in again: who signed in the night before, when a number waited for a first real
     # step, gets theirs now in the order they came, after every number given so far (burnt ones stay burnt)
     (59, """UPDATE users SET card_no = r.base + r.n FROM (SELECT s.user_id,
             ROW_NUMBER() OVER (ORDER BY s.verified_at, s.user_id) AS n,
@@ -442,7 +442,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE r.user_id = users.id;
       INSERT INTO meta (key, value) SELECT 'card_last', MAX(card_no) FROM users WHERE card_no IS NOT NULL HAVING MAX(card_no) IS NOT NULL
         ON CONFLICT (key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER));"""),
-    # club strikes are gone (owner, Oct 22: never used, a lot of code for nothing); probation stays as a label
+    # club strikes are gone (never used, a lot of code for nothing); probation stays as a label
     (60, "DROP TABLE strikes; DELETE FROM bot_outbox WHERE kind = 'strike';"),
     # until now the sign-in demoted every admin missing from ADMIN_TG_IDS; it no longer does (roles are given in the
     # app), so a stale admin row from before must not wake up as an admin: those in the env get it back at sign-in
@@ -450,7 +450,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the year of study moves on every September 1 (logic.course_day): course_year is the academic year a course was
     # last right for: the one it was written in (synced_at, as course_day's fallback), or the ID's own for an August ID
     # of the coming intake. Then the years migration 58 read from the ID (typed-in rows, up to 6) stop at the degree's
-    # last (owner, Oct 22: bachelor 4, master 2): rows written since the portal closed (Oct 19; the typed-in sign-up
+    # last (bachelor 4, master 2): rows written since the portal closed (Oct 19; the typed-in sign-up
     # sets synced_at, ms_link then clears manual); the portal's own are never touched
     (62, """ALTER TABLE students ADD COLUMN course_year INTEGER;
     UPDATE students SET course_year = MAX(CAST(strftime('%Y', synced_at, 'unixepoch', '+5 hours') AS INTEGER)
@@ -468,11 +468,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id   INTEGER NOT NULL,
       PRIMARY KEY (day, viewer_id, user_id)
     ) WITHOUT ROWID;"""),
-    # one report sheet for everything (owner, Oct 22): one OPEN report per person and thing; once a moderator has
+    # one report sheet for everything: one OPEN report per person and thing; once a moderator has
     # decided, the same person may report it again (it may have changed, or come back)
     (64, """DROP INDEX one_report;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
-    # A4 (owner, Oct 23): a club application is a name, a description and up to 6 social links, no "why" essay: the
+    # A4: a club application is a name, a description and up to 6 social links, no "why" essay: the
     # table again with links (JSON, the club's own rule) and why optional (old rows keep theirs). A19: the walk-ins at
     # the door without the app, by the full name they typed; linked when one confirms with Microsoft (logic.ms_link)
     (65, """CREATE TABLE club_applications_new (
@@ -511,9 +511,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # recruiting is the club's own switch in Studio now: closed everywhere until a club opens it (owner, Oct 24: the list
     # of open clubs was every club); a round (Literature club's) shows on its own
     (66, "UPDATE orgs SET recruiting = 0;"),
-    # 53/68 (owner, Oct 24): a club's members are public unless the club hides the list (a support group, a faith club)
+    # 53/68: a club's members are public unless the club hides the list (a support group, a faith club)
     (67, "ALTER TABLE orgs ADD COLUMN members_hidden INTEGER NOT NULL DEFAULT 0;"),
-    # a club's own short links kbtu.sow.kz/<slug> (owner, Oct 25): only into the app, the club, one of its events, its round
+    # a club's own short links kbtu.sow.kz/<slug>: only into the app, the club, one of its events, its round
     (68, """CREATE TABLE short_links (
         slug       TEXT PRIMARY KEY,                   -- logic.SHORT; never an orgs.slug or one a club had before
         org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -526,10 +526,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX short_links_by_org ON short_links(org_id);"""),
     # PLAN 71: an event asks for the phone at sign-up (no up-front "My data" step); a phone already kept stays
     (69, "ALTER TABLE events ADD COLUMN needs_phone INTEGER NOT NULL DEFAULT 0;"),
-    # a club's short name where a long one won't fit (owner, Oct 25): its Vice+ or DMP set it; the clubs made before
+    # a club's short name where a long one won't fit: its Vice+ or DMP set it; the clubs made before
     # take their initials at start (logic.fill_abbrs: SQLite can't uppercase Cyrillic); a school's comes from schools.json
     (70, "ALTER TABLE orgs ADD COLUMN abbr TEXT;"),
-    # PLAN 86: a club's or school's own Telegram chats on its page (owner, Oct 22 and 26): chats.org_id says whose a chat
+    # PLAN 86: a club's or school's own Telegram chats on its page: chats.org_id says whose a chat
     # is, main = its one channel with the Subscribe button (later the mirror's source), about = the chat's own line; one
     # linked only from Studio waits as status 'org', out of the shared catalog
     (71, """ALTER TABLE chats ADD COLUMN org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
@@ -562,7 +562,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX tg_post_msgs_by_post ON tg_post_msgs(post_id);
     CREATE INDEX tg_post_msgs_by_album ON tg_post_msgs(channel, grouped);"""),
-    # a channel's post in three languages (owner, Oct 26): schools post kk/ru/en as separate posts (folded into one) or
+    # a channel's post in three languages: schools post kk/ru/en as separate posts (folded into one) or
     # write the translations as the channel in the post's comments; only without either, our AI (ai.py). i18n holds
     # the other languages, lang the source's (NULL: none yet), tr_by where they came from ('tg' official, 'ai');
     # tg_post_msgs.lang: the language a folded message gave its post (NULL: the post's own text)
@@ -571,11 +571,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE posts ADD COLUMN tr_by TEXT;
     ALTER TABLE posts ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE tg_post_msgs ADD COLUMN lang TEXT;"""),
-    # PLAN 95: the clubs' rosters from DMP's Student Union sheet (owner, Oct 26), each row waiting for its student:
+    # PLAN 95: the clubs' rosters from DMP's Student Union sheet, each row waiting for its student:
     # joined at once when the Telegram username (or e-mail) AND the name match the KBTU account (roster.py), asked when
     # only the username does; claimed_by: "Yes, it's me" anyway, waiting for the club's President (or DMP); rejected_by:
     # declined by them, kept for the right person. users.city from it (hideable, deletable). A one-off until everyone
-    # has signed up (owner): dropped by hand later
+    # has signed up: dropped by hand later
     (74, """CREATE TABLE roster_pending (
         id         INTEGER PRIMARY KEY,
         key        TEXT NOT NULL UNIQUE,              -- the sheet's row, so a second load adds nothing
@@ -608,7 +608,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     ALTER TABLE users ADD COLUMN city TEXT;
     ALTER TABLE users ADD COLUMN city_hidden INTEGER NOT NULL DEFAULT 0;"""),
-    # what the report queue took down and an undo needs (owner, Oct 25): an album photo's row, a profile's nick, photo
+    # what the report queue took down and an undo needs: an album photo's row, a profile's nick, photo
     # and "about me", kept 30 days with the file (it counts as shown, logic._drop_unused), then gone from disk too
     (75, """CREATE TABLE takedowns (
         id        INTEGER PRIMARY KEY,
@@ -696,7 +696,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     INSERT INTO skills (name, approved, created_at, used_at) SELECT value, 1, CAST(strftime('%s', 'now') AS INTEGER),
         CAST(strftime('%s', 'now') AS INTEGER) FROM json_each('["ios", "android", "web", "backend", "ml", "data", "ui design", "graphic design", "3d", "photo", "video", "editing", "texts", "translation", "smm", "music", "events"]');"""),
-    # referrals (PLAN, owner Oct 26): who brought me, by their invite link (r_<badge code>); the first link wins.
+    # referrals (PLAN): who brought me, by their invite link (r_<badge code>); the first link wins.
     # 77, not 76: 76 is the forum (sower4d/forum-people), to be merged first
     (77, """ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;"""),
@@ -707,7 +707,7 @@ def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=5)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
-    con.execute("PRAGMA busy_timeout = 15000")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core (Oct 7)
+    con.execute("PRAGMA busy_timeout = 15000")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core
     con.execute("PRAGMA secure_delete = ON")  # deleted rows' text doesn't linger in free pages (H2)
     con.execute("PRAGMA synchronous = NORMAL")  # with WAL: no corruption on a crash, fsync only at checkpoints
     return con
@@ -715,7 +715,7 @@ def connect(path: str) -> sqlite3.Connection:
 
 class Pool:
     """Open connections kept for the next request. A new connection reads the whole schema before its first query
-    (~4 ms on a laptop core, more than most requests take; load test, Oct 7); a kept one starts at once. A request
+    (~4 ms on a laptop core, more than most requests take; load test); a kept one starts at once. A request
     has its connection to itself until it gives it back."""
 
     def __init__(self, path: str) -> None:

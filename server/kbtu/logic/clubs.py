@@ -72,7 +72,7 @@ def _people(con, oid: int, where: str = "") -> list[dict]:
 
 
 def people(con, v: Viewer, oid: int) -> list[dict]:
-    """Everyone in a club or school, for anyone (owner, Oct 24: President and Vice first, a button for the rest), unless
+    """Everyone in a club or school, for anyone (President and Vice first, a button for the rest), unless
     the club hides the list: then its own people and the app's staff only. Names and roles, never @usernames (team())."""
     o = one(con, "SELECT members_hidden FROM orgs WHERE id = ? AND status = 'active'", oid)
     if not o:
@@ -172,14 +172,14 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         sets["recruiting"] = body["recruiting"] if isinstance(body["recruiting"], bool) else bad
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
-    if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too (owner, Oct 25)
+    if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too
         named, acro = org_name(text("name"))
         sets["name"] = named if 2 <= len(text("name")) <= 60 else bad
         if acro and "abbr" not in body:
             sets["abbr"] = acro
         if sets["name"] is not bad and one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived' AND id != ?", sets["name"], oid):
             raise ApiError("conflict", "taken")
-    if "slug" in body:  # the short link is the President's (owner, Oct 23)
+    if "slug" in body:  # the short link is the President's
         if _roles(con, v).get(oid) != "president":
             raise ApiError("forbidden")
         s = text("slug").lower()
@@ -214,7 +214,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         for k in ("name", "description"):  # the app showed a translation in the form: sent back unchanged, it's no edit
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
-        with tx(con):  # the name checked and taken at once (review, Oct 26)
+        with tx(con):  # the name checked and taken at once
             if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
                 if not _slug_free(con, sets["slug"], oid):
                     raise ApiError("conflict", "taken")
@@ -267,7 +267,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
     need_student(v)
     name, short = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper()
     about, why = str(body.get("description") or "").strip(), str(body.get("why") or "").strip() or None
-    # up to 6 social links, the club's own rule (A4, owner Oct 23); the form before the refactor sends one "link"
+    # up to 6 social links, the club's own rule (A4); the form before the refactor sends one "link"
     links = body["links"] if "links" in body else [x] if (x := str(body.get("link") or "").strip()) else []
     emoji, cover = str(body.get("emoji") or ""), body.get("cover")
     if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and 10 <= len(about) <= 600 and (why is None or len(why) <= 500)
@@ -290,7 +290,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
 
 
 def club_applications(con, v: Viewer) -> list[dict]:
-    """The check (the admin: clubs are his, owner Oct 22): pending first, then the last decisions."""
+    """The check (the admin; clubs are his, owner Oct 22): pending first, then the last decisions."""
     _admin(v)
     return [_club_app(con, a, True) for a in rows(con, """SELECT * FROM club_applications ORDER BY status = 'pending' DESC,
         COALESCE(decided_at, created_at) DESC LIMIT 40""")]
@@ -324,12 +324,12 @@ def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: obj
 
 def create_org(con, actor: int | None, name: str, short: str, emoji: str, official: bool, slug: str | None = None,
                kind: str = "club") -> int:
-    """A club or a school, by the admin (the app or the CLI). A school (owner, Oct 13: KBTU's own, a few, made by the
+    """A club or a school, by the admin (the app or the CLI). A school (KBTU's own, a few, made by the
     admin, never by an application) is official from the start and never closes; its President has a club
     President's rights. A slug nobody chose comes from the name (A5: kbtu.sow.kz/<slug>). Recruiting starts closed:
-    the club opens it in Studio (owner, Oct 24)."""
+    the club opens it in Studio."""
     abbr = guess_abbr(name)
-    name = org_name(name)[0]  # no "KBTU", the short form to abbr (owner, Oct 25)
+    name = org_name(name)[0]  # no "KBTU", the short form to abbr
     slug = slug or slug_for(con, name)
     cur = con.execute("INSERT INTO orgs (slug, kind, name, short, abbr, emoji, official, created_by, created_at, recruiting) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
                       (slug, kind, name, short, abbr, emoji, int(official or kind == "school"), actor, core.now()))
@@ -339,17 +339,17 @@ def create_org(con, actor: int | None, name: str, short: str, emoji: str, offici
     return cur.lastrowid
 
 
-# A5 short links kbtu.sow.kz/<slug> (owner, Oct 23): the name in Latin letters, the app's own paths never
+# A5 short links kbtu.sow.kz/<slug>: the name in Latin letters, the app's own paths never
 # Cyrillic a..ya (U+0430..U+044F) in order, then yo and the Kazakh letters (code points: the code stays ASCII)
 TRANSLIT = str.maketrans({**dict(zip(range(0x430, 0x450), "a b v g d e zh z i i k l m n o p r s t u f h c ch sh sch _ y _ e yu ya".split())),
     0x451: "e", 0x4D9: "a", 0x493: "g", 0x49B: "k", 0x4A3: "n", 0x4E9: "o", 0x4B1: "u", 0x4AF: "u", 0x4BB: "h", 0x456: "i", 0x44A: "", 0x44C: ""})
 SLUG = re.compile(r"[a-z0-9]{2,24}")
 RESERVED = {"api", "cal", "healthz", "exit", "privacy", "terms", "og", "media", "demo", "old", "assets", "emoji", "map", "admin",
             "app", "kbtu", "help", "login", "ms", "static", "www", "bot", "support", "settings", "outlook", "club", "clubs", "events",
-            # and for the clubs' own links (Oct 25): what a phishing page would like to be
+            # and for the clubs' own links: what a phishing page would like to be
             "favicon", "apple-touch-icon", "robots", "sitemap", "auth", "oauth", "logout", "signin", "signup", "register", "account",
             "me", "profile", "dmp", "pay", "kaspi", "telegram", "tg", "security", "official", "news", "about", "wp-admin"}
-# a club's own short link (owner, Oct 25): a club slug, or words joined by single hyphens, 2-32 characters
+# a club's own short link: a club slug, or words joined by single hyphens, 2-32 characters
 SHORT = re.compile(r"(?=.{2,32}$)[a-z0-9]+(?:-[a-z0-9]+)*")
 LINKS_MAX = 20  # a club's: the names are everyone's, first come, first served
 
@@ -363,7 +363,7 @@ def slug_for(con, name: str, oid: int | None = None) -> str:
 
 
 def name_slugs(con) -> None:
-    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once (review: every start renamed
+    """At start: the clubs made before A5 got club<N>; they take their names' slugs, once (every start renamed
     a club<N> its President chose)."""
     if one(con, "SELECT 1 FROM meta WHERE key = 'slugs_named'"):
         return
@@ -373,7 +373,7 @@ def name_slugs(con) -> None:
             con.execute("UPDATE orgs SET slug = ? WHERE id = ?", (slug_for(con, o["name"], o["id"]), o["id"]))
 
 
-# words a club's initials leave out (owner, Oct 25): "Club of Film and Theatre" is CFT; Russian and Kazakh ones as code
+# words a club's initials leave out: "Club of Film and Theatre" is CFT; Russian and Kazakh ones as code
 # points (the code stays ASCII)
 LINK_WORDS = {*"\u0438 \u0432 \u0432\u043e \u043d\u0430 \u043f\u043e \u0434\u043b\u044f \u0441 \u0441\u043e \u043e \u043e\u0431 \u043e\u0442 \u043f\u0440\u0438 \u0437\u0430 \u0438\u0437 \u043a \u0436\u04d9\u043d\u0435 \u043c\u0435\u043d \u043f\u0435\u043d \u0431\u0435\u043d".split(),
               "and", "of", "the", "for", "in", "on", "at", "a", "an", "to", "by"}
@@ -381,7 +381,7 @@ LINK_WORDS = {*"\u0438 \u0432 \u0432\u043e \u043d\u0430 \u043f\u043e \u0434\u043
 
 def initials(name: str) -> str:
     """A club's short name until it types its own: the first letters of its words, uppercase; one word stays whole
-    (the first three letters of a long one). "KBTU" is no letter of it (owner, Oct 25)."""
+    (the first three letters of a long one). "KBTU" is no letter of it."""
     words = re.findall(r"[^\W_]+", name)
     words = [w for w in words if w.lower() not in LINK_WORDS and w.upper() not in KBTU] or words
     if len(words) == 1:
@@ -389,7 +389,7 @@ def initials(name: str) -> str:
     return "".join(w[0] for w in words).upper()[:8]
 
 
-# Org names, one style (owner, Oct 25): no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
+# Org names, one style: no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
 # one is the abbr. Done to a name as it's created or renamed; the names already there were fixed by hand.
 KBTU = {"KBTU", "\u041a\u0411\u0422\u0423"}  # and in Cyrillic
 _KB = r"(?:kbtu|\u043a\u0431\u0442\u0443)"
@@ -498,7 +498,7 @@ def drop_link(con, v: Viewer, slug: str) -> None:
 
 
 def _keep_name(con, s: str, oid: int) -> None:
-    """A gone short link's name stays its club's and leads to the club (review, Oct 26: printed posters of one club
+    """A gone short link's name stays its club's and leads to the club (printed posters of one club
     would open another's), as a changed club slug does."""
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"slug:{s}", str(oid)))
 
@@ -524,8 +524,7 @@ SCHOOLS = json.loads((Path(__file__).parent.with_name("i18n") / "schools.json").
 
 
 def seed_schools(con, root: Path) -> None:
-    """KBTU's schools from its site (kbtu.edu.kz/ru/shkoly, /kz/mektepter, /en/schools; owner Oct 14: "nobody should
-    create them by hand"): once, at start under the migration lock, with their crests (kbtu/schools/<slug>.png) and
+    """KBTU's schools from its site (kbtu.edu.kz/ru/shkoly, /kz/mektepter, /en/schools): once, at start under the migration lock, with their crests (kbtu/schools/<slug>.png) and
     names in three languages. A school made by hand before is found by its slug or any of its names and filled in."""
     done = one(con, "SELECT value FROM meta WHERE key = 'schools'")
     if done and done[0] == SCHOOLS_VERSION:
@@ -543,7 +542,7 @@ def seed_schools(con, root: Path) -> None:
                 logo = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, created_at, color)
                     VALUES (?, 'org_logo', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
                                                                           saved["path"], core.now(), saved["color"])).lastrowid
-            # a later version brings new translations (the short names, Oct 14) and leaves what the school typed
+            # a later version brings new translations (the short names) and leaves what the school typed
             tr = {"ru": {"abbr": s["ru"]["abbr"]}, **{k: s[k] for k in ("kk", "en")}}
             own = done and o["description"] != s["ru"]["description"]  # the school's own text: the AI translates it (ai.py), not the site's
             if own:

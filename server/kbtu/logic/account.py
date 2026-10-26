@@ -19,7 +19,7 @@ SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents
 
 def ms_link(con, uid: int, who: dict) -> None:
     """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
-    names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is); the old portal's
+    names over typed ones (otherwise "confirmed" proved nothing about who it is); the old portal's
     names stay (they came from KBTU already). Whoever's invite link brought them now counts it (awards.brought)."""
     by = one(con, """SELECT u.referred_by FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 1 WHERE u.id = ?""", uid)
     before = _levels(con, by[0]) if by and by[0] else None
@@ -82,7 +82,7 @@ def ms_sweep(con) -> None:
 
 def id_clash(con, sid: str, new: int, old: int) -> None:
     """Someone signed in with Microsoft typed a student ID another account holds: every admin hears, with both
-    people's contacts, and asks them (owner, Oct 20). Once per pair, 3 a day per person (review: no admin spam). The
+    people's contacts, and asks them. Once per pair, 3 a day per person (no admin spam). The
     holder's name and email are kept in the message: their row may be gone by the time it's sent."""
     day = core.now() // 86400
     if one(con, "SELECT COUNT(DISTINCT ref) FROM bot_outbox WHERE kind = 'id_clash' AND ref LIKE ? AND send_after >= ?",
@@ -100,7 +100,7 @@ def me(con, v: Viewer) -> dict:
         roster.match(con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
-    relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms (owner, Oct 20)
+    relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
     s = None if relink else s
     members = rows(con, """SELECT m.role, t.name AS title, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
@@ -133,7 +133,7 @@ def me(con, v: Viewer) -> dict:
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
-        # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked (owner, Oct 26)
+        # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [{"org": org_ref(con, m), "role": m["role"], "title": m["title"], "rights": _ordered(_rights_from(m["role"], m["rights"])),
                          "oversee": bool(m["can_oversee"] and m["role"] != "member")} for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
@@ -143,7 +143,7 @@ def me(con, v: Viewer) -> dict:
                      "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
-        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too (review)
+        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
     }
@@ -177,9 +177,9 @@ SKINNED = ("o.official = 1 AND o.status = 'active' AND (lower(o.name) LIKE '%stu
 
 
 def _skin(con, uid: int) -> int | str | None:
-    """The badge I show (owner, Oct 13: badges as skins): a club's id, "sower" (the creator's own), None for KBTU's.
+    """The badge I show (badges as skins): a club's id, "sower" (the creator's own), None for KBTU's.
     My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the newest club I joined
-    that has a badge, the creator's own for the creator (owner, Oct 13: a new club's badge comes by itself); of
+    that has a badge, the creator's own for the creator (a new club's badge comes by itself); of
     several, the one where my role is highest, as the picker lists them (LookSheet)."""
     u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
@@ -194,7 +194,7 @@ def _skin(con, uid: int) -> int | str | None:
 
 
 def _skin_ok(con, uid: int, oid: int):
-    """Any club's lanyard can be tried on, member or not (owner, Oct 20: "let everyone try on another club's"); the
+    """Any club's lanyard can be tried on, member or not; the
     creator's own stays his. ponytail: uid unused while it's open to all; a membership check comes back if he closes it."""
     return one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND {SKINNED}", oid)
 
@@ -290,7 +290,7 @@ def _drop_unused(con, fid: int | None) -> list[str]:
 
 def set_photo(con, v: Viewer, saved: dict) -> list[str]:
     """My own photo (a processed upload, media.save) instead of Telegram's: the "Photo from Telegram" switch goes off
-    (owner, Oct 5). The one it replaces is deleted; returns its files to remove from disk."""
+   . The one it replaces is deleted; returns its files to remove from disk."""
     need_student(v)
     old = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]
     f = one(con, "SELECT id FROM files WHERE sha256 = ? AND kind = 'avatar' AND owner_id = ?", saved["sha256"], v.id)
@@ -302,7 +302,7 @@ def set_photo(con, v: Viewer, saved: dict) -> list[str]:
 
 
 def drop_my_photo(con, v: Viewer) -> list[str]:
-    """My own photo deleted (owner's list, Oct 10: the upload shouldn't stay on the server): Telegram's is back; returns
+    """My own photo deleted (the upload shouldn't stay on the server): Telegram's is back; returns
     its files to remove from disk."""
     need_student(v)
     old = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]
@@ -315,14 +315,14 @@ DELETE_WAIT = 7 * 86400
 
 def _paid_ahead(con, uid: int) -> bool:
     """A ticket paid for (a receipt sent or accepted) to an event still ahead: the deletion waits until it passes, so
-    the money's only record isn't erased before the door (owner, Oct 22)."""
+    the money's only record isn't erased before the door."""
     return one(con, """SELECT 1 FROM registrations r JOIN events e ON e.id = r.event_id JOIN receipts c ON c.registration_id = r.id
         WHERE r.user_id = ? AND r.status IN ('going', 'hold') AND c.status != 'rejected' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""",
                uid, NO_END, core.now()) is not None
 
 
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
-    """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (owner, Oct 13: a change of heart, or someone
+    """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; the KBTU password asked before shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
@@ -348,7 +348,7 @@ CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in forc
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
-    """The privacy policy changed (H2, Oct 22: what a deletion keeps): a student agrees again once; staff and students
+    """The privacy policy changed (H2; what a deletion keeps): a student agrees again once; staff and students
     added by hand keep their marks."""
     need_student(v)
     if version != current:
@@ -360,7 +360,7 @@ def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
 
 def dm_on(con, v: Viewer, eid: object) -> dict:
     """Telegram's "allow messages" said yes inside the app: the bot may write from now on, not from the next launch
-    (the launch data said no). The event just signed up for gets its confirmation with the ticket (owner, Oct 24). A
+    (the launch data said no). The event just signed up for gets its confirmation with the ticket. A
     false yes costs nothing: the bot's first 403 turns it off again."""
     con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (v.id,))
     if type(eid) is int and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", eid, v.id):
@@ -376,7 +376,7 @@ def keep_me(con, v: Viewer) -> dict:
 
 def _hand_over(con, uid: int) -> None:
     """A President leaving with the account: each club passes to its highest-ranked member (the earliest of them), a
-    club with nobody else to the admin (owner, Oct 22: deleting it would erase other people's events and photos)."""
+    club with nobody else to the admin (deleting it would erase other people's events and photos)."""
     for (oid,) in rows(con, "SELECT org_id FROM org_members WHERE user_id = ? AND role = 'president'", uid):
         con.execute("UPDATE org_members SET role = 'member' WHERE org_id = ? AND user_id = ?", (oid, uid))
         heir = one(con, f"""SELECT user_id FROM org_members WHERE org_id = ? AND user_id != ? ORDER BY CASE role
@@ -533,7 +533,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
-        # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days (owner, Oct 25)
+        # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
         photos = [p for f in mine + avatars + kept for p in _drop_unused(con, f)]
         fks = _user_fks(con)

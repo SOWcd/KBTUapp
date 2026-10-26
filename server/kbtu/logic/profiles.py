@@ -35,7 +35,7 @@ def _week(t: int) -> int:
 
 def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
     """Weeks in a row with a check-in (§4.11): the longest run (the medal's: an earned level never goes away) and the
-    current one. A week without a public event neither breaks nor adds (owner, Oct 7: nothing to go to is no reason to
+    current one. A week without a public event neither breaks nor adds (nothing to go to is no reason to
     lose it), and this week breaks nothing until it's over."""
     # ponytail: holidays and the session pause it only when they have no events; read the academic calendar if one bites
     best = run = 0
@@ -51,11 +51,11 @@ def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
 ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("regular", "trophy_3d", (5, 15, 30, 50), False), ("streak", "fire_3d", (2, 4, 8, 16), False),
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
-    ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too (owner, Oct 6)
+    ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
-    ("first50", "n500", (1,), False),  # not an emoji: the medal strikes the number (web ui/Medal, owner Oct 13)
+    ("first50", "n500", (1,), False),  # not an emoji: the medal strikes the number (web ui/Medal)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
-    ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (owner, Oct 13: no emoji twice)
+    ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
 ]
 
@@ -111,7 +111,7 @@ def _celebrate(con, uid: int, before: dict[str, int]) -> None:
 
 def sync_levels(con) -> None:
     """Levels already reached, recorded once the achievements change (a new one, a new level): counts never stop at the
-    top, so a level added later is reached by whoever already did it (owner, Oct 6). At start, under the migration
+    top, so a level added later is reached by whoever already did it. At start, under the migration
     lock (db.init), only when the list differs from the last run. No bot message: the app's unlock moment shows them."""
     mark = json.dumps([[code, needs] for code, _, needs, _ in ACHIEVEMENTS])
     last = one(con, "SELECT value FROM meta WHERE key = 'achievements'")
@@ -169,7 +169,7 @@ GRANT_LINK_TTL = 7 * 86400
 
 
 def grant_link(con, v: Viewer, code: object) -> str:
-    """The admin's one-time award link (owner, Oct 13: "Bug hunter" is earned in a chat, so it goes as a link there;
+    """The admin's one-time award link ("Bug hunter" is earned in a chat, so it goes as a link there;
     the face-to-face ones stay on the badge QR): one student, once, within 7 days."""
     _admin(v)
     if code not in GRANTABLE:
@@ -202,7 +202,7 @@ def ungrant(con, v: Viewer, gid: int) -> None:
 
 
 def take_back(con, v: Viewer, uid: object, code: object) -> dict:
-    """The admin takes back a manual award from a profile at any time (owner, Oct 13: Bug hunter given to a friend
+    """The admin takes back a manual award from a profile at any time (Bug hunter given to a friend
     by mistake while testing, ten times over): every grant of it, by a person or a link; never the sign-in's "First 500"."""
     _admin(v)
     if code not in GRANTABLE or not isinstance(uid, int) or isinstance(uid, bool):
@@ -238,7 +238,7 @@ def my_grants(con, v: Viewer) -> list[dict]:
                 ORDER BY g.created_at DESC, g.id DESC LIMIT 300""", v.id, *GRANTABLE)]
 
 
-FIRST_N = 500  # cards 1-500; the code stays "first50": it was 50 until launch day (Oct 5), a pilot club alone could have taken them all
+FIRST_N = 500  # cards 1-500; the code stays "first50": it was 50 until launch day, a pilot club alone could have taken them all
 
 
 def card_no(con, uid: int) -> None:
@@ -286,9 +286,9 @@ def seen_unlock(con, v: Viewer, code: object, level: object) -> None:
 def achievements(con, uid: int) -> list[dict]:
     """Mine, each level with its rarity: the share of students who have reached it. Rarity comes from the levels everyone
     reached (achievement_levels: an earned level stays), one query; counting every student's check-ins for every
-    profile view was thousands of queries once a few hundred students had signed in (load test, Oct 7)."""
+    profile view was thousands of queries once a few hundred students had signed in (load test)."""
     mine = _counts(con, uid)
-    # out of students only: staff take no card and no "First 500", counted they made it "95%" (Oct 14)
+    # out of students only: staff take no card and no "First 500", counted they made it "95%"
     total = max(1, one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0])
     at_level = {(r[0], r[1]): r[2] for r in rows(con, """SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
         JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""")}
@@ -337,7 +337,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     close = uid == v.id or link is not None or team or v.role in ("admin", "moderator")  # the team: reports need it all
     if not close:
         _stranger_view(con, v, uid)
-    # when a level was reached is the second of a check-in: matched against the Afisha it names the event (review, Oct 23)
+    # when a level was reached is the second of a check-in: matched against the Afisha it names the event
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid)]
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
@@ -353,7 +353,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
         "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
         "attended": len(attended(con, uid)),
-        # the role shows only to the club's own team (owner, Oct 15): outside, just the club
+        # the role shows only to the club's own team: outside, just the club
         "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, "title": m["title"] if m["mine"] else None} for m in rows(con, """
             SELECT m.role, t.name AS title, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.* FROM org_members m
             JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close],

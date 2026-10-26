@@ -75,7 +75,7 @@ async def read_upload(request: Request) -> bytes:
 
 class _Route(APIRoute):
     """Answers go out through pydantic's JSON writer (Rust) instead of FastAPI's jsonable_encoder, which walks every value
-    in Python: two thirds of the Afisha's time on a big database (load test, Oct 7). Our answers are plain JSON
+    in Python: two thirds of the Afisha's time on a big database (load test). Our answers are plain JSON
     already, so `Any` checks nothing and only changes who writes the bytes."""
 
     def __init__(self, path: str, endpoint, *, response_model=Default(None), status_code: int | None = None, **kw) -> None:
@@ -118,7 +118,7 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
         u = logic.one(con, "SELECT * FROM users WHERE tg_id = ?", tg["id"])
         logic.visit(con, u["id"], t)
     else:
-        # ADMIN_TG_IDS are always admins; everyone else's role is given in the app (owner, Oct 22)
+        # ADMIN_TG_IDS are always admins; everyone else's role is given in the app
         role = "admin" if tg["id"] in admins and not u["banned_at"] else u["role"]  # a ban outranks the env
         dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
         if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
@@ -129,7 +129,7 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
             u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
     if u["banned_at"]:
         raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
-    # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (owner, Oct 20: Microsoft only)
+    # a typed-in row (manual, no Microsoft yet) acts as nobody until Microsoft confirms it (Microsoft only)
     return Viewer(u["id"], u["role"], logic.one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", u["id"]) is not None)
 
 
@@ -242,7 +242,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/orgs/{oid}/president-link")
     def admin_president_link(oid: int, con: Con, v: Me):
-        return logic.president_link(con, v, oid)  # the QR the admin shows a President face to face (owner, Oct 16)
+        return logic.president_link(con, v, oid)  # the QR the admin shows a President face to face
 
     @app.put("/api/admin/orgs/{oid}/hidden")
     def admin_hide_org(oid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -256,7 +256,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def kbtu_manual(con: Con, v: Me, body: dict = Body(...)):
         """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
         empty, measured Oct 20), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
-        (owner, Oct 20): no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
+        no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
         to the Microsoft one; held by a Microsoft-confirmed one, it's refused; the admins hear of both (id_clash)."""
         consent = str(body.get("consentVersion") or "")
         sid = str(body.get("studentId") or "").strip().upper()
@@ -306,7 +306,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/ms/verifier")
     def ms_verifier(state: str, con: Con):
-        """The PKCE verifier. No "link to <name>?" question (owner, Oct 23: minimum steps)"""
+        """The PKCE verifier. No "link to <name>?" question (minimum steps)"""
         uid = msauth.state_uid(cfg.token_key, state)
         if not uid or not logic.one(con, "SELECT 1 FROM users WHERE id = ?", uid):
             raise ApiError("not_found")  # a stale link: ms.html says "expired"
@@ -329,7 +329,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         with pool.conn() as con, db.tx(con):
             if not con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"ms_used:{state[-16:]}", str(logic.now()))).rowcount:
                 raise ApiError("forbidden", "ms")  # each link once
-            # linked at once, no code back from the app: a forwarded sign-in link is caught by hand and unlinked (owner, Oct 24)
+            # linked at once, no code back from the app: a forwarded sign-in link is caught by hand and unlinked
             logic.ms_apply(con, uid, who)
             return {"ok": True}
 
@@ -929,7 +929,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         media.drop(photos, logic.drop_my_photo(con, v))
         return logic.me(con, v)
 
-    # my own photo instead of Telegram's (owner, Oct 5): the body as in /api/photos; the one it replaces leaves the disk
+    # my own photo instead of Telegram's: the body as in /api/photos; the one it replaces leaves the disk
     @app.post("/api/me/photo")
     async def upload_my_photo(request: Request, con: Con, v: Me):
         data = await read_upload(request)
@@ -1090,7 +1090,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/chats/suggest")
     async def suggest_chat(con: Con, v: Me, body: dict = Body(...)):
-        """A chat suggested from the app's own sheet (owner, Oct 21: not through the bot's chat): @name, a t.me link or an
+        """A chat suggested from the app's own sheet (not through the bot's chat): @name, a t.me link or an
         invite link. {status: sent | waiting | exists | limit | later | slow | notchat | bad, title}."""
         if not v.student:
             raise logic.ApiError("forbidden")
@@ -1235,7 +1235,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def share(request: Request, con: Con, v: Me, body: dict = Body(...)):
         """A card for shareMessage (Bot API 8.0), built by the server from its own templates, so nothing the client
         sends ends up in a message from our bot: an event (a photo card), my friend invite, a club's invite or one of my
-        achievements (a line of text and our bot's button; owner, Oct 4: no bare links in chats)."""
+        achievements (a line of text and our bot's button; no bare links in chats)."""
         kind = body.get("kind")
         try:
             ref = int(body.get("id") or 0)
@@ -1251,7 +1251,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # the photo, else the video's poster (a photo of the same name)
             cover = logic.one(con, """SELECT COALESCE(f.path, x.path) AS path FROM events e LEFT JOIN files f ON f.id = e.cover_file_id
                 LEFT JOIN videos x ON x.id = e.video_id AND x.status = 'ready' WHERE e.id = ? AND COALESCE(f.path, x.path) IS NOT NULL""", ref)
-            # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture (owner, Oct 13)
+            # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture
             photo = f"https://{cfg.domain}/media/{cover['path']}.jpg" if cover else \
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
@@ -1400,7 +1400,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/exit")
     def exit_link():
-        """kbtu.sow.kz/exit: the short "help me get out" link for posters and chats (owner, Oct 15)."""
+        """kbtu.sow.kz/exit: the short "help me get out" link for posters and chats."""
         return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp=exit")
 
     @app.get("/ms.html")
@@ -1424,7 +1424,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return legal_page("terms", lang)
 
     def legal_page(doc: str, lang: str) -> Response:
-        """kbtu.sow.kz/privacy and /terms (owner, Oct 16): plain pages anyone can open, in ru, kk or en; the app links
+        """kbtu.sow.kz/privacy and /terms: plain pages anyone can open, in ru, kk or en; the app links
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
@@ -1475,7 +1475,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             raise ApiError("not_found")
         return FileResponse(f, headers={"Cache-Control": "public, max-age=31536000, immutable"})  # named by content hash
 
-    # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405 (owner, Oct 13)
+    # HEAD too: uptime monitors (UptimeRobot) check with HEAD, and a GET-only route answered them 405
     @app.api_route("/{path:path}", methods=["GET", "HEAD"])
     def frontend(path: str, request: Request):
         if path.startswith("api/"):
@@ -1483,13 +1483,13 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         start = request.query_params.get("tgWebAppStartParam")
         if start == "old" and cfg.old_dir:  # t.me/KBTUappBot?startapp=old
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
-        if path == "demo" or path.startswith("demo/"):  # the in-browser demo went (Oct 11): its old links open the app in Telegram
+        if path == "demo" or path.startswith("demo/"):  # the in-browser demo went: its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path):
             return f
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
-            with pool.conn() as con:  # only past the files (review: every asset took a connection)
+            with pool.conn() as con:  # only past the files (every asset took a connection)
                 to = logic.start_by_slug(con, path.strip("/"))
         if to:  # kbtu.sow.kz/<club>: an Instagram bio's link (A5); or a club's own link to itself, an event, its round
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp={to}", status_code=302)
