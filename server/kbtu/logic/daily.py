@@ -103,15 +103,16 @@ _AI_EVENTS = """FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.status = 'p
 _AI_ORGS = "FROM orgs WHERE status = 'active' AND trim(description) != ''"
 
 
-def admin_ai(con, v: Viewer) -> dict:
-    """The AI page in Admin (owner, Oct 21): the translator's state, what it has done and what waits or failed."""
+def admin_ai(con, v: Viewer, chain: list[str] | None = None) -> dict:
+    """The AI page in Admin (owner, Oct 21): the translator's state, what it has done and what waits or failed; the AI
+    chain (llm.py: app.py gives its links) and each link's answers and failures by day."""
     _admin(v)
-    from .. import ai  # the model's name; ai.py doesn't import logic
+    from .. import llm  # llm.py doesn't import logic
     ev, og = _AI_EVENTS, _AI_ORGS
     count = lambda sql, *a: one(con, "SELECT COUNT(*) " + sql, *a)[0]  # noqa: E731
     failed = [{"kind": "event", "id": r["id"], "title": r["title"]} for r in rows(con, f"SELECT e.id, e.title {ev} AND e.lang IS NULL AND e.ai_tries >= ?", core.now(), AI_TRIES)] \
         + [{"kind": "org", "id": r["id"], "title": r["name"]} for r in rows(con, f"SELECT id, name {og} AND lang IS NULL AND ai_tries >= ?", AI_TRIES)]
-    return {**ai_state(con), "model": ai.MODEL,
+    return {**ai_state(con), "chain": chain or [], "usage": llm.usage(con),
             "events": {"done": count(f"{ev} AND e.lang IS NOT NULL", core.now()), "waiting": count(f"{ev} AND e.lang IS NULL AND e.ai_tries < ?", core.now(), AI_TRIES)},
             "clubs": {"done": count(f"{og} AND lang IS NOT NULL"), "waiting": count(f"{og} AND lang IS NULL AND ai_tries < ?", AI_TRIES)},
             "failed": failed}

@@ -32,7 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, auth, bot, casting, config, db, logic, media, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, casting, config, db, llm, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -1162,8 +1162,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.admin_day(con, v, day)
 
     @app.get("/api/admin/ai")
-    def admin_ai(con: Con, v: Me):
-        return logic.admin_ai(con, v)
+    async def admin_ai(con: Con, v: Me):
+        out = logic.admin_ai(con, v, [x.name for x in llm.links(cfg)])
+        async with httpx.AsyncClient() as http:
+            out["accounts"] = await llm.munito_account(cfg, http)  # Munito's usage and limits per key
+        return out
 
     @app.post("/api/admin/ai/retry", status_code=204)
     def admin_ai_retry(con: Con, v: Me):

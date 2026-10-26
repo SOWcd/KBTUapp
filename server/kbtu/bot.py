@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, logic, media, offsite, portal, receipt, texts, userbot, video
+from . import ai, casting, db, llm, logic, media, offsite, portal, receipt, texts, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -1046,10 +1046,10 @@ async def _videos(cfg: Config) -> None:
 
 
 async def _translator(cfg: Config) -> None:
-    """Event and club texts into the other two languages (ai.py), one every few seconds; off without Cloudflare's keys.
-    The day's free neurons spent: back after Cloudflare's midnight (UTC)."""
-    on = bool(cfg.cf_account_id and cfg.cf_ai_token)
-    log.warning("ai translation: %s", "on" if on else "off (no CF_ACCOUNT_ID / CF_AI_TOKEN)")
+    """Event and club texts into the other two languages (ai.py), one every few seconds, on the AI chain (llm.py); off
+    without any of its keys. Every link resting: back in a few minutes."""
+    on = llm.available(cfg)
+    log.warning("ai translation: %s", "on" if on else "off (no AI keys)")
     try:  # never let the translator take the postman down with it (asyncio.gather)
         con = db.connect(cfg.db_path)
         logic.ai_note(con, on=on)
@@ -1065,12 +1065,8 @@ async def _translator(cfg: Config) -> None:
                 if job:
                     kind, rid, was = job
                     try:
-                        src, tr = await ai.translate(http, cfg.cf_account_id, cfg.cf_ai_token, was,
-                                                     logic.AI_LIMIT[kind])
+                        src, tr = await ai.translate(cfg, http, was, logic.AI_LIMIT[kind], con)
                         logic.ai_save(con, kind, rid, was, src, tr)
-                    except ai.Limit:
-                        logic.ai_note(con, error="daily limit")
-                        await asyncio.sleep(86400 - time.time() % 86400 + 300)
                     except ai.Busy as exc:
                         logic.ai_note(con, error=f"busy: {exc}")
                         await asyncio.sleep(300)

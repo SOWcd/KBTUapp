@@ -14,6 +14,7 @@
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import AiBadge from '../../ui/AiBadge.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
@@ -82,7 +83,7 @@
 
     {#if o.myRole}<p class="role">{t('club.myRole', { role: roleName(o.myRole, o.myTitle) })}</p>{/if}
     {#if o.description}<p class="t-body about selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
-      {#if translated(o, 'description')}<button class="trn" onclick={() => (raw = !raw)}>{raw ? t('ai.showTr') : t('ai.translated')}</button>{/if}{/if}
+      {#if translated(o, 'description')}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}{/if}
     {#if o.round && !o.myRole}<p class="rnd">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</p>
     {:else if joinable && !o.myRole && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t('join.closed')}</p>{/if}
 

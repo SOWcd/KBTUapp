@@ -60,7 +60,9 @@ export interface AdminStats { online: number; day: number; week: number; month: 
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
 export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
-export interface AdminAi { on: boolean; today: number; error: string | null; model: string; events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
+export interface AdminAi { on: boolean; today: number; error: string | null; chain: string[]; usage: Record<string, Record<string, [number, number]>>;
+  accounts?: Record<string, { usage?: unknown; limits?: unknown }>; // Munito's own view per key, as Munito gives it
+  events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
