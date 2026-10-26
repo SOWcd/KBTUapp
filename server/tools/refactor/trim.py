@@ -21,7 +21,7 @@ BARE = re.compile(rf"(?<![\w(])(?:{WHO}),\s*{DATE}:\s*(?=\S)")
 
 def _group(m: re.Match) -> str:
     before, space, inner, colon = m.group(1), m.group(2), m.group(3), m.group(4)
-    if not SEG.search(inner):
+    if not SEG.search(inner) or re.search(r"\d{1,2}:\d{2}", inner):  # a clock time: a fact ("closed Oct 19, 00:00"), kept
         return m.group(0)
     head, _, reason = inner.partition(":") if ":" in inner else (inner, "", "")
     kept = SEG.sub("", head)
