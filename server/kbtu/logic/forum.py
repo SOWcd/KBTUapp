@@ -1,6 +1,4 @@
-"""F1 find people (the forum, PLAN "F1 spec" + "Forum adversarial review"): skills from one shared catalog, requests
-for help, contact only by double opt-in (nothing of either side shows until the other accepts), blocks, a few pings.
-The forum's gate (a server flag, staff only for now) is app.py's; everything here assumes the caller may use it."""
+"""F1 find people: skills, requests, contact by double opt-in, blocks, pings (PLAN F1)."""
 from __future__ import annotations
 
 import difflib
@@ -8,7 +6,9 @@ import re
 import unicodedata
 
 from ..db import tx
-from .core import ApiError, Viewer, need_student, one, rows
+
+from .core import (ApiError, PERSON, Viewer, course_of, log_action, need_student, one, person_ref, rows, short_name)
+
 
 PUBLIC_AT = 3            # a skill someone made shows in everyone's suggestions once this many people have it (or a moderator approves)
 MY_SKILLS, ASK_SKILLS, NAME_MAX = 5, 3, 24
@@ -428,7 +428,6 @@ def _now() -> int:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
-from .appteam import _mod  # noqa: E402
-from .core import PERSON, log_action  # noqa: E402
+from .account import me  # noqa: E402
+from .oversight import _mod  # noqa: E402
 from .seats import notify  # noqa: E402
-from .shapes import course_of, person_ref, short_name  # noqa: E402

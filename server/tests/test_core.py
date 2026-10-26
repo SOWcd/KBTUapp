@@ -46,7 +46,7 @@ def env(tmp_path, monkeypatch):
     (dist / "map" / "u1" / "o.webp").write_bytes(b"RIFF")
     cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=str(tmp_path / "t.db"), web_dist=str(dist), background=False, seed=False)
 
-    monkeypatch.setattr(logic.awards, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
     DB[:] = [cfg.db_path]
     client = TestClient(server.create(cfg))
@@ -1521,7 +1521,7 @@ def test_first_fifty(env, monkeypatch):
     the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
     stays empty, never given again: a return gets a new one."""
     c, cfg = env
-    monkeypatch.setattr(logic.awards, "FIRST_N", 2)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 2)
     con = db.connect(cfg.db_path)
     c.get("/api/me", headers=tma(69, "Boss"))
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 69")
@@ -1538,7 +1538,7 @@ def test_first_fifty(env, monkeypatch):
     assert c.get(f"/api/users/{b['id']}", headers=tma(72, "Cc")).json()["no"] == 2
     assert c.get("/api/me", headers=tma(73, "Guest")).json()["no"] is None
     # migration 36: a card within the 500 that missed the award gets it quietly; then everyone has it = 100%
-    monkeypatch.setattr(logic.awards, "FIRST_N", 500)
+    monkeypatch.setattr(logic.profiles, "FIRST_N", 500)
     con.execute("DELETE FROM achievement_grants WHERE user_id = ?", (cc["id"],))
     con.execute("DELETE FROM achievement_levels WHERE user_id = ?", (cc["id"],))
     con.executescript(dict(db.MIGRATIONS)[36])
@@ -1770,10 +1770,10 @@ def test_club_applications(env, monkeypatch):
     assert c.get("/api/admin/club-applications", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
     real = logic.set_role
-    monkeypatch.setattr(logic.appteam, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(logic.oversight, "set_role", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     with pytest.raises(RuntimeError):
         c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True})
-    monkeypatch.setattr(logic.appteam, "set_role", real)
+    monkeypatch.setattr(logic.oversight, "set_role", real)
     assert not con.execute("SELECT 1 FROM orgs WHERE name = 'Chess Club'").fetchone()
     assert c.get("/api/club-applications/mine", headers=A).json()["application"]["status"] == "pending"
     done = c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True}).json()
@@ -3829,7 +3829,7 @@ def test_profile_privacy(env, monkeypatch):
     assert "limited" not in full(14)                                                                   # an admin sees it all, uncounted
     assert c.get("/api/users/999999", headers=tma(13)).status_code == 404                             # nobody there: not counted
     assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(dan, ann)]  # only the stranger counts
-    monkeypatch.setattr(logic.awards, "PROFILES_A_DAY", 2)
+    monkeypatch.setattr(logic.profiles, "PROFILES_A_DAY", 2)
     assert c.get(f"/api/users/{ann}", headers=tma(13)).status_code == 200                              # the same one again: free
     assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
     assert c.get(f"/api/users/{cat}", headers=tma(13)).json()["error"] == "rate_limited"

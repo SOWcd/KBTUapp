@@ -7,8 +7,9 @@ import sqlite3
 
 from ..db import tx
 
-from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, at_least,
-    log_action, need_student, one, role_in, rows)
+from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
+    _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
+    person_ref, role_in, rows, taken)
 
 
 # ---------------------------------------------------------------- Studio (own org)
@@ -837,12 +838,9 @@ def link_door_guests(con, uid: int) -> None:
 # when a function runs
 from . import core  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
-from .awards import _came  # noqa: E402
-from .clubs import org, people  # noqa: E402
-from .memos import _memo  # noqa: E402
-from .orgnames import _keep_name  # noqa: E402
+from .clubs import _keep_name, org, people  # noqa: E402
+from .daily import _memo  # noqa: E402
+from .profiles import _came  # noqa: E402
+from .queues import _video  # noqa: E402
 from .seats import _event, _remind, _ticket_code, end_of, notify, promote, unregister  # noqa: E402
-from .shapes import (_door_ref, _may, _org, _qs, can, card, cards, friend_ids, full, media_shape, org_ref, person_ref,
-    taken)  # noqa: E402
 from .teams import dept_of, team  # noqa: E402
-from .videos import _video  # noqa: E402

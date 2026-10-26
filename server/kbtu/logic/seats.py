@@ -11,7 +11,8 @@ import time
 from .. import receipt, texts
 from ..db import tx
 
-from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, at_least, log_action, need_student, one, rows)
+from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
+    friend_ids, full, log_action, need_student, one, person_ref, rows, taken)
 
 
 # ------------------------------------------------------------ volunteers (owner, Oct 15)
@@ -537,5 +538,4 @@ def tickets(con, v: Viewer) -> list[dict]:
 from . import core  # noqa: E402
 from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
-from .shapes import _free_seat, _roles, can, card, cards, friend_ids, full, person_ref, taken  # noqa: E402
 from .teams import team  # noqa: E402

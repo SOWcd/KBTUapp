@@ -6,7 +6,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import ApiError, Viewer, log_action, need_student, one, rows
+from .core import (ApiError, Viewer, _org, _qs, can, card, log_action, need_student, one, org_ref, photo, rows)
 
 
 # ---------------------------------------------------------------- the chats directory (§4.11)
@@ -390,5 +390,4 @@ def photo_free(con, path: str) -> bool:
 from . import core  # noqa: E402
 from .clubs import orgs  # noqa: E402
 from .seats import notify  # noqa: E402
-from .shapes import _org, _qs, can, card, org_ref, photo  # noqa: E402
 from .teams import invite  # noqa: E402
