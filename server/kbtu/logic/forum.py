@@ -33,12 +33,12 @@ def norm_skill(raw: object) -> str | None:
     return s if s and len(s) <= NAME_MAX and re.search(r"[^\W_]", s) else None
 
 
-def _people(con, sid: int) -> int:
+def _holders(con, sid: int) -> int:
     return one(con, "SELECT COUNT(*) FROM user_skills WHERE skill_id = ?", sid)[0]
 
 
 def _skill(con, s) -> dict:
-    n = _people(con, s["id"])
+    n = _holders(con, s["id"])
     return {"id": s["id"], "name": s["name"], "people": n, "public": bool(s["approved"]) or n >= PUBLIC_AT}
 
 

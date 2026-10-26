@@ -10,7 +10,7 @@ from pathlib import Path
 server = Path(sys.argv[1])
 pkg = server / "kbtu" / "logic"
 init = (pkg / "__init__.py").read_text()
-order = re.findall(r"^from \.(\w+) import", init, re.M)
+order = list(dict.fromkeys(re.findall(r"^from \.(\w+) import", init, re.M)))  # a module imported twice is one module
 doc = ast.get_docstring(ast.parse(init)).split("\n\nSplit by domain")[0]
 PATCHED = r"\b(?:" + "|".join(order) + r")\.(now|FIRST_N|PROFILES_A_DAY|REPORTS_A_DAY|set_role|ICS_KEY)\b"
 imports, bodies = {}, []
