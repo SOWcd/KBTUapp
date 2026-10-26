@@ -87,8 +87,8 @@ export function roomOf(place: string | null | undefined): string | null {
   if (b) return normRoom(b[1]);
   return /\d/.test(p) ? null : HALLS.find(([re]) => re.test(p))?.[1] ?? null;
 }
-/** Its floor: the room's first digit (or a named place's floor) ("305" → 3), 0 for the basement's 1-99; 7xx is Independence Hall's wing on floor 2
- * . Compare with null: 0 is a floor. */
+/** Its floor: the room's first digit (or a named place's floor) ("305" → 3), 0 for the basement's 1-99; 7xx is
+ *  Independence Hall's wing on floor 2. Compare with null: 0 is a floor. */
 export function floorOf(place: string | null | undefined): number | null {
   const r = roomOf(place);
   if (r == null) return place && spotOf(place)?.k === 'indep' ? 2 : null; // the schedule's Independence Hall; not any "Halyk" or "canteen" (an arena, a home)

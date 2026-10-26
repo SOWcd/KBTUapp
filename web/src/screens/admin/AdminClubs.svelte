@@ -44,7 +44,7 @@
 
   // ---- a new club ----
   let adding = $state(false);
-  // a club (schools come from KBTU's site, never by hand; owner, Oct 14)
+  // a club (schools come from KBTU's site, never by hand)
   let nc = $state({ name: '', emoji: PICK_EMOJI[1], official: false });
   async function create(ev: Event) {
     ev.preventDefault();

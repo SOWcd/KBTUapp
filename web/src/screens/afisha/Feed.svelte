@@ -58,7 +58,7 @@
     return { update: set };
   }
 
-  // our bot's card with a button, as from the event sheet (never a bare link; owner, Oct 4)
+  // our bot's card with a button, as from the event sheet (never a bare link)
   function share(id: number, title: string) {
     haptic.tap();
     shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, title)

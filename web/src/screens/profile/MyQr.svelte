@@ -2,7 +2,7 @@
   // My QR — the back of my badge. Opens over a blurred scrim like the ticket, follows the phone's tilt and
   // leans toward a pressing finger. The code holds only a link into the app (my profile; the friend invite
   // takes its place once friends exist, SPEC §4.7), in the brand gradient with the app's mark in the middle
-  // (the face is once, on top; owner, Oct 4) — big enough for any phone camera across a table. Back, a tap
+  // (the face is once, on top) — big enough for any phone camera across a table. Back, a tap
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';

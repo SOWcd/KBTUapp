@@ -111,7 +111,7 @@
 
 <style>
   .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; }
-  /* the word sits clear of the clip (it hid behind it at the bottom; owner, Oct 4) */
+  /* the word sits clear of the clip (it hid behind it at the bottom) */
   .strap { width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }

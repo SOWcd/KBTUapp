@@ -1,8 +1,8 @@
 <script lang="ts">
   // Tab 2 → Studio (Head+) or Club (Member): "To do" on top only when something waits (new applications, the memo on
   // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
-  // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state
-  //. Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
+  // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state.
+  // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
   // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
   // mark by its name, the next event with how full it is, the actions as tiles. "Link a channel" waits for its backend.
   import Plus from '@lucide/svelte/icons/plus';

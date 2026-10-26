@@ -106,7 +106,7 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
 # ---------------------------------------------------------------- Team 2.0 (SPEC §2b)
 # A club's own roles are a name and colour on one of the levels, so every rights check stays on the level. Tags are
 # groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off
-# (the strikes that came with it went on Oct 22; never used, owner). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
+# (the strikes that came with it went on Oct 22; never used). A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
 
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 
@@ -241,8 +241,8 @@ def delete_tag(con, v: Viewer, oid: int, tid: int) -> dict:
 
 def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
-    level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights; owner,
-    Oct 12); `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power; owner, Oct 12, the
+    level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights);
+    `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power, the
     President and the Vice tag each other; departments in it are left as they are); `dept` — the department (a tag
     marked so) or null for none (PLAN 47): Vice+ on anyone; a Head on those below them, only into or out of the Head's
     own department, never their own; `probation` — Head+ put someone

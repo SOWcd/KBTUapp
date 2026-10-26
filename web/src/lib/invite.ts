@@ -1,5 +1,5 @@
 // The club's invite (§4.5): a fresh one-time link per share (one person, 48 h), so a page view makes none; sent as our
-// bot's card in the chat (a line and a button, no bare link; owner, Oct 4), the plain link only on old Telegram.
+// bot's card in the chat (a line and a button, no bare link), the plain link only on old Telegram.
 // Team's header and Studio's actions both share it.
 import { api } from './api';
 import { t } from './i18n/index.svelte';

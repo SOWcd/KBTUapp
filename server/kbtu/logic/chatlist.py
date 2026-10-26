@@ -24,7 +24,7 @@ def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
 def chats(con, v: Viewer) -> dict:
     """Curated Telegram chats (§4.11), the biggest first (A8); "for you" are the ones aimed at my school and
     course plus those for everyone (my school and course first, by size within); a club's or school's chat says whose
-    (PLAN 86; the app no longer ticks the ones I opened; the owner didn't understand it, Oct 22)."""
+    (PLAN 86; the app no longer ticks the ones I opened; the owner didn't understand it)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)

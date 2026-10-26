@@ -402,7 +402,7 @@
   }
 
   // a computer: a sheet that the app is made for phones, with a code for the phone, until "continue on the computer"
-  // (never forbid; Oct 13: warn properly, not a toast)
+  // (never forbid; warn properly, not a toast)
   function computerHint() {
     try { if (!onComputer || localStorage.getItem('kb-pc2')) return; } catch { return; }
     sheets.pc(() => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } });

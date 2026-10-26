@@ -405,7 +405,7 @@ def receipt_open(con, v: Viewer, eid: int) -> None:
 def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, sqlite3.Row | None]:
     """Where a receipt goes: (registration, event, the receipt it replaces). A seat on hold takes one; a ticket takes
     another file in place of its receipt while the organizer hasn't looked at it and the event isn't over (the app
-    says when a receipt looks wrong; owner, Oct 11, "upload another?")."""
+    says when a receipt looks wrong, "upload another?")."""
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('hold', 'going')", eid, v.id)
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     old = None

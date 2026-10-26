@@ -74,7 +74,7 @@ def claims(token: str) -> dict:
 
 async def identity(token: str) -> dict | None:
     """Who the token is for ({"refused": why} for a token of the wrong kind), when Graph accepts it, it was issued to our app in KBTU's directory, and it is a KBTU
-    member with a @kbtu.kz address (a guest in KBTU's directory carries its own outside address; review, Oct 19)"""
+    member with a @kbtu.kz address (a guest in KBTU's directory carries its own outside address)"""
     try:
         async with httpx.AsyncClient(timeout=15) as http:
             r = await http.get("https://graph.microsoft.com/v1.0/me", headers={"authorization": f"Bearer {token}"},

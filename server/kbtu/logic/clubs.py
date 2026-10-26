@@ -290,7 +290,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
 
 
 def club_applications(con, v: Viewer) -> list[dict]:
-    """The check (the admin; clubs are his, owner Oct 22): pending first, then the last decisions."""
+    """The check (the admin; clubs are his): pending first, then the last decisions."""
     _admin(v)
     return [_club_app(con, a, True) for a in rows(con, """SELECT * FROM club_applications ORDER BY status = 'pending' DESC,
         COALESCE(decided_at, created_at) DESC LIMIT 40""")]
