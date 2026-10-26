@@ -328,13 +328,14 @@ def delete_info(con, v: Viewer) -> dict:
 
 
 CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
+CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
 
 
-def consent(con, v: Viewer, version: object) -> dict:
+def consent(con, v: Viewer, version: object, now: str = CONSENT) -> dict:
     """The privacy policy changed (H2, Oct 22: what a deletion keeps): a student agrees again once; staff and students
     added by hand keep their marks."""
     need_student(v)
-    if version != CONSENT:
+    if version != now:
         raise ApiError("bad_input")
     con.execute("UPDATE students SET consent_version = ?, consent_at = ? WHERE user_id = ? AND consent_version NOT IN ('staff', 'admin')",
                 (version, core.now(), v.id))
@@ -444,7 +445,9 @@ _DEL_GONE = {
     ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
     ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
-    ("takedowns", "user_id"), ("org_history", "user_id"),  # last: org_members' trigger writes it
+    ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
+    ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
+    ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
 

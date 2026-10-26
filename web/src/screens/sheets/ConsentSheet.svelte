@@ -1,6 +1,7 @@
 <script lang="ts">
   // The privacy policy changed (H2, Oct 22: what a deleted account keeps without the name): every student agrees once
-  // more (lib/legal.ts). Closing it asks again at the next open; deleting the account is the other way out.
+  // more (lib/legal.ts); with the forum on, its part of the policy (v4). Closing it asks again at the next open;
+  // deleting the account is the other way out.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -17,7 +18,7 @@
   async function agree() {
     if (busy) return;
     busy = true;
-    try { session.me = await api.consent(CONSENT_VERSION); haptic.ok(); close(overlay.id); }
+    try { session.me = await api.consent(session.policy); haptic.ok(); close(overlay.id); }
     catch { haptic.error(); } finally { busy = false; }
   }
 </script>
@@ -25,7 +26,7 @@
 <Sheet {overlay} title={t('consent.title')} icon={ShieldCheck}>
   <div class="wrap">
     <h2 class="t-h2">{t('consent.title')}</h2>
-    <p class="t-callout">{t('consent.text')}</p>
+    <p class="t-callout">{t(session.policy === CONSENT_VERSION ? 'consent.text' : 'consent.textForum')}</p>
     <button class="lnk t-callout" onclick={() => { haptic.tap(); openLink(`${location.origin}/privacy?lang=${i18n.lang}`); }}>{t('login.consentLink')}</button>
   </div>
   {#snippet footer()}

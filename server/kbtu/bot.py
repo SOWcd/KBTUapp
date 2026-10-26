@@ -92,8 +92,9 @@ async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Respo
     return await _tg(cfg, http, "sendMessage", body)
 
 
-def _render(con, m) -> tuple[str, str | None, str] | None:
-    """(text, button, startapp) for one outbox row, or None when what it was about is gone."""
+def _render(con, m) -> tuple[str, str | None, str | list] | None:
+    """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
+    is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
@@ -113,6 +114,36 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             f[k + "tg"] = "@" + p["tg_username"] if p["tg_username"] else p["tg_first_name"]
             f[k + "id"] = p["tg_id"]
         return (*texts.bot_message(lang, kind, sid=ref[1], **f), "")
+    if kind == "ask_match":  # am:<request>: a project request for my skills; quiet once it's gone or my pings are off
+        a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
+        if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
+            return None
+        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
+            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
+        text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "", title=a["title"])
+        return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
+    if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
+        p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
+        if not p:
+            return None
+        a = one(con, "SELECT title FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
+        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
+        text = texts.bot_message(lang, "contact_ask" if a else "contact_ask_plain", name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        yes, no = texts.bot_message(lang, "contact_buttons")
+        return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
+    if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
+        c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted'", int(ref[1]))
+        other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
+        p = other and one(con, logic.PERSON + " WHERE u.id = ?", other)
+        if not p:
+            return None
+        text, button = texts.bot_message(lang, kind, name=logic.short_name(p))
+        return text, None, [[{"text": button, "url": logic.telegram_of(con, other)}]]
+    if kind == "ask_hidden":  # ah:<request>, to its author: why it's gone from the lists
+        a = one(con, "SELECT title, why FROM asks WHERE id = ? AND status = 'hidden'", int(ref[1]))
+        why = texts.pick(texts.ASK_WHY, lang).get(a["why"] or "") if a else None
+        return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"fa_{ref[1]}") if why else None
     if kind == "backup_failed":  # bf:<day>, to the admins: no copy reached R2 last night nor the night before
         return (*texts.bot_message(lang, kind), "")
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
@@ -547,7 +578,10 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 continue
             text, button, start = msg
             body = {"chat_id": m["tg_id"], "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
-            if button:
+            if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
+                body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
+                                                             if "start" in b else b for b in row] for row in start]}
+            elif button:
                 body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
             try:
                 r = await _send(cfg, http, body)
@@ -807,9 +841,22 @@ async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, o
 
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:), "whose channel" for a
-    chat (oc:). The question turns into the answer; someone else's tap does nothing."""
+    chat (oc:); and on the forum's cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
+    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?", data):  # the forum's cards: Accept/Decline an offer, stop the pings
+        u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if not u or not msg:
+            return
+        if f[1] == "ps":
+            con.execute("UPDATE users SET ask_pings = 0 WHERE id = ?", (u["id"],))
+            said = "ask_stopped"
+        else:
+            st = logic.decide_contact(con, u["id"], int(f[2]), f[3] == "y")
+            said = {"accepted": "contact_yes", "declined": "contact_no"}.get(st or "", "contact_gone")
+        await _tg(cfg, http, "editMessageText", {"chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "parse_mode": "HTML",
+                                                 "text": texts.bot_message(u["lang"], said)[0], "reply_markup": {"inline_keyboard": []}})
+        return
     orig = msg.get("reply_to_message") or {}
     m = re.fullmatch(r"(rc|oc):(\d+)", data)
     if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):

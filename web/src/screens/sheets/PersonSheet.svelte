@@ -177,6 +177,11 @@
       </div>
     {/if}
 
+    {#if p.forum?.skills.length}
+      <h3 class="sec">{t('fo.skillsOf')}</h3>
+      <div class="skills">{#each p.forum.skills as s (s.id)}<span class="chip">{s.name}</span>{/each}{#if p.forum.open}<span class="chip open">{t('fo.open')}</span>{/if}</div>
+    {/if}
+
     {#if !me && session.me?.student}
       <!-- a nick, an own photo or "about me" that shouldn't be there (owner, Oct 5): to the admin's queue -->
       <div class="rep">
@@ -205,6 +210,9 @@
   .rep { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; text-align: center; }
   .friends { text-align: center; color: var(--text-2); }
   /* section titles in the type scale of mockup v24 (sentence case, not the old caps caption) */
+  .skills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .skills .chip { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2); font: 600 13px/1 var(--font-text); }
+  .skills .open { background: var(--success-soft); color: var(--success-text); }
   .sec { margin: 26px 2px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; text-transform: none; color: var(--text); }
   .clubs { display: flex; flex-wrap: wrap; gap: 6px; }
   .club { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: var(--r-full); background: var(--surface-2); }

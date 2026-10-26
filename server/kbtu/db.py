@@ -620,6 +620,82 @@ MIGRATIONS: list[tuple[int, str]] = [
         at        INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX takedowns_by_target ON takedowns(target, target_id);"""),
+    # F1 find people (forum, PLAN): a shared skills catalog, requests, contact by double opt-in, blocks, pings
+    (76, """CREATE TABLE skills (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,                  -- normalised: lowercase, single spaces
+        approved   INTEGER NOT NULL DEFAULT 0,            -- a moderator's yes; else public at 3 people (forum.PUBLIC_AT)
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        used_at    INTEGER NOT NULL                       -- last added to someone or a request: unused 30 days, out of suggestions
+    ) STRICT;
+    CREATE TABLE user_skills (
+        user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, skill_id)
+    ) STRICT;
+    CREATE INDEX user_skills_by_skill ON user_skills(skill_id);
+    CREATE TABLE asks (
+        id         INTEGER PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL CHECK (kind IN ('project', 'help')),
+        title      TEXT NOT NULL,
+        body       TEXT NOT NULL DEFAULT '',
+        status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'closed')),
+        why        TEXT,                                  -- held / hidden: what the author is told
+        found      INTEGER,                               -- closed: found someone through the app (1), elsewhere (0)
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX asks_live ON asks(status, expires_at);
+    CREATE TABLE ask_skills (
+        ask_id   INTEGER NOT NULL REFERENCES asks(id) ON DELETE CASCADE,
+        skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        PRIMARY KEY (ask_id, skill_id)
+    ) STRICT;
+    CREATE TABLE contacts (                               -- "I can help" / "write to them": nothing shared until accepted
+        id         INTEGER PRIMARY KEY,
+        from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ask_id     INTEGER REFERENCES asks(id) ON DELETE CASCADE,
+        status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+        created_at INTEGER NOT NULL,
+        decided_at INTEGER
+    ) STRICT;
+    CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0));
+    CREATE TABLE blocks (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, blocked_id)
+    ) STRICT;
+    CREATE TABLE ask_pings (
+        ask_id  INTEGER NOT NULL REFERENCES asks(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        at      INTEGER NOT NULL,
+        PRIMARY KEY (ask_id, user_id)
+    ) STRICT;
+    CREATE INDEX ask_pings_by_user ON ask_pings(user_id, at);
+    ALTER TABLE users ADD COLUMN open_projects INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN ask_pings INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE reports3 (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    ) STRICT;
+    INSERT INTO reports3 SELECT id, reporter_id, target, target_id, reason, note, status, created_at, resolved_by, resolved_at FROM reports;
+    DROP TABLE reports;
+    ALTER TABLE reports3 RENAME TO reports;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
+    INSERT INTO skills (name, approved, created_at, used_at) SELECT value, 1, CAST(strftime('%s', 'now') AS INTEGER),
+        CAST(strftime('%s', 'now') AS INTEGER) FROM json_each('["ios", "android", "web", "backend", "ml", "data", "ui design", "graphic design", "3d", "photo", "video", "editing", "texts", "translation", "smm", "music", "events"]');"""),
 ]
 
 

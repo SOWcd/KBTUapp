@@ -24,7 +24,7 @@ from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _ics_text, _rec
 from .translation import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note,
     ai_failed, ai_next, ai_note, ai_save, ai_state)  # noqa: F401
 from .videos import (_video, my_video, new_video, next_video, stale_videos, video_done, video_shape, video_uploaded)  # noqa: F401
-from .account import (CONSENT, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE, _DEL_KEEP,
+from .account import (CONSENT, CONSENT_FORUM, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE, _DEL_KEEP,
     _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log, _qr_code,
     _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me, deletion_hash,
     dm_on, drop_my_photo, id_clash, keep_me, me, ms_apply, ms_link, ms_pending, ms_remember, ms_sweep, roster_requests,
@@ -72,4 +72,7 @@ from .orgnames import (KBTU, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, RESERVED, SC
 from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, _ask_removal, _below, _manage, _named, _ordered,
     _remove, accept_invite, banned, decide_removal, delete_role, delete_tag, dept_of, invite, map_graph,
     president_link, remove, remove_member, save_role, save_tag, team, team_setup, transfer, unban, update_member)  # noqa: F401
+from .forum import (CONTACTS_A_DAY, OPEN_ASKS, PING_DAY, PING_TOP, PING_WEEK, PUBLIC_AT, add_skill, ask_people, asks, block,  # noqa: F401
+    close_ask, contact, contacts, create_ask, decide_contact, forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough,
+    search_people, set_my_forum, skill_lookup, skill_mod, skills, telegram_of)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

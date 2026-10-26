@@ -32,7 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, bot, casting, config, db, logic, media, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, casting, config, db, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -136,6 +136,18 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
 Me = Annotated[Viewer, Depends(viewer)]
 
 
+def forum_viewer(request: Request, v: Me) -> Viewer:
+    """The forum (logic/forum.py) is the app's staff's only, behind FORUM=1, while it's tried out."""
+    if not request.app.state.cfg.forum:
+        raise ApiError("not_found")
+    if v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+    return v
+
+
+Forum = Annotated[Viewer, Depends(forum_viewer)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     def after(con) -> None:
@@ -182,9 +194,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
+    # the policy version in force: its forum part counts only with the forum on (legal_page shows it then)
+    policy = logic.CONSENT_FORUM if cfg.forum else logic.CONSENT
+
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v)
+        return logic.me(con, v) | {"consentNow": policy}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -201,7 +216,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/consent")
     def consent(con: Con, v: Me, body: dict = Body(...)):
-        return logic.consent(con, v, body.get("version"))
+        return logic.consent(con, v, body.get("version"), policy)
 
     @app.post("/api/me/dm")
     def dm_on(con: Con, v: Me, body: dict | None = Body(None)):
@@ -251,7 +266,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         names = [(" ".join(str((ms or {}).get(m) or "").split())[:40], " ".join(str(body.get(k) or "").split()))
                  for m, k in (("first", "firstName"), ("last", "lastName"))]
         first, last = (mine or typed for mine, typed in names)
-        if consent != logic.CONSENT:
+        if consent != policy:
             raise ApiError("bad_input", "consent")  # an app opened before the policy changed: it says to reopen
         if not (all(mine or NAME.fullmatch(typed) for mine, typed in names) and STUDENT_ID.fullmatch(sid)
                 and isinstance(course, int) and not isinstance(course, bool) and 1 <= course <= 6):
@@ -520,7 +535,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/users/{uid}")
     def person(uid: int, con: Con, v: Me):
-        return logic.person(con, v, uid)
+        out = logic.person(con, v, uid)
+        if cfg.forum and v.role in ("admin", "moderator"):  # the forum's skills, where its people can see them
+            out["forum"] = logic.my_forum(con, logic.Viewer(uid, "user", True))
+        return out
 
     # ------------------------------------------------------------ Studio
 
@@ -953,8 +971,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.delete_comment(con, v, cid)
 
     @app.post("/api/reports", status_code=204)
-    def report(con: Con, v: Me, body: dict = Body(...)):
+    async def report(con: Con, v: Me, body: dict = Body(...)):
         logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
+        # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
+        if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
+            a = logic.one(con, "SELECT title, body FROM asks WHERE id = ?", body["id"])
+            if a and await screen(f"{a['title']}\n{a['body']}") is False:
+                logic.hide_ask(con, body["id"], "reports")
 
     @app.get("/api/admin/taken-down")
     def taken_down(con: Con, v: Me):
@@ -1273,6 +1296,90 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("unavailable", "telegram")
         return {"id": r["result"]["id"]}
 
+    # ------------------------------------------------------------ the forum: F1 find people (logic/forum.py)
+
+    async def screen(text: str) -> bool | None:
+        async with httpx.AsyncClient() as http:
+            return await ai.screen(http, cfg.munito_key, text)
+
+    @app.get("/api/forum/me")
+    def forum_me(con: Con, v: Forum):
+        return logic.my_forum(con, v)
+
+    @app.put("/api/forum/me")
+    def forum_set_me(con: Con, v: Forum, body: dict = Body(...)):
+        return logic.set_my_forum(con, v, body)
+
+    @app.get("/api/forum/skills")
+    def forum_skills(con: Con, v: Forum, q: str = ""):
+        return logic.skills(con, v, q[:40])
+
+    @app.post("/api/forum/skills")
+    async def forum_new_skill(con: Con, v: Forum, body: dict = Body(...)):
+        """A skill by name: the one there is, close ones to pick ({didYouMean}), or a new one if the AI doesn't object
+        (no answer: it's made, and stays the maker's own until three people have it or a moderator approves)."""
+        found = logic.skill_lookup(con, v, body.get("name"), body.get("force") is True)
+        if "name" not in found:
+            return found
+        if await screen(found["name"]) is False:
+            raise ApiError("bad_input", "ai")
+        return {"skill": logic.add_skill(con, v, found["name"])}
+
+    @app.patch("/api/forum/skills/{sid}")
+    def forum_skill_mod(sid: int, con: Con, v: Forum, body: dict = Body(...)):
+        return logic.skill_mod(con, v, sid, body)
+
+    @app.get("/api/forum/asks")
+    def forum_asks(con: Con, v: Forum, skill: int | None = None):
+        return logic.asks(con, v, skill)
+
+    @app.post("/api/forum/asks")
+    async def forum_new_ask(con: Con, v: Forum, body: dict = Body(...)):
+        verdict = await screen(f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
+        return logic.create_ask(con, v, body, verdict)
+
+    @app.post("/api/forum/asks/{aid}/close")
+    def forum_close_ask(aid: int, con: Con, v: Forum, body: dict = Body(default={})):
+        return logic.close_ask(con, v, aid, body.get("found"))
+
+    @app.get("/api/forum/mod")
+    def forum_mod(con: Con, v: Forum):
+        return logic.mod_queue(con, v)
+
+    @app.post("/api/forum/asks/{aid}/hide", status_code=204)
+    def forum_hide_ask(aid: int, con: Con, v: Forum):
+        logic.mod_hide_ask(con, v, aid)
+
+    @app.post("/api/forum/asks/{aid}/release")
+    def forum_release_ask(aid: int, con: Con, v: Forum):
+        return logic.release_ask(con, v, aid)
+
+    @app.get("/api/forum/asks/{aid}/people")
+    def forum_ask_people(aid: int, con: Con, v: Forum):
+        return logic.ask_people(con, v, aid)
+
+    @app.get("/api/forum/people")
+    def forum_people(con: Con, v: Forum, skill: int | None = None, q: str = ""):
+        return logic.search_people(con, v, skill, q[:40])
+
+    @app.get("/api/forum/contacts")
+    def forum_contacts(con: Con, v: Forum):
+        return logic.contacts(con, v)
+
+    @app.post("/api/forum/contacts")
+    def forum_contact(con: Con, v: Forum, body: dict = Body(...)):
+        return logic.contact(con, v, body.get("to"), body.get("ask"))
+
+    @app.post("/api/forum/contacts/{cid}")
+    def forum_decide_contact(cid: int, con: Con, v: Forum, body: dict = Body(...)):
+        if not isinstance(body.get("yes"), bool) or not logic.decide_contact(con, v.id, cid, body["yes"]):
+            raise ApiError("not_found")
+        return logic.contacts(con, v)
+
+    @app.post("/api/forum/blocks", status_code=204)
+    def forum_block(con: Con, v: Forum, body: dict = Body(...)):
+        logic.block(con, v, body.get("user"), body.get("on", True))
+
     # ------------------------------------------------------------ the frontend
 
     @app.get("/healthz")
@@ -1309,6 +1416,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
+        off = "noforum" if cfg.forum else "forum"  # the forum's part (and its version line) only with the forum on
+        body = re.sub(r"<!--/?(?:no)?forum-->\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
         other = "terms" if doc == "privacy" else "privacy"
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
