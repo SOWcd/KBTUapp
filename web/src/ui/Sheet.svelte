@@ -101,18 +101,24 @@
     currentY = 0;
   }
 
+  // keyboard and screen readers: focus goes into the sheet as it opens (unless a field in it took it) and back to what
+  // opened it when it goes (never to a text field: that would bring the keyboard up)
   onMount(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    const back = () => { if (opener?.isConnected && !opener.matches('input, textarea, [contenteditable]')) opener.focus({ preventScroll: true }); };
     panel.addEventListener('touchstart', onStart, { passive: true });
     panel.addEventListener('touchmove', onMove, { passive: false });
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
     panel.addEventListener('focusin', focusin);
-    return hideChrome();
+    const chrome = hideChrome();
+    return () => { chrome(); back(); };
   });
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" style={tint ? `--tint:${tint}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
@@ -132,6 +138,7 @@
     will-change: transform;
   }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
+  .sheet:focus { outline: none; }
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .full::before, .full::after { display: none; }
   .full .body { padding-top: var(--page-top); }
