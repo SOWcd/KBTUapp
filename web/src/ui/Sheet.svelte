@@ -29,9 +29,26 @@
   let body: HTMLDivElement;
   let gone = false;
 
+  // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
+  // put its top edge higher in one frame (details arriving after it opened: a person's card, a club); instead an added
+  // offset holds the top edge where it was and lets it glide to its new place (FLIP), mid-rise or after. Its own
+  // property (translate, added on), so the rise runs on untouched; the rise in pixels: a percentage of the height
+  // would jump with it.
+  let lift: Animation | null = null, height = 0;
+  const root = getComputedStyle(document.documentElement), slow = root.getPropertyValue('--t-slow').trim();
+  const RISE = (parseFloat(slow) || 0.38) * (slow.endsWith('ms') ? 1 : 1000), SPRING = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
+  const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : RISE, easing: SPRING });
+  function resized() {
+    const h = panel.getBoundingClientRect().height, dh = h - height;
+    height = h;
+    if (Math.abs(dh) < 2 || gone || dragging || currentY) return;
+    panel.animate([{ translate: `0 ${dh}px` }, { translate: '0 0' }], { ...motion(), composite: 'add' });
+  }
+
   function leave(fromY = 0) {
     if (gone) return;
     gone = true;
+    lift?.cancel();
     const h = panel.getBoundingClientRect().height;
     const a = panel.animate([{ transform: `translate3d(0,${fromY}px,0)` }, { transform: `translate3d(0,${h + 40}px,0)` }],
       { duration: 260, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
@@ -102,12 +119,17 @@
   }
 
   onMount(() => {
+    height = panel.getBoundingClientRect().height;
+    lift = panel.animate([{ transform: `translate3d(0,${height}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion());
+    const ro = new ResizeObserver(resized);
+    ro.observe(panel);
     panel.addEventListener('touchstart', onStart, { passive: true });
     panel.addEventListener('touchmove', onMove, { passive: false });
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
     panel.addEventListener('focusin', focusin);
-    return hideChrome();
+    const chrome = hideChrome();
+    return () => { ro.disconnect(); chrome(); };
   });
 </script>
 
@@ -128,7 +150,6 @@
     max-width: 560px; margin: 0 auto; max-height: calc(100% - max(var(--top), 48px) - 10px);
     display: flex; flex-direction: column; overflow: hidden;
     border-radius: var(--r-xl) var(--r-xl) 0 0;
-    animation: rise var(--t-slow) var(--ease-spring) both;
     will-change: transform;
   }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
@@ -151,6 +172,5 @@
     border-top: 1px solid var(--line);
   }
   .hasfoot .body { padding-bottom: var(--s-4); }
-  @keyframes rise { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
   @keyframes fade { from { opacity: 0; } }
 </style>

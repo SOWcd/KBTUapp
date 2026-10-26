@@ -18,7 +18,7 @@ export function fly(from: Element | null | undefined, to: HTMLElement, focus?: [
   // where the header rests: the sheet's rise has only begun, so take its current lift off
   const aim = () => {
     const tf = getComputedStyle(panel).transform;
-    const lift = tf === 'none' ? 0 : new DOMMatrix(tf).m42;
+    const lift = (tf === 'none' ? 0 : new DOMMatrix(tf).m42) + (parseFloat(getComputedStyle(panel).translate.split(' ')[1]) || 0); // + a growing sheet's glide (Sheet)
     const b = to.getBoundingClientRect(), W = b.width, H = b.height, top = b.top - lift;
     // the poster's shape inside the header: same aspect, as large as fits, placed by the focus
     const sw = a.width / a.height < W / H ? H * a.width / a.height : W, sh = sw * a.height / a.width;
