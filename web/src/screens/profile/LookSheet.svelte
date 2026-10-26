@@ -97,7 +97,7 @@
   {/if}
 
   <h3 class="t-cap cap">{t('look.nick')}</h3>
-  <label class="field nick"><input bind:value={nick} maxlength="24" placeholder={t('look.nickPh')} enterkeyhint="done" autocomplete="off"
+  <label class="field nick"><input bind:value={nick} maxlength="24" aria-label={t('look.nick')} placeholder={t('look.nickPh')} enterkeyhint="done" autocomplete="off"
     onkeydown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); void saveNick(); } }} />
     {#if me.nick}<button class="x" onclick={clearNick} disabled={!!busy} aria-label={t('look.dropNick')}><X size={16} /></button>{/if}</label>
   <p class="t-foot hint">{t('look.nickHint', { name: real })}</p>
