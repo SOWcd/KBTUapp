@@ -19,13 +19,27 @@ SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents
 def ms_link(con, uid: int, who: dict) -> None:
     """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
     names over typed ones (review, Oct 19: otherwise "confirmed" proved nothing about who it is); the old portal's
-    names stay (they came from KBTU already)"""
+    names stay (they came from KBTU already). Whoever's invite link brought them now counts it (awards.brought)."""
+    by = one(con, """SELECT u.referred_by FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 1 WHERE u.id = ?""", uid)
+    before = _levels(con, by[0]) if by and by[0] else None
     con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?, ms_profile = ?,
         first_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), first_name) ELSE first_name END,
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], core.now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
     link_door_guests(con, uid)
+    if before is not None:
+        _celebrate(con, by[0], before)
+
+
+def refer(con, v: Viewer, code: object) -> None:
+    """Opened by someone's invite link (r_<their badge code>, never a user ID): the first link wins, and only before I
+    signed in with KBTU; it counts for them once I have (ms_link)."""
+    if not isinstance(code, str) or not re.fullmatch(r"[A-Z2-7]{10}", code):
+        raise ApiError("bad_input")
+    by = one(con, "SELECT id FROM users WHERE qr_code = ? AND id != ?", code, v.id)
+    if by and not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
+        con.execute("UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL", (by["id"], v.id))
 
 
 def ms_remember(con, uid: int, who: dict) -> None:
@@ -112,6 +126,7 @@ def me(con, v: Viewer) -> dict:
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
+        "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id)} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -513,7 +528,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         avatars = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind = 'avatar' AND owner_id = ?", v.id)]
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0,
+            skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
@@ -569,3 +584,4 @@ from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .seats import _remind, _ticket_code, notify, promote, tickets  # noqa: E402
 from .shapes import _rights_from, avatar_of, clean_nick, org_ref, person_ref, shown_name  # noqa: E402
 from .teams import _ordered  # noqa: E402
+from .awards import _celebrate, _levels, brought  # noqa: E402

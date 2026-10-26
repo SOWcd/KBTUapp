@@ -233,6 +233,7 @@ export const server: Api = {
   releaseAsk: (id) => call('POST', `/forum/asks/${id}/release`),
   hideAsk: (id) => call('POST', `/forum/asks/${id}/hide`),
   skillMod: (id, change) => call('PATCH', `/forum/skills/${id}`, change),
+  refer: (code) => call('POST', '/referral', { code }),
   restore: (target, id) => call('POST', `/admin/taken-down/${target}/${id}/restore`),
   resolveReport: (target, id, remove) => call('POST', `/admin/reports/${target}/${id}`, { remove }),
   myClubApplication: () => call<{ application: ClubApplication | null }>('GET', '/club-applications/mine').then((r) => r.application),

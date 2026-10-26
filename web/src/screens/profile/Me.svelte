@@ -24,6 +24,7 @@
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
+  import Invite from './Invite.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
   import EventRow from '../../ui/EventRow.svelte';
@@ -122,6 +123,7 @@
       <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
   </div>
 
+  {#if me?.referrals}<Invite r={me.referrals} />{/if}
   <AppCard />
   <div class="tail"></div>
 </div>

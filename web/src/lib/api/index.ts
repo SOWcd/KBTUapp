@@ -163,6 +163,7 @@ export interface Api {
   releaseAsk(id: Id): Promise<Ask>;
   hideAsk(id: Id): Promise<void>;
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
+  refer(code: string): Promise<void>;                                                 // opened by someone's invite link
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean): Promise<void>; // admin: take it down or leave it

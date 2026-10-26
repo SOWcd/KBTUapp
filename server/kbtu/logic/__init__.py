@@ -75,4 +75,6 @@ from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, _ask_removal
 from .forum import (CONTACTS_A_DAY, OPEN_ASKS, PING_DAY, PING_TOP, PING_WEEK, PUBLIC_AT, add_skill, ask_people, asks, block,  # noqa: F401
     close_ask, contact, contacts, create_ask, decide_contact, forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough,
     search_people, set_my_forum, skill_lookup, skill_mod, skills, telegram_of)
+from .account import refer  # noqa: F401
+from .awards import brought  # noqa: F401
 from ..db import tx  # noqa: F401  (callers took these from the old module)

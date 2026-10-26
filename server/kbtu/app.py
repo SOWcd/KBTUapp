@@ -378,6 +378,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.seen_unlock(con, v, body.get("code"), body.get("level"))
         return {"unlocked": logic.unlocked(con, v)}
 
+    @app.post("/api/referral", status_code=204)
+    def refer(con: Con, v: Me, body: dict = Body(...)):
+        logic.refer(con, v, body.get("code"))
+
     @app.post("/api/me/calendar")
     def my_calendar(con: Con, v: Me):
         """My calendar feed: the page that subscribes (Apple) and the feed itself (Google's "add by URL")."""
@@ -1249,7 +1253,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{ref}"}]]}}
-        elif kind in ("fr", "join", "pres", "rc", "gl"):
+        elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's one-time award link (logic.grant_link)
                 code = body.get("code")
                 start, fields = f"gl_{logic.grant_link(con, v, code)}", {"award": texts.pick(texts.ACH_NAMES, lang)[code]}
@@ -1259,6 +1263,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
+            elif kind == "rf":  # my invite link (referrals): my badge's code, never my ID
+                if not v.student:
+                    raise ApiError("need_student")
+                start = f"r_{logic._qr_code(con, v.id)}"
+                fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
             elif kind == "fr":  # my live one-time link (§4.7), the same one the QR on screen holds
                 start = f"fr_{logic.friend_link(con, v)['token']}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}

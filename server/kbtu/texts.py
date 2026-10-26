@@ -29,6 +29,11 @@ SHARE_FRIEND = {
     "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер.", "🤝 Досқа қосылу"),
     "en": ("Be my friend", "👋 <b>{name}</b> invites you to be friends on KBTU App — you'll see where each other is going.", "🤝 Add as a friend"),
 }
+SHARE_REFER = {  # my invite link (referrals): it counts once they sign in with KBTU
+    "ru": ("Залетай в KBTU App", "📣 <b>{name}</b> зовёт тебя в KBTU App: все события, клубы и друзья КБТУ в одном месте.", "🚀 Открыть KBTU App"),
+    "kk": ("KBTU App-қа кел", "📣 <b>{name}</b> сені KBTU App-қа шақырады: ҚБТУ-дің барлық іс-шаралары, клубтары мен достары бір жерде.", "🚀 KBTU App ашу"),
+    "en": ("Join KBTU App", "📣 <b>{name}</b> invites you to KBTU App: KBTU's events, clubs and friends in one place.", "🚀 Open KBTU App"),
+}
 SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 Тебя назначают президентом <b>{club}</b> в KBTU App. Открой и войди через KBTU — ссылка одноразовая, работает 7 дней.", "Стать президентом"),
     "kk": ("Клуб президентін күтеді", "👑 Сені KBTU App-та <b>{club}</b> клубының президенті етіп тағайындайды. Аш та, KBTU арқылы кір — сілтеме бір реттік, 7 күн жұмыс істейді.", "Президент болу"),
@@ -60,11 +65,11 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга"},
+           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала"},
     "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы"},
+           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы"},
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder"},
+           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter"},
 }
 TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "Аңыз"), "en": ("I", "II", "III", "Legend")}
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
@@ -90,7 +95,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for a friend ('fr'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"fr": SHARE_FRIEND, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_FRIEND else "ru"]
+    title, text, button = {"fr": SHARE_FRIEND, "rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_FRIEND else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 

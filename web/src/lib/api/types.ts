@@ -183,6 +183,7 @@ export interface Me {
   founder: boolean;
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests
+  referrals: { count: number; code: string } | null; // students my invite link brought (signed in with KBTU), my badge's code for the link
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   bio: string;

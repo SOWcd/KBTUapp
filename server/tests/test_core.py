@@ -5155,3 +5155,38 @@ def test_forum_policy_behind_the_flag(env):
     assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT_FORUM}).json()["student"]["consent"] == logic.CONSENT_FORUM
     for lang in ("ru", "kk"):
         assert on.get(f"/privacy?lang={lang}").text.count("<h2>11.") == 1 and "<h2>11." not in c.get(f"/privacy?lang={lang}").text
+
+
+def test_referrals(env):
+    """Invite links (PLAN, owner Oct 26): r_<badge code>, never a user ID; the first link wins, only before the KBTU
+    sign-in; it counts once the invitee is confirmed by Microsoft; "Recruiter" at 3; gone with the account."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann = login(c, 100, "ann")
+    code = ann["referrals"]["code"]
+    assert ann["referrals"] == {"count": 0, "code": code} and len(code) == 10
+    other = login(c, 101, "ole")["referrals"]["code"]
+    refer = lambda tg, cd: c.post("/api/referral", headers=tma(tg), json={"code": cd}).status_code  # noqa: E731
+    assert refer(100, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 100").fetchone()[0] is None  # not myself
+    assert refer(101, code) == 204 and con.execute("SELECT referred_by FROM users WHERE tg_id = 101").fetchone()[0] is None  # signed in already
+    assert refer(102, "nope") == 400
+    for tg in (102, 103, 104, 105):
+        c.get("/api/me", headers=tma(tg))
+        assert refer(tg, code) == 204
+    assert refer(102, other) == 204                                                     # the first link wins
+    assert con.execute("SELECT COUNT(*) FROM users WHERE referred_by = ?", (ann["id"],)).fetchone()[0] == 4
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 0          # Telegram accounts alone count nothing
+    def confirm(tg):  # typed in, then Microsoft (app.py's two steps)
+        uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]
+        con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+            VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid, f"25B{tg:06d}"))
+        logic.ms_link(con, uid, {"oid": f"o{tg}", "email": f"x{tg}@kbtu.kz", "first": "X", "last": "Testov"})
+    for tg in (102, 103):
+        confirm(tg)
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+    assert not con.execute("SELECT 1 FROM achievement_levels WHERE code = 'referral'").fetchone()
+    confirm(104)
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
+    delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2

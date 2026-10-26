@@ -696,6 +696,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
     INSERT INTO skills (name, approved, created_at, used_at) SELECT value, 1, CAST(strftime('%s', 'now') AS INTEGER),
         CAST(strftime('%s', 'now') AS INTEGER) FROM json_each('["ios", "android", "web", "backend", "ml", "data", "ui design", "graphic design", "3d", "photo", "video", "editing", "texts", "translation", "smm", "music", "events"]');"""),
+    # referrals (PLAN, owner Oct 26): who brought me, by their invite link (r_<badge code>); the first link wins.
+    # 77, not 76: 76 is the forum (sower4d/forum-people), to be merged first
+    (77, """ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;"""),
 ]
 
 
