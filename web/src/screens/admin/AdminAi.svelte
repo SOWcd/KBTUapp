@@ -6,7 +6,7 @@
   import { api, type AdminAi } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -48,8 +48,8 @@
       </div>
     {/each}
     <div class="nums">
-      <span class="surface"><b class="num">{ai.events.done}</b><i>{t('ai.events')}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
-      <span class="surface"><b class="num">{ai.clubs.done}</b><i>{t('ai.clubs')}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
+      <span class="surface"><b class="num">{ai.events.done}</b><i>{tn('ai.events', ai.events.done)}</i>{#if ai.events.waiting}<em>{t('ai.waiting', { n: ai.events.waiting })}</em>{/if}</span>
+      <span class="surface"><b class="num">{ai.clubs.done}</b><i>{tn('ai.clubs', ai.clubs.done)}</i>{#if ai.clubs.waiting}<em>{t('ai.waiting', { n: ai.clubs.waiting })}</em>{/if}</span>
     </div>
     {#if ai.error}<p class="err surface"><b>{t('ai.lastError')}</b><span class="selectable">{ai.error}</span></p>{/if}
     {#if ai.failed.length}
