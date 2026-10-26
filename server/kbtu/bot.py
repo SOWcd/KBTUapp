@@ -113,7 +113,7 @@ def _render(con, m) -> tuple[str, str | None, str] | None:
             f[k + "tg"] = "@" + p["tg_username"] if p["tg_username"] else p["tg_first_name"]
             f[k + "id"] = p["tg_id"]
         return (*texts.bot_message(lang, kind, sid=ref[1], **f), "")
-    if kind == "backup_failed":  # bf:<day>, to the admins: no copy reached R2 last night nor the night before
+    if kind in ("backup_failed", "backup_ok"):  # bf:<day> / bo:<day>, to the admins: no copy reached R2 two nights running; back again
         return (*texts.bot_message(lang, kind), "")
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
@@ -479,10 +479,18 @@ def offsite_round(cfg: Config, con) -> None:
     stamp, done = time.strftime("%Y-%m-%d-%H%M", time.gmtime(local)), lambda key: one(con, "SELECT 1 FROM meta WHERE key = ? AND value = ?", key, date)
     copy = home / "backups" / f"kbtu-{date}.db"
     yday = time.strftime("%Y-%m-%d", time.gmtime(local - 86400))
-    if local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
-        # two nights without a copy off the server (six tries tonight already): the admins hear it once a day
-        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
+    # two nights without a copy off the server (six tries tonight already): the admins hear it once per outage
+    # (meta offsite_alert: the day it was raised), and once more when a copy gets through again
+    alert = one(con, "SELECT value FROM meta WHERE key = 'offsite_alert'")
+    admins = lambda: rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL")  # noqa: E731
+    if alert and done("offsite_db"):
+        for (uid,) in admins():
+            logic.notify(con, uid, "backup_ok", f"bo:{date}")
+        con.execute("DELETE FROM meta WHERE key = 'offsite_alert'")
+    elif not alert and local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
+        for (uid,) in admins():
             logic.notify(con, uid, "backup_failed", f"bf:{date}")
+        con.execute("INSERT INTO meta (key, value) VALUES ('offsite_alert', ?)", (date,))
     # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
     jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]
             if copy.exists() and not done("offsite_db") else [])
