@@ -3389,8 +3389,29 @@ def test_offsite_backup(env, monkeypatch):
     clock[0] += 86400                                                   # Tuesday 11:00: two nights without one
     bot.offsite_round(cfg, con)
     clock[0] += 3600
-    bot.offsite_round(cfg, con)                                         # once a day
+    bot.offsite_round(cfg, con)                                         # once per outage, not once a day
+    clock[0] += 86400
+    bot.offsite_round(cfg, con)                                         # Wednesday, still failing: no second alert
     assert alerts() == 1
+    oks = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'backup_ok'").fetchone()[0]  # noqa: E731
+    fail[0] = False
+    clock[0] += 3600
+    bot.backup_day(cfg, con)                                            # the night's local copy, as the bot makes it
+    bot.offsite_round(cfg, con)                                         # tonight's copy gets through
+    assert oks() == 0                                                   # (counted once R2 said 200)
+    clock[0] += 60
+    bot.offsite_round(cfg, con)
+    clock[0] += 3600
+    bot.offsite_round(cfg, con)
+    assert oks() == 1 and not con.execute("SELECT 1 FROM meta WHERE key = 'offsite_alert'").fetchone()
+    fail[0] = True                                                      # a new outage: alerted again, once
+    clock[0] += 2 * 86400
+    bot.offsite_round(cfg, con)
+    clock[0] += 3600
+    bot.offsite_round(cfg, con)
+    assert alerts() == 2
+    payload = con.execute("SELECT payload, ref FROM bot_outbox WHERE kind IN ('backup_failed', 'backup_ok')").fetchall()
+    assert all("key" not in (p or "").lower() and "secret" not in (p or "").lower() for p, _ in payload)  # nothing of the R2 credentials
 
 
 async def _noop():
