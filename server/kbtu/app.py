@@ -1339,6 +1339,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def forum_close_ask(aid: int, con: Con, v: Forum, body: dict = Body(default={})):
         return logic.close_ask(con, v, aid, body.get("found"))
 
+    @app.get("/api/forum/mod")
+    def forum_mod(con: Con, v: Forum):
+        return logic.mod_queue(con, v)
+
+    @app.post("/api/forum/asks/{aid}/hide", status_code=204)
+    def forum_hide_ask(aid: int, con: Con, v: Forum):
+        logic.mod_hide_ask(con, v, aid)
+
     @app.post("/api/forum/asks/{aid}/release")
     def forum_release_ask(aid: int, con: Con, v: Forum):
         return logic.release_ask(con, v, aid)

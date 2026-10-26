@@ -20,6 +20,7 @@ OPEN_ASKS = 3            # live or waiting requests per person
 CONTACTS_A_DAY = 10
 SEARCHES_AN_HOUR = 30
 PING_TOP, PING_DAY, PING_WEEK = 5, 1, 2   # a project request pings its best five matches; nobody gets more than 1 a day, 2 a week
+DECIDE_IN = 86400  # a held or reported request waits a moderator's word this long (shown as a deadline)
 HIDE_AT, REPORTER_AGE = 3, 14 * 86400     # reports from accounts older than two weeks; with an AI flag or a moderator: hidden
 
 
@@ -272,6 +273,30 @@ def release_ask(con, v: Viewer, aid: int) -> dict:
     return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
 
 
+def mod_queue(con, v: Viewer) -> dict:
+    """What waits for a moderator: requests the AI didn't pass (or couldn't read), and skills not public yet."""
+    _mod(v)
+    held = [_ask_shape(con, v, a) | {"status": "held", "why": a["why"], "dueAt": a["created_at"] + DECIDE_IN}
+            for a in rows(con, "SELECT * FROM asks WHERE status = 'held' AND expires_at > ? ORDER BY id", _now())]
+    # reported enough without the AI's agreement: a moderator decides within a day of the report that made it enough
+    for a in rows(con, "SELECT * FROM asks WHERE status = 'live' AND expires_at > ? AND id IN (SELECT target_id FROM reports WHERE target = 'ask' AND status = 'open') ORDER BY id", _now()):
+        if at := _enough_at(con, a["id"]):
+            held.append(_ask_shape(con, v, a) | {"status": "reported", "why": "reports", "dueAt": at + DECIDE_IN})
+    held.sort(key=lambda a: a["dueAt"])
+    fresh = [s for s in (_skill(con, x) for x in rows(con, "SELECT * FROM skills WHERE approved = 0 ORDER BY created_at DESC LIMIT 100")) if not s["public"]]
+    return {"held": held, "skills": fresh}
+
+
+def mod_hide_ask(con, v: Viewer, aid: int) -> None:
+    """A moderator takes a request down (held or live); its author is told."""
+    _mod(v)
+    if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')", aid):
+        raise ApiError("not_found")
+    with tx(con):
+        hide_ask(con, aid, "moderator", v.id)
+        log_action(con, v.id, "ask_hide", f"ask:{aid}")
+
+
 def close_ask(con, v: Viewer, aid: int, found: object) -> dict:
     """The author: found someone (through the app or not), or no longer needed."""
     if not (found is None or isinstance(found, bool)):
@@ -369,6 +394,14 @@ def reported_enough(con, aid: int) -> bool:
     """Three open reports from accounts at least two weeks old: worth the AI's look (app.py), else a moderator's."""
     return one(con, """SELECT COUNT(DISTINCT r.reporter_id) FROM reports r JOIN users u ON u.id = r.reporter_id
         WHERE r.target = 'ask' AND r.target_id = ? AND r.status = 'open' AND u.created_at <= ?""", aid, _now() - REPORTER_AGE)[0] >= HIDE_AT
+
+
+def _enough_at(con, aid: int) -> int | None:
+    """When the open reports from old enough accounts reached three: the moderators' day starts then."""
+    at = [r[0] for r in con.execute("""SELECT MIN(r.created_at) FROM reports r JOIN users u ON u.id = r.reporter_id
+        WHERE r.target = 'ask' AND r.target_id = ? AND r.status = 'open' AND u.created_at <= ? GROUP BY r.reporter_id ORDER BY 1""",
+        (aid, _now() - REPORTER_AGE))]
+    return at[HIDE_AT - 1] if len(at) >= HIDE_AT else None
 
 
 def hide_ask(con, aid: int, why: str, by: int | None = None) -> None:

@@ -5020,3 +5020,39 @@ def test_forum_bot_cards(env, monkeypatch):
     tap(91, "ps:0")
     assert con.execute("SELECT ask_pings FROM users WHERE id = ?", (b.id,)).fetchone()[0] == 0
     assert bot._render(con, row("ask_match")) is None                                                 # pings off: quiet
+
+
+def test_forum_moderator_queue(env):
+    """What waits for the forum's moderators: requests the AI didn't pass and skills not public yet; release puts a
+    request live (and its pings out), hide takes it down and tells its author; only moderators see or act."""
+    import dataclasses
+    _, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
+    con = db.connect(cfg.db_path)
+    mod = logic.Viewer(login(c, 95, "mod")["id"], "moderator", True)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod.id,))
+    stu = logic.Viewer(login(c, 96, "stu")["id"], "user", True)
+    held = logic.create_ask(con, stu, {"kind": "help", "title": "Held one"}, None)
+    other = logic.create_ask(con, stu, {"kind": "help", "title": "Flagged one"}, False)
+    new = logic.add_skill(con, stu, "lockpicking")
+    q = c.get("/api/forum/mod", headers=tma(95)).json()
+    assert [a["id"] for a in q["held"]] == [held["id"], other["id"]] and [s["name"] for s in q["skills"]] == ["lockpicking"]
+    assert c.get("/api/forum/mod", headers=tma(96)).status_code == 403
+    with pytest.raises(logic.ApiError):
+        logic.mod_queue(con, stu)
+    assert c.post(f"/api/forum/asks/{held['id']}/release", headers=tma(95)).status_code == 200
+    assert con.execute("SELECT status FROM asks WHERE id = ?", (held["id"],)).fetchone()[0] == "live"
+    assert c.post(f"/api/forum/asks/{other['id']}/hide", headers=tma(95)).status_code == 204
+    assert con.execute("SELECT status, why FROM asks WHERE id = ?", (other["id"],)).fetchone()[:] == ("hidden", "moderator")
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (stu.id,)).fetchone()
+    assert c.patch(f"/api/forum/skills/{new['id']}", headers=tma(95), json={"approve": True}).json()["public"] is True
+    assert c.get("/api/forum/mod", headers=tma(95)).json() == {"held": [], "skills": []}
+    # three reports from old accounts, no AI word: a moderator's day, counted from the third report
+    t0 = int(time.time())
+    for i, uid in enumerate((97, 98, 99)):
+        rid = login(c, uid, f"r{uid}")["id"]
+        con.execute("UPDATE users SET created_at = ? WHERE id = ?", (t0 - 30 * 86400, rid))
+        con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, status, created_at) VALUES (?, 'ask', ?, 'spam', 'open', ?)",
+                    (rid, held["id"], t0 - 3600 + i * 60))
+        q = c.get("/api/forum/mod", headers=tma(95)).json()["held"]
+        assert q == [] if i < 2 else [(a["id"], a["status"], a["dueAt"]) for a in q] == [(held["id"], "reported", t0 - 3600 + 120 + 86400)]

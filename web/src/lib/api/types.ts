@@ -534,4 +534,7 @@ export interface Ask {
 }
 /** an offer either way; accepted: the other's Telegram to write to */
 export interface Contact extends ForumCard { id: Id; status: 'pending' | 'accepted'; incoming: boolean; ask: string | null; telegram?: string }
+/** What waits for a moderator: held requests (the AI said no or couldn't tell) and reported ones, each due a day on */
+export interface ModAsk extends Omit<Ask, 'status' | 'why'> { status: 'held' | 'reported'; why: 'ai' | 'check' | 'reports'; dueAt: Ts }
+export interface ForumMod { held: ModAsk[]; skills: Skill[] }
 export interface AskInput { kind: Ask['kind']; title: string; body: string; skills: Id[]; days: 1 | 3 | 7 | 30 }

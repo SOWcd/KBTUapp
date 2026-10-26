@@ -15,6 +15,8 @@
   import Avatar from '../../ui/Avatar.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import PersonCards from './PersonCards.svelte';
+  import ForumMod from './ForumMod.svelte';
+  import { session } from '../../lib/state/session.svelte';
 
   let { overlay, ask: focus }: { overlay: Overlay; ask?: Id } = $props();
   let me = $state<ForumMe | null>(null), list = $state<Ask[]>([]), offers = $state<Contact[]>([]);
@@ -51,11 +53,13 @@
   async function block(id: Id) {
     try { await api.block(id); haptic.ok(); say(t('fo.blockedSay'), 'waving_hand_3d_default'); load(); } catch (e) { fail(e); }
   }
+  const staff = $derived(session.me?.role === 'admin' || session.me?.role === 'moderator');
   const standing = (a: Ask) => a.status === 'held' ? t('fo.held') : a.status === 'hidden' ? t('fo.hidden') : a.status === 'closed' ? t('fo.closed') : '';
 </script>
 
 <Sheet {overlay} full title={t('fo.title')}>
   <div class="seg top" role="tablist"><button class="on" role="tab" aria-selected="true">{t('fo.find')}</button></div>
+  {#if staff}<ForumMod changed={load} />{/if}
 
   {#if offers.length}
     <h3 class="t-cap cap">{t('fo.offers')}</h3>
