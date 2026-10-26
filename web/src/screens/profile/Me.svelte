@@ -149,6 +149,7 @@
   /* the pencil and the shield: in the lanyard's gap right of its strap */
   .gear { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
+  .gear::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; } /* a 44 px target, the circle stays 36 */
   .gear:active { transform: scale(0.92); }
   .gear.adm { right: calc(var(--gutter) + 44px); }
   .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
