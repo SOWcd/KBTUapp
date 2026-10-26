@@ -54,10 +54,13 @@
   // A sheet in its own chunk needs the network the first time: offline, taps used to queue and all open on top of each
   // other once it was back (owner's list). Now only the latest tap opens, and after 2 s the app says there's no network.
   let want = 0;
+  // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
+  const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
   function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>): void {
-    const mine = ++want;
+    const mine = ++want, got = loaded.get(load);
+    if (got) { open(got.default, props); return; }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    load().then((m) => { clearTimeout(slow); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
@@ -403,7 +406,7 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing)) close(); };
     addEventListener('keydown', esc);
-    void eventSheet(); void personSheet(); void clubSheet();
+    for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {

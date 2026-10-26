@@ -76,7 +76,7 @@
       {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
-        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
+        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={() => sheets.look()} aria-label={t('look.title')}><Avatar person={h.person} size={74} tappable={false} /></button>
