@@ -136,13 +136,17 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
 Me = Annotated[Viewer, Depends(viewer)]
 
 
-def forum_viewer(request: Request, v: Me) -> Viewer:
-    """The forum (logic/forum.py) is the app's staff's only, behind FORUM=1, while it's tried out."""
-    if not request.app.state.cfg.forum:
+def forum_viewer(request: Request, v: Me, con: Con) -> Viewer:
+    """The forum (logic/forum.py) while it's tried out: FORUM=1 the app's staff, FORUM=founder the Creator alone
+    (no new policy version then: nobody else is asked anything)."""
+    cfg = request.app.state.cfg
+    if not (cfg.forum or cfg.forum_founder):
         raise ApiError("not_found")
-    if v.role not in ("admin", "moderator"):
-        raise ApiError("forbidden")
-    return v
+    if cfg.forum and v.role in ("admin", "moderator"):
+        return v
+    if cfg.forum_founder and logic.one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", v.id):
+        return v
+    raise ApiError("forbidden")
 
 
 Forum = Annotated[Viewer, Depends(forum_viewer)]

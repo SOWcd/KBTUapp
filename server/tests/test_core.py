@@ -5259,3 +5259,20 @@ def test_forum_screen_munito_only(monkeypatch):
     assert hosts and set(hosts) == {"api.eu.munito.ai"}   # both keys tried, then no one else
     llm._rest.clear(); hosts.clear(); answer.update(code=200, word="maybe")
     assert asyncio.run(look("anything")) is None and set(hosts) == {"api.eu.munito.ai"}   # nonsense: no other provider either
+
+
+def test_forum_founder_only(env):
+    """FORUM=founder: the Creator alone gets the forum; the staff get 403; the policy and consent stay as they are."""
+    import dataclasses
+    c, cfg = env
+    login(c, 90, "stu")
+    c.get("/api/me", headers=tma(91))
+    c.get("/api/me", headers=tma(92))
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 91")
+    con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 92")
+    on = TestClient(server.create(dataclasses.replace(cfg, forum_founder=True)))
+    assert on.get("/api/forum/me", headers=tma(91)).status_code == 200
+    assert on.get("/api/forum/me", headers=tma(92)).status_code == 403
+    assert on.get("/api/forum/me", headers=tma(90)).status_code == 403
+    assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT and "11." not in on.get("/privacy?lang=en").text

@@ -24,6 +24,7 @@ class Config:
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
     cf_ai_token: str = ""
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
+    forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
@@ -69,6 +70,7 @@ def load() -> Config:
         cf_account_id=env.get("CF_ACCOUNT_ID", "").strip(),
         cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
         forum=env.get("FORUM", "0") == "1",
+        forum_founder=env.get("FORUM", "0") == "founder",
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),
