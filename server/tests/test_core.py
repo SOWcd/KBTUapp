@@ -5276,3 +5276,40 @@ def test_forum_founder_only(env):
     assert on.get("/api/forum/me", headers=tma(92)).status_code == 403
     assert on.get("/api/forum/me", headers=tma(90)).status_code == 403
     assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT and "11." not in on.get("/privacy?lang=en").text
+
+
+def test_userpic_copy(env):
+    """The Telegram photo is served from /media once the bot copied it; a new t.me photo goes back to t.me until its
+    own copy, and the old copy leaves the disk."""
+    import asyncio
+    import io
+    import httpx
+    from PIL import Image
+    from kbtu import bot
+    c, cfg = env
+    login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    pic = lambda k: {"Authorization": "tma " + auth.sign_init_data({"id": 10, "first_name": "Ali", "photo_url": f"https://t.me/i/userpic/320/{k}.jpg"}, BOT)}
+    url = "a"
+    pics = {}
+    for k, rgb in (("a", (200, 40, 40)), ("b", (40, 200, 40))):
+        buf = io.BytesIO()
+        Image.new("RGB", (320, 320), rgb).save(buf, "JPEG")
+        pics[k] = buf.getvalue()
+
+    async def round_():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda r: httpx.Response(200, content=pics[r.url.path[-5]]))) as http:
+            await bot._userpics(cfg, http, con)
+
+    me = lambda: c.get("/api/me", headers=pic(url)).json()["avatar"]
+    me()
+    asyncio.run(round_())
+    first = me()
+    assert first.startswith("media/") and first.endswith(".t.webp")
+    root = Path(cfg.db_path).resolve().parent
+    assert (root / first).is_file()
+    url = "b"
+    assert me() == "https://t.me/i/userpic/320/b.jpg"
+    asyncio.run(round_())
+    assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()

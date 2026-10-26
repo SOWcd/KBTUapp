@@ -700,6 +700,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # 77, not 76: 76 is the forum (sower4d/forum-people), to be merged first
     (77, """ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
     CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;"""),
+    # our copy of the Telegram photo (bot._userpics): t.me took ~1 s per open; src = the t.me URL it was made from
+    (78, """ALTER TABLE users ADD COLUMN tg_photo_path TEXT;
+    ALTER TABLE users ADD COLUMN tg_photo_src TEXT;"""),
 ]
 
 

@@ -381,8 +381,9 @@ def chat_card(con, cid: int, card: dict) -> str | None:
 
 
 def photo_free(con, path: str) -> bool:
-    """No chat and no file record shows this picture any more (pictures are named by their content: shared)."""
-    return not one(con, "SELECT 1 FROM chats WHERE photo = ?", path) and not one(con, "SELECT 1 FROM files WHERE path = ?", path)
+    """No chat, file record or Telegram photo copy shows this picture any more (pictures are named by their content: shared)."""
+    return not con.execute("""SELECT 1 FROM chats WHERE photo = :p UNION ALL SELECT 1 FROM files WHERE path = :p
+        UNION ALL SELECT 1 FROM users WHERE tg_photo_path = :p""", {"p": path}).fetchone()
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only

@@ -378,6 +378,27 @@ async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat
     return True
 
 
+async def _userpics(cfg: Config, http: httpx.AsyncClient, con, n: int = 5) -> None:
+    """A few users whose Telegram photo is new to us: saved under /media (tg_photo_path), the old copy dropped. A photo
+    that fails is marked done all the same (tg_photo_src) and stays on t.me until Telegram gives a new URL."""
+    root = Path(cfg.db_path).resolve().parent / "media"
+    for u in logic.rows(con, """SELECT id, tg_photo_url, tg_photo_path FROM users WHERE tg_photo_url IS NOT NULL
+            AND tg_photo_src IS NOT tg_photo_url LIMIT ?""", n):
+        path = None
+        try:
+            r = await http.get(u["tg_photo_url"], follow_redirects=True, timeout=15)
+            if r.status_code == 200:
+                path = (await asyncio.to_thread(media.save, r.content, root))["path"]
+        except (httpx.HTTPError, media.BadImage, OSError) as exc:
+            log.warning("userpic: %s", type(exc).__name__)
+        # only if the URL is still the one fetched: a newer photo meanwhile is the next round's
+        if con.execute("UPDATE users SET tg_photo_path = ?, tg_photo_src = ? WHERE id = ? AND tg_photo_url = ?",
+                       (path, u["tg_photo_url"], u["id"], u["tg_photo_url"])).rowcount:
+            _drop_free(con, root, u["tg_photo_path"] if u["tg_photo_path"] != path else None)
+        else:
+            _drop_free(con, root, path)
+
+
 def _drop_free(con, root: Path, *paths: str | None) -> None:
     """Saved pictures nothing shows (no files row names them) gone from disk."""
     media.drop(root, [p for p in paths if p and logic.photo_free(con, p)])
@@ -562,6 +583,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         backup_day(cfg, con)  # a nightly copy of the database, 14 kept
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
+        await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         due = rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b JOIN users u ON u.id = b.user_id

@@ -86,7 +86,7 @@ def overseer(con, v: Viewer) -> bool:
         WHERE m.user_id = ? AND o.can_oversee = 1 AND m.role != 'member'""", v.id) is not None)
 
 
-PERSON_COLS = ("u.id, u.tg_first_name, u.tg_last_name, u.tg_photo_url, u.is_founder, u.mark, u.show_going, s.first_name, s.last_name, u.nick,"
+PERSON_COLS = ("u.id, u.tg_first_name, u.tg_last_name, u.tg_photo_url, u.tg_photo_path, u.tg_photo_src, u.is_founder, u.mark, u.show_going, s.first_name, s.last_name, u.nick,"
                " u.role AS platform_role,"  # aliased: lists join a club role as `role`
                " CASE WHEN u.avatar_tg = 0 THEN (SELECT path FROM files WHERE id = u.avatar_file_id) END AS own_photo")
 PERSON = f"SELECT {PERSON_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id"
@@ -184,8 +184,10 @@ def shown_name(p: sqlite3.Row) -> str:
 
 
 def avatar_of(p: sqlite3.Row) -> str | None:
-    """My own photo while the "Photo from Telegram" switch is off, else Telegram's (refreshed on every open)."""
-    return f"media/{p['own_photo']}.t.webp" if p["own_photo"] else p["tg_photo_url"]
+    """My own photo while the "Photo from Telegram" switch is off, else Telegram's (refreshed on every open): our copy
+    once the bot has made it, t.me until then."""
+    copy = p["tg_photo_path"] if p["tg_photo_src"] == p["tg_photo_url"] else None  # a new t.me photo: t.me till copied
+    return f"media/{p['own_photo'] or copy}.t.webp" if p["own_photo"] or copy else p["tg_photo_url"]
 
 
 def person_ref(p: sqlite3.Row) -> dict:
