@@ -19,6 +19,9 @@ log = logging.getLogger("kbtu.llm")
 URLS = {
     "cf": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions",
     "munito": "https://api.munito.ai/inference/v1/chat/completions",
+    # Munito's EU host: the global one "can run in any region" (docs.munito.ai/gdpr-data-residency); the forum's look
+    # must stay in the EU (privacy policy, section 11). Fewer models there: no deepseek-v4.1 (measured Oct 26)
+    "munitoeu": "https://api.eu.munito.ai/inference/v1/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
 }
@@ -54,14 +57,15 @@ class Link:
 _rest: dict[str, float] = {}     # link name -> resting until (this process)
 
 
-def links(cfg) -> list[Link]:
+def links(cfg, chain: str | None = None) -> list[Link]:
     """The chain for this config: every (provider, model) whose key is set, Munito once per key."""
     keys = {"cf": [("cf", cfg.cf_ai_token)] if cfg.cf_account_id and cfg.cf_ai_token else [],
             "munito": [(f"munito{i + 1 if i else ''}", k) for i, k in enumerate(cfg.munito_keys) if k],
+            "munitoeu": [(f"munitoeu{i + 1 if i else ''}", k) for i, k in enumerate(cfg.munito_keys) if k],
             "openrouter": [("openrouter", cfg.openrouter_key)] if cfg.openrouter_key else [],
             "groq": [("groq", cfg.groq_key)] if cfg.groq_key else []}
     out = []
-    for item in (cfg.ai_chain or CHAIN).split(","):
+    for item in (chain or cfg.ai_chain or CHAIN).split(","):
         provider, _, model = item.strip().partition(":")
         for name, token in keys.get(provider, []):
             out.append(Link(provider, model, name, URLS[provider].format(account=cfg.cf_account_id), token))
@@ -92,12 +96,12 @@ def _rest_for(r: httpx.Response) -> float:
 
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
                check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
-               timeout: float = TIMEOUT) -> tuple[str, str]:
+               timeout: float = TIMEOUT, chain: str | None = None) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
-    (what the privacy policy names for a text). Busy: none answered; BadAnswers: none usable."""
+    (what the privacy policy names for a text); chain: a caller's own links instead of the shared chain. Busy: none answered; BadAnswers: none usable."""
     answered = False
-    for link in links(cfg):
+    for link in links(cfg, chain):
         if only is not None and link.provider not in only:
             continue
         if _rest.get(link.name, 0) > time.time():

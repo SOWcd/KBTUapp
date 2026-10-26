@@ -88,7 +88,8 @@ async def translate(cfg, http: httpx.AsyncClient, fields: dict[str, str], limits
 SCREEN_PROMPT = ("You check posts on a university students' board where people look for help with projects and small "
                  "favours. Answer FLAG if the text is abusive, hateful, sexual, a scam, an ad, asks for something illegal "
                  "or dangerous, or shares someone's personal data; otherwise answer OK. One word only.")
-SCREEN_PROVIDERS = ("munito",)
+SCREEN_PROVIDERS = ("munitoeu",)
+SCREEN_CHAIN = "munitoeu:deepseek-ai/deepseek-v4-flash,munitoeu:zai-org/glm-5.3-flash"  # EU host only (llm.URLS)
 
 
 def _verdict(text: str) -> bool:
@@ -100,7 +101,7 @@ async def screen(cfg, http: httpx.AsyncClient, text: str, con=None) -> bool | No
     moderator decides."""
     try:
         word, _ = await llm.chat(cfg, http, [{"role": "system", "content": SCREEN_PROMPT}, {"role": "user", "content": CONTROL.sub("", text)[:2000]}],
-                                 max_tokens=5, temperature=0, check=_verdict, con=con, only=SCREEN_PROVIDERS, timeout=15)
+                                 max_tokens=5, temperature=0, check=_verdict, con=con, only=SCREEN_PROVIDERS, chain=SCREEN_CHAIN, timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None
     return word.strip().upper().startswith("OK")

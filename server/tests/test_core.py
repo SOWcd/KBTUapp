@@ -5252,10 +5252,10 @@ def test_forum_screen_munito_only(monkeypatch):
     async def look(text):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
             return await ai.screen(cfg, http, text)
-    assert asyncio.run(look("Need a tripod")) is True and set(hosts) == {"api.munito.ai"}
+    assert asyncio.run(look("Need a tripod")) is True and set(hosts) == {"api.eu.munito.ai"}
     answer["word"] = "FLAG"; assert asyncio.run(look("buy essays")) is False
     hosts.clear(); answer["code"] = 429
     assert asyncio.run(look("anything")) is None
-    assert hosts and set(hosts) == {"api.munito.ai"}   # both keys tried, then no one else
+    assert hosts and set(hosts) == {"api.eu.munito.ai"}   # both keys tried, then no one else
     llm._rest.clear(); hosts.clear(); answer.update(code=200, word="maybe")
-    assert asyncio.run(look("anything")) is None and set(hosts) == {"api.munito.ai"}   # nonsense: no other provider either
+    assert asyncio.run(look("anything")) is None and set(hosts) == {"api.eu.munito.ai"}   # nonsense: no other provider either
