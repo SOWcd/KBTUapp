@@ -69,6 +69,8 @@
   let hero = $state<HTMLDivElement>();
   let land = () => {};
   onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
+  let later = $state(false);
+  onMount(() => { const f = requestAnimationFrame(() => setTimeout(() => (later = true))); return () => cancelAnimationFrame(f); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
@@ -370,6 +372,8 @@
       <p class="rnote"><GraduationCap size={15} />{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>
     {/if}
 
+    <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
+    {#if later}
     <!-- volunteers (owner, Oct 15): a student applies with a short "why", the organizers answer; the team sees the count -->
     {#if detail?.volunteers && !preview && !cancelled && !started}
       {@const vo = detail.volunteers}
@@ -469,6 +473,7 @@
     {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
     <!-- the one report sheet (owner, Oct 22): anyone but the event's own crew -->
     {#if !may(mem, 'door') && !preview && session.me?.student}<button class="rep" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</button>{/if}
+    {/if}
   {/if}
 
   {#snippet footer()}

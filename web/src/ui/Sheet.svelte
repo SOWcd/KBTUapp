@@ -38,8 +38,11 @@
   const root = getComputedStyle(document.documentElement), slow = root.getPropertyValue('--t-slow').trim();
   const RISE = (parseFloat(slow) || 0.38) * (slow.endsWith('ms') ? 1 : 1000), SPRING = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
   const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : RISE, easing: SPRING });
+  // the first call comes after the browser's own layout and before the first paint: the rise starts there, with the
+  // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
     const h = panel.getBoundingClientRect().height, dh = h - height;
+    if (!lift) { height = h; lift = panel.animate([{ transform: `translate3d(0,${h}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion()); return; }
     height = h;
     if (Math.abs(dh) < 2 || gone || dragging || currentY) return;
     panel.animate([{ translate: `0 ${dh}px` }, { translate: '0 0' }], { ...motion(), composite: 'add' });
@@ -119,8 +122,6 @@
   }
 
   onMount(() => {
-    height = panel.getBoundingClientRect().height;
-    lift = panel.animate([{ transform: `translate3d(0,${height}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion());
     const ro = new ResizeObserver(resized);
     ro.observe(panel);
     panel.addEventListener('touchstart', onStart, { passive: true });
