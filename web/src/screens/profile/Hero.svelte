@@ -182,7 +182,7 @@
   .shelf { margin-top: 14px; padding: 12px 14px 14px; border-radius: var(--r-xl); }
   .shelf.wait { animation: wait 1.2s ease-in-out infinite; }
   @keyframes wait { 50% { opacity: 0.6; } }
-  .sh { display: flex; align-items: center; gap: 6px; width: 100%; font: 650 15px/1.2 var(--font-text); color: var(--text); text-align: left; }
+  .sh { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 0; margin: -6px 0; /* a taller target, same place */ font: 650 15px/1.2 var(--font-text); color: var(--text); text-align: left; }
   .sh b { flex: 1; font-weight: 650; }
   .sh .num { font: 550 13.5px/1.2 var(--font-text); color: var(--text-2); }
   .sh :global(svg) { color: var(--text-3); }
@@ -190,5 +190,5 @@
   .row button { display: flex; transition: transform var(--t-fast) var(--ease); }
   .row button:active { transform: scale(0.9); }
   .empty { width: 44px; height: 44px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); background: var(--surface-2); }
-  .nx { display: block; width: 100%; margin-top: 12px; text-align: left; color: var(--text-2); }
+  .nx { display: block; width: 100%; padding: 6px 0; margin: 6px 0 -6px; /* a taller target, same place */ text-align: left; color: var(--text-2); }
 </style>

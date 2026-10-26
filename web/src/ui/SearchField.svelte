@@ -10,7 +10,7 @@
 
 <label class="search" class:raised>
   <Search size={18} />
-  <input bind:value {placeholder} type="search" enterkeyhint="search" autocomplete="off" />
+  <input bind:value {placeholder} aria-label={placeholder} type="search" enterkeyhint="search" autocomplete="off" />
   {#if value}<button onclick={() => (value = '')} aria-label={t('common.close')}><X size={16} /></button>{/if}
 </label>
 
@@ -20,5 +20,6 @@
   input { flex: 1; min-width: 0; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text); }
   input::placeholder { color: var(--text-3); }
   input::-webkit-search-cancel-button { display: none; }
-  button { display: flex; color: var(--text-3); padding: 4px; }
+  button { position: relative; display: flex; color: var(--text-3); padding: 4px; }
+  button::after { content: ''; position: absolute; inset: -10px; } /* a 44 px target around the small cross */
 </style>

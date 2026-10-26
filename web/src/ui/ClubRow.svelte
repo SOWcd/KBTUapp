@@ -45,6 +45,7 @@
   small.hot { font-weight: 650; color: var(--accent-text); }
   small.hot i { display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: #46D6FF; vertical-align: middle; }
   .end { position: relative; z-index: 2; flex: none; }
-  .bell { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .bell { position: relative; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
   .bell.on { background: var(--success-soft); color: var(--success-text); }
 </style>

@@ -201,6 +201,7 @@
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .ghost { position: absolute; right: -18px; bottom: -22px; opacity: 0.1; transform: rotate(-12deg); pointer-events: none; }
   .bell { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
   .bell.on { background: var(--success-soft); color: var(--success-text); }
   .txt { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .nm { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
