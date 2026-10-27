@@ -465,8 +465,6 @@ const en: Dict = {
   'map.ver.kbtu': "KBTU App map",
   'map.ver.old': "2023 plan",
   'map.noteKbtu': "KBTU App map — floor 1 only for now",
-  'map.zone.dit': "DIT",
-  'map.staffOnly': "Staff only",
   'map.bShort': "0",
   'route.out': "Help me get out",
   'route.here': "You are here",

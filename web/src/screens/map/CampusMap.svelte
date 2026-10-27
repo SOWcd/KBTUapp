@@ -26,7 +26,7 @@
   import MapIcon from '@lucide/svelte/icons/map';
   import Layers from '@lucide/svelte/icons/layers';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
   import { FLOORS, KBTU_FLOORS, TILES, SPOTS, loadSvg, roomOf, floorOf, normRoom, nearRooms, spotOf } from '../../lib/map';
   import uniq from '../../assets/map/uniq-tiles.json';
@@ -88,9 +88,9 @@
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
   const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
   let svg = $state('');
-  // our map's words in the UI language: the SVG marks them data-t="key" and holds the English
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const shown = $derived(svg.replace(/(<text[^>]*data-t="([^"]+)"[^>]*>)[^<]*/g, (_, open: string, k: string) => open + esc(t(k as Parameters<typeof t>[0]))));
+  // our map's words in the UI language: each <text> holds the English and carries data-ru / data-kk
+  const shown = $derived(i18n.lang === 'en' ? svg
+    : svg.replace(new RegExp(`(<text[^>]*\\sdata-${i18n.lang}="([^"]*)"[^>]*>)[^<]*`, 'g'), (_, open: string, w: string) => open + w));
   // another room: a clean plan, without the last one's rings
   $effect(() => {
     const n = cur, url = ver === 'old' ? FLOORS[n] : ver === 'kbtu' ? KBTU_FLOORS[n]?.[look === 'dark' ? 1 : 0] : null; // ours is drawn light and dark
