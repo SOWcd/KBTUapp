@@ -12,21 +12,28 @@ import f2 from '../assets/map/floor-2.svg?url';
 import f3 from '../assets/map/floor-3.svg?url';
 import f4 from '../assets/map/floor-4.svg?url';
 import f5 from '../assets/map/floor-5.svg?url';
+import k1 from '../assets/map/kbtu-1.svg?url';
+import k1d from '../assets/map/kbtu-1-dark.svg?url';
 
 /** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off UNI-Q's) */
 export const FLOORS = [null, f1, f2, f3, f4, f5];
 
-const loaded = new Map<number, Promise<string>>();
-/** A floor's SVG markup (0..5); fetched once per launch, a failed fetch is tried again next time. */
-export function loadFloor(n: number): Promise<string> {
-  let p = loaded.get(n);
+/** Our own map's floors (design/map/tools/clean, owner, Oct 27): light and dark renders, floor 1 so far */
+export const KBTU_FLOORS: Record<number, [string, string]> = { 1: [k1, k1d] };
+
+const loaded = new Map<string, Promise<string>>();
+/** A floor's SVG markup by its url; fetched once per launch, a failed fetch is tried again next time. */
+export function loadSvg(url: string): Promise<string> {
+  let p = loaded.get(url);
   if (!p) {
-    p = fetch(FLOORS[n]!).then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))));
-    loaded.set(n, p);
-    p.catch(() => loaded.delete(n));
+    p = fetch(url).then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))));
+    loaded.set(url, p);
+    p.catch(() => loaded.delete(url));
   }
   return p;
 }
+/** An old-map floor's SVG markup (1..5) */
+export const loadFloor = (n: number): Promise<string> => loadSvg(FLOORS[n]!);
 
 /** The main-building room in a place: "Aud. 305" (in Russian), "305", "Room 412", "251a" → "305", "305", "412", "251a".
  *  Only a room at the start counts, so a street address ("Abaya 150") never sends anyone to the KBTU map. A letter

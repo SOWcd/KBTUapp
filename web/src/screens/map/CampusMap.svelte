@@ -1,7 +1,7 @@
 <script lang="ts">
   // The campus map (CONTEXT): a floor of the main building full screen, pinch to zoom and drag to look around, a
-  // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Two versions, switched at the top left
-  // (owner, Oct 6): the main one, UNI-Q's plans (credited under the map), and the old one, our vector redraw with red
+  // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Three versions, picked from a list at the top left
+  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floor 1 so far): the main one, UNI-Q's plans (credited under the map), and the old one, our vector redraw with red
   // walls (floors 1-5 from the 2023 plans, which nobody updates, so it says so). Opens on a room's floor ("Aud. 305"
   // → 3), rings the room's number and glides in to it (owner, Oct 5: "show where the room is"); a room the plan
   // doesn't number frames its nearest numbers on the floor, "somewhere here, look yourself", or just says it couldn't
@@ -24,11 +24,11 @@
   import Moon from '@lucide/svelte/icons/moon';
   import { theme, reveal, paintFor, type Theme } from '../../lib/state/theme.svelte';
   import MapIcon from '@lucide/svelte/icons/map';
-  import History from '@lucide/svelte/icons/history';
+  import Layers from '@lucide/svelte/icons/layers';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { FLOORS, TILES, SPOTS, loadFloor, roomOf, floorOf, normRoom, nearRooms, spotOf } from '../../lib/map';
+  import { FLOORS, KBTU_FLOORS, TILES, SPOTS, loadSvg, roomOf, floorOf, normRoom, nearRooms, spotOf } from '../../lib/map';
   import uniq from '../../assets/map/uniq-tiles.json';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { glass, jelly } from '../../ui/glass';
@@ -51,7 +51,11 @@
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
-  let ver = $state<'main' | 'old'>('main');
+  // which map (owner, Oct 27: a list at the top left): UNI-Q's, ours (floor 1 so far, not the default yet), the 2023 plan
+  type Ver = 'main' | 'kbtu' | 'old';
+  const VERS: Ver[] = ['main', 'kbtu', 'old'];
+  let ver = $state<Ver>('main');
+  let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0, edit: false, sel: null, moving: false });
   let routing = $state(false), ui = $state<RouteUI>();
   let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one (owner, Oct 15)
@@ -85,7 +89,11 @@
   const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
   let svg = $state('');
   // another room: a clean plan, without the last one's rings
-  $effect(() => { const n = cur; void room; svg = ''; if (ver === 'old') loadFloor(n).then((m) => { if (n === cur) svg = m; }, () => {}); });
+  $effect(() => {
+    const n = cur, url = ver === 'old' ? FLOORS[n] : ver === 'kbtu' ? KBTU_FLOORS[n]?.[look === 'dark' ? 1 : 0] : null; // ours is drawn light and dark
+    void room; svg = '';
+    if (url) loadSvg(url).then((m) => { if (n === cur) svg = m; }, () => {});
+  });
 
   let panel: HTMLDivElement;
   let stage: HTMLDivElement;
@@ -221,7 +229,7 @@
   }
   let press: { x: number; y: number; t: number } | null = null; // the editor's tap: a finger down and up in place
   function down(e: PointerEvent) {
-    clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
+    menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
     stage.setPointerCapture(e.pointerId);
     if (pts.size) swipeEnd(true); // a second finger: a pinch, never a floor
@@ -368,7 +376,7 @@
     on.forEach(([k, f]) => el.addEventListener(k, f as EventListener));
     return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
   }
-  function setVer(v: 'main' | 'old') { if (v === ver) return; haptic.select(); ver = v; if (v === 'old' && !cur) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); goHome(); }
+  function setVer(v: Ver) { if (v === ver) return; haptic.select(); ver = v; if ((v === 'old' && !cur) || (v === 'kbtu' && !KBTU_FLOORS[cur])) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); goHome(); }
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
   let glided = false, glideT = 0, touched = 0;
@@ -402,7 +410,7 @@
     const dn = doorNamed(text), sp = dn ? { f: dn.f, u: dn.u, v: dn.v } : spotOf(text);
     if (sp && sp.f != null) {
       room = null; at = { f: sp.f, u: sp.u!, v: sp.v!, label: text }; glided = false;
-      if (ver === 'old') { ver = 'main'; reset(); }
+      if (ver !== 'main') { ver = 'main'; reset(); }
       if (sp.f !== cur) { halt(); cur = sp.f; tiles = []; touched++; pickTiles(); }
       glideTo(sp.u!, sp.v!, 3.2, true);
       return;
@@ -412,7 +420,7 @@
     at = null; glided = r === room; // the same room again: stay
     room = r;
     const f = floorOf(r)!;
-    if (!f && ver === 'old') { ver = 'main'; reset(); } // the basement is on the main map only
+    if (ver === 'kbtu' || (!f && ver === 'old')) { ver = 'main'; reset(); } // rooms are ringed on UNI-Q's; the basement is there only
     if (f !== cur) { halt(); cur = f; tiles = []; touched++; pickTiles(); }
   }
   const dest = $derived(room ?? at?.label ?? null);
@@ -421,7 +429,7 @@
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
   function fit() { halt(); framed = null; zoomTo(...home(), 420); }
-  const railFloors = $derived([0, 1, 2, 3, 4, 5].filter((n) => ver === 'main' || FLOORS[n]));
+  const railFloors = $derived([0, 1, 2, 3, 4, 5].filter((n) => ver === 'main' || (ver === 'old' ? FLOORS[n] : KBTU_FLOORS[n])));
   /** the glide, to a point of the plan as fractions of its width and height, at least at `zoom` */
   function glideTo(u: number, v: number, zoom = 3.2, fit = false) {
     if (glided) return;
@@ -684,9 +692,16 @@
   </div>
   <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
   <div class="side">
-    <!-- the 2023 plan, for who wants it (owner, Oct 24: the top row's spare room; it was a link under the map) -->
-    <button class="rb glass glass-pill" class:on={ver === 'old'} class:away={!!rt.route} use:glass onclick={() => { haptic.tap(); setVer(ver === 'old' ? 'main' : 'old'); }}
-      aria-label={ver === 'old' ? t('map.newPlan') : t('map.oldPlan')} aria-pressed={ver === 'old'}><History size={20} /></button>
+    <!-- the maps: a tap lists them (owner, Oct 27; it was a toggle to the 2023 plan) -->
+    <div class="maps" class:away={!!rt.route}>
+      <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }}
+        aria-label={t('map.maps')} aria-expanded={menu} aria-haspopup="menu"><Layers size={20} /></button>
+      {#if menu}
+        <div class="menu glass glass-sheet" use:glass role="menu">
+          {#each VERS as v (v)}<button role="menuitemradio" aria-checked={ver === v} class:on={ver === v} onclick={() => { menu = false; setVer(v); }}>{t(`map.ver.${v}` as 'map.ver.main')}</button>{/each}
+        </div>
+      {/if}
+    </div>
     <!-- on the way only the look button stays: the floors move into the step card (owner, Oct 24) -->
     <div class="rail glass glass-pill" class:away={!!rt.route} class:dragging inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')} style:--kp={kp}>
       <!-- the knob: a clear glass lens, the rail's numbers again inside it, magnified around its middle (owner, Oct 25) -->
@@ -702,7 +717,7 @@
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
-  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : t('map.note')}</p>
+  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
   <!-- the bottom, under the thumb (owner's layout, Oct 26): the way out small on the left, the search, and on the right
        the app's own map button, lit: a tap there closes the map, as the button opened it -->
   <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
@@ -815,7 +830,11 @@
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .rb { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
   .rb.on { background: var(--accent); color: #fff; }
-  .rb.away { opacity: 0; pointer-events: none; }
+  .rb.away, .maps.away { opacity: 0; pointer-events: none; }
+  .maps { position: relative; flex: none; transition: opacity 0.3s; }
+  .menu { position: absolute; left: 0; top: 54px; min-width: 190px; padding: 6px; border-radius: 22px; display: grid; gap: 2px; }
+  .menu button { text-align: left; padding: 11px 14px; border-radius: 16px; font: inherit; font-weight: 600; color: var(--text); }
+  .menu button.on { background: var(--accent); color: #fff; }
   .rb:active { transform: scale(0.92); transition-duration: 80ms; }
   /* a floor button shrinks on a narrow phone so the row fits (two 46px buttons, two 10px gaps, 12px sides) */
   .rail { --fb: min(42px, calc((100vw - 144px) / 6)); position: relative; display: flex; padding: 4px; border-radius: 26px; transition: opacity 0.3s, transform 0.5s var(--ease-spring), --kp 420ms var(--ease-spring); }
