@@ -107,7 +107,10 @@
   // laid out at scale `base` (drawn sharp there); between base and s it is a CSS scale until the fingers let go.
   let s = 1, x = 0, y = 0, base = 1, settleT = 0;
   const MAX = 8;
-  const paint = (ease = '') => { plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`; };
+  const paint = (ease = '') => {
+    plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`;
+    plan.classList.toggle('near', stage.clientWidth * s / 1000 >= 1.1); // our map's fine detail (windows, doors, WC fixtures) from ~1.1 px a unit
+  };
   /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
   function settle() {
     clearTimeout(settleT);
@@ -798,6 +801,8 @@
   .theme-dark .plan { --m-wall: #e5484d; --m-col: #3d5444; --m-col-line: #8fb59a; --m-ink: #e5e5ea; --m-soft: #6e6e73; --m-part: #d4525f; --m-dot: #48484a; }
   /* the SVG carries light-theme colours of its own (so it reads on its own); the theme's win here */
   .plan :global(svg) { display: block; width: 100%; height: 100%; }
+  .plan :global(.fine) { opacity: 0; transition: opacity 0.25s; }
+  .plan:global(.near) :global(.fine) { opacity: 1; }
   .plan :global(.w) { fill: var(--m-wall); }
   .plan :global(.c) { fill: var(--m-col); stroke: var(--m-col-line); }
   .plan :global(.lk) { stroke: var(--m-ink); }
