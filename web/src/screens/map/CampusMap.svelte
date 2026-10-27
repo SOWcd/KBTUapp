@@ -109,7 +109,9 @@
   const MAX = 8;
   const paint = (ease = '') => {
     plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`;
-    plan.classList.toggle('near', stage.clientWidth * s / 1000 >= 1.1); // our map's fine detail (windows, doors, WC fixtures) from ~1.1 px a unit
+    const px = stage.clientWidth * s / 1000; // our map's px a unit
+    plan.classList.toggle('mid', px >= 0.7); // room numbers and door signs (Oct 28: far off they were specks)
+    plan.classList.toggle('near', px >= 1.1); // fine detail: windows, doors, WC fixtures
   };
   /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
   function settle() {
@@ -803,6 +805,8 @@
   .plan :global(svg) { display: block; width: 100%; height: 100%; }
   .plan :global(.fine) { opacity: 0; transition: opacity 0.25s; }
   .plan:global(.near) :global(.fine) { opacity: 1; }
+  .plan :global(.mid) { opacity: 0; transition: opacity 0.25s; }
+  .plan:global(.mid) :global(.mid) { opacity: 1; }
   .plan :global(.w) { fill: var(--m-wall); }
   .plan :global(.c) { fill: var(--m-col); stroke: var(--m-col-line); }
   .plan :global(.lk) { stroke: var(--m-ink); }
