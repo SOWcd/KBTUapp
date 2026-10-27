@@ -376,7 +376,34 @@
     on.forEach(([k, f]) => el.addEventListener(k, f as EventListener));
     return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
   }
-  function setVer(v: Ver) { if (v === ver) return; haptic.select(); ver = v; if ((v === 'old' && !cur) || (v === 'kbtu' && !KBTU_FLOORS[cur])) cur = 1; glided = false; clearTimeout(glideT); touched++; reset(); goHome(); }
+  // the frames in plan units (the 2023 plan's): the old map is the plan itself, ours a 1000-unit square cut of it at
+  // (120, 130), UNI-Q's sheet fitted to it by its room numbers (design/map/tools/clean, median error ~9 units)
+  const FIT = [[0.186469, 0.000447], [-0.001899, 0.196124], [9.528454, 5.881245]];
+  const UNITS: Record<Ver, number> = { main: uniq.w * FIT[0][0], old: 1240, kbtu: 1000 }; // the sheet's width
+  function toPlan(v: Ver, u: number, w: number): [number, number] {
+    if (v === 'old') return [u * 1240, w * 1240];
+    if (v === 'kbtu') return [120 + u * 1000, 130 + w * 1000];
+    const px = u * uniq.w, py = w * uniq.h;
+    return [px * FIT[0][0] + py * FIT[1][0] + FIT[2][0], px * FIT[0][1] + py * FIT[1][1] + FIT[2][1]];
+  }
+  function fromPlan(v: Ver, X: number, Y: number): [number, number] {
+    if (v === 'old') return [X / 1240, Y / 1240];
+    if (v === 'kbtu') return [(X - 120) / 1000, (Y - 130) / 1000];
+    const [[a, c], [b, d], [e, f]] = FIT, X0 = X - e, Y0 = Y - f, det = a * d - b * c;
+    return [(d * X0 - b * Y0) / det / uniq.w, (a * Y0 - c * X0) / det / uniq.h];
+  }
+  /** another map: the same part of the building stays on screen at the same size (owner, Oct 27: it zoomed out) */
+  function setVer(v: Ver) {
+    if (v === ver) return;
+    haptic.select();
+    const W = stage.clientWidth, H = stage.clientHeight, zoomed = !out();
+    const P = toPlan(ver, (W / 2 - x) / (W * s), (H / 2 - y) / (W * AR * s)), k = s * UNITS[v] / UNITS[ver];
+    ver = v; if ((v === 'old' && !cur) || (v === 'kbtu' && !KBTU_FLOORS[cur])) cur = 1; glided = false; clearTimeout(glideT); touched++; reset();
+    if (!zoomed) { goHome(); return; }
+    const [u, w] = fromPlan(v, ...P);
+    s = Math.min(MAX, Math.max(home()[0], k)); x = W / 2 - u * W * s; y = H / 2 - w * W * AR * s;
+    clamp(); settle(); paint();
+  }
 
   // the room: its number ringed wherever the plan has it, and once, a beat after the floor shows, a glide in to it
   let glided = false, glideT = 0, touched = 0;
