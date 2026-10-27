@@ -53,7 +53,7 @@
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
   // which map (owner, Oct 27: a list at the top left): UNI-Q's, ours (floor 1 so far, not the default yet), the 2023 plan
   type Ver = 'main' | 'kbtu' | 'old';
-  const VERS: Ver[] = ['main', 'kbtu', 'old'];
+  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); UNI-Q stays the default for now
   let ver = $state<Ver>('main');
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0, edit: false, sel: null, moving: false });
