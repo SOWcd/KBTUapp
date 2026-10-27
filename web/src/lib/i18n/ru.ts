@@ -465,6 +465,8 @@ const ru = {
   'map.ver.kbtu': "Карта KBTU App",
   'map.ver.old': "План 2023 года",
   'map.noteKbtu': "Карта KBTU App — пока только 1 этаж",
+  'map.zone.dit': "ДИТ",
+  'map.staffOnly': "Служебная зона",
   'map.bShort': "0",
   'route.out': "Помоги выйти",
   'route.here': "Ты здесь",

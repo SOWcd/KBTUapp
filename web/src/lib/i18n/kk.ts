@@ -465,6 +465,8 @@ const kk: Dict = {
   'map.ver.kbtu': "KBTU App картасы",
   'map.ver.old': "2023 жылғы жоспар",
   'map.noteKbtu': "KBTU App картасы — әзірге тек 1-қабат",
+  'map.zone.dit': "ДИТ",
+  'map.staffOnly': "Қызметтік аймақ",
   'map.bShort': "0",
   'route.out': "Шығуға көмектес",
   'route.here': "Сен осындасың",

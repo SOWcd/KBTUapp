@@ -88,6 +88,9 @@
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
   const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
   let svg = $state('');
+  // our map's words in the UI language: the SVG marks them data-t="key" and holds the English
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const shown = $derived(svg.replace(/(<text[^>]*data-t="([^"]+)"[^>]*>)[^<]*/g, (_, open: string, k: string) => open + esc(t(k as Parameters<typeof t>[0]))));
   // another room: a clean plan, without the last one's rings
   $effect(() => {
     const n = cur, url = ver === 'old' ? FLOORS[n] : ver === 'kbtu' ? KBTU_FLOORS[n]?.[look === 'dark' ? 1 : 0] : null; // ours is drawn light and dark
@@ -713,7 +716,7 @@
           {/each}
         {/if}
       {:else}
-        {@html svg}
+        {@html shown}
       {/if}
     </div>
   </div>
