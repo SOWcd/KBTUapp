@@ -29,8 +29,12 @@
   const skins = $derived([...mine, ...data.orgs.filter((o) => skinned(o) && !mine.some((x) => x.id === o.id))]);
   async function pickSkin(id: number | 'sower' | null) {
     if (busy || id === me.skin) return;
+    // no toast (owner, Oct 29: "Lanyard" popping up on every pick looked cheap): the badge above changes at once and
+    // swings in (Hero); a failure puts the old one back
+    const was = me;
     busy = 'skin';
-    try { done(await api.updateMe({ skin: id }), t('look.skin')); } catch (e) { oops(e); } finally { busy = ''; }
+    session.me = { ...me, skin: id };
+    try { session.me = await api.updateMe({ skin: id }); } catch (e) { session.me = was; oops(e); } finally { busy = ''; }
   }
   let file = $state<HTMLInputElement>();
 

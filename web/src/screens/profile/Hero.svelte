@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   // The profile hero, shared by Me and the person sheet (owner's pick of three): the profile as a KBTU
   // event badge on a lanyard — clubs print their titles in English on theirs, so this one does too. It hangs
@@ -42,6 +43,9 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
+  // a new lanyard put on drops in the same way: the eye goes to the badge, not to a toast
+  let worn = untrack(() => look);
+  $effect(() => { if (look !== worn) { worn = look; if (!still()) swing.animate(frames, { duration: 1400 }); } });
 
   // On Me it also feels the Profile pages being swiped (the swing-in on paging looked like a jerk):
   // it leans behind a moving page and sways when the page stops. A damped spring (8 rad/s, ζ 0.2) toward a lean
