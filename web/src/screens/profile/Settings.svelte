@@ -5,6 +5,17 @@
   // deleting the account last and quiet.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Languages from '@lucide/svelte/icons/languages';
+  import SunMoon from '@lucide/svelte/icons/sun-moon';
+  import BellRing from '@lucide/svelte/icons/bell-ring';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import BatteryMedium from '@lucide/svelte/icons/battery-medium';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
+  import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import Phone from '@lucide/svelte/icons/phone';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
@@ -22,9 +33,11 @@
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
   const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
 
-  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
+  // each row's mark: a tinted tile, like the phone's own settings (the eye finds a row by its colour and shape first)
+  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint', BellRing, '#FF5A4E'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint', CalendarPlus, '#FF9F0A'],
+    ['nForum', 'set.forum', 'set.forumHint', MessagesSquare, '#30B0C7']] as const;
   // a switch saves at once and puts itself back if the server says no
-  async function set(k: 'nRemind' | 'nNewEvents', on: boolean) {
+  async function set(k: (typeof SWITCHES)[number][0], on: boolean) {
     if (!me) return;
     haptic.tap();
     me.settings[k] = on;
@@ -80,20 +93,22 @@
   }
 </script>
 
+{#snippet ic(Icon: typeof BellRing, c: string)}<span class="ico" style="--c:{c}" aria-hidden="true"><Icon size={18} strokeWidth={2.2} /></span>{/snippet}
+
 <div class="page scroll">
   <h1 class="ttl">{t('me.settings')}</h1>
   <div class="rows surface">
-    <div class="r"><span class="lb">{t('me.guestLang')}</span>
+    <div class="r">{@render ic(Languages, '#5E5CE6')}<span class="lb">{t('me.guestLang')}</span>
       <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); keep({ lang: l }); void loadLang(l).then(() => reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang')); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
-    <div class="r"><span class="lb">{t('me.guestTheme')}</span>
+    <div class="r">{@render ic(SunMoon, '#3B6BFF')}<span class="lb">{t('me.guestTheme')}</span>
       <span class="seg"><button class:on={theme.current === 'dark'} onclick={(e) => { if (theme.current !== 'dark') { chooseTheme('dark', e.currentTarget); keep({ theme: 'dark' }); say(phrase('say.theme.dark'), 'crescent_moon_3d'); } }}>{t('theme.dark')}</button><button class:on={theme.current === 'light'} onclick={(e) => { if (theme.current !== 'light') { chooseTheme('light', e.currentTarget); keep({ theme: 'light' }); say(phrase('say.theme.light'), 'sparkles_3d'); } }}>{t('theme.light')}</button></span></div>
   </div>
 
   {#if me?.student}
     <h2 class="sec">{t('me.notifications')}<span>{t('set.notifyBot')}</span></h2>
     <div class="rows surface">
-      {#each SWITCHES as [k, title, hint] (k)}
-        <label class="r switch"><span><b>{t(title)}</b><i>{t(hint)}</i></span>
+      {#each SWITCHES as [k, title, hint, Icon, c] (k)}
+        <label class="r switch">{@render ic(Icon, c)}<span><b>{t(title)}</b><i>{t(hint)}</i></span>
           <input type="checkbox" role="switch" checked={me.settings[k]} onchange={(e) => set(k, e.currentTarget.checked)} /></label>
       {/each}
     </div>
@@ -102,13 +117,13 @@
 
   <h2 class="sec">{t('set.phone')}</h2>
   <div class="rows surface">
-    <button class="r" onclick={() => sheets.settings('power')}>
+    <button class="r" onclick={() => sheets.settings('power')}>{@render ic(BatteryMedium, '#34C759')}
       <span class="lb">{t('power.title')}<i>{t(power.mode === 'auto' ? (power.lite ? 'power.sub.autoOn' : 'power.sub.autoOff') : power.mode === 'on' ? 'power.sub.on' : 'power.sub.off')}</i></span><ChevronRight size={18} /></button>
     {#if home === 'unknown' || home === 'missed'}
-      <button class="r" onclick={() => { haptic.tap(); homeScreen.add(); }}><span class="lb">{t('set.home')}<i>{t('set.homeSub')}</i></span><ChevronRight size={18} /></button>
+      <button class="r" onclick={() => { haptic.tap(); homeScreen.add(); }}>{@render ic(Smartphone, '#8E8E93')}<span class="lb">{t('set.home')}<i>{t('set.homeSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
     {#if me?.student}
-      <button class="r" onclick={subscribe}><span class="lb">{t('me.calendar')}<i>{t('set.calendarSub')}</i></span><ChevronRight size={18} /></button>
+      <button class="r" onclick={subscribe}>{@render ic(CalendarDays, '#FF375F')}<span class="lb">{t('me.calendar')}<i>{t('set.calendarSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
   </div>
 
@@ -116,13 +131,13 @@
     <h2 class="sec">{t('pd.title')}</h2>
     <div class="rows surface">
       {#if me.student?.phone}
-        <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
+        <div class="r">{@render ic(Phone, '#34C759')}<button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
           <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
       {/if}
       {#if me.city}
-        <div class="r"><span class="lb">{t('pd.city')}<i>{me.city.name}</i></span>
+        <div class="r">{@render ic(MapPin, '#FF9F0A')}<span class="lb">{t('pd.city')}<i>{me.city.name}</i></span>
           <button class="x" aria-label={t('pd.del')} onclick={dropCity}><Trash2 size={18} /></button></div>
-        <label class="r switch"><span><b>{t('pd.cityHide')}</b><i>{t('pd.cityNote')}</i></span>
+        <label class="r switch">{@render ic(EyeOff, '#8E8E93')}<span><b>{t('pd.cityHide')}</b><i>{t('pd.cityNote')}</i></span>
           <input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
       {/if}
     </div>
@@ -153,7 +168,7 @@
   .lb, .switch b { flex: 1; min-width: 0; font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); }
   .lb i, .switch i { display: block; margin-top: 2px; font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-3); }
   .switch { justify-content: space-between; border-radius: 0; background: none; }
-  .switch > span { flex: 1; }
+  .switch > span:not(.ico) { flex: 1; }
   .switch b { display: block; }
   .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-full); background: var(--surface-2); }
   .seg button { height: 30px; padding: 0 12px; border-radius: var(--r-full); font: 620 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
@@ -162,6 +177,13 @@
   button.lb { text-align: left; }
   .x { display: flex; padding: 8px; margin-right: -8px; color: var(--danger-text); }
   .about { margin-top: 20px; }
+  /* the tile: the colour solid, the mark white, a soft inner light on top (glass, not flat paint) */
+  .ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #fff;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 82%, #fff), var(--c));
+    box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.45), 0 2px 6px -2px color-mix(in srgb, var(--c) 60%, transparent); }
+  .switch:has(input:active) .ico, button.r:active .ico { transform: scale(0.92); }
+  .ico { transition: transform var(--t-fast) var(--ease); }
+  .r { padding-left: 12px; }
   .mk { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); }
   .del { align-self: center; margin-top: 18px; padding: 8px 14px; font: 600 var(--fs-body)/1 var(--font-text); color: var(--danger-text); }
   .tail { flex: none; height: calc(var(--bottom) + 12px); }

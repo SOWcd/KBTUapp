@@ -800,6 +800,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     DROP TABLE reports;
     ALTER TABLE reports4 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
+    # the bot's "someone answered your forum thread" has its own switch in Settings
+    (84, "ALTER TABLE users ADD COLUMN n_forum INTEGER NOT NULL DEFAULT 1;"),
 ]
 
 

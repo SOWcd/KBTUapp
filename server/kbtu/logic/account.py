@@ -14,7 +14,7 @@ from .core import (ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
-            "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
+            "nFriends": "n_friends", "nForum": "n_forum", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
 
 
 def ms_link(con, uid: int, who: dict) -> None:

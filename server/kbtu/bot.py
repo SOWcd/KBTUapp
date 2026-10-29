@@ -124,7 +124,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
     if kind == "thread_reply":  # tr:<thread>:<hour>: someone answered or joined my forum thread; never their words
         t = one(con, "SELECT id FROM threads WHERE id = ? AND status = 'live'", int(ref[1]))
-        return (*texts.bot_message(lang, kind), f"th_{t['id']}") if t else None
+        if not t or not one(con, "SELECT n_forum FROM users WHERE id = ?", m["user_id"])[0]:  # gone, or the switch is off
+            return None
+        return (*texts.bot_message(lang, kind), f"th_{t['id']}")
     if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])

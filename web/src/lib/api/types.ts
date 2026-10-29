@@ -157,6 +157,7 @@ export interface Settings {
   nRemind: boolean;
   nNewEvents: boolean;
   nFriends: boolean;
+  nForum: boolean;              // the bot: someone answered or joined my forum thread
   showGoing: boolean;
   hideFirstYear: boolean;
 }

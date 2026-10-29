@@ -5580,7 +5580,11 @@ def test_student_forum(env, monkeypatch):
     assert [(r.get("n"), r.get("op", False)) for r in th["thread"]] == [(1, False), (2, False), (1, False), (None, True)]
     assert all("person" not in r for r in th["thread"]) and th["replies"] == 4
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'thread_reply' AND user_id = ?", (ann["id"],)).fetchone()[0] == 1
-    assert "Same here" not in bot._render(con, con.execute("""SELECT o.*, 'ru' AS lang FROM bot_outbox o WHERE kind = 'thread_reply'""").fetchone())[0]
+    card = con.execute("""SELECT o.*, 'ru' AS lang FROM bot_outbox o WHERE kind = 'thread_reply'""").fetchone()
+    assert "Same here" not in bot._render(con, card)[0]
+    c.patch("/api/me", headers=A, json={"nForum": False})                                         # Settings: off
+    assert bot._render(con, card) is None and c.get("/api/me", headers=A).json()["settings"]["nForum"] is False
+    c.patch("/api/me", headers=A, json={"nForum": True})
     # "I'm in": gathering topics only, not my own; the author sees who and how to write
     assert c.put(f"/api/threads/{named['id']}/join", headers=B, json={"on": True}).json()["joins"] == 1
     assert c.put(f"/api/threads/{named['id']}/join", headers=A, json={"on": True}).status_code == 404
