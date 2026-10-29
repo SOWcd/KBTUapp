@@ -7,14 +7,21 @@ export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
 // the forum second (Oct 30): the students' everyday place, next to the events
 export const TABS: Tab[] = ['afisha', 'forum', 'club', 'profile'];
 const NAV_KEY = 'kb-nav';
+/** Each tab's home page: List, the forum, Studio (the catalogue for a non-member, clamped), Me. */
+const HOME: Record<Tab, number> = { afisha: 1, forum: 0, club: 1, profile: 1 };
+// away this long, each tab opens on its home page again (owner, Oct 29: the tabs kept their last page "forever" and even
+// he got lost); the tab itself and the club picked stay
+const AWAY = 10 * 60_000;
 
 function restore(): { tab: Tab; page: Record<Tab, number>; club: number | null } {
-  const dflt = { tab: 'afisha' as Tab, page: { afisha: 1, forum: 0, club: 1, profile: 1 }, club: null };
   try {
     const v = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (v && TABS.includes(v.tab) && v.page) return { tab: v.tab, page: { ...dflt.page, ...v.page }, club: typeof v.club === 'number' ? v.club : null };
+    if (v && TABS.includes(v.tab) && v.page) {
+      const fresh = typeof v.at === 'number' && Date.now() - v.at < AWAY;
+      return { tab: v.tab, page: { ...HOME, ...(fresh ? v.page : {}) }, club: typeof v.club === 'number' ? v.club : null };
+    }
   } catch { /* blocked or corrupted */ }
-  return dflt;
+  return { tab: 'afisha', page: { ...HOME }, club: null };
 }
 
 const start = restore();
@@ -28,11 +35,17 @@ export const ui = $state({
 });
 
 export function persistNav(): void {
-  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, page: ui.page, club: ui.club })); } catch { /* blocked */ }
+  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, page: ui.page, club: ui.club, at: Date.now() })); } catch { /* blocked */ }
 }
+// Telegram keeps a Mini App alive in the background: coming back after AWAY is a fresh start too
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); persistNav(); }
+  else if (hiddenAt && Date.now() - hiddenAt > AWAY) Object.assign(ui.page, HOME);
+});
 
 export function goTab(tab: Tab): void {
-  if (ui.tab === tab) { ui.page[tab] = 1; return; } // re-tap: back to the tab's home page
+  if (ui.tab === tab) { ui.page[tab] = HOME[tab]; return; } // re-tap: back to the tab's home page
   ui.tab = tab;
   haptic.select();
 }
