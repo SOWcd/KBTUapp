@@ -805,6 +805,7 @@ const en: Dict = {
   'ci.wait': "You're at “{title}”. Sign in with KBTU and it counts",
   'ci.old': "This QR is old: scan the screen again",
   'ci.closed': "Check-in is closed",
+  'ci.notIn': "You didn't scan in: talk to the organizers",
   'scr.title': "Check-in screen",
   'scr.start': "Start check-in",
   'scr.finish': "Finish",

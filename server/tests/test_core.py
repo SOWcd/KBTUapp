@@ -5787,6 +5787,11 @@ def test_assistant(env, monkeypatch):
     assert [m["role"] for m in seen[0]] == ["system", "user", "user"]
     for bad in ({"q": "x"}, {"q": "y" * 301}, {"q": "ok?", "history": "nope"}):
         assert c.post("/api/assistant", headers=tma(1), json=bad).status_code == 400
+    from kbtu.logic import assistant
+    assert assistant.answer('{"text": "hi", "actions": 5}', set(), {1}) == {"text": "hi", "actions": []}       # not a 500
+    assert assistant.answer('{"text": "hi", "actions": [{"type": "event", "id": true}]}', set(), {1})["actions"] == []
+    con.execute("UPDATE schedule_classes SET room = '256A'")                                   # the portal's capital letter
+    assert "256a" in assistant.brief(con, logic.Viewer(ann["id"], "user", True))[1]
 
     async def busy(*a, **k):
         raise llm.Busy()
@@ -5818,6 +5823,14 @@ def test_checkin_way_out(env, monkeypatch):
     p = c.get("/api/screen", headers=k).json()["param"]
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["left"] is True
     assert c.get("/api/screen", headers=k).json()["departed"] == 1
+    # the adversarial review: a "leaving" scan alone isn't being there (no mark, no badge); an old link from Telegram's
+    # history can't mark leaving from home
+    cleo = login(c, 3, "cleo")
+    r = c.post("/api/checkin", headers=tma(3), json={"p": p})
+    assert (r.status_code, r.json()["message"]) == (400, "qr_not_in") and not con.execute("SELECT 1 FROM qr_marks WHERE user_id = ?", (cleo["id"],)).fetchone()
+    was = int(time.time()) // checkin.SLOT - 20
+    stale = f"ci_{sid}_{was}_{checkin._sig(cfg.token_key, f'ci.{sid}.{was}')}"
+    assert c.post("/api/checkin", headers=tma(2), json={"p": stale}).json()["message"] == "qr_old"
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
     ann_row = next(r for r in rows_[1:] if r[3] == "24Bann")
     assert ann_row[10] and float(ann_row[11]) >= 1.9 and not next(r for r in rows_[1:] if r[3] == "24Bbob")[10]

@@ -243,20 +243,23 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         raise ApiError("bad_input", "qr") from None
     if not _same(_sig(key, f"ci.{sid}.{slot}"), sig):
         raise ApiError("bad_input", "qr")
-    # the same scan again after the sign-up (the app repeats it): its age doesn't matter, it was taken in time
     had = one(con, "SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
     # finished: only someone who scanned before Finish may still complete it, for GRACE (said before "old": a photo
     # scanned after Finish is "closed")
     if not s or s["started_at"] is None or s["ended_at"] is not None and not (had and s["ended_at"] > now() - GRACE):
         raise ApiError("closed", "qr")
-    if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
-        raise ApiError("bad_input", "qr_old")
-    t = now()
     out = s["phase"] == "out" and s["ended_at"] is None
+    # the same scan again after the sign-up (the app repeats it): its age doesn't matter, it was taken in time. Leaving
+    # always looks at it: an old link in Telegram's history must not mark someone gone home as leaving at the end
+    if (out or not had) and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
+        raise ApiError("bad_input", "qr_old")
+    if out and not had:  # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
+        raise ApiError("bad_input", "qr_not_in")
+    t = now()
     with tx(con):
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
-        if out:  # leaving: the last time counts (out and back in, out again); someone who never scanned in shows as "left only"
+        if out:  # leaving: the last time counts (out and back in, out again)
             con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
