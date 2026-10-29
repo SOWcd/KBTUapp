@@ -1,7 +1,8 @@
 <script lang="ts">
   // The organizer's side of /show (server checkin.py): a scan of the laptop's pairing QR (sh_<code>) binds it to my
   // session, and here are the controls the screen itself no longer has: Start, Finish, the list, "disconnect". Anyone
-  // who doesn't run a session gets a polite no and the screen stays as it was. Without a code: my sessions.
+  // who doesn't run a session gets a polite no and the screen stays as it was. From an event (`event`): its own session,
+  // made on first use, with the way to the laptop. Without either: my sessions.
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -15,13 +16,14 @@
   import Download from '@lucide/svelte/icons/download';
   import Unplug from '@lucide/svelte/icons/unplug';
 
-  let { overlay, code }: { overlay: Overlay; code?: string } = $props();
+  let { overlay, code, event }: { overlay: Overlay; code?: string; event?: Id } = $props();
   let list = $state<ScreenSession[] | null>(null);
   let pick = $state(false);   // an unpaired screen and several open sessions: which one
   let note = $state('');      // why there's nothing to do here
   let busy = $state(0);
 
-  const refresh = () => api.screens().then((l) => { if (!pick) list = l; }).catch(() => {});
+  // from an event, only its session stays in view
+  const refresh = () => api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : l; }).catch(() => {});
   async function bind(session?: Id) {
     try {
       const s = await api.bindScreen(code!, session);
@@ -36,7 +38,9 @@
     }
   }
   $effect(() => {
-    if (code) void bind(); else void refresh();
+    if (code) void bind();
+    else if (event) api.eventScreen(event).then((s) => (list = [s])).catch(() => { haptic.error(); note = t('common.error'); list = []; });
+    else void refresh();
     const id = setInterval(refresh, 4000); // the count goes up while people scan
     return () => clearInterval(id);
   });
@@ -71,7 +75,7 @@
         <span class="st" class:on={s.param}>{s.ended ? t('scr.closed') : s.started ? t('scr.live') : t('scr.waiting')}</span>
       </div>
       <p class="num"><b>{s.done}</b>{#if s.expected}<span> / {s.expected}</span>{/if} <i class="t-foot">{t('scr.done')}{s.pending ? ' · ' + t('scr.joining', { n: s.pending }) : ''}</i></p>
-      <p class="t-foot scr"><MonitorUp size={15} />{t('scr.screens', { n: s.screens })}</p>
+      <p class="t-foot scr"><MonitorUp size={15} />{s.screens ? t('scr.screens', { n: s.screens }) : t('scr.howTo', { url: location.host + '/show' })}</p>
       <div class="acts">
         {#if pick}
           <Button kind="primary" size="m" full onclick={() => bind(s.session)}>{t('scr.here')}</Button>

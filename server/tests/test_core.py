@@ -5495,6 +5495,41 @@ def test_screen_pairing(env, monkeypatch):
     con.close()
 
 
+def test_event_screen(env):
+    """An event's own check-in screen (Oct 30): its organizers make it in the app (one per event); a counted scan is
+    that event's check-in (a walk-in on a free public event, the ticket checked in, nothing on a paid one); a paid or
+    partner's event keeps its door."""
+    from kbtu import checkin
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    ann, bob = login(c, 1, "ann"), login(c, 2, "bob")
+    t0 = int(time.time())
+    for eid, price, host in ((1, None, None), (2, 2000, None), (3, None, "Night Owls")):
+        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, price, pay_to_name, pay_phone, guest_host,
+            created_by, created_at, updated_at) VALUES (?, ?, 'published', 'Initiation', 'Hall', ?, 'trophy_3d', '#3B6BFF', ?, ?, ?, ?, 1, 0, 0)""",
+                    (eid, org, t0 + 600, price, price and "Dana S.", price and "+77071234567", host))
+    assert c.post("/api/events/1/screen", headers=tma(1)).status_code == 403                 # a guest at it, not its organizer
+    for eid in (2, 3):
+        assert c.post(f"/api/events/{eid}/screen", headers=tma(9)).status_code == 409        # tickets / no door
+    s = c.post("/api/events/1/screen", headers=tma(9)).json()
+    assert (s["event"], s["title"]) == (1, "Initiation") and c.post("/api/events/1/screen", headers=tma(9)).json()["session"] == s["session"]
+    p = c.post(f"/api/screens/{s['session']}/start", headers=tma(9)).json()["param"]
+    c.post("/api/events/1/registration", headers=tma(2), json={})                            # Bob has a ticket
+    for u in (1, 2):
+        assert c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["done"]
+    came = dict(con.execute("SELECT user_id, walk_in FROM registrations WHERE event_id = 1 AND checked_in_at IS NOT NULL").fetchall())
+    assert came == {ann["id"]: 1, bob["id"]: 0}                                              # Ann walked in, Bob's ticket
+    # a scan before the sign-up counts for the event once that person is a student
+    assert not c.post("/api/checkin", headers=tma(4), json={"p": p}).json()["done"]
+    uid = c.get("/api/me", headers=tma(4)).json()["id"]
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
+        synced_at, manual) VALUES (?, '24B4', 'Four', 'P', 1, ?, 0, 0, 0, 1)""", (uid, logic.CONSENT))
+    with db.tx(con):
+        checkin.became_student(con, uid)
+    assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0]
+    con.close()
+
 def test_partner_events(env):
     """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
     council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays

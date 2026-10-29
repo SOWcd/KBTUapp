@@ -696,6 +696,7 @@ const en: Dict = {
   'scr.joining': "{n} more signing in with KBTU",
   'scr.done': "checked in",
   'scr.closed': "Check-in closed",
+  'scr.howTo': "Open {url} on the laptop and scan its QR with this phone",
   'scr.paired': "Screen connected",
   'scr.stale': "This QR has changed: scan the screen again",
   'scr.notYours': "This QR is for the event's organizers. Nothing changed: the screen waits for them",

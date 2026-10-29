@@ -61,7 +61,7 @@ from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MA
     attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
     clean_event, create_event, decline, delete_event, delete_update, door, door_guests, event_invites, invite_friend,
     kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,
-    remove_album_photo, shade, undo_checkin, undo_door_guest, update_event)  # noqa: F401
+    remove_album_photo, screen_came, shade, undo_checkin, undo_door_guest, update_event)  # noqa: F401
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
     admin_stats, ai_retry, day_of, memo, memo_again, memo_item, memo_opened, memo_sent, memo_sign, memo_week,
     saved_day, stats_day, tba_day, visit)  # noqa: F401

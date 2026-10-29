@@ -521,6 +521,28 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int) -> sqlite3.Row | 
     return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
 
 
+def screen_came(con, eid: int, uid: int, t: int) -> None:
+    """A counted scan of an event's big-screen QR (checkin.py): that person came, as the door scanner would say. A ticket
+    they hold is checked in; a free public event registers them on the spot (walk_in); a paid one needs a ticket and a
+    team-only one counts its members only (the scan still shows in the session's own list)."""
+    e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+    if not e or e["status"] != "published":
+        return
+    r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+    if not r or r["status"] != "going":
+        if e["price"] or e["visibility"] != "public" and not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
+            return
+        if r:
+            con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
+                        (t, r["id"]))
+        else:
+            con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
+                        (eid, uid, _ticket_code(con), t, t))
+        r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+    if not r["checked_in_at"]:
+        _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
+
+
 def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
     """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer."""
     with tx(con):

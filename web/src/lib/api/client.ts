@@ -238,6 +238,7 @@ export const server: Api = {
   screens: () => call('GET', '/screens'),
   bindScreen: (code, session) => call('POST', '/screens/bind', { code, session }),
   screenAct: (id, act) => call('POST', `/screens/${id}/${act}`),
+  eventScreen: (event) => call('POST', `/events/${event}/screen`),
   screenCsv: (id) => call('POST', `/screens/${id}/csv`),
   restore: (target, id) => call('POST', `/admin/taken-down/${target}/${id}/restore`),
   resolveReport: (target, id, remove) => call('POST', `/admin/reports/${target}/${id}`, { remove }),

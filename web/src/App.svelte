@@ -93,7 +93,7 @@
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
-  sheets.screens = (code) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code });
+  sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   sheets.rosterWelcome = (spots) => lazy(() => import('./screens/sheets/RosterWelcome.svelte'), { spots });

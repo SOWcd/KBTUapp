@@ -13,6 +13,7 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { api, ApiErr, type Attendee, type Id, type PersonRef } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
@@ -140,6 +141,8 @@
       {/if}
       {#if head}
         <button onclick={() => sheets.attendees(id)}><UsersRound size={20} />{t('studio.attendees')}</button>
+        <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
+        {#if live && !price && !e.guestHost}<button onclick={() => sheets.screens(undefined, id)}><MonitorUp size={20} />{t('scr.title')}</button>{/if}
         <button onclick={() => sheets.editor(e.org.id, id)}><Pencil size={20} />{t('studio.edit')}</button>
         {#if e.status !== 'cancelled'}<button onclick={openChat}><MessagesSquare size={20} />{t(chat ? 'chat.open' : 'chat.create')}</button>{/if}
         {#if e.needsVolunteers}<button onclick={() => sheets.volunteers(id, e.needsVolunteers!)}><HandHeart size={20} />{t('vol.list')}{e.volunteersAsked ? ` · ${e.volunteersAsked}` : ''}</button>{/if}

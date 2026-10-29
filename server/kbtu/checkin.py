@@ -15,6 +15,7 @@ import json
 import secrets
 import time
 
+from . import logic
 from .logic import ApiError, Viewer, can, now, one, rows, tx
 
 SLOT = 10           # the QR on the screen changes this often (s)
@@ -88,7 +89,7 @@ def _state(con, key: bytes, s) -> dict:
     slot = int(time.time()) // SLOT
     c = one(con, """SELECT COUNT(*) FILTER (WHERE done_at IS NOT NULL), COUNT(*) FILTER (WHERE done_at IS NULL)
         FROM qr_marks WHERE session_id = ?""", sid)
-    return {"session": sid, "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
+    return {"session": sid, "event": s["event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
             "expected": one(con, "SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", sid)[0],
             "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running else None, "next": SLOT - int(time.time()) % SLOT}
 
@@ -147,6 +148,21 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
     else:
         raise ApiError("not_found")
     return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
+
+
+def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
+    """An event's own session (its organizer's "Check-in screen" in the app), made on first use: its title, its club. A
+    paid event keeps its tickets at the door, a partner's has no door (Oct 29)."""
+    e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+    if not e or not can(con, v, e["org_id"], "events") and v.role != "admin":
+        raise ApiError("forbidden", "screen")
+    if e["status"] != "published" or e["price"] or e["guest_host"]:
+        raise ApiError("closed", "screen")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):
+            con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (e["title"], secrets.token_hex(32), e["org_id"], eid, now()))
+        return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
 
 
 def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:
@@ -213,17 +229,26 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
     if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
         raise ApiError("bad_input", "qr_old")
     t = now()
-    con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
-    if student:
-        con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
+    with tx(con):
+        con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
+        if student:
+            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
+            if s["event_id"]:  # an event's own session: that event's check-in too
+                logic.screen_came(con, s["event_id"], uid, t)
     return {"title": s["title"], "done": student}
 
 
 def became_student(con, uid: int) -> None:
     """Just signed up: the scans waiting for it count now (sessions open or finished under GRACE ago)."""
     t = now()
-    con.execute("""UPDATE qr_marks SET done_at = ? WHERE user_id = ? AND done_at IS NULL
-        AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ?)""", (t, uid, t - GRACE))
+    with tx(con):
+        due = rows(con, """SELECT s.event_id FROM qr_marks m JOIN qr_sessions s ON s.id = m.session_id WHERE m.user_id = ?
+            AND m.done_at IS NULL AND (s.ended_at IS NULL OR s.ended_at > ?)""", uid, t - GRACE)
+        con.execute("""UPDATE qr_marks SET done_at = ? WHERE user_id = ? AND done_at IS NULL
+            AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ?)""", (t, uid, t - GRACE))
+        for r in due:
+            if r["event_id"]:
+                logic.screen_came(con, r["event_id"], uid, t)
 
 
 def prefill(con, email: str | None) -> dict | None:

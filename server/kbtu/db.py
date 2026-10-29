@@ -746,6 +746,10 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX qr_screens_by_session ON qr_screens(session_id);"""),
+    # a check-in session made from an event in the app (its organizer's "Check-in screen"): one per event, its done
+    # scans are that event's check-ins
+    (82, """ALTER TABLE qr_sessions ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
+    CREATE UNIQUE INDEX qr_sessions_by_event ON qr_sessions(event_id) WHERE event_id IS NOT NULL;"""),
 ]
 
 

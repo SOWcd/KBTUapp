@@ -325,6 +325,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         sid = body.get("session")
         return qr.bind(con, cfg.token_key, v, str(body.get("code") or ""), int(sid) if isinstance(sid, int) else None)
 
+    @app.post("/api/events/{eid}/screen")
+    def event_screen(eid: int, con: Con, v: Me):
+        return qr.for_event(con, cfg.token_key, v, eid)
+
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
         return qr.csv_link(con, cfg.token_key, v, sid)
