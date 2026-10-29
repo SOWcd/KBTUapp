@@ -153,11 +153,15 @@
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
   .moments { --role: #F4D9BE; }
-  .moments .pass { background: linear-gradient(180deg, #3A2419, #160D09); }
+  /* below the band the look's texture goes on: Moments' film grain and a warm leak, Faces' club lights */
+  .moments .pass { background: radial-gradient(60% 40% at 100% 70%, rgba(255, 150, 80, 0.16), transparent 70%), linear-gradient(180deg, #3A2419, #160D09); }
+  .moments .pass::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
   .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
   .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
-  .faces .pass { background: radial-gradient(80% 50% at 50% 100%, rgba(200, 64, 255, 0.22), transparent 70%), linear-gradient(180deg, #0E0C14, #050408); }
+  .faces .pass { background: radial-gradient(circle at 8% 62%, rgba(255, 79, 154, 0.3) 0 4px, transparent 9px), radial-gradient(circle at 93% 48%, rgba(110, 123, 255, 0.3) 0 3px, transparent 8px),
+    radial-gradient(circle at 90% 90%, rgba(255, 164, 61, 0.28) 0 5px, transparent 10px), radial-gradient(80% 50% at 50% 100%, rgba(200, 64, 255, 0.22), transparent 70%), linear-gradient(180deg, #0E0C14, #050408); }
   .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
   .studex { --role: rgba(255, 255, 255, 0.92); }
