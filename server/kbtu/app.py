@@ -1077,6 +1077,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("unavailable", "assistant") from None
         return logic.assistant.answer(text, rooms, events)
 
+    # a new event filled from its announcement (logic/assistant.py, below the assistant): the same switch, host and allowance
+    @app.post("/api/orgs/{oid}/events/fill")
+    async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
+        msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
+        try:
+            async with httpx.AsyncClient() as http:
+                text, _ = await llm.chat(cfg, http, msgs, max_tokens=1500, temperature=0.1, check=lambda a: bool(logic.assistant.filled(a)),
+                                         con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, timeout=30)
+        except (llm.Busy, llm.BadAnswers):
+            raise ApiError("unavailable", "assistant") from None
+        return logic.assistant.filled(text)
+
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them
     @app.post("/api/map/flaws", status_code=204)
     def map_flaw(con: Con, v: Me, body: dict = Body(...)):

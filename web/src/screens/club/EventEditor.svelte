@@ -16,6 +16,7 @@
   import Clapperboard from '@lucide/svelte/icons/clapperboard';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Eye from '@lucide/svelte/icons/eye';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, studioChanged, phrase } from '../../lib/state/data.svelte';
@@ -327,6 +328,32 @@
     } finally { busy = ''; }
   }
 
+  // a new event from the announcement the club already wrote (the owner, Oct 30): the AI fills what the text says,
+  // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
+  let filling = $state(false);
+  async function fillFromText() {
+    const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000 });
+    if (!text) return;
+    touch(); filling = true;
+    try {
+      const x = await api.eventFill(org, text);
+      if (x.title) f.title = x.title;
+      if (x.date) f.date = x.date;
+      if (x.start) f.start = x.start;
+      if (x.end) f.end = x.end;
+      if (x.place) f.place = x.place;
+      if (x.description) f.description = x.description;
+      if (x.price && canPrice) { f.paid = true; f.price = String(x.price); }
+      const got = Object.keys(x).length > 0;
+      if (got) haptic.ok(); else haptic.error();
+      say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
+    } catch (e) {
+      haptic.error();
+      const c = e instanceof ApiErr ? e.code : '';
+      say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
+    } finally { filling = false; }
+  }
+
   async function remove() {
     if (!saved || busy) return;
     if (!(await sheets.ask({ title: t('ed.deleteAsk'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
@@ -357,6 +384,12 @@
       </span>
       <span class="eye"><Eye size={19} /></span>
     </button>
+    {#if !id && session.board}
+      <button class="fill surface" class:busy={filling} disabled={filling} onclick={fillFromText}>
+        <span class="spark"><Sparkles size={19} /></span>
+        <span class="txt"><b>{t('ed.fill')}</b><span class="t-foot">{filling ? t('as.thinking') + '…' : t('ed.fillSub')}</span></span>
+      </button>
+    {/if}
 
     <section class="cover">
       <h2 class="t-cap">{t('ed.cover')}</h2>
@@ -628,6 +661,14 @@
 
   .body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; margin-top: max(48px, var(--top)); padding: 6px var(--gutter) 0; }
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
+  .fill { display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 6px; text-align: left; width: 100%; transition: opacity var(--t-base) var(--ease), transform var(--t-fast) var(--ease); }
+  .fill:active { transform: scale(0.98); }
+  .fill.busy { opacity: 0.6; }
+  .fill .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .spark { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff;
+    background: linear-gradient(135deg, var(--accent), #AF52DE); }
+  .fill.busy .spark { animation: spin 1.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .preview { display: flex; gap: 12px; align-items: center; padding: 10px; margin-bottom: 6px; text-align: left; width: 100%; }
   .preview:active { transform: scale(0.98); }
   .preview .txt { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }

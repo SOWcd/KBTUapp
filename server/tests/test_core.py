@@ -5803,6 +5803,32 @@ def test_assistant(env, monkeypatch):
     assert c.post("/api/assistant", headers=tma(1), json={"q": "one more?"}).status_code == 429
     con.close()
 
+def test_event_fill(env, monkeypatch):
+    """Oct 30: a club's organizer pastes an announcement and the new event's form fills itself: the club's own only,
+    behind the forum's switch, the EU host, the assistant's day; only well-shaped fields come back."""
+    from kbtu import llm
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    login(c, 1, "ann")
+    text = "Open mic on November 10 at 18:00 in room 256, entry 1000 tenge. Bring friends!"
+    assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": text}).status_code == 404   # BOARD off
+    _board_on(c, cfg)
+
+    async def fake(cfg_, http, msgs, **kw):
+        assert kw["only"] == ("munitoeu",) and msgs[1]["content"] == text
+        return json.dumps({"title": "Open mic", "date": "2026-11-10", "start": "18:00", "end": "25:00", "place": "256",
+                           "description": "Bring friends!", "price": 1000, "seats": 5}), "x"
+    monkeypatch.setattr(llm, "chat", fake)
+    assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(1), json={"text": text}).status_code == 403    # not their club
+    r = c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": text}).json()
+    assert r == {"title": "Open mic", "date": "2026-11-10", "start": "18:00", "place": "256", "description": "Bring friends!", "price": 1000}
+    assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": "short"}).status_code == 400
+    from kbtu.logic import assistant
+    assert assistant.filled('{"date": "2026-02-31", "price": true, "title": 5}') == {} and assistant.filled("nope") == {}
+    con.close()
+
+
 def test_checkin_way_out(env, monkeypatch):
     """Oct 30: the initiation's volunteers mark leaving on the same screen (the organizer switches it to "out"): the CSV
     has when each left and the hours; the owner then gives everyone counted the "init26" badge, once each."""

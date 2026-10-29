@@ -249,6 +249,7 @@ export const server: Api = {
   mapFlaws: () => call('GET', '/map/flaws'),
   mapFlawDone: (id, done) => call('POST', `/map/flaws/${id}/done`, { done }),
   assistant: (q, history) => call('POST', '/assistant', { q, history }),
+  eventFill: (org, text) => call('POST', `/orgs/${org}/events/fill`, { text }),
   qrCheckin: (p) => call('POST', '/checkin', { p }),
   screens: () => call('GET', '/screens'),
   bindScreen: (code, session) => call('POST', '/screens/bind', { code, session }),
