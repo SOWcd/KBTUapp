@@ -164,7 +164,7 @@ export interface Api {
   hideAsk(id: Id): Promise<void>;
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
-  threads(topic?: import('./types').Topic | null, before?: Ts): Promise<import('./types').Thread[]>;   // the student forum's feed
+  threads(topic?: import('./types').Topic | null, before?: Ts, bid?: Id): Promise<import('./types').Thread[]>; // the student forum's feed; a page after (bumpedAt, id)
   thread(id: Id): Promise<import('./types').ThreadFull>;
   newThread(input: { topic: import('./types').Topic; body: string; anon: boolean }): Promise<import('./types').ThreadFull>;
   deleteThread(id: Id): Promise<void>;

@@ -20,7 +20,15 @@ HIDE_AT, REPORTER_AGE = 3, 14 * 86400
 KEEP = 30 * 86400
 PAGE = 40
 JOINERS = 6                               # faces shown on a gathering thread
-_UNBLOCKED = "NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.user_id = :me AND b.blocked_id = t.user_id) OR (b.user_id = t.user_id AND b.blocked_id = :me))"
+# blocks hide named things both ways, never anonymous ones: hiding those would tell whoever blocked someone that the
+# anonymous thread is theirs (block, look, unblock: an oracle the adversarial review found)
+_SHOWN = """(t.anon = 1 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.user_id = :me AND b.blocked_id = t.user_id)
+    OR (b.user_id = t.user_id AND b.blocked_id = :me)))"""
+
+
+def _blocked(con, me: int) -> set[int]:
+    """Who I blocked and who blocked me."""
+    return {r[0] for r in rows(con, "SELECT blocked_id FROM blocks WHERE user_id = ? UNION SELECT user_id FROM blocks WHERE blocked_id = ?", me, me)}
 
 
 def _verdict_status(verdict: bool | None, anon: bool) -> tuple[str, str | None]:
@@ -53,6 +61,8 @@ def _shapes(con, v: Viewer, found: list) -> list[dict]:
     joins: dict[int, list[int]] = {}
     for j in rows(con, f"SELECT thread_id, user_id FROM thread_joins WHERE thread_id IN ({qs}) ORDER BY at", *ids):
         joins.setdefault(j["thread_id"], []).append(j["user_id"])
+    shut = _blocked(con, v.id)
+    joins = {k: [u for u in js if u not in shut] for k, js in joins.items()}
     people = _people(con, {t["user_id"] for t in found if not t["anon"]} | {u for js in joins.values() for u in js[:JOINERS]})
     out = []
     for t in found:
@@ -68,24 +78,39 @@ def _shapes(con, v: Viewer, found: list) -> list[dict]:
     return out
 
 
-def threads(con, v: Viewer, topic: object = None, before: object = None) -> list[dict]:
-    """The feed: live threads newest-bumped first (mine also while held), a topic to filter by, `before` a bumpedAt to
-    page from. Not what I reported, not people I blocked or who blocked me."""
+def _int(x: object) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def threads(con, v: Viewer, topic: object = None, before: object = None, bid: object = None) -> list[dict]:
+    """The feed: live threads newest-bumped first (mine also while held), a topic to filter by, the next page after the
+    last one shown (its bumpedAt and id: threads bumped in the same second aren't lost at the edge). Not what I
+    reported, not named people I blocked or who blocked me."""
     need_student(v)
-    if topic is not None and topic not in TOPICS or before is not None and (not isinstance(before, int) or isinstance(before, bool)):
+    if topic is not None and topic not in TOPICS or before is not None and not (_int(before) and _int(bid)):
         raise ApiError("bad_input")
     found = con.execute(f"""SELECT t.* FROM threads t WHERE t.expires_at > :now
-            AND (t.user_id = :me AND t.status IN ('live', 'held') OR t.status = 'live' AND {_UNBLOCKED}
+            AND (t.user_id = :me AND t.status IN ('live', 'held') OR t.status = 'live' AND {_SHOWN}
                 AND t.id NOT IN (SELECT target_id FROM reports WHERE target = 'thread' AND reporter_id = :me AND status = 'open'))
-            {"AND t.topic = :topic" if topic else ""} {"AND t.bumped_at < :before" if before else ""}
-        ORDER BY t.bumped_at DESC, t.id DESC LIMIT {PAGE}""", {"now": _now(), "me": v.id, "topic": topic, "before": before}).fetchall()
+            {"AND t.topic = :topic" if topic else ""} {"AND (t.bumped_at < :before OR t.bumped_at = :before AND t.id < :bid)" if before else ""}
+        ORDER BY t.bumped_at DESC, t.id DESC LIMIT {PAGE}""", {"now": _now(), "me": v.id, "topic": topic, "before": before, "bid": bid}).fetchall()
     return _shapes(con, v, found)
 
 
+def _open(con, v: Viewer, tid: object):
+    """A thread one may answer or join: live, not run out, not a blocked named person's."""
+    t = con.execute(f"SELECT t.* FROM threads t WHERE t.id = :id AND t.status = 'live' AND t.expires_at > :now AND {_SHOWN}",
+                    {"id": tid, "now": _now(), "me": v.id}).fetchone() if _int(tid) else None
+    if not t:
+        raise ApiError("not_found")
+    return t
+
+
 def _seen(con, v: Viewer, tid: int):
-    """A thread I may open: live and not run out, or mine, or a moderator's look."""
-    t = one(con, "SELECT * FROM threads WHERE id = ?", tid)
-    if not t or not (t["user_id"] == v.id or v.role in ("admin", "moderator") or t["status"] == "live" and t["expires_at"] > _now()):
+    """A thread I may open: live, not run out and not a blocked named person's; or mine; or a moderator's look."""
+    t = one(con, "SELECT * FROM threads WHERE id = ? AND status != 'gone'", tid)
+    if not t or not (t["user_id"] == v.id or v.role in ("admin", "moderator")
+                     or t["status"] == "live" and t["expires_at"] > _now() and (t["anon"] or t["user_id"] not in _blocked(con, v.id))):
         raise ApiError("not_found")
     return t
 
@@ -95,7 +120,9 @@ def thread(con, v: Viewer, tid: int) -> dict:
     "Anonymous N", numbered in the order they first wrote, the same number all through the thread."""
     need_student(v)
     t = _seen(con, v, tid)
-    reps = rows(con, """SELECT * FROM thread_replies WHERE thread_id = ? AND (status = 'live' OR user_id = ?) ORDER BY id""", tid, v.id)
+    shut = _blocked(con, v.id)
+    reps = [r for r in rows(con, """SELECT * FROM thread_replies WHERE thread_id = ? AND (status = 'live' OR user_id = ? AND status = 'held')
+        ORDER BY id""", tid, v.id) if r["anon"] or r["user_id"] not in shut]  # anonymous ones stay (else an oracle, as above)
     people = _people(con, {r["user_id"] for r in reps if not r["anon"]})
     numbers: dict[int, int] = {}
     out = []
@@ -111,12 +138,15 @@ def thread(con, v: Viewer, tid: int) -> dict:
     return {**_shapes(con, v, [t])[0], "thread": out}
 
 
-def precheck(con, v: Viewer, body: dict, reply: bool = False) -> None:
+def precheck(con, v: Viewer, body: dict, reply: int | None = None) -> None:
     """Before the AI is asked (each look costs): a student, words of the right length, within the day's or hour's
     allowance. The writes check again."""
     need_student(v)
     _text(body.get("body"), REPLY_MAX if reply else BODY_MAX, 1 if reply else 2)
+    if not isinstance(body.get("anon", False), bool) or not reply and body.get("topic") not in TOPICS:
+        raise ApiError("bad_input")
     if reply:
+        _open(con, v, reply if _int(reply) else None)
         if one(con, "SELECT COUNT(*) FROM thread_replies WHERE user_id = ? AND created_at > ?", v.id, _now() - 3600)[0] >= REPLIES_AN_HOUR:
             raise ApiError("rate_limited", "replies")
     elif one(con, "SELECT COUNT(*) FROM threads WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= THREADS_A_DAY:
@@ -139,9 +169,13 @@ def create_thread(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
 
 
 def delete_thread(con, v: Viewer, tid: int) -> None:
-    """The author takes it down: gone with its replies (nothing kept: it was theirs)."""
-    if not con.execute("DELETE FROM threads WHERE id = ? AND user_id = ?", (tid, v.id)).rowcount:
-        raise ApiError("not_found")
+    """The author takes it down: the words and the replies go at once; a wordless tombstone stays until the sweep, so
+    the day's allowance still counts it (deleting can't buy more posts, nor more of the AI's looks)."""
+    with tx(con):
+        if not con.execute("UPDATE threads SET status = 'gone', body = '', why = NULL WHERE id = ? AND user_id = ? AND status != 'gone'", (tid, v.id)).rowcount:
+            raise ApiError("not_found")
+        con.execute("DELETE FROM thread_replies WHERE thread_id = ?", (tid,))
+        con.execute("DELETE FROM thread_joins WHERE thread_id = ?", (tid,))
 
 
 def reply(con, v: Viewer, tid: int, body: dict, verdict: bool | None) -> dict:
@@ -152,10 +186,7 @@ def reply(con, v: Viewer, tid: int, body: dict, verdict: bool | None) -> dict:
         raise ApiError("bad_input")
     text = _text(body.get("body"), REPLY_MAX)
     with tx(con):
-        t = con.execute(f"SELECT t.* FROM threads t WHERE t.id = :id AND t.status = 'live' AND t.expires_at > :now AND {_UNBLOCKED}",
-                        {"id": tid, "now": _now(), "me": v.id}).fetchone()
-        if not t:
-            raise ApiError("not_found")
+        t = _open(con, v, tid)
         if one(con, "SELECT COUNT(*) FROM thread_replies WHERE user_id = ? AND created_at > ?", v.id, _now() - 3600)[0] >= REPLIES_AN_HOUR:
             raise ApiError("rate_limited", "replies")
         status, why = _verdict_status(verdict, anon)
@@ -174,7 +205,8 @@ def _went_live(con, t, by: int) -> None:
 
 
 def delete_reply(con, v: Viewer, rid: int) -> None:
-    if not con.execute("DELETE FROM thread_replies WHERE id = ? AND user_id = ?", (rid, v.id)).rowcount:
+    """Mine goes: the words wiped, a tombstone for the hour's allowance."""
+    if not con.execute("UPDATE thread_replies SET status = 'gone', body = '', why = NULL WHERE id = ? AND user_id = ? AND status != 'gone'", (rid, v.id)).rowcount:
         raise ApiError("not_found")
 
 
@@ -184,9 +216,8 @@ def join(con, v: Viewer, tid: int, on: object) -> dict:
     if not isinstance(on, bool):
         raise ApiError("bad_input")
     with tx(con):
-        t = con.execute(f"SELECT t.* FROM threads t WHERE t.id = :id AND t.status = 'live' AND t.expires_at > :now AND {_UNBLOCKED}",
-                        {"id": tid, "now": _now(), "me": v.id}).fetchone()
-        if not t or t["topic"] not in GATHER or t["user_id"] == v.id:
+        t = _open(con, v, tid)
+        if t["topic"] not in GATHER or t["user_id"] == v.id:
             raise ApiError("not_found")
         if on:
             if con.execute("INSERT OR IGNORE INTO thread_joins (thread_id, user_id, at) VALUES (?, ?, ?)", (tid, v.id, _now())).rowcount:
@@ -203,12 +234,14 @@ def joiners(con, v: Viewer, tid: int) -> list[dict]:
         raise ApiError("not_found")
     found = rows(con, f"""{PERSON.replace('SELECT ', 'SELECT u.tg_username, ', 1)} JOIN thread_joins j ON j.user_id = u.id
         WHERE j.thread_id = ? ORDER BY j.at""", tid)
-    return [person_ref(p) | {"telegram": f"https://t.me/{p['tg_username']}" if p["tg_username"] else None} for p in found]
+    shut = _blocked(con, v.id)  # joined, then blocked me: no way to write to them
+    return [person_ref(p) | {"telegram": f"https://t.me/{p['tg_username']}" if p["tg_username"] else None} for p in found if p["id"] not in shut]
 
 
 def reveal(con, v: Viewer, kind: str, xid: int) -> dict:
-    """The admin alone learns who wrote an anonymous thread or reply; the audit log keeps every look."""
-    if v.role != "admin":
+    """The app's owner alone (the founder admin, as the app promises: not every admin) learns who wrote an anonymous
+    thread or reply; the audit log, which only the owner reads, keeps every look."""
+    if not _owner(con, v):
         raise ApiError("forbidden")
     r = one(con, f"SELECT user_id, anon FROM {'threads' if kind == 'thread' else 'thread_replies'} WHERE id = ?", xid) if kind in ("thread", "reply") else None
     if not r or not r["anon"]:
@@ -240,8 +273,9 @@ def mod_decide(con, v: Viewer, kind: str, xid: int, ok: object) -> None:
         if not x:
             raise ApiError("not_found")
         con.execute(f"UPDATE {table} SET status = ?, why = ? WHERE id = ?", ("live" if ok else "hidden", None if ok else "moderator", xid))
-        if ok and kind == "reply":
-            _went_live(con, one(con, "SELECT * FROM threads WHERE id = ?", x["thread_id"]), x["user_id"])
+        t = ok and kind == "reply" and one(con, "SELECT * FROM threads WHERE id = ? AND status = 'live'", x["thread_id"])
+        if t:  # the thread itself still up: it rises and its author hears
+            _went_live(con, t, x["user_id"])
         log_action(con, v.id, "thread_release" if ok else "thread_hide", f"{kind}:{xid}")
 
 
@@ -252,8 +286,10 @@ def owner_of(con, kind: str, xid: int) -> int | None:
 
 def reportable(con, v: Viewer, kind: str, xid: int) -> bool:
     """Up and not mine: what a report may be about."""
-    table = "threads" if kind == "thread" else "thread_replies"
-    return one(con, f"SELECT 1 FROM {table} WHERE id = ? AND status = 'live' AND user_id != ?", xid, v.id) is not None
+    if kind == "thread":
+        return one(con, "SELECT 1 FROM threads WHERE id = ? AND status = 'live' AND user_id != ?", xid, v.id) is not None
+    return one(con, """SELECT 1 FROM thread_replies r JOIN threads t ON t.id = r.thread_id WHERE r.id = ? AND r.status = 'live'
+        AND r.user_id != ? AND t.status = 'live' AND t.expires_at > ?""", xid, v.id, _now()) is not None
 
 
 def after_report(con, kind: str, xid: int) -> None:
@@ -295,5 +331,5 @@ def _now() -> int:
 
 # the other domains', imported last: they import this one too
 from . import core  # noqa: E402
-from .oversight import _mod  # noqa: E402
+from .oversight import _mod, _owner  # noqa: E402
 from .seats import notify  # noqa: E402

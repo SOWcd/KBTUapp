@@ -27,15 +27,15 @@
   let draft = $state(''), anon = $state(false), sending = $state(false);
   let menu = $state<string | null>(null); // 't' the thread's, 'r<id>' a reply's
   let revealed = $state<Record<string, PersonRef>>({});
-  const admin = $derived(session.me?.role === 'admin');
+  // the app's owner alone (the founder admin), as the anonymous switch promises
+  const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
 
   const load = () => api.thread(id).then((x) => {
+    if (!th) anon = x.mine && x.anon; // once: an anonymous author stays anonymous in their replies; a switch flipped by hand stays
     th = x;
     if (x.mine && gathers(x.topic) && x.joins) api.threadJoiners(id).then((l) => (joiners = l)).catch(() => {});
   }).catch(() => (gone = true));
   $effect(() => { void load(); });
-  // what I write anonymously follows the thread's own: an anonymous author stays anonymous in their replies
-  $effect(() => { if (th?.mine) anon = th.anon; });
 
   const fail = (e: unknown) => {
     haptic.error();
@@ -94,7 +94,7 @@
       <div class="acts">
         {#if th.mine}<button class="danger" onclick={removeThread}>{t('bd.delete')}</button>
         {:else}<button onclick={() => { menu = null; sheets.report('thread', id, th!.body.slice(0, 60)); }}>{t('cm.report')}</button>{/if}
-        {#if admin && th.anon && !revealed[`thread${id}`]}<button onclick={() => reveal('thread', id)}>{t('bd.reveal')}</button>{/if}
+        {#if owner && th.anon && !revealed[`thread${id}`]}<button onclick={() => reveal('thread', id)}>{t('bd.reveal')}</button>{/if}
       </div>
     {/if}
     {#if revealed[`thread${id}`]}<p class="who-was">{t('bd.wrote', { name: revealed[`thread${id}`].name })}</p>{/if}
@@ -134,7 +134,7 @@
               <div class="acts">
                 {#if r.mine}<button class="danger" onclick={() => removeReply(r)}>{t('cm.delete')}</button>
                 {:else}<button onclick={() => { menu = null; sheets.report('reply', r.id, r.body.slice(0, 60)); }}>{t('cm.report')}</button>{/if}
-                {#if admin && r.anon && !revealed[`reply${r.id}`]}<button onclick={() => reveal('reply', r.id)}>{t('bd.reveal')}</button>{/if}
+                {#if owner && r.anon && !revealed[`reply${r.id}`]}<button onclick={() => reveal('reply', r.id)}>{t('bd.reveal')}</button>{/if}
               </div>
             {/if}
           </div>

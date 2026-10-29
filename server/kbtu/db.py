@@ -756,9 +756,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       topic      TEXT NOT NULL CHECK (topic IN ('thing', 'go', 'help', 'vol', 'talk')),
-      body       TEXT NOT NULL CHECK (length(body) BETWEEN 2 AND 1000),
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
       anon       INTEGER NOT NULL DEFAULT 0,
-      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden')),
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'gone')),  -- gone: its author deleted it (words wiped; still counts toward the allowance)
       why        TEXT,                                  -- held / hidden: 'ai', 'check' (no AI answer), 'reports', 'moderator'
       created_at INTEGER NOT NULL,
       bumped_at  INTEGER NOT NULL,                      -- the last live reply: the feed's order
@@ -770,9 +770,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       id         INTEGER PRIMARY KEY,
       thread_id  INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      body       TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 500),
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 1 AND 500),
       anon       INTEGER NOT NULL DEFAULT 0,
-      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden')),
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'gone')),
       why        TEXT,
       created_at INTEGER NOT NULL
     ) STRICT;

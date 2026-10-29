@@ -1402,8 +1402,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     T = logic.threads
 
     @app.get("/api/threads")
-    def threads_feed(con: Con, v: Me, topic: str | None = None, before: int | None = None):
-        return T.threads(con, v, topic, before)
+    def threads_feed(con: Con, v: Me, topic: str | None = None, before: int | None = None, bid: int | None = None):
+        return T.threads(con, v, topic, before, bid)
 
     @app.post("/api/threads")
     async def threads_new(con: Con, v: Me, body: dict = Body(...)):
@@ -1436,7 +1436,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/threads/{tid}/replies")
     async def threads_reply(tid: int, con: Con, v: Me, body: dict = Body(...)):
-        T.precheck(con, v, body, reply=True)
+        T.precheck(con, v, body, reply=tid)  # the thread is open to me, before the AI is asked
         return T.reply(con, v, tid, body, await screen(str(body["body"])))
 
     @app.put("/api/threads/{tid}/join")

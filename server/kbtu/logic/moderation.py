@@ -250,7 +250,7 @@ def taken_down(con, v: Viewer) -> list[dict]:
     can be undone (§2 "hide / restore"). Things their own authors or clubs removed aren't here — that was their choice."""
     _mod(v)
     out = []
-    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action = 'report_remove' AND at > ?
+    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'thread_hide') AND at > ?
             AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)
             GROUP BY target ORDER BY MAX(at) DESC LIMIT 50""", core.now() - 30 * 86400):  # undone ones stay undone
         kind, _, ref = a["target"].partition(":")

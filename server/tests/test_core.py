@@ -5540,7 +5540,7 @@ def test_student_forum(env, monkeypatch):
     ann, bob, mod, boss = login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "mod"), login(c, 4, "boss")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
-    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))   # the owner
     ok = lambda r: monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=r))  # noqa: E731
     A, B, M, X = tma(1), tma(2), tma(3), tma(4)
     assert c.get("/api/threads", headers=tma(9)).status_code == 401                               # a guest: sign in first
@@ -5564,8 +5564,11 @@ def test_student_forum(env, monkeypatch):
     feed = c.get("/api/threads", headers=B).json()
     assert {t["id"] for t in feed} == {named["id"], secret["id"], lend["id"]} and all("ann" not in json.dumps(t).lower() for t in feed if t["anon"])
     assert [t["id"] for t in c.get("/api/threads", headers=B, params={"topic": "thing"}).json()] == [lend["id"]]
-    # the admin alone reveals, and it's logged
+    # the owner alone reveals (not a moderator, not another admin), and it's logged
     assert c.post(f"/api/threads/reveal/thread/{secret['id']}", headers=M).status_code == 403
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (mod["id"],))
+    assert c.post(f"/api/threads/reveal/thread/{secret['id']}", headers=M).status_code == 403
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
     assert c.post(f"/api/threads/reveal/thread/{secret['id']}", headers=X).json()["id"] == ann["id"]
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'reveal_anon'").fetchone()[0] == 1
     assert c.post(f"/api/threads/reveal/thread/{named['id']}", headers=X).status_code == 404       # not anonymous: nothing to reveal
@@ -5593,12 +5596,48 @@ def test_student_forum(env, monkeypatch):
     assert row["where"] == {"kind": "thread", "id": named["id"]}
     c.post(f"/api/admin/reports/thread/{named['id']}", headers=X, json={"remove": False})              # left up: back
     assert con.execute("SELECT status FROM threads WHERE id = ?", (named["id"],)).fetchone()[0] == "live"
-    # blocks hide each other's threads; deleting mine takes the replies along
+    # blocks hide named threads both ways, by the feed and by id; never an anonymous one (that would unmask it)
     c.post("/api/forum/blocks", headers=B, json={"user": ann["id"], "on": True})
-    assert [t["id"] for t in c.get("/api/threads", headers=B).json()] == [lend["id"]]               # Ann's, the anonymous one too
+    assert {t["id"] for t in c.get("/api/threads", headers=B).json()} == {lend["id"], secret["id"]}
+    assert c.get(f"/api/threads/{named['id']}", headers=B).status_code == 404
+    assert c.post(f"/api/threads/{secret['id']}/replies", headers=B, json={"body": "still here"}).status_code == 200
+    assert [p["id"] for p in c.get(f"/api/threads/{named['id']}/joiners", headers=A).json()] == []  # Bob blocked Ann: no way to him
+    # deleting mine takes the replies along, and doesn't give the day's allowance back
     assert c.delete(f"/api/threads/{secret['id']}", headers=B).status_code == 404
     assert c.delete(f"/api/threads/{secret['id']}", headers=A).status_code == 204
-    assert con.execute("SELECT COUNT(*) FROM thread_replies").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM thread_replies WHERE thread_id = ?", (secret["id"],)).fetchone()[0] == 0
+    assert c.get(f"/api/threads/{secret['id']}", headers=A).status_code == 404
+    for _ in range(4):                                                                                # 2 made above, 3 more fit
+        x = c.post("/api/threads", headers=A, json={"topic": "talk", "body": "again and again"})
+        if x.status_code == 200:
+            c.delete(f"/api/threads/{x.json()['id']}", headers=A)
+    assert x.status_code == 429                                                                       # 5 a day, deleted ones too
+    # the AI isn't asked for what can't be posted: a missing thread, a wrong topic
+    calls = []
+    monkeypatch.setattr(ai, "screen", lambda *a: calls.append(1) or asyncio.sleep(0, result=True))
+    assert c.post("/api/threads/999999/replies", headers=B, json={"body": "hello"}).status_code == 404
+    assert c.post("/api/threads", headers=B, json={"topic": "nope", "body": "hello there"}).status_code == 400
+    assert calls == []
+    # a moderator's take-down from the held queue can be undone like a report's
+    ok(None)
+    held = c.post("/api/threads", headers=B, json={"topic": "talk", "body": "a held one", "anon": True}).json()
+    c.post(f"/api/threads/mod/thread/{held['id']}", headers=M, json={"ok": False})
+    assert any(x["target"] == "thread" and x["id"] == held["id"] for x in c.get("/api/admin/taken-down", headers=X).json())
+    con.close()
+
+
+def test_student_forum_pages(env):
+    """The feed pages by (bumpedAt, id): threads bumped in the same second aren't lost at a page's edge."""
+    from kbtu.logic import threads as T
+    c, cfg = env
+    ann = login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    t = int(time.time())
+    con.executemany("""INSERT INTO threads (user_id, topic, body, anon, status, created_at, bumped_at, expires_at)
+        VALUES (?, 'talk', 'same second', 0, 'live', ?, ?, ?)""", [(ann["id"], t, t, t + 86400)] * (T.PAGE + 6))
+    first = c.get("/api/threads", headers=tma(1)).json()
+    rest = c.get("/api/threads", headers=tma(1), params={"before": first[-1]["bumpedAt"], "bid": first[-1]["id"]}).json()
+    assert len(first) == T.PAGE and len(rest) == 6 and not {x["id"] for x in first} & {x["id"] for x in rest}
     con.close()
 
 def test_partner_events(env):

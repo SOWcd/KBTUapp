@@ -21,7 +21,7 @@ export async function moreBoard(): Promise<void> {
   if (!last || !board.more) return;
   const mine = seq, topic = board.topic;
   try {
-    const l = await api.threads(topic, last.bumpedAt);
+    const l = await api.threads(topic, last.bumpedAt, last.id);
     if (mine === seq) { board.list = [...(board.list ?? []), ...l.filter((x) => !board.list!.some((y) => y.id === x.id))]; board.more = l.length >= PAGE; }
   } catch { /* the button stays: try again */ }
 }
