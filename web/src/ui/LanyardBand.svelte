@@ -25,6 +25,7 @@
   // Moments' date stamp, as an old film camera burns it into the corner: today
   const d = new Date(), two = (n: number) => String(n).padStart(2, '0');
   const stamp = `'${two(d.getFullYear() % 100)} ${two(d.getMonth() + 1)} ${two(d.getDate())}`;
+  const gid = 'sxr' + Math.random().toString(36).slice(2, 8); // gradient ids are page-global: the picker draws several
 </script>
 
 <div class="band {look}" class:wide aria-hidden="true">
@@ -43,11 +44,11 @@
     <!-- the red wedge drawn, so its white cut runs exactly along it: on the profile's card between the photo and the
          name (it crossed the text) -->
     <svg class="dec sxa" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio="none">
-      <defs><linearGradient id="sxr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="#A9211A" /></linearGradient></defs>
-      {#if wide}<path d="M0 0H120.9L34 221H0Z" fill="url(#sxr)" /><path class="cut" d="M120.9 -2L33.2 223" stroke-width="4" />
+      <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="#A9211A" /></linearGradient></defs>
+      {#if wide}<path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="cut" d="M120.9 -2L33.2 223" stroke-width="4" />
         <path d="M150 221L330 22" stroke="#fff" stroke-width="8" stroke-opacity=".08" /><path d="M150 221L330 22" stroke="#fff" stroke-width="2" stroke-opacity=".55" stroke-linecap="round" />
         <path d="M313 21L331 21L329 39" fill="none" stroke="#fff" stroke-width="2" stroke-opacity=".55" stroke-linecap="round" stroke-linejoin="round" />
-      {:else}<path d="M0 0H194.4L108.3 124H0Z" fill="url(#sxr)" /><path class="cut" d="M195.8 -2L106.9 126" stroke-width="5" />
+      {:else}<path d="M0 0H194.4L108.3 124H0Z" fill="url(#{gid})" /><path class="cut" d="M195.8 -2L106.9 126" stroke-width="5" />
         <path d="M150 136L322 12" stroke="#fff" stroke-width="12" stroke-opacity=".1" /><path d="M150 136L322 12" stroke="#fff" stroke-width="3.5" stroke-linecap="round" />
         <path d="M302 10L324 11L318 33" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />{/if}</svg>
     {#if !wide}<b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>{/if}
