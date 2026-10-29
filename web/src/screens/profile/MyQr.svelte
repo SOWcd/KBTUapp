@@ -70,9 +70,10 @@
 <div class="wrap" bind:this={wrap}>
   <div class="stage {look}">
     <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
-    <div class="clip" aria-hidden="true"></div>
-    <div class="pass" class:banded={banded(look)} bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
+    <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
+    <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
+    <div class="pass" class:banded={banded(look)}>
       {#if banded(look)}<LanyardBand {look} />{/if}
       <span class="slot" aria-hidden="true"></span>
       <div class="who">
@@ -86,6 +87,8 @@
         <Qr text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></Qr>
       </div>
       <span class="foot"><LanyardHolo {look} no={h.no} /></span>
+    </div>
+    <div class="clip" aria-hidden="true"></div>
     </div>
   </div>
   <p class="hint">{t('me.qrHint')}</p>
@@ -108,10 +111,10 @@
   .wrap > :global(*) { pointer-events: auto; }
   .stage { perspective: 900px; display: flex; flex-direction: column; align-items: center; }
   /* the strap and clip as on the badge (Hero.svelte) */
-  .strap { width: 26px; height: 40px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
+  .strap { width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
-  .clip { position: relative; z-index: 2; width: 36px; height: 15px; margin-bottom: -9px; border-radius: 5px;
+  .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
 
   /* the badge's own material, seen from the back */
@@ -119,10 +122,9 @@
     position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 420px)); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it (the QR stays ~180 px) */ border-radius: 26px; color: #fff;
     background: radial-gradient(110% 70% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(160deg, #2A4FD6, #121A3D 70%);
     box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.75), 0 10px 24px -12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-    transform: rotateX(calc(var(--gy, 0) * -7deg + var(--py, 0) * 5deg)) rotateY(calc(var(--gx, 0) * 9deg - var(--px, 0) * 5deg)) scale(var(--ps, 1));
-    transition: transform 160ms ease-out;
-    touch-action: manipulation;
   }
+  .card { position: relative; touch-action: manipulation; transition: transform 160ms ease-out;
+    transform: rotateX(calc(var(--gy, 0) * -7deg + var(--py, 0) * 5deg)) rotateY(calc(var(--gx, 0) * 9deg - var(--px, 0) * 5deg)) scale(var(--ps, 1)); }
   .pass::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.12) 46%, transparent 60%);
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
@@ -151,6 +153,14 @@
   .knights .pass { background: linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
+  .moments { --role: #F4D9BE; }
+  .moments .pass { background: linear-gradient(180deg, #3A2419, #160D09); }
+  .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
+  .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
+  .faces { --role: #FF9BD6; }
+  .faces .pass { background: radial-gradient(80% 50% at 50% 100%, rgba(200, 64, 255, 0.22), transparent 70%), linear-gradient(180deg, #0E0C14, #050408); }
+  .faces .strap { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
+  .faces .strap span { color: #fff; }
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .pass { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }

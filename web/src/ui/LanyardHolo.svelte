@@ -11,6 +11,8 @@
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
   {:else if look === 'cheer'}<b class="w ch">✦ CHEERLEADING</b>
   {:else if look === 'knights'}<b class="w kn">KNIGHTS</b>
+  {:else if look === 'moments'}<b class="w mo">MOMENTS</b>
+  {:else if look === 'faces'}<b class="w fa">FACES FAMILY</b>
   {:else}<b class="w">KBTU APP</b>{/if}
   <span>№ {no}</span>
 </div>
@@ -31,4 +33,10 @@
   .knights { background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0 6px, transparent 6px 14px), linear-gradient(90deg, #1C4C94, #2F6BD0);
     color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
   .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; }
+  .moments { background-image: linear-gradient(100deg, #F2DEC8 15%, #E3A985 40%, #F6E7D6 55%, #C9C391 75%, #F2DEC8 90%); color: #3A2016;
+    box-shadow: inset 0 0 0 1px rgba(58, 32, 22, 0.15); }
+  .mo { font: 800 12px/1 var(--font-display); letter-spacing: 0.34em; }
+  .faces { background-image: linear-gradient(100deg, #6E7BFF, #C04BFF 30%, #FF4F9A 55%, #FFA43D 80%, #6E7BFF); color: #fff;
+    box-shadow: 0 6px 18px -6px rgba(200, 64, 255, 0.6); }
+  .fa { font: italic 900 12px/1 var(--font-display); letter-spacing: 0.14em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
 </style>

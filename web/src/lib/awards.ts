@@ -88,9 +88,9 @@ export function hero(p: PersonCard): HeroData {
 }
 
 /** Clubs with a badge of their own (made by hand per official club, PLAN "Club badge"), told by name as on the server
- *  (logic.SKINNED): StudEx; Cheerleading and Knights since Oct 20. */
-export type Skin = 'studex' | 'cheer' | 'knights';
-const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['knights', /knight/i]];
+ *  (logic.SKINNED): StudEx; Cheerleading and Knights since Oct 20; Moments and Faces since Oct 29. */
+export type Skin = 'studex' | 'cheer' | 'knights' | 'moments' | 'faces';
+const SKINS: [Skin, RegExp][] = [['studex', /studex/i], ['cheer', /cheer/i], ['knights', /knight/i], ['moments', /moment/i], ['faces', /faces/i]];
 export const skinOf = (o?: OrgRef | null): Skin | null => (o?.official && SKINS.find(([, re]) => re.test(o.name))?.[0]) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
@@ -98,6 +98,6 @@ export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
 /** the word on each one's strap */
 export type Look = Skin | 'sower' | 'kbtu';
-export const STRAP: Record<Look, string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', sower: 'SOWER', kbtu: 'KBTU' };
+export const STRAP: Record<Look, string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', moments: 'MOMENTS', faces: 'FACES', sower: 'SOWER', kbtu: 'KBTU' };
 /** the looks with their own art (ui/LanyardBand): owner, Oct 20, StudEx, KBTU and SOWER keep their own cards */
-export const banded = (look: Look) => look === 'cheer' || look === 'knights';
+export const banded = (look: Look) => look === 'cheer' || look === 'knights' || look === 'moments' || look === 'faces';

@@ -70,7 +70,6 @@
 <section class="h">
 <div class="hang {look}">
   <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
-  <div class="clip" aria-hidden="true"></div>
   <div class="swing" bind:this={swing}>
     <div class="badge" use:glass>
       {#if banded(look)}<LanyardBand {look} wide />{/if}
@@ -89,6 +88,7 @@
       </div>
       <span class="foot"><LanyardHolo {look} no={h.no} /></span>
     </div>
+    <div class="clip" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -112,12 +112,13 @@
 <style>
   .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
-  .strap { width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
+  .strap { width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
-  .clip { position: relative; z-index: 2; width: 36px; height: 15px; margin-bottom: -9px; border-radius: 5px;
+  /* the clip swings with the card, down into its slot (owner, Oct 29: it hung above it) */
+  .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
-  .swing { width: min(340px, 100%); transform-origin: 50% -16px; }
+  .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -16px; }
 
   .badge {
     position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;
@@ -141,7 +142,7 @@
 
   .qr:active { transform: scale(0.92); }
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
-  .cheer .photo, .knights .photo, .studex .photo, .sower .photo { background: #fff; }
+  .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
   .id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
@@ -160,6 +161,12 @@
   .knights { --role: #9CC2FF; }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
+  .moments { --role: #F4D9BE; }
+  .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
+  .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
+  .faces { --role: #FF9BD6; }
+  .faces .strap { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
+  .faces .strap span { color: #fff; }
   /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,

@@ -5338,6 +5338,8 @@ def test_qr_checkin(env, monkeypatch):
     assert c.post("/api/checkin", headers=tma(1), json={"p": old}).json()["message"] == "qr_old"  # 400 s ago
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]           # a student: at once
     assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]       # not yet: waits
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]           # Ann again: still one mark
+    assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]
     st = c.get(f"/api/screen/{sid}", params={"k": k}).json()
     assert (st["done"], st["pending"], st["expected"]) == (1, 1, 2)
     uid = c.get("/api/me", headers=tma(2)).json()["id"]

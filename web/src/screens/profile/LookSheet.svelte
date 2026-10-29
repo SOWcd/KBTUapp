@@ -153,6 +153,13 @@
   .ly.knights .st { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .ly.knights .cd { background: linear-gradient(180deg, #3A7BEA, #1C4C94 40%, #0F2B66 40%, #071631); }
   .ly.knights .hl { background: linear-gradient(90deg, #1C4C94, #2F6BD0); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+  .ly.moments .st { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
+  .ly.moments .st i { color: #F4D9BE; }
+  .ly.moments .cd { background: linear-gradient(180deg, #1B1310 0 4px, #C46D47 4px, #7A7442 36%, #3A2419 40%, #160D09); }
+  .ly.moments .hl { background: linear-gradient(100deg, #F2DEC8, #E3A985, #C9C391); }
+  .ly.faces .st { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
+  .ly.faces .cd { background: radial-gradient(70% 40% at 50% 34%, rgba(200, 64, 255, 0.55), transparent 70%), linear-gradient(180deg, #07060B, #050408); }
+  .ly.faces .hl { background: linear-gradient(100deg, #6E7BFF, #C04BFF, #FF4F9A, #FFA43D); }
   .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .ly.sower .st i { color: #000; }
   .ly.sower .cd { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
