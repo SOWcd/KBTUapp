@@ -114,12 +114,12 @@
   .btn.ghost { background: color-mix(in srgb, var(--text) 10%, transparent); }
   .btn.big { font-size: clamp(22px, 3.4vh, 34px); padding: 3vh 6vh; box-shadow: 0 0 60px color-mix(in srgb, var(--accent) 45%, transparent); }
   .live { display: flex; align-items: center; gap: 5vw; }
-  .code { width: min(78vh, 58vw); padding: 2.4vh; border-radius: 4vh; background: #fff;
+  .code { width: min(68vh, 50vw); padding: 2.4vh; border-radius: 4vh; background: #fff;
     box-shadow: 0 0 80px color-mix(in srgb, var(--accent) 40%, transparent); }
-  aside { display: flex; flex-direction: column; align-items: flex-start; gap: 1.2vh; max-width: 28vw; }
+  aside { display: flex; flex-direction: column; align-items: flex-start; gap: 1.2vh; max-width: 30vw; min-width: 0; }
   .hint { margin: 0; font-size: clamp(18px, 2.6vh, 28px); color: var(--text-2); }
   .count { margin: 0; line-height: 1; font-variant-numeric: tabular-nums; }
-  .count b { font-size: clamp(64px, 14vh, 160px); font-weight: 800; }
+  .count b { font-size: clamp(48px, 12vh, 160px); font-weight: 800; }
   .count span { font-size: clamp(28px, 5vh, 56px); color: var(--text-2); }
   .sub { margin: 0; font-size: clamp(16px, 2.2vh, 24px); color: var(--text-2); }
   aside .btn { margin-top: 3vh; }
