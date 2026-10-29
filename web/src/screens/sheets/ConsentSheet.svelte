@@ -10,7 +10,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
-  import { CONSENT_VERSION } from '../../lib/legal';
+  import { CONSENT_BOARD, CONSENT_BOTH, CONSENT_VERSION } from '../../lib/legal';
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
@@ -26,7 +26,10 @@
 <Sheet {overlay} title={t('consent.title')} icon={ShieldCheck}>
   <div class="wrap">
     <h2 class="t-h2">{t('consent.title')}</h2>
-    <p class="t-callout">{t(session.policy === CONSENT_VERSION ? 'consent.text' : 'consent.textForum')}</p>
+    <!-- what's new in the version asked: the find-people forum (v4), the student forum, questions and assistant (v5), both (v6) -->
+    {#if session.policy === CONSENT_VERSION}<p class="t-callout">{t('consent.text')}</p>{/if}
+    {#if session.policy !== CONSENT_VERSION && session.policy !== CONSENT_BOARD}<p class="t-callout">{t('consent.textForum')}</p>{/if}
+    {#if session.policy === CONSENT_BOARD || session.policy === CONSENT_BOTH}<p class="t-callout">{t('consent.textBoard')}</p>{/if}
     <button class="lnk t-callout" onclick={() => { haptic.tap(); openLink(`${location.origin}/privacy?lang=${i18n.lang}`); }}>{t('login.consentLink')}</button>
   </div>
   {#snippet footer()}

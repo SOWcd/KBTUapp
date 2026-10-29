@@ -512,7 +512,7 @@
       <input type="checkbox" role="switch" bind:checked={f.needsPhone} />
     </label>
     <!-- the event's own questions at sign-up (Oct 30, an organizer's ask): up to five, text or a choice -->
-    {#if session.me?.board}<!-- with the forum's policy section (it covers the answers) -->
+    {#if session.board}<!-- with the forum's policy section (it covers the answers) -->
     <section class="qs">
       <span class="t-cap">{t('ed.form')}</span>
       {#each f.form as q, i (i)}

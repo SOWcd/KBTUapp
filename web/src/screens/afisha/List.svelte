@@ -18,6 +18,7 @@
   import EventRow from '../../ui/EventRow.svelte';
   import StoryRow from './StoryRow.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import { classesOn, classesLeft } from '../../lib/classes';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -88,6 +89,8 @@
 <div class="page scroll">
   <header class="hd">
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
+    <!-- the assistant: knows my school, timetable, the campus and what's on (with the forum's switch) -->
+    {#if session.board}<button class="ask" onclick={() => sheets.assistant()}><Sparkles size={16} />{t('as.ask')}</button>{/if}
   </header>
   <StoryRow />
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
@@ -204,6 +207,10 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
+  .ask { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: var(--r-full); color: #fff; font: 680 14px/1 var(--font-text);
+    background: linear-gradient(135deg, var(--accent), #7C4DFF); box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent) 80%, transparent);
+    transition: transform var(--t-fast) var(--ease); }
+  .ask:active { transform: scale(0.95); }
   .hd { margin-bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 
   .more { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; padding: 20px 18px; text-align: center; }

@@ -1060,6 +1060,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if a and await screen(f"{a['title']}\n{a['body']}") is False:
                 logic.hide_ask(con, body["id"], "reports")
 
+    # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
+    @app.post("/api/assistant")
+    async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
+        lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
+        msgs, rooms, events = logic.assistant.prompt(con, v, body, lang)
+        try:
+            async with httpx.AsyncClient() as http:
+                text, _ = await llm.chat(cfg, http, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, con=con,
+                                         only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, timeout=25)
+        except (llm.Busy, llm.BadAnswers):
+            raise ApiError("unavailable", "assistant") from None
+        return logic.assistant.answer(text, rooms, events)
+
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them
     @app.post("/api/map/flaws", status_code=204)
     def map_flaw(con: Con, v: Me, body: dict = Body(...)):

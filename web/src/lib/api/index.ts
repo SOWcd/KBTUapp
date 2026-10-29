@@ -178,6 +178,7 @@ export interface Api {
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
   mapFlawDone(id: Id, done: boolean): Promise<void>;
+  assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<{ text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[] }>; // the students' assistant
   qrCheckin(p: string): Promise<{ title: string; done: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session

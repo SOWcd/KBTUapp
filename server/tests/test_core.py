@@ -5757,6 +5757,47 @@ def test_map_flaws(env):
     assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 429
     con.close()
 
+def test_assistant(env, monkeypatch):
+    """The assistant: the model gets the school, year, today's and tomorrow's classes, the campus and the week's
+    events, never the name or student ID; its buttons open only rooms and events from that brief; 30 questions a day;
+    no answer from the model is a 503, not a 500. Behind the forum's switch."""
+    from kbtu import llm
+    c, cfg = env
+    ann = login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
+        VALUES (7, 1, 'published', 'Hackathon', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (int(time.time()) + 86400, ann["id"]))
+    today = time.gmtime(time.time() + 5 * 3600).tm_wday + 1
+    con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, room) VALUES (?, ?, '10:00', '10:50', 'Physics', '256')", (ann["id"], today))
+    assert c.post("/api/assistant", headers=tma(1), json={"q": "where is my dean's office?"}).status_code == 404   # BOARD off
+    _board_on(c, cfg)
+    seen = []
+
+    async def fake(cfg_, http, msgs, **kw):
+        seen.append(msgs)
+        assert kw["only"] == ("munitoeu",)                                                    # the EU host only
+        return json.dumps({"text": "Room 180, floor 1.", "actions": [{"type": "map", "room": "180"}, {"type": "map", "room": "999"},
+                                                                     {"type": "event", "id": 7}, {"type": "event", "id": 8}]}), "x"
+    monkeypatch.setattr(llm, "chat", fake)
+    r = c.post("/api/assistant", headers=tma(1), json={"q": "where is my dean's office?", "history": [{"role": "user", "text": "hi"}]}).json()
+    assert r == {"text": "Room 180, floor 1.", "actions": [{"type": "map", "room": "180"}, {"type": "event", "id": 7}]}  # nothing made up
+    brief = seen[0][0]["content"]
+    assert "SITE" in brief and "Physics" in brief and "room 256" in brief and "Hackathon" in brief and "Ann" not in brief and "24Bann" not in brief
+    assert [m["role"] for m in seen[0]] == ["system", "user", "user"]
+    for bad in ({"q": "x"}, {"q": "y" * 301}, {"q": "ok?", "history": "nope"}):
+        assert c.post("/api/assistant", headers=tma(1), json=bad).status_code == 400
+
+    async def busy(*a, **k):
+        raise llm.Busy()
+    monkeypatch.setattr(llm, "chat", busy)
+    assert c.post("/api/assistant", headers=tma(1), json={"q": "and the canteen?"}).status_code == 503
+    con.execute("UPDATE assist_uses SET at = ?", (int(time.time()),))
+    for _ in range(30 - con.execute("SELECT COUNT(*) FROM assist_uses").fetchone()[0]):
+        con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (ann["id"], int(time.time())))
+    assert c.post("/api/assistant", headers=tma(1), json={"q": "one more?"}).status_code == 429
+    con.close()
+
 def test_partner_events(env):
     """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
     council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays

@@ -5,7 +5,9 @@ import { CONSENT_VERSION } from '../legal';
 
 // banned: the platform ban, why and whom to write; the app shows only that; policy: the version in force
 // (the server's word: its forum part counts only with the forum on)
-export const session = $state({ me: null as Me | null, ready: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION });
+// board: the student forum (and the assistant, the event questions) is open to me: GET /api/me says so, the other
+// answers that carry Me don't, so it's kept here
+export const session = $state({ me: null as Me | null, ready: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION, board: false, boardKnown: false });
 
 import { clearCache } from './cache';
 function banned(d: Record<string, unknown>) {
@@ -16,7 +18,7 @@ if (typeof window !== 'undefined') addEventListener('kb:banned', (e) => banned((
 
 export async function loadMe(): Promise<void> {
   try {
-    session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy;
+    session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.boardKnown = true;
     if (session.me.avatar) new Image().src = session.me.avatar; // the profile tab opens with its photo in place
   } catch (x) {
     session.failed = true;

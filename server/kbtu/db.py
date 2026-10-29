@@ -820,6 +820,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       done_at    INTEGER
     ) STRICT;
     CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);"""),
+    # the assistant (logic/assistant.py): a count per day, never the questions
+    (88, """CREATE TABLE assist_uses (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX assist_uses_by_user ON assist_uses(user_id, at);"""),
 ]
 
 

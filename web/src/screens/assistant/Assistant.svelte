@@ -1,0 +1,117 @@
+<script lang="ts">
+  // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
+  // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
+  // three buttons (a room on the map, an event), checked by the server against what it told the model.
+  import { untrack } from 'svelte';
+  import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import { api, ApiErr } from '../../lib/api';
+  import { type Overlay } from '../../lib/state/ui.svelte';
+  import { sheets } from '../../lib/state/sheets';
+  import { eventById } from '../../lib/state/data.svelte';
+  import { chat, type Turn } from '../../lib/state/assistant.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { haptic } from '../../lib/tg';
+  import { grow } from '../../ui/grow';
+  import Sheet from '../../ui/Sheet.svelte';
+  import Emoji from '../../ui/Emoji.svelte';
+
+  let { overlay }: { overlay: Overlay } = $props();
+  let draft = $state(''), busy = $state(false);
+  let list = $state<HTMLDivElement>();
+  const SUGGEST = ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const;
+  const down = () => setTimeout(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
+  $effect(() => { void chat.turns.length; untrack(down); });
+
+  async function ask(q: string) {
+    q = q.trim();
+    if (!q || busy) return;
+    haptic.tap();
+    const history = chat.turns.slice(-6).map(({ role, text }) => ({ role, text }));
+    chat.turns.push({ role: 'user', text: q });
+    draft = ''; busy = true;
+    try {
+      const a = await api.assistant(q, history);
+      chat.turns.push({ role: 'assistant', text: a.text, actions: a.actions });
+      haptic.soft();
+    } catch (e) {
+      const why = e instanceof ApiErr ? e.code : '';
+      chat.turns.push({ role: 'assistant', text: t(why === 'rate_limited' ? 'as.limit' : why === 'unavailable' ? 'as.busy' : why === 'forbidden' ? 'as.consent' : 'common.error') });
+      haptic.error();
+      if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
+    } finally { busy = false; }
+  }
+  const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void ask(draft); } };
+  const label = (a: NonNullable<Turn['actions']>[number]) => a.type === 'map' ? t('as.onMap', { room: a.room }) : eventById(a.id)?.title ?? t('as.event');
+  const go = (a: NonNullable<Turn['actions']>[number]) => { haptic.tap(); if (a.type === 'map') sheets.map(a.room); else sheets.event(a.id); };
+</script>
+
+<Sheet {overlay} tall title={t('as.title')}>
+  <div class="list" bind:this={list}>
+    {#if !chat.turns.length}
+      <div class="hello">
+        <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={44} /></span>
+        <h2 class="t-h2">{t('as.hello')}</h2>
+        <p class="t-callout">{t('as.helloText')}</p>
+        <div class="sugg">{#each SUGGEST as k, i (k)}<button style="--i:{i}" onclick={() => ask(t(k))}>{t(k)}</button>{/each}</div>
+      </div>
+    {/if}
+    {#each chat.turns as m, i (i)}
+      <div class="b {m.role}">
+        <p class="selectable">{m.text}</p>
+        {#if m.actions?.length}
+          <div class="acts">{#each m.actions as a, k (k)}
+            <button onclick={() => go(a)}>{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}<span class="ellipsis">{label(a)}</span></button>
+          {/each}</div>
+        {/if}
+      </div>
+    {/each}
+    {#if busy}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
+  </div>
+  <p class="t-foot note">{t('as.note')}</p>
+
+  {#snippet footer()}
+    <div class="row">
+      <textarea bind:value={draft} rows="1" maxlength="300" placeholder={t('as.ph')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
+      <button class="send" disabled={!draft.trim() || busy} onclick={() => ask(draft)} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<style>
+  .list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
+  .hello { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 6px 8px; }
+  .hello p { color: var(--text-2); max-width: 320px; }
+  .orb { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%), var(--surface-2);
+    animation: orb 3.2s ease-in-out infinite; }
+  @keyframes orb { 50% { transform: translateY(-4px) scale(1.04); box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--accent) 60%, transparent); } }
+  .sugg { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+  .sugg button { padding: 9px 14px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text); font: 600 14px/1.2 var(--font-text);
+    animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(120ms + var(--i) * 60ms); transition: transform var(--t-fast) var(--ease); }
+  .sugg button:active { transform: scale(0.95); }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.92); } }
+  .b { max-width: 86%; padding: 10px 14px; border-radius: 20px; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  @keyframes in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+  .b p { font: 450 15.5px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .b.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+  .b.assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .acts button { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 32px; padding: 0 12px; border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
+  .typing { display: flex; gap: 5px; padding: 14px 16px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: dot 1s ease-in-out infinite; }
+  .typing i:nth-child(2) { animation-delay: 150ms; } .typing i:nth-child(3) { animation-delay: 300ms; }
+  @keyframes dot { 30% { transform: translateY(-4px); opacity: 1; } 0%, 60%, 100% { opacity: 0.4; } }
+  .note { text-align: center; margin: 8px 0 2px; }
+  .row { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
+  .row textarea { flex: 1; min-width: 0; min-height: 44px; padding: 11px 14px; border-radius: 22px; resize: none; background: var(--surface-2); color: var(--text);
+    font: 450 16px/1.4 var(--font-text); }
+  .row textarea::placeholder { color: var(--text-3); }
+  .send { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff;
+    transition: opacity var(--t-fast), transform var(--t-fast); }
+  .send:disabled { opacity: 0.35; }
+  .send:not(:disabled):active { transform: scale(0.92); }
+  :global(html.lowfx) .orb { animation: none; }
+</style>

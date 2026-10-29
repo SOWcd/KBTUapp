@@ -88,17 +88,21 @@
   const teamPage = () => import('./screens/club/Team.svelte');
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
-  const askConsent = () => {
+  // asked once the screen is free: an unlock or a deep link's sheet up at the start used to skip it until the next launch
+  const askConsent = (tries = 0) => {
     const s = session.me?.student;
-    if (s && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent) && !overlays.length) sheets.consent();
+    if (!s || session.me?.deleteAt || ['staff', 'admin', session.policy].includes(s.consent)) return;
+    if (overlays.length) { if (tries < 40) setTimeout(() => askConsent(tries + 1), 1500); return; }
+    sheets.consent();
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmBoard = () => { if (!session.me?.board) return; void boardPage(); if (session.me.student) void loadBoard(); };
+  const warmBoard = () => { if (!session.board) return; void boardPage(); if (session.me?.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
+  sheets.assistant = () => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), {}));
   sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
   sheets.newThread = (onmade) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
@@ -164,8 +168,8 @@
   // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
   const tab2Label = $derived(member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
   // the bar's tabs: the forum only where the server opened it (BOARD; its policy section in force)
-  const tabs = $derived(TABS.filter((k) => k !== 'forum' || !!session.me?.board));
-  $effect(() => { if (session.me && !session.me.board && ui.tab === 'forum') ui.tab = 'afisha'; });
+  const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.board));
+  $effect(() => { if (session.boardKnown && !session.board && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => tab2Label, profile: () => t('tab.profile') };
   const TAB_DOT: Record<Tab, () => boolean> = {
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
@@ -302,7 +306,7 @@
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const th = p.match(/^th_(\d+)$/); // the bot's "someone answered your thread"
-    if (th) { if (session.me?.board) { ui.tab = 'forum'; sheets.thread(Number(th[1])); } return; }
+    if (th) { if (session.board) { ui.tab = 'forum'; sheets.thread(Number(th[1])); } return; }
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
@@ -456,11 +460,11 @@
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
-      session.me = snap.me; session.ready = true;
+      session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; // the last launch's word until the server's
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(warmBoard, 1800); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(warmBoard, 1800); setTimeout(() => askConsent(), 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up
