@@ -1,18 +1,17 @@
 """The map's flaws, marked in the app (owner, Oct 29: endless small mistakes, and screenshots bloat the work): a long
 press on the plan, a line of text, and the spot lands in the admin's list with its floor and plan units. The app's staff
-mark (ten a day each); students not until the privacy policy covers it. Fixed ones go 30 days after."""
+mark ten a day each; students three, with the forum's switch (its policy section covers it). Fixed ones go 30 days after."""
 from __future__ import annotations
 
 from .core import ApiError, Viewer, need_student, now, one, rows
 
-A_DAY = 10
+A_DAY, A_DAY_STUDENT = 10, 3
 KEEP = 30 * 86400
 
 
-def report(con, v: Viewer, body: dict) -> None:
+def report(con, v: Viewer, body: dict, student: bool = False) -> None:
+    """student: not the team (the route has checked the forum's switch and the consent)."""
     need_student(v)
-    if v.role not in ("admin", "moderator"):  # the owner and the team mark the map (students only once the policy says so)
-        raise ApiError("forbidden")
     ver, floor, text = body.get("ver"), body.get("floor"), " ".join(str(body.get("body") or "").split())
     try:
         u, w = float(body["u"]), float(body["v"])
@@ -22,7 +21,7 @@ def report(con, v: Viewer, body: dict) -> None:
     if ver not in ("main", "old", "kbtu") or not isinstance(floor, int) or isinstance(floor, bool) or not 0 <= floor <= 5 \
             or not (0 <= u <= 1 and 0 <= w <= 1) or not 2 <= len(text) <= 300:
         raise ApiError("bad_input")
-    if one(con, "SELECT COUNT(*) FROM map_flaws WHERE user_id = ? AND created_at > ?", v.id, now() - 86400)[0] >= A_DAY:
+    if one(con, "SELECT COUNT(*) FROM map_flaws WHERE user_id = ? AND created_at > ?", v.id, now() - 86400)[0] >= (A_DAY_STUDENT if student else A_DAY):
         raise ApiError("rate_limited")
     con.execute("INSERT INTO map_flaws (user_id, ver, floor, u, v, px, py, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (v.id, ver, floor, u, w, px, py, text, now()))

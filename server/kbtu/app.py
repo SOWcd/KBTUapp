@@ -1091,8 +1091,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them
     @app.post("/api/map/flaws", status_code=204)
-    def map_flaw(con: Con, v: Me, body: dict = Body(...)):
-        logic.mapflaws.report(con, v, body)
+    def map_flaw(con: Con, v: Me, request: Request, body: dict = Body(...)):
+        student = v.role not in ("admin", "moderator")
+        if student and v.student:  # students with the forum's switch and its policy section (agreed to), like a forum post (a guest: 401 below)
+            board_writer(request, board_viewer(request, v), con)
+        logic.mapflaws.report(con, v, body, student)
 
     @app.get("/api/map/flaws")
     def map_flaws(con: Con, v: Me):

@@ -5734,13 +5734,15 @@ def test_event_questions(env):
     con.close()
 
 def test_map_flaws(env):
-    """A long press on the map reports a flaw (the app's team for now, ten a day); the admin lists and fixes them."""
+    """A long press on the map reports a flaw (the app's team ten a day; students three, with the forum's switch); the
+    admin lists and fixes them."""
     c, cfg = env
     ann, boss = login(c, 1, "ann"), login(c, 4, "boss")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
     login(c, 2, "bob")
-    assert c.post("/api/map/flaws", headers=tma(2), json={"ver": "kbtu", "floor": 1, "u": 0.4, "v": 0.3, "body": "a student"}).status_code == 403
+    mine = {"ver": "kbtu", "floor": 1, "u": 0.4, "v": 0.3, "body": "a student"}
+    assert c.post("/api/map/flaws", headers=tma(2), json=mine).status_code == 404               # BOARD off
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (ann["id"],))               # the team marks, for now
     flaw = {"ver": "kbtu", "floor": 1, "u": 0.42, "v": 0.31, "px": 540.0, "py": 440.0, "body": "the WC door doesn't exist"}
     assert c.post("/api/map/flaws", headers=tma(9), json=flaw).status_code == 401                 # a guest
@@ -5755,6 +5757,8 @@ def test_map_flaws(env):
     for _ in range(9):
         c.post("/api/map/flaws", headers=tma(1), json=flaw)
     assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 429
+    _board_on(c, cfg)
+    assert [c.post("/api/map/flaws", headers=tma(2), json=mine).status_code for _ in range(4)] == [204, 204, 204, 429]
     con.close()
 
 def test_assistant(env, monkeypatch):
