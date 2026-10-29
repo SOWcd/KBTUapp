@@ -17,10 +17,6 @@ export const RIGHTS: { key: Right; level: ClubLevel }[] = [
   { key: 'door', level: 'member' }, { key: 'events', level: 'head' }, { key: 'posts', level: 'head' }, { key: 'people', level: 'head' },
   { key: 'casting', level: 'head' }, { key: 'team', level: 'vice' }, { key: 'money', level: 'vice' }, { key: 'memo', level: 'vice' }, { key: 'profile', level: 'vice' },
 ];
-/** what a level has without a club role (and a role made before the toggles) */
-export const levelRights = (l: OrgRole): Right[] => RIGHTS.filter((r) => RANK[r.level] <= RANK[l]).map((r) => r.key);
-/** the level a set of rights makes: the highest one's */
-export const levelOf = (rights: Right[]): ClubLevel => (['vice', 'head'] as ClubLevel[]).find((l) => RIGHTS.some((r) => r.level === l && rights.includes(r.key))) ?? 'member';
 /** I may do this in this club (my membership, or a club with my rights) */
 export const may = (m: { rights?: Right[] | null } | null | undefined, right: Right): boolean => !!m?.rights?.includes(right);
 
@@ -29,9 +25,6 @@ export const canManage = (m: { role: OrgRole; rights?: Right[] } | null | undefi
 
 /** The roles you can give: strictly below your own. */
 export const canGive = (mine: OrgRole): OrgRole[] => (['vice', 'head', 'member'] as OrgRole[]).filter((r) => RANK[r] < RANK[mine]);
-
-/** Your role in the org is at least `min`. Scan tickets: member; create and edit events, attendees: head. */
-export const atLeast = (role: OrgRole | null | undefined, min: OrgRole): boolean => !!role && RANK[role] >= RANK[min];
 
 /** The club's own name for someone's role (§2b), else the level's. */
 export const roleName = (role: OrgRole, title?: string | null): string => title || ROLE_NAME[role];

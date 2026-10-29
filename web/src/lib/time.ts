@@ -11,8 +11,6 @@ export const nowTs = (): number => Math.floor(Date.now() / 1000);
 
 /** Local calendar day number (days since epoch in Kazakhstan time). */
 export const dayNo = (ts: number): number => Math.floor((ts + OFFSET) / DAY);
-/** Start of the local day containing ts, as a UTC timestamp. */
-export const dayStart = (ts: number): number => dayNo(ts) * DAY - OFFSET;
 /** Local wall-clock parts. */
 export function parts(ts: number) {
   const d = new Date((ts + OFFSET) * 1000);

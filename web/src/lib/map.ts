@@ -32,8 +32,6 @@ export function loadSvg(url: string): Promise<string> {
   }
   return p;
 }
-/** An old-map floor's SVG markup (1..5) */
-export const loadFloor = (n: number): Promise<string> => loadSvg(FLOORS[n]!);
 
 /** The main-building room in a place: "Aud. 305" (in Russian), "305", "Room 412", "251a" → "305", "305", "412", "251a".
  *  Only a room at the start counts, so a street address ("Abaya 150") never sends anyone to the KBTU map. A letter

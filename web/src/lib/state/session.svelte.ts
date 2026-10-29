@@ -46,4 +46,3 @@ export function takeAgain(): string | null {
   } catch { return null; }
 }
 
-export const isStudent = () => !!session.me?.student;
