@@ -358,6 +358,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def event_screen(eid: int, con: Con, v: Me):
         return qr.for_event(con, cfg.token_key, v, eid)
 
+    @app.post("/api/screens/{sid}/grant")
+    def screen_grant(sid: int, con: Con, v: Me, body: dict = Body(...)):
+        return {"granted": qr.grant_all(con, v, sid, body.get("code"))}
+
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
         return qr.csv_link(con, cfg.token_key, v, sid)

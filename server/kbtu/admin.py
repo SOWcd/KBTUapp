@@ -24,6 +24,7 @@
   .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
+  .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
@@ -75,6 +76,12 @@ def main(args: list[str]) -> None:
         n = con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (sid,)).fetchone()[0]
         who = f"{args[4]}'s organizers and the admin" if org else "the admin only"
         print(f"session {sid}, {n} expected; run by {who} (pair /show from the app)")
+    elif cmd == "grant" and len(args) == 4 and args[1] == "session":  # a badge to everyone counted in a check-in session
+        from . import checkin
+        owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
+        if not owner:
+            sys.exit("no owner (the founder admin) yet")
+        print(f"granted {args[3]} to {checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])} people")
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"

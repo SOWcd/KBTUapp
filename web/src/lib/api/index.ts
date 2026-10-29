@@ -179,10 +179,11 @@ export interface Api {
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
   mapFlawDone(id: Id, done: boolean): Promise<void>;
   assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<{ text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[] }>; // the students' assistant
-  qrCheckin(p: string): Promise<{ title: string; done: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
+  qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
-  screenAct(id: Id, act: 'start' | 'finish' | 'unpair'): Promise<import('./types').ScreenSession>;
+  screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving
+  screenGrant(id: Id, code: 'init26'): Promise<{ granted: number }>;  // the owner: a badge to everyone counted
   eventScreen(event: Id): Promise<import('./types').ScreenSession>;                   // an event's own session, made on first use (organizers)
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
@@ -193,12 +194,12 @@ export interface Api {
   clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
-  grant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found'): Promise<PersonCard>; // the admin's manual achievements
+  grant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'): Promise<PersonCard>; // the admin's manual achievements
   /** the owner's batch scanner: a badge QR is one grant; undo within a minute; what I gave */
   grantScan(qr: string, code: GrantItem['code']): Promise<GrantItem>;
   ungrant(id: Id): Promise<void>;
   /** a manual award back off a profile, at any time (a mistake): every grant of it */
-  takeBackGrant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found'): Promise<PersonCard>;
+  takeBackGrant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'): Promise<PersonCard>;
   useGrantLink(token: string): Promise<{ code: string }>;
   myGrants(): Promise<GrantItem[]>;
   staff(): Promise<Staff>;                                // admin: the app's team and the banned

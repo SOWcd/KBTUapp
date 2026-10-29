@@ -5410,7 +5410,7 @@ def test_qr_checkin(env, monkeypatch):
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # finished
     rows_ = _csv(c, 9, sid).splitlines()
     assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
-    assert rows_[2].endswith(",B") and rows_[1].endswith(",A")
+    assert rows_[2].split(",")[9] == "B" and rows_[1].split(",")[9] == "A"                     # the tier column
     con.close()
 
 
@@ -5796,6 +5796,39 @@ def test_assistant(env, monkeypatch):
     for _ in range(30 - con.execute("SELECT COUNT(*) FROM assist_uses").fetchone()[0]):
         con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (ann["id"], int(time.time())))
     assert c.post("/api/assistant", headers=tma(1), json={"q": "one more?"}).status_code == 429
+    con.close()
+
+def test_checkin_way_out(env, monkeypatch):
+    """Oct 30: the initiation's volunteers mark leaving on the same screen (the organizer switches it to "out"): the CSV
+    has when each left and the hours; the owner then gives everyone counted the "init26" badge, once each."""
+    import csv
+    from kbtu import checkin
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    org = _club_runs(c, con, 9, "dana")
+    ann, bob = login(c, 1, "ann"), login(c, 2, "bob")
+    sid = checkin.new(con, "Initiation", [], org)
+    k = _paired(c, 9)
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
+    for u in (1, 2):
+        assert c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["left"] is False
+    con.execute("UPDATE qr_marks SET done_at = done_at - 7200")                                # came two hours ago
+    assert c.post(f"/api/screens/{sid}/out", headers=tma(1)).status_code == 403              # a student can't switch it
+    assert c.post(f"/api/screens/{sid}/out", headers=tma(9)).json()["phase"] == "out"
+    p = c.get("/api/screen", headers=k).json()["param"]
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["left"] is True
+    assert c.get("/api/screen", headers=k).json()["departed"] == 1
+    rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
+    ann_row = next(r for r in rows_[1:] if r[3] == "24Bann")
+    assert ann_row[10] and float(ann_row[11]) >= 1.9 and not next(r for r in rows_[1:] if r[3] == "24Bbob")[10]
+    # the badge: the owner only, everyone counted, once
+    assert c.post(f"/api/screens/{sid}/grant", headers=tma(9), json={"code": "init26"}).status_code == 403
+    login(c, 4, "boss")
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE tg_id = 4")
+    assert c.post(f"/api/screens/{sid}/grant", headers=tma(4), json={"code": "init26"}).json()["granted"] == 2
+    assert c.post(f"/api/screens/{sid}/grant", headers=tma(4), json={"code": "init26"}).json()["granted"] == 0
+    ach = {a["code"]: a["level"] for a in c.get(f"/api/users/{ann['id']}", headers=tma(1)).json()["awards"]["achievements"]}
+    assert ach["init26"] == 1
     con.close()
 
 def test_partner_events(env):

@@ -12,7 +12,7 @@
   import { t } from '../lib/i18n/index.svelte';
 
   type State = { code: string; left?: number; session?: number; title?: string; started?: number | null; ended?: number | null;
-    done?: number; pending?: number; expected?: number; param?: string | null };
+    done?: number; pending?: number; expected?: number; param?: string | null; phase?: 'in' | 'out'; departed?: number };
   const KEEP = 'kb-show';
   let secret = '';
   let st = $state<State | null>(null);
@@ -75,12 +75,19 @@
   {:else}
     <header><h1>{st.title}</h1></header>
     {#if st.param}
-      <section class="live">
+      <section class="live" class:out={st.phase === 'out'}>
         {#key link}<div class="code" in:fade={{ duration: 400 }}><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>{/key}
         <aside>
-          <p class="hint">{t('scr.scan')}</p>
-          <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
-          <p class="sub">{t('scr.done')}</p>
+          {#if st.phase === 'out'}
+            <!-- the way out: the same QR marks leaving (the organizer switched it in the app) -->
+            <p class="hint outh">{t('scr.outScan')}</p>
+            <p class="count"><b>{st.departed}</b><span> / {st.done}</span></p>
+            <p class="sub">{t('scr.outDone')}</p>
+          {:else}
+            <p class="hint">{t('scr.scan')}</p>
+            <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
+            <p class="sub">{t('scr.done')}</p>
+          {/if}
           {#if st.pending}<p class="sub" transition:fade>{t('scr.joining', { n: st.pending })}</p>{/if}
         </aside>
       </section>
@@ -119,6 +126,8 @@
   .again:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
   .mini { width: 11vh; min-width: 72px; padding: 6px; border-radius: 10px; background: #fff; }
   .live { display: flex; align-items: center; gap: 5vw; }
+  .live.out .code { box-shadow: 0 0 80px rgba(255, 159, 10, 0.55); }
+  .outh { color: #FF9F0A; font-weight: 700; }
   .code { width: min(68vh, 50vw); padding: 2.4vh; border-radius: 4vh; background: #fff;
     box-shadow: 0 0 80px color-mix(in srgb, var(--accent) 40%, transparent); }
   aside { display: flex; flex-direction: column; align-items: flex-start; gap: 1.2vh; max-width: 30vw; min-width: 0; }

@@ -826,6 +826,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX assist_uses_by_user ON assist_uses(user_id, at);"""),
+    # the check-in's way out (owner, Oct 30: who left and when, for the initiation's volunteers): the session's phase,
+    # 'in' or 'out', and the last time each person scanned out
+    (89, "ALTER TABLE qr_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')); ALTER TABLE qr_marks ADD COLUMN left_at INTEGER;"),
 ]
 
 

@@ -90,9 +90,10 @@ def _state(con, key: bytes, s) -> dict:
     sid = s["id"]
     running = s["started_at"] is not None and s["ended_at"] is None
     slot = int(time.time()) // SLOT
-    c = one(con, """SELECT COUNT(*) FILTER (WHERE done_at IS NOT NULL), COUNT(*) FILTER (WHERE done_at IS NULL)
-        FROM qr_marks WHERE session_id = ?""", sid)
+    c = one(con, """SELECT COUNT(*) FILTER (WHERE done_at IS NOT NULL), COUNT(*) FILTER (WHERE done_at IS NULL),
+        COUNT(*) FILTER (WHERE left_at IS NOT NULL) FROM qr_marks WHERE session_id = ?""", sid)
     return {"session": sid, "event": s["event_id"], "title": s["title"], "started": s["started_at"], "ended": s["ended_at"], "done": c[0], "pending": c[1],
+            "phase": s["phase"], "departed": c[2],
             "expected": one(con, "SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", sid)[0],
             "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running else None, "next": SLOT - int(time.time()) % SLOT}
 
@@ -148,6 +149,8 @@ def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
         con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now(), sid))
     elif act == "unpair":  # every screen of it goes back to its pairing QR
         con.execute("DELETE FROM qr_screens WHERE session_id = ?", (sid,))
+    elif act in ("out", "in"):  # the same QR marks leaving now (a running session), or arriving again
+        con.execute("UPDATE qr_sessions SET phase = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (act, sid))
     else:
         raise ApiError("not_found")
     return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", s["id"]))
@@ -166,6 +169,21 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
             con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
                         (e["title"], secrets.token_hex(32), e["org_id"], eid, now()))
         return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
+
+
+def grant_all(con, v: Viewer, sid: int, code: object) -> int:
+    """The owner gives a badge (a manual one, e.g. "init26") to everyone counted in a session, once each; how many got it."""
+    if not (v.role == "admin" and logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]):
+        raise ApiError("forbidden")
+    if code not in logic.GRANTABLE or code == "bugs" or not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
+        raise ApiError("bad_input")
+    n = 0
+    with tx(con):
+        for (uid,) in rows(con, """SELECT m.user_id FROM qr_marks m JOIN students s ON s.user_id = m.user_id WHERE m.session_id = ?
+                AND m.done_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM achievement_grants g WHERE g.user_id = m.user_id AND g.code = ?)""", sid, code):
+            logic._grant(con, v.id, uid, str(code))
+            n += 1
+    return n
 
 
 def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:
@@ -190,11 +208,12 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         raise ApiError("forbidden", "screen")
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["status", "name", "email", "student_id", "school", "course", "phone", "telegram", "checked_in", "tier"])
+    w.writerow(["status", "name", "email", "student_id", "school", "course", "phone", "telegram", "checked_in", "tier", "left", "hours"])
+    hm = lambda ts: time.strftime("%H:%M:%S", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
     xs = rows(con, "SELECT * FROM qr_expected WHERE session_id = ? ORDER BY full_name", sid)
     by_mail, by_sid = {x["email"]: x for x in xs}, {x["student_id"]: x for x in xs if x["student_id"]}
     seen = set()
-    for r in rows(con, """SELECT m.done_at, m.scanned_at, st.first_name, st.last_name, st.email, st.student_id, st.school, st.course,
+    for r in rows(con, """SELECT m.done_at, m.scanned_at, m.left_at, st.first_name, st.last_name, st.email, st.student_id, st.school, st.course,
             st.verified_at, u.tg_first_name, u.tg_last_name, u.tg_username FROM qr_marks m JOIN users u ON u.id = m.user_id
             LEFT JOIN students st ON st.user_id = m.user_id WHERE m.session_id = ?
             ORDER BY m.done_at IS NULL, COALESCE(m.done_at, m.scanned_at)""", sid):
@@ -206,10 +225,11 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         w.writerow(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
                     x["full_name"] if x else name, r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
                     (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime((r["done_at"] or r["scanned_at"]) + 5 * 3600)),
-                    ("A" if r["verified_at"] <= s["started_at"] else "B") if done else ""]))
+                    ("A" if r["verified_at"] <= s["started_at"] else "B") if done else "", hm(r["left_at"]),
+                    f"{(r['left_at'] - r['done_at']) / 3600:.1f}" if done and r["left_at"] and r["left_at"] > r["done_at"] else ""]))
     for x in xs:
         if x["email"] not in seen:
-            w.writerow(map(_cell, ["absent", x["full_name"], x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", ""]))
+            w.writerow(map(_cell, ["absent", x["full_name"], x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", "", "", ""]))
     return "\ufeff" + out.getvalue()
 
 
@@ -233,13 +253,16 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
     if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
         raise ApiError("bad_input", "qr_old")
     t = now()
+    out = s["phase"] == "out" and s["ended_at"] is None
     with tx(con):
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
+        if out:  # leaving: the last time counts (out and back in, out again); someone who never scanned in shows as "left only"
+            con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
-            if s["event_id"]:  # an event's own session: that event's check-in too
+            if s["event_id"] and not out:  # an event's own session: that event's check-in too
                 logic.screen_came(con, s["event_id"], uid, t)
-    return {"title": s["title"], "done": student}
+    return {"title": s["title"], "done": student, "left": out}
 
 
 def became_student(con, uid: int) -> None:

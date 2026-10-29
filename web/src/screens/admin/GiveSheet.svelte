@@ -22,6 +22,7 @@
     { code: 'creator_laugh', emoji: 'face_with_tears_of_joy_3d', link: false },
     { code: 'creator_found', emoji: 'waving_hand_3d_default', link: false },
     { code: 'bugs', emoji: 'lady_beetle_3d', link: true },
+    { code: 'init26', emoji: 'party_popper_3d', link: true }, // the initiation's volunteers (a whole check-in session: its sheet)
   ] as const;
   const name = (code: string) => t(`ach.${code}.name` as 'ach.bugs.name');
 

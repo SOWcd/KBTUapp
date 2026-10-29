@@ -255,6 +255,7 @@ export const server: Api = {
   screenAct: (id, act) => call('POST', `/screens/${id}/${act}`),
   eventScreen: (event) => call('POST', `/events/${event}/screen`),
   screenCsv: (id) => call('POST', `/screens/${id}/csv`),
+  screenGrant: (id, code) => call('POST', `/screens/${id}/grant`, { code }),
   restore: (target, id) => call('POST', `/admin/taken-down/${target}/${id}/restore`),
   resolveReport: (target, id, remove) => call('POST', `/admin/reports/${target}/${id}`, { remove }),
   myClubApplication: () => call<{ application: ClubApplication | null }>('GET', '/club-applications/mine').then((r) => r.application),

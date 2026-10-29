@@ -60,7 +60,7 @@ export interface ThreadFull extends Thread { thread: ThreadReply[] }
 export interface ThreadMod { threads: Thread[]; replies: { id: Id; body: string; anon: boolean; why: string | null; at: Ts; thread: Id; threadBody: string }[] }
 export type Joiner = PersonRef & { telegram: string | null };
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
+export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
 export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply'; id: Id; text: string; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
@@ -77,7 +77,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
   events: { done: number; waiting: number }; clubs: { done: number; waiting: number };
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
-export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
+export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'; at: Ts; person: PersonRef }
 export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'thread'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
 

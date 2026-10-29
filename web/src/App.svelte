@@ -337,6 +337,7 @@
   async function checkIn(p: string, again = false): Promise<void> {
     try {
       const r = await api.qrCheckin(p);
+      if (r.done && r.left) { haptic.ok(); say(t('ci.left', { title: r.title }), 'waving_hand_3d_default'); return; }
       if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
       if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p, true); }
     } catch (e) {

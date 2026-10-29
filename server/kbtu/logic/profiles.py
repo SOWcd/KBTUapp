@@ -57,6 +57,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
+    ("init26", "party_popper_3d", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
 ]
 
 
@@ -74,7 +75,8 @@ def _counts(con, uid: int) -> dict[str, int]:
     streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
-            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral}
+            "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
+            "init26": grants.get("init26", 0)}
 
 
 def brought(con, uid: int) -> int:
@@ -127,7 +129,7 @@ def sync_levels(con) -> None:
         con.execute("INSERT INTO meta (key, value) VALUES ('achievements', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (mark,))
 
 
-GRANTABLE = ("bugs", "creator_laugh", "creator_found")  # the manual ones (§4.11); "First 500" is given at verification
+GRANTABLE = ("bugs", "creator_laugh", "creator_found", "init26")  # the manual ones (§4.11); "First 500" is given at verification
 
 
 def grant(con, v: Viewer, uid: object, code: object) -> dict:
