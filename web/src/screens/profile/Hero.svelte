@@ -46,9 +46,16 @@
   // a new lanyard put on turns in like a card flipped to its new face (owner: the re-swing looked cheap): edge-on,
   // a little past, settled; the eye goes to the badge, not to a toast
   let worn = untrack(() => look);
-  const flip = [{ transform: 'rotateY(88deg) scale(0.94)', opacity: 0.4 }, { transform: 'rotateY(-10deg) scale(1.01)', opacity: 1, offset: 0.62 },
-    { transform: 'rotateY(3deg)', offset: 0.85 }, { transform: 'none' }];
-  $effect(() => { if (look !== worn) { worn = look; if (!still()) swing.animate(flip, { duration: 620, easing: 'cubic-bezier(.2,.8,.3,1)' }); } });
+  // one motion on the compositor (owner: the first try stuttered): no opacity (a fading layer this big re-rasterizes),
+  // a single overshooting curve instead of keyframes, the layer promoted only while it turns
+  const flip = [{ transform: 'rotateY(-62deg)' }, { transform: 'none' }];
+  $effect(() => {
+    if (look === worn) return;
+    worn = look;
+    if (still()) return;
+    swing.style.willChange = 'transform';
+    swing.animate(flip, { duration: 560, easing: 'cubic-bezier(.3,1.35,.5,1)' }).onfinish = () => (swing.style.willChange = '');
+  });
 
   // On Me it also feels the Profile pages being swiped (the swing-in on paging looked like a jerk):
   // it leans behind a moving page and sways when the page stops. A damped spring (8 rad/s, ζ 0.2) toward a lean
