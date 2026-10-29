@@ -13,7 +13,8 @@
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import { skinOf, skinned, STRAP } from '../../lib/awards';
+  import { skinOf, skinned, STRAP, banded, type Look } from '../../lib/awards';
+  import LanyardBand from '../../ui/LanyardBand.svelte';
   import { byRank } from '../../lib/perms';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -89,7 +90,7 @@
               { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }] as k (k.id ?? 'kbtu')}
         <button class="ly {k.kind}" role="radio" aria-checked={me.skin === k.id} class:on={me.skin === k.id} disabled={!!busy} onclick={() => { haptic.select(); void pickSkin(k.id); }}>
           <span class="st"><i>{k.word}</i></span><span class="cl"></span>
-          <span class="cd"><span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
+          <span class="cd">{#if banded(k.kind as Look)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
           <b class="ellipsis">{k.name}</b>
         </button>
       {/each}
@@ -143,22 +144,20 @@
   .ly .hl { grid-column: 1 / 3; align-self: end; height: 7px; border-radius: 3px; background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A); }
   .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); }
   .ly .ph { z-index: 1; }
+  .ly .ln, .ly .hl { position: relative; z-index: 1; }
+  /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch: 340 px wide -> 74 */
+  .mini { position: absolute; left: 0; top: 0; width: 340px; height: 221px; transform: scale(0.2176); transform-origin: 0 0; pointer-events: none; }
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   .ly.studex .cd { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 31%, #1D3B7A 31%, #0F2350); }
   .ly.studex .hl { background: #fff; }
   .ly.cheer .st { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
-  /* Cheerleading and Knights: their art band on top, the body below (LanyardBand) */
-  .ly.cheer .cd { background: linear-gradient(180deg, #5560C2, #2E3258 40%, #1D2042 40%, #0A0B17); }
   .ly.cheer .hl { background: linear-gradient(100deg, #FFE7A3, #FFC6E0, #FFE7A3); }
   .ly.knights .st { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
-  .ly.knights .cd { background: linear-gradient(180deg, #3A7BEA, #1C4C94 40%, #0F2B66 40%, #071631); }
   .ly.knights .hl { background: linear-gradient(90deg, #1C4C94, #2F6BD0); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
   .ly.moments .st { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
   .ly.moments .st i { color: #F4D9BE; }
-  .ly.moments .cd { background: linear-gradient(180deg, #1B1310 0 4px, #C46D47 4px, #7A7442 36%, #3A2419 40%, #160D09); }
   .ly.moments .hl { background: linear-gradient(100deg, #F2DEC8, #E3A985, #C9C391); }
-  .ly.faces .st { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
-  .ly.faces .cd { background: radial-gradient(70% 40% at 50% 34%, rgba(200, 64, 255, 0.55), transparent 70%), linear-gradient(180deg, #07060B, #050408); }
+  .ly.faces .st { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .ly.faces .hl { background: linear-gradient(100deg, #6E7BFF, #C04BFF, #FF4F9A, #FFA43D); }
   .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .ly.sower .st i { color: #000; }

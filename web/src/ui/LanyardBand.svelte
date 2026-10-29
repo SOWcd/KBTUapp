@@ -6,7 +6,8 @@
   // basketball, football and volleyball: a student's idea from their tryout poster, Oct 20), white line art like the emblem.
   // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band; on the
   // profile's card only the lens's aperture (lucide's), as the wordmark ran under the name.
-  // Faces: their gradient wordmark over the hands' triangle from their logo, drawn white, on black.
+  // Faces (a party club): their gradient wordmark over the hands' triangle from their logo, drawn white, on a club
+  // night's black with laser beams and lights in the haze.
   import type { Look } from '../lib/awards';
   import panther from '../assets/lanyards/panther.webp';
   import knights from '../assets/lanyards/knights.webp';
@@ -17,8 +18,13 @@
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
   import faces from '../assets/lanyards/faces.webp';
   import hands from '../assets/lanyards/faces-hands.webp';
+  import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
+  import KbtuMark from './KbtuMark.svelte';
 
   let { look, wide = false }: { look: Look; wide?: boolean } = $props();
+  // Moments' date stamp, as an old film camera burns it into the corner: today
+  const d = new Date(), two = (n: number) => String(n).padStart(2, '0');
+  const stamp = `'${two(d.getFullYear() % 100)} ${two(d.getMonth() + 1)} ${two(d.getDate())}`;
 </script>
 
 <div class="band {look}" class:wide aria-hidden="true">
@@ -29,10 +35,14 @@
       <path d="M-10 8H350" /><circle cx="170" cy="8" r="34" /><path d="M120 112V64H220V112" /><path d="M150 64A20 20 0 0 1 190 64" /><path d="M40 112A130 130 0 0 1 300 112" /></g></svg>
     <img class="ball" src={ball} alt="" /><img class="art" src={knights} alt="" />
   {:else if look === 'moments'}
-    {#if wide}<i class="vf"></i><i class="leak"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
+    <i class="leak"></i><span class="date">{stamp}</span>
+    {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
+  {:else if look === 'kbtu'}
+    <img class="dec gl" src={guilloche} alt="" /><span class="mark"><KbtuMark size={wide ? 150 : 70} /></span>
+    {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
   {:else if look === 'faces'}
-    <img class="hands" src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
+    <i class="beams"></i><i class="bokeh"></i><img class="hands" src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
   {/if}
 </div>
 
@@ -42,6 +52,13 @@
   img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
   .dec { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
+  /* KBTU, the app's own: the brand's blue and violet, a guilloche as on an ID card, the colonnade */
+  .kbtu { background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), radial-gradient(60% 80% at 100% 100%, rgba(59, 107, 255, 0.5), transparent 70%),
+    linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
+  .gl { opacity: 0.13; mix-blend-mode: screen; }
+  .mark { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; color: #fff; filter: drop-shadow(0 6px 18px rgba(124, 77, 255, 0.8)); }
+  .wide .mark { left: auto; top: auto; right: -26px; bottom: 36px; transform: rotate(-8deg); opacity: 0.12; filter: none; }
+  .word { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 800 7.5px/1 var(--font-text); letter-spacing: 0.28em; color: rgba(255, 255, 255, 0.7); }
   /* Cheerleading: rays behind the panther, gold and pink pom-poms, confetti */
   .cheer { background: repeating-conic-gradient(from 0deg at var(--c, 50% 78%), rgba(255, 255, 255, 0.06) 0 5deg, transparent 5deg 13deg),
     radial-gradient(circle at var(--c, 50% 78%), #5560C2, #2E3258 48%, #14162E); }
@@ -83,6 +100,9 @@
       linear-gradient(var(--l), var(--l)) 0 100% / 16px 1.5px, linear-gradient(var(--l), var(--l)) 0 100% / 1.5px 16px,
       linear-gradient(var(--l), var(--l)) 100% 100% / 16px 1.5px, linear-gradient(var(--l), var(--l)) 100% 100% / 1.5px 16px;
     background-repeat: no-repeat; }
+  .date { position: absolute; right: 16px; bottom: 22px; font: 700 10px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: 0.08em;
+    color: #FF9A3C; text-shadow: 0 0 6px rgba(255, 120, 40, 0.9); opacity: 0.9; }
+  .wide .date { right: 22px; bottom: 50px; font-size: 9px; } /* just above the strip */
   .moments .art { left: 50%; top: 55%; width: 210px; transform: translate(-50%, -50%); filter: drop-shadow(0 0 14px rgba(255, 228, 200, 0.55)); }
   .band.moments.wide .art { left: auto; top: auto; right: -34px; bottom: -40px; width: 180px; height: auto; transform: none; opacity: 0.2; filter: none; }
 
@@ -92,6 +112,19 @@
     radial-gradient(40% 70% at 94% 12%, rgba(255, 150, 60, 0.35), transparent 70%), #07060B; }
   .faces.wide { background: radial-gradient(70% 55% at 100% 100%, rgba(200, 64, 255, 0.42), transparent 70%),
     radial-gradient(60% 50% at 0% 0%, rgba(110, 123, 255, 0.32), transparent 70%), radial-gradient(40% 40% at 100% 0%, rgba(255, 150, 60, 0.22), transparent 70%), #07060B; }
+  /* a club night: laser beams fanning from the stage, out-of-focus lights in the haze */
+  .beams { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+    background: repeating-conic-gradient(from 150deg at 50% -18%, transparent 0 5deg, rgba(192, 75, 255, 0.4) 5deg 5.5deg, transparent 5.5deg 11deg),
+      repeating-conic-gradient(from 165deg at 18% -30%, transparent 0 7deg, rgba(255, 79, 154, 0.3) 7deg 7.4deg, transparent 7.4deg 14deg),
+      repeating-conic-gradient(from 135deg at 84% -30%, transparent 0 8deg, rgba(255, 164, 61, 0.28) 8deg 8.4deg, transparent 8.4deg 15deg);
+    -webkit-mask: linear-gradient(#000 10%, transparent 92%); mask: linear-gradient(#000 10%, transparent 92%); }
+  .wide .beams { background: repeating-conic-gradient(from 10deg at -8% 110%, transparent 0 4deg, rgba(192, 75, 255, 0.32) 4deg 4.4deg, transparent 4.4deg 9deg),
+      repeating-conic-gradient(from 280deg at 108% 112%, transparent 0 6deg, rgba(255, 79, 154, 0.26) 6deg 6.4deg, transparent 6.4deg 12deg);
+    -webkit-mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); }
+  .bokeh { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+    background: radial-gradient(circle at 12% 78%, rgba(255, 79, 154, 0.45) 0 5px, transparent 9px), radial-gradient(circle at 28% 30%, rgba(110, 123, 255, 0.4) 0 3px, transparent 6px),
+      radial-gradient(circle at 74% 82%, rgba(255, 164, 61, 0.45) 0 6px, transparent 10px), radial-gradient(circle at 90% 40%, rgba(192, 75, 255, 0.45) 0 4px, transparent 8px),
+      radial-gradient(circle at 56% 18%, rgba(255, 255, 255, 0.35) 0 2px, transparent 4px), radial-gradient(circle at 40% 88%, rgba(192, 75, 255, 0.35) 0 3px, transparent 7px); }
   .hands { left: 50%; bottom: -6px; width: 300px; transform: translateX(-50%); opacity: 0.16; }
   .faces .art { left: 50%; top: 50%; height: 92px; transform: translate(-50%, -50%); filter: drop-shadow(0 4px 18px rgba(200, 64, 255, 0.45)); }
   .wide .hands { left: auto; right: -40px; bottom: 44px; width: 230px; transform: none; opacity: 0.2; }

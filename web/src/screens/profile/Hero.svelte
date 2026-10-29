@@ -33,7 +33,7 @@
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
 
-  // a damped pendulum around the clip, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
+  // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
   const frames = Array.from({ length: 41 }, (_, f) => {
     const s = (f / 40) * 1.4;
     return { transform: `rotate(${f === 40 ? 0 : (-6 * Math.exp(-2.8 * s) * Math.cos(7.5 * s)).toFixed(2)}deg)` };
@@ -68,8 +68,8 @@
 
 <section class="h">
 <div class="hang {look}">
-  <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
   <div class="swing" bind:this={swing}>
+    <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
     <div class="badge" use:glass>
       {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
@@ -109,15 +109,16 @@
 </section>
 
 <style>
-  .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; }
+  .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
-  .strap { width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
+  /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
+  .strap { position: absolute; top: -52px; left: 50%; margin-left: -13px; width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
   /* the clip swings with the card, down into its slot (owner, Oct 29: it hung above it) */
   .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
-  .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -16px; }
+  .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; }
 
   .badge {
     position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;
@@ -164,7 +165,7 @@
   .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
   .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
-  .faces .strap { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
+  .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
   /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }

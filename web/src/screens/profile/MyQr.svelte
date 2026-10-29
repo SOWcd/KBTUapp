@@ -67,7 +67,6 @@
 <div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
   <div class="stage {look}">
-    <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
     <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
@@ -86,6 +85,7 @@
       </div>
       <span class="foot"><LanyardHolo {look} no={h.no} /></span>
     </div>
+    <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
     <div class="clip" aria-hidden="true"></div>
     </div>
   </div>
@@ -107,9 +107,10 @@
     padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 16px);
   }
   .wrap > :global(*) { pointer-events: auto; }
-  .stage { perspective: 900px; display: flex; flex-direction: column; align-items: center; }
+  .stage { perspective: 900px; display: flex; flex-direction: column; align-items: center; padding-top: 46px; }
   /* the strap and clip as on the badge (Hero.svelte) */
-  .strap { width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
+  /* the strap tilts with the card too, out from under the capsule */
+  .strap { position: absolute; z-index: 1; top: -46px; left: 50%; margin-left: -13px; width: 26px; height: 46px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
     background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
   .strap span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 7.5px/26px var(--font-text); letter-spacing: 0.22em; color: rgba(255, 255, 255, 0.8); white-space: nowrap; }
   .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
@@ -157,7 +158,7 @@
   .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
   .faces .pass { background: radial-gradient(80% 50% at 50% 100%, rgba(200, 64, 255, 0.22), transparent 70%), linear-gradient(180deg, #0E0C14, #050408); }
-  .faces .strap { background: linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); }
+  .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .pass { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
