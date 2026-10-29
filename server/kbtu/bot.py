@@ -122,6 +122,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
         text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "", title=a["title"])
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
+    if kind == "thread_reply":  # tr:<thread>:<hour>: someone answered or joined my forum thread; never their words
+        t = one(con, "SELECT id FROM threads WHERE id = ? AND status = 'live'", int(ref[1]))
+        return (*texts.bot_message(lang, kind), f"th_{t['id']}") if t else None
     if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])

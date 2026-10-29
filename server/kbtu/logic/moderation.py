@@ -117,7 +117,7 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    if target not in ("post", "comment", "event", "user", "photo", "ask") or reason not in ("spam", "insult", "danger", "other") \
+    if target not in ("post", "comment", "event", "user", "photo", "ask", "thread", "reply") or reason not in ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
@@ -134,6 +134,9 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     elif target == "ask":  # a forum request (forum.py): not my own, still up
         if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id):
             raise ApiError("not_found")
+    elif target in ("thread", "reply"):  # the student forum (threads.py): not my own, still up
+        if not threads.reportable(con, v, target, tid):
+            raise ApiError("not_found")
     elif target == "comment":
         c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
         if not c or c["user_id"] == v.id:  # my own comment I delete, not report
@@ -148,6 +151,8 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
         raise ApiError("rate_limited")
     con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (v.id, target, tid, reason, note, core.now()))
+    if target in ("thread", "reply"):
+        threads.after_report(con, target, tid)
 
 
 def _about(con, target: str, tid: int) -> int | None:
@@ -155,6 +160,8 @@ def _about(con, target: str, tid: int) -> int | None:
     r = (one(con, "SELECT ?", tid) if target == "user" else one(con, "SELECT user_id FROM comments WHERE id = ?", tid) if target == "comment"
          else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo"
          else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask" else None)
+    if target in ("thread", "reply"):
+        return threads.owner_of(con, target, tid)
     return r[0] if r else None
 
 
@@ -177,6 +184,9 @@ def report_queue(con, v: Viewer) -> list[dict]:
         elif r["target"] == "ask":  # a forum request: its words (forum.py hides it only with three reports and the AI, or here)
             a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
+        elif r["target"] in ("thread", "reply"):  # the student forum: the words (never an anonymous writer's name)
+            w = threads.words(con, r["target"], r["target_id"])
+            text, where = (w[0], ("thread", w[1])) if w else (None, None)
         elif r["target"] == "post":
             # no post screen of its own to open: its words are the thing to judge, title and body
             p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
@@ -217,6 +227,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                             (tid, p["added_by"], json.dumps(dict(p)), tid, core.now()))
         elif target == "ask":
             hide_ask(con, tid, "moderator", v.id)
+        elif target in ("thread", "reply"):
+            threads.take_down(con, target, tid)
         elif target == "user":  # the nick, the own photo and "about me" go, the Telegram photo is back; kept 30 days for an undo
             u = one(con, "SELECT nick, bio, avatar_tg, avatar_file_id FROM users WHERE id = ?", tid)
             if u and (u["nick"] or u["bio"] or u["avatar_file_id"]):
@@ -225,6 +237,8 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
             con.execute("UPDATE users SET nick = NULL, avatar_tg = 1, avatar_file_id = NULL, bio = '' WHERE id = ?", (tid,))
         else:
             raise ApiError("bad_input")
+    elif target in ("thread", "reply"):  # left up: back if three reports had hidden it meanwhile
+        threads.put_back(con, target, tid, reported_only=True)
     con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'",
                 ("actioned" if remove else "dismissed", v.id, core.now(), target, tid))
     log_action(con, v.id, "report_remove" if remove else "report_keep", f"{target}:{tid}")
@@ -248,6 +262,9 @@ def taken_down(con, v: Viewer) -> list[dict]:
         elif kind == "photo":  # the picture itself, as the queue showed it
             x = one(con, """SELECT 'media/' || f.path || '.t.webp' AS text FROM takedowns k JOIN files f ON f.id = k.file_id
                 WHERE k.target = 'photo' AND k.target_id = ?""", tid)
+        elif kind in ("thread", "reply"):
+            w = threads.words(con, kind, tid, hidden=True)
+            x = {"text": w[0]} if w else None
         elif kind == "user":  # what the person wrote about themselves
             k = one(con, "SELECT data FROM takedowns WHERE target = 'user' AND target_id = ? ORDER BY id DESC", tid)
             d = json.loads(k["data"]) if k else None
@@ -270,6 +287,8 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             n = con.execute("UPDATE comments SET deleted_at = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL", (tid,)).rowcount
         elif target in ("post", "event"):
             n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL", (tid,)).rowcount
+        elif target in ("thread", "reply"):
+            n = threads.put_back(con, target, tid)
         elif target in ("photo", "user"):
             k = one(con, "DELETE FROM takedowns WHERE id = (SELECT MAX(id) FROM takedowns WHERE target = ? AND target_id = ?) RETURNING *", target, tid)
             n = 1 if k else 0
@@ -311,3 +330,4 @@ from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import _event, notify  # noqa: E402
 from .teams import remove  # noqa: E402
+from . import threads  # noqa: E402

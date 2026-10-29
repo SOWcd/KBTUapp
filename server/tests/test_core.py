@@ -5530,6 +5530,77 @@ def test_event_screen(env):
     assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0]
     con.close()
 
+def test_student_forum(env, monkeypatch):
+    """Oct 30: the student forum. Threads by topic; anonymous ones name nobody (not even moderators) and the admin's
+    reveal is audited; the AI holds an anonymous text unless it says yes, a named one only on its no; replies number
+    anonymous writers per thread; "I'm in" only on gathering topics; the author hears from the bot without the words;
+    three reports from older accounts hide a thing; blocks and deletes; guests can't read."""
+    from kbtu import ai
+    c, cfg = env
+    ann, bob, mod, boss = login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "mod"), login(c, 4, "boss")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    ok = lambda r: monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=r))  # noqa: E731
+    A, B, M, X = tma(1), tma(2), tma(3), tma(4)
+    assert c.get("/api/threads", headers=tma(9)).status_code == 401                               # a guest: sign in first
+    ok(None)                                                                                        # no AI answer
+    named = c.post("/api/threads", headers=A, json={"topic": "go", "body": "KFC at 14:00, who's in?"}).json()
+    assert named["status"] == "live" and named["author"]["id"] == ann["id"]                         # named: up
+    secret = c.post("/api/threads", headers=A, json={"topic": "talk", "body": "Parents call every hour", "anon": True}).json()
+    assert secret["status"] == "held" and secret["author"] is None                                  # anonymous: waits
+    assert [t["id"] for t in c.get("/api/threads", headers=B).json()] == [named["id"]]
+    ok(True)
+    lend = c.post("/api/threads", headers=B, json={"topic": "thing", "body": "Need a Type-C charger for an hour", "anon": True}).json()
+    assert lend["status"] == "live"
+    for bad in ({"topic": "spam", "body": "hi there"}, {"topic": "talk", "body": "x"}, {"topic": "talk", "body": "y" * 1001},
+                {"topic": "talk", "body": "ok ok", "anon": "yes"}):
+        assert c.post("/api/threads", headers=A, json=bad).status_code == 400
+    # the moderator sees the held one without its author, releases it
+    q = c.get("/api/threads/mod", headers=M).json()
+    assert [t["id"] for t in q["threads"]] == [secret["id"]] and q["threads"][0]["author"] is None
+    assert c.get("/api/threads/mod", headers=A).status_code == 403
+    assert c.post(f"/api/threads/mod/thread/{secret['id']}", headers=M, json={"ok": True}).status_code == 204
+    feed = c.get("/api/threads", headers=B).json()
+    assert {t["id"] for t in feed} == {named["id"], secret["id"], lend["id"]} and all("ann" not in json.dumps(t).lower() for t in feed if t["anon"])
+    assert [t["id"] for t in c.get("/api/threads", headers=B, params={"topic": "thing"}).json()] == [lend["id"]]
+    # the admin alone reveals, and it's logged
+    assert c.post(f"/api/threads/reveal/thread/{secret['id']}", headers=M).status_code == 403
+    assert c.post(f"/api/threads/reveal/thread/{secret['id']}", headers=X).json()["id"] == ann["id"]
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'reveal_anon'").fetchone()[0] == 1
+    assert c.post(f"/api/threads/reveal/thread/{named['id']}", headers=X).status_code == 404       # not anonymous: nothing to reveal
+    # replies: anonymous writers numbered, the anonymous author is "the author"; the author hears once an hour
+    c.post(f"/api/threads/{secret['id']}/replies", headers=B, json={"body": "Same here", "anon": True})
+    c.post(f"/api/threads/{secret['id']}/replies", headers=M, json={"body": "Talk to them", "anon": True})
+    c.post(f"/api/threads/{secret['id']}/replies", headers=B, json={"body": "Hang in there", "anon": True})
+    th = c.post(f"/api/threads/{secret['id']}/replies", headers=A, json={"body": "Thanks all", "anon": True}).json()
+    assert [(r.get("n"), r.get("op", False)) for r in th["thread"]] == [(1, False), (2, False), (1, False), (None, True)]
+    assert all("person" not in r for r in th["thread"]) and th["replies"] == 4
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'thread_reply' AND user_id = ?", (ann["id"],)).fetchone()[0] == 1
+    assert "Same here" not in bot._render(con, con.execute("""SELECT o.*, 'ru' AS lang FROM bot_outbox o WHERE kind = 'thread_reply'""").fetchone())[0]
+    # "I'm in": gathering topics only, not my own; the author sees who and how to write
+    assert c.put(f"/api/threads/{named['id']}/join", headers=B, json={"on": True}).json()["joins"] == 1
+    assert c.put(f"/api/threads/{named['id']}/join", headers=A, json={"on": True}).status_code == 404
+    assert c.put(f"/api/threads/{lend['id']}/join", headers=A, json={"on": True}).status_code == 404
+    assert [p["id"] for p in c.get(f"/api/threads/{named['id']}/joiners", headers=A).json()] == [bob["id"]]
+    assert c.get(f"/api/threads/{named['id']}/joiners", headers=B).status_code == 404
+    # three reports from accounts older than two weeks hide it; the queue keeps the author's name out
+    con.execute("UPDATE users SET created_at = 0")
+    for h in (B, M, X):
+        assert c.post("/api/reports", headers=h, json={"target": "thread", "id": named["id"], "reason": "spam"}).status_code in (200, 204)
+    assert con.execute("SELECT status FROM threads WHERE id = ?", (named["id"],)).fetchone()[0] == "hidden"
+    row = next(r for r in c.get("/api/admin/reports", headers=X).json() if r["target"] == "thread")
+    assert row["where"] == {"kind": "thread", "id": named["id"]}
+    c.post(f"/api/admin/reports/thread/{named['id']}", headers=X, json={"remove": False})              # left up: back
+    assert con.execute("SELECT status FROM threads WHERE id = ?", (named["id"],)).fetchone()[0] == "live"
+    # blocks hide each other's threads; deleting mine takes the replies along
+    c.post("/api/forum/blocks", headers=B, json={"user": ann["id"], "on": True})
+    assert [t["id"] for t in c.get("/api/threads", headers=B).json()] == [lend["id"]]               # Ann's, the anonymous one too
+    assert c.delete(f"/api/threads/{secret['id']}", headers=B).status_code == 404
+    assert c.delete(f"/api/threads/{secret['id']}", headers=A).status_code == 204
+    assert con.execute("SELECT COUNT(*) FROM thread_replies").fetchone()[0] == 0
+    con.close()
+
 def test_partner_events(env):
     """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
     council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays

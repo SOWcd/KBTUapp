@@ -1398,6 +1398,55 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await screen(f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
         return logic.create_ask(con, v, body, verdict)
 
+    # ------------------------------------------------------------ the student forum (logic/threads.py): every student
+    T = logic.threads
+
+    @app.get("/api/threads")
+    def threads_feed(con: Con, v: Me, topic: str | None = None, before: int | None = None):
+        return T.threads(con, v, topic, before)
+
+    @app.post("/api/threads")
+    async def threads_new(con: Con, v: Me, body: dict = Body(...)):
+        T.precheck(con, v, body)
+        return T.create_thread(con, v, body, await screen(str(body["body"])))
+
+    @app.get("/api/threads/mod")
+    def threads_mod(con: Con, v: Me):
+        return T.mod_queue(con, v)
+
+    @app.post("/api/threads/mod/{kind}/{xid}", status_code=204)
+    def threads_mod_decide(kind: str, xid: int, con: Con, v: Me, body: dict = Body(...)):
+        T.mod_decide(con, v, kind, xid, body.get("ok"))
+
+    @app.post("/api/threads/reveal/{kind}/{xid}")
+    def threads_reveal(kind: str, xid: int, con: Con, v: Me):
+        return T.reveal(con, v, kind, xid)
+
+    @app.delete("/api/threads/replies/{rid}", status_code=204)
+    def threads_drop_reply(rid: int, con: Con, v: Me):
+        T.delete_reply(con, v, rid)
+
+    @app.get("/api/threads/{tid}")
+    def threads_one(tid: int, con: Con, v: Me):
+        return T.thread(con, v, tid)
+
+    @app.delete("/api/threads/{tid}", status_code=204)
+    def threads_drop(tid: int, con: Con, v: Me):
+        T.delete_thread(con, v, tid)
+
+    @app.post("/api/threads/{tid}/replies")
+    async def threads_reply(tid: int, con: Con, v: Me, body: dict = Body(...)):
+        T.precheck(con, v, body, reply=True)
+        return T.reply(con, v, tid, body, await screen(str(body["body"])))
+
+    @app.put("/api/threads/{tid}/join")
+    def threads_join(tid: int, con: Con, v: Me, body: dict = Body(...)):
+        return T.join(con, v, tid, body.get("on"))
+
+    @app.get("/api/threads/{tid}/joiners")
+    def threads_joiners(tid: int, con: Con, v: Me):
+        return T.joiners(con, v, tid)
+
     @app.post("/api/forum/asks/{aid}/close")
     def forum_close_ask(aid: int, con: Con, v: Forum, body: dict = Body(default={})):
         return logic.close_ask(con, v, aid, body.get("found"))
@@ -1437,7 +1486,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.contacts(con, v)
 
     @app.post("/api/forum/blocks", status_code=204)
-    def forum_block(con: Con, v: Forum, body: dict = Body(...)):
+    def forum_block(con: Con, v: Me, body: dict = Body(...)):  # every student: the student forum hides blocked people too
         logic.block(con, v, body.get("user"), body.get("on", True))
 
     # ------------------------------------------------------------ the frontend

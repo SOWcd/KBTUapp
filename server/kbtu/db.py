@@ -750,6 +750,56 @@ MIGRATIONS: list[tuple[int, str]] = [
     # scans are that event's check-ins
     (82, """ALTER TABLE qr_sessions ADD COLUMN event_id INTEGER REFERENCES events(id) ON DELETE SET NULL;
     CREATE UNIQUE INDEX qr_sessions_by_event ON qr_sessions(event_id) WHERE event_id IS NOT NULL;"""),
+    # the student forum (logic/threads.py, Oct 30): threads, replies, "I'm in"; anonymous ones keep their author for
+    # the admin's audited reveal only. Reports learn 'thread' and 'reply' (the table rebuilt: a CHECK can't be altered)
+    (83, """CREATE TABLE threads (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      topic      TEXT NOT NULL CHECK (topic IN ('thing', 'go', 'help', 'vol', 'talk')),
+      body       TEXT NOT NULL CHECK (length(body) BETWEEN 2 AND 1000),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden')),
+      why        TEXT,                                  -- held / hidden: 'ai', 'check' (no AI answer), 'reports', 'moderator'
+      created_at INTEGER NOT NULL,
+      bumped_at  INTEGER NOT NULL,                      -- the last live reply: the feed's order
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX threads_feed ON threads(status, bumped_at);
+    CREATE INDEX threads_by_user ON threads(user_id, created_at);
+    CREATE TABLE thread_replies (
+      id         INTEGER PRIMARY KEY,
+      thread_id  INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 500),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden')),
+      why        TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX thread_replies_by_thread ON thread_replies(thread_id, id);
+    CREATE INDEX thread_replies_by_user ON thread_replies(user_id, created_at);
+    CREATE TABLE thread_joins (
+      thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at        INTEGER NOT NULL,
+      PRIMARY KEY (thread_id, user_id)
+    ) STRICT;
+    CREATE TABLE reports4 (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    ) STRICT;
+    INSERT INTO reports4 SELECT id, reporter_id, target, target_id, reason, note, status, created_at, resolved_by, resolved_at FROM reports;
+    DROP TABLE reports;
+    ALTER TABLE reports4 RENAME TO reports;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
 ]
 
 
