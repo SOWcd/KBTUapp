@@ -19,12 +19,19 @@ from .logic import ApiError, now, one, rows, tx
 
 SLOT = 10           # the QR on the screen changes this often (s)
 SCAN_OK = 5 * 60    # a scan is taken this long after its QR was shown: a slow phone on crowded wifi
-PIN_TRIES = 20      # wrong PINs a minute, all together: 10^6 PINs stay out of reach
+PIN_TRIES = 200     # wrong PINs a minute, all together (a right one always opens): ~3.5 days to try all 10^6
+GRACE = 30 * 60     # after Finish, someone who scanned in time may still finish signing in this long
+# ponytail: _fails is per process (one uvicorn worker today); a table in SQLite if it ever runs several
 _fails: list[float] = []
 
 
 def _sig(key: bytes, msg: str) -> str:
     return hmac.new(key, msg.encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def _same(sig: str, given: object) -> bool:
+    """compare_digest on bytes: a non-ASCII str would raise TypeError (a 500)"""
+    return hmac.compare_digest(sig.encode(), str(given or "").encode())
 
 
 def _pin_hash(pin: str) -> str:
@@ -51,12 +58,13 @@ def new(con, title: str, people: list[dict]) -> tuple[int, str]:
 # ------------------------------------------------------------ the screen (no Telegram: a PIN, then a key per session)
 
 def open_screen(con, key: bytes, pin: str) -> dict:
-    t = time.monotonic()
-    _fails[:] = [f for f in _fails if f > t - 60]
-    if len(_fails) >= PIN_TRIES:
-        raise ApiError("rate_limited")
+    # the PIN first: junk POSTs can't lock the organizer out, only the guessers
     s = one(con, "SELECT id FROM qr_sessions WHERE pin_hash = ?", _pin_hash(str(pin or "").strip()))
     if not s:
+        t = time.monotonic()
+        _fails[:] = [f for f in _fails if f > t - 60]
+        if len(_fails) >= PIN_TRIES:
+            raise ApiError("rate_limited")
         _fails.append(t)
         raise ApiError("not_found", "pin")
     return {"session": s["id"], "key": _sig(key, f"screen.{s['id']}")}
@@ -64,7 +72,7 @@ def open_screen(con, key: bytes, pin: str) -> dict:
 
 def _screen(con, key: bytes, sid: int, k: str):
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not s or not hmac.compare_digest(_sig(key, f"screen.{sid}"), str(k or "")):
+    if not s or not _same(_sig(key, f"screen.{sid}"), k):
         raise ApiError("forbidden", "screen")
     return s
 
@@ -82,7 +90,8 @@ def state(con, key: bytes, sid: int, k: str) -> dict:
 
 def start(con, key: bytes, sid: int, k: str) -> dict:
     _screen(con, key, sid, k)
-    con.execute("UPDATE qr_sessions SET started_at = COALESCE(started_at, ?), ended_at = NULL WHERE id = ?", (now(), sid))
+    # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
+    con.execute("UPDATE qr_sessions SET started_at = ? WHERE id = ? AND started_at IS NULL", (now(), sid))
     return state(con, key, sid, k)
 
 
@@ -92,25 +101,39 @@ def finish(con, key: bytes, sid: int, k: str) -> dict:
     return state(con, key, sid, k)
 
 
+def _cell(v) -> str:
+    """No formulas in Excel: a cell starting = + - @ or a tab/CR gets a ' (phones "+7 ..." show it; harmless)"""
+    v = "" if v is None else str(v)
+    return "'" + v if v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+
+
 def export(con, key: bytes, sid: int, k: str) -> str:
-    """Who came (tier, time), then who of the expected list didn't; a BOM so Excel reads the Cyrillic."""
+    """Who came (tier, time), who scanned but never signed in, then who of the expected list didn't; a BOM so Excel
+    reads the Cyrillic. The list is matched by mail, else by student ID (a personal mail on the sheet)."""
     s = _screen(con, key, sid, k)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["status", "name", "email", "student_id", "school", "course", "phone", "telegram", "checked_in", "tier"])
+    xs = rows(con, "SELECT * FROM qr_expected WHERE session_id = ? ORDER BY full_name", sid)
+    by_mail, by_sid = {x["email"]: x for x in xs}, {x["student_id"]: x for x in xs if x["student_id"]}
     seen = set()
-    for r in rows(con, """SELECT m.done_at, st.first_name, st.last_name, st.email, st.student_id, st.school, st.course, st.verified_at,
-            u.tg_username, x.full_name, x.phone, x.tg FROM qr_marks m JOIN users u ON u.id = m.user_id
-            JOIN students st ON st.user_id = m.user_id LEFT JOIN qr_expected x ON x.session_id = m.session_id AND x.email = lower(st.email)
-            WHERE m.session_id = ? AND m.done_at IS NOT NULL ORDER BY m.done_at""", sid):
-        seen.add((r["email"] or "").lower())
-        w.writerow(["came" if r["full_name"] is not None else "came (not on the list)", r["full_name"] or f"{r['last_name']} {r['first_name']}",
-                    r["email"], r["student_id"], r["school"], r["course"], r["phone"], r["tg"] or r["tg_username"],
-                    time.strftime("%H:%M:%S", time.gmtime(r["done_at"] + 5 * 3600)), "A" if r["verified_at"] <= s["started_at"] else "B"])
-    for x in rows(con, "SELECT * FROM qr_expected WHERE session_id = ? ORDER BY full_name", sid):
+    for r in rows(con, """SELECT m.done_at, m.scanned_at, st.first_name, st.last_name, st.email, st.student_id, st.school, st.course,
+            st.verified_at, u.tg_first_name, u.tg_last_name, u.tg_username FROM qr_marks m JOIN users u ON u.id = m.user_id
+            LEFT JOIN students st ON st.user_id = m.user_id WHERE m.session_id = ?
+            ORDER BY m.done_at IS NULL, COALESCE(m.done_at, m.scanned_at)""", sid):
+        x = by_mail.get((r["email"] or "").lower()) or by_sid.get(r["student_id"])
+        if x:
+            seen.add(x["email"])
+        done = r["done_at"] is not None
+        name = " ".join(n for n in (r["last_name"], r["first_name"]) if n) or " ".join(n for n in (r["tg_last_name"], r["tg_first_name"]) if n)
+        w.writerow(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
+                    x["full_name"] if x else name, r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
+                    (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime((r["done_at"] or r["scanned_at"]) + 5 * 3600)),
+                    ("A" if r["verified_at"] <= s["started_at"] else "B") if done else ""]))
+    for x in xs:
         if x["email"] not in seen:
-            w.writerow(["absent", x["full_name"], x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", ""])
-    return "﻿" + out.getvalue()
+            w.writerow(map(_cell, ["absent", x["full_name"], x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", ""]))
+    return "\ufeff" + out.getvalue()
 
 
 # ------------------------------------------------------------ the student's scan
@@ -121,14 +144,15 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         sid, slot = int(sid), int(slot)
     except ValueError:
         raise ApiError("bad_input", "qr") from None
-    if not hmac.compare_digest(_sig(key, f"ci.{sid}.{slot}"), sig):
+    if not _same(_sig(key, f"ci.{sid}.{slot}"), sig):
         raise ApiError("bad_input", "qr")
     # the same scan again after the sign-up (the app repeats it): its age doesn't matter, it was taken in time
     had = one(con, "SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
     if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
         raise ApiError("bad_input", "qr_old")
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not s or s["started_at"] is None or s["ended_at"] is not None:
+    # finished: only someone who scanned before Finish may still complete it, for GRACE
+    if not s or s["started_at"] is None or s["ended_at"] is not None and not (had and s["ended_at"] > now() - GRACE):
         raise ApiError("closed", "qr")
     t = now()
     con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
@@ -138,9 +162,10 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
 
 
 def became_student(con, uid: int) -> None:
-    """Just signed up: the scans waiting for it count now (sessions still open)."""
+    """Just signed up: the scans waiting for it count now (sessions open or finished under GRACE ago)."""
+    t = now()
     con.execute("""UPDATE qr_marks SET done_at = ? WHERE user_id = ? AND done_at IS NULL
-        AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL)""", (now(), uid))
+        AND session_id IN (SELECT id FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ?)""", (t, uid, t - GRACE))
 
 
 def prefill(con, email: str | None) -> dict | None:

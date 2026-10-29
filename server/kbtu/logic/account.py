@@ -21,6 +21,7 @@ def ms_link(con, uid: int, who: dict) -> None:
     """A student signed in with the KBTU Microsoft account (msauth.py): confirmed, with that account's email, and its
     names over typed ones (otherwise "confirmed" proved nothing about who it is); the old portal's
     names stay (they came from KBTU already). Whoever's invite link brought them now counts it (awards.brought)."""
+    from .. import checkin  # imports logic: here, not at the top
     by = one(con, """SELECT u.referred_by FROM users u JOIN students s ON s.user_id = u.id AND s.manual = 1 WHERE u.id = ?""", uid)
     before = _levels(con, by[0]) if by and by[0] else None
     con.execute("""UPDATE students SET ms_oid = ?, email = ?, manual = 0, verified_at = ?, ms_profile = ?,
@@ -29,6 +30,7 @@ def ms_link(con, uid: int, who: dict) -> None:
                 (who["oid"], who["email"], core.now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
     link_door_guests(con, uid)
+    checkin.became_student(con, uid)  # a QR scan waiting for the sign-up counts now (the form's and the relink's path)
     if before is not None:
         _celebrate(con, by[0], before)
 

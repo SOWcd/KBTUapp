@@ -82,10 +82,7 @@
         {#if st.ended}
           <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
           <p class="sub">{t('scr.closed')}</p>
-          <div class="row">
-            <a class="btn" href={csv} download>{t('scr.csv')}</a>
-            <button class="btn ghost" onclick={() => act('start')} disabled={busy}>{t('scr.again')}</button>
-          </div>
+          <div class="row"><a class="btn" href={csv} download>{t('scr.csv')}</a></div>
         {:else}
           <button class="btn big" onclick={() => act('start')} disabled={busy}>{t('scr.start')}</button>
         {/if}

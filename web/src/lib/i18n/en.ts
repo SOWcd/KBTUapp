@@ -688,7 +688,6 @@ const en: Dict = {
   'scr.badPin': "Wrong PIN",
   'scr.start': "Start check-in",
   'scr.finish': "Finish",
-  'scr.again': "Resume check-in",
   'scr.csv': "Download the list",
   'scr.scan': "Point your phone camera at the QR",
   'scr.joining': "{n} more signing in with KBTU",

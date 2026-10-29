@@ -2543,7 +2543,7 @@ def test_memo(env, monkeypatch):
     assert "№305" in text and "Ivanov Ivan, Satbayev University" in text and texts.memo_day(a["startsAt"]) in text
     numbered = [x for x in text.split("\n") if x[:3] in ("1) ", "2) ", "3) ")]
     assert len(numbered) == 3 and "305" in numbered[0] and "50" in numbered[2]               # numbered through the memo
-    assert text.count("Pres Testov") == 3 and "Pres Testov\n+7 701 234 56 78\n-------" in text       # kk and ru, then the Latin one
+    assert text.count("Pres Testov") == 3 and "Pres Testov\n+7 (701) 234 56 78\n-------" in text       # kk and ru, then the Latin one
     pos = texts.MEMO2_POS["president"]
     assert "\n".join((texts.MEMO2_SIGN["kk"][0], texts.MEMO2_SIGN["kk"][1].format(org="IT Club", pos=pos["kk"]))) in text
     assert "Regards and best wishes,\nPresident of Student Organization «IT Club»\nPres Testov" in text
@@ -2619,7 +2619,7 @@ def test_memo_v2(env, monkeypatch):
                 "15:00-17:00", texts.MEMO2_GUESTS_DORM.format(side=texts.MEMO2_DORM_SIDES["turgut"]),
                 texts.MEMO2_PROVIDE_HEAD.format(items="; ".join([*provide, "extension cord"])), texts.MEMO2_QUIET,
                 texts.MEMO2_DATES.format(dates=texts._dates(every["promo"]["dates"])),
-                f"{texts.MEMO2_FILM}\n", "10:00-12:00", "interview", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]) + f"\n{' '.join(cyr)}\n+7 700 111 22 33",
+                f"{texts.MEMO2_FILM}\n", "10:00-12:00", "interview", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]) + f"\n{' '.join(cyr)}\n+7 (700) 111 22 33",
                 texts.MEMO2_SIGN["kk"][1].format(org="StudEx", pos=sec["kk"]), "Secretary of Student Organization «StudEx»\nAigerim Saparova"):
         assert bit in t, bit
     assert texts._dates(["2026-10-14", "2026-10-13", "2026-11-03"]) == f"13, 14 {texts.MONTHS['ru'][9]} \u0438 3 {texts.MONTHS['ru'][10]} 2026"
@@ -2628,7 +2628,7 @@ def test_memo_v2(env, monkeypatch):
     # printing goes in its own letter to the Publishing Center, signed in Russian
     pr = m["print"]
     assert pr["to"] == "ic@kbtu.kz" and "Hackday" in pr["subject"] and "General meeting" not in pr["subject"]
-    for bit in ("1) ", "Poster", "A3", f"{texts.MEMO2_DENSITY[2]} ", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]), "+7 700 111 22 33"):
+    for bit in ("1) ", "Poster", "A3", f"{texts.MEMO2_DENSITY[2]} ", texts.MEMO2_SIGN["ru"][1].format(org="StudEx", pos=sec["ru"]), "+7 (700) 111 22 33"):
         assert bit in pr["text"], bit
     assert m["guests"] and m["sign"]["nameEn"] == "Aigerim Saparova" and not m["sign"]["fixed"]
     assert "Big fair" in c.get("/api/orgs/1/memo?later=true", headers=tma(21)).json()["text"]   # the switch
@@ -5353,4 +5353,44 @@ def test_qr_checkin(env, monkeypatch):
     rows_ = c.get(f"/api/screen/{sid}/csv", params={"k": k}).text.lstrip("﻿").splitlines()
     assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
     assert rows_[2].endswith(",B") and rows_[1].endswith(",A")
+    con.close()
+
+
+def test_qr_checkin_edges(env, monkeypatch):
+    """The review's holes: junk PINs can't lock the organizer out, a non-ASCII key is a 403 (not a 500), Finish doesn't
+    lose who scanned (30 min to sign in, Microsoft's path too), Start doesn't reopen, the CSV has no formulas and
+    matches the list by student ID when the mail differs."""
+    from kbtu import checkin
+    c, cfg = env
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    sid, pin = checkin.new(con, "Initiation", [{"email": "ann.home@gmail.com", "name": "=HYPERLINK(1)", "studentId": "24Bann",
+                                                "phone": "+7 (700) 000-00-00"}])
+    monkeypatch.setattr(checkin, "_fails", [time.monotonic()] * checkin.PIN_TRIES)       # the limit spent on junk
+    assert c.post("/api/screen/open", json={"pin": "000000" if pin != "000000" else "111111"}).status_code == 429
+    k = c.post("/api/screen/open", json={"pin": pin}).json()["key"]                       # the right one still opens
+    assert c.get(f"/api/screen/{sid}", params={"k": "\u043a\u043b\u044e\u0447"}).status_code == 403
+    p = c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"]
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p[:-1] + "\u0436"}).status_code == 400
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]
+    for u in (2, 4):
+        assert not c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["done"]  # scanned, not signed in yet
+    c.post(f"/api/screen/{sid}/finish", json={"k": k})
+    assert c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"] is None     # finished stays finished
+    assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # new after Finish: no
+    import csv
+    rows_ = list(csv.reader(c.get(f"/api/screen/{sid}/csv", params={"k": k}).text.lstrip("\ufeff").splitlines()))
+    assert [r[0] for r in rows_[1:]] == ["came", "scanned, not signed in", "scanned, not signed in"]   # by ID: not absent
+    assert (rows_[1][1], rows_[1][6]) == ("'=HYPERLINK(1)", "'+7 (700) 000-00-00")      # no formulas in Excel
+    assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 200       # had a mark: may come back
+    uid2, uid4 = (c.get("/api/me", headers=tma(u)).json()["id"] for u in (2, 4))
+    logic.ms_remember(con, uid2, {"oid": "oid-2", "email": "two@kbtu.kz", "first": "Two", "last": "Person", "employeeId": "", "profile": {}})
+    assert c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "24B030002", "consentVersion": logic.CONSENT}).status_code == 200
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
+        synced_at, manual) VALUES (?, '24B030004', 'Four', 'P', 1, ?, 0, 0, 0, 1)""", (uid4, logic.CONSENT))
+    logic.ms_link(con, uid4, {"oid": "oid-4", "email": "four@kbtu.kz", "first": "Four", "last": "P"})  # the relink path
+    st = c.get(f"/api/screen/{sid}", params={"k": k}).json()
+    assert (st["done"], st["pending"]) == (3, 0)
+    con.execute("UPDATE qr_sessions SET ended_at = ended_at - ? WHERE id = ?", (checkin.GRACE + 1, sid))
+    assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 409       # past the grace: closed
     con.close()
