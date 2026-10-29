@@ -21,6 +21,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { nameOf } from '../../lib/short';
+  import { grow } from '../../ui/grow';
 
   let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
 
@@ -117,7 +118,6 @@
   const jump = (to: Id) => list?.querySelector(`[data-c="${to}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   const open = (c: Comment) => { menu = menu === c.id ? null : c.id; };
   // the field grows with the text, up to five lines; Enter sends, Shift+Enter breaks the line
-  const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 132) + 'px'; }; fit(); el.addEventListener('input', fit); };
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
 </script>
 
@@ -173,7 +173,7 @@
             <button class="x" onclick={() => (replying = null)} aria-label={t('common.cancel')}><X size={16} /></button></div>
         {/if}
         <div class="row">
-          <textarea bind:value={draft} rows="1" maxlength="500" bind:this={field} placeholder={kind === 'event' && !th.asOrg ? t('cm.askPh') : t('cm.ph')} use:grow enterkeyhint="send" onkeydown={key}></textarea>
+          <textarea bind:value={draft} rows="1" maxlength="500" bind:this={field} placeholder={kind === 'event' && !th.asOrg ? t('cm.askPh') : t('cm.ph')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
           <button class="send" disabled={!draft.trim() || sending} onclick={send} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
         </div>
       </div>

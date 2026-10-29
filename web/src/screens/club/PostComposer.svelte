@@ -22,6 +22,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import { grow } from '../../ui/grow';
 
   let { overlay, org, post }: { overlay: Overlay; org: Id; post?: Post } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
@@ -102,7 +103,6 @@
     if (await sheets.ask({ title: t('post.discard'), text: t('post.discardText'), ok: t('post.leave'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); }
   }
   // the textarea grows with the text
-  const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
 </script>
 
 <Sheet {overlay} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>

@@ -20,6 +20,7 @@
   import OrgLogo, { COVERS } from '../../ui/OrgLogo.svelte';
   import ShortLinks from './ShortLinks.svelte';
   import OrgChats from './OrgChats.svelte';
+  import { grow } from '../../ui/grow';
 
   let { overlay, id, at }: { overlay: Overlay; id: Id; at?: 'chats' } = $props();
   // at 'chats' (the bot's "open in Studio" after linking a chat, the catalog sheet's "your club's channel?"): the
@@ -87,7 +88,6 @@
   async function onhold() {
     if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); }
   }
-  const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
 </script>
 
 <Sheet {overlay} full title={t('ce.title')} {hold} {onhold}>

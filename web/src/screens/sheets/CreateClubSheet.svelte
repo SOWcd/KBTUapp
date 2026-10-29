@@ -19,6 +19,7 @@
   import Button from '../../ui/Button.svelte';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
   import { linkUrl, type LinkDraft } from '../../lib/social';
+  import { grow } from '../../ui/grow';
 
   let { overlay }: { overlay: Overlay } = $props();
 
@@ -51,7 +52,6 @@
     } finally { sending = false; }
   }
   async function openClub(id: number) { await loadMe(); void loadAfisha(); close(overlay.id); sheets.club(id); }
-  const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
 </script>
 
 <Sheet {overlay} full title={t('nc.title')}>

@@ -57,6 +57,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { focusPos } from '../../lib/photo';
   import { nameOf } from '../../lib/short';
+  import { grow } from '../../ui/grow';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   let { overlay, id, preview, from }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null } = $props();
@@ -182,7 +183,6 @@
       else say(phrase('say.rated'), FACES[score - 1]);
     } catch { rated = was; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
-  const grow = (el: HTMLTextAreaElement) => { const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }; fit(); el.addEventListener('input', fit); };
   // ---- the guests' album: who came adds photos (several at once, one upload after another); a mosaic of the first ----
   const photos = $derived(detail?.photos ?? []);
   const shown = $derived(photos.length >= 6 ? 6 : photos.length >= 3 ? 3 : photos.length); // whole blocks of the mosaic
