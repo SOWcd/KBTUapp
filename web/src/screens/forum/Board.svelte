@@ -57,7 +57,7 @@
     <span><h1 class="t-h1">{t('page.forum')}</h1><p class="t-foot">{t('bd.sub')}</p></span>
   </header>
 
-  <div class="topics" role="tablist" aria-label={t('bd.topics')}>
+  <div class="topics hscroll" role="tablist" aria-label={t('bd.topics')}>
     <button role="tab" class:on={board.topic == null} aria-selected={board.topic == null} onclick={() => pick(null)}>{t('bd.all')}</button>
     {#each TOPICS as k (k)}
       <button role="tab" class:on={board.topic === k} aria-selected={board.topic === k} onclick={() => pick(k)}><Emoji name={TOPIC_EMOJI[k]} size={18} />{t(`bd.topic.${k}`)}</button>
@@ -125,8 +125,7 @@
   .page > :global(*) { flex-shrink: 0; }
   .hd p { margin-top: 4px; }
   /* the topics scroll sideways under the thumb, edge to edge */
-  .topics { display: flex; gap: 8px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter); scrollbar-width: none; }
-  .topics::-webkit-scrollbar { display: none; }
+  .topics { gap: 8px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter); }
   .topics button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: var(--r-full);
     background: var(--surface-2); color: var(--text-2); font: 620 14px/1 var(--font-text); white-space: nowrap;
     transition: background-color var(--t-base) var(--ease), color var(--t-base) var(--ease), transform var(--t-fast) var(--ease); }

@@ -337,13 +337,9 @@
     touch(); filling = true;
     try {
       const x = await api.eventFill(org, text);
-      if (x.title) f.title = x.title;
-      if (x.date) f.date = x.date;
-      if (x.start) f.start = x.start;
-      if (x.end) f.end = x.end;
-      if (x.place) f.place = x.place;
-      if (x.description) f.description = x.description;
-      if (x.price && canPrice) { f.paid = true; f.price = String(x.price); }
+      const { price, ...rest } = x; // the server sends only the fields it found, named as the form's
+      Object.assign(f, rest);
+      if (price && canPrice) { f.paid = true; f.price = String(price); }
       const got = Object.keys(x).length > 0;
       if (got) haptic.ok(); else haptic.error();
       say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');

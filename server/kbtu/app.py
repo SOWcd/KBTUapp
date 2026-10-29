@@ -1064,29 +1064,27 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if a and await screen(f"{a['title']}\n{a['body']}") is False:
                 logic.hide_ask(con, body["id"], "reports")
 
+    async def eu_ai(con, msgs: list[dict], **kw) -> str:
+        """The assistant's model call: the EU host only (the policy's section 12); none answered: 503."""
+        try:
+            async with httpx.AsyncClient() as http:
+                return (await llm.chat(cfg, http, msgs, con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, **kw))[0]
+        except (llm.Busy, llm.BadAnswers):
+            raise ApiError("unavailable", "assistant") from None
+
     # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
     @app.post("/api/assistant")
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         msgs, rooms, events = logic.assistant.prompt(con, v, body, lang)
-        try:
-            async with httpx.AsyncClient() as http:
-                text, _ = await llm.chat(cfg, http, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, con=con,
-                                         only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, timeout=25)
-        except (llm.Busy, llm.BadAnswers):
-            raise ApiError("unavailable", "assistant") from None
+        text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
         return logic.assistant.answer(text, rooms, events)
 
     # a new event filled from its announcement (logic/assistant.py, below the assistant): the same switch, host and allowance
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
-        try:
-            async with httpx.AsyncClient() as http:
-                text, _ = await llm.chat(cfg, http, msgs, max_tokens=1500, temperature=0.1, check=lambda a: bool(logic.assistant.filled(a)),
-                                         con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, timeout=30)
-        except (llm.Busy, llm.BadAnswers):
-            raise ApiError("unavailable", "assistant") from None
+        text = await eu_ai(con, msgs, max_tokens=1500, temperature=0.1, check=lambda a: bool(logic.assistant.filled(a)), timeout=30)
         return logic.assistant.filled(text)
 
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them

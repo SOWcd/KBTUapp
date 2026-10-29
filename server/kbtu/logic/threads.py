@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ..db import tx
 
-from .core import ApiError, PERSON, Viewer, log_action, need_student, one, person_ref, rows
+from .core import ApiError, PERSON, Viewer, _qs, log_action, need_student, one, person_ref, rows
 
 TOPICS = ("thing", "go", "help", "vol", "talk")
 GATHER = ("go", "vol")                    # "I'm in" counts people here
@@ -19,6 +19,7 @@ THREADS_A_DAY, REPLIES_AN_HOUR = 5, 30
 HIDE_AT, REPORTER_AGE = 3, 14 * 86400
 KEEP = 30 * 86400
 PAGE = 40
+TABLE = {"thread": "threads", "reply": "thread_replies"}  # a report's or a moderator's kind -> its table
 JOINERS = 6                               # faces shown on a gathering thread
 # blocks hide named things both ways, never anonymous ones: hiding those would tell whoever blocked someone that the
 # anonymous thread is theirs (block, look, unblock: an oracle the adversarial review found)
@@ -48,7 +49,7 @@ def _text(raw: object, most: int, least: int = 1) -> str:
 def _people(con, ids: set[int]) -> dict[int, dict]:
     if not ids:
         return {}
-    return {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)}
+    return {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({_qs(ids)})", *ids)}
 
 
 def _shapes(con, v: Viewer, found: list) -> list[dict]:
@@ -56,7 +57,7 @@ def _shapes(con, v: Viewer, found: list) -> list[dict]:
     if not found:
         return []
     ids = [t["id"] for t in found]
-    qs = ",".join("?" * len(ids))
+    qs = _qs(ids)
     replies = dict(rows(con, f"SELECT thread_id, COUNT(*) FROM thread_replies WHERE status = 'live' AND thread_id IN ({qs}) GROUP BY thread_id", *ids))
     joins: dict[int, list[int]] = {}
     for j in rows(con, f"SELECT thread_id, user_id FROM thread_joins WHERE thread_id IN ({qs}) ORDER BY at", *ids):
@@ -247,7 +248,7 @@ def reveal(con, v: Viewer, kind: str, xid: int) -> dict:
     thread or reply; the audit log, which only the owner reads, keeps every look."""
     if not _owner(con, v):
         raise ApiError("forbidden")
-    r = one(con, f"SELECT user_id, anon FROM {'threads' if kind == 'thread' else 'thread_replies'} WHERE id = ?", xid) if kind in ("thread", "reply") else None
+    r = one(con, f"SELECT user_id, anon FROM {TABLE[kind]} WHERE id = ?", xid) if kind in ("thread", "reply") else None
     if not r or not r["anon"]:
         raise ApiError("not_found")
     log_action(con, v.id, "reveal_anon", f"{kind}:{xid}")
@@ -271,7 +272,7 @@ def mod_decide(con, v: Viewer, kind: str, xid: int, ok: object) -> None:
     _mod(v)
     if kind not in ("thread", "reply") or not isinstance(ok, bool):
         raise ApiError("bad_input")
-    table = "threads" if kind == "thread" else "thread_replies"
+    table = TABLE[kind]
     with tx(con):
         x = one(con, f"SELECT * FROM {table} WHERE id = ? AND status = 'held'", xid)
         if not x:
@@ -286,7 +287,7 @@ def mod_decide(con, v: Viewer, kind: str, xid: int, ok: object) -> None:
 
 
 def owner_of(con, kind: str, xid: int) -> int | None:
-    r = one(con, f"SELECT user_id FROM {'threads' if kind == 'thread' else 'thread_replies'} WHERE id = ?", xid)
+    r = one(con, f"SELECT user_id FROM {TABLE[kind]} WHERE id = ?", xid)
     return r[0] if r else None
 
 
@@ -303,7 +304,7 @@ def after_report(con, kind: str, xid: int) -> None:
     n = one(con, """SELECT COUNT(*) FROM reports r JOIN users u ON u.id = r.reporter_id WHERE r.target = ? AND r.target_id = ?
         AND r.status = 'open' AND u.created_at < ?""", kind, xid, _now() - REPORTER_AGE)[0]
     if n >= HIDE_AT:
-        con.execute(f"UPDATE {'threads' if kind == 'thread' else 'thread_replies'} SET status = 'hidden', why = 'reports' WHERE id = ? AND status = 'live'", (xid,))
+        con.execute(f"UPDATE {TABLE[kind]} SET status = 'hidden', why = 'reports' WHERE id = ? AND status = 'live'", (xid,))
 
 
 def words(con, kind: str, xid: int, hidden: bool = False) -> tuple[str, int] | None:
@@ -317,12 +318,12 @@ def words(con, kind: str, xid: int, hidden: bool = False) -> tuple[str, int] | N
 
 
 def take_down(con, kind: str, xid: int) -> None:
-    con.execute(f"UPDATE {'threads' if kind == 'thread' else 'thread_replies'} SET status = 'hidden', why = 'moderator' WHERE id = ? AND status != 'gone'", (xid,))
+    con.execute(f"UPDATE {TABLE[kind]} SET status = 'hidden', why = 'moderator' WHERE id = ? AND status != 'gone'", (xid,))
 
 
 def put_back(con, kind: str, xid: int, reported_only: bool = False) -> int:
     """Live again: a moderator's restore, or (reported_only) a report queue's "leave it" on what three reports hid."""
-    return con.execute(f"""UPDATE {'threads' if kind == 'thread' else 'thread_replies'} SET status = 'live', why = NULL
+    return con.execute(f"""UPDATE {TABLE[kind]} SET status = 'live', why = NULL
         WHERE id = ? AND status = 'hidden' {"AND why = 'reports'" if reported_only else ""}""", (xid,)).rowcount
 
 

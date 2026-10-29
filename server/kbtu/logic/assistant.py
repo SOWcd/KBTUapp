@@ -77,6 +77,13 @@ def brief(con, v: Viewer) -> tuple[str, set[str], set[int]]:
     return "\n".join(lines), rooms, {e["id"] for e in evs}
 
 
+def _spend(con, v: Viewer) -> None:
+    """One of the day's AI uses (the questions and the event fills together), counted before the model is asked."""
+    if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
+        raise ApiError("rate_limited", "assistant")
+    con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
+
+
 def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str], set[int]]:
     """The messages for the model, after the day's allowance (counted here, before the model is asked)."""
     need_student(v)
@@ -84,9 +91,7 @@ def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str],
     past = body.get("history") or []
     if not 2 <= len(q) <= Q_MAX or not isinstance(past, list):
         raise ApiError("bad_input")
-    if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
-        raise ApiError("rate_limited", "assistant")
-    con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
+    _spend(con, v)
     facts, rooms, events = brief(con, v)
     msgs = [{"role": "system", "content": SYSTEM.format(lang=LANGS.get(lang, "Russian"), facts=facts)}]
     for m in past[-TURNS:]:
@@ -96,13 +101,19 @@ def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str],
     return msgs, rooms, events
 
 
-def _json(text: str) -> dict | None:
+def _parse(text: str) -> dict:
+    """The JSON object in a model's answer (some wrap it in prose or a code fence); {} when there's none."""
     m = re.search(r"\{.*\}", text, re.S)
     try:
-        x = json.loads(m.group(0)) if m else None
+        x = json.loads(m.group(0)) if m else {}
     except ValueError:
-        return None
-    return x if isinstance(x, dict) and isinstance(x.get("text"), str) and x["text"].strip() else None
+        return {}
+    return x if isinstance(x, dict) else {}
+
+
+def _json(text: str) -> dict | None:
+    x = _parse(text)
+    return x if isinstance(x.get("text"), str) and x["text"].strip() else None
 
 
 def usable(text: str) -> bool:
@@ -146,9 +157,7 @@ def fill_prompt(con, v: Viewer, org: int, text: object) -> list[dict]:
     t = " ".join(str(text or "").split())
     if not FILL_MIN <= len(t) <= FILL_MAX:
         raise ApiError("bad_input")
-    if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
-        raise ApiError("rate_limited", "assistant")
-    con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
+    _spend(con, v)
     today = time.gmtime(now() + 5 * 3600)
     return [{"role": "system", "content": FILL.format(today=f"{WEEKDAYS[today.tm_wday]}, {time.strftime('%Y-%m-%d', today)}")},
             {"role": "user", "content": t}]
@@ -156,13 +165,7 @@ def fill_prompt(con, v: Viewer, org: int, text: object) -> list[dict]:
 
 def filled(text: str) -> dict:
     """The model's form, each field kept only in the shape the editor takes (anything else: left for the person)."""
-    m = re.search(r"\{.*\}", text, re.S)
-    try:
-        x = json.loads(m.group(0)) if m else {}
-    except ValueError:
-        x = {}
-    x = x if isinstance(x, dict) else {}
-    out: dict = {}
+    x, out = _parse(text), {}
     for k, most in (("title", 80), ("place", 80), ("description", 2000)):
         if isinstance(x.get(k), str) and x[k].strip():
             out[k] = x[k].strip()[:most]

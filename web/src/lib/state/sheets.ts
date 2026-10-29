@@ -38,9 +38,9 @@ export const sheets = {
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
   attendees: (_id: Id) => {},
-  thread: (_id: Id) => {},
+  thread: (_id: Id) => {},              // the student forum: a thread and its replies
   assistant: () => {},                   // the students' assistant (with the forum's switch)
-  mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press               // the student forum: a thread and its replies
+  mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   newThread: (_onmade?: () => void) => {},
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */

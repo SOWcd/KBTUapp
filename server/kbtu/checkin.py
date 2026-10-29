@@ -173,7 +173,7 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
 
 def grant_all(con, v: Viewer, sid: int, code: object) -> int:
     """The owner gives a badge (a manual one, e.g. "init26") to everyone counted in a session, once each; how many got it."""
-    if not (v.role == "admin" and logic.one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]):
+    if not logic._owner(con, v):
         raise ApiError("forbidden")
     if code not in logic.GRANTABLE or code == "bugs" or not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
         raise ApiError("bad_input")

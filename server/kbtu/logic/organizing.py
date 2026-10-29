@@ -148,7 +148,7 @@ def leaders_answers(con, v: Viewer, eid: int) -> list[dict]:
     return out
 
 
-QUESTIONS_MAX, QUESTION_MAX, OPTION_MAX, ANSWER_MAX = 5, 80, 40, 200
+QUESTIONS_MAX, QUESTION_MAX, OPTION_MAX = 5, 80, 40
 
 
 def clean_questions(raw: object) -> str | None:
