@@ -61,7 +61,7 @@
 </div>
 
 <style>
-  .band { position: relative; overflow: hidden; height: 124px; color: #fff; }
+  .band { position: relative; overflow: hidden; height: 124px; color: #fff; isolation: isolate; } /* its layers stay inside */
   .band.wide { position: absolute; inset: 0; height: auto; }
   img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
   .dec { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
