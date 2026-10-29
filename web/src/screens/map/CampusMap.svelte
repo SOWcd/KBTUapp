@@ -823,6 +823,7 @@
   .plan :global(svg) { display: block; width: 100%; height: 100%; }
   .plan :global(.fine) { opacity: 0; transition: opacity 0.25s; }
   .plan:global(.near) :global(.fine) { opacity: 1; }
+  .plan:global(.near) :global(.shade) { display: none; } /* the soft shadow's blur, redrawn over a plan laid out 8x wide, made zooming lag; up close it's off screen anyway */
   .plan :global(.mid) { opacity: 0; transition: opacity 0.25s; }
   .plan:global(.mid) :global(.mid) { opacity: 1; }
   .plan :global(.w) { fill: var(--m-wall); }
