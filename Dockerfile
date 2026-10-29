@@ -7,7 +7,8 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
-RUN npx vite build
+# npm run build: vite, then the check that no bundle uses regex lookbehind (Safari < 16.4 fails at start on it)
+RUN npm run build
 
 # 2. the server
 FROM python:3.14-slim

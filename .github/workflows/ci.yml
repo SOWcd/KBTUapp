@@ -31,3 +31,4 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run check
       - run: npm test
+      - run: npm run build  # incl. the old-iOS regex check
