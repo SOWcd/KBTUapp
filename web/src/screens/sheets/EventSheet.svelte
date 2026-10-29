@@ -27,6 +27,7 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Link from '@lucide/svelte/icons/link';
   import { shrink } from '../../lib/photo';
   import { FACES } from '../../lib/faces';
   import { burst } from '../../ui/burst';
@@ -230,6 +231,15 @@
       'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
   }
+  // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
+  const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
+  function shareMine() {
+    if (!e) return;
+    haptic.tap();
+    shareCard({ kind: 'ev', id: String(id), mine: '1' }, `https://t.me/KBTUappBot?startapp=ev_${id}_${session.me?.qr?.split('_')[1] ?? ''}`, e.title)
+      .then((sent) => { if (sent) say(t('event.myLinkSent'), 'party_popper_3d'); })
+      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+  }
 </script>
 
 <Sheet {overlay} title={preview ? t('ed.preview') : (e?.title ?? '')} tint={e?.tint}>
@@ -424,6 +434,7 @@
         {/if}
       </div>
     {/if}
+    {#if myLink}<div class="tools"><button onclick={shareMine}><Link size={18} />{t('event.myLink')}</button></div>{/if}
 
     {#if e.meeting && head && crew && meet}
       <section class="lead">

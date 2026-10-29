@@ -387,7 +387,7 @@ export interface EventInput {
 }
 
 /** One registration as the organizer sees it (§3: full name for organizers). */
-export interface Attendee { person: PersonRef; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
+export interface Attendee { person: PersonRef; by?: PersonRef | null /* who brought them: their link or "Bring a friend" */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` once the organizer said it's fine. Flagged ones first. */
@@ -410,6 +410,7 @@ export interface TeamMember {
   tags?: Id[];                  // the club's tags on them
   dept?: Id | null;             // their department: one of those tags marked department (PLAN 47)
   probation?: boolean; // for the club's Head+ and the person
+  brought?: number;    // Head+: came by their link to the club's events in 60 days
 }
 
 /** Team 2.0 (§2b): the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */

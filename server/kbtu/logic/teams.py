@@ -27,13 +27,16 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
     found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, t.name AS title, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
-        (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept
+        (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept,
+        (SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
+            WHERE e.org_id = m.org_id AND r.invited_by = u.id AND r.checked_in_at > ?) AS brought
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
-        WHERE m.org_id = ?""", oid)
+        WHERE m.org_id = ?""", core.now() - QUIET_FOR, oid)
     return sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "username": p["tg_username"],
                     "role": p["role"], "roleId": p["role_id"], "title": p["title"], "titleColor": p["title_color"],
                     "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < core.now() - QUIET_FOR,
+                    **({"brought": p["brought"]} if head else {}),  # Head+: who came by their link in these 60 days (a member's KPI)
                     # theirs, and Head+ strictly above them (the rank rule; audit L10: a Head saw the Vice's)
                     **({"probation": bool(p["probation"])} if (head and RANK[mine] > RANK[p["role"]]) or p["id"] == v.id else {})}
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))

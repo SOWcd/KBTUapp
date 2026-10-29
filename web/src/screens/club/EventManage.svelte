@@ -13,7 +13,7 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import { api, ApiErr, type Attendee, type Id } from '../../lib/api';
+  import { api, ApiErr, type Attendee, type Id, type PersonRef } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -25,6 +25,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Poster from '../../ui/Poster.svelte';
   import Button from '../../ui/Button.svelte';
+  import Avatar from '../../ui/Avatar.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -53,6 +54,18 @@
     if (!(await sheets.ask({ title: t('chat.ask'), text: t('chat.askText'), ok: t('chat.go'), cancel: t('common.cancel') }))) return;
     try { openLink(await api.chatStart(id)); } catch { say(t('common.error'), 'pleading_face_3d'); }
   }
+  // "Who brought" (a member's KPI): signed up by their link, paid (an accepted receipt), came; the ones who came most first
+  const brought = $derived.by(() => {
+    const by = new Map<Id, { person: PersonRef; signed: number; paid: number; came: number }>();
+    for (const a of list ?? []) {
+      if (!a.by) continue;
+      const x = by.get(a.by.id) ?? by.set(a.by.id, { person: a.by, signed: 0, paid: 0, came: 0 }).get(a.by.id)!;
+      x.signed++;
+      if (a.status === 'going' && a.receipt) x.paid++;
+      if (a.checkedInAt) x.came++;
+    }
+    return [...by.values()].sort((a, b) => b.came - a.came || b.paid - a.paid || b.signed - a.signed);
+  });
   const toCheck = $derived(going.filter((a) => a.receipt?.flags.length && !a.receipt.reviewed).length);
 
   async function removeEvent() {
@@ -107,6 +120,19 @@
       </div>
     {/if}
 
+    {#if head && brought.length}
+      <h3 class="t-cap sec">{t('mg.brought')}</h3>
+      <div class="card surface" style="--n:{price ? 3 : 2}">
+        <div class="by hd2"><span></span><i>{t('mg.broughtSigned')}</i>{#if price}<i>{t('mg.broughtPaid')}</i>{/if}<i>{t('mg.came')}</i></div>
+        {#each brought as x (x.person.id)}
+          <button class="by" onclick={() => sheets.person(x.person.id)}>
+            <span class="who"><Avatar person={x.person} size={32} /><b class="ellipsis">{x.person.name}</b></span>
+            <span>{x.signed}</span>{#if price}<span>{x.paid}</span>{/if}<span class="cm">{x.came}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
     <div class="tools">
       {#if live && !e.guestHost}<!-- a partner's event has no door -->
         {#if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={20} />{t('studio.marks')}</button>
@@ -146,6 +172,14 @@
   .nums div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
   .nums b { font: 750 20px/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .nums i { font: 550 12.5px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
+  .by { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 68px); align-items: center; gap: 4px; width: 100%; min-height: 48px; text-align: left;
+    font: 650 15px/1 var(--font-text); font-variant-numeric: tabular-nums; }
+  .by + .by { border-top: 1px solid var(--line); }
+  .by > span:not(.who), .by i { text-align: right; }
+  .by i { font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .by.hd2 { min-height: 34px; }
+  .by .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .by .cm { font-weight: 750; color: var(--accent-text); }
   .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
   .tools button { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px; border-radius: var(--r-l); background: var(--surface);
     box-shadow: inset 0 0 0 1px var(--line); color: var(--text); font: 620 15px/1 var(--font-text); }

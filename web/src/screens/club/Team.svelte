@@ -201,7 +201,7 @@
             <button class="who" onclick={(ev) => tap(x, ev)}>
               <span class="av"><Avatar person={x.person} size={42} />{#if x.role === 'president'}<span class="crown" title={ROLE_NAME.president}><Crown size={12} strokeWidth={2.6} /></span>{/if}</span>
               <span class="tx"><b class="ellipsis">{x.fullName}</b>
-                <i class="t-foot ellipsis">{[x.person.nick, x.username && '@' + x.username].filter(Boolean).join(' · ') || x.person.name}{#if x.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}</i>
+                <i class="t-foot ellipsis">{[x.person.nick, x.username && '@' + x.username].filter(Boolean).join(' · ') || x.person.name}{#if x.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}{#if x.brought}<span class="brought">{t('team.brought', { n: x.brought })}</span>{/if}</i>
                 {#if x.tags?.length || x.probation}
                   <span class="marks">
                     {#if x.probation}<span class="prob">{t('team.probation')}</span>{/if}
@@ -259,6 +259,7 @@
 </div>
 
 <style>
+  .brought { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; font-style: normal; }
   .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
   .page > :global(*) { flex-shrink: 0; }

@@ -12,7 +12,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
-    friend_ids, full, log_action, need_student, one, person_ref, rows, taken)
+    full, log_action, need_student, one, person_ref, rows, taken)
 
 
 # ------------------------------------------------------------ volunteers
@@ -352,8 +352,10 @@ def promote(con, e: sqlite3.Row) -> None:
         notify(con, nxt["user_id"], "seat_hold" if pay else "seat_free", f"event:{e['id']}")  # a hold: pay within 30 min
 
 
-def register(con, v: Viewer, eid: int, invited_by: int | None = None, phone: object = None) -> dict:
-    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71)."""
+def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None) -> dict:
+    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71).
+    ref: the badge code of the club member whose link they came by ("My link", ev_<id>_<code>): the member gets the
+    credit, the organizers see it in "Who brought"."""
     need_student(v)
     sweep_holds(con)
     with tx(con):  # count and insert under one write lock: the last seat goes to one person
@@ -384,7 +386,10 @@ def register(con, v: Viewer, eid: int, invited_by: int | None = None, phone: obj
             con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, updated_at = ?
                 WHERE id = ?""", (status, hold, wait, int(free), core.now(), r["id"]))
         else:
-            inviter = invited_by if invited_by in friend_ids(con, v.id) else None
+            # someone already in keeps whoever was first (this branch is new rows only); never myself
+            by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.qr_code = ? AND u.id != ?",
+                     e["org_id"], ref, v.id) if isinstance(ref, str) else None
+            inviter = by["user_id"] if by else None
             if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None

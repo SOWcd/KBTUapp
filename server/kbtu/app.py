@@ -464,8 +464,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
-        invited = body.get("invitedBy")
-        return logic.register(con, v, eid, invited if isinstance(invited, int) else None, body.get("phone"))
+        return logic.register(con, v, eid, body.get("ref"), body.get("phone"))
 
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con: Con, v: Me):
@@ -1297,8 +1296,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture
             photo = f"https://{cfg.domain}/media/{cover['path']}.jpg" if cover else \
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
+            # "My link": a member of the event's club shares it with their badge code, so who came by it is theirs
+            start = f"ev_{ref}_{logic._qr_code(con, v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
-                      "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=ev_{ref}"}]]}}
+                      "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's one-time award link (logic.grant_link)
                 code = body.get("code")

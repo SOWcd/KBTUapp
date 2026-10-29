@@ -158,6 +158,15 @@ function errorText(e: unknown): string {
   return t('common.error');
 }
 
+/** A club member's link to an event (ev_<id>_<code>, "My link"): the code is kept on the phone, so a guest's sign-in
+ *  in between doesn't lose it, and goes with the sign-up; the first link opened wins (the server keeps the first too) */
+const REF_KEY = 'kb-ref';
+const refs = (): Record<string, string> => { try { return JSON.parse(localStorage.getItem(REF_KEY) || '{}'); } catch { return {}; } };
+export function keepRef(id: Id, code: string): void {
+  const all = refs();
+  if (!all[id]) try { localStorage.setItem(REF_KEY, JSON.stringify({ ...all, [id]: code })); } catch { /* blocked */ }
+}
+
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
@@ -172,7 +181,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       : undefined;
     if (phone === null) return;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, undefined, phone);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone);
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);
       const st = after.my?.status;

@@ -28,7 +28,7 @@ export interface Api {
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;
   pastEvents(): Promise<EventCard[]>;
   event(id: Id): Promise<EventFull>;
-  register(id: Id, invitedBy?: Id, phone?: string): Promise<EventCard>; // phone: asked at the sign-up, kept (needsPhone)
+  register(id: Id, ref?: string, phone?: string): Promise<EventCard>; // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   addSeats(id: Id, add: number): Promise<EventFull>;
   changePlace(id: Id, place: string): Promise<EventFull>;   // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
   decline(id: Id, note?: string): Promise<EventCard>;      // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
