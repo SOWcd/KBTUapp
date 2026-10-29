@@ -288,6 +288,8 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
         elif target in ("post", "event"):
             n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL", (tid,)).rowcount
         elif target in ("thread", "reply"):
+            if threads.owner_of(con, target, tid) == v.id:  # their own: another moderator decides
+                raise ApiError("forbidden")
             n = threads.put_back(con, target, tid)
         elif target in ("photo", "user"):
             k = one(con, "DELETE FROM takedowns WHERE id = (SELECT MAX(id) FROM takedowns WHERE target = ? AND target_id = ?) RETURNING *", target, tid)

@@ -138,33 +138,28 @@ def thread(con, v: Viewer, tid: int) -> dict:
     return {**_shapes(con, v, [t])[0], "thread": out}
 
 
-def precheck(con, v: Viewer, body: dict, reply: int | None = None) -> None:
-    """Before the AI is asked (each look costs): a student, words of the right length, within the day's or hour's
-    allowance. The writes check again."""
-    need_student(v)
-    _text(body.get("body"), REPLY_MAX if reply else BODY_MAX, 1 if reply else 2)
-    if not isinstance(body.get("anon", False), bool) or not reply and body.get("topic") not in TOPICS:
-        raise ApiError("bad_input")
-    if reply:
-        _open(con, v, reply if _int(reply) else None)
-        if one(con, "SELECT COUNT(*) FROM thread_replies WHERE user_id = ? AND created_at > ?", v.id, _now() - 3600)[0] >= REPLIES_AN_HOUR:
-            raise ApiError("rate_limited", "replies")
-    elif one(con, "SELECT COUNT(*) FROM threads WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= THREADS_A_DAY:
-        raise ApiError("rate_limited", "threads")
-
-
-def create_thread(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
+def reserve_thread(con, v: Viewer, body: dict) -> int:
+    """A new thread, made at once and held ('check') before the AI is asked: the day's allowance is counted in the same
+    transaction, so posts sent at the same moment can't all pass it, nor all cost the AI a look. settle_thread puts the
+    verdict on it; with no verdict it stays held for a moderator."""
     need_student(v)
     topic, anon = body.get("topic"), body.get("anon", False)
     if topic not in TOPICS or not isinstance(anon, bool):
         raise ApiError("bad_input")
     text = _text(body.get("body"), BODY_MAX, 2)
-    status, why = _verdict_status(verdict, anon)
     with tx(con):
         if one(con, "SELECT COUNT(*) FROM threads WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= THREADS_A_DAY:
             raise ApiError("rate_limited", "threads")
-        tid = con.execute("""INSERT INTO threads (user_id, topic, body, anon, status, why, created_at, bumped_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, topic, text, int(anon), status, why, _now(), _now(), _now() + LIFE[topic] * 86400)).lastrowid
+        return con.execute("""INSERT INTO threads (user_id, topic, body, anon, status, why, created_at, bumped_at, expires_at)
+            VALUES (?, ?, ?, ?, 'held', 'check', ?, ?, ?)""", (v.id, topic, text, int(anon), _now(), _now(), _now() + LIFE[topic] * 86400)).lastrowid
+
+
+def settle_thread(con, v: Viewer, tid: int, verdict: bool | None) -> dict:
+    """The AI's verdict on a reserved thread (untouched meanwhile: not deleted, not decided by a moderator)."""
+    t = one(con, "SELECT anon FROM threads WHERE id = ?", tid)
+    if t:
+        status, why = _verdict_status(verdict, bool(t["anon"]))
+        con.execute("UPDATE threads SET status = ?, why = ? WHERE id = ? AND status = 'held' AND why = 'check'", (status, why, tid))
     return thread(con, v, tid)
 
 
@@ -174,27 +169,36 @@ def delete_thread(con, v: Viewer, tid: int) -> None:
     with tx(con):
         if not con.execute("UPDATE threads SET status = 'gone', body = '', why = NULL WHERE id = ? AND user_id = ? AND status != 'gone'", (tid, v.id)).rowcount:
             raise ApiError("not_found")
-        con.execute("DELETE FROM thread_replies WHERE thread_id = ?", (tid,))
+        con.execute("UPDATE thread_replies SET status = 'gone', body = '', why = NULL WHERE thread_id = ?", (tid,))
         con.execute("DELETE FROM thread_joins WHERE thread_id = ?", (tid,))
 
 
-def reply(con, v: Viewer, tid: int, body: dict, verdict: bool | None) -> dict:
-    """A reply under a live thread; its author hears of it from the bot (once an hour at most, never the words)."""
+def reserve_reply(con, v: Viewer, tid: int, body: dict) -> int:
+    """A reply under a live thread open to me, made at once and held before the AI is asked (as reserve_thread)."""
     need_student(v)
     anon = body.get("anon", False)
     if not isinstance(anon, bool):
         raise ApiError("bad_input")
     text = _text(body.get("body"), REPLY_MAX)
     with tx(con):
-        t = _open(con, v, tid)
+        _open(con, v, tid)
         if one(con, "SELECT COUNT(*) FROM thread_replies WHERE user_id = ? AND created_at > ?", v.id, _now() - 3600)[0] >= REPLIES_AN_HOUR:
             raise ApiError("rate_limited", "replies")
-        status, why = _verdict_status(verdict, anon)
-        con.execute("INSERT INTO thread_replies (thread_id, user_id, body, anon, status, why, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (tid, v.id, text, int(anon), status, why, _now()))
-        if status == "live":
+        return con.execute("INSERT INTO thread_replies (thread_id, user_id, body, anon, status, why, created_at) VALUES (?, ?, ?, ?, 'held', 'check', ?)",
+                           (tid, v.id, text, int(anon), _now())).lastrowid
+
+
+def settle_reply(con, v: Viewer, rid: int, verdict: bool | None) -> dict:
+    """The AI's verdict on a reserved reply; up: the thread rises and its author hears (never the words)."""
+    r = one(con, "SELECT * FROM thread_replies WHERE id = ?", rid)
+    if not r:
+        raise ApiError("not_found")
+    status, why = _verdict_status(verdict, bool(r["anon"]))
+    with tx(con):
+        if con.execute("UPDATE thread_replies SET status = ?, why = ? WHERE id = ? AND status = 'held' AND why = 'check'", (status, why, rid)).rowcount \
+                and status == "live" and (t := one(con, "SELECT * FROM threads WHERE id = ? AND status = 'live'", r["thread_id"])):
             _went_live(con, t, v.id)
-    return thread(con, v, tid)
+    return thread(con, v, r["thread_id"])
 
 
 def _went_live(con, t, by: int) -> None:
@@ -272,6 +276,8 @@ def mod_decide(con, v: Viewer, kind: str, xid: int, ok: object) -> None:
         x = one(con, f"SELECT * FROM {table} WHERE id = ? AND status = 'held'", xid)
         if not x:
             raise ApiError("not_found")
+        if x["user_id"] == v.id:  # their own: another moderator decides
+            raise ApiError("forbidden")
         con.execute(f"UPDATE {table} SET status = ?, why = ? WHERE id = ?", ("live" if ok else "hidden", None if ok else "moderator", xid))
         t = ok and kind == "reply" and one(con, "SELECT * FROM threads WHERE id = ? AND status = 'live'", x["thread_id"])
         if t:  # the thread itself still up: it rises and its author hears
@@ -311,7 +317,7 @@ def words(con, kind: str, xid: int, hidden: bool = False) -> tuple[str, int] | N
 
 
 def take_down(con, kind: str, xid: int) -> None:
-    con.execute(f"UPDATE {'threads' if kind == 'thread' else 'thread_replies'} SET status = 'hidden', why = 'moderator' WHERE id = ?", (xid,))
+    con.execute(f"UPDATE {'threads' if kind == 'thread' else 'thread_replies'} SET status = 'hidden', why = 'moderator' WHERE id = ? AND status != 'gone'", (xid,))
 
 
 def put_back(con, kind: str, xid: int, reported_only: bool = False) -> int:

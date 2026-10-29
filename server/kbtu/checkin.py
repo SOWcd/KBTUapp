@@ -16,14 +16,15 @@ import secrets
 import time
 
 from . import logic
-from .logic import ApiError, Viewer, can, now, one, rows, tx
+from .logic import ApiError, Viewer, can, log_action, now, one, rows, tx
 
 SLOT = 10           # the QR on the screen changes this often (s)
 SCAN_OK = 90        # a scan is taken this long after its QR was shown: 5 min let a photo relay too long, 60 s was tight for
                     # a cold Telegram start on crowded wifi (owner, Oct 29)
 GRACE = 30 * 60     # after Finish, someone who scanned in time may still finish signing in this long
 PAIR_TTL = 120      # a screen's pairing QR turns this often while nobody has bound it (a photo of it goes stale)
-PAIR_MAX = 500      # unpaired screens at once, all together: junk requests can't fill the table
+PAIR_MAX = 5000     # unpaired screens at once, all together: junk requests can't fill the table
+PAIR_PER_IP = 10    # ... and from one address (its hash): one machine can't take them all and lock every screen out
 CSV_TTL = 300       # the CSV link the app hands Telegram's download works this long
 
 
@@ -60,16 +61,18 @@ def _hash(secret: str) -> str:
     return hashlib.sha256(f"kbtu-screen:{secret}".encode()).hexdigest()
 
 
-def pair(con) -> dict:
+def pair(con, ip: str = "") -> dict:
     """A new screen: its pairing code (public, in the QR) and its secret (stays in that browser, only its hash here)."""
+    where = hashlib.sha256(f"kbtu-ip:{ip}".encode()).hexdigest()[:16]
     t = now()
     # unpaired ones rotate every PAIR_TTL; a paired one goes a day after its session ended
     con.execute("""DELETE FROM qr_screens WHERE session_id IS NULL AND created_at < ? OR session_id IN
         (SELECT id FROM qr_sessions WHERE ended_at < ?)""", (t - PAIR_TTL, t - 86400))
-    if one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id IS NULL")[0] >= PAIR_MAX:
+    if one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id IS NULL")[0] >= PAIR_MAX \
+            or one(con, "SELECT COUNT(*) FROM qr_screens WHERE session_id IS NULL AND ip = ?", where)[0] >= PAIR_PER_IP:
         raise ApiError("rate_limited")
     code, secret = secrets.token_hex(8), secrets.token_urlsafe(24)
-    con.execute("INSERT INTO qr_screens (code, secret, created_at) VALUES (?, ?, ?)", (code, _hash(secret), t))
+    con.execute("INSERT INTO qr_screens (code, secret, ip, created_at) VALUES (?, ?, ?, ?)", (code, _hash(secret), where, t))
     return {"code": code, "secret": secret, "ttl": PAIR_TTL}
 
 
@@ -168,6 +171,7 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
 def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:
     """A link Telegram's downloadFile can open without our headers: signed, for CSV_TTL."""
     _mine(con, v, sid)
+    log_action(con, v.id, "checkin_csv", f"qr:{sid}")  # names, mails, phones: who took the list is on record
     e = now() + CSV_TTL
     return {"url": f"/api/screen/{sid}/csv?e={e}&k={_sig(key, f'csv.{sid}.{e}')}", "name": f"checkin-{sid}.csv"}
 

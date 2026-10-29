@@ -308,8 +308,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # the laptop (no Telegram): a pairing code, then what to show; its secret in a header, never in a URL
     @app.post("/api/screen/pair")
-    def screen_pair(con: Con):
-        return qr.pair(con)
+    def screen_pair(request: Request, con: Con):
+        # the visitor's address through Cloudflare's tunnel (the socket's peer is the tunnel itself)
+        return qr.pair(con, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else ""))
 
     @app.get("/api/screen")
     def screen_show(con: Con, x_screen: str = Header("")):
@@ -1407,8 +1408,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/threads")
     async def threads_new(con: Con, v: Me, body: dict = Body(...)):
-        T.precheck(con, v, body)
-        return T.create_thread(con, v, body, await screen(str(body["body"])))
+        tid = T.reserve_thread(con, v, body)  # held, inside the allowance, before the AI is asked
+        return T.settle_thread(con, v, tid, await screen(str(body["body"])))
 
     @app.get("/api/threads/mod")
     def threads_mod(con: Con, v: Me):
@@ -1436,8 +1437,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/threads/{tid}/replies")
     async def threads_reply(tid: int, con: Con, v: Me, body: dict = Body(...)):
-        T.precheck(con, v, body, reply=tid)  # the thread is open to me, before the AI is asked
-        return T.reply(con, v, tid, body, await screen(str(body["body"])))
+        rid = T.reserve_reply(con, v, tid, body)  # the thread open to me, held, inside the allowance, before the AI
+        return T.settle_reply(con, v, rid, await screen(str(body["body"])))
 
     @app.put("/api/threads/{tid}/join")
     def threads_join(tid: int, con: Con, v: Me, body: dict = Body(...)):

@@ -5489,6 +5489,11 @@ def test_screen_pairing(env, monkeypatch):
     assert c.post(f"/api/screens/{sid}/unpair", headers=tma(9)).json()["screens"] == 0
     assert c.get("/api/screen", headers=me).status_code == 403                               # back to a new pairing QR
     assert c.get("/api/screen", headers={"X-Screen": two["secret"]}).json()["session"] == sid2
+    monkeypatch.setattr(checkin, "PAIR_PER_IP", 1)
+    other = {"cf-connecting-ip": "203.0.113.9"}
+    assert c.post("/api/screen/pair", headers=other).status_code == 200
+    assert c.post("/api/screen/pair", headers=other).status_code == 429                      # one address can't take them all
+    assert c.post("/api/screen/pair", headers={"cf-connecting-ip": "203.0.113.10"}).status_code == 200
     monkeypatch.setattr(checkin, "PAIR_MAX", 1)
     c.post("/api/screen/pair")                                                               # one waiting: the cap
     assert c.post("/api/screen/pair").status_code == 429                                     # junk can't fill the table
@@ -5528,6 +5533,12 @@ def test_event_screen(env):
     with db.tx(con):
         checkin.became_student(con, uid)
     assert con.execute("SELECT checked_in_at IS NOT NULL FROM registrations WHERE event_id = 1 AND user_id = ?", (uid,)).fetchone()[0]
+    # far from the door's window (a session started a week early): the scan counts in the list, nobody "came"
+    con.execute("UPDATE events SET starts_at = starts_at + 7 * 86400 WHERE id = 1")
+    login(c, 5, "eve")
+    k = _paired(c, 9)                                                                        # a laptop on the event's session
+    assert c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]}).json()["done"]
+    assert not con.execute("SELECT 1 FROM registrations r JOIN users u ON u.id = r.user_id WHERE u.tg_id = 5").fetchone()
     con.close()
 
 def test_student_forum(env, monkeypatch):
@@ -5609,7 +5620,7 @@ def test_student_forum(env, monkeypatch):
     # deleting mine takes the replies along, and doesn't give the day's allowance back
     assert c.delete(f"/api/threads/{secret['id']}", headers=B).status_code == 404
     assert c.delete(f"/api/threads/{secret['id']}", headers=A).status_code == 204
-    assert con.execute("SELECT COUNT(*) FROM thread_replies WHERE thread_id = ?", (secret["id"],)).fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM thread_replies WHERE thread_id = ? AND (status != 'gone' OR body != '')", (secret["id"],)).fetchone()[0] == 0
     assert c.get(f"/api/threads/{secret['id']}", headers=A).status_code == 404
     for _ in range(4):                                                                                # 2 made above, 3 more fit
         x = c.post("/api/threads", headers=A, json={"topic": "talk", "body": "again and again"})
@@ -5625,6 +5636,8 @@ def test_student_forum(env, monkeypatch):
     # a moderator's take-down from the held queue can be undone like a report's
     ok(None)
     held = c.post("/api/threads", headers=B, json={"topic": "talk", "body": "a held one", "anon": True}).json()
+    mine = c.post("/api/threads", headers=M, json={"topic": "talk", "body": "the moderator's own", "anon": True}).json()
+    assert c.post(f"/api/threads/mod/thread/{mine['id']}", headers=M, json={"ok": True}).status_code == 403   # not their own
     c.post(f"/api/threads/mod/thread/{held['id']}", headers=M, json={"ok": False})
     assert any(x["target"] == "thread" and x["id"] == held["id"] for x in c.get("/api/admin/taken-down", headers=X).json())
     con.close()

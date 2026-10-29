@@ -802,6 +802,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
     # the bot's "someone answered your forum thread" has its own switch in Settings
     (84, "ALTER TABLE users ADD COLUMN n_forum INTEGER NOT NULL DEFAULT 1;"),
+    # /show's pairing codes per address (its hash): one address can't take every free code and lock all screens out
+    (85, "ALTER TABLE qr_screens ADD COLUMN ip TEXT; CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;"),
 ]
 
 

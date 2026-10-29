@@ -43,6 +43,13 @@
       if (st && st.session == null && !st.left) await pair(); // nobody scanned it in time: a fresh code
     } catch { /* offline: the next poll */ }
   }
+  // whoever stands at the laptop starts over (another club's organizer bound it first, or the wrong session): this
+  // browser forgets its secret and shows a fresh pairing code; the old pairing goes with its session
+  async function again() {
+    try { localStorage.removeItem(KEEP); } catch { /* fine */ }
+    secret = ''; st = null;
+    await pair();
+  }
   onMount(() => {
     void poll();
     const id = setInterval(poll, 2000); // the count and the QR: the code turns every 10 s, the screen catches it within 2
@@ -89,7 +96,8 @@
       </section>
     {/if}
     <!-- the same pairing code: another organizer's way to the controls; anyone else's scan changes nothing -->
-    <div class="corner"><div class="mini"><Qr text={pairLink} tone={QR_TONE} /></div><span>{t('scr.organizers')}</span></div>
+    <div class="corner"><div class="mini"><Qr text={pairLink} tone={QR_TONE} /></div><span>{t('scr.organizers')}</span>
+      <button class="again" onclick={again}>{t('scr.again')}</button></div>
   {/if}
 </div>
 
@@ -107,6 +115,8 @@
   .code.small { width: min(48vh, 70vw); }
   .screen > .corner { position: absolute; right: 2.4vh; bottom: 2.4vh; display: flex; flex-direction: column; align-items: center; gap: 6px;
     font-size: 12px; color: var(--text-2); opacity: 0.75; }
+  .again { margin-top: 2px; padding: 4px 8px; border-radius: 999px; font: inherit; font-size: 11px; color: var(--text-2); background: none; border: 0; cursor: pointer; }
+  .again:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
   .mini { width: 11vh; min-width: 72px; padding: 6px; border-radius: 10px; background: #fff; }
   .live { display: flex; align-items: center; gap: 5vw; }
   .code { width: min(68vh, 50vw); padding: 2.4vh; border-radius: 4vh; background: #fff;
