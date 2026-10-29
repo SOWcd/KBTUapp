@@ -18,7 +18,8 @@ import time
 from .logic import ApiError, now, one, rows, tx
 
 SLOT = 10           # the QR on the screen changes this often (s)
-SCAN_OK = 60        # a scan is taken this long after its QR was shown (owner, Oct 29: 5 min let a photo relay too long)
+SCAN_OK = 90        # a scan is taken this long after its QR was shown: 5 min let a photo relay too long, 60 s was tight for
+                    # a cold Telegram start on crowded wifi (owner, Oct 29)
 PIN_TRIES = 200     # wrong PINs a minute, all together (a right one always opens): ~3.5 days to try all 10^6
 GRACE = 30 * 60     # after Finish, someone who scanned in time may still finish signing in this long
 # ponytail: _fails is per process (one uvicorn worker today); a table in SQLite if it ever runs several
