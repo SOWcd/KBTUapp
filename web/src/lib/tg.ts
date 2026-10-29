@@ -56,6 +56,8 @@ export const inTelegram = !!W && W.platform !== 'unknown' && !!W.initData;
  *  window. Telegram's phone platforms are ios, android and android_x. */
 export const onComputer = inTelegram ? !/^(ios|android)/.test(W!.platform)
   : typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; // a plain browser: a mouse, not a finger
+/** An Android phone (Telegram's android / android_x, or a plain browser saying so): its own steps come first. */
+export const onAndroid = inTelegram ? /^android/.test(W!.platform) : typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
 
 function can(v: string): boolean {
   try { return inTelegram && W!.isVersionAtLeast(v); } catch { return false; }
