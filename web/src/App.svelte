@@ -279,6 +279,7 @@
       return;
     }
     if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
@@ -302,6 +303,19 @@
 
   // the app was closed while away at Microsoft (the page returns to plain Telegram): someone new types the student ID
   // now, then what the guest wanted before signing in runs
+  // A scan of the big screen's QR: the server keeps it at once; a guest signs in (the sheet comes back to Telegram by
+  // itself) and the same scan again shows it counted (the server counted it at the sign-up already)
+  async function checkIn(p: string, again = false): Promise<void> {
+    try {
+      const r = await api.qrCheckin(p);
+      if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
+      if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p); }
+    } catch (e) {
+      haptic.error();
+      say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : t('common.error'), 'pleading_face_3d');
+    }
+  }
+
   function msBack() {
     // go_<id>: a guest's "I'm going" from before the sign-in, kept on the phone only (never a start param: a shared link
     // must not sign anyone up)
@@ -421,7 +435,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit') greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !tg.startParam.startsWith('ci_')) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

@@ -40,7 +40,7 @@
     return () => { document.removeEventListener("visibilitychange", back); off(); };
   });
   // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
-  $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; } });
+  $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; m.studentId ||= pending.prefill?.studentId ?? ''; } });
   $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha().then(offerWeek); close(overlay.id); setTimeout(() => after?.(), 380); } });
   // signed in, no timetable yet, nothing else to do next: "load your schedule? 1 minute", skippable (PLAN 26)
   const offerWeek = () => { if (!after && !data.schedule.length) setTimeout(() => sheets.schedHowTo(true), 500); };

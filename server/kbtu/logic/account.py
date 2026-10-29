@@ -95,7 +95,7 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
 
 
 def me(con, v: Viewer) -> dict:
-    from .. import roster
+    from .. import checkin, roster
     if v.student:
         roster.match(con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
@@ -125,7 +125,9 @@ def me(con, v: Viewer) -> dict:
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
-        "msPending": {k: p[k] for k in ("first", "last", "email")} if not s and not relink and (p := ms_pending(con, v.id)) else None,
+        # prefill: the student ID an organizers' check-in list has for this KBTU mail (checkin.py)
+        "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"])}
+                     if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id)} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
@@ -458,7 +460,7 @@ _DEL_GONE = {
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("friend_links", "user_id"), ("achievement_grants", "user_id"),
     ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
-    ("volunteers", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
+    ("volunteers", "user_id"), ("qr_marks", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
     ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),

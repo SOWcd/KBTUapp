@@ -3,6 +3,7 @@ import './ui/tokens.css';
 import './ui/base.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import Screen from './screens/Screen.svelte';
 import { boot, hapticTaps, tg } from './lib/tg';
 import { i18n, loadLang, LANGS } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
@@ -32,7 +33,8 @@ hapticTaps();
 
 // the app's language before the first render (Russian is in the bundle: at once); without the network, Russian words
 void loadLang(i18n.lang).catch(() => {}).then(() => {
-  mount(App, { target: document.getElementById('app')! });
+  // /screen: the organizer's check-in screen on a laptop (server checkin.py), the app otherwise
+  mount(location.pathname === '/screen' ? Screen : App, { target: document.getElementById('app')! });
   window.__kbStarted = true;
   // the other languages when idle, so a switch in Settings is as instant as before
   setTimeout(() => { for (const l of LANGS) void loadLang(l).catch(() => {}); }, 3000);

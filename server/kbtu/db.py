@@ -703,6 +703,35 @@ MIGRATIONS: list[tuple[int, str]] = [
     # our copy of the Telegram photo (bot._userpics): t.me took ~1 s per open; src = the t.me URL it was made from
     (78, """ALTER TABLE users ADD COLUMN tg_photo_path TEXT;
     ALTER TABLE users ADD COLUMN tg_photo_src TEXT;"""),
+    # check-in by a QR on a big screen (checkin.py): a session (its PIN hashed), the scans, the organizers' expected list
+    (79, """CREATE TABLE qr_sessions (
+      id         INTEGER PRIMARY KEY,
+      title      TEXT NOT NULL,
+      pin_hash   TEXT NOT NULL UNIQUE,
+      started_at INTEGER,
+      ended_at   INTEGER,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE qr_marks (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      done_at    INTEGER,
+      PRIMARY KEY (session_id, user_id)
+    ) STRICT;
+    CREATE TABLE qr_expected (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      email      TEXT NOT NULL,
+      full_name  TEXT NOT NULL,
+      student_id TEXT,
+      school     TEXT,
+      course     INTEGER,
+      phone      TEXT,
+      tg         TEXT,
+      extra      TEXT NOT NULL DEFAULT '{}',
+      PRIMARY KEY (session_id, email)
+    ) STRICT;
+    CREATE INDEX qr_expected_by_email ON qr_expected(email);"""),
 ]
 
 

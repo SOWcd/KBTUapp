@@ -3466,7 +3466,7 @@ def test_ms_sign_in(env, monkeypatch):
     assert finish(22, token()).json()["message"] == "linked"                  # the same account, another Telegram
     graph = {"id": "oid-2", "givenName": "Dana", "surname": "New", "userPrincipalName": "d_new@kbtu.kz"}
     assert finish(22, token()).json() == {"ok": True}                         # new: remembered for the form
-    assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz"}
+    assert c.get("/api/me", headers=tma(22)).json()["msPending"] == {"first": "Dana", "last": "New", "email": "d_new@kbtu.kz", "prefill": None}
     c.post("/api/kbtu/manual", headers=tma(22), json={"consentVersion": logic.CONSENT, "firstName": "Dana", "lastName": "New", "studentId": "24B099002", "course": 1})
     me = c.get("/api/me", headers=tma(22)).json()
     assert me["student"]["ms"] and me["msPending"] is None and me["no"]
@@ -5313,3 +5313,42 @@ def test_userpic_copy(env):
     assert me() == "https://t.me/i/userpic/320/b.jpg"
     asyncio.run(round_())
     assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()
+
+
+def test_qr_checkin(env, monkeypatch):
+    """The big screen's QR (checkin.py): a PIN opens the screen, a scan before the sign-up waits and counts once the
+    student signs up (ID prefilled from the organizers' list), a forged or stale QR is refused, the CSV has both."""
+    from kbtu import checkin
+    c, cfg = env
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    sid, pin = checkin.new(con, "Meeting", [{"email": "S_New@kbtu.kz", "name": "New Person", "studentId": "24B030001"},
+                                           {"email": "s_gone@kbtu.kz", "name": "Gone Person"}])
+    assert c.post("/api/screen/open", json={"pin": "x"}).status_code == 404
+    k = c.post("/api/screen/open", json={"pin": pin}).json()["key"]
+    assert c.get(f"/api/screen/{sid}", params={"k": "bad"}).status_code == 403
+    assert c.get(f"/api/screen/{sid}", params={"k": k}).json()["param"] is None          # not started: no QR
+    p = c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"]
+    con.execute("UPDATE students SET verified_at = verified_at - 60")                     # Ann: a student well before Start
+    con.execute("UPDATE qr_sessions SET started_at = started_at - 30")                    # and Start a while ago
+    forged = p[:-1] + ("1" if p[-1] == "0" else "0")
+    assert c.post("/api/checkin", headers=tma(1), json={"p": forged}).json()["message"] == "qr"   # forged
+    _, s, slot, _ = p.split("_")
+    old = f"ci_{s}_{int(slot) - 40}_{checkin._sig(cfg.token_key, f'ci.{s}.{int(slot) - 40}')}"
+    assert c.post("/api/checkin", headers=tma(1), json={"p": old}).json()["message"] == "qr_old"  # 400 s ago
+    assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]           # a student: at once
+    assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]       # not yet: waits
+    st = c.get(f"/api/screen/{sid}", params={"k": k}).json()
+    assert (st["done"], st["pending"], st["expected"]) == (1, 1, 2)
+    uid = c.get("/api/me", headers=tma(2)).json()["id"]
+    logic.ms_remember(con, uid, {"oid": "oid-2", "email": "s_new@kbtu.kz", "first": "New", "last": "Person", "employeeId": "", "profile": {}})
+    assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "24B030001"}
+    r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "24B030001", "consentVersion": logic.CONSENT})
+    assert r.status_code == 200, r.text
+    assert c.get(f"/api/screen/{sid}", params={"k": k}).json()["done"] == 2
+    c.post(f"/api/screen/{sid}/finish", json={"k": k})
+    assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # finished
+    rows_ = c.get(f"/api/screen/{sid}/csv", params={"k": k}).text.lstrip("﻿").splitlines()
+    assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
+    assert rows_[2].endswith(",B") and rows_[1].endswith(",A")
+    con.close()

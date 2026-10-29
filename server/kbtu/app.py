@@ -32,7 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, auth, bot, casting, config, db, llm, logic, media, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, casting, checkin as qr, config, db, llm, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -299,9 +299,35 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
                         synced_at, manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""", (v.id, sid, first, last, course, consent, now, now, now))
                 logic.ms_link(con, v.id, ms)
+                qr.became_student(con, v.id)  # a QR scan waiting for the sign-up counts now
         if held:  # after the commit: the admins' message stays
             raise ApiError("conflict", "sid_taken")  # someone with a real account holds it: the admin sorts it out
         return logic.me(con, Viewer(v.id, v.role, True))
+
+    # ------------------------------------------------------------ check-in by a QR on a big screen (checkin.py)
+
+    @app.post("/api/screen/open")
+    def screen_open(con: Con, body: dict = Body(...)):
+        return qr.open_screen(con, cfg.token_key, str(body.get("pin") or ""))
+
+    @app.get("/api/screen/{sid}")
+    def screen_state(sid: int, k: str, con: Con):
+        return qr.state(con, cfg.token_key, sid, k)
+
+    @app.post("/api/screen/{sid}/{act}")
+    def screen_act(sid: int, act: str, con: Con, body: dict = Body(...)):
+        if act not in ("start", "finish"):
+            raise ApiError("not_found")
+        return (qr.start if act == "start" else qr.finish)(con, cfg.token_key, sid, str(body.get("k") or ""))
+
+    @app.get("/api/screen/{sid}/csv")
+    def screen_csv(sid: int, k: str, con: Con):
+        return Response(qr.export(con, cfg.token_key, sid, k), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="checkin-{sid}.csv"', "Cache-Control": "no-store"})
+
+    @app.post("/api/checkin")
+    def checkin_scan(con: Con, v: Me, body: dict = Body(...)):
+        return qr.mark(con, cfg.token_key, v.id, v.student, str(body.get("p") or ""))
 
     @app.post("/api/ms/start")
     def ms_start(v: Me):
