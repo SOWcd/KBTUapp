@@ -109,9 +109,15 @@
       {@render consent()}
     {:else}
       {#if relink}<p class="relink t-callout">{t('login.relink')}</p>{/if}
-      <div class="big"><Emoji name="waving_hand_3d_default" size={72} /><b>{t('login.big')}</b></div>
-      {@render msButton(t('login.ms'))}
-      {@render consent()}
+      <!-- the hello (owner, Oct 29: the full-screen sign-in after a scan "was right; make it beautiful"): the hand waves,
+           the brand's light drifts behind it, the rest comes in after it; still under power saving and reduced motion -->
+      <div class="big" class:hero={lock}>
+        <span class="aura" aria-hidden="true"><i></i><i></i></span>
+        <span class="hand"><Emoji name="waving_hand_3d_default" size={lock ? 96 : 72} /></span>
+        <b class="in" style="--d:160ms">{t('login.big')}</b>
+      </div>
+      <div class="in" style="--d:300ms">{@render msButton(t('login.ms'))}</div>
+      <div class="in" style="--d:420ms">{@render consent()}</div>
     {/if}
     {#if error && !pending}<p class="err t-callout">{error}</p>{/if}
   </form>
@@ -121,10 +127,32 @@
   .sid { text-transform: uppercase; } /* a typed "b" shows as "B"; it's sent upper-cased */
   .wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
   .err { color: var(--danger-text); }
-  .ms { display: flex; align-items: center; justify-content: center; gap: 12px; height: 56px; border-radius: var(--r-l); background: #fff; color: #1b1b1b;
-    font: 650 17px/1 var(--font-text); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), var(--shadow-card); }
+  .ms { position: relative; overflow: hidden; width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px; height: 56px; border-radius: var(--r-l);
+    background: #fff; color: #1b1b1b; font: 650 17px/1 var(--font-text); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), var(--shadow-card);
+    transition: transform var(--t-fast) var(--ease); }
+  /* a glint crosses the button now and then: the one thing to tap */
+  .ms::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.85) 50%, transparent 65%);
+    transform: translateX(-120%); animation: glint 3.6s ease-in-out 1.2s infinite; pointer-events: none; mix-blend-mode: overlay; }
+  @keyframes glint { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
   .ms:active { transform: scale(0.98); }
-  .big { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 8px 12px 10px; }
+  .big { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 8px 12px 10px; }
+  .big.hero { padding: 6vh 12px 4vh; gap: 18px; }
+  .big.hero b { font-size: 30px; }
+  /* the brand's light behind the hello, drifting slowly */
+  .aura { position: absolute; inset: -10% -20%; z-index: -1; pointer-events: none; }
+  .aura i { position: absolute; width: 60%; aspect-ratio: 1; border-radius: 50%; filter: blur(40px); opacity: 0.55; }
+  .aura i:first-child { left: 8%; top: 5%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 70%, transparent), transparent 70%); animation: drift 9s ease-in-out infinite alternate; }
+  .aura i:last-child { right: 4%; top: 25%; background: radial-gradient(circle, rgba(175, 82, 222, 0.55), transparent 70%); animation: drift 11s ease-in-out infinite alternate-reverse; }
+  @keyframes drift { to { transform: translate3d(14%, 10%, 0) scale(1.15); } }
+  /* the hand: comes up, waves twice from the wrist, then breathes */
+  .hand { display: inline-flex; transform-origin: 70% 85%; animation: hand-in 520ms cubic-bezier(.2, 1.4, .4, 1) backwards, wave 1.3s ease-in-out 480ms, bob 3.2s ease-in-out 1.9s infinite; }
+  @keyframes hand-in { from { opacity: 0; transform: translateY(18px) scale(0.6); } }
+  @keyframes wave { 15% { transform: rotate(16deg); } 30% { transform: rotate(-10deg); } 45% { transform: rotate(14deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(8deg); } }
+  @keyframes bob { 50% { transform: translateY(-5px) rotate(-3deg); } }
+  .in { animation: login-in 480ms cubic-bezier(.2, .9, .25, 1) backwards; animation-delay: var(--d, 0ms); }
+  @keyframes login-in { from { opacity: 0; transform: translate3d(0, 12px, 0); } }
+  :global(html.lowfx) .aura, :global(html.lowfx) .ms::after { display: none; }
+  :global(html.lowfx) .hand { animation: hand-in 520ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
   .big b { font: 750 26px/1.15 var(--font-display, var(--font-text)); letter-spacing: -0.015em; text-wrap: balance; }
   .relink { padding: 12px 14px; border-radius: var(--r-l); background: var(--surface-3); }
   .center { text-align: center; margin-top: -4px; }
