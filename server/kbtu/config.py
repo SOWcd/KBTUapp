@@ -34,6 +34,7 @@ class Config:
     munito_keys: tuple[str, ...] = field(default=(), repr=False)
     openrouter_key: str = field(default="", repr=False)
     groq_key: str = field(default="", repr=False)
+    apinex_key: str = field(default="", repr=False)  # APINEX_API_KEY: the chain's first link
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
     seed: bool = True           # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
@@ -77,5 +78,6 @@ def load() -> Config:
         munito_keys=tuple(k for k in (env.get("MUNITO_API_KEY", "").strip(), env.get("MUNITO_API_KEY2", "").strip()) if k),
         openrouter_key=env.get("OPENROUTER_API_KEY", "").strip(),
         groq_key=env.get("GROQ_API_KEY", "").strip(),
+        apinex_key=env.get("APINEX_API_KEY", "").strip(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
     )

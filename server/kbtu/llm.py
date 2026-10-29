@@ -24,10 +24,15 @@ URLS = {
     "munitoeu": "https://api.eu.munito.ai/inference/v1/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
+    # APInex (apinex.bond/llms.txt): an OpenAI-compatible reseller; free/* models spend a daily allowance
+    # (20M weighted tokens, V4.1 Flash weighs 3) at 15 req/min per account (api/public/subscriptions, /rate-limits)
+    "apinex": "https://api.apinex.bond/v1/chat/completions",
 }
-CHAIN = ("cf:@cf/deepseek-ai/deepseek-v4-pro-0813,munito:deepseek-ai/deepseek-v4.1-flash-1017,"
-         "openrouter:nvidia/nemotron-3-ultra-550b-a55b:free,groq:openai/gpt-oss-120b,cf:@cf/moonshotai/kimi-k2.6,"
-         "munito:zai-org/glm-5.3-flash,groq:qwen/qwen3.8-27b,cf:@cf/zai-org/glm-5.3-flash,groq:openai/gpt-oss-20b")
+# the biggest free limits first (Oct 29): APInex (owner's pick), Munito (rate limits only, no daily cap), Groq (~1K
+# req/day per model), Cloudflare (10k neurons/day for all its models), OpenRouter (50 free req/day)
+CHAIN = ("apinex:free/deepseek-v4.1-flash,munito:deepseek-ai/deepseek-v4.1-flash-1017,munito:zai-org/glm-5.3-flash,"
+         "groq:openai/gpt-oss-120b,groq:qwen/qwen3.8-27b,groq:openai/gpt-oss-20b,cf:@cf/deepseek-ai/deepseek-v4-pro-0813,"
+         "cf:@cf/moonshotai/kimi-k2.6,cf:@cf/zai-org/glm-5.3-flash,openrouter:nvidia/nemotron-3-ultra-550b-a55b:free")
 REST = 60             # a limited or busy link without a Retry-After rests this long
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
@@ -63,7 +68,8 @@ def links(cfg, chain: str | None = None) -> list[Link]:
             "munito": [(f"munito{i + 1 if i else ''}", k) for i, k in enumerate(cfg.munito_keys) if k],
             "munitoeu": [(f"munitoeu{i + 1 if i else ''}", k) for i, k in enumerate(cfg.munito_keys) if k],
             "openrouter": [("openrouter", cfg.openrouter_key)] if cfg.openrouter_key else [],
-            "groq": [("groq", cfg.groq_key)] if cfg.groq_key else []}
+            "groq": [("groq", cfg.groq_key)] if cfg.groq_key else [],
+            "apinex": [("apinex", cfg.apinex_key)] if cfg.apinex_key else []}
     out = []
     for item in (chain or cfg.ai_chain or CHAIN).split(","):
         provider, _, model = item.strip().partition(":")
