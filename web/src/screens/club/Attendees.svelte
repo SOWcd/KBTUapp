@@ -92,6 +92,7 @@
           {:else if a.status === 'going'}<Chip tone="accent">{t('att.going')}</Chip>
           {:else if a.status === 'hold'}<Chip tone="warning">{t('att.hold')}</Chip>
           {:else}<Chip>{t('att.waitlist')}</Chip>{/if}
+          {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
         </div>
       {:else}
         <p class="t-foot empty">{list.length ? t('clubs.nothing') : t('att.none')}</p>
@@ -114,7 +115,11 @@
   .search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; margin-bottom: 8px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-3); }
   .search input { flex: 1; min-width: 0; font: 500 16px/1 var(--font-text); color: var(--text); }
   .list { display: flex; flex-direction: column; }
-  .row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; width: 100%; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 2px; width: 100%; }
+  /* the answers to the event's own questions, under the name */
+  .ans { flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 2px 48px; font: 500 13px/1.35 var(--font-text); }
+  .ans dt { color: var(--text-3); }
+  .ans dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
   .who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; }
   .undo { flex: none; padding: 6px 4px; font: 620 13px/1 var(--font-text); color: var(--text-2); }
   .row + .row { border-top: 1px solid var(--line); }

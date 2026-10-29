@@ -259,6 +259,7 @@ export interface EventCard {
   meeting?: boolean;            // a club meeting (§2b): team-only, the whole club or one tag expected to answer and come
   firstYear: boolean;
   needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
+  form?: Question[] | null;     // the event's own questions at sign-up, answered in the same tap
   externalUrl: string | null;
   guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
   price: number | null;
@@ -368,6 +369,7 @@ export interface EventInput {
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
   firstYear: boolean;
   needsPhone?: boolean;        // sign-up asks for the phone if none is kept
+  form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none
   albumOpen?: boolean;         // "Photos from participants" (who came adds to the album); left out = on
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1
@@ -398,7 +400,9 @@ export interface EventInput {
 }
 
 /** One registration as the organizer sees it (§3: full name for organizers). */
-export interface Attendee { person: PersonRef; by?: PersonRef | null /* who brought them: their link or "Bring a friend" */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
+/** An event's own question at sign-up (server clean_questions): text, or a choice of 2-8 options. */
+export interface Question { label: string; kind: 'text' | 'choice'; options?: string[]; required: boolean }
+export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them: their link or "Bring a friend" */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` once the organizer said it's fine. Flagged ones first. */

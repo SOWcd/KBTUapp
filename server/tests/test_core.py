@@ -5657,6 +5657,38 @@ def test_student_forum_pages(env):
     assert len(first) == T.PAGE and len(rest) == 6 and not {x["id"] for x in first} & {x["id"] for x in rest}
     con.close()
 
+def test_event_questions(env):
+    """Oct 30: an event's own questions at sign-up. The editor sets up to five (text or a choice); signing up answers
+    them (a required one, a choice from its options); the organizers see the answers in Attendees and the CSV; they
+    go 30 days after the event."""
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    base = {"title": "Hackathon", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    qs = [{"label": "Your team?", "kind": "text", "required": True}, {"label": "T-shirt", "kind": "choice", "options": ["S", "M", "L"], "required": False}]
+    for bad in ([{"label": "x", "kind": "text"}], [{"label": "Size", "kind": "choice", "options": ["S"]}], [qs[0]] * 6,
+                [{"label": "Size", "kind": "choice", "options": ["S", "S"]}], [{"label": "Size", "kind": "file"}]):
+        assert c.post("/api/orgs/1/events", headers=tma(20), json={**base, "form": bad}).status_code == 400
+    eid = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "form": qs}).json()["id"]
+    c.post(f"/api/events/{eid}/publish", headers=tma(20))
+    assert [q["label"] for q in c.get(f"/api/events/{eid}", headers=tma(10)).json()["form"]] == ["Your team?", "T-shirt"]
+    for bad in (None, ["Bugs"], ["", "M"], ["Bugs", "XL"], ["x" * 201, ""]):
+        assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": bad}).status_code == 400
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": ["  Bugs  Bunny ", "M"]}).json()["my"]["status"] == "going"
+    seen = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
+    assert seen[0]["answers"] == [{"q": "Your team?", "a": "Bugs Bunny"}, {"q": "T-shirt", "a": "M"}]
+    assert "answers" not in c.get(f"/api/events/{eid}", headers=tma(10)).json().get("my", {})       # nobody else's view
+    # an edit later leaves what was answered as it was asked
+    c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, "form": [{"label": "Team name", "kind": "text", "required": True}]})
+    rows_ = texts.attendees_csv("en", "Hackathon", logic.attendees_export(con, logic.Viewer(pres["id"], "user", True), eid)[1])[1].decode()
+    assert "Your team?" in rows_.splitlines()[0] and "Bugs Bunny" in rows_
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 31 * 86400, eid))
+    logic.stats_day(con)                                                                    # the nightly round
+    assert con.execute("SELECT answers FROM registrations WHERE event_id = ?", (eid,)).fetchone()[0] is None
+    con.close()
+
 def test_partner_events(env):
     """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
     council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays

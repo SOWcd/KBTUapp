@@ -7,6 +7,7 @@ import calendar
 import csv
 import html
 import io
+import json
 import re
 import time
 
@@ -512,12 +513,15 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     """(file name, the file, caption): UTF-8 with a BOM and ';' so Excel opens it right in Russian and Kazakh."""
     st, out = CSV_STATUS[lang], io.StringIO()
     w = csv.writer(out, delimiter=";")
-    w.writerow(CSV_HEAD[lang])
+    # the event's own questions at sign-up, a column each, in the order they were first answered
+    answers = [dict((x["q"], x["a"]) for x in json.loads(p["answers"])) if p["answers"] else {} for p in people]
+    asked = list(dict.fromkeys(q for a in answers for q in a))
+    w.writerow([*CSV_HEAD[lang], *(_cell(q) for q in asked)])
     stamp = lambda ts: time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + 5 * 3600)) if ts else ""
-    for p in people:
+    for p, a in zip(people, answers):
         w.writerow([_cell(x) for x in (p["last_name"], p["first_name"], p["tg_username"], p["student_id"], p["course"], p["school"], p["email"],
                                        p["phone"], st[p["status"]], stamp(p["created_at"]), stamp(p["checked_in_at"]), st["yes"] if p["walk_in"] else "",
-                                       st["yes"] if p["checkin_manual"] else "")])
+                                       st["yes"] if p["checkin_manual"] else "", *(a.get(q, "") for q in asked))])
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
 
 

@@ -148,6 +148,29 @@ def leaders_answers(con, v: Viewer, eid: int) -> list[dict]:
     return out
 
 
+QUESTIONS_MAX, QUESTION_MAX, OPTION_MAX, ANSWER_MAX = 5, 80, 40, 200
+
+
+def clean_questions(raw: object) -> str | None:
+    """The editor's questions at sign-up, checked: up to 5, each its words (2-80), text or a choice of 2-8 options
+    (1-40 each, no repeats), required or not. None: no questions. Kept as JSON."""
+    if raw is None or raw == []:
+        return None
+    if not isinstance(raw, list) or len(raw) > QUESTIONS_MAX:
+        raise ApiError("bad_input", "questions")
+    out = []
+    for q in raw:
+        if not isinstance(q, dict):
+            raise ApiError("bad_input", "questions")
+        label, kind = " ".join(str(q.get("label") or "").split()), q.get("kind")
+        opts = [" ".join(str(o).split()) for o in q.get("options") or []] if kind == "choice" else []
+        if not 2 <= len(label) <= QUESTION_MAX or kind not in ("text", "choice") or not isinstance(q.get("required", False), bool) \
+                or kind == "choice" and not (2 <= len(opts) <= 8 and len(set(opts)) == len(opts) and all(1 <= len(o) <= OPTION_MAX for o in opts)):
+            raise ApiError("bad_input", "questions")
+        out.append({"label": label, "kind": kind, **({"options": opts} if opts else {}), "required": bool(q.get("required"))})
+    return json.dumps(out, ensure_ascii=False)
+
+
 def clean_event(i: dict, oversee: bool = False) -> dict:
     """The editor's input, checked. A leaders meeting (§4.10) only from an oversight org
     (DMP), with the lowest role invited."""
@@ -176,6 +199,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
             "emoji": emoji, "color": color, "seats": seats, "reg_until": reg_until, "first_year": int(bool(i.get("firstYear"))),
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
+            **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
             "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
             "meeting": int(meeting), "meeting_tag": tag, "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
@@ -469,7 +493,7 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
     _staff_event(con, v, eid, "events")
     order = {"going": 0, "hold": 1, "waitlist": 2}
-    found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by,
+    found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
@@ -480,7 +504,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
-            if p["rid"] else None} for p in found]
+            if p["rid"] else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
     return sorted(out, key=lambda a: (not flagged(a), order[a["status"]], a["fullName"]))  # §4.3: flagged receipts first
 
@@ -492,7 +516,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     # the phone only where this event asked for it (one club's ask reached every club's list)
     found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email,
             CASE WHEN ? THEN s.phone END AS phone,
-            r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual
+            r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual, r.answers
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
         WHERE r.event_id = ? AND r.status != 'cancelled' ORDER BY s.last_name, s.first_name""", e["needs_phone"], eid)
     log_action(con, v.id, "attendees_export", f"event:{eid}", json.dumps({"rows": len(found)}))

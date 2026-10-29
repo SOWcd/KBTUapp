@@ -349,7 +349,9 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
             "cover": _event_cover(con, e, files),
             "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
             "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
-            "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"], "price": e["price"], "my": my, "visibility": e["visibility"],
+            "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
+            # its own questions at sign-up ("questions" is Studio's count)
+            "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "my": my, "visibility": e["visibility"],
             "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
             "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
             "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),

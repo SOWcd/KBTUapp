@@ -352,7 +352,28 @@ def promote(con, e: sqlite3.Row) -> None:
         notify(con, nxt["user_id"], "seat_hold" if pay else "seat_free", f"event:{e['id']}")  # a hold: pay within 30 min
 
 
-def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None) -> dict:
+ANSWER_MAX = 200  # one answer to an event's question at sign-up
+
+
+def _answers(e: sqlite3.Row, given: object) -> str | None:
+    """The answers to an event's questions, one per question in order: a required one not empty, a choice one of its
+    options, text up to 200. Kept with each question's words (an edit later doesn't change what was answered)."""
+    qs = json.loads(e["questions"]) if e["questions"] else []
+    if not qs:
+        return None
+    if not isinstance(given, list) or len(given) != len(qs):
+        raise ApiError("bad_input", "answers")
+    out = []
+    for q, a in zip(qs, given):
+        a = " ".join(str(a or "").split())
+        if q["required"] and not a or len(a) > ANSWER_MAX or q["kind"] == "choice" and a and a not in q["options"]:
+            raise ApiError("bad_input", "answers")
+        if a:
+            out.append({"q": q["label"], "a": a})
+    return json.dumps(out, ensure_ascii=False)
+
+
+def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None, answers: object = None) -> dict:
     """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71).
     ref: the badge code of the club member whose link they came by ("My link", ev_<id>_<code>): the member gets the
     credit, the organizers see it in "Who brought"."""
@@ -377,14 +398,15 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None)
             con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
         elif e["needs_phone"] and not one(con, "SELECT phone FROM students WHERE user_id = ?", v.id)[0]:
             raise ApiError("bad_input", "phone")  # the app asks for it and sends it with the same tap
+        given = _answers(e, answers)  # the app asks the event's questions first and sends them with the same tap
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
         hold = core.now() + HOLD if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
-            con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, updated_at = ?
-                WHERE id = ?""", (status, hold, wait, int(free), core.now(), r["id"]))
+            con.execute("""UPDATE registrations SET status = ?, cancel_reason = NULL, hold_until = ?, waitlisted_at = ?, free = ?, note = NULL, answers = ?, updated_at = ?
+                WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), r["id"]))
         else:
             # someone already in keeps whoever was first (this branch is new rows only); never myself
             by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.qr_code = ? AND u.id != ?",
@@ -393,8 +415,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None)
             if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None
-            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con), hold, wait, inviter, int(free), core.now(), core.now()))
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, answers, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con), hold, wait, inviter, int(free), given, core.now(), core.now()))
         if status == "going":
             _remind(con, v.id, e)
     return card(con, v, e)

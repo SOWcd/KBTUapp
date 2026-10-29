@@ -42,6 +42,8 @@
   const canPrice = $derived(official && may(mine, 'money'));
   // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
   const canPartner = $derived(official || oversee);
+  // a choice question's options, typed with commas: "S, M, L"
+  const opts = (s: string) => [...new Set(s.split(',').map((o) => o.trim()).filter(Boolean))];
   const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
   // the name Kaspi prints for the recipient ("Alikhan S.", my short name): mine, as the one setting it up usually takes the money
   const myKaspiName = session.me?.student ? session.me.name : '';
@@ -60,6 +62,7 @@
     end: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null,
     partner: false, host: '', link: '',
+    form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
@@ -109,6 +112,7 @@
     freeFirst: !f.paid || !f.freeFirst || (Number.isInteger(+f.freeFirst) && +f.freeFirst >= 0 && +f.freeFirst <= 5000) ? '' : t('ed.need'),
     host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
     link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
+    form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? t('ed.formBad') : '',
     reg: !f.deadline ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
@@ -235,6 +239,7 @@
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
+          form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
           deadline: !!e.regUntil, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place, memo: e.memo ?? {} };
@@ -272,6 +277,7 @@
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: f.deadline && !isMeeting && Number.isFinite(regTs) ? regTs : null,
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: isMeeting && !f.partner ? f.meetingTag : null,
+    form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
     ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
     // only a changed photo or focus is sent: left out, the server keeps what the event has
     ...(f.cover?.id !== saved?.cover?.id || !f.cover !== !saved?.cover ? { coverId: f.cover?.id ?? null } : {}),
@@ -499,6 +505,23 @@
       <span><b>{t('ed.needsPhone')}</b><i class="t-foot">{t('ed.needsPhoneHint')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.needsPhone} />
     </label>
+    <!-- the event's own questions at sign-up (Oct 30, an organizer's ask): up to five, text or a choice -->
+    <section class="qs">
+      <span class="t-cap">{t('ed.form')}</span>
+      {#each f.form as q, i (i)}
+        <div class="qc surface">
+          <div class="qrow"><input class="ql" bind:value={q.label} maxlength="80" placeholder={t('ed.formQ')} />
+            <button class="qx" onclick={() => (f.form = f.form.filter((_, k) => k !== i))} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
+          <div class="mtags"><button class:on={q.kind === 'text'} onclick={() => (q.kind = 'text')}>{t('ed.formText')}</button>
+            <button class:on={q.kind === 'choice'} onclick={() => (q.kind = 'choice')}>{t('ed.formChoice')}</button></div>
+          {#if q.kind === 'choice'}<input class="ql" bind:value={q.opts} maxlength="300" placeholder={t('ed.formOpts')} />{/if}
+          <label class="chk"><input type="checkbox" bind:checked={q.required} />{t('ed.formReq')}</label>
+        </div>
+      {/each}
+      {#if tried && err.form}<p class="err">{err.form}</p>{/if}
+      {#if f.form.length < 5}<button class="qadd" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>+ {t('ed.formAdd')}</button>{/if}
+      <p class="hint">{t('ed.formHint')}</p>
+    </section>
     <label class="switch">
       <span><b>{t('ed.albumOpen')}</b><i class="t-foot">{t('ed.albumOpenHint')}</i></span>
       <input type="checkbox" role="switch" bind:checked={f.albumOpen} />
@@ -573,6 +596,13 @@
   .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px 12px; font: 550 15px/1.3 var(--font-text); }
   .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
   .who { display: flex; flex-direction: column; gap: 8px; }
+  .qs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+  .qc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 2px; border-radius: 16px; animation: qin 260ms cubic-bezier(.2, .9, .25, 1); }
+  @keyframes qin { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+  .qrow { display: flex; align-items: center; gap: 6px; }
+  .ql { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 12px; background: var(--surface-2); color: var(--text); font: 500 15px/1 var(--font-text); }
+  .qx { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); }
+  .qadd { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); }
   .mtags { display: flex; flex-wrap: wrap; gap: 6px; }
   .mtags button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2);
     font: 600 14px/1 var(--font-text); color: var(--text-2); }

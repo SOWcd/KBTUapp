@@ -180,8 +180,11 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
       : undefined;
     if (phone === null) return;
+    // the event's own questions: answered here, sent with the same tap (closed: no sign-up)
+    const answers = !leaving && before.form?.length ? await sheets.answers(before.title, before.form) : undefined;
+    if (answers === null) return;
     try {
-      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone);
+      const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers);
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);
       const st = after.my?.status;

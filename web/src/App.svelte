@@ -81,6 +81,7 @@
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   sheets.pc = (ok) => lazy(() => import('./screens/sheets/PcSheet.svelte'), { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
+  sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
   sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
   // Studio is for club teams only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');

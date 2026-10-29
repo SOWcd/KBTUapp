@@ -469,7 +469,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/registration")
     def register(eid: int, con: Con, v: Me, body: dict = Body(default={})):
-        return logic.register(con, v, eid, body.get("ref"), body.get("phone"))
+        return logic.register(con, v, eid, body.get("ref"), body.get("phone"), body.get("answers"))
 
     @app.delete("/api/events/{eid}/registration")
     def unregister(eid: int, con: Con, v: Me):

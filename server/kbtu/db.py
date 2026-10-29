@@ -804,6 +804,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     (84, "ALTER TABLE users ADD COLUMN n_forum INTEGER NOT NULL DEFAULT 1;"),
     # /show's pairing codes per address (its hash): one address can't take every free code and lock all screens out
     (85, "ALTER TABLE qr_screens ADD COLUMN ip TEXT; CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;"),
+    # an event's own questions at sign-up (Oct 30, an organizer's ask): JSON [{label, kind text|choice, options, required}];
+    # the answers on the registration, JSON [{q, a}] (the question's words as they were), wiped 30 days after the event
+    (86, "ALTER TABLE events ADD COLUMN questions TEXT; ALTER TABLE registrations ADD COLUMN answers TEXT;"),
 ]
 
 
