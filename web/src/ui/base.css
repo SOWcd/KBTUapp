@@ -221,12 +221,18 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 @property --glass-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --glass-pill-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
 @property --glass-clear { syntax: '<color>'; inherits: true; initial-value: transparent; }
-:root.vt-solid, .vt-solid .theme-light, .vt-solid .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
-:root:not(.vt-solid), :root:not(.vt-solid) .theme-light, :root:not(.vt-solid) .theme-dark {
+/* glass-wake (glass.ts): the same solid glass while the app is away and for a moment after it's back: iOS drops the
+   backdrop layers of a hidden page and rebuilds them ~300 ms after the return, the glass showed bare meanwhile
+   (owner's video, Oct 29) */
+:root.vt-solid, .vt-solid .theme-light, .vt-solid .theme-dark,
+:root.glass-wake, .glass-wake .theme-light, .glass-wake .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+:root:not(.vt-solid, .glass-wake), :root:not(.vt-solid, .glass-wake) .theme-light, :root:not(.vt-solid, .glass-wake) .theme-dark {
   transition: --glass-bg 360ms ease, --glass-pill-bg 360ms ease, --glass-clear 360ms ease;
 }
 /* glass with a tint of its own (the route's step card) goes solid too: it showed the plan through, sharp (owner, Oct 24) */
-.vt-solid .glass { background-color: var(--glass-solid) !important; }
+.vt-solid .glass, .glass-wake .glass { background-color: var(--glass-solid) !important; }
+/* solid at once on the way out (the nav's and capsule's tone layers glide their colour, chrome.ts) */
+.glass-wake .tone-base { transition: none !important; }
 .vt-circle::view-transition-old(root), .vt-circle::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 /* a language switch: the old screen stays put, the new one comes into focus over it; the backgrounds match, so only the
    words visibly change */

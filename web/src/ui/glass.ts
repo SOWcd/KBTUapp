@@ -50,6 +50,16 @@ function startTilt() {
   sensor.run();
 }
 
+// Away and back: iOS drops the backdrop-filter layers of a hidden page and rebuilds them a few frames after the return,
+// the glass showed bare. It goes solid as the app leaves (so the first frame back is already solid) and glides back to
+// clear (base.css, 360 ms) once the blur is surely there again.
+let wake: ReturnType<typeof setTimeout> | undefined;
+const away = () => { clearTimeout(wake); document.documentElement.classList.add('glass-wake'); };
+const back = () => { clearTimeout(wake); wake = setTimeout(() => document.documentElement.classList.remove('glass-wake'), 450); };
+document.addEventListener('visibilitychange', () => (document.hidden ? away() : back()));
+on('deactivated', away);
+on('activated', back);
+
 /** Power saving stops the light: the gyro, and a repaint of every glass element as the phone moves. */
 export function tilt(allowed: boolean): void {
   sensor.allowed = allowed;
