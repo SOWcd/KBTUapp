@@ -83,7 +83,7 @@
       {#if f.going.length}
         <section class="blk">
           <h2 class="sh">{t('fr.going')}</h2>
-          <div class="cards hscroll" data-noswipe>
+          <div class="cards hscroll" class:one={f.going.length === 1} data-noswipe>
             {#each f.going as e, i (e.id)}
               <button class="card" style="--i:{i};--c:{e.tint}" onpointerdown={() => prefetchEvent(e.id)} onclick={() => sheets.event(e.id)}>
                 <span class="art"><Poster item={e} big radius={0} /></span>
@@ -187,7 +187,10 @@
   .no:active { transform: scale(0.92); }
 
   /* where friends are going: portrait cards, the cover full-bleed, the words on the photo */
-  .cards { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 8px; scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter); }
+  /* room below for the cards' shadow: the row scrolls sideways, so it clipped the shadow into a hard line (owner, Oct 29) */
+  .cards { gap: 10px; margin: 0 calc(-1 * var(--gutter)) -24px; padding: 2px var(--gutter) 32px; scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter); }
+  /* one place to go: the card takes the row, wide like a poster, not a lone narrow card beside empty space */
+  .cards.one .card { width: 100%; height: 220px; }
   .card { position: relative; flex: none; width: 212px; height: 270px; border-radius: 24px; overflow: hidden; scroll-snap-align: start; text-align: left; color: #fff;
     background: var(--c); box-shadow: 0 18px 34px -22px color-mix(in srgb, var(--c) 80%, #000), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     transition: transform var(--t-fast) var(--ease); animation: rise 480ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 70ms); }
