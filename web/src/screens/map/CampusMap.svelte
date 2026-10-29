@@ -758,7 +758,7 @@
   <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
     <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
     <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} /><span class="ellipsis">{t('map.find')}</span></button>
-    <button class="shut" onclick={() => close(overlay.id)} aria-label={t('common.close')}><MapIcon size={22} strokeWidth={1.9} /></button>
+    <button class="shut glass glass-pill" use:glass onclick={() => close(overlay.id)} aria-label={t('common.close')}><MapIcon size={22} strokeWidth={1.9} /></button>
   </div>
   {#if card}
     <div class="rcard" data-cover>
@@ -906,9 +906,13 @@
   .bar { position: relative; flex: 1; min-width: 0; height: 60px; border-radius: 30px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font: 600 16px/1 var(--font-text); color: var(--text-2); }
   .bar :global(svg) { color: var(--text); flex: none; }
   .exit { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
-  /* lit like the nav's chosen tab: this is where you are */
-  .shut { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--text); color: var(--bg);
-    box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6); }
+  /* the same glass as its neighbours, lit from inside in the accent: this is where you are (owner, Oct 29: the solid
+     white disc was too loud) */
+  .shut { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--accent); }
+  .shut::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .shut > :global(svg) { position: relative; }
   .bar, .exit, .shut { transition: transform 0.45s var(--ease-bounce); }
   .bar:active, .exit:active, .shut:active { transform: scale(0.95); transition-duration: 80ms; }
   /* the room found: a short panel with the way to it */
