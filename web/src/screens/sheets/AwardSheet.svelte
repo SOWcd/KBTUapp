@@ -20,6 +20,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Award from '../../ui/Award.svelte';
   import { nameOf } from '../../lib/short';
+  import { session } from '../../lib/state/session.svelte';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
 
   let { overlay, it, mine = false }: { overlay: Overlay; it: ShelfItem; mine?: boolean } = $props();
   let sharing = $state(false);
@@ -29,6 +31,16 @@
     try { if (await shareCard({ kind: 'aw', code: it.ach.code }, 'https://t.me/KBTUappBot?startapp=aw_' + it.ach.code, t('aw.shareText', { name: it.name }))) say(phrase('say.shared'), 'party_popper_3d'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
     finally { sharing = false; }
+  }
+  // "Recruiter" is earned by my invite link: the link right here (owner, Oct 29: no hunting for it on Me)
+  let inviting = $state(false);
+  const ref = $derived(mine && it.ach?.code === 'referral' ? session.me?.referrals : null);
+  async function invite() {
+    if (!ref) return;
+    inviting = true; haptic.tap();
+    try { await shareCard({ kind: 'rf', id: '0' }, `https://t.me/KBTUappBot?startapp=r_${ref.code}`, t('ref.text'), () => (inviting = false)); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    finally { inviting = false; }
   }
   const a = $derived(it.ach), b = $derived(it.badge);
   const hidden = $derived(!!a && a.secret && a.level === 0);
@@ -89,13 +101,18 @@
   {/if}
 
   {#snippet footer()}
-    {#if mine && a && a.level > 0}
-      <Button kind="primary" size="l" full loading={sharing} onclick={shareIt}>{#snippet icon()}<Share size={18} />{/snippet}{t('aw.share')}</Button>
-    {/if}
+    <div class="acts">
+      {#if ref}<Button kind="primary" size="l" full loading={inviting} onclick={invite}>{#snippet icon()}<Megaphone size={18} />{/snippet}{t('ref.invite')}</Button>{/if}
+      {#if mine && a && a.level > 0}
+        <Button kind={ref ? 'secondary' : 'primary'} size="l" full loading={sharing} onclick={shareIt}>{#snippet icon()}<Share size={18} />{/snippet}{t('aw.share')}</Button>
+      {/if}
+    </div>
   {/snippet}
 </Sheet>
 
 <style>
+  .acts { display: flex; gap: 8px; }
+  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .stage { display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
   .big { position: relative; display: inline-flex; transform: rotateX(calc(var(--gy, 0) * -14deg)) rotateY(calc(var(--gx, 0) * 16deg)); transition: transform 160ms ease-out; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
