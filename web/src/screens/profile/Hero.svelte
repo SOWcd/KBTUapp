@@ -43,9 +43,12 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
-  // a new lanyard put on drops in the same way: the eye goes to the badge, not to a toast
+  // a new lanyard put on turns in like a card flipped to its new face (owner: the re-swing looked cheap): edge-on,
+  // a little past, settled; the eye goes to the badge, not to a toast
   let worn = untrack(() => look);
-  $effect(() => { if (look !== worn) { worn = look; if (!still()) swing.animate(frames, { duration: 1400 }); } });
+  const flip = [{ transform: 'rotateY(88deg) scale(0.94)', opacity: 0.4 }, { transform: 'rotateY(-10deg) scale(1.01)', opacity: 1, offset: 0.62 },
+    { transform: 'rotateY(3deg)', offset: 0.85 }, { transform: 'none' }];
+  $effect(() => { if (look !== worn) { worn = look; if (!still()) swing.animate(flip, { duration: 620, easing: 'cubic-bezier(.2,.8,.3,1)' }); } });
 
   // On Me it also feels the Profile pages being swiped (the swing-in on paging looked like a jerk):
   // it leans behind a moving page and sways when the page stops. A damped spring (8 rad/s, ζ 0.2) toward a lean
