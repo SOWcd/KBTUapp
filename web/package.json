@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && ! grep -lE '\\(\\?<[=!]' dist/assets/*.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run"
   },

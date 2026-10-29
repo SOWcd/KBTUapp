@@ -111,7 +111,7 @@ export const atDorm = (place: string | null | undefined): boolean => !!place && 
  *  map here, so its rooms never open the main one; the schedule shows "312 · B2" that opens it in 2GIS (the link he sent).
  *  The escape is "korpus", in Russian and Kazakh alike. */
 export const BLDG2_2GIS = 'https://2gis.kz/almaty/geo/70000001117579717/76.909355,43.253443';
-const BLDG2 = /(?:\u043a\u043e\u0440\u043f\u0443\u0441|building)\s*(?:\u2116|no\.?)?\s*2(?!\d)|(?<!\d)2\s*-?\s*\u043a\u043e\u0440\u043f\u0443\u0441/i;
+const BLDG2 = /(?:\u043a\u043e\u0440\u043f\u0443\u0441|building)\s*(?:\u2116|no\.?)?\s*2(?!\d)|(?:^|\D)2\s*-?\s*\u043a\u043e\u0440\u043f\u0443\u0441/i;
 export const atBldg2 = (place: string | null | undefined): boolean => !!place && BLDG2.test(place);
 /** Its room as the schedule shows it: the number before the building or right after it ("312 (Korpus No. 2)",
  *  "Korpus No. 2, 312", "2 korpus, 312" → "312"), never the building's own 2 or a street's number */
