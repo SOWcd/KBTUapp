@@ -10,7 +10,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
-  type Target = 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask';
+  type Target = 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply';
   let { overlay, target, id, about = '', onsent }: { overlay: Overlay; target: Target; id: Id; about?: string; onsent?: () => void } = $props();
 
   const REASONS: ReportReason[] = ['spam', 'insult', 'danger', 'other'];

@@ -143,7 +143,7 @@ export interface Api {
   addComment(kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread>; // 500 chars, 10 a minute
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
-  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
+  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
   reports(): Promise<ReportItem[]>;                                                  // admin
   // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
   forumMe(): Promise<ForumMe>;
@@ -164,6 +164,17 @@ export interface Api {
   hideAsk(id: Id): Promise<void>;
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
+  threads(topic?: import('./types').Topic | null, before?: Ts): Promise<import('./types').Thread[]>;   // the student forum's feed
+  thread(id: Id): Promise<import('./types').ThreadFull>;
+  newThread(input: { topic: import('./types').Topic; body: string; anon: boolean }): Promise<import('./types').ThreadFull>;
+  deleteThread(id: Id): Promise<void>;
+  replyThread(id: Id, body: string, anon: boolean): Promise<import('./types').ThreadFull>;
+  deleteReply(id: Id): Promise<void>;
+  joinThread(id: Id, on: boolean): Promise<import('./types').Thread>;                    // "I'm in" on go / vol
+  threadJoiners(id: Id): Promise<import('./types').Joiner[]>;                            // the author: who's in, how to write
+  threadMod(): Promise<import('./types').ThreadMod>;                                     // moderators: what the AI held
+  threadModDecide(kind: 'thread' | 'reply', id: Id, ok: boolean): Promise<void>;
+  revealAnon(kind: 'thread' | 'reply', id: Id): Promise<PersonRef>;                      // the admin alone; audited
   qrCheckin(p: string): Promise<{ title: string; done: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session

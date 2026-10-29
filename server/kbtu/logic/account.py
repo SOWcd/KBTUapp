@@ -467,6 +467,7 @@ _DEL_GONE = {
     ("friend_invites", "from_id"), ("friend_invites", "to_id"), ("grant_links", "created_by"), ("door_guests", "user_id"),
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
+    ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"),  # the forum: mine go (a thread with its replies)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 

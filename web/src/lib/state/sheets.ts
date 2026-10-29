@@ -38,6 +38,8 @@ export const sheets = {
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
   attendees: (_id: Id) => {},
+  thread: (_id: Id) => {},               // the student forum: a thread and its replies
+  newThread: (_onmade?: () => void) => {},
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id) => {},
@@ -119,7 +121,7 @@ export const sheets = {
   /** comments under a post or an event; `onchange` hears the new count */
   comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
   /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */
-  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', _id: Id, _about?: string, _onsent?: () => void) => {},
+  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply', _id: Id, _about?: string, _onsent?: () => void) => {},
   /** "Bring a friend" to an event */
   invite: (_id: Id, _title: string) => {},
   /** "Bring a friend" from their card: my upcoming events */

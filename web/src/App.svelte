@@ -7,6 +7,7 @@
   import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
+  import { loadBoard } from './lib/state/board.svelte';
   import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
@@ -25,6 +26,7 @@
   import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
   import IconFeed from './ui/IconFeed.svelte';
   import Newspaper from '@lucide/svelte/icons/newspaper';
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
   // top and bottom bars never repeat an icon: the bottom is ticket / landmark / circle-user-round
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
@@ -83,6 +85,7 @@
   // Studio is for club teams only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
+  const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   const askConsent = () => {
     const s = session.me?.student;
@@ -90,8 +93,12 @@
   };
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
+  // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
+  const warmBoard = () => { void boardPage(); if (session.me?.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
+  sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
+  sheets.newThread = (onmade) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
@@ -170,13 +177,14 @@
   }
   const PAGES = $derived<Record<Tab, CapPage[]>>({
     afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }, { label: t('page.news'), icon: Newspaper }],
+    forum: [{ label: t('page.forum'), icon: MessagesSquare }],
     club: clubPages.map((k) => CLUB_CAP[k]()),
     profile: [{ label: t('page.friends'), icon: UsersRound, dot: (session.me?.counters.friendRequests ?? 0) > 0 }, { label: t('page.me'), icon: IdCardLanyard }, { label: t('me.settings'), icon: Settings2 }],
   });
   // a non-member's tab 2 has one page (the catalogue): clamp where it's used, so the saved page (Studio by default) comes
   // back by itself after sign-in
   const pageIdx = (tab: Tab) => Math.min(ui.page[tab], PAGES[tab].length - 1);
-  $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.club; void ui.page.profile; void ui.club; persistNav(); });
+  $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.forum; void ui.page.club; void ui.page.profile; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
@@ -283,6 +291,8 @@
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
+    const th = p.match(/^th_(\d+)$/); // the bot's "someone answered your thread"
+    if (th) { ui.tab = 'forum'; sheets.thread(Number(th[1])); return; }
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
@@ -440,7 +450,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(warmBoard, 1800); setTimeout(askConsent, 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up
@@ -473,6 +483,8 @@
         {#snippet page(i)}
           {#if tab === 'afisha'}
             {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<News />{/if}
+          {:else if tab === 'forum'}
+            {#await boardPage() then m}<m.default />{/await}
           {:else if tab === 'club'}
             {#if !member || i === 0}<Clubs />
             {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
@@ -488,7 +500,7 @@
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
-  <Nav labels={[t('tab.afisha'), tab2Label, t('tab.profile')]} dot={[(session.me?.counters.unreadBroadcasts ?? 0) > 0, false, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
+  <Nav labels={[t('tab.afisha'), t('tab.forum'), tab2Label, t('tab.profile')]} dot={[(session.me?.counters.unreadBroadcasts ?? 0) > 0, false, false, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
 
   {#each overlays as o (o.id)}
     <o.component {...o.props} overlay={o} />

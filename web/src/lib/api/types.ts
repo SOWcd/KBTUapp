@@ -49,10 +49,20 @@ export type ReportReason = 'spam' | 'insult' | 'danger' | 'other';
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
+/** The student forum (server logic/threads.py): a thread's topic decides how long it stays and whether "I'm in" counts
+ *  people (go, vol). An anonymous one has no author for anyone (the admin's reveal is separate and audited). */
+export type Topic = 'thing' | 'go' | 'help' | 'vol' | 'talk';
+export interface Thread { id: Id; topic: Topic; body: string; anon: boolean; mine: boolean; author: PersonRef | null; createdAt: Ts; bumpedAt: Ts; expiresAt: Ts;
+  replies: number; joins?: number; joined?: boolean; joiners?: PersonRef[]; status?: 'live' | 'held' | 'hidden'; why?: string | null }
+/** A reply: a named writer's person (op: the thread's author), an anonymous one's number in this thread, or op for the anonymous author. */
+export interface ThreadReply { id: Id; body: string; anon: boolean; mine: boolean; at: Ts; person?: PersonRef | null; op?: boolean; n?: number; status?: 'live' | 'held' | 'hidden'; why?: string | null }
+export interface ThreadFull extends Thread { thread: ThreadReply[] }
+export interface ThreadMod { threads: Thread[]; replies: { id: Id; body: string; anon: boolean; why: string | null; at: Ts; thread: Id; threadBody: string }[] }
+export type Joiner = PersonRef & { telegram: string | null };
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
-export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user'; id: Id; text: string; at: Ts }
+export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply'; id: Id; text: string; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number;
   days: { day: number; active: number; new: number; students: number }[];
@@ -68,7 +78,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
   failed: { kind: 'event' | 'org'; id: Id; title: string }[] }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'thread'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */

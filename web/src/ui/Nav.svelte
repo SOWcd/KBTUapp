@@ -1,11 +1,12 @@
 <script lang="ts">
-  // Bottom nav (liquid glass, floats). Three equal tabs that stay put (the owner's pick of four layouts,
+  // Bottom nav (liquid glass, floats). Equal tabs that stay put (four since the forum, Oct 30) (the owner's pick of four layouts,
   // Oct 4: a widening active tab made the others jump on every switch); the active one shows its label
   // inside one pill that slides under it with a jelly squash. Press and drag along the bar previews tabs;
   // the tab switches on release. Shrinks to icons while scrolling down; hides under a sheet. Over the
   // Feed it turns into dark glass tinted by the slide, in step with the finger (chrome.ts).
   import Ticket from '@lucide/svelte/icons/ticket';
   import Landmark from '@lucide/svelte/icons/landmark';
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import UserRound from '@lucide/svelte/icons/circle-user-round';
   import MapIcon from '@lucide/svelte/icons/map';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
@@ -15,7 +16,9 @@
   import { glass, refract, jelly } from './glass';
   import { chrome } from './chrome';
 
-  let { labels, dot = [false, false, false] }: { labels: [string, string, string]; dot?: boolean[] } = $props();
+  let { labels, dot = [] }: { labels: string[]; dot?: boolean[] } = $props();
+  const N = TABS.length;
+  const ICON = { afisha: Ticket, forum: MessagesSquare, club: Landmark, profile: UserRound };
 
   let preview = $state<number | null>(null);
   const shown = $derived(preview ?? TABS.indexOf(ui.tab));
@@ -24,7 +27,7 @@
   let pill: HTMLSpanElement;
   $effect(() => { void shown; jelly(pill); });
   let drag: null | { x: number; on: boolean; id: number } = null;
-  const idxAt = (x: number) => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(2, Math.floor(((x - r.left) / r.width) * 3))); };
+  const idxAt = (x: number) => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(N - 1, Math.floor(((x - r.left) / r.width) * N))); };
   function down(e: PointerEvent) { drag = { x: e.clientX, on: false, id: e.pointerId }; }
   function moveP(e: PointerEvent) {
     if (!drag) return;
@@ -54,11 +57,12 @@
 <nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract use:chrome
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up}>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
-  <span class="pill" bind:this={pill} style="left:calc(4px + (100% - 8px) * {shown} / 3)" aria-hidden="true"></span>
+  <span class="pill" bind:this={pill} style="left:calc(4px + (100% - 8px) * {shown} / {N}); width:calc((100% - 8px) / {N})" aria-hidden="true"></span>
   {#each TABS as tab, i (tab)}
+    {@const Icon = ICON[tab]}
     <button class="tab" class:on={shown === i} aria-current={ui.tab === tab ? 'page' : undefined} onclick={() => pick(i)}>
       <span class="ic">
-        {#if i === 0}<Ticket size={22} strokeWidth={1.9} />{:else if i === 1}<Landmark size={22} strokeWidth={1.9} />{:else}<UserRound size={22} strokeWidth={1.9} />{/if}
+        <Icon size={22} strokeWidth={1.9} />
         {#if dot[i]}<i class="dot"></i>{/if}
       </span>
       <span class="lbl">{labels[i]}</span>
@@ -113,7 +117,7 @@
   .nav:global([data-feed]), .mapb:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
   .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
   .pill {
-    position: absolute; top: 4px; bottom: 4px; width: calc((100% - 8px) / 3); border-radius: var(--r-full); background: var(--text);
+    position: absolute; top: 4px; bottom: 4px; border-radius: var(--r-full); background: var(--text);
     transition: left 380ms var(--ease-spring), background-color 200ms ease;
   }
   .tab {
@@ -126,7 +130,7 @@
   .ic { position: relative; display: inline-flex; flex: none; }
   .dot { position: absolute; top: -1px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--glass-bg); }
   .lbl {
-    max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+    max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
     font: 650 14px/1 var(--font-text); letter-spacing: -0.01em;
     transition: max-width 380ms var(--ease-spring), opacity var(--t-base) var(--ease);
   }
@@ -134,5 +138,7 @@
   .mini .tab.on .lbl { max-width: 0; opacity: 0; }
   .mini .tab.on { gap: 0; }
   /* a narrow bar (the map button beside it takes 68 px): a third of ~95 px, the longest label gets a size smaller */
-  @container (max-width: 310px) { .tab { padding: 0 2px; } .tab.on { gap: 5px; } .lbl { font-size: 13px; letter-spacing: -0.02em; } }
+  /* four tabs: a quarter of ~90 px; the longest label (Profile) gets a size smaller; a 320 px phone's bar shows the icons alone */
+  @container (max-width: 380px) { .tab { padding: 0 2px; } .tab.on { gap: 5px; } .lbl { font-size: 13px; letter-spacing: -0.02em; } }
+  @container (max-width: 280px) { .tab.on .lbl { max-width: 0; opacity: 0; } .tab.on { gap: 0; } }
 </style>

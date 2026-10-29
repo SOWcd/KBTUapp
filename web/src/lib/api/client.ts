@@ -52,8 +52,8 @@ export const original = <T extends object>(x: T): T => ({ ...x, ...((x as { orig
 export const translated = (x: { orig?: Record<string, string>; title?: string; description?: string | null }, k: 'title' | 'description'): boolean =>
   !!x.orig && typeof x.orig[k] === 'string' && x[k] !== x.orig[k];
 
-const query = (q: Record<string, number | undefined>) => {
-  const s = Object.entries(q).filter(([, v]) => v != null).map(([k, v]) => `${k}=${v}`).join('&');
+const query = (q: Record<string, number | string | undefined>) => {
+  const s = Object.entries(q).filter(([, v]) => v != null).map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&');
   return s ? '?' + s : '';
 };
 
@@ -234,6 +234,17 @@ export const server: Api = {
   hideAsk: (id) => call('POST', `/forum/asks/${id}/hide`),
   skillMod: (id, change) => call('PATCH', `/forum/skills/${id}`, change),
   refer: (code) => call('POST', '/referral', { code }),
+  threads: (topic, before) => call('GET', '/threads' + query({ topic: topic ?? undefined, before })),
+  thread: (id) => call('GET', `/threads/${id}`),
+  newThread: (input) => call('POST', '/threads', input),
+  deleteThread: (id) => call('DELETE', `/threads/${id}`),
+  replyThread: (id, body, anon) => call('POST', `/threads/${id}/replies`, { body, anon }),
+  deleteReply: (id) => call('DELETE', `/threads/replies/${id}`),
+  joinThread: (id, on) => call('PUT', `/threads/${id}/join`, { on }),
+  threadJoiners: (id) => call('GET', `/threads/${id}/joiners`),
+  threadMod: () => call('GET', '/threads/mod'),
+  threadModDecide: (kind, id, ok) => call('POST', `/threads/mod/${kind}/${id}`, { ok }),
+  revealAnon: (kind, id) => call('POST', `/threads/reveal/${kind}/${id}`),
   qrCheckin: (p) => call('POST', '/checkin', { p }),
   screens: () => call('GET', '/screens'),
   bindScreen: (code, session) => call('POST', '/screens/bind', { code, session }),

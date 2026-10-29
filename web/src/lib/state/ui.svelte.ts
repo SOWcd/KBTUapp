@@ -3,12 +3,13 @@
 import type { Component } from 'svelte';
 import { haptic } from '../tg';
 
-export type Tab = 'afisha' | 'club' | 'profile';
-export const TABS: Tab[] = ['afisha', 'club', 'profile'];
+export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
+// the forum second (Oct 30): the students' everyday place, next to the events
+export const TABS: Tab[] = ['afisha', 'forum', 'club', 'profile'];
 const NAV_KEY = 'kb-nav';
 
 function restore(): { tab: Tab; page: Record<Tab, number>; club: number | null } {
-  const dflt = { tab: 'afisha' as Tab, page: { afisha: 1, club: 1, profile: 1 }, club: null };
+  const dflt = { tab: 'afisha' as Tab, page: { afisha: 1, forum: 0, club: 1, profile: 1 }, club: null };
   try {
     const v = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
     if (v && TABS.includes(v.tab) && v.page) return { tab: v.tab, page: { ...dflt.page, ...v.page }, club: typeof v.club === 'number' ? v.club : null };
