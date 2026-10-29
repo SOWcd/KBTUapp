@@ -34,6 +34,7 @@
   import LookPick from '../../ui/LookPick.svelte';
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
+  import { addressGis } from '../../lib/map';
 
   let { overlay, org, id }: { overlay: Overlay; org: Id; id?: Id } = $props();
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
@@ -431,6 +432,11 @@
         <input type="checkbox" role="switch" bind:checked={f.tba} />
       </label>
     {/if}
+    {#if !f.placeUrl && !f.tba && addressGis(f.place)}
+      <!-- a typed street address: its 2GIS route offered, seen before saving -->
+      <button class="gisoffer" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
+        <MapPin size={16} />{t('ed.gisOffer')}</button>
+    {/if}
     {#if f.placeUrl && !f.tba}
       <!-- off campus: the route instead of a room -->
       <div class="gis"><MapPin size={17} /><span class="ellipsis">{t('event.route')}</span>
@@ -596,6 +602,8 @@
   .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px 12px; font: 550 15px/1.3 var(--font-text); }
   .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
   .who { display: flex; flex-direction: column; gap: 8px; }
+  .gisoffer { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; margin: -2px 0 2px; padding: 0 12px;
+    border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); animation: qin 260ms cubic-bezier(.2, .9, .25, 1); }
   .qs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
   .qc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 2px; border-radius: 16px; animation: qin 260ms cubic-bezier(.2, .9, .25, 1); }
   @keyframes qin { from { opacity: 0; transform: translateY(6px) scale(0.98); } }

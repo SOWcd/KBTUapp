@@ -103,6 +103,14 @@ export function floorOf(place: string | null | undefined): number | null {
 /** The dormitory: the portal names classes held there "DMiS ..." (PE: "DMiS OFP (Rugby)..."); the schedule shows a
  *  small "Dorm" that opens it in 2GIS instead (*  since Oct 7 the official card of KBTU's Dorm No. 3, the link he sent). The escapes are the Russian letters of DMiS. */
 export const DORM_2GIS = 'https://2gis.kz/almaty/geo/9429940001182035';
+/** A typed street address ("Gogolya 157", "Abaya 150, 2nd floor") → 2GIS's search for it in Almaty, the route one tap
+ *  away (owner, Oct 29: the Halloween party's address stayed plain text). Not a room, a campus spot, the dorm or the
+ *  second building: a word of three letters or more and a house number. */
+export function addressGis(place: string): string | null {
+  const p = place.trim();
+  if (!p || roomOf(p) || spotOf(p) || atDorm(p) || atBldg2(p) || !/\p{L}{3,}/u.test(p) || !/(^|\s)\d{1,4}[a-z\u0430-\u044f/]?(\b|$)/iu.test(p)) return null;
+  return `https://2gis.kz/almaty/search/${encodeURIComponent(p)}`;
+}
 export const atDorm = (place: string | null | undefined): boolean => !!place && /\u0434\u043c\u0438\u0441/i.test(place);
 
 /** KBTU's second building, away from the main one: the portal writes "312 (Korpus No. 2 ...)". It has no

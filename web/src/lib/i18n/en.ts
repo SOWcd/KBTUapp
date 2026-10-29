@@ -1006,6 +1006,7 @@ const en: Dict = {
   'ed.partnerBad': "Check the partner: no price, open to everyone",
   'ed.partnerTaken': "People have signed up already: it can't become a partner's",
   'ed.paidOfficial': "Only official clubs can run paid events",
+  'ed.gisOffer': "An address? Make it a 2GIS route",
   'ed.form': "Questions at sign-up",
   'ed.formQ': "A question: e.g. T-shirt size",
   'ed.formText': "Text",

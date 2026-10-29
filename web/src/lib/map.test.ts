@@ -1,7 +1,7 @@
 // floorOf: a main-building room at the start of a place gives its floor; street addresses and other numbers never do.
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
-import { atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
+import { addressGis, atBldg2, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -64,4 +64,10 @@ it('the second building', () => {
   expect(atBldg2('\u041a\u043e\u0440\u043f\u0443\u0441 \u211612')).toBe(false); // building 12 is another
   expect(atBldg2('312')).toBe(false);
   expect(roomOf('312')).toBe('312');
+});
+
+it('a typed street address becomes a 2GIS search; rooms and campus places never do', () => {
+  expect(addressGis('Gogolya 157')).toBe('https://2gis.kz/almaty/search/Gogolya%20157');
+  expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
+  for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
 });
