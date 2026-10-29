@@ -16,7 +16,7 @@
   import { power } from '../../lib/state/power.svelte';
   import { haptic, openLink, tg, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import { fmtPhone } from '../../lib/phone';
+  import { fmtPhone, kzPhone } from '../../lib/phone';
 
   const me = $derived(session.me);
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
@@ -53,7 +53,7 @@
   }
   async function editPhone() {
     haptic.tap();
-    const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 707 123 45 67', max: 16, tel: true });
+    const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true });
     if (p) await savePhone(p, t('pd.saved'));
   }
   // the city from the club's roster (PLAN 95): off the profile, or gone
@@ -116,7 +116,7 @@
     <h2 class="sec">{t('pd.title')}</h2>
     <div class="rows surface">
       {#if me.student?.phone}
-        <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{me.student.phone.startsWith('+7') ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
+        <div class="r"><button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
           <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
       {/if}
       {#if me.city}

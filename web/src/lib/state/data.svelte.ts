@@ -168,7 +168,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
     // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
-      ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 707 123 45 67', max: 16, tel: true })
+      ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
       : undefined;
     if (phone === null) return;
     try {

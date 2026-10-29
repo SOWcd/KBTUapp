@@ -20,6 +20,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
+  import { fmtPhone, kzPhone } from '../../lib/phone';
 
   let { overlay, org, onofficial }: { overlay: Overlay; org: OrgRef; onofficial?: (on: boolean) => void } = $props();
   let list = $state<RosterMember[] | null>(null);
@@ -73,7 +74,7 @@
               <span class="contacts">
                 {#if m.username}<button onclick={() => openLink('https://t.me/' + m.username)}><TelegramMark size={14} />@{m.username}</button>{/if}
                 {#if m.email}<button onclick={() => openLink('mailto:' + m.email)}><Mail size={14} />{m.email}</button>{/if}
-                {#if m.phone}<button onclick={() => openLink('tel:' + m.phone)}><Phone size={14} />{m.phone}</button>{/if}
+                {#if m.phone}<button onclick={() => openLink('tel:' + m.phone)}><Phone size={14} />{kzPhone(m.phone) ? fmtPhone(m.phone) : m.phone}</button>{/if}
               </span>
             {/if}
           </span>

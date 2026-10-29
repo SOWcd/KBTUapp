@@ -455,7 +455,7 @@
         <label class="field" class:bad={tried && err.payTo}><span class="t-cap">{t('ed.payTo')}</span>
           <input bind:value={f.payTo} maxlength="80" placeholder={t('ed.payToPh')} /></label>
         <label class="field" class:bad={tried && err.payPhone}><span class="t-cap">{t('ed.payPhone')}</span>
-          <input bind:value={f.payPhone} oninput={() => (f.payPhone = fmtPhone(f.payPhone))} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 707 123 45 67" /></label>
+          <input bind:value={f.payPhone} oninput={() => (f.payPhone = fmtPhone(f.payPhone))} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" /></label>
         {#if tried && err.payPhone}<p class="err">{err.payPhone}</p>{/if}
         <p class="hint">{t('ed.payHint')}</p>
         <label class="field" class:bad={tried && err.freeFirst}><span class="t-cap">{t('ed.freeFirst')}</span>

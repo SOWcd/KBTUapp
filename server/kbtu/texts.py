@@ -759,9 +759,9 @@ def memo_subject(org: str, monday: int) -> str:
 
 
 def phone_line(phone: str | None) -> str | None:
-    """'+7 701 234 56 78' from the portal's or the editor's number (as the app's lib/phone.ts)."""
+    """'+7 (701) 234 56 78' from the portal's or the editor's number (as the app's lib/phone.ts)."""
     d = "".join(c for c in str(phone or "") if c.isdigit())[-10:]
-    return f"+7 {d[:3]} {d[3:6]} {d[6:8]} {d[8:]}" if len(d) == 10 else None
+    return f"+7 ({d[:3]}) {d[3:6]} {d[6:8]} {d[8:]}" if len(d) == 10 else None
 
 
 def place_or_tba(place: str, lang: str) -> str:
