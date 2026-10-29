@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import Qr from '../ui/Qr.svelte';
+  import KbtuMark from '../ui/KbtuMark.svelte';
   import { QR_TONE } from '../lib/awards';
   import { t } from '../lib/i18n/index.svelte';
 
@@ -67,7 +68,7 @@
     <header><h1>{st.title}</h1></header>
     {#if st.param}
       <section class="live">
-        {#key link}<div class="code" in:fade={{ duration: 400 }}><Qr text={link} tone={QR_TONE} /></div>{/key}
+        {#key link}<div class="code" in:fade={{ duration: 400 }}><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>{/key}
         <aside>
           <p class="hint">{t('scr.scan')}</p>
           <p class="count"><b>{st.done}</b>{#if st.expected}<span> / {st.expected}</span>{/if}</p>
