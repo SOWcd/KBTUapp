@@ -41,7 +41,7 @@
   .nm { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
   .nm b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
   /* a narrow phone with a button at the end: the name takes two lines rather than "Open ..." (320 px, Oct 30) */
-  @media (max-width: 360px) { .nm b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } }
+  @media (max-width: 360px) { .nm b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } }
   .ok { display: inline-flex; flex: none; color: var(--accent-text); }
   small { display: block; max-width: 100%; font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-3); }
   small.hot { font-weight: 650; color: var(--accent-text); }
