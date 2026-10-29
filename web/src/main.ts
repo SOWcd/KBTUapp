@@ -34,7 +34,9 @@ hapticTaps();
 // the app's language before the first render (Russian is in the bundle: at once); without the network, Russian words
 void loadLang(i18n.lang).catch(() => {}).then(() => {
   // /screen: the organizer's check-in screen on a laptop (server checkin.py), the app otherwise
-  mount(location.pathname === '/screen' ? Screen : App, { target: document.getElementById('app')! });
+  // (the screen into the body: #app is a phone-wide column on a computer)
+  if (location.pathname === '/screen') mount(Screen, { target: document.body });
+  else mount(App, { target: document.getElementById('app')! });
   window.__kbStarted = true;
   // the other languages when idle, so a switch in Settings is as instant as before
   setTimeout(() => { for (const l of LANGS) void loadLang(l).catch(() => {}); }, 3000);

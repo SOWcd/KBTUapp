@@ -53,7 +53,7 @@
   const csv = $derived(auth ? `/api/screen/${auth.session}/csv?k=${auth.key}` : '');
 </script>
 
-<main class="screen">
+<div class="screen">
   <div class="glow" aria-hidden="true"></div>
   {#if !auth || !st}
     <form class="pin" onsubmit={open} in:fade>
@@ -91,7 +91,7 @@
       </section>
     {/if}
   {/if}
-</main>
+</div>
 
 <style>
   .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
