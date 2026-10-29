@@ -175,6 +175,9 @@ export interface Api {
   threadMod(): Promise<import('./types').ThreadMod>;                                     // moderators: what the AI held
   threadModDecide(kind: 'thread' | 'reply', id: Id, ok: boolean): Promise<void>;
   revealAnon(kind: 'thread' | 'reply', id: Id): Promise<PersonRef>;                      // the admin alone; audited
+  mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
+  mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
+  mapFlawDone(id: Id, done: boolean): Promise<void>;
   qrCheckin(p: string): Promise<{ title: string; done: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session

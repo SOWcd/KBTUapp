@@ -807,6 +807,19 @@ MIGRATIONS: list[tuple[int, str]] = [
     # an event's own questions at sign-up (Oct 30, an organizer's ask): JSON [{label, kind text|choice, options, required}];
     # the answers on the registration, JSON [{q, a}] (the question's words as they were), wiped 30 days after the event
     (86, "ALTER TABLE events ADD COLUMN questions TEXT; ALTER TABLE registrations ADD COLUMN answers TEXT;"),
+    # "something's wrong here" on the map (owner, Oct 29: marking the map's flaws in the app, not by screenshots): the
+    # map version and floor, the spot (the sheet's fraction and the 2023 plan's units), a line of text
+    (87, """CREATE TABLE map_flaws (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ver        TEXT NOT NULL CHECK (ver IN ('main', 'old', 'kbtu')),
+      floor      INTEGER NOT NULL CHECK (floor BETWEEN 0 AND 5),
+      u          REAL NOT NULL, v REAL NOT NULL, px REAL, py REAL,
+      body       TEXT NOT NULL CHECK (length(body) BETWEEN 2 AND 300),
+      created_at INTEGER NOT NULL,
+      done_at    INTEGER
+    ) STRICT;
+    CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);"""),
 ]
 
 

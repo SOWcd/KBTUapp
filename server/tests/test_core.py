@@ -5716,6 +5716,28 @@ def test_event_questions(env):
     assert con.execute("SELECT answers FROM registrations WHERE event_id = ?", (eid,)).fetchone()[0] is None
     con.close()
 
+def test_map_flaws(env):
+    """A long press on the map reports a flaw (students, ten a day); the admin lists and fixes them; account deletion
+    keeps the flaw without its author."""
+    c, cfg = env
+    ann, boss = login(c, 1, "ann"), login(c, 4, "boss")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    flaw = {"ver": "kbtu", "floor": 1, "u": 0.42, "v": 0.31, "px": 540.0, "py": 440.0, "body": "the WC door doesn't exist"}
+    assert c.post("/api/map/flaws", headers=tma(9), json=flaw).status_code == 401                 # a guest
+    for bad in ({**flaw, "floor": 7}, {**flaw, "u": 2}, {**flaw, "ver": "x"}, {**flaw, "body": "x"}):
+        assert c.post("/api/map/flaws", headers=tma(1), json=bad).status_code == 400
+    assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 204
+    assert c.get("/api/map/flaws", headers=tma(1)).status_code == 403
+    got = c.get("/api/map/flaws", headers=tma(4)).json()
+    assert [(x["floor"], x["body"], x["done"]) for x in got] == [(1, "the WC door doesn't exist", None)]
+    c.post(f"/api/map/flaws/{got[0]['id']}/done", headers=tma(4))
+    assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["done"]
+    for _ in range(9):
+        c.post("/api/map/flaws", headers=tma(1), json=flaw)
+    assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 429
+    con.close()
+
 def test_partner_events(env):
     """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
     council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays

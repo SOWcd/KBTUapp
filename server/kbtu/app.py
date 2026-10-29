@@ -1044,6 +1044,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if a and await screen(f"{a['title']}\n{a['body']}") is False:
                 logic.hide_ask(con, body["id"], "reports")
 
+    # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them
+    @app.post("/api/map/flaws", status_code=204)
+    def map_flaw(con: Con, v: Me, body: dict = Body(...)):
+        logic.mapflaws.report(con, v, body)
+
+    @app.get("/api/map/flaws")
+    def map_flaws(con: Con, v: Me):
+        return logic.mapflaws.listing(con, v)
+
+    @app.post("/api/map/flaws/{fid}/done", status_code=204)
+    def map_flaw_done(fid: int, con: Con, v: Me, body: dict = Body(default={})):
+        logic.mapflaws.done(con, v, fid, body.get("done", True))
+
     @app.get("/api/admin/taken-down")
     def taken_down(con: Con, v: Me):
         return logic.taken_down(con, v)

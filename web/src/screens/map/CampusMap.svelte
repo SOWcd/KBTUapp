@@ -37,6 +37,8 @@
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import { api } from '../../lib/api';
+  import { session } from '../../lib/state/session.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import { mapFrom, copyCap, type CapCopy } from '../../lib/state/sheets';
 
   let { overlay, place, exit = false }: { overlay: Overlay; place?: string; exit?: boolean } = $props();
@@ -236,9 +238,23 @@
     return b ? { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 } : { d: 0, cx: a.x, cy: a.y };
   }
   let press: { x: number; y: number; t: number } | null = null; // the editor's tap: a finger down and up in place
+  // a long press in place: "something's wrong here" (owner, Oct 29: the map's flaws marked in the app, not by screenshots),
+  // a line of text, the spot to the admin's list with its floor and the plan's units
+  let holdT: ReturnType<typeof setTimeout> | undefined;
+  function flaw(at: { x: number; y: number }) {
+    const W = stage.clientWidth * s, u = (at.x - x) / W, v = (at.y - y) / (W * AR);
+    if (u < 0 || u > 1 || v < 0 || v > 1 || !session.me?.student) return;
+    haptic.soft(); press = null; lastTap = 0;
+    const [px, py] = toPlan(ver, u, v);
+    void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: cur }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
+      .then((body) => body ? api.mapFlaw({ ver, floor: cur, u, v, px, py, body }).then(() => { haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d'); }) : undefined)
+      .catch(() => say(t('common.error'), 'pleading_face_3d'));
+  }
   function down(e: PointerEvent) {
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
+    clearTimeout(holdT);
+    if (press && !rt.edit && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
     stage.setPointerCapture(e.pointerId);
     if (pts.size) swipeEnd(true); // a second finger: a pinch, never a floor
     else if (!rt.route && !rt.edit && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
@@ -248,8 +264,9 @@
   }
   function move(e: PointerEvent) {
     if (!pts.has(e.pointerId) || !from) return;
-    if (pts.size === 1 && swipeMove(e.clientX, e.clientY)) { press = null; lastTap = 0; return; }
+    if (pts.size === 1 && swipeMove(e.clientX, e.clientY)) { press = null; lastTap = 0; clearTimeout(holdT); return; }
     pts.set(e.pointerId, local(e));
+    if (press && Math.hypot(local(e).x - press.x, local(e).y - press.y) > 8) clearTimeout(holdT); // it moved: not a hold
     const m = mid();
     if (pts.size > 1 && from.d) { x += m.cx - from.cx; y += m.cy - from.cy; zoomAt(m.d / from.d, m.cx, m.cy); rx = x; ry = y; }
     else {
@@ -261,6 +278,7 @@
     from = m;
   }
   function up(e: PointerEvent) {
+    clearTimeout(holdT);
     if (sw?.on) { pts.delete(e.pointerId); from = pts.size ? mid() : null; press = null; swipeEnd(); return; }
     sw = null;
     const p = pts.has(e.pointerId) ? local(e) : null;

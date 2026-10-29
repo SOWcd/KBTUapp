@@ -98,6 +98,7 @@
   const warmBoard = () => { if (!session.me?.board) return; void boardPage(); if (session.me.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
+  sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
   sheets.newThread = (onmade) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });

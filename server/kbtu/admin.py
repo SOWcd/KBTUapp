@@ -24,6 +24,7 @@
   .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
+  .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone
@@ -74,6 +75,10 @@ def main(args: list[str]) -> None:
         n = con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (sid,)).fetchone()[0]
         who = f"{args[4]}'s organizers and the admin" if org else "the admin only"
         print(f"session {sid}, {n} expected; run by {who} (pair /show from the app)")
+    elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
+        for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
+            at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"
+            print(f"#{r['id']}  {r['ver']} floor {r['floor']}  {at}  {r['body']}")
     elif cmd == "users":
         for u in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, u.role, s.user_id IS NOT NULL AS student
                 FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0 ORDER BY u.created_at"""):

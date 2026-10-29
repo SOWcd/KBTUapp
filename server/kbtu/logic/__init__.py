@@ -74,5 +74,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     _skills_of, add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
-from . import threads  # noqa: F401  (the student forum: logic.threads.*, its names overlap the find-people forum's)
+from . import mapflaws, threads  # noqa: F401  (the student forum: logic.threads.*, its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

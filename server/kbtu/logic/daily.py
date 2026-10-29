@@ -214,6 +214,7 @@ def stats_day(con) -> None:
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     forum_sweep(con)
     threads.threads_sweep(con)
+    mapflaws.sweep(con)
     # the answers to an event's questions at sign-up go 30 days after it (the privacy policy's promise for them)
     con.execute("""UPDATE registrations SET answers = NULL WHERE answers IS NOT NULL AND event_id IN
         (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) < ?)""", (core.now() - 30 * 86400,))
@@ -286,7 +287,7 @@ def ai_retry(con, v: Viewer) -> None:
 from . import core  # noqa: E402
 from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
-from . import threads  # noqa: E402
+from . import mapflaws, threads  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

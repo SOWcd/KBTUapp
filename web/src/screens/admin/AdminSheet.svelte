@@ -13,6 +13,7 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import MapPinned from '@lucide/svelte/icons/map-pinned';
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
@@ -225,6 +226,7 @@
     <!-- the app's team: moderators, admins (the owner gives those), bans -->
     <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
+    <button class="r" onclick={() => sheets.mapFlaws()}><span class="ic"><MapPinned size={20} /></span><span class="lb">{t('mf.title')}<i>{t('mf.adminSub')}</i></span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
     {#if forum}<button class="r" onclick={() => sheets.forum()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('fo.title')}<i>{t('fo.adminSub')}</i></span><ChevronRight size={18} /></button>{/if}
