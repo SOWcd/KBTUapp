@@ -148,7 +148,6 @@
   /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch: 340 px wide -> 74 */
   .mini { position: absolute; left: 0; top: 0; width: 340px; height: 221px; transform: scale(0.2176); transform-origin: 0 0; pointer-events: none; }
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  .ly.studex .cd { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 31%, #1D3B7A 31%, #0F2350); }
   .ly.studex .hl { background: #fff; }
   .ly.cheer .st { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
   .ly.cheer .hl { background: linear-gradient(100deg, #FFE7A3, #FFC6E0, #FFE7A3); }

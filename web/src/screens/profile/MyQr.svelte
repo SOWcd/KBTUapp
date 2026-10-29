@@ -161,7 +161,7 @@
   .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .studex .pass { background: linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
+  .studex .pass { background: linear-gradient(180deg, #13295C, #081633); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   .sower { --role: rgba(255, 255, 255, 0.92); }
   .sower .pass { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }

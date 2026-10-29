@@ -169,8 +169,6 @@
   .faces .strap span { color: #fff; }
   /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .studex .badge { background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z' fill='white' fill-opacity='0.07'/%3E%3C/svg%3E") right -18px bottom -26px / 170px no-repeat,
-    linear-gradient(104deg, #DE3B2E, #C12E22 29%, #fff 29%, #fff 30.6%, #1D3B7A 30.6%, #0F2350); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   /* SOWER, the creator's alone (Oct 14 after four drafts): black, rings spreading from behind the QR's corner; the strap white with black letters */

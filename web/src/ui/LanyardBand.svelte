@@ -38,6 +38,12 @@
     <i class="leak"></i><span class="date">{stamp}</span>
     {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
+  {:else if look === 'studex'}
+    <i class="streaks"></i>
+    <svg class="dec" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-linecap="round">
+      {#if wide}<path d="M-10 236L332 -6" stroke-width="2.2" stroke-opacity=".55" /><path d="M318 4L333 -7L328 11" stroke-width="2.2" stroke-opacity=".55" />
+      {:else}<path d="M96 136L318 14" stroke-width="3" /><path d="M300 12L320 13L311 30" stroke-width="3" />{/if}</g></svg>
+    {#if !wide}<b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>{/if}
   {:else if look === 'kbtu'}
     <img class="dec gl" src={guilloche} alt="" /><span class="mark"><KbtuMark size={wide ? 150 : 70} /></span>
     {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
@@ -52,6 +58,17 @@
   img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
   .dec { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
+  /* StudEx (redrawn Oct 29: the old diagonal was flat): their red and navy split on a rising diagonal, speed streaks
+     on both halves, the logo's arrow climbing it, the wordmark with a mortarboard on the band */
+  .studex { background: linear-gradient(118deg, #E0412F, #B8261C 44%, #0F2350 44.2%, #1D3B7A 70%, #0B1C44); }
+  .studex.wide { background: linear-gradient(126deg, #E0412F, #B8261C 31%, #0F2350 31.2%, #1D3B7A 64%, #0B1C44); }
+  .streaks { position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.07) 18px 19px, transparent 19px 46px),
+      radial-gradient(60% 80% at 82% 10%, rgba(90, 140, 255, 0.35), transparent 70%), radial-gradient(50% 70% at 10% 100%, rgba(255, 120, 90, 0.3), transparent 70%); }
+  .sxw { position: absolute; left: 22px; top: 40px; font: 900 40px/1 var(--font-display); letter-spacing: -0.02em; color: #fff;
+    text-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); }
+  .sxw i { font-style: normal; }
+  .cap { position: absolute; left: -10px; top: -15px; width: 30px; transform: rotate(-16deg); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
   /* KBTU, the app's own: the brand's blue and violet, a guilloche as on an ID card, the colonnade */
   .kbtu { background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), radial-gradient(60% 80% at 100% 100%, rgba(59, 107, 255, 0.5), transparent 70%),
     linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
