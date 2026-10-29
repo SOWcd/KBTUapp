@@ -36,11 +36,11 @@ def ms_link(con, uid: int, who: dict) -> None:
 
 
 def refer(con, v: Viewer, code: object) -> None:
-    """Opened by someone's invite link (r_<their badge code>, never a user ID): the first link wins, and only before I
+    """Opened by someone's invite link (r_<their link code>, never a user ID): the first link wins, and only before I
     signed in with KBTU; it counts for them once I have (ms_link)."""
     if not isinstance(code, str) or not re.fullmatch(r"[A-Z2-7]{10}", code):
         raise ApiError("bad_input")
-    by = one(con, "SELECT id FROM users WHERE qr_code = ? AND id != ?", code, v.id)
+    by = one(con, "SELECT id FROM users WHERE link_code = ? AND id != ?", code, v.id)
     if by and not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
         con.execute("UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL", (by["id"], v.id))
 
@@ -131,7 +131,7 @@ def me(con, v: Viewer) -> dict:
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"])}
                      if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
-        "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id)} if s else None,
+        "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -203,13 +203,15 @@ def _skin_ok(con, uid: int, oid: int):
     return one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND {SKINNED}", oid)
 
 
-def _qr_code(con, uid: int) -> str:
-    """The secret half of my badge QR (§4.4): made on first use, random like a ticket code."""
-    code = one(con, "SELECT qr_code FROM users WHERE id = ?", uid)["qr_code"]
+def _qr_code(con, uid: int, col: str = "qr_code") -> str:
+    """The secret half of my badge QR (§4.4), or with "link_code" my links' code (r_, ev_: posted in chats, so never the
+    badge's): made on first use, random like a ticket code."""
+    assert col in ("qr_code", "link_code")
+    code = one(con, f"SELECT {col} FROM users WHERE id = ?", uid)[col]
     if not code:
-        con.execute("UPDATE users SET qr_code = ? WHERE id = ? AND qr_code IS NULL",
+        con.execute(f"UPDATE users SET {col} = ? WHERE id = ? AND {col} IS NULL",
                     ("".join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") for _ in range(10)), uid))
-        code = one(con, "SELECT qr_code FROM users WHERE id = ?", uid)["qr_code"]
+        code = one(con, f"SELECT {col} FROM users WHERE id = ?", uid)[col]
     return code
 
 
@@ -535,7 +537,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             con.execute("DELETE FROM event_photos WHERE added_by = ?", (v.id,))
         avatars = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind = 'avatar' AND owner_id = ?", v.id)]
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
-        con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
+        con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again

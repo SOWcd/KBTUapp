@@ -829,6 +829,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the check-in's way out (owner, Oct 30: who left and when, for the initiation's volunteers): the session's phase,
     # 'in' or 'out', and the last time each person scanned out
     (89, "ALTER TABLE qr_sessions ADD COLUMN phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')); ALTER TABLE qr_marks ADD COLUMN left_at INTEGER;"),
+    # links (r_, ev_) get their own code: they're posted in chats, and the badge's secret was in them (review, Oct 30). The
+    # links already out keep working (they carry today's code, now the link code); every badge gets a new secret
+    (90, """ALTER TABLE users ADD COLUMN link_code TEXT;
+    UPDATE users SET link_code = qr_code, qr_code = NULL WHERE qr_code IS NOT NULL;
+    CREATE UNIQUE INDEX users_link ON users(link_code);"""),
 ]
 
 

@@ -495,14 +495,17 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
     _staff_event(con, v, eid, "events")
     order = {"going": 0, "hold": 1, "waitlist": 2}
-    found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.answers,
+    found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id
         LEFT JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id AND status = 'accepted')
         WHERE r.event_id = ? AND r.status != 'cancelled'""", eid)
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
-    by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({_qs(ids)})", *ids)} if ids else {}
-    out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "status": p["status"],
+    # the club's members only: a friend's invite between two outsiders isn't the club's business (review, Oct 30)
+    by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
+                                               one(con, "SELECT org_id FROM events WHERE id = ?", eid)[0], *ids)} if ids else {}
+    # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
+    out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}

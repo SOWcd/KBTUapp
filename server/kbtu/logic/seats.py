@@ -412,7 +412,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
                 WHERE id = ?""", (status, hold, wait, int(free), given, core.now(), r["id"]))
         else:
             # someone already in keeps whoever was first (this branch is new rows only); never myself
-            by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.qr_code = ? AND u.id != ?",
+            by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.link_code = ? AND u.id != ?",
                      e["org_id"], ref, v.id) if isinstance(ref, str) else None
             inviter = by["user_id"] if by else None
             if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)

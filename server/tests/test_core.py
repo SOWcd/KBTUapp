@@ -1237,9 +1237,9 @@ def test_bring_a_friend(env):
 
 
 def test_member_link(env):
-    """"My link" (a member's KPI): who signs up by a club member's link (ev_<id>_<badge code>) is that member's; the
-    first link wins, never myself, never a stranger's code; the organizers see who brought whom, the Team page the
-    ones who came."""
+    """"My link" (a member's KPI): who signs up by a club member's link (ev_<id>_<link code>, never the badge's secret)
+    is that member's; the first link wins, never myself, never a stranger's code; the organizers see who brought whom,
+    the Team page the ones who came, not counting those the member checked in themself."""
     c, cfg = env
     pres, ali, zhan, dana = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan"), login(c, 93, "dana")
     con = db.connect(cfg.db_path)
@@ -1247,10 +1247,15 @@ def test_member_link(env):
     con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "member")])
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Hack', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
-    code = {u["id"]: logic._qr_code(con, u["id"]) for u in (pres, ali, dana)}
+    code = {u["id"]: logic._qr_code(con, u["id"], "link_code") for u in (pres, ali, dana)}
+    assert logic._qr_code(con, ali["id"]) != code[ali["id"]]                                            # the badge keeps its own secret
     P, A, Z, D = tma(90, "Pres"), tma(91, "Ali"), tma(92, "Zhan"), tma(93, "Dana")
     by = lambda u: con.execute("SELECT invited_by FROM registrations WHERE user_id = ?", (u["id"],)).fetchone()[0]  # noqa: E731
     c.post("/api/events/1/registration", headers=A, json={"ref": code[ali["id"]]})
+    eve = login(c, 94, "eve")
+    c.post("/api/events/1/registration", headers=tma(94, "Eve"), json={"ref": logic._qr_code(con, ali["id"])})
+    assert by(eve) is None                                                                              # a badge's secret isn't a link
+    c.delete("/api/events/1/registration", headers=tma(94, "Eve"))
     c.post("/api/events/1/registration", headers=D, json={"ref": code[dana["id"]]})
     assert by(ali) is None and by(dana) is None                                                         # myself; not in the club
     c.post("/api/events/1/registration", headers=Z, json={"ref": code[ali["id"]]})
@@ -1258,8 +1263,12 @@ def test_member_link(env):
     c.post("/api/events/1/registration", headers=Z, json={"ref": code[pres["id"]]})
     assert by(zhan) == ali["id"]                                                                        # the first link wins
     seen = {a["person"]["id"]: a["by"] and a["by"]["id"] for a in c.get("/api/events/1/attendees", headers=P).json()}
-    assert seen == {ali["id"]: None, dana["id"]: None, zhan["id"]: ali["id"]}
-    con.execute("UPDATE registrations SET checked_in_at = ? WHERE user_id = ?", (int(time.time()), zhan["id"]))
+    assert seen == {ali["id"]: None, dana["id"]: None, zhan["id"]: ali["id"]}                         # Eve cancelled: not listed
+    con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ? WHERE user_id = ?", (int(time.time()), ali["id"], zhan["id"]))
+    team = {m["person"]["id"]: m.get("brought") for m in c.get("/api/orgs/1/members", headers=P).json()}
+    assert team == {pres["id"]: 0, ali["id"]: 0}                                                        # Ali checked his own friend in
+    assert not next(a for a in c.get("/api/events/1/attendees", headers=P).json() if a["person"]["id"] == zhan["id"])["byCame"]
+    con.execute("UPDATE registrations SET checked_in_by = ? WHERE user_id = ?", (pres["id"], zhan["id"]))
     team = {m["person"]["id"]: m.get("brought") for m in c.get("/api/orgs/1/members", headers=P).json()}
     assert team == {pres["id"]: 0, ali["id"]: 1}
     assert "brought" not in c.get("/api/orgs/1/members", headers=A).json()[0]                           # Head+ only

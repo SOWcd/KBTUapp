@@ -29,7 +29,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
         (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept,
         (SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
-            WHERE e.org_id = m.org_id AND r.invited_by = u.id AND r.checked_in_at > ?) AS brought
+            WHERE e.org_id = m.org_id AND r.invited_by = u.id AND r.checked_in_at > ? AND r.checked_in_by IS NOT u.id) AS brought
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
         WHERE m.org_id = ?""", core.now() - QUIET_FOR, oid)
     return sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "username": p["tg_username"],

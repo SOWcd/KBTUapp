@@ -1376,8 +1376,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             # no photo: the event's own poster (its colour and emoji, as in the app), not the app's old picture
             photo = f"https://{cfg.domain}/media/{cover['path']}.jpg" if cover else \
                 f"https://{cfg.domain}/og/poster.jpg?c={(e['color'] or e['tint'] or '#3B6BFF').lstrip('#')}&e={e['emoji'] or 'sparkles_3d'}"
-            # "My link": a member of the event's club shares it with their badge code, so who came by it is theirs
-            start = f"ev_{ref}_{logic._qr_code(con, v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
+            # "My link": a member of the event's club shares it with their link code, so who came by it is theirs
+            start = f"ev_{ref}_{logic._qr_code(con, v.id, 'link_code')}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
@@ -1390,10 +1390,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
-            elif kind == "rf":  # my invite link (referrals): my badge's code, never my ID
+            elif kind == "rf":  # my invite link (referrals): my link code, never my ID nor my badge's secret
                 if not v.student:
                     raise ApiError("need_student")
-                start = f"r_{logic._qr_code(con, v.id)}"
+                start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
             elif kind == "fr":  # my live one-time link (§4.7), the same one the QR on screen holds
                 start = f"fr_{logic.friend_link(con, v)['token']}"
