@@ -76,7 +76,7 @@
   sheets.ticket = (id) => lazy(ticketView, { id });
   sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
   sheets.photos = (photos, start, onremove, ongone) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone });
-  sheets.login = (after) => open(LoginSheet, { after, why: after ? 'go' : 'other' });
+  sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   sheets.pc = (ok) => lazy(() => import('./screens/sheets/PcSheet.svelte'), { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
@@ -145,7 +145,7 @@
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
   sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
-  setLoginHook((after) => sheets.login(after));
+  setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- tab 2 depends on who you are ----
   const member = $derived((session.me?.memberships.length ?? 0) > 0);
@@ -309,7 +309,7 @@
     try {
       const r = await api.qrCheckin(p);
       if (r.done) { haptic.ok(); say(t('ci.done', { title: r.title }), 'party_popper_3d'); return; }
-      if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p); }
+      if (!again) { say(t('ci.wait', { title: r.title }), 'waving_hand_3d_default'); asStudent(() => void checkIn(p, true), p, true); }
     } catch (e) {
       haptic.error();
       say(e instanceof ApiErr && e.code === 'closed' ? t('ci.closed') : e instanceof ApiErr && e.message === 'qr_old' ? t('ci.old') : t('common.error'), 'pleading_face_3d');

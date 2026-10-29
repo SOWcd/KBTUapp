@@ -17,7 +17,7 @@
   import { haptic, openLink, on } from '../../lib/tg';
   import { nowTs, parts } from '../../lib/time';
 
-  let { overlay, after }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other' } = $props();
+  let { overlay, after, lock = false }: { overlay: Overlay; after?: () => void; why?: 'go' | 'other'; lock?: boolean } = $props();
 
   const legal = (doc: 'privacy' | 'terms') => { haptic.tap(); openLink(`${location.origin}/${doc}?lang=${i18n.lang}`); };
   const st = session.me?.student, relink = !!session.me?.relink;
@@ -86,7 +86,7 @@
   {#if away}<p class="t-foot dim center">{t('login.msAway')}</p>{/if}
 {/snippet}
 
-<Sheet {overlay} title={t('login.title')}>
+<Sheet {overlay} title={t('login.title')} full={lock} hold={lock ? () => !session.me?.student : undefined}>
   <form class="wrap" onsubmit={submit}>
     {#if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->

@@ -33,7 +33,7 @@ export const sheets = {
   receipt: (_r: AttendeeReceipt, _name: string, _ondone?: () => void) => {},  // the organizer's look at one receipt
   /** an album full screen, from photo `start`; `onremove` takes one out and answers with what is left */
   photos: (_photos: AlbumPhoto[], _start: number, _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void) => {},
-  login: (_after?: () => void) => {},
+  login: (_after?: () => void, _lock?: boolean) => {},
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
