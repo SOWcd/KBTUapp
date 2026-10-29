@@ -10,18 +10,19 @@
   import UserRound from '@lucide/svelte/icons/circle-user-round';
   import MapIcon from '@lucide/svelte/icons/map';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
-  import { ui, TABS, goTab } from '../lib/state/ui.svelte';
+  import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
   import { glass, refract, jelly } from './glass';
   import { chrome } from './chrome';
 
-  let { labels, dot = [] }: { labels: string[]; dot?: boolean[] } = $props();
-  const N = TABS.length;
+  // the tabs shown (the forum only where the server opened it), each with its label and dot
+  let { tabs, labels, dot = [] }: { tabs: Tab[]; labels: string[]; dot?: boolean[] } = $props();
+  const N = $derived(tabs.length);
   const ICON = { afisha: Ticket, forum: MessagesSquare, club: Landmark, profile: UserRound };
 
   let preview = $state<number | null>(null);
-  const shown = $derived(preview ?? TABS.indexOf(ui.tab));
+  const shown = $derived(preview ?? tabs.indexOf(ui.tab));
 
   let bar: HTMLElement;
   let pill: HTMLSpanElement;
@@ -37,7 +38,7 @@
   }
   function up() {
     const d = drag; drag = null;
-    if (d?.on && preview != null) { const i = preview; preview = null; goTab(TABS[i]); }
+    if (d?.on && preview != null) { const i = preview; preview = null; goTab(tabs[i]); }
     else preview = null;
   }
   // the button gives under the finger and springs back as the map grows out of it (CampusMap's iris)
@@ -50,7 +51,7 @@
   }
   // the map's chunk on the press, not the click: by the release it has been loading for the whole press
   const warm = () => { void import('../screens/map/CampusMap.svelte').catch(() => {}); };
-  function pick(i: number) { if (drag?.on) return; goTab(TABS[i]); ui.awake++; }
+  function pick(i: number) { if (drag?.on) return; goTab(tabs[i]); ui.awake++; }
 </script>
 
 <div class="dock">
@@ -58,7 +59,7 @@
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up}>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <span class="pill" bind:this={pill} style="left:calc(4px + (100% - 8px) * {shown} / {N}); width:calc((100% - 8px) / {N})" aria-hidden="true"></span>
-  {#each TABS as tab, i (tab)}
+  {#each tabs as tab, i (tab)}
     {@const Icon = ICON[tab]}
     <button class="tab" class:on={shown === i} aria-current={ui.tab === tab ? 'page' : undefined} onclick={() => pick(i)}>
       <span class="ic">

@@ -95,7 +95,7 @@
   // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
   const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmBoard = () => { void boardPage(); if (session.me?.student) void loadBoard(); };
+  const warmBoard = () => { if (!session.me?.board) return; void boardPage(); if (session.me.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
@@ -162,6 +162,14 @@
   // tab 2 is the clubs' tab for everyone (PLAN 46): the catalogue first (joining and following live there),
   // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
   const tab2Label = $derived(member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
+  // the bar's tabs: the forum only where the server opened it (BOARD; its policy section in force)
+  const tabs = $derived(TABS.filter((k) => k !== 'forum' || !!session.me?.board));
+  $effect(() => { if (session.me && !session.me.board && ui.tab === 'forum') ui.tab = 'afisha'; });
+  const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => tab2Label, profile: () => t('tab.profile') };
+  const TAB_DOT: Record<Tab, () => boolean> = {
+    afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
+    profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0,
+  };
 
   // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds. DMP is an org like any other
   // its staff have the same three pages, and its registry sits in Studio with DMP picked
@@ -293,7 +301,7 @@
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const th = p.match(/^th_(\d+)$/); // the bot's "someone answered your thread"
-    if (th) { ui.tab = 'forum'; sheets.thread(Number(th[1])); return; }
+    if (th) { if (session.me?.board) { ui.tab = 'forum'; sheets.thread(Number(th[1])); } return; }
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
@@ -478,7 +486,7 @@
 </script>
 
 <main class="app">
-  {#each TABS as tab (tab)}
+  {#each tabs as tab (tab)}
     <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
       <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
         {#snippet page(i)}
@@ -501,7 +509,7 @@
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
-  <Nav labels={[t('tab.afisha'), t('tab.forum'), tab2Label, t('tab.profile')]} dot={[(session.me?.counters.unreadBroadcasts ?? 0) > 0, false, false, (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0]} />
+  <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
   {#each overlays as o (o.id)}
     <o.component {...o.props} overlay={o} />

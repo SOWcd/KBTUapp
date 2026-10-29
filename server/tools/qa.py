@@ -103,7 +103,8 @@ def main() -> None:
     for _, tg, first, _ in PEOPLE:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
-           "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist")}
+           "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
+           "BOARD": os.environ.get("BOARD", "1")}  # the student forum on, as it will be after its policy part
     subprocess.run([sys.executable, "-m", "uvicorn", "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 

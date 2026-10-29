@@ -25,6 +25,9 @@ class Config:
     cf_ai_token: str = ""
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
+    # the student forum (logic/threads.py): BOARD=1 every student (the policy's section 12 in force, everyone agrees
+    # again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
+    board: str = ""
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
@@ -72,6 +75,7 @@ def load() -> Config:
         cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
         forum=env.get("FORUM", "0") == "1",
         forum_founder=env.get("FORUM", "0") == "founder",
+        board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),

@@ -24,7 +24,7 @@ from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _
 from .queues import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note, _video,
     ai_failed, ai_next, ai_note, ai_save, ai_state, my_video, new_video, next_video, stale_videos, video_done,
     video_shape, video_uploaded)  # noqa: F401
-from .account import (CONSENT, CONSENT_FORUM, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE,
+from .account import (CONSENT, CONSENT_BOARD, CONSENT_FORUM, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE,
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     deletion_hash, dm_on, drop_my_photo, id_clash, keep_me, me, ms_apply, ms_link, ms_pending, ms_remember, ms_sweep,

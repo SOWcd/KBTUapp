@@ -5345,6 +5345,12 @@ def test_userpic_copy(env):
     assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()
 
 
+def _board_on(c, cfg) -> None:
+    """The student forum's routes open (BOARD=1) for this app; the policy version stays the env's (sign-ins keep working)."""
+    import dataclasses
+    c.app.state.cfg = dataclasses.replace(cfg, board="all")
+
+
 def _club_runs(c, con, uid: int, name: str, slug: str = "vol") -> int:
     """A club whose Head (uid) runs its events, so its check-in sessions too."""
     login(c, uid, name)
@@ -5548,6 +5554,7 @@ def test_student_forum(env, monkeypatch):
     three reports from older accounts hide a thing; blocks and deletes; guests can't read."""
     from kbtu import ai
     c, cfg = env
+    _board_on(c, cfg)
     ann, bob, mod, boss = login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "mod"), login(c, 4, "boss")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
@@ -5643,10 +5650,30 @@ def test_student_forum(env, monkeypatch):
     con.close()
 
 
+def test_student_forum_flag(env):
+    """BOARD off: no forum (its routes 404, the app hides the tab), the policy as it was; BOARD=staff: the staff try it,
+    nobody is asked to agree again; BOARD=1: everyone, section 12 shows and the new version is asked."""
+    import dataclasses
+    c, cfg = env
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 1")
+    login(c, 2, "bob")
+    for board, ann, bob, version in (("", 404, 404, logic.CONSENT), ("staff", 200, 404, logic.CONSENT), ("all", 200, 200, logic.CONSENT_BOARD)):
+        app = server.create(dataclasses.replace(cfg, board=board))
+        with TestClient(app) as x:
+            assert x.get("/api/threads", headers=tma(1)).status_code == ann and x.get("/api/threads", headers=tma(2)).status_code == bob
+            me = x.get("/api/me", headers=tma(2)).json()
+            assert me["consentNow"] == version and me["board"] is (bob == 200)
+            assert ("12." in x.get("/privacy").text) is (board == "all")
+    con.close()
+
+
 def test_student_forum_pages(env):
     """The feed pages by (bumpedAt, id): threads bumped in the same second aren't lost at a page's edge."""
     from kbtu.logic import threads as T
     c, cfg = env
+    _board_on(c, cfg)
     ann = login(c, 1, "ann")
     con = db.connect(cfg.db_path)
     t = int(time.time())

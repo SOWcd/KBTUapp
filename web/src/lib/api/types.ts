@@ -192,6 +192,7 @@ export interface Me {
   student: StudentProfile | null; // null = guest
   msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
+  board?: boolean;     // GET /api/me only: the student forum is open to me (the server's BOARD switch)
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)

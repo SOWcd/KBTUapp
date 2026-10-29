@@ -349,6 +349,7 @@ def delete_info(con, v: Viewer) -> dict:
 
 CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
 CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
+CONSENT_BOARD = "2026-10-v5"  # with BOARD=1: the student forum's section 12 too (and section 11 if FORUM=1)
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:

@@ -152,6 +152,20 @@ def forum_viewer(request: Request, v: Me, con: Con) -> Viewer:
 Forum = Annotated[Viewer, Depends(forum_viewer)]
 
 
+def board_on(cfg, v: Viewer) -> bool:
+    """The student forum is open to this person: BOARD=1 everyone, BOARD=staff the admins and moderators."""
+    return cfg.board == "all" or cfg.board == "staff" and v.role in ("admin", "moderator")
+
+
+def board_viewer(request: Request, v: Me) -> Viewer:
+    if not board_on(request.app.state.cfg, v):
+        raise ApiError("not_found")
+    return v
+
+
+Board = Annotated[Viewer, Depends(board_viewer)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     def after(con) -> None:
@@ -198,12 +212,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
-    # the policy version in force: its forum part counts only with the forum on (legal_page shows it then)
-    policy = logic.CONSENT_FORUM if cfg.forum else logic.CONSENT
+    # the policy version in force: its forum parts count only with the forums on (legal_page shows them then)
+    policy = logic.CONSENT_BOARD if cfg.board == "all" else logic.CONSENT_FORUM if cfg.forum else logic.CONSENT
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v) | {"consentNow": policy}
+        return logic.me(con, v) | {"consentNow": policy, "board": board_on(cfg, v)}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -1403,49 +1417,49 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     T = logic.threads
 
     @app.get("/api/threads")
-    def threads_feed(con: Con, v: Me, topic: str | None = None, before: int | None = None, bid: int | None = None):
+    def threads_feed(con: Con, v: Board, topic: str | None = None, before: int | None = None, bid: int | None = None):
         return T.threads(con, v, topic, before, bid)
 
     @app.post("/api/threads")
-    async def threads_new(con: Con, v: Me, body: dict = Body(...)):
+    async def threads_new(con: Con, v: Board, body: dict = Body(...)):
         tid = T.reserve_thread(con, v, body)  # held, inside the allowance, before the AI is asked
         return T.settle_thread(con, v, tid, await screen(str(body["body"])))
 
     @app.get("/api/threads/mod")
-    def threads_mod(con: Con, v: Me):
+    def threads_mod(con: Con, v: Board):
         return T.mod_queue(con, v)
 
     @app.post("/api/threads/mod/{kind}/{xid}", status_code=204)
-    def threads_mod_decide(kind: str, xid: int, con: Con, v: Me, body: dict = Body(...)):
+    def threads_mod_decide(kind: str, xid: int, con: Con, v: Board, body: dict = Body(...)):
         T.mod_decide(con, v, kind, xid, body.get("ok"))
 
     @app.post("/api/threads/reveal/{kind}/{xid}")
-    def threads_reveal(kind: str, xid: int, con: Con, v: Me):
+    def threads_reveal(kind: str, xid: int, con: Con, v: Board):
         return T.reveal(con, v, kind, xid)
 
     @app.delete("/api/threads/replies/{rid}", status_code=204)
-    def threads_drop_reply(rid: int, con: Con, v: Me):
+    def threads_drop_reply(rid: int, con: Con, v: Board):
         T.delete_reply(con, v, rid)
 
     @app.get("/api/threads/{tid}")
-    def threads_one(tid: int, con: Con, v: Me):
+    def threads_one(tid: int, con: Con, v: Board):
         return T.thread(con, v, tid)
 
     @app.delete("/api/threads/{tid}", status_code=204)
-    def threads_drop(tid: int, con: Con, v: Me):
+    def threads_drop(tid: int, con: Con, v: Board):
         T.delete_thread(con, v, tid)
 
     @app.post("/api/threads/{tid}/replies")
-    async def threads_reply(tid: int, con: Con, v: Me, body: dict = Body(...)):
+    async def threads_reply(tid: int, con: Con, v: Board, body: dict = Body(...)):
         rid = T.reserve_reply(con, v, tid, body)  # the thread open to me, held, inside the allowance, before the AI
         return T.settle_reply(con, v, rid, await screen(str(body["body"])))
 
     @app.put("/api/threads/{tid}/join")
-    def threads_join(tid: int, con: Con, v: Me, body: dict = Body(...)):
+    def threads_join(tid: int, con: Con, v: Board, body: dict = Body(...)):
         return T.join(con, v, tid, body.get("on"))
 
     @app.get("/api/threads/{tid}/joiners")
-    def threads_joiners(tid: int, con: Con, v: Me):
+    def threads_joiners(tid: int, con: Con, v: Board):
         return T.joiners(con, v, tid)
 
     @app.post("/api/forum/asks/{aid}/close")
@@ -1526,8 +1540,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         them from the sign-in consent and Settings → Privacy."""
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
-        off = "noforum" if cfg.forum else "forum"  # the forum's part (and its version line) only with the forum on
-        body = re.sub(r"<!--/?(?:no)?forum-->\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
+        # each forum's part (and the version line that names it) only with that forum on for everyone
+        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all")):
+            off = f"no{part}" if on else part
+            body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))
         other = "terms" if doc == "privacy" else "privacy"
         html = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
