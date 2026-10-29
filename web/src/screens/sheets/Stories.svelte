@@ -26,6 +26,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
+  import Linked from '../../ui/Linked.svelte';
 
   // at: open on that post of the first club (a club page's news list), else its first unread
   let { overlay, groups, start = 0, at }: { overlay: Overlay; groups: StoryGroup[]; start?: number; at?: number } = $props();
@@ -183,7 +184,7 @@
       <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
       <div class="txt" class:card={p.body}>
         <h2>{p.title}</h2>
-        {#if p.body}<p class="scroll" data-noswipe>{p.body}</p>{/if}
+        {#if p.body}<p class="scroll" data-noswipe><Linked text={p.body} /></p>{/if}
       </div>
     {/key}
 

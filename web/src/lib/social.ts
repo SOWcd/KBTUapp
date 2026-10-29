@@ -49,3 +49,22 @@ export function linkDraft(url: string): LinkDraft {
   const m = net && /^https:\/\/[^/]+\/@?([A-Za-z0-9_.-]{1,64})\/?$/.exec(url);
   return m ? { kind: net.kind, v: m[1] } : { kind: 'web', v: url.replace(/^https:\/\//, '') };
 }
+
+// Addresses inside a text (a club's post: "our new TikTok: tiktok.com/@club/video/1"), for tapping. A bare
+// t.me/instagram/tiktok/youtube address counts too; a trailing dot or bracket stays text.
+const IN_TEXT = /(?:https?:\/\/|(?:www\.)?(?:t\.me|instagram\.com|tiktok\.com|youtube\.com|youtu\.be)\/)[^\s<>"«»]+/gi;
+export function linked(text: string): { s: string; url?: string }[] {
+  const out: { s: string; url?: string }[] = [];
+  let i = 0;
+  for (const m of text.matchAll(IN_TEXT)) {
+    const s = m[0].replace(/[.,;:!?)\]'’»]+$/, '');
+    out.push({ s: text.slice(i, m.index) }, { s, url: /^https?:/i.test(s) ? s : `https://${s}` });
+    i = m.index + s.length;
+  }
+  out.push({ s: text.slice(i) });
+  return out.filter((p) => p.s);
+}
+/** the text's Instagram, TikTok and YouTube links, at most two: a button each under the post */
+export const videoLinks = (text: string) =>
+  [...new Set(linked(text).flatMap((p) => (p.url ? [p.url] : [])))]
+    .map((url) => ({ url, ...social(url) })).filter((x) => ['instagram', 'tiktok', 'youtube'].includes(x.kind)).slice(0, 2);

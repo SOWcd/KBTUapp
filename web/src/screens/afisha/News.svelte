@@ -11,6 +11,9 @@
   import Eye from '@lucide/svelte/icons/eye';
   import Play from '@lucide/svelte/icons/play';
   import TelegramMark from '../../ui/TelegramMark.svelte';
+  import SocialIcon from '../../ui/SocialIcon.svelte';
+  import Linked from '../../ui/Linked.svelte';
+  import { videoLinks } from '../../lib/social';
   import { api, type EventCard, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
@@ -124,9 +127,10 @@
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{p.title}</h3>
     {#if p.body}
-      <p class="bd" class:fold={long(p) && !open.has(p.id)}>{p.body}</p>
+      <p class="bd" class:fold={long(p) && !open.has(p.id)}><Linked text={p.body} /></p>
       {#if long(p) && !open.has(p.id)}<button class="unfold" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</button>{/if}
     {/if}
+    <div class="vl">{#each videoLinks(p.body) as l (l.url)}<button class="tgm" onclick={() => openLink(l.url)}><SocialIcon kind={l.kind} size={16} />{l.label}</button>{/each}</div>
     {#if p.tg}
       <!-- the club's Telegram channel post: its counts, its comments and its video live there (PLAN 86) -->
       {@const tg = p.tg}
@@ -231,6 +235,7 @@
   .tgf .cm b { white-space: nowrap; }
   .tge { font-size: 17px; line-height: 1; }
   .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 13px/1 var(--font-text); color: var(--text-3); }
+  .vl { display: flex; gap: 8px; } .vl:empty { display: none; }
   .tgm { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; height: 34px; margin: 2px 0 8px; padding: 0 13px 0 10px; border-radius: var(--r-full);
     background: var(--surface-2); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
   .re button.on b { color: var(--accent-text); }
