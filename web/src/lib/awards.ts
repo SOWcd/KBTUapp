@@ -100,4 +100,8 @@ export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
 export type Look = Skin | 'sower' | 'kbtu';
 export const STRAP: Record<Look, string> = { studex: 'STUDEX', cheer: 'CHEER', knights: 'KNIGHTS', moments: 'MOMENTS', faces: 'FACES', sower: 'SOWER', kbtu: 'KBTU' };
 /** the looks with their own art (ui/LanyardBand): owner, Oct 20, StudEx, KBTU and SOWER keep their own cards */
+/** each look's QR: its dark colours (both ≥ 7:1 on the white plate; SOWER plain black) and its mark in the middle
+ *  (ui/LookMark; owner, Oct 29: a club's badge had the app's colours and mark) */
+export const QR_LOOK: Record<Look, [string, string] | undefined> = { kbtu: QR_TONE, sower: undefined, studex: ['#A9271E', '#0F2350'],
+  cheer: ['#2E3258', '#14162E'], knights: ['#1C4C94', '#0D2A63'], moments: ['#7A321F', '#2E1A11'], faces: ['#4B2BC9', '#8E1257'] };
 export const banded = (look: Look) => look === 'cheer' || look === 'knights' || look === 'moments' || look === 'faces';

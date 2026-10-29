@@ -15,10 +15,10 @@
   import Award from '../../ui/Award.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
-  import KbtuMark from '../../ui/KbtuMark.svelte';
+  import LookMark from '../../ui/LookMark.svelte';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { QR_TONE, lookOf, STRAP, banded } from '../../lib/awards';
+  import { QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { power } from '../../lib/state/power.svelte';
   import { ui } from '../../lib/state/ui.svelte';
@@ -28,7 +28,6 @@
   let { p, qr = null, live = true, shelf = true }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean } = $props();
   const h = $derived(hero(p));
   // the club badge they picked (a skin; picked in LookSheet), else the KBTU one
-  const sower = $derived(p.skin === 'sower'); // the creator's own
   const look = $derived(lookOf(p)); // the class and the strap's word
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
@@ -75,7 +74,7 @@
       {#if banded(look)}<LanyardBand {look} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
-        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></m.default>{/await}</button>
+        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[look]}><LookMark {look} /></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={() => sheets.look()} aria-label={t('look.title')}><Avatar person={h.person} size={74} tappable={false} /></button>
@@ -180,7 +179,6 @@
     background: repeating-radial-gradient(circle, transparent 0 17px, rgba(255, 255, 255, 0.12) 17px 18.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
-  .sower .qr :global(.appmark) { background: #0A0A0A; }
   .sower .meta { color: rgba(255, 255, 255, 0.66); }
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }

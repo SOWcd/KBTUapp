@@ -6,7 +6,7 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_TONE, lookOf, STRAP, banded } from '../../lib/awards';
+  import { hero, QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -14,15 +14,13 @@
   import Qr from '../../ui/Qr.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Founder from '../../ui/Founder.svelte';
-  import KbtuMark from '../../ui/KbtuMark.svelte';
+  import LookMark from '../../ui/LookMark.svelte';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
 
   let { overlay, link, p }: { overlay: Overlay; link: string; p: PersonCard } = $props();
   const h = $derived(hero(p));
-  // the back of the badge I wear: the same skin, its strap and clip on top (it stayed in the old blue)
-  const sower = $derived(p.skin === 'sower');
   const look = $derived(lookOf(p)); // the class and the strap's word
   // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look it was dark
   // text on a darkened glass
@@ -84,7 +82,7 @@
         </span>
       </div>
       <div class="plate">
-        <Qr text={link} tone={sower ? undefined : QR_TONE}><span class="appmark"><KbtuMark /></span></Qr>
+        <Qr text={link} tone={QR_LOOK[look]}><LookMark {look} /></Qr>
       </div>
       <span class="foot"><LanyardHolo {look} no={h.no} /></span>
     </div>
@@ -170,7 +168,6 @@
     background: repeating-radial-gradient(circle, transparent 0 18px, rgba(255, 255, 255, 0.12) 18px 19.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
-  .sower .plate :global(.appmark) { background: #0A0A0A; }
 
   .hint { max-width: 300px; text-align: center; font: 550 13px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.66); }
   .pill { position: relative; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }

@@ -25,7 +25,7 @@
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json>   a QR check-in session (checkin.py) with its expected
-                                people from tools/checkin_convert.py; prints the PIN for /screen once
+                                people from tools/checkin_convert.py; prints the PIN for /show once
   .venv/bin/python -m kbtu.admin redelete                               after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -65,7 +65,7 @@ def main(args: list[str]) -> None:
         from . import checkin
         sid, pin = checkin.new(con, args[2], json.loads(Path(args[3]).read_text(encoding="utf-8")))
         n = con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (sid,)).fetchone()[0]
-        print(f"session {sid}, {n} expected; PIN {pin} (shown once: the screen at /screen asks it)")
+        print(f"session {sid}, {n} expected; PIN {pin} (shown once: the screen at /show asks it)")
     elif cmd == "users":
         for u in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, u.role, s.user_id IS NOT NULL AS student
                 FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0 ORDER BY u.created_at"""):

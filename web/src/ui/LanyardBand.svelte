@@ -29,7 +29,7 @@
       <path d="M-10 8H350" /><circle cx="170" cy="8" r="34" /><path d="M120 112V64H220V112" /><path d="M150 64A20 20 0 0 1 190 64" /><path d="M40 112A130 130 0 0 1 300 112" /></g></svg>
     <img class="ball" src={ball} alt="" /><img class="art" src={knights} alt="" />
   {:else if look === 'moments'}
-    {#if wide}<i class="vf"></i><img class="art" src={aperture} alt="" />
+    {#if wide}<i class="vf"></i><i class="leak"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'faces'}
     <img class="hands" src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
@@ -69,6 +69,13 @@
   /* the film's edge print, as on a real negative */
   .edge { position: absolute; left: 14px; top: 19px; font: 700 7px/1 var(--font-text); letter-spacing: 0.18em; color: #F2B35C; opacity: 0.85; }
   .edge b { font-weight: 400; }
+  /* the profile's card as a camera's screen: a warm light leak, film grain, the exposure in the corner */
+  .leak { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+    background: radial-gradient(38% 70% at 104% 18%, rgba(255, 176, 92, 0.55), transparent 70%), radial-gradient(30% 60% at -4% 96%, rgba(255, 120, 70, 0.4), transparent 70%); }
+  .leak::after { content: ''; position: absolute; inset: 0; opacity: 0.16; mix-blend-mode: overlay;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .exif { position: absolute; left: 30px; top: 11px; font: 650 7.5px/1 var(--font-text); letter-spacing: 0.12em; color: rgba(246, 226, 205, 0.75); }
+  .exif b { color: #FF5A3C; font-weight: 400; }
   /* a viewfinder's corners around the profile's card */
   .vf { position: absolute; inset: 8px 8px 5px; pointer-events: none; opacity: 0.55; --l: rgba(246, 226, 205, 0.9);
     background: linear-gradient(var(--l), var(--l)) 0 0 / 16px 1.5px, linear-gradient(var(--l), var(--l)) 0 0 / 1.5px 16px,
