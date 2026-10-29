@@ -349,7 +349,8 @@ def delete_info(con, v: Viewer) -> dict:
 
 CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
 CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
-CONSENT_BOARD = "2026-10-v5"  # with BOARD=1: the student forum's section 12 too (and section 11 if FORUM=1)
+CONSENT_BOARD = "2026-10-v5"  # with BOARD=1 alone: the student forum's section (11 then)
+CONSENT_BOTH = "2026-10-v6"   # FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
@@ -518,7 +519,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         pid = _placeholder(con)
         me_.update(p=pid, end=NO_END, now=core.now())
         for (rid,) in con.execute(f"SELECT id FROM registrations WHERE user_id = :u AND status = 'going' AND event_id IN ({ended})", me_).fetchall():
-            con.execute("UPDATE registrations SET user_id = ?, note = NULL, ticket_code = ? WHERE id = ?", (pid, _ticket_code(con), rid))
+            con.execute("UPDATE registrations SET user_id = ?, note = NULL, answers = NULL, ticket_code = ? WHERE id = ?", (pid, _ticket_code(con), rid))
         con.execute("UPDATE event_ratings SET user_id = :p, comment = '' WHERE user_id = :u", me_)
         con.execute(f"UPDATE volunteers SET user_id = :p, note = '' WHERE user_id = :u AND event_id IN ({ended})", me_)
         done = "SELECT id FROM rounds WHERE status = 'done'"

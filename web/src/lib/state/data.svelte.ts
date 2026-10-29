@@ -154,6 +154,7 @@ function errorText(e: unknown): string {
   if (e instanceof ApiErr) {
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
+    if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile
   }
   return t('common.error');
 }

@@ -114,6 +114,7 @@ const en: Dict = {
   'bd.signIn': "Sign in",
   'bd.emptyTitle': "Quiet here so far",
   'bd.emptyText': "Ask for a charger, call people to the canteen, or just say what you think.",
+  'qs.changed': "The questions changed — open the event again",
   'qs.title': "A few questions",
   'qs.sub': "The organizers ask these at sign-up. Only they see the answers; they're deleted 30 days after the event.",
   'map.flawTitle': "Something wrong here?",

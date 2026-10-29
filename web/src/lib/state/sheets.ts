@@ -137,5 +137,5 @@ export const sheets = {
   /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,
    *  handed over as +7XXXXXXXXXX */
   askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean }): Promise<string | null> => Promise.resolve(null),
-  answers: (_title: string, _questions: import('../api').Question[]): Promise<string[] | null> => Promise.resolve(null), // an event's own questions at sign-up
+  answers: (_title: string, _questions: import('../api').Question[]): Promise<{ q: string; a: string }[] | null> => Promise.resolve(null), // an event's own questions at sign-up
 };

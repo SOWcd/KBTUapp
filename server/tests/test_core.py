@@ -5349,6 +5349,7 @@ def _board_on(c, cfg) -> None:
     """The student forum's routes open (BOARD=1) for this app; the policy version stays the env's (sign-ins keep working)."""
     import dataclasses
     c.app.state.cfg = dataclasses.replace(cfg, board="all")
+    c.app.state.policy = "1"  # the version login() writes: everyone here agreed to the policy in force
 
 
 def _club_runs(c, con, uid: int, name: str, slug: str = "vol") -> int:
@@ -5665,7 +5666,16 @@ def test_student_forum_flag(env):
             assert x.get("/api/threads", headers=tma(1)).status_code == ann and x.get("/api/threads", headers=tma(2)).status_code == bob
             me = x.get("/api/me", headers=tma(2)).json()
             assert me["consentNow"] == version and me["board"] is (bob == 200)
-            assert ("12." in x.get("/privacy").text) is (board == "all")
+            page = x.get("/privacy").text
+            assert ("11. " in page and "12. " not in page) is (board == "all")                     # numbered on from 10
+            if board == "":
+                assert x.post("/api/reports", headers=tma(2), json={"target": "thread", "id": 1, "reason": "spam"}).status_code == 404
+            if board == "all":  # on the old policy: may read, not write (the AI's cross-border look needs the new consent)
+                assert x.post("/api/threads", headers=tma(2), json={"topic": "talk", "body": "hello all"}).json()["message"] == "consent"
+                con.execute("UPDATE students SET consent_version = ? WHERE user_id = (SELECT id FROM users WHERE tg_id = 2)", (logic.CONSENT_BOARD,))
+                assert x.post("/api/threads", headers=tma(2), json={"topic": "talk", "body": "hello all"}).status_code == 200
+    with TestClient(server.create(dataclasses.replace(cfg, board="all", forum=True))) as x:
+        assert x.get("/api/me", headers=tma(2)).json()["consentNow"] == logic.CONSENT_BOTH and "12. " in x.get("/privacy").text
     con.close()
 
 
@@ -5693,17 +5703,24 @@ def test_event_questions(env):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    off = {"title": "Quiz", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF",
+           "form": [{"label": "Team?", "kind": "text", "required": True}]}
+    assert c.post("/api/orgs/1/events", headers=tma(20), json=off).json()["form"] is None   # BOARD off: questions not taken
+    _board_on(c, cfg)
     base = {"title": "Hackathon", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
     qs = [{"label": "Your team?", "kind": "text", "required": True}, {"label": "T-shirt", "kind": "choice", "options": ["S", "M", "L"], "required": False}]
     for bad in ([{"label": "x", "kind": "text"}], [{"label": "Size", "kind": "choice", "options": ["S"]}], [qs[0]] * 6,
-                [{"label": "Size", "kind": "choice", "options": ["S", "S"]}], [{"label": "Size", "kind": "file"}]):
+                [{"label": "Size", "kind": "choice", "options": ["S", "S"]}], [{"label": "Size", "kind": "file"}],
+                [{"label": "Name", "kind": "text"}, {"label": "name", "kind": "text"}]):
         assert c.post("/api/orgs/1/events", headers=tma(20), json={**base, "form": bad}).status_code == 400
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "form": qs}).json()["id"]
     c.post(f"/api/events/{eid}/publish", headers=tma(20))
     assert [q["label"] for q in c.get(f"/api/events/{eid}", headers=tma(10)).json()["form"]] == ["Your team?", "T-shirt"]
-    for bad in (None, ["Bugs"], ["", "M"], ["Bugs", "XL"], ["x" * 201, ""]):
-        assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": bad}).status_code == 400
-    assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": ["  Bugs  Bunny ", "M"]}).json()["my"]["status"] == "going"
+    A = lambda a, b: [{"q": "Your team?", "a": a}, {"q": "T-shirt", "a": b}]  # noqa: E731
+    for bad in (None, A("Bugs", "XL")[:1], A("", "M"), A("Bugs", "XL"), A("x" * 201, ""), A({"x": [1]}, ""),
+                [{"q": "Phone", "a": "Bugs"}, {"q": "T-shirt", "a": "M"}]):                    # a question that changed: refused
+        assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": bad}).status_code in (400, 409)
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={"answers": A("  Bugs  Bunny ", "M")}).json()["my"]["status"] == "going"
     seen = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     assert seen[0]["answers"] == [{"q": "Your team?", "a": "Bugs Bunny"}, {"q": "T-shirt", "a": "M"}]
     assert "answers" not in c.get(f"/api/events/{eid}", headers=tma(10)).json().get("my", {})       # nobody else's view
@@ -5717,12 +5734,14 @@ def test_event_questions(env):
     con.close()
 
 def test_map_flaws(env):
-    """A long press on the map reports a flaw (students, ten a day); the admin lists and fixes them; account deletion
-    keeps the flaw without its author."""
+    """A long press on the map reports a flaw (the app's team for now, ten a day); the admin lists and fixes them."""
     c, cfg = env
     ann, boss = login(c, 1, "ann"), login(c, 4, "boss")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    login(c, 2, "bob")
+    assert c.post("/api/map/flaws", headers=tma(2), json={"ver": "kbtu", "floor": 1, "u": 0.4, "v": 0.3, "body": "a student"}).status_code == 403
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (ann["id"],))               # the team marks, for now
     flaw = {"ver": "kbtu", "floor": 1, "u": 0.42, "v": 0.31, "px": 540.0, "py": 440.0, "body": "the WC door doesn't exist"}
     assert c.post("/api/map/flaws", headers=tma(9), json=flaw).status_code == 401                 # a guest
     for bad in ({**flaw, "floor": 7}, {**flaw, "u": 2}, {**flaw, "ver": "x"}, {**flaw, "body": "x"}):

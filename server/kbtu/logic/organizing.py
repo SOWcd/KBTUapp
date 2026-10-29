@@ -168,6 +168,8 @@ def clean_questions(raw: object) -> str | None:
                 or kind == "choice" and not (2 <= len(opts) <= 8 and len(set(opts)) == len(opts) and all(1 <= len(o) <= OPTION_MAX for o in opts)):
             raise ApiError("bad_input", "questions")
         out.append({"label": label, "kind": kind, **({"options": opts} if opts else {}), "required": bool(q.get("required"))})
+    if len({q["label"].lower() for q in out}) != len(out):  # one column each in the table: no two the same
+        raise ApiError("bad_input", "questions")
     return json.dumps(out, ensure_ascii=False)
 
 

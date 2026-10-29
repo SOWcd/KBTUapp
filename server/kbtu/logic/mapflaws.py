@@ -1,6 +1,6 @@
 """The map's flaws, marked in the app (owner, Oct 29: endless small mistakes, and screenshots bloat the work): a long
-press on the plan, a line of text, and the spot lands in the admin's list with its floor and plan units. Students may
-mark too (ten a day each). Fixed ones go 30 days after."""
+press on the plan, a line of text, and the spot lands in the admin's list with its floor and plan units. The app's staff
+mark (ten a day each); students not until the privacy policy covers it. Fixed ones go 30 days after."""
 from __future__ import annotations
 
 from .core import ApiError, Viewer, need_student, now, one, rows
@@ -11,6 +11,8 @@ KEEP = 30 * 86400
 
 def report(con, v: Viewer, body: dict) -> None:
     need_student(v)
+    if v.role not in ("admin", "moderator"):  # the owner and the team mark the map (students only once the policy says so)
+        raise ApiError("forbidden")
     ver, floor, text = body.get("ver"), body.get("floor"), " ".join(str(body.get("body") or "").split())
     try:
         u, w = float(body["u"]), float(body["v"])

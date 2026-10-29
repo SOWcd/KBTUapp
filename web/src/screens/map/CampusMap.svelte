@@ -243,7 +243,7 @@
   let holdT: ReturnType<typeof setTimeout> | undefined;
   function flaw(at: { x: number; y: number }) {
     const W = stage.clientWidth * s, u = (at.x - x) / W, v = (at.y - y) / (W * AR);
-    if (u < 0 || u > 1 || v < 0 || v > 1 || !session.me?.student) return;
+    if (u < 0 || u > 1 || v < 0 || v > 1 || !session.me?.student || !['admin', 'moderator'].includes(session.me.role)) return; // the team only, for now
     haptic.soft(); press = null; lastTap = 0;
     const [px, py] = toPlan(ver, u, v);
     void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: cur }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })

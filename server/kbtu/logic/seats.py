@@ -356,16 +356,19 @@ ANSWER_MAX = 200  # one answer to an event's question at sign-up
 
 
 def _answers(e: sqlite3.Row, given: object) -> str | None:
-    """The answers to an event's questions, one per question in order: a required one not empty, a choice one of its
-    options, text up to 200. Kept with each question's words (an edit later doesn't change what was answered)."""
+    """The answers to an event's questions, one per question in order, each {q: the question's words as the form showed
+    them, a: the answer}: a question changed since the form loaded refuses the lot (the app reloads it), a required one
+    not empty, a choice one of its options, text up to 200. Kept with each question's words."""
     qs = json.loads(e["questions"]) if e["questions"] else []
     if not qs:
         return None
     if not isinstance(given, list) or len(given) != len(qs):
         raise ApiError("bad_input", "answers")
     out = []
-    for q, a in zip(qs, given):
-        a = " ".join(str(a or "").split())
+    for q, x in zip(qs, given):
+        if not isinstance(x, dict) or x.get("q") != q["label"] or not isinstance(x.get("a", ""), (str, type(None))):
+            raise ApiError("conflict", "answers")
+        a = " ".join((x.get("a") or "").split())
         if q["required"] and not a or len(a) > ANSWER_MAX or q["kind"] == "choice" and a and a not in q["options"]:
             raise ApiError("bad_input", "answers")
         if a:

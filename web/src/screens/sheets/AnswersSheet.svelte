@@ -10,7 +10,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, title, questions, done }: { overlay: Overlay; title: string; questions: Question[]; done: (a: string[] | null) => void } = $props();
+  let { overlay, title, questions, done }: { overlay: Overlay; title: string; questions: Question[]; done: (a: { q: string; a: string }[] | null) => void } = $props();
   let answers = $state<string[]>(untrack(() => questions.map(() => ''))); // the sheet asks one fixed list
   let tried = $state(false);
   let sent = false;
@@ -19,7 +19,7 @@
   function go() {
     tried = true;
     if (!ready) { haptic.error(); return; }
-    sent = true; done(answers.map((a) => a.trim())); close(overlay.id);
+    sent = true; done(answers.map((a, i) => ({ q: questions[i].label, a: a.trim() }))); close(overlay.id); // each with its question: an edit meanwhile is caught
   }
   onDestroy(() => { if (!sent) done(null); }); // closed some other way: not signed up
 </script>

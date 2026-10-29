@@ -166,6 +166,18 @@ def board_viewer(request: Request, v: Me) -> Viewer:
 Board = Annotated[Viewer, Depends(board_viewer)]
 
 
+def board_writer(request: Request, v: Board, con: Con) -> Viewer:
+    """Writing on the forum: also agreed to the policy in force (its section on the forum, the AI's cross-border look);
+    the app asks first, the server holds it too. Staff trying it (BOARD=staff) are on the policy they have."""
+    s = logic.one(con, "SELECT consent_version FROM students WHERE user_id = ?", v.id)
+    if request.app.state.cfg.board == "all" and s and s[0] not in (request.app.state.policy, "staff", "admin"):
+        raise ApiError("forbidden", "consent")
+    return v
+
+
+BoardWrite = Annotated[Viewer, Depends(board_writer)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     def after(con) -> None:
@@ -213,11 +225,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ me and sign-in
 
     # the policy version in force: its forum parts count only with the forums on (legal_page shows them then)
-    policy = logic.CONSENT_BOARD if cfg.board == "all" else logic.CONSENT_FORUM if cfg.forum else logic.CONSENT
+    policy = {(False, False): logic.CONSENT, (True, False): logic.CONSENT_FORUM, (False, True): logic.CONSENT_BOARD,
+              (True, True): logic.CONSENT_BOTH}[(cfg.forum, cfg.board == "all")]
+    app.state.policy = policy
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v) | {"consentNow": policy, "board": board_on(cfg, v)}
+        return logic.me(con, v) | {"consentNow": policy, "board": board_on(app.state.cfg, v)}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -749,11 +763,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/orgs/{oid}/events")
     def create_event(oid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.create_event(con, v, oid, body)
+        return logic.create_event(con, v, oid, body if board_on(app.state.cfg, v) else {k: x for k, x in body.items() if k != "form"})  # questions: BOARD's policy
 
     @app.patch("/api/events/{eid}")
     def update_event(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.update_event(con, v, eid, body)
+        return logic.update_event(con, v, eid, body if board_on(app.state.cfg, v) else {k: x for k, x in body.items() if k != "form"})
 
     @app.post("/api/events/{eid}/volunteer")
     def volunteer_apply(eid: int, con: Con, v: Me, body: dict = Body(default={})):
@@ -1037,6 +1051,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
+        if body.get("target") in ("thread", "reply") and not board_on(app.state.cfg, v):  # no forum here: nothing of it to report
+            raise ApiError("not_found")
         logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
         # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
         if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
@@ -1434,7 +1450,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return T.threads(con, v, topic, before, bid)
 
     @app.post("/api/threads")
-    async def threads_new(con: Con, v: Board, body: dict = Body(...)):
+    async def threads_new(con: Con, v: BoardWrite, body: dict = Body(...)):
         tid = T.reserve_thread(con, v, body)  # held, inside the allowance, before the AI is asked
         return T.settle_thread(con, v, tid, await screen(str(body["body"])))
 
@@ -1463,12 +1479,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         T.delete_thread(con, v, tid)
 
     @app.post("/api/threads/{tid}/replies")
-    async def threads_reply(tid: int, con: Con, v: Board, body: dict = Body(...)):
+    async def threads_reply(tid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         rid = T.reserve_reply(con, v, tid, body)  # the thread open to me, held, inside the allowance, before the AI
         return T.settle_reply(con, v, rid, await screen(str(body["body"])))
 
     @app.put("/api/threads/{tid}/join")
-    def threads_join(tid: int, con: Con, v: Board, body: dict = Body(...)):
+    def threads_join(tid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         return T.join(con, v, tid, body.get("on"))
 
     @app.get("/api/threads/{tid}/joiners")
