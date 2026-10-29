@@ -40,11 +40,16 @@
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex'}
     <i class="streaks"></i><i class="dots"></i><b class="ghost">STUDEX</b>
-    <svg class="dec" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio="none"><g fill="none" stroke="#fff" stroke-linecap="round">
-      {#if wide}<path class="cut" d="M58 236L196 -8" stroke-width="5" /><path d="M120 236L330 18" stroke-width="7" stroke-opacity=".1" /><path d="M120 236L330 18" stroke-width="2" stroke-opacity=".6" />
-        <path d="M312 16L331 17L328 36" stroke-width="2" stroke-opacity=".6" />
-      {:else}<path class="cut" d="M100 136L200 -8" stroke-width="5" /><path d="M150 136L322 12" stroke-width="10" stroke-opacity=".12" /><path d="M150 136L322 12" stroke-width="3.5" />
-        <path d="M302 10L324 11L318 33" stroke-width="3.5" />{/if}</g></svg>
+    <!-- the red wedge drawn, so its white cut runs exactly along it: on the profile's card between the photo and the
+         name (it crossed the text) -->
+    <svg class="dec sxa" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio="none">
+      <defs><linearGradient id="sxr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="#A9211A" /></linearGradient></defs>
+      {#if wide}<path d="M0 0H120.9L34 221H0Z" fill="url(#sxr)" /><path class="cut" d="M120.9 -2L33.2 223" stroke-width="4" />
+        <path d="M150 221L330 22" stroke="#fff" stroke-width="8" stroke-opacity=".08" /><path d="M150 221L330 22" stroke="#fff" stroke-width="2" stroke-opacity=".55" stroke-linecap="round" />
+        <path d="M313 21L331 21L329 39" fill="none" stroke="#fff" stroke-width="2" stroke-opacity=".55" stroke-linecap="round" stroke-linejoin="round" />
+      {:else}<path d="M0 0H194.4L108.3 124H0Z" fill="url(#sxr)" /><path class="cut" d="M195.8 -2L106.9 126" stroke-width="5" />
+        <path d="M150 136L322 12" stroke="#fff" stroke-width="12" stroke-opacity=".1" /><path d="M150 136L322 12" stroke="#fff" stroke-width="3.5" stroke-linecap="round" />
+        <path d="M302 10L324 11L318 33" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />{/if}</svg>
     {#if !wide}<b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>{/if}
   {:else if look === 'kbtu'}
     <img class="dec gl" src={guilloche} alt="" /><span class="mark"><KbtuMark size={wide ? 150 : 70} /></span>
@@ -62,13 +67,14 @@
 
   /* StudEx (redrawn Oct 29: the old diagonal was flat): their red and navy split on a rising diagonal, speed streaks
      on both halves, the logo's arrow climbing it, the wordmark with a mortarboard on the band */
-  .studex { background: linear-gradient(124deg, #E8452F, #B8261C 39%, #0F2350 39.2%, #1D3B7A 70%, #0B1C44); }
-  .studex.wide { background: linear-gradient(120deg, #E8452F, #B8261C 30%, #0F2350 30.2%, #1D3B7A 64%, #0B1C44); }
+  .studex { background: linear-gradient(135deg, #0F2350, #1D3B7A 55%, #0B1C44); }
   .streaks { position: absolute; inset: 0; pointer-events: none;
     background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.07) 18px 19px, transparent 19px 46px),
       radial-gradient(60% 80% at 82% 10%, rgba(90, 140, 255, 0.35), transparent 70%), radial-gradient(50% 70% at 10% 100%, rgba(255, 120, 90, 0.3), transparent 70%); }
   /* the logo's white cut between the red and the navy */
-  .cut { stroke: #fff; stroke-opacity: 0.9; stroke-linecap: butt; }
+  .cut { stroke: #fff; stroke-opacity: 0.92; }
+  .sxa { z-index: 0; }
+  .studex .streaks, .studex .dots, .studex .ghost { z-index: 1; }
   /* halftone fading out of the red corner, and the name huge and faint behind, like a team jersey */
   .dots { position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1px, transparent 1.6px) 0 0 / 7px 7px;

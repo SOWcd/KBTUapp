@@ -148,12 +148,13 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         raise ApiError("bad_input", "qr")
     # the same scan again after the sign-up (the app repeats it): its age doesn't matter, it was taken in time
     had = one(con, "SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid)
-    if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
-        raise ApiError("bad_input", "qr_old")
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    # finished: only someone who scanned before Finish may still complete it, for GRACE
+    # finished: only someone who scanned before Finish may still complete it, for GRACE (said before "old": a photo
+    # scanned after Finish is "closed")
     if not s or s["started_at"] is None or s["ended_at"] is not None and not (had and s["ended_at"] > now() - GRACE):
         raise ApiError("closed", "qr")
+    if not had and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
+        raise ApiError("bad_input", "qr_old")
     t = now()
     con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
     if student:
