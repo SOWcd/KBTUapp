@@ -38,6 +38,7 @@ export const sheets = {
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
   attendees: (_id: Id) => {},
+  screens: (_code?: string) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */

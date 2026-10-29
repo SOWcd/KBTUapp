@@ -165,6 +165,10 @@ export interface Api {
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
   qrCheckin(p: string): Promise<{ title: string; done: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
+  screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
+  bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
+  screenAct(id: Id, act: 'start' | 'finish' | 'unpair'): Promise<import('./types').ScreenSession>;
+  screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
   resolveReport(target: ReportItem['target'], id: Id, remove: boolean): Promise<void>; // admin: take it down or leave it

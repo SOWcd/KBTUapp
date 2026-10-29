@@ -2038,10 +2038,11 @@ def test_leaders_meeting(env):
 
 def test_every_api_route_needs_telegram(env):
     """No /api route answers with data to a request without Telegram's initData — a new route that forgot its viewer
-    fails here. The calendar file is the one exception: it carries its own signature (§4.2)."""
+    fails here. The calendar file carries its own signature (§4.2); /show's pairing code is the laptop's, no Telegram
+    there (it opens nothing until an organizer binds it: test_screen_pairing)."""
     import re as _re
     c, cfg = env
-    open_ok = {("GET", "/api/events/{eid}/ics")}
+    open_ok = {("GET", "/api/events/{eid}/ics"), ("POST", "/api/screen/pair")}
     for r in c.app.routes:
         path, methods = getattr(r, "path", ""), getattr(r, "methods", set()) or set()
         if not path.startswith("/api/"):
@@ -5315,20 +5316,41 @@ def test_userpic_copy(env):
     assert me() not in (first, "https://t.me/i/userpic/320/b.jpg") and not (root / first).exists()
 
 
+def _club_runs(c, con, uid: int, name: str, slug: str = "vol") -> int:
+    """A club whose Head (uid) runs its events, so its check-in sessions too."""
+    login(c, uid, name)
+    oid = con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES (?, 'club', ?, 'V', 'trophy_3d', 0)",
+                      (slug, slug.title())).lastrowid
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', 0)",
+                (oid, c.get("/api/me", headers=tma(uid)).json()["id"]))
+    return oid
+
+
+def _paired(c, uid: int, sid: int | None = None) -> dict:
+    """A laptop's /show paired by the organizer uid: its header for what to show."""
+    scr = c.post("/api/screen/pair").json()
+    assert c.post("/api/screens/bind", headers=tma(uid), json={"code": scr["code"], "session": sid}).status_code == 200
+    return {"X-Screen": scr["secret"]}
+
+
+def _csv(c, uid: int, sid: int) -> str:
+    return c.get(c.post(f"/api/screens/{sid}/csv", headers=tma(uid)).json()["url"]).text.lstrip("\ufeff")
+
+
 def test_qr_checkin(env, monkeypatch):
-    """The big screen's QR (checkin.py): a PIN opens the screen, a scan before the sign-up waits and counts once the
+    """The big screen's QR (checkin.py): paired from the organizer's phone, a scan before the sign-up waits and counts once the
     student signs up (ID prefilled from the organizers' list), a forged or stale QR is refused, the CSV has both."""
     from kbtu import checkin
     c, cfg = env
     login(c, 1, "ann")
     con = db.connect(cfg.db_path)
-    sid, pin = checkin.new(con, "Meeting", [{"email": "S_New@kbtu.kz", "name": "New Person", "studentId": "24B030001"},
-                                           {"email": "s_gone@kbtu.kz", "name": "Gone Person"}])
-    assert c.post("/api/screen/open", json={"pin": "x"}).status_code == 404
-    k = c.post("/api/screen/open", json={"pin": pin}).json()["key"]
-    assert c.get(f"/api/screen/{sid}", params={"k": "bad"}).status_code == 403
-    assert c.get(f"/api/screen/{sid}", params={"k": k}).json()["param"] is None          # not started: no QR
-    p = c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"]
+    org = _club_runs(c, con, 9, "dana")
+    sid = checkin.new(con, "Meeting", [{"email": "S_New@kbtu.kz", "name": "New Person", "studentId": "24B030001"},
+                                       {"email": "s_gone@kbtu.kz", "name": "Gone Person"}], org)
+    k = _paired(c, 9)                                                                       # Dana's only session
+    assert c.get("/api/screen", headers={"X-Screen": "bad"}).status_code == 403
+    assert c.get("/api/screen", headers=k).json()["param"] is None                          # not started: no QR
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
     con.execute("UPDATE students SET verified_at = verified_at - 60")                     # Ann: a student well before Start
     con.execute("UPDATE qr_sessions SET started_at = started_at - 30")                    # and Start a while ago
     forged = p[:-1] + ("1" if p[-1] == "0" else "0")
@@ -5340,46 +5362,43 @@ def test_qr_checkin(env, monkeypatch):
     assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]       # not yet: waits
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]           # Ann again: still one mark
     assert not c.post("/api/checkin", headers=tma(2), json={"p": p}).json()["done"]
-    st = c.get(f"/api/screen/{sid}", params={"k": k}).json()
+    st = c.get("/api/screen", headers=k).json()
     assert (st["done"], st["pending"], st["expected"]) == (1, 1, 2)
     uid = c.get("/api/me", headers=tma(2)).json()["id"]
     logic.ms_remember(con, uid, {"oid": "oid-2", "email": "s_new@kbtu.kz", "first": "New", "last": "Person", "employeeId": "", "profile": {}})
     assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "24B030001"}
     r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "24B030001", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
-    assert c.get(f"/api/screen/{sid}", params={"k": k}).json()["done"] == 2
-    c.post(f"/api/screen/{sid}/finish", json={"k": k})
+    assert c.get("/api/screen", headers=k).json()["done"] == 2
+    c.post(f"/api/screens/{sid}/finish", headers=tma(9))
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # finished
-    rows_ = c.get(f"/api/screen/{sid}/csv", params={"k": k}).text.lstrip("﻿").splitlines()
+    rows_ = _csv(c, 9, sid).splitlines()
     assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
     assert rows_[2].endswith(",B") and rows_[1].endswith(",A")
     con.close()
 
 
 def test_qr_checkin_edges(env, monkeypatch):
-    """The review's holes: junk PINs can't lock the organizer out, a non-ASCII key is a 403 (not a 500), Finish doesn't
+    """The review's holes: a non-ASCII QR is a 400 (not a 500), Finish doesn't
     lose who scanned (30 min to sign in, Microsoft's path too), Start doesn't reopen, the CSV has no formulas and
     matches the list by student ID when the mail differs."""
     from kbtu import checkin
     c, cfg = env
     login(c, 1, "ann")
     con = db.connect(cfg.db_path)
-    sid, pin = checkin.new(con, "Initiation", [{"email": "ann.home@gmail.com", "name": "=HYPERLINK(1)", "studentId": "24Bann",
-                                                "phone": "+7 (700) 000-00-00"}])
-    monkeypatch.setattr(checkin, "_fails", [time.monotonic()] * checkin.PIN_TRIES)       # the limit spent on junk
-    assert c.post("/api/screen/open", json={"pin": "000000" if pin != "000000" else "111111"}).status_code == 429
-    k = c.post("/api/screen/open", json={"pin": pin}).json()["key"]                       # the right one still opens
-    assert c.get(f"/api/screen/{sid}", params={"k": "\u043a\u043b\u044e\u0447"}).status_code == 403
-    p = c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"]
+    sid = checkin.new(con, "Initiation", [{"email": "ann.home@gmail.com", "name": "=HYPERLINK(1)", "studentId": "24Bann",
+                                            "phone": "+7 (700) 000-00-00"}], _club_runs(c, con, 9, "dana"))
+    k = _paired(c, 9)
+    p = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
     assert c.post("/api/checkin", headers=tma(1), json={"p": p[:-1] + "\u0436"}).status_code == 400
     assert c.post("/api/checkin", headers=tma(1), json={"p": p}).json()["done"]
     for u in (2, 4):
         assert not c.post("/api/checkin", headers=tma(u), json={"p": p}).json()["done"]  # scanned, not signed in yet
-    c.post(f"/api/screen/{sid}/finish", json={"k": k})
-    assert c.post(f"/api/screen/{sid}/start", json={"k": k}).json()["param"] is None     # finished stays finished
+    c.post(f"/api/screens/{sid}/finish", headers=tma(9))
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"] is None    # finished stays finished
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # new after Finish: no
     import csv
-    rows_ = list(csv.reader(c.get(f"/api/screen/{sid}/csv", params={"k": k}).text.lstrip("\ufeff").splitlines()))
+    rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
     assert [r[0] for r in rows_[1:]] == ["came", "scanned, not signed in", "scanned, not signed in"]   # by ID: not absent
     assert (rows_[1][1], rows_[1][6]) == ("'=HYPERLINK(1)", "'+7 (700) 000-00-00")      # no formulas in Excel
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 200       # had a mark: may come back
@@ -5389,10 +5408,61 @@ def test_qr_checkin_edges(env, monkeypatch):
     con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
         synced_at, manual) VALUES (?, '24B030004', 'Four', 'P', 1, ?, 0, 0, 0, 1)""", (uid4, logic.CONSENT))
     logic.ms_link(con, uid4, {"oid": "oid-4", "email": "four@kbtu.kz", "first": "Four", "last": "P"})  # the relink path
-    st = c.get(f"/api/screen/{sid}", params={"k": k}).json()
+    st = c.get("/api/screen", headers=k).json()
     assert (st["done"], st["pending"]) == (3, 0)
     con.execute("UPDATE qr_sessions SET ended_at = ended_at - ? WHERE id = ?", (checkin.GRACE + 1, sid))
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 409       # past the grace: closed
+    con.close()
+
+
+def test_screen_pairing(env, monkeypatch):
+    """/show without a PIN (Oct 29 night): only a session's organizers bind a screen, a stranger's scan changes nothing,
+    a paired screen can't be moved to another club's session, the screen never controls or downloads anything, the CSV
+    link is the organizer's and short-lived, "disconnect" sends every screen back to pairing."""
+    from kbtu import checkin
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    vol, other = _club_runs(c, con, 9, "dana"), _club_runs(c, con, 8, "omar", "inc")
+    login(c, 1, "ann")                                                                       # a student in the hall
+    sid = checkin.new(con, "Initiation", [{"email": "x@kbtu.kz", "name": "X Person", "phone": "+7 (700) 000 00 00"}], vol)
+    scr = c.post("/api/screen/pair").json()
+    me = {"X-Screen": scr["secret"]}
+    assert set(c.get("/api/screen", headers=me).json()) == {"code", "left"}                 # waiting: just its QR
+    for uid in (1, 8, 3):                                                                    # a student, another club, a guest
+        assert c.post("/api/screens/bind", headers=tma(uid), json={"code": scr["code"]}).status_code == 403
+        assert c.post("/api/screens/bind", headers=tma(uid), json={"code": scr["code"], "session": sid}).status_code == 403
+    assert "session" not in c.get("/api/screen", headers=me).json()                         # still Dana's to pair
+    assert c.get("/api/screens", headers=tma(1)).json() == [] and c.get("/api/screens", headers=tma(8)).json() == []
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": scr["code"]}).json()["session"] == sid
+    assert c.get("/api/screen", headers=me).json()["session"] == sid
+    theirs = checkin.new(con, "Their party", [], other)
+    assert c.post("/api/screens/bind", headers=tma(8), json={"code": scr["code"], "session": theirs}).status_code == 403  # not moved
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": scr["code"], "session": theirs}).json()["session"] == sid
+    for act in ("start", "finish", "unpair", "csv"):                                         # nobody else runs it
+        assert c.post(f"/api/screens/{sid}/{act}", headers=tma(1)).status_code == 403
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
+    assert c.post("/api/checkin", headers=tma(1), json={"p": c.get("/api/screen", headers=me).json()["param"]}).json()["done"]
+    url = c.post(f"/api/screens/{sid}/csv", headers=tma(9)).json()["url"]
+    assert c.get(url.replace("k=", "k=0")).status_code == 403 and c.get(url).status_code == 200
+    e = int(url.split("e=")[1].split("&")[0])
+    monkeypatch.setattr(checkin, "now", lambda: e + 1)
+    assert c.get(url).status_code == 403                                                     # the link is short-lived
+    monkeypatch.undo()
+    # a stale pairing QR (a photo of it) binds nothing
+    old = c.post("/api/screen/pair").json()
+    con.execute("UPDATE qr_screens SET created_at = created_at - ? WHERE code = ?", (checkin.PAIR_TTL + 1, old["code"]))
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": old["code"]}).status_code == 404
+    # several open sessions: the app has to say which
+    sid2 = checkin.new(con, "Second", [], vol)
+    two = c.post("/api/screen/pair").json()
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": two["code"]}).json()["message"] == "pick"
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": two["code"], "session": sid2}).json()["session"] == sid2
+    assert c.post(f"/api/screens/{sid}/unpair", headers=tma(9)).json()["screens"] == 0
+    assert c.get("/api/screen", headers=me).status_code == 403                               # back to a new pairing QR
+    assert c.get("/api/screen", headers={"X-Screen": two["secret"]}).json()["session"] == sid2
+    monkeypatch.setattr(checkin, "PAIR_MAX", 1)
+    c.post("/api/screen/pair")                                                               # one waiting: the cap
+    assert c.post("/api/screen/pair").status_code == 429                                     # junk can't fill the table
     con.close()
 
 

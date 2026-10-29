@@ -735,6 +735,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     # a partner's event a club posts (Oct 29, the Incubator's Halloween party): "With <host>" under the club, a link out
     # (external_url) instead of tickets, no ping to followers, out of the club's numbers and achievements
     (80, "ALTER TABLE events ADD COLUMN guest_host TEXT;"),
+    # /show paired from an organizer's phone instead of a PIN (checkin.py): a session belongs to a club, a screen is
+    # its pairing code + the hash of a secret only that browser holds
+    (81, """ALTER TABLE qr_sessions ADD COLUMN org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
+    CREATE TABLE qr_screens (
+      code       TEXT PRIMARY KEY,
+      secret     TEXT NOT NULL UNIQUE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      paired_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX qr_screens_by_session ON qr_screens(session_id);"""),
 ]
 
 

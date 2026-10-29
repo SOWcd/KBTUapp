@@ -23,7 +23,7 @@ from typing import Annotated, Any
 
 import anyio
 import httpx
-from fastapi import Body, Depends, FastAPI, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, Query, Request
 from fastapi.datastructures import Default, DefaultPlaceholder
 from fastapi.dependencies.utils import get_typed_return_annotation
 from fastapi.routing import APIRoute
@@ -306,23 +306,36 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ check-in by a QR on a big screen (checkin.py)
 
-    @app.post("/api/screen/open")
-    def screen_open(con: Con, body: dict = Body(...)):
-        return qr.open_screen(con, cfg.token_key, str(body.get("pin") or ""))
+    # the laptop (no Telegram): a pairing code, then what to show; its secret in a header, never in a URL
+    @app.post("/api/screen/pair")
+    def screen_pair(con: Con):
+        return qr.pair(con)
 
-    @app.get("/api/screen/{sid}")
-    def screen_state(sid: int, k: str, con: Con):
-        return qr.state(con, cfg.token_key, sid, k)
+    @app.get("/api/screen")
+    def screen_show(con: Con, x_screen: str = Header("")):
+        return qr.screen(con, cfg.token_key, x_screen)
 
-    @app.post("/api/screen/{sid}/{act}")
-    def screen_act(sid: int, act: str, con: Con, body: dict = Body(...)):
-        if act not in ("start", "finish"):
-            raise ApiError("not_found")
-        return (qr.start if act == "start" else qr.finish)(con, cfg.token_key, sid, str(body.get("k") or ""))
+    # the organizer's phone: pair a screen, run the session, the list
+    @app.get("/api/screens")
+    def screen_sessions(con: Con, v: Me):
+        return qr.sessions(con, cfg.token_key, v)
+
+    @app.post("/api/screens/bind")
+    def screen_bind(con: Con, v: Me, body: dict = Body(...)):
+        sid = body.get("session")
+        return qr.bind(con, cfg.token_key, v, str(body.get("code") or ""), int(sid) if isinstance(sid, int) else None)
+
+    @app.post("/api/screens/{sid}/csv")
+    def screen_csv_link(sid: int, con: Con, v: Me):
+        return qr.csv_link(con, cfg.token_key, v, sid)
+
+    @app.post("/api/screens/{sid}/{act}")
+    def screen_act(sid: int, act: str, con: Con, v: Me):
+        return qr.control(con, cfg.token_key, v, sid, act)
 
     @app.get("/api/screen/{sid}/csv")
-    def screen_csv(sid: int, k: str, con: Con):
-        return Response(qr.export(con, cfg.token_key, sid, k), media_type="text/csv; charset=utf-8",
+    def screen_csv(sid: int, e: int, k: str, con: Con):
+        return Response(qr.export(con, cfg.token_key, sid, e, k), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="checkin-{sid}.csv"', "Cache-Control": "no-store"})
 
     @app.post("/api/checkin")
