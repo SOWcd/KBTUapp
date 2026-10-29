@@ -70,7 +70,7 @@ def registry(con, v: Viewer, back: int = 0) -> list[dict]:
                         "WHERE m.org_id = ? AND m.role = 'president'", o["id"])
         st = one(con, """SELECT COUNT(DISTINCT e.id) AS events, COUNT(r.id) AS regs, COUNT(r.checked_in_at) AS came FROM events e
             LEFT JOIN registrations r ON r.event_id = e.id AND r.status = 'going'
-            WHERE e.org_id = ? AND e.status = 'published' AND e.starts_at >= ? AND e.starts_at < ?""", o["id"], m0, m1)
+            WHERE e.org_id = ? AND e.status = 'published' AND e.guest_host IS NULL AND e.starts_at >= ? AND e.starts_at < ?""", o["id"], m0, m1)  # a partner's isn't the club's work
         out.append({"org": org_ref(con, o), "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
                     "president": _dmp_person(pres, "president") if pres else None,
                     "month": {"events": st["events"], "registrations": st["regs"], "came": st["came"]}})

@@ -247,6 +247,7 @@ export interface EventCard {
   firstYear: boolean;
   needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
   externalUrl: string | null;
+  guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
   freeFirst?: number | null;    // a paid event: how many 1st-year students come free (the first to register)
@@ -360,6 +361,8 @@ export interface EventInput {
   visibility?: 'public' | 'members' | 'leaders';  // left out: kept as it is; leaders only from an oversight org
   meeting?: boolean;           // a club meeting: only team-only, no seats, no price
   meetingTag?: Id | null;
+  guestHost?: string | null;   // a partner's event: the outside host; null turns it off, left out keeps it
+  externalUrl?: string | null; // with guestHost: where people sign up (https)
   leadersFrom?: 'president' | 'vice' | 'head';
   /** A photo from uploadPhoto; null removes the photo; left out keeps whatever the event has. */
   coverId?: Id | null;

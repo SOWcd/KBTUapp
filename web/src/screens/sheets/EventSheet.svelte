@@ -257,6 +257,7 @@
 
     <h2 class="t-h2 title" class:strike={cancelled}>{e.title}</h2>
     {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
+    {#if e.guestHost}<p class="t-foot">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
 
     {#if detail && (detail.canRate || detail.myRating != null)}
       <section class="rate">
@@ -346,7 +347,7 @@
       {:else if floorOf(e.place) != null}
         <button class="fact" onclick={() => sheets.map(e.place)}><span class="fi"><MapIcon size={18} /></span><span><b>{e.place}</b><i class="go">{floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')}</i></span></button>
       {:else}
-        <div class="fact"><span class="fi"><MapPin size={18} /></span><span><b class:tba={!e.place}>{placeOf(e.place)}</b><i>{e.price ? money(e.price) : t('event.free')}</i></span></div>
+        <div class="fact"><span class="fi"><MapPin size={18} /></span><span><b class:tba={!e.place}>{placeOf(e.place)}</b><i>{e.price ? money(e.price) : e.guestHost ? '' : t('event.free')}</i></span></div>
       {/if}
     </div>
 
@@ -415,10 +416,10 @@
 
     {#if crew}
       <div class="tools">
-        {#if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={18} />{t('studio.marks')}</button>
+        {#if e.guestHost}{:else if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={18} />{t('studio.marks')}</button>
         {:else}<button onclick={() => sheets.scanner(id)}><ScanLine size={18} />{t('studio.scanner')}</button>{/if}
         {#if head}
-          <button onclick={() => sheets.attendees(id)}><UsersRound size={18} />{t('studio.attendees')}</button>
+          {#if !e.guestHost}<button onclick={() => sheets.attendees(id)}><UsersRound size={18} />{t('studio.attendees')}</button>{/if}
           <button onclick={() => sheets.editor(e.org.id, id)}><Pencil size={18} />{t('studio.edit')}</button>
         {/if}
       </div>

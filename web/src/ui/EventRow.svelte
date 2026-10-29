@@ -36,6 +36,7 @@
       {:else if st === 'hold'}<Chip tone="warning">{t('event.pay', { price: money(e.price ?? 0) })}</Chip>
       {:else if st === 'waitlist'}<Chip tone="neutral">{t('event.notifyOn')}</Chip>
       {:else if full}<Chip tone="neutral">{t('event.full')}</Chip>
+      {:else if e.guestHost}<Chip tone="neutral">{t('event.partner')}</Chip>
       {:else if e.visibility === 'members'}<Chip tone="accent">{t('event.teamOnly')}</Chip>
       {:else if e.firstYear}<Chip tone="warning">{t('event.firstYear')}</Chip>{/if}
       {#if e.friends.length && !cancelled}
@@ -43,7 +44,7 @@
           <span class="stack">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={20} tappable={false} />{/each}</span>
           <span class="t-foot ellipsis">{friendsLine(e.friends.map((f) => f.name), over)}</span>
         </span>
-      {:else if !cancelled && !over}
+      {:else if !cancelled && !over && !e.guestHost}
         <span class="t-foot faint">{tn('event.going', e.taken)}</span>
       {/if}
     </span>

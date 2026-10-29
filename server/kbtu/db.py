@@ -732,6 +732,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (session_id, email)
     ) STRICT;
     CREATE INDEX qr_expected_by_email ON qr_expected(email);"""),
+    # a partner's event a club posts (Oct 29, the Incubator's Halloween party): "With <host>" under the club, a link out
+    # (external_url) instead of tickets, no ping to followers, out of the club's numbers and achievements
+    (80, "ALTER TABLE events ADD COLUMN guest_host TEXT;"),
 ]
 
 

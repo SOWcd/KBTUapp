@@ -40,6 +40,9 @@
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
   const canPrice = $derived(official && may(mine, 'money'));
+  // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
+  const canPartner = $derived(official || oversee);
+  const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
   // the name Kaspi prints for the recipient ("Alikhan S.", my short name): mine, as the one setting it up usually takes the money
   const myKaspiName = session.me?.student ? session.me.name : '';
 
@@ -56,6 +59,7 @@
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
     end: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null,
+    partner: false, host: '', link: '',
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
@@ -103,6 +107,8 @@
     payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
     payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
     freeFirst: !f.paid || !f.freeFirst || (Number.isInteger(+f.freeFirst) && +f.freeFirst >= 0 && +f.freeFirst <= 5000) ? '' : t('ed.need'),
+    host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
+    link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
     reg: !f.deadline ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
@@ -228,6 +234,7 @@
           end: e.endsAt ? time(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null,
+          partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
           deadline: !!e.regUntil, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place, memo: e.memo ?? {} };
@@ -263,8 +270,9 @@
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     memo: Object.keys(f.memo).length ? $state.snapshot(f.memo) : null,
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: f.deadline && !isMeeting && Number.isFinite(regTs) ? regTs : null,
-    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
-    meeting: isMeeting, meetingTag: isMeeting ? f.meetingTag : null,
+    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
+    meeting: isMeeting && !f.partner, meetingTag: isMeeting && !f.partner ? f.meetingTag : null,
+    ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
     // only a changed photo or focus is sent: left out, the server keeps what the event has
     ...(f.cover?.id !== saved?.cover?.id || !f.cover !== !saved?.cover ? { coverId: f.cover?.id ?? null } : {}),
     ...(String(f.cover?.focus ?? '') !== String(saved?.cover?.focus ?? '') ? { coverFocus: f.cover?.focus ?? null } : {}),
@@ -272,7 +280,7 @@
     ...(f.wideVideoId !== (saved?.wideVideo?.id ?? null) ? { wideVideoId: f.wideVideoId } : {}),
     ...(String(f.cover ? f.slides.map((x) => x.id) : []) !== String((saved?.slides ?? []).map((x) => x.id)) ? { slideIds: f.cover ? f.slides.map((x) => x.id!) : [] } : {}),
     // the price only from those who may set it: left out, the server keeps it
-    ...(canPrice ? f.paid && !isMeeting ? { price: +f.price, payToName: f.payTo.trim(), payPhone: f.payPhone.trim(), freeFirst: +(f.freeFirst || 0) || null } : { price: null } : {}),
+    ...(canPrice ? f.paid && !isMeeting && !f.partner ? { price: +f.price, payToName: f.payTo.trim(), payPhone: f.payPhone.trim(), freeFirst: +(f.freeFirst || 0) || null } : { price: null } : {}),
   });
 
   // the form as students will see it once published; what's still empty shows as a dash, never as an example
@@ -283,7 +291,7 @@
     sheets.preview({
       ...i, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
-      cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: saved?.externalUrl ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
+      cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
     });
   }
@@ -306,7 +314,8 @@
       close(overlay.id);
     } catch (x) {
       haptic.error();
-      say(x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
+      say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
+        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
         : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'pleading_face_3d');
     } finally { busy = ''; }
   }
@@ -428,7 +437,22 @@
       <textarea bind:value={f.description} maxlength="2000" rows="4" placeholder={t('ed.aboutPh')}></textarea></label>
     {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
 
-    {#if !isMeeting}
+    {#if canPartner && !isMeeting}
+      <label class="switch">
+        <span><b>{t('ed.partner')}</b><i class="t-foot">{t('ed.partnerHint')}</i></span>
+        <input type="checkbox" role="switch" bind:checked={f.partner} />
+      </label>
+      {#if f.partner}
+        <label class="field" class:bad={tried && err.host}><span class="t-cap">{t('ed.partnerHost')}</span>
+          <input bind:value={f.host} maxlength="60" placeholder={t('ed.partnerHostPh')} /></label>
+        {#if tried && err.host}<p class="err">{err.host}</p>{/if}
+        <label class="field" class:bad={tried && err.link}><span class="t-cap">{t('ed.partnerLink')}</span>
+          <input bind:value={f.link} type="url" inputmode="url" maxlength="500" placeholder="https://" /></label>
+        {#if tried && err.link}<p class="err">{err.link}</p>{/if}
+      {/if}
+    {/if}
+
+    {#if !isMeeting && !f.partner}
     <label class="field" class:bad={tried && err.seats}><span class="t-cap">{t('ed.seats')}</span>
       <input bind:value={f.seats} type="number" inputmode="numeric" min="1" placeholder={t('ed.seatsPh')} /></label>
 
@@ -490,7 +514,8 @@
     {/if}
     {/if}
 
-    {#if oversee}
+    {#if f.partner}<!-- a partner's: public, no team or meeting -->
+    {:else if oversee}
       <!-- DMP (§4.10): an event for everyone, its own team, or a meeting of every club's leaders -->
       <div class="who">
         <span class="t-cap">{t('ed.who')}</span>
@@ -510,7 +535,7 @@
         <input type="checkbox" role="switch" bind:checked={f.teamOnly} />
       </label>
     {/if}
-    {#if f.teamOnly}
+    {#if f.teamOnly && !f.partner}
       <label class="switch">
         <span><b>{t('ed.meeting')}</b><i class="t-foot">{t('ed.meetingHint')}</i></span>
         <input type="checkbox" role="switch" bind:checked={f.meeting} />

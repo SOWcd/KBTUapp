@@ -108,7 +108,7 @@
     {/if}
 
     <div class="tools">
-      {#if live}
+      {#if live && !e.guestHost}<!-- a partner's event has no door -->
         {#if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={20} />{t('studio.marks')}</button>
         {:else}<button onclick={() => sheets.scanner(id)}><ScanLine size={20} />{t('studio.scanner')}</button>{/if}
       {/if}

@@ -5394,3 +5394,47 @@ def test_qr_checkin_edges(env, monkeypatch):
     con.execute("UPDATE qr_sessions SET ended_at = ended_at - ? WHERE id = ?", (checkin.GRACE + 1, sid))
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 409       # past the grace: closed
     con.close()
+
+
+def test_partner_events(env):
+    """Oct 29: a partner's event a club posts. An official club's organizers or DMP name the outside host (no KBTU, DMP,
+    council or school in it) with an https link; no price, no sign-up here, no door; followers aren't pinged; it stays
+    out of DMP's registry numbers."""
+    c, cfg = env
+    pres, head, dmp, ali = login(c, 20, "pres"), login(c, 21, "head"), login(c, 80, "dmp"), login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'inc', 'club', 'Incubator', 'IN', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_oversee, created_at) VALUES (9, 'dmp', 'office', 'DMP', 'D', 'trophy_3d', 1, 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                    [(1, pres["id"], "president"), (1, head["id"], "head"), (9, dmp["id"], "head"), (1, dmp["id"], "head")])
+    con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (?, 1, 0)", (ali["id"],))
+    start = int(time.time()) + 86400
+    body = {"title": "Halloween", "place": "Bar", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    party = {**body, "guestHost": "  Night  Owls ", "externalUrl": "https://owls.kz/halloween"}
+    assert c.post("/api/orgs/1/events", headers=tma(20), json=party).json()["message"] == "partner"   # a student initiative
+    ev = c.post("/api/orgs/1/events", headers=tma(80), json=party).json()                              # DMP may
+    assert (ev["guestHost"], ev["externalUrl"]) == ("Night Owls", "https://owls.kz/halloween")
+    con.execute("UPDATE orgs SET official = 1 WHERE id = 1")
+    for bad in ("KBTU Night", "\u041a\u0411\u0422\u0423 party", "dmp crew", "\u0414\u041c\u041f", "Student Council", "\u0421\u043e\u0432\u0435\u0442",
+                "Business School", "x" * 61):
+        assert c.post("/api/orgs/1/events", headers=tma(21), json={**party, "guestHost": bad}).json()["message"] == "partner"
+    for url in (None, "http://owls.kz", "https://owls", "javascript:alert(1)"):
+        assert c.post("/api/orgs/1/events", headers=tma(21), json={**party, "externalUrl": url}).status_code == 400
+    priced = {**party, "price": 2000, "payToName": "Alikhan S.", "payPhone": "87071234567"}
+    assert c.post("/api/orgs/1/events", headers=tma(20), json=priced).json()["message"] == "partner"   # no tickets, no money
+    eid = c.post("/api/orgs/1/events", headers=tma(21), json=party).json()["id"]                        # a Head may
+    assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**priced, "guestHost": "Night Owls"}).json()["message"] == "partner"
+    assert c.post(f"/api/events/{eid}/publish", headers=tma(21)).status_code == 200
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'new_event'").fetchone()[0] == 0    # the feed only
+    assert c.post(f"/api/events/{eid}/registration", headers=tma(10), json={}).status_code == 400         # signed up for on the host's site
+    assert c.post(f"/api/events/{eid}/checkin", headers=tma(21), json={"code": "X"}).status_code == 409  # no door
+    assert any(e["id"] == eid and e["guestHost"] == "Night Owls" for e in c.get("/api/events", headers=tma(10)).json())
+    # a club's own event with people signed up can't turn into a partner's
+    own = c.post("/api/orgs/1/events", headers=tma(21), json=body).json()["id"]
+    c.post(f"/api/events/{own}/publish", headers=tma(21))
+    c.post(f"/api/events/{own}/registration", headers=tma(10), json={})
+    assert c.patch(f"/api/events/{own}", headers=tma(21), json=party).json()["message"] == "taken"
+    con.execute("UPDATE events SET starts_at = ? WHERE id IN (?, ?)", (int(time.time()), eid, own))  # this month, for the registry
+    month = next(x for x in c.get("/api/registry/orgs", headers=tma(80, "Dmp")).json() if x["org"]["id"] == 1)["month"]
+    assert (month["events"], month["registrations"]) == (1, 1)                                         # the club's own only
+    assert c.patch(f"/api/events/{eid}", headers=tma(21), json={**body, "guestHost": None}).json()["externalUrl"] is None  # off: the link goes too

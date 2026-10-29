@@ -9,7 +9,7 @@ from ..db import tx
 
 from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
     _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
-    person_ref, role_in, rows, taken)
+    overseer, person_ref, role_in, rows, taken)
 
 
 # ---------------------------------------------------------------- Studio (own org)
@@ -20,6 +20,8 @@ def _staff_event(con, v: Viewer, eid: int, right: str) -> sqlite3.Row:
     if not e:
         raise ApiError("not_found")
     _may(con, v, e["org_id"], right)
+    if right == "door" and e["guest_host"]:
+        raise ApiError("closed")  # a partner's event has no door: people sign up on the host's site
     return e
 
 
@@ -257,10 +259,45 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     return new
 
 
+# a partner's name must not pass for KBTU's own: KBTU, DMP, a council, a school (en, ru)
+GUEST_BANNED = re.compile(r"kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school", re.I)
+HTTPS = re.compile(r"https://[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?")
+
+
+def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
+    """A partner's event (Oct 29, the Incubator's Halloween party): guestHost names the outside host, shown as
+    "With <host>" (the club stays the one accountable), externalUrl is where people sign up. Only an official club's
+    organizers or DMP set it, and not once people have signed up here. Absent keeps both."""
+    if "guestHost" not in body:
+        return {}
+    host = " ".join(str(body.get("guestHost") or "").split()) or None
+    url = str(body.get("externalUrl") or "").strip() or None
+    if host and not (len(host) <= 60 and not GUEST_BANNED.search(host) and url and len(url) <= 500 and HTTPS.fullmatch(url)):
+        raise ApiError("bad_input", "partner")
+    # off again: its link goes with it; an older event's own external_url stays
+    new = {"guest_host": host, "external_url": url if host else None if e is None or e["guest_host"] else e["external_url"]}
+    old = {k: e[k] for k in new} if e else dict.fromkeys(new)
+    if new == old:
+        return {}
+    if not (org["official"] or overseer(con, v)):
+        raise ApiError("forbidden", "partner")
+    if host and e and one(con, "SELECT 1 FROM registrations WHERE event_id = ?", e["id"]):
+        raise ApiError("conflict", "taken")
+    return new
+
+
+def _partner_ok(f: dict, e: sqlite3.Row | None = None) -> None:
+    """A partner's event has no tickets: no price, public, not a meeting (the link out is the only way in)."""
+    get = lambda k: f[k] if k in f else e[k] if e else None  # noqa: E731
+    if get("guest_host") and (get("price") or get("meeting") or (get("visibility") or "public") != "public"):
+        raise ApiError("bad_input", "partner")
+
+
 def create_event(con, v: Viewer, oid: int, body: dict) -> dict:
     _may(con, v, oid, "events")
     org = _org(con, oid)
-    f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org)}
+    f = {**clean_event(body, bool(org["can_oversee"])), **_pay(con, v, body, org), **_partner(con, v, body, org)}
+    _partner_ok(f)
     _meeting_ok(con, v, oid, f, bool(f.get("price")))
     f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, None), _focus(body, None), _memo(body, None)
     f["video_id"], f["wide_video_id"] = _video(con, v, body, None), _video(con, v, body, None, "wideVideoId")
@@ -298,7 +335,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         e = _staff_event(con, v, eid, "events")
         if e["status"] == "cancelled":
             raise ApiError("closed")
-        f |= _pay(con, v, body, org, e)
+        f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e)
+        _partner_ok(f, e)
         _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"]))
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
@@ -376,7 +414,7 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
             for uid in _expected(con, e):
                 if uid != v.id:
                     notify(con, uid, "meeting_invite", f"mi:{eid}")
-        if e["visibility"] == "public":  # subscribers hear about it (§7, can be turned off)
+        if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
             for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
                 WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id):
                 notify(con, r[0], "new_event", f"event:{eid}")

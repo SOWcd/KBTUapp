@@ -134,6 +134,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     for e in rows(con, """SELECT e.*, o.name AS org_name, f.path AS cover FROM events e JOIN orgs o ON o.id = e.org_id
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.starts_at > ?
+              AND (e.guest_host IS NULL OR e.channel_msg IS NOT NULL)  -- a partner's event isn't announced; one posted before it became one is kept in step
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) ORDER BY e.published_at""", core.now()):
         tr = json.loads(e["i18n"]) if e["i18n"] else {}  # the channel is everyone's: the other languages' titles under it (PLAN 9)
         also = [x for k in ("kk", "ru", "en") if (x := tr.get(k, {}).get("title")) and x.strip().lower() != e["title"].strip().lower()]
@@ -363,7 +364,7 @@ def register(con, v: Viewer, eid: int, invited_by: int | None = None, phone: obj
             raise ApiError("closed")
         if e["reg_until"] and e["reg_until"] <= core.now():
             raise ApiError("closed", "deadline")
-        if e["external_url"]:
+        if e["external_url"] or e["guest_host"]:  # signed up for elsewhere
             raise ApiError("bad_input")
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if r and r["status"] in ("going", "hold", "waitlist"):
