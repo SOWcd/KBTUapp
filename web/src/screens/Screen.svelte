@@ -111,7 +111,7 @@
     border-radius: 999px; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); transition: transform 0.15s, opacity 0.2s; }
   .btn:hover { transform: scale(1.03); }
   .btn:disabled { opacity: 0.45; cursor: default; transform: none; }
-  .btn.ghost { background: color-mix(in srgb, var(--text) 10%, transparent); }
+  .btn.ghost { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
   .btn.big { font-size: clamp(22px, 3.4vh, 34px); padding: 3vh 6vh; box-shadow: 0 0 60px color-mix(in srgb, var(--accent) 45%, transparent); }
   .live { display: flex; align-items: center; gap: 5vw; }
   .code { width: min(68vh, 50vw); padding: 2.4vh; border-radius: 4vh; background: #fff;
