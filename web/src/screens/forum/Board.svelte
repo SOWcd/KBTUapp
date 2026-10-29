@@ -134,6 +134,8 @@
   .topics button.on { background: var(--text); color: var(--bg); }
   .list { display: flex; flex-direction: column; gap: 10px; }
   .in { animation: rise 440ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 50ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
+  @keyframes pulse { 50% { opacity: 0.5; } }
   .th { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 10px; border-radius: var(--r-l); background: var(--surface);
     box-shadow: inset 0 0 0 1px var(--line); transition: transform var(--t-fast) var(--ease); }
   .th:has(.open:active) { transform: scale(0.985); }

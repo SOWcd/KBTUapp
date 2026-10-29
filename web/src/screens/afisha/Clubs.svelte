@@ -69,7 +69,7 @@
   const tint = (title: string) => COVERS[[...title].reduce((h, c) => h + c.charCodeAt(0), 0) % COVERS.length];
 </script>
 
-<div class="page scroll">
+<div class="page scroll stagger">
   <header class="hd">
     <h1 class="t-h1">{t('clubs.title')}</h1>
   </header>

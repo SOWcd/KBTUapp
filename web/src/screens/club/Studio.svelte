@@ -127,7 +127,7 @@
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
 
-<div class="page scroll">
+<div class="page scroll stagger">
   {#if m}
     <header class="hd">
       <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right, in glass

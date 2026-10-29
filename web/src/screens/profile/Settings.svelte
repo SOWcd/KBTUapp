@@ -95,7 +95,7 @@
 
 {#snippet ic(Icon: typeof BellRing, c: string)}<span class="ico" style="--c:{c}" aria-hidden="true"><Icon size={18} strokeWidth={2.2} /></span>{/snippet}
 
-<div class="page scroll">
+<div class="page scroll stagger">
   <h1 class="ttl">{t('me.settings')}</h1>
   <div class="rows surface">
     <div class="r">{@render ic(Languages, '#5E5CE6')}<span class="lb">{t('me.guestLang')}</span>

@@ -58,7 +58,7 @@
   }
 </script>
 
-<div class="page scroll" bind:this={page}>
+<div class="page scroll stagger" bind:this={page}>
   {#if me?.student}
     <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below -->
     <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
