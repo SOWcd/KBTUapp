@@ -438,6 +438,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def my_schedule(con: Con, v: Me):
         return logic.schedule(con, v)
 
+    @app.delete("/api/me/schedule", status_code=204)
+    def drop_my_schedule(con: Con, v: Me):
+        logic.drop_my_schedule(con, v)
+
     @app.get("/api/me/tickets")
     def my_tickets(con: Con, v: Me):
         return logic.tickets(con, v)

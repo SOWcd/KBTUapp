@@ -132,6 +132,7 @@ export const server: Api = {
   withdraw: (org) => call('DELETE', `/orgs/${org}/join-requests/mine`),
 
   schedule: () => call('GET', '/me/schedule'),
+  deleteSchedule: () => call('DELETE', '/me/schedule'),
 
   posts: (scope) => call('GET', '/posts?scope=' + encodeURIComponent(typeof scope === 'string' ? scope : `org:${scope.org}`)),
   react: (postId, kind, on) => call(on ? 'PUT' : 'DELETE', `/posts/${postId}/reactions/${kind}`),

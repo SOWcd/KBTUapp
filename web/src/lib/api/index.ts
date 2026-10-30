@@ -52,6 +52,7 @@ export interface Api {
   withdraw(org: Id): Promise<Org>;
 
   schedule(): Promise<ClassItem[]>;
+  deleteSchedule(): Promise<void>;                               // my week gone from the server (the Week sheet)
 
   posts(scope: 'all' | 'subs' | 'clubs' | { org: Id }): Promise<Post[]>;
   react(postId: Id, kind: 'fire' | 'heart', on: boolean): Promise<Post>;

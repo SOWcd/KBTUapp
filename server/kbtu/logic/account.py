@@ -585,6 +585,13 @@ def save_schedule(con, uid: int, lessons: list) -> None:
                                                      json.dumps(x.names, ensure_ascii=False) if getattr(x, "names", None) else None) for x in lessons])
 
 
+def drop_my_schedule(con, v: Viewer) -> None:
+    """My week deleted (the Week sheet). These rows are all of it: the names ride in them, the page sent to the bot is
+    never kept, the assistant reads the rows live. A guest has none, as with the GET."""
+    if v.student:
+        con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (v.id,))
+
+
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import chatlist, core, profiles  # noqa: E402

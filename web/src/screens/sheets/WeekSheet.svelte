@@ -1,9 +1,11 @@
 <script lang="ts">
   // My whole week of classes (PLAN 26: the class card on Home, tapped; the bot's "check them in the app"): a day a
-  // block, each class its times, kind, room and teacher, as the portal had them. A new one from the portal replaces it.
+  // block, each class its times, kind, room and teacher, as the portal had them. A new one from the portal replaces it;
+  // the last row deletes it.
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
-  import type { Overlay } from '../../lib/state/ui.svelte';
-  import { data } from '../../lib/state/data.svelte';
+  import type { ClassItem } from '../../lib/api';
+  import { close, type Overlay } from '../../lib/state/ui.svelte';
+  import { data, dropSchedule } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, subjectOf } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
@@ -13,7 +15,17 @@
   let { overlay }: { overlay: Overlay } = $props();
   // a weekday's name in the app's language: 2024-01-01 was a Monday (noon UTC, the same day in Almaty)
   const dayName = (wd: number) => { const w = weekday(Date.UTC(2024, 0, wd, 12) / 1000); return w.charAt(0).toUpperCase() + w.slice(1); };
-  const days = $derived([1, 2, 3, 4, 5, 6, 7].map((wd) => ({ wd, list: data.schedule.filter((c) => c.weekday === wd) })).filter((d) => d.list.length));
+  // the week it had stays put while the sheet slides away after "Delete" (the store is empty at once, for the others)
+  let shown: ClassItem[] = [];
+  const days = $derived.by(() => {
+    if (!overlay.closing) shown = data.schedule;
+    return [1, 2, 3, 4, 5, 6, 7].map((wd) => ({ wd, list: shown.filter((c) => c.weekday === wd) })).filter((d) => d.list.length);
+  });
+  async function drop() {
+    if (!(await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true }))) return;
+    close(overlay.id);
+    void dropSchedule();
+  }
 </script>
 
 <Sheet {overlay} tall title={t('sched.weekTitle')} icon={CalendarDays}>
@@ -34,6 +46,7 @@
     <p class="t-foot none">{t('sched.none')}</p>
   {/each}
   <button class="upd" onclick={() => sheets.schedHowTo()}>{t('sched.update')}</button>
+  {#if days.length}<button class="upd red" onclick={drop}>{t('sched.del')}</button>{/if}
 </Sheet>
 
 <style>
@@ -49,5 +62,6 @@
   .tx b { font: 640 15px/1.25 var(--font-text); }
   .tx small { font: 500 12.5px/1.25 var(--font-text); color: var(--text-2); }
   .none { padding: 20px 4px; }
-  .upd { display: block; width: 100%; height: 44px; margin-top: 16px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
+  .upd { display: block; width: 100%; height: 44px; margin-top: 16px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); text-align: center; }
+  .upd.red { margin-top: 8px; color: var(--danger-text); }
 </style>

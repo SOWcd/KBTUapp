@@ -280,3 +280,16 @@ export async function skipClass(key: string, c: ClassItem): Promise<void> {
   }
   try { localStorage.setItem(SKIP_KEY, JSON.stringify([...skipped])); } catch { /* blocked */ }
 }
+
+/** My week deleted (the Week sheet): gone from every screen at once, back if the server says no; the classes I skip
+ *  go too once it's done (unseen without the week) */
+export async function dropSchedule(): Promise<void> {
+  const before = data.schedule;
+  data.schedule = [];
+  try {
+    await api.deleteSchedule();
+    skipped.clear();
+    try { localStorage.removeItem(SKIP_KEY); } catch { /* blocked */ }
+    haptic.ok(); say(t('pd.deleted'), 'sparkles_3d');
+  } catch { data.schedule = before; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+}

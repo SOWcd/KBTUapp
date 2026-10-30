@@ -4883,6 +4883,16 @@ def test_portal_schedule(env, monkeypatch):
     assert "00X000000" not in dump and "Phone Only Course" not in dump           # the student ID is never kept; the phone layout ignored
     assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})
 
+    # the Week sheet's "Delete schedule": nothing of the week stays anywhere in the database; Bek's stays; again is fine;
+    # a guest gets what the GET gives a guest: no error, no week
+    assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204
+    assert c.get("/api/me/schedule", headers=tma(50)).json() == []
+    dump = "\n".join(con.iterdump())
+    assert not [x for w in want for x in (w[3], w[6]) if x in dump]               # subjects, teachers: in no table at all
+    assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204
+    assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]
+    assert c.delete("/api/me/schedule", headers=tma(52)).status_code == 204 and c.get("/api/me/schedule", headers=tma(52)).json() == []
+
 
 def test_bot_cards_for_helpers_and_invites(env):
     """The bot's cards about an event for one person (_render): a volunteer's yes/no, an invitation to a leaders'
