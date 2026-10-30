@@ -185,16 +185,19 @@
   /* the term card: the strip of weeks, then the psychologist (mockup v24) */
   .term { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .sem { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; text-align: left; }
+  /* a <button> doesn't stretch its flex children on older iOS WebKit: the track had no width and every label sat on the
+     left ("3midterms", Oct 31) */
+  .sem > * { width: 100%; }
   .sem-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .sem-h b { font: 750 19px/1.15 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
   .left { flex: none; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .track { position: relative; height: 10px; margin: 6px 0 2px; border-radius: 5px; background: var(--surface-3); }
   .track i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
-  .band { background: color-mix(in srgb, var(--gold) 38%, transparent); }
-  .exam { right: 0; width: calc(100% / 16); background: color-mix(in srgb, var(--danger) 75%, transparent); }
-  .fill { left: 0; background: linear-gradient(90deg, #3B6BFF, #7C5CFF); box-shadow: 0 0 14px -2px color-mix(in srgb, #5B6BFF 70%, transparent); }
+  .band { background: rgba(245, 177, 61, 0.38); }
+  .exam { right: 0; width: calc(100% / 16); background: rgba(240, 82, 74, 0.75); }
+  .fill { left: 0; background: linear-gradient(90deg, #3B6BFF, #7C5CFF); box-shadow: 0 0 14px -2px rgba(91, 107, 255, 0.7); }
   .dot { top: 50% !important; bottom: auto !important; width: 20px; height: 20px; translate: -50% -50%; border-radius: 50% !important;
-    background: radial-gradient(circle at 35% 30%, #fff, #DCE3FF); box-shadow: 0 0 0 4px color-mix(in srgb, #6B6BFF 45%, transparent), 0 0 18px 2px color-mix(in srgb, #6B6BFF 60%, transparent); }
+    background: radial-gradient(circle at 35% 30%, #fff, #DCE3FF); box-shadow: 0 0 0 4px rgba(107, 107, 255, 0.45), 0 0 18px 2px rgba(107, 107, 255, 0.6); }
   .sem-l { position: relative; display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .sem-l span:nth-child(2) { position: absolute; translate: -50% 0; color: var(--warning-text); }
   .sem-l span:last-child { color: var(--danger-text); }

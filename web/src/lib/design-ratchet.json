@@ -368,8 +368,8 @@
  "screens/profile/Me.svelte": {
   "font": 6,
   "radius": 7,
-  "hex": 18,
-  "mix": 5
+  "hex": 15,
+  "mix": 0
  },
  "screens/profile/MyQr.svelte": {
   "font": 5,
@@ -557,12 +557,6 @@
   "hex": 8,
   "mix": 0
  },
- "ui/Button.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 6,
-  "mix": 0
- },
  "ui/Capsule.svelte": {
   "font": 3,
   "radius": 0,
@@ -579,12 +573,6 @@
   "font": 0,
   "radius": 0,
   "hex": 3,
-  "mix": 0
- },
- "ui/Chip.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 1,
   "mix": 0
  },
  "ui/ClubRow.svelte": {
@@ -641,12 +629,6 @@
   "hex": 19,
   "mix": 0
  },
- "ui/Nav.svelte": {
-  "font": 2,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0
- },
  "ui/OrgLogo.svelte": {
   "font": 0,
   "radius": 0,
@@ -657,12 +639,6 @@
   "font": 2,
   "radius": 0,
   "hex": 4,
-  "mix": 0
- },
- "ui/Pane.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
   "mix": 0
  },
  "ui/Pin.svelte": {
