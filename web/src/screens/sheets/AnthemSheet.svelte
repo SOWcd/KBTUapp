@@ -102,7 +102,9 @@
   const synced = $derived(TIMED && (cursor >= 0 || on || cur > 0));
   const len = $derived(lineLen(starts));
   const pos = $derived(synced && cursor < 0 ? lyricAt(starts, ends, cur + LEAD, dur, len) : null);
-  const lit = $derived(cursor >= 0 ? cursor : (pos?.line ?? -1));
+  // re-tapping lights the line just stamped (the one being sung), not the one waiting: a lit waiting line made the
+  // owner tap it when the NEXT began, every time a line late (Oct 30)
+  const lit = $derived(cursor >= 0 ? cursor - 1 : (pos?.line ?? -1));
   const gapAt = $derived(pos?.next ?? -1), gapP = $derived(pos?.p ?? 0);
   const dot = (k: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, gapP * 3 - k));
 
