@@ -21,8 +21,6 @@
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
   import { QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
-  import { power } from '../../lib/state/power.svelte';
-  import { ui } from '../../lib/state/ui.svelte';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
@@ -55,28 +53,6 @@
     if (still()) return;
     swing.style.willChange = 'transform';
     swing.animate(flip, { duration: 560, easing: 'cubic-bezier(.3,1.35,.5,1)' }).onfinish = () => (swing.style.willChange = '');
-  });
-
-  // On Me it also feels the Profile pages being swiped (the swing-in on paging looked like a jerk):
-  // it leans behind a moving page and sways when the page stops. A damped spring (8 rad/s, ζ 0.2) toward a lean
-  // set by the page's speed (1e-4 rad per px/s, at most 0.09 rad: 3.5–6°, calm in 2 s), measured from where the badge really is, so a
-  // drag, a flick and the capsule's slide all feel the same. CSS `rotate`, so it adds to the swing-in's transform.
-  $effect(() => {
-    if (!qr || still() || power.lite) return; // power saving: no spring, it reads the layout every frame
-    let th = 0, om = 0, vs = 0, lastX = 0, lastT = 0, raf = 0, until = 0;
-    const step = (t: number) => {
-      const x = swing.getBoundingClientRect().left, dt = lastT ? Math.min(0.034, (t - lastT) / 1000) : 0;
-      if (dt) vs += ((x - lastX) / dt - vs) * 0.3;
-      lastX = x; lastT = t;
-      const lean = Math.max(-0.09, Math.min(0.09, vs * 1e-4));
-      om += (64 * (lean - th) - 3.2 * om) * dt; th += om * dt;
-      if (t < until || Math.abs(th) > 5e-4 || Math.abs(om) > 5e-3 || Math.abs(vs) > 5) { swing.style.rotate = `${th.toFixed(4)}rad`; raf = requestAnimationFrame(step); }
-      else { swing.style.rotate = ''; th = om = vs = raf = lastT = 0; }
-    };
-    // the pager speaks when a drag moves and when a settle starts (≤ 360 ms): keep watching that long
-    const kick = () => { if (ui.tab !== 'profile') return; until = performance.now() + 450; if (!raf) raf = requestAnimationFrame(step); };
-    addEventListener('kb:pager', kick);
-    return () => { removeEventListener('kb:pager', kick); cancelAnimationFrame(raf); };
   });
 </script>
 

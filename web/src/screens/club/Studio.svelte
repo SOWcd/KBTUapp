@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Tab 2 → Studio (Head+) or Club (Member): "To do" on top only when something waits (new applications, the memo on
+  // Clubs → My club, Studio for Head+ and the club's page for a Member: the switch to All clubs, the Team row (the roster
+  // as a sheet, with the removal requests waiting), "To do" on top only when something waits (new applications, the memo on
   // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
   // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state.
   // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
@@ -8,6 +9,8 @@
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';
+  import Users from '@lucide/svelte/icons/users';
+  import ClubSwitch from './ClubSwitch.svelte';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -59,6 +62,14 @@
     void data.rev;
     if (org && vice) api.joinRequests(org).then((l) => { if (m?.org.id === org) waiting = l.length; }).catch(() => {});
     else waiting = 0;
+  });
+  // Vice+: the removal requests waiting on Team (§2b), on its row
+  let removals = $state(0);
+  $effect(() => {
+    const org = m?.org.id;
+    void data.rev;
+    if (org && vice) api.teamSetup(org).then((x) => { if (m?.org.id === org) removals = x.removals?.length ?? 0; }).catch(() => {});
+    else removals = 0;
   });
   const recruiting = $derived(data.orgs.find((x) => x.id === m?.org.id)?.recruiting ?? true);
   const members = $derived(data.orgs.find((x) => x.id === m?.org.id)?.members ?? 0);
@@ -128,6 +139,7 @@
 </script>
 
 <div class="page scroll stagger">
+  <ClubSwitch />
   {#if m}
     <header class="hd">
       <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right, in glass
@@ -151,6 +163,11 @@
         </div>
       {/if}
     </header>
+
+    <div class="todo surface">
+      <button onclick={() => { haptic.tap(); sheets.team(); }}><Users size={20} /><span class="tx"><b class="ellipsis">{t('page.team')}</b>{#if removals}<i class="t-foot ellipsis">{t('team.removals')}</i>{/if}</span>
+        <span class="num n">{data.team[m.org.id]?.length ?? members}</span>{#if removals}<b class="count warn">{removals}</b>{/if}<ChevronRight size={18} /></button>
+    </div>
 
     {#if todo}
       <h2 class="sec">{t('studio.todo')}</h2>
@@ -296,6 +313,7 @@
   .seats b { color: var(--text); font-weight: 650; }
   .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .n { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
   .count.warn { background: var(--warning-text); color: var(--bg); }
   .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
   .hero { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }

@@ -1,10 +1,13 @@
 <script lang="ts">
-  // Afisha → News, the page right of List ("one news feed is the killer feature"; PLAN 58): KBTU's news in
+  // Afisha → News, a sheet from the news circles' "All" ("one news feed is the killer feature"; PLAN 58): KBTU's news in
   // one place, not only events: the broadcasts "From DMP and KBTU App" first (a gradient edge, "new" until seen; seeing
-  // them clears the dot), then every club's and office's public posts with the new events of my clubs and follows, newest
-  // first. Writing is in Studio. A post: the club, when, its label, a photo, the text (long ones fold), the two
+  // them clears the dot), then every club's and office's public posts, newest first (a club's new
+  // event is on the list already, not here too). Writing is in Studio. A post: the club, when, its label, a photo, the text (long ones fold), the two
   // reactions, comments. A club's Head+ edit their post, pin it, or take it down (⋯).
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import Sheet from '../../ui/Sheet.svelte';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
+  import type { Overlay } from '../../lib/state/ui.svelte';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -14,14 +17,13 @@
   import SocialIcon from '../../ui/SocialIcon.svelte';
   import Linked from '../../ui/Linked.svelte';
   import { videoLinks } from '../../lib/social';
-  import { api, type EventCard, type Post } from '../../lib/api';
+  import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
-  import { ui, say } from '../../lib/state/ui.svelte';
+  import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { ago, nowTs, relDay } from '../../lib/time';
-  import EventRow from '../../ui/EventRow.svelte';
+  import { ago } from '../../lib/time';
   import { tagName } from '../../lib/posts';
   import { focusPos } from '../../lib/photo';
   import { haptic, openLink } from '../../lib/tg';
@@ -31,8 +33,8 @@
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
 
+  let { overlay }: { overlay: Overlay } = $props();
   const me = $derived(session.me);
-  const here = $derived(ui.tab === 'afisha' && ui.page.afisha === 2);
   const student = $derived(!!me?.student); // a boolean: a fresh Me (the dot's count) doesn't reload the page
   // loaded with the app (and kept for the next launch), so the page opens full; coming into view refreshes it quietly
   const casts = $derived(data.news?.casts ?? []);
@@ -41,8 +43,8 @@
   // refreshes it quietly
   const posts = $derived(data.eventsReady ? data.posts : null);
   const loadAll = () => api.posts('all').then((l) => (data.posts = l)).catch(() => {});
-  $effect(() => { if (here) untrack(() => { if (student) void loadNews(); void loadAll(); }); }); // staff read the feed too
-  $effect(() => { if (here && casts) untrack(() => seen(casts)); });
+  onMount(() => { if (student) void loadNews(); void loadAll(); }); // staff read the feed too
+  $effect(() => { if (casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
   let timer: ReturnType<typeof setTimeout> | undefined;
   function seen(list: Post[]) {
@@ -90,13 +92,8 @@
       void loadAfisha(); // List's card follows
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
-  // a new event of my clubs and follows (published in the last two weeks, still ahead) is a card among the posts, in time:
-  // clubs announce an event by publishing it, not with a post as well
-  const near = (id: number) => !!me?.memberships.some((m) => m.org.id === id) || data.orgs.some((o) => o.id === id && o.subscribed);
-  const fresh = $derived(data.events.filter((e) => e.status === 'published' && (e.publishedAt ?? 0) > nowTs() - 14 * 86400 && near(e.org.id)));
-  type Item = { at: number; post: Post } | { at: number; ev: EventCard };
   // by time only: a club's pin holds on its own page, not over everyone's news
-  const feed = $derived<Item[] | null>(posts && [...posts.map((p) => ({ at: p.createdAt, post: p })), ...fresh.map((e) => ({ at: e.publishedAt!, ev: e }))].sort((a, b) => b.at - a.at));
+  const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt));
   // "your club" / "you follow"; anyone else's post says only when
   const why = (p: Post) => (me?.memberships.some((m) => m.org.id === p.org.id) ? t('news.yourClub') + ' · ' : data.orgs.some((o) => o.id === p.org.id && o.subscribed) ? t('news.following') + ' · ' : '');
 </script>
@@ -152,9 +149,10 @@
   </article>
 {/snippet}
 
-<div class="page scroll">
+<Sheet {overlay} tall title={t('page.news')} icon={Newspaper}>
+<div class="news">
   <header class="hd">
-    <span><h1 class="t-h1">{t('page.news')}</h1><p class="t-foot">{t('news.sub')}</p></span>
+    <span><h2 class="t-h2">{t('page.news')}</h2><p class="t-foot">{t('news.sub')}</p></span>
   </header>
 
   {#if casts && posts}
@@ -164,15 +162,7 @@
     {/if}
     {#if feed?.length}
       {#if casts.length}<h2 class="sh">{t('news.clubs')}</h2>{/if}
-      <div class="list">{#each feed as it, i ('post' in it ? `p${it.post.id}` : `e${it.ev.id}`)}<div class="in" style="--i:{i + (casts.length ? 2 : 0)}">
-        {#if 'post' in it}{@render card(it.post, false)}
-        {:else}
-          <article class="post">
-            <header class="ph"><OrgLogo org={it.ev.org} size={36} /><span class="who"><b class="ellipsis">{nameOf(it.ev.org)}</b><i><span class="when">{t('news.newEvent')} · {ago(it.at)}</span></i></span></header>
-            <EventRow e={it.ev} showDate dateLine={relDay(it.ev.startsAt)} />
-          </article>
-        {/if}
-      </div>{/each}</div>
+      <div class="list">{#each feed as p, i (p.id)}<div class="in" style="--i:{i + (casts.length ? 2 : 0)}">{@render card(p, false)}</div>{/each}</div>
     {:else if !casts.length}
       <section class="empty">
         <Emoji name="sparkles_3d" size={64} />
@@ -183,15 +173,15 @@
   {:else}
     <div class="skel"><span></span><span class="tall"></span><span></span></div>
   {/if}
-  <div class="tail"></div>
 </div>
+</Sheet>
 
 <style>
   .pmenu { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
   .pmenu button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); color: var(--text); }
   .pmenu .danger { color: var(--danger-text); background: var(--danger-soft); }
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
-  .page > :global(*) { flex-shrink: 0; }
+  .news { display: flex; flex-direction: column; gap: 12px; }
+  .news > :global(*) { flex-shrink: 0; }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
   .hd p { margin-top: 4px; }
   .sh { font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-top: 6px; }
@@ -251,5 +241,4 @@
   .skel .tall { height: 280px; }
   @keyframes pulse { 50% { opacity: 0.5; } }
   @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
-  .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

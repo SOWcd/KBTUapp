@@ -251,7 +251,7 @@
         <Poster item={e} big radius={22} />
         <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
       {:else if !e.video?.url && e.cover && e.slides?.length}
-        <div class="strip" data-noswipe onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
+        <div class="strip" onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
           {#each [e.cover, ...e.slides] as p, i (p.id)}
             <button class="pic" onclick={() => sheets.photos([e.cover!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
               <img src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>

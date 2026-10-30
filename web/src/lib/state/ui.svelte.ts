@@ -7,45 +7,33 @@ export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
 // the forum second (Oct 30): the students' everyday place, next to the events
 export const TABS: Tab[] = ['afisha', 'forum', 'club', 'profile'];
 const NAV_KEY = 'kb-nav';
-/** Each tab's home page: List, the forum, Studio (the catalogue for a non-member, clamped), Me. */
-const HOME: Record<Tab, number> = { afisha: 1, forum: 0, club: 1, profile: 1 };
-// away this long, each tab opens on its home page again (owner, Oct 29: the tabs kept their last page "forever" and even
-// he got lost); the tab itself and the club picked stay
-const AWAY = 10 * 60_000;
 
-function restore(): { tab: Tab; page: Record<Tab, number>; club: number | null } {
+// one tab = one scrolling screen (Oct 30: the pages side by side in a tab were an 11-place grid even the owner got lost
+// in); the tab and the club picked are kept across launches
+function restore(): { tab: Tab; club: number | null } {
   try {
     const v = JSON.parse(localStorage.getItem(NAV_KEY) || 'null');
-    if (v && TABS.includes(v.tab) && v.page) {
-      const fresh = typeof v.at === 'number' && Date.now() - v.at < AWAY;
-      return { tab: v.tab, page: { ...HOME, ...(fresh ? v.page : {}) }, club: typeof v.club === 'number' ? v.club : null };
-    }
+    if (v && TABS.includes(v.tab)) return { tab: v.tab, club: typeof v.club === 'number' ? v.club : null };
   } catch { /* blocked or corrupted */ }
-  return { tab: 'afisha', page: { ...HOME }, club: null };
+  return { tab: 'afisha', club: null };
 }
 
 const start = restore();
 export const ui = $state({
   tab: start.tab,
-  page: start.page,
   navMini: false,          // bottom nav shrinks to icons while scrolling down
-  awake: 0,                // bumps on interaction: the capsule shows the page switcher for a moment
-  club: start.club,        // tab 2: the club picked in Studio, the same on Team (null = the top one); kept across launches
+  club: start.club,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
+  allClubs: false,         // the Clubs tab of a member: All clubs instead of My club (each launch starts on My club)
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
 });
 
 export function persistNav(): void {
-  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, page: ui.page, club: ui.club, at: Date.now() })); } catch { /* blocked */ }
+  try { localStorage.setItem(NAV_KEY, JSON.stringify({ tab: ui.tab, club: ui.club })); } catch { /* blocked */ }
 }
-// Telegram keeps a Mini App alive in the background: coming back after AWAY is a fresh start too
-let hiddenAt = 0;
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { hiddenAt = Date.now(); persistNav(); }
-  else if (hiddenAt && Date.now() - hiddenAt > AWAY) Object.assign(ui.page, HOME);
-});
+document.addEventListener('visibilitychange', () => { if (document.hidden) persistNav(); });
 
 export function goTab(tab: Tab): void {
-  if (ui.tab === tab) { ui.page[tab] = HOME[tab]; return; } // re-tap: back to the tab's home page
+  if (ui.tab === tab) return;
   ui.tab = tab;
   haptic.select();
 }
@@ -57,7 +45,8 @@ export function goTab(tab: Tab): void {
  *  before the title for a full-screen mode (the QR, the map, the scanner, settings). `byUser`: the close came
  *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
 /** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean }
+/** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 

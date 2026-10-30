@@ -184,7 +184,7 @@
       <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
       <div class="txt" class:card={p.body}>
         <h2>{p.title}</h2>
-        {#if p.body}<p class="scroll" data-noswipe><Linked text={p.body} /></p>{/if}
+        {#if p.body}<p class="scroll"><Linked text={p.body} /></p>{/if}
       </div>
     {/key}
 

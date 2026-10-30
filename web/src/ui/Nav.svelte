@@ -2,8 +2,7 @@
   // Bottom nav (liquid glass, floats). Equal tabs that stay put (four since the forum, Oct 30) (the owner's pick of four layouts,
   // Oct 4: a widening active tab made the others jump on every switch); the active one shows its label
   // inside one pill that slides under it with a jelly squash. Press and drag along the bar previews tabs;
-  // the tab switches on release. Shrinks to icons while scrolling down; hides under a sheet. Over the
-  // Feed it turns into dark glass tinted by the slide, in step with the finger (chrome.ts).
+  // the tab switches on release. Shrinks to icons while scrolling down; hides under a sheet (and the Feed).
   import Ticket from '@lucide/svelte/icons/ticket';
   import Landmark from '@lucide/svelte/icons/landmark';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
@@ -14,7 +13,6 @@
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
   import { glass, refract, jelly } from './glass';
-  import { chrome } from './chrome';
 
   // the tabs shown (the forum only where the server opened it), each with its label and dot
   let { tabs, labels, dot = [] }: { tabs: Tab[]; labels: string[]; dot?: boolean[] } = $props();
@@ -51,13 +49,13 @@
   }
   // the map's chunk on the press, not the click: by the release it has been loading for the whole press
   const warm = () => { void import('../screens/map/CampusMap.svelte').catch(() => {}); };
-  function pick(i: number) { if (drag?.on) return; goTab(tabs[i]); ui.awake++; }
+  function pick(i: number) { if (drag?.on) return; goTab(tabs[i]); }
 </script>
 
 <div class="dock">
-<nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract use:chrome
+<nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up}>
-  <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
+  <span class="tone-base" aria-hidden="true"></span>
   <span class="pill" bind:this={pill} style="left:calc(4px + (100% - 8px) * {shown} / {N}); width:calc((100% - 8px) / {N})" aria-hidden="true"></span>
   {#each tabs as tab, i (tab)}
     {@const Icon = ICON[tab]}
@@ -72,9 +70,9 @@
 </nav>
 <!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
-<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }} use:chrome
+<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }}
         onpointerdown={warm} onclick={openMap}>
-  <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
+  <span class="tone-base" aria-hidden="true"></span>
   <MapIcon size={22} strokeWidth={1.9} />
 </button>
 </div>
@@ -113,9 +111,6 @@
       rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base, .mapb > .tone-base { background: var(--glass-clear); }
-  .nav > .tone-feed, .mapb > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.55); background-image: linear-gradient(120deg, transparent, rgba(12, 14, 24, 0.6)); }
-  /* past the halfway point to the Feed: the dark palette (chrome.ts sets data-feed) */
-  .nav:global([data-feed]), .mapb:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
   .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
   .pill {
     position: absolute; top: 4px; bottom: 4px; border-radius: var(--r-full); background: var(--text);

@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Event card #1 (of three): the list row used in List, club pages and tickets.
+  // Event card #1 (of three): the list row used in List, club pages and tickets. A saved event has a small bookmark in
+  // its corner (Oct 30: Profile's "Coming up" is gone, the saved ones are found on the list).
   import type { EventCard } from '../lib/api';
   import { t, tn, money, friendsLine, placeOf } from '../lib/i18n/index.svelte';
   import { time, nowTs } from '../lib/time';
@@ -9,6 +10,7 @@
   import Chip from './Chip.svelte';
   import Avatar from './Avatar.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
+  import Bookmark from '@lucide/svelte/icons/bookmark';
   import { inner } from '../lib/perms';
 
   let { e, showDate = false, dateLine = '', onopen }: { e: EventCard; showDate?: boolean; dateLine?: string; onopen?: () => void } = $props();
@@ -23,7 +25,8 @@
 <!-- a club's own event looks like one: an outline instead of a card, the team mark by its time -->
 <button class="row press" class:cancelled class:inner={inner(e)} onpointerdown={() => { if (!onopen) prefetchEvent(e.id); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.querySelector('.poster')))}>
   <Poster item={e} size={68} radius={16} dim={cancelled} />
-  <span class="txt">
+  {#if e.saved && !cancelled}<span class="saved" title={t('event.saved')}><Bookmark size={14} strokeWidth={2.4} fill="currentColor" /></span>{/if}
+  <span class="txt" class:pr={e.saved && !cancelled}>
     <span class="t-title clamp-2 title">{e.title}</span>
     <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</span>
     <span class="foot">
@@ -52,8 +55,10 @@
 </button>
 
 <style>
-  .row { display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card); text-align: left; }
+  .row { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card); text-align: left; }
   .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .txt.pr .title { padding-right: 16px; }
+  .saved { position: absolute; top: 10px; right: 10px; display: flex; color: var(--gold); }
   .title { color: var(--text); }
   .cancelled .title { text-decoration: line-through; color: var(--text-2); }
   .meta { color: var(--text-2); }

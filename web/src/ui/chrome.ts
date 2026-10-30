@@ -1,13 +1,12 @@
-// The Feed is always dark photos, so over it the nav and the capsule turn into dark glass tinted with the
-// slide on screen. The blend follows the finger: the pager reports its position ('kb:pager') and two
-// layers per element cross-fade (opacity, compositor only); the icon palette flips at the halfway point.
+// The Feed is always dark photos, so over it the capsule turns into dark glass tinted with the slide on screen
+// (the nav hides under it): two layers cross-fade (opacity, compositor only) and the palette flips past halfway.
 // Nothing here touches <html>: a variable there restyles the whole document on every frame.
 type Part = { node: HTMLElement; base: HTMLElement; feed: HTMLElement };
 const parts = new Set<Part>();
 const state = { k: 0, rgb: '' };
 
 function apply(p: Part, ease: string) {
-  // the pager's ease is written for transform; the same curve and duration drive the cross-fade
+  // an ease may be written for transform; the same curve and duration drive the cross-fade
   const tr = `${ease ? ease.replace(/transform/g, 'opacity') : 'opacity 0s'}, background-color 500ms ease`;
   p.base.style.transition = tr;
   p.feed.style.transition = tr;
@@ -23,8 +22,7 @@ export function feedChrome(k: number, ease = ''): void {
   for (const f of fades) fadeOut(f, ease);
 }
 
-// the fades under the capsule and the nav go away over the Feed, with the same blend (they used to vanish at
-// the end of the swipe: the owner's video, Oct 21)
+// the fades under the capsule and the nav go away over the Feed, with the same blend (the owner's video, Oct 21)
 const fades = new Set<HTMLElement>();
 function fadeOut(f: HTMLElement, ease: string) {
   f.style.transition = ease ? ease.replace(/transform/g, 'opacity') : 'none';
@@ -42,7 +40,7 @@ export function feedTint(rgb: string): void {
   for (const p of parts) p.feed.style.setProperty('--feed-rgb', rgb);
 }
 
-/** Svelte action for the nav and the capsule; their children .tone-base and .tone-feed are the two layers. */
+/** Svelte action for the capsule; its children .tone-base and .tone-feed are the two layers. */
 export function chrome(node: HTMLElement) {
   const base = node.querySelector<HTMLElement>(':scope > .tone-base');
   const feed = node.querySelector<HTMLElement>(':scope > .tone-feed');

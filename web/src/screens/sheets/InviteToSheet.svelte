@@ -28,7 +28,7 @@
     } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'pleading_face_3d'); }
     finally { busy = null; }
   }
-  function toEvents() { close(overlay.id); ui.tab = 'afisha'; ui.page.afisha = 1; }
+  function toEvents() { close(overlay.id); ui.tab = 'afisha'; }
 </script>
 
 <Sheet {overlay} title={t('inv.toTitle', { name })}>

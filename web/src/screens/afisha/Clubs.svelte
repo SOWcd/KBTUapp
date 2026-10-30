@@ -1,6 +1,6 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus';
-  // Tab 2 → Clubs, the catalogue for everyone (owner, Oct 24: it moved here from Events; the Join page folded in as
+  // Clubs → All clubs, the catalogue for everyone (a member's tab opens on My club; the switch on top) (owner, Oct 24: it moved here from Events; the Join page folded in as
   // "Recruiting now" up top). Mockup v24, owner Oct 21: subscribe to a club to hear about its new events (the bell; the Feed
   // and List show everything anyway). All / mine up top, search (a catalog of 50–100 clubs is unusable by scrolling),
   // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
@@ -29,6 +29,7 @@
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { slide } from 'svelte/transition';
+  import ClubSwitch from '../club/ClubSwitch.svelte';
 
 
   let q = $state('');
@@ -70,6 +71,7 @@
 </script>
 
 <div class="page scroll stagger">
+  {#if session.me?.memberships.length}<ClubSwitch />{/if}
   <header class="hd">
     <h1 class="t-h1">{t('clubs.title')}</h1>
   </header>
@@ -87,7 +89,7 @@
   {#if chats && (chats.all.length || session.me?.student) && !q.trim()}
     <section class="chats">
       <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
-      <div class="ch-row hscroll" data-noswipe>
+      <div class="ch-row hscroll">
         <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
         <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
         {#each chats.forYou as c (c.id)}

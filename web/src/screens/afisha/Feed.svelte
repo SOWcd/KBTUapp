@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Events → Feed: full-screen posters, one per event, vertical snap. Perf rules from the prototype:
+  // Afisha → "In a row": the Feed full screen over the list (Oct 30: it was the page left of it), full-screen posters,
+  // one per event, vertical snap; Back (or the last slide's button) closes it. Perf rules from the prototype:
   // no backdrop-filter inside slides (tinted solid buttons instead), the slow zoom runs only on the
   // slide on screen (IntersectionObserver), images decode async.
   import Plus from '@lucide/svelte/icons/plus';
@@ -11,7 +12,6 @@
   import VolumeX from '@lucide/svelte/icons/volume-x';
   import { onMount } from 'svelte';
   import { data, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
-  import { say } from '../../lib/state/ui.svelte';
   import { focusPos } from '../../lib/photo';
   import { sheets } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
@@ -22,7 +22,10 @@
   import OrgTag from '../../ui/OrgTag.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import { feedTint } from '../../ui/chrome';
-  import { ui, overlays } from '../../lib/state/ui.svelte';
+  import IconFeed from '../../ui/IconFeed.svelte';
+  import { say, overlays, close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
+
+  let { overlay }: { overlay: Overlay } = $props();
 
   const list = $derived(data.events.filter((e) => e.status !== 'cancelled'));
   let root: HTMLDivElement;
@@ -36,7 +39,18 @@
     feedTint(`${n >> 16} ${(n >> 8) & 255} ${n & 255}`);
   });
 
+  $effect(() => { overlay.title = t('page.feed'); overlay.icon = IconFeed; overlay.theme = 'dark'; overlay.feed = true; });
+  let gone = false;
+  function leave() {
+    if (gone) return;
+    gone = true;
+    root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.96)' }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).onfinish = () => removeOverlay(overlay.id);
+  }
+  $effect(() => { if (overlay.closing) leave(); });
+
   onMount(() => {
+    root.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    const chrome = hideChrome();
     const io = new IntersectionObserver((entries) => {
       for (const en of entries) if (en.isIntersecting) cur = Number((en.target as HTMLElement).dataset.i);
     }, { root, threshold: 0.6 });
@@ -44,15 +58,15 @@
     watch();
     const mo = new MutationObserver(watch);
     mo.observe(root, { childList: true });
-    return () => { io.disconnect(); mo.disconnect(); };
+    return () => { io.disconnect(); mo.disconnect(); chrome(); };
   });
 
   // an event's video plays on the slide on screen, muted as in every feed, and loops; the next and the previous one
   // load ahead, the rest are their poster only. The sound, once turned on, stays on for the following videos.
   let sound = $state(false);
   const pic: Record<number, number> = $state({}); // which photo of a slide's strip is on screen
-  // only while the Feed is what's on screen: not under a sheet, not from another page or tab
-  const shown = $derived(ui.tab === 'afisha' && ui.page.afisha === 0 && !overlays.length);
+  // only while the Feed is what's on screen: not under a sheet
+  const shown = $derived(!overlays.some((o) => o.id > overlay.id && !o.closing));
   function playing(el: HTMLVideoElement, on: boolean) {
     const set = (o: boolean) => { if (o) el.play().catch(() => {}); else { el.pause(); el.currentTime = 0; } };
     set(on);
@@ -79,8 +93,8 @@
           <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload="auto" use:playing={i === cur && shown}></video>
         {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
         {:else if e.cover && e.slides?.length}
-          <!-- the cover and its photos, swiped sideways like a TikTok photo post (PLAN 33); at the last one the swipe turns the page -->
-          <div class="strip" data-edge onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
+          <!-- the cover and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
+          <div class="strip" onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
             <img src={e.cover.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(e.cover)} />
             {#each e.slides as p (p.id)}<img src={p.url} alt="" decoding="async" loading="lazy" />{/each}
           </div>
@@ -138,13 +152,13 @@
       <span class="endart"><Emoji name="sparkles_3d" size={96} /></span>
       <b>{t('feed.end')}</b>
       <p>{t('feed.endText')}</p>
-      <span class="endacts"><button onclick={() => (ui.page.afisha = 1)}>{t('page.list')}</button><button onclick={() => { ui.tab = 'club'; ui.page.club = 0; }}>{t('page.clubs')}</button></span>
+      <span class="endacts"><button onclick={() => close(overlay.id)}>{t('feed.back')}</button></span>
     </div>
   {/if}
 </div>
 
 <style>
-  .feed { position: absolute; inset: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
+  .feed { position: absolute; inset: 0; z-index: var(--z-sheet); overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
   .feed::-webkit-scrollbar { display: none; }
   /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
      whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
@@ -164,7 +178,8 @@
   .cur .art :global(img) { animation: float 5s ease-in-out infinite alternate; }
   .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, transparent 22%, transparent 45%, rgba(0, 0, 0, 0.78) 82%); }
 
-  .info { position: absolute; left: var(--gutter); right: 84px; bottom: calc(var(--bottom) + 8px); display: flex; flex-direction: column; gap: 8px; }
+  /* no tab bar under it: the thumb's room only */
+  .info { position: absolute; left: var(--gutter); right: 84px; bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 8px; }
   .org { align-self: flex-start; display: flex; max-width: 100%; }
   .title { font: 800 29px/1.04 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35); }
   .meta { font: 550 14px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.86); }
@@ -173,7 +188,7 @@
   .stack :global(.av + .av) { margin-left: -7px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5); }
 
-  .side { position: absolute; right: 12px; bottom: calc(var(--bottom) + 8px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .side { position: absolute; right: 12px; bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
   .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; }
   /* a press on a ring never pans the Feed (B3, video); the labels still swipe (the whole column was dead) */
   .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
@@ -185,7 +200,7 @@
   .act b { font: 700 12.5px/1 var(--font-text); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
   .saved .ring { color: #FFD23F; }
 
-  .end { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 32px calc(var(--bottom) + 40px); text-align: center;
+  .end { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 32px calc(var(--safe-bottom) + 56px); text-align: center;
     background: radial-gradient(80% 50% at 50% 35%, rgba(124, 77, 255, 0.35), transparent 70%), #07080F; }
   .end b { font: 800 26px/1.1 var(--font-display); letter-spacing: -0.03em; }
   .end p { font: 500 15px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.72); text-wrap: balance; }

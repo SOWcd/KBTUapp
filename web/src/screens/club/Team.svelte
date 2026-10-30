@@ -1,12 +1,15 @@
 <script lang="ts">
-  // Tab 2 → Team (SPEC §2, §2b): the club's roster for its own team, highest role first (full names inside the team, §3),
+  // My club → Team, a sheet from its row (SPEC §2, §2b): the club's roster for its own team, highest role first (full names inside the team, §3),
   // each with the club's own role name and its tags. A tap opens the person's card; for someone below me it opens the
   // actions instead (the card is the first of them): Vice+ give a role (a level or one of the club's own) and remove;
   // Head+ put on probation and ask the President and Vice to remove someone. On top for Vice+: the
   // removal requests. Tags (and probation) filter the list; "Roles and tags" makes the club's own. The club is the one
-  // picked in Studio (ui.club). Vice+ also get the club's invite link (§4.5): share it to the club's chat, copy it, or
+  // picked in My club (ui.club). Vice+ also get the club's invite link (§4.5): share it to the club's chat, copy it, or
   // replace it if it went somewhere it shouldn't. Anyone but the President can leave.
   import { api, ApiErr, type ClubRole, type OrgRole, type RemovalRequest, type TeamMember, type TeamSetup } from '../../lib/api';
+  import Sheet from '../../ui/Sheet.svelte';
+  import Users from '@lucide/svelte/icons/users';
+  import type { Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { say, ui } from '../../lib/state/ui.svelte';
   import { data, loadTeam, studioChanged } from '../../lib/state/data.svelte';
@@ -24,6 +27,7 @@
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
+  let { overlay }: { overlay: Overlay } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
   // kept per club (and for the next launch), so Team opens with the people already there; a visit refreshes it quietly
@@ -132,7 +136,8 @@
 {/snippet}
 
 
-<div class="page scroll">
+<Sheet {overlay} tall title={t('page.team')} icon={Users}>
+<div class="team">
   {#if m}
     <header class="hd">
       <span class="org"><OrgLogo org={m.org} size={30} /><span><h1 class="t-h2 ellipsis">{t('page.team')}</h1><p class="t-foot ellipsis">{m.org.name}</p></span></span>
@@ -255,14 +260,14 @@
       <div class="skel"><span></span><span></span><span></span></div>
     {/if}
   {/if}
-  <div class="tail"></div>
 </div>
+</Sheet>
 
 <style>
   .brought { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; font-style: normal; }
   .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 10px; }
-  .page > :global(*) { flex-shrink: 0; }
+  .team { display: flex; flex-direction: column; gap: 10px; }
+  .team > :global(*) { flex-shrink: 0; }
   /* the club's President: a crown on the avatar */
   .av { position: relative; }
   .crown { position: absolute; right: -3px; top: -4px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -322,5 +327,4 @@
   .skel { display: flex; flex-direction: column; gap: 8px; }
   .skel span { height: 62px; border-radius: var(--r-l); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.5; } }
-  .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

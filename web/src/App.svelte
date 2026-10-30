@@ -1,6 +1,6 @@
 <script lang="ts">
-  // App shell: three tabs (each a pager of up to three pages), the capsule on top, the nav at the
-  // bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
+  // App shell: the tabs (one scrolling screen each; what used to be their other pages opens as a sheet), the capsule on
+  // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
   import { ui, TABS, overlays, open, close, persistNav, say, type Tab } from './lib/state/ui.svelte';
@@ -18,33 +18,21 @@
   import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg } from './lib/tg';
   import { api, ApiErr, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
-  import Pager from './ui/Pager.svelte';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Ban from '@lucide/svelte/icons/ban';
   import Nav from './ui/Nav.svelte';
-  import Capsule, { type Live, type CapPage } from './ui/Capsule.svelte';
-  import IconFeed from './ui/IconFeed.svelte';
-  import Newspaper from '@lucide/svelte/icons/newspaper';
+  import Capsule, { type Live } from './ui/Capsule.svelte';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   // top and bottom bars never repeat an icon: the bottom is ticket / landmark / circle-user-round
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import Shapes from '@lucide/svelte/icons/shapes';
-  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
-  import Flag from '@lucide/svelte/icons/flag';
-  import Users from '@lucide/svelte/icons/users';
-  import UsersRound from '@lucide/svelte/icons/users-round';
   import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
-  import Settings2 from '@lucide/svelte/icons/settings';
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
-  import Feed from './screens/afisha/Feed.svelte';
   import Clubs from './screens/afisha/Clubs.svelte';
-  import News from './screens/afisha/News.svelte';
   import Me from './screens/profile/Me.svelte';
-  import Friends from './screens/profile/Friends.svelte';
-  import Settings from './screens/profile/Settings.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
   import { warmMap } from './lib/map';
@@ -83,9 +71,10 @@
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
   sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
-  // Studio is for club teams only: its page and views are their own chunks
+  // My club is for club members only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
+  const feedPage = () => import('./screens/afisha/Feed.svelte');
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   // asked once the screen is free: an unlock or a deep link's sheet up at the start used to skip it until the next launch
@@ -95,8 +84,9 @@
     if (overlays.length) { if (tries < 40) setTimeout(() => askConsent(tries + 1), 1500); return; }
     sheets.consent();
   };
-  // the club tab's pages are chunks and that tab builds on its first tap: fetch them ahead, so it doesn't open blank
-  const warmClub = () => { if (!session.me) return; void studioPage(); void teamPage(); };
+  // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
+  // the Feed's too, so "In a row" opens in the tap's frame
+  const warmClub = () => { void feedPage().then((m) => loaded.set(feedPage, m)); if (!session.me?.memberships.length) return; void studioPage(); void teamPage().then((m) => loaded.set(teamPage, m)); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmBoard = () => { if (!session.board) return; void boardPage(); if (session.me?.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -159,57 +149,40 @@
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
   sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
+  sheets.news = () => lazy(() => import('./screens/afisha/News.svelte'), {});
+  sheets.feed = () => lazy(feedPage, {});
+  sheets.friends = () => lazy(() => import('./screens/profile/Friends.svelte'), {});
+  sheets.team = () => lazy(teamPage, {});
+  sheets.settingsPage = () => lazy(() => import('./screens/profile/SettingsPage.svelte'), {});
   setLoginHook((after, lock) => sheets.login(after, lock));
 
-  // ---- tab 2 depends on who you are ----
+  // ---- the Clubs tab: a member's has My club and All clubs (a switch on top of the content, tap only) ----
   const member = $derived((session.me?.memberships.length ?? 0) > 0);
-  const staff = $derived(!!session.me?.memberships.some((m) => m.role !== 'member'));
-  // tab 2 is the clubs' tab for everyone (PLAN 46): the catalogue first (joining and following live there),
-  // then my club's Studio and Team; the News page is gone, the news are circles on Afisha's List
-  const tab2Label = $derived(member ? (staff ? t('tab.studio') : t('tab.club')) : t('page.clubs'));
   // the bar's tabs: the forum only where the server opened it (BOARD; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.board));
   $effect(() => { if (session.boardKnown && !session.board && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
-  const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => tab2Label, profile: () => t('tab.profile') };
+  // a role changes a tab's content, never its name
+  const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
+  const TAB_ICON: Record<Tab, typeof Shapes> = { afisha: CalendarDays, forum: MessagesSquare, club: Shapes, profile: IdCardLanyard };
   const TAB_DOT: Record<Tab, () => boolean> = {
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
     profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0,
   };
-
-  // tab 2's pages by name: a deep link asks for "team" or "studio" whatever the tab holds. DMP is an org like any other
-  // its staff have the same three pages, and its registry sits in Studio with DMP picked
-  type ClubPage = 'clubs' | 'studio' | 'club' | 'team';
-  const clubPages = $derived<ClubPage[]>(member ? ['clubs', staff ? 'studio' : 'club', 'team'] : ['clubs']);
-  const CLUB_CAP: Record<ClubPage, () => CapPage> = {
-    clubs: () => ({ label: t('page.clubs'), icon: Shapes }),
-    studio: () => ({ label: t('tab.studio'), icon: LayoutDashboard }), club: () => ({ label: t('tab.club'), icon: Flag }), team: () => ({ label: t('page.team'), icon: Users }),
-  };
-  /** Tab 2 on the first of these pages it has (else its catalogue). */
-  function toClub(...want: ClubPage[]) {
-    ui.tab = 'club';
-    ui.page.club = Math.max(0, clubPages.findIndex((k) => k === want.find((w) => clubPages.includes(w))));
-  }
-  const PAGES = $derived<Record<Tab, CapPage[]>>({
-    afisha: [{ label: t('page.feed'), icon: IconFeed }, { label: t('page.list'), icon: CalendarDays, dot: (session.me?.counters.unreadBroadcasts ?? 0) > 0 }, { label: t('page.news'), icon: Newspaper }],
-    forum: [{ label: t('page.forum'), icon: MessagesSquare }],
-    club: clubPages.map((k) => CLUB_CAP[k]()),
-    profile: [{ label: t('page.friends'), icon: UsersRound, dot: (session.me?.counters.friendRequests ?? 0) > 0 }, { label: t('page.me'), icon: IdCardLanyard }, { label: t('me.settings'), icon: Settings2 }],
-  });
-  // a non-member's tab 2 has one page (the catalogue): clamp where it's used, so the saved page (Studio by default) comes
-  // back by itself after sign-in
-  const pageIdx = (tab: Tab) => Math.min(ui.page[tab], PAGES[tab].length - 1);
-  $effect(() => { void ui.tab; void ui.page.afisha; void ui.page.forum; void ui.page.club; void ui.page.profile; void ui.club; persistNav(); });
+  /** The Clubs tab on My club (a non-member: the catalogue, all there is). */
+  function toClub() { ui.tab = 'club'; ui.allClubs = false; }
+  // a screen builds on its first showing and stays alive (scroll kept); a tab never shown builds nothing (the hidden tabs
+  // were ~1400 of 1900 nodes and 40 % of the blocking time at start)
+  const clubView = $derived(member && !ui.allClubs ? 'mine' : 'all');
+  const built = $state<Record<string, boolean>>({});
+  // (the Clubs tab waits for who I am: the copy or the server, a frame; else a member's hidden catalogue built too)
+  $effect(() => { if (ui.tab === 'club' && !session.ready) return; const k = ui.tab === 'club' ? 'club:' + clubView : ui.tab; if (!built[k]) built[k] = true; });
+  $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
-  const capTitle = $derived(ui.busy || capOf?.title || null);
-  // every state has an icon: a spinner while a tap's work runs, a sparkle if a view forgot its own
-  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : null);
-  // over the Feed the nav and capsule turn into tinted dark glass (chrome.ts): at once on a tab switch,
-  // and in step with the finger while the Events pager moves
-  // a titled overlay over the Feed (the map, a sheet) takes the normal chrome (owner's video, Oct 25: the map's capsule
-  // kept the Feed's tint)
-  $effect(() => { feedChrome(ui.tab === 'afisha' && ui.page.afisha === 0 && !capOf ? 1 : 0, 'opacity 220ms ease'); });
+  // over the Feed the capsule turns into tinted dark glass (chrome.ts); a titled overlay over it (the map, a sheet) takes
+  // the normal chrome (owner's video, Oct 25: the map's capsule kept the Feed's tint)
+  $effect(() => { feedChrome(capOf?.feed ? 1 : 0, 'opacity 220ms ease'); });
 
   // ---- live capsule: an event today you're going to, or a class within the next hour ----
   let clock = $state(nowTs());
@@ -221,11 +194,16 @@
     if (cls) {
       const mins = Math.ceil((cls.b - now) / 60);
       return { kind: 'class', title: subjectOf(cls.c) + (cls.c.room ? ' · ' + cls.c.room : ''), at: cls.b, emoji: classEmoji(cls.c), tint: '#2FBF71',
-        label: mins > 0 ? t('cap.inMin', { n: mins }) : t('cap.until', { time: cls.c.ends }), onopen: () => { ui.tab = 'afisha'; ui.page.afisha = 1; } };
+        label: mins > 0 ? t('cap.inMin', { n: mins }) : t('cap.until', { time: cls.c.ends }), onopen: () => { ui.tab = 'afisha'; } };
     }
     if (ev) return { kind: 'event', title: ev.title, at: ev.startsAt, emoji: ev.emoji ?? ev.org.emoji, tint: ev.tint, label: time(ev.startsAt), onopen: () => sheets.ticket(ev.id) };
     return null;
   });
+
+  // nothing on top: the live status, else the tab's name
+  const capTitle = $derived(ui.busy || capOf?.title || (live ? null : TAB_LABEL[ui.tab]()));
+  // every state has an icon: a spinner while a tap's work runs, a sparkle if a view forgot its own
+  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
   $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
@@ -262,7 +240,7 @@
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
-  // one-time link, §4.7), friends (the Friends page: the bot's request message) ----
+  // one-time link, §4.7), friends (Profile with the Friends sheet: the bot's request message) ----
   function deepLink(p = tg.startParam) {
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
@@ -280,8 +258,8 @@
     const fr = p.match(/^fr_([0-9a-f]{24})$/);
     if (fr) { friendByLink(fr[1]); return; }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
-    if (p === 'friends') { ui.tab = 'profile'; ui.page.profile = 0; return; }
-    if (p === 'me') { ui.tab = 'profile'; ui.page.profile = 1; return; }   // the bot: "keep my account"
+    if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
+    if (p === 'me') { ui.tab = 'profile'; return; }   // the bot: "keep my account"
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
@@ -293,7 +271,7 @@
     if (cm) { const id = Number(cm[1]); sheets.event(id); asStudent(() => { api.event(id).then((e) => sheets.comments('event', id, e.title)).catch(() => {}); }); return; }
     const aw = p.match(/^aw_([a-z0-9_]{1,40})$/); // someone's award card: my own way to the same one
     if (aw) {
-      ui.tab = 'profile'; ui.page.profile = 1;
+      ui.tab = 'profile';
       asStudent(async () => {
         sheets.awards();
         const a = (await api.person(session.me!.id)).awards.achievements.find((x) => x.code === aw[1]);
@@ -301,7 +279,7 @@
       });
       return;
     }
-    if (p === 'news') { ui.tab = 'afisha'; ui.page.afisha = 2; return; } // the news feed, right of List
+    if (p === 'news') { ui.tab = 'afisha'; sheets.news(); return; } // every post: Afisha's "All" 
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
@@ -319,14 +297,14 @@
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (p === 'clubs') { toClub('clubs'); return; } // the bot's "other clubs recruit now"
+    if (p === 'clubs') { ui.tab = 'club'; ui.allClubs = true; return; } // the bot's "other clubs recruit now"
     const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const ref = p.match(/^ev_(\d+)_([A-Z2-7]{10})$/); // a club member's "My link": the sign-up goes to them
     if (ref) keepRef(Number(ref[1]), ref[2]);
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
-    // tm_<club>: the bot's removal messages open that club's Team (§2b); DMP staff have none in the tab: Studio for now
-    const team = (org: number) => { ui.club = org; toClub('team', 'studio', 'club'); };
+    // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club
+    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) return; ui.club = org; toClub(); sheets.team(); };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }
 
@@ -423,7 +401,7 @@
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
         haptic.ok(); burst(); say(t('pres.done', { club: o.name }), 'party_popper_3d');
-        ui.club = o.id; toClub('studio', 'club');
+        ui.club = o.id; toClub();
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
     });
   }
@@ -480,41 +458,29 @@
       if (mini !== ui.navMini) ui.navMini = mini;
     };
     document.addEventListener('scroll', onScroll, true);
-
-    const onPager = (e: Event) => {
-      if (ui.tab !== 'afisha') return;
-      const d = (e as CustomEvent).detail as { x: number; ease: string };
-      feedChrome(1 - d.x, d.ease);
-    };
-    window.addEventListener('kb:pager', onPager);
-    return () => { clearInterval(tick); document.removeEventListener('scroll', onScroll, true); window.removeEventListener('kb:pager', onPager); removeEventListener('keydown', esc); };
+    return () => { clearInterval(tick); document.removeEventListener('scroll', onScroll, true); removeEventListener('keydown', esc); };
   });
 </script>
 
 <main class="app">
   {#each tabs as tab (tab)}
     <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
-      <Pager count={PAGES[tab].length} index={pageIdx(tab)} active={ui.tab === tab} onchange={(i) => { ui.page[tab] = i; ui.awake++; }}>
-        {#snippet page(i)}
-          {#if tab === 'afisha'}
-            {#if i === 0}<Feed />{:else if i === 1}<ListPage />{:else}<News />{/if}
-          {:else if tab === 'forum'}
-            {#await boardPage() then m}<m.default />{/await}
-          {:else if tab === 'club'}
-            {#if !member || i === 0}<Clubs />
-            {:else if i === 1}{#await studioPage() then m}<m.default />{/await}{:else}{#await teamPage() then m}<m.default />{/await}{/if}
-          {:else}
-            {#if i === 0}<Friends />{:else if i === 1}<Me />{:else}<Settings />{/if}
-          {/if}
-        {/snippet}
-      </Pager>
+      {#if tab === 'afisha'}
+        {#if built.afisha}<ListPage />{/if}
+      {:else if tab === 'forum'}
+        {#if built.forum}{#await boardPage() then m}<m.default />{/await}{/if}
+      {:else if tab === 'club'}
+        <!-- My club and All clubs both stay alive once shown: the switch answers in the tap's frame, each keeps its scroll -->
+        {#if built['club:all']}<div class="view" class:off={clubView !== 'all'}><Clubs /></div>{/if}
+        {#if member && built['club:mine']}<div class="view" class:off={clubView !== 'mine'}>{#await studioPage() then m}<m.default />{/await}</div>{/if}
+      {:else if built.profile}<Me />{/if}
     </section>
   {/each}
 
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
-  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule pages={PAGES[ui.tab]} index={pageIdx(ui.tab)} onpick={(i) => (ui.page[ui.tab] = i)} {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
+  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
   {#each overlays as o (o.id)}
@@ -552,7 +518,8 @@
   /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
-  /* opacity only, backwards fill: a lingering transform fill would pin the pager pages (prototype bug) */
+  /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
   .tab.on { visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
+  .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
 </style>

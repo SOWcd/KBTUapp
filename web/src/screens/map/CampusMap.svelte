@@ -697,7 +697,7 @@
 
 <div class="panel theme-{look}" class:main={ver === 'main'} bind:this={panel}>
   {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
-  <div class="stage" bind:this={stage} role="img" aria-label={title} data-noswipe
+  <div class="stage" bind:this={stage} role="img" aria-label={title}
        onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
     <div class="plan" bind:this={plan} style:aspect-ratio={ver === 'main' ? `${uniq.w} / ${uniq.h}` : '1'}>
       {#if ver === 'main'}

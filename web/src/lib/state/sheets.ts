@@ -79,6 +79,13 @@ export const sheets = {
   consent: () => {},
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
+  /** what used to be a tab's other pages (Oct 30: one tab, one screen): every post (Afisha's "All"), the Feed full screen
+   *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row), Settings (Profile's gear) */
+  news: () => {},
+  feed: () => {},
+  friends: () => {},
+  team: () => {},
+  settingsPage: () => {},
   /** a new post for a club (Head+), from Studio */
   composer: (_org: Id, _post?: Post) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */

@@ -26,7 +26,7 @@
 <p class="tip">{t('ed.focusTip')}</p>
 <div class="pick">
   <span class="wrap" role="slider" tabindex="0" aria-label={t('ed.focusTip')} aria-valuetext="{Math.round(fx * 100)}%, {Math.round(fy * 100)}%"
-        aria-valuenow={Math.round(fx * 100)} data-noswipe
+        aria-valuenow={Math.round(fx * 100)}
         onpointerdown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); pick(e); }}
         onpointermove={(e) => { if (e.buttons) pick(e); }}
         onkeydown={(e) => { const d = KEYS[e.key]; if (d) { e.preventDefault(); put(fx + d[0], fy + d[1]); } }}>

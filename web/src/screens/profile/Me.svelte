@@ -1,12 +1,13 @@
 <script lang="ts">
-  // Profile → Me (Friends | Me; Oct 21: Friends | Me | Settings, mockup v24). Guest: the sign-in card.
-  // Student: my badge (the same hero as everyone else sees), then what's coming up for me (tickets and saved; nothing
-  // when there's nothing), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
+  // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
+  // Student: my badge (the same hero as everyone else sees), then my friends as one row (the Friends sheet: requests,
+  // everyone, Add; my tickets and saved events are on Afisha's list, not repeated here), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
   // under it (one row, a small button to their own booking page), and the app's card (AppCard; it stays
   // on Me, not Settings).
-  // The admin panel is the shield next to the pencil.
+  // Top right: the admin panel's shield, the pencil (my look), the gear (Settings, full screen; a guest's too: the language).
   import Pencil from '@lucide/svelte/icons/pencil';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import SettingsIcon from '@lucide/svelte/icons/settings';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
@@ -15,19 +16,18 @@
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
   import { say, ui } from '../../lib/state/ui.svelte';
+  import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, type PersonCard } from '../../lib/api';
   import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
-  import { inner } from '../../lib/perms';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
-  import { dateInput, dayMonth, nowTs, relDay } from '../../lib/time';
+  import { dateInput, dayMonth, nowTs } from '../../lib/time';
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
   import Invite from './Invite.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
-  import EventRow from '../../ui/EventRow.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
   // today: Me stays mounted and the app can stay open for days, so it moves on when the app comes back
@@ -38,15 +38,16 @@
   const semFrom = $derived(sem ? new Intl.DateTimeFormat(i18n.lang, { month: 'short', timeZone: 'UTC' }).format(new Date(sem.start)).replace('.', '') : '');
   const me = $derived(session.me);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
-  $effect(() => { if (ui.tab === 'profile' && ui.page.profile >= 1 && me?.student) void untrack(loadMyCard); });
+  $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(loadMyCard); });
   // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
   const shown = $derived<PersonCard | null>(card ? { ...card, skin: me?.skin } : (me?.student ? {
     id: me.id, name: me.name, avatar: me.avatar, founder: me.founder, no: me.no, course: me.student.course, school: me.student.school, bio: me.bio,
     attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: me.skin,
   } : null));
 
-  // coming up: my tickets (a club's own event has none) and what I saved, soonest first
-  const soon = $derived(data.events.filter((e) => (e.my && e.my.status !== 'cancelled' && !inner(e)) || e.saved).sort((a, b) => a.startsAt - b.startsAt));
+  // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
+  const friends = $derived(data.friends?.friends ?? []);
+  const asked = $derived(me?.counters.friendRequests ?? 0);
   const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
 
   let page = $state<HTMLDivElement>();
@@ -59,16 +60,26 @@
 </script>
 
 <div class="page scroll stagger" bind:this={page}>
-  {#if me?.student}
-    <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below -->
-    <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
-    {#if me.role === 'admin' || me.role === 'moderator'}
-      <!-- the admin panel, with what waits for it; a moderator's is the content part -->
-      <button class="gear adm" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
+  <div class="gears" class:out={!me?.student}>
+    {#if me?.student}
+      {#if me.role === 'admin' || me.role === 'moderator'}
+        <!-- the admin panel, with what waits for it; a moderator's is the content part -->
+        <button class="gear" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>
+      {/if}
+      <!-- dress my lanyard: the page goes up to it and the panel takes the nav's place below -->
+      <button class="gear" onclick={look} aria-label={t('look.title')}><Pencil size={19} /></button>
     {/if}
-  {/if}
+    <button class="gear" onclick={() => { haptic.tap(); sheets.settingsPage(); }} aria-label={t('me.settings')}><SettingsIcon size={19} /></button>
+  </div>
   {#if me?.student}
     {#if shown}<Hero p={shown} qr={me.qr} live={ui.tab === 'profile'} />{/if}
+    <button class="fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
+      <span class="lb">{t('page.friends')}</span>
+      {#if friends.length}<span class="faces">{#each friends.slice(0, 3) as r (r.person.id)}<Avatar person={r.person} size={26} tappable={false} />{/each}</span>
+        <span class="num fn">{friends.length}</span>{/if}
+      {#if asked}<b class="req num">{asked}</b>{/if}
+      <ChevronRight size={18} />
+    </button>
   {:else if session.ready}
     <section class="guest">
       <div class="mark"><KbtuMark /></div>
@@ -87,11 +98,6 @@
     <!-- the week to change my mind (DeleteSheet), with the way back -->
     <div class="soon surface"><span>{t('del.soon', { date: dayMonth(me.deleteAt) })}</span>
       <Button kind="secondary" size="s" onclick={keepAccount}>{t('del.keep')}</Button></div>
-  {/if}
-
-  {#if me?.student && soon.length}
-    <h2 class="sec t-h3">{t('me.upcoming')}</h2>
-    <div class="list">{#each soon as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={e.my?.status === 'going' ? () => sheets.ticket(e.id) : undefined} />{/each}</div>
   {/if}
 
   <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it; out of term the row
@@ -133,7 +139,6 @@
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
 
-  .sec { margin-top: 10px; }
   .confirm { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--text-3);
     box-shadow: inset 0 0 0 1.5px var(--accent-soft), var(--shadow-card); }
   .confirm:active { transform: scale(0.98); }
@@ -147,13 +152,23 @@
   .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 16px; text-align: left; color: var(--text-3); }
   button.r:active { background: var(--surface-2); }
   .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  /* the pencil and the shield: in the lanyard's gap right of its strap */
-  .gear { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; width: 36px; height: 36px; border-radius: 50%;
+  /* my friends: one row under the badge, a red count while requests wait */
+  .fr { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 14px 0 16px; border-radius: var(--r-l); text-align: left; color: var(--text-3); }
+  .fr:active { transform: scale(0.98); }
+  .faces { display: flex; flex: none; }
+  .faces > :global(*) { box-shadow: 0 0 0 2px var(--surface-solid); border-radius: 50%; }
+  .faces > :global(* + *) { margin-left: -8px; }
+  .fn { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+  .req { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); text-align: center; }
+  /* the shield, the pencil and the gear: in the lanyard's gap right of its strap */
+  .gears { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; display: flex; gap: 8px; }
+  /* a guest's gear sits over the sign-in card's corner: in it, on its glass */
+  .gears.out { top: calc(var(--page-top) + 12px); right: calc(var(--gutter) + 12px); }
+  .gears.out .gear { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
+  .gear { position: relative; width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
   .gear::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; } /* a 44 px target, the circle stays 36 */
   .gear:active { transform: scale(0.92); }
-  .gear.adm { right: calc(var(--gutter) + 44px); }
   .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
 
   /* the term card: the strip of weeks, then the psychologist (mockup v24) */

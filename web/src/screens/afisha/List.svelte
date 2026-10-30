@@ -1,5 +1,7 @@
 <script lang="ts">
-  // Events → List (the home page). Title + count, the featured post, then the
+  // Afisha, one screen (Oct 30: the Feed and News were pages beside it): the date and Today, the news circles (their
+  // "All" opens every post as a sheet), the live cards, then Events with "In a row" (the Feed full screen), the featured
+  // post, then the
   // days as timelines: classes from the portal schedule (one slim row each; back-to-back ones of a subject
   // joined into one row with a "×2"/"×3" chip, lib/classes.ts; tall blocks took too much room)
   // and events, in time order, so an event shows in the gap between classes where it really is. No date strip (owner, Oct 24: people
@@ -19,6 +21,7 @@
   import StoryRow from './StoryRow.svelte';
   import { sheets } from '../../lib/state/sheets';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import Play from '@lucide/svelte/icons/play';
   import { classesOn, classesLeft } from '../../lib/classes';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -96,8 +99,7 @@
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   {#if cards.length}
-    <!-- data-edge: at the stack's end the swipe moves the pages (Pager) -->
-    <div class="stack" bind:this={stack} onscroll={onStack} data-edge>
+    <div class="stack" bind:this={stack} onscroll={onStack}>
       {#each cards as k (k)}
         {#if k === 'class' && cur}
           {@const room = cur.c.room}
@@ -151,7 +153,8 @@
     </button>
   {/if}
 
-  <div class="evh"><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></div>
+  <div class="evh"><span><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></span>
+    {#if data.events.some((e) => e.status !== 'cancelled')}<button class="row1" onclick={() => sheets.feed()}><Play size={14} fill="currentColor" />{t('list.inRow')}</button>{/if}</div>
 
   {#if featured}
     <button class="pin surface press" onclick={() => (openPost = !openPost)}>
@@ -199,7 +202,7 @@
       <Emoji name="sparkles_3d" size={36} />
       <b>{t('list.moreSoon')}</b>
       <p class="t-foot">{t('list.moreSoonText')}</p>
-      <button onclick={() => { ui.tab = 'club'; ui.page.club = 0; }}>{t('list.toClubs')}</button>
+      <button onclick={() => { ui.tab = 'club'; ui.allClubs = true; }}>{t('list.toClubs')}</button>
     </section>
   {/if}
   <div class="tail"></div>
@@ -254,7 +257,12 @@
   .kick { font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); margin-bottom: 2px; }
   .kick::first-letter { text-transform: uppercase; }
   .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
-  .evh { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 12px; }
+  .evh { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 28px 4px 12px; }
+  .evh > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+  .evh > span > span { white-space: nowrap; } /* a narrow phone: the count goes under the title whole */
+  .row1 { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px 0 12px; border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-sub)/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
+  .row1:active { transform: scale(0.95); }
   .evh h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
   .evh span { font: 550 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
 
