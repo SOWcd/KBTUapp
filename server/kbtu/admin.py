@@ -21,6 +21,8 @@
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
+  .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
+                                only): the share reaching every level and the typical values, to set the levels by
   .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json>    the clubs' rosters from DMP's sheet (PLAN 95): rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
@@ -193,6 +195,19 @@ def main(args: list[str]) -> None:
                           ("posts", "SELECT count(*) FROM posts WHERE hidden_at IS NULL"),
                           ("first KBTU sign-in", f"SELECT date(min(verified_at), 'unixepoch', '+5 hours') FROM students WHERE {real}")):
             print(f"{one(con, sql)[0]!s:>10}  {name}")
+    elif cmd == "achstats":  # levels set by real numbers, not guesses (owner, Oct 30: some need too many, some too few)
+        from .logic.profiles import ACHIEVEMENTS, _counts
+        counts = [_counts(con, uid) for (uid,) in rows(con, "SELECT user_id FROM students WHERE consent_version != 'staff'")]
+        came = [c for c in counts if c["regular"]]
+        print(f"{len(counts)} students, {len(came)} came to an event at least once; each level: share of all / of those who came")
+        for code, _, needs, _ in ACHIEVEMENTS:
+            if code in ("first50", "creator_laugh", "creator_found", "bugs", "init26"):
+                continue  # given by hand or at sign-in: no counter to tune
+            vals = sorted(c[code] for c in counts)
+            at = lambda q: vals[min(len(vals) - 1, int(q * len(vals)))] if vals else 0  # noqa: E731
+            share = lambda n, of: f"{sum(c[code] >= n for c in of) * 100 / max(1, len(of)):.1f}%"  # noqa: E731
+            print(f"{code:>8}  p50 {at(.5)}  p90 {at(.9)}  p99 {at(.99)}  max {vals[-1] if vals else 0}  |  "
+                  + "  ".join(f"{n}: {share(n, counts)} / {share(n, came)}" for n in needs))
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

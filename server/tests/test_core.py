@@ -155,6 +155,9 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     admin.main(["stats"])  # counts only
     stats = {name: n for n, name in (line.split(None, 1) for line in capsys.readouterr().out.splitlines())}
     assert stats["signed in with KBTU"] == "1" and stats["staff (by hand)"] == "1"
+    admin.main(["achstats"])  # counts only, the staff left out, the hand-given ones skipped
+    out = capsys.readouterr().out
+    assert out.startswith("1 students, 0 came") and "regular" in out and "first50" not in out
     # a tester who signed in as a student turns staff: the number is retired (a gap: moving the later ones down would
     # reuse a deleted account's burnt number), and signing in again brings no number back
     login(c, 14, "it"), login(c, 15, "zhan")
