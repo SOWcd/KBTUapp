@@ -73,7 +73,8 @@ export const tg = {
   user: W?.initDataUnsafe?.user ?? null,
   startParam: W?.initDataUnsafe?.start_param ?? '',
   platform: W?.platform ?? 'unknown',
-  colorScheme: (): 'light' | 'dark' => W?.colorScheme ?? 'dark',
+  // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
+  colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   can,
 };
 
