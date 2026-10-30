@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
-import html
 import hmac
 import json
 import logging
@@ -32,7 +31,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, auth, bot, casting, checkin as qr, config, db, llm, logic, media, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, llm, logic, media, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -468,7 +467,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/calendar")
     def my_calendar(con: Con, v: Me):
-        """My calendar feed: the page that subscribes (Apple) and the feed itself (Google's "add by URL")."""
+        """My calendar feed: the page that subscribes any phone (calpage.py) and the feed itself ("add by URL")."""
         t = logic.cal_token(con, v)
         return {"page": f"https://{cfg.domain}/cal/{t}", "feed": f"webcal://{cfg.domain}/cal/{t}.ics"}
 
@@ -479,17 +478,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/cal/{token}")
     def calendar_page(token: str, request: Request, con: Con):
-        """Opened from the app in the phone's browser: hands webcal:// to the calendar at once, a button if it asks."""
+        """Opened from the app in the phone's browser: Apple's calendar subscribes at once, the rest through Google (calpage.py)."""
         logic.cal_feed(con, token, str)  # 404 for a token that isn't (or no longer is) anyone's
         lang = next((x for x in ("ru", "kk", "en") if x in request.headers.get("accept-language", "")[:5].lower()), "ru")
-        title, text, button = texts.CAL_PAGE[lang]
-        url = html.escape(f"webcal://{cfg.domain}/cal/{token}.ics", quote=True)
-        page = (f'<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-                f'<title>{title}</title><style>body{{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.45 -apple-system,system-ui,sans-serif;'
-                f'background:#0B1020;color:#fff;text-align:center}}main{{padding:32px 24px;max-width:360px}}h1{{font-size:24px;margin:0 0 8px}}p{{opacity:.75;margin:0 0 24px}}'
-                f'a{{display:inline-block;padding:14px 28px;border-radius:999px;background:#3B6BFF;color:#fff;font-weight:650;text-decoration:none}}</style></head>'
-                f'<body><main><h1>📅 {title}</h1><p>{text}</p><a href="{url}">{button}</a></main><script>location.href="{url}"</script></body></html>')
-        return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
+        page = calpage.render(cfg.domain, token, lang, request.headers.get("user-agent", ""))
+        # the token is in the address: no Referer carries it on
+        return Response(page, media_type="text/html; charset=utf-8",
+                        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": calpage.CSP})
 
     @app.get("/api/events/{eid}/ics")
     def event_ics(eid: int, con: Con, k: str = ""):

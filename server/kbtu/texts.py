@@ -76,12 +76,15 @@ TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "�
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
 
 
-# The page between the app and the phone's calendar (/cal/<token>): it hands the feed to the calendar app at once;
-# the button is there if the phone asks for a tap first.
-CAL_PAGE = {
-    "ru": ("Календарь KBTU App", "Все события, на которые ты идёшь, — в календаре телефона. Новые появятся сами.", "Подписаться"),
-    "kk": ("KBTU App күнтізбесі", "Баратын барлық іс-шараң — телефон күнтізбесінде. Жаңалары өздігінен қосылады.", "Жазылу"),
-    "en": ("KBTU App calendar", "Every event you're going to, in your phone's calendar. New ones show up on their own.", "Subscribe"),
+# The page between the app and the phone's calendar (/cal/<token>, calpage.py): Apple's calendar gets the feed at once
+# (the button for a dismissed prompt), the rest lead with Google and can copy the address for another app.
+CAL_PAGE = {  # (title, text, subscribe: Apple's button, Google's, copy the address, copied); \u00a0 keeps a dash off the start of a line
+    "ru": ("Календарь KBTU App", "Все события, на которые ты идёшь,\u00a0— в календаре телефона. Новые появятся сами.", "Подписаться",
+           "Добавить в Google Календарь", "Скопировать ссылку", "Скопировано"),
+    "kk": ("KBTU App күнтізбесі", "Баратын барлық іс-шараң\u00a0— телефон күнтізбесінде. Жаңалары өздігінен қосылады.", "Жазылу",
+           "Google Күнтізбесіне қосу", "Сілтемені көшіру", "Көшірілді"),
+    "en": ("KBTU App calendar", "Every event you're going to, in your phone's calendar. New ones show up on their own.", "Subscribe",
+           "Add to Google Calendar", "Copy link", "Copied"),
 }
 
 

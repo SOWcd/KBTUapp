@@ -18,7 +18,7 @@
   import { t, i18n, LANG_FULL } from '../../lib/i18n/index.svelte';
   import { theme } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
-  import { haptic, openLink, tg, homeScreen, on } from '../../lib/tg';
+  import { haptic, openLink, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
@@ -26,12 +26,13 @@
   const s = $derived(me?.settings);
   const bells = $derived(s ? [s.nRemind, s.nNewEvents, s.nForum].filter(Boolean).length : 0);
 
-  // my events in the phone's calendar: Apple through our page that hands webcal:// over, the rest through Google. Asked
-  // for on the tap, not when Settings opens: the address makes a feed token on the server
+  // my events in the phone's calendar, through our page (server/kbtu/calpage.py): it hands webcal:// to Apple's calendar,
+  // leads the rest to Google and has the address to copy for any other app. Asked for on the tap, not when Settings
+  // opens: the address makes a feed token on the server
   let cal: { page: string; feed: string } | null = null;
   async function subscribe() {
     try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
-    openLink(/^(ios|macos)$/.test(tg.platform) ? cal.page : 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(cal.feed));
+    openLink(cal.page);
   }
 
   // the app's icon on the home screen: the row only while it can be added and isn't yet

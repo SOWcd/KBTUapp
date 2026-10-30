@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import casting, app as server, auth, bot, config, db, logic, media, receipt, texts, video
+from kbtu import calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, video
 
 BOT = "123:test"
 
@@ -1459,7 +1459,10 @@ def test_nick_and_photo(env):
 
 def test_calendar_feed(env):
     """My calendar feed: one secret address per student, kept; everything I go to (a cancelled event struck
-    through); the page hands webcal:// to the phone's calendar; gone with my data."""
+    through); the page hands webcal:// to an Apple calendar, leads Android to Google, fetches nothing; gone with my data."""
+    import base64
+    import hashlib
+    import urllib.parse
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
     con = db.connect(cfg.db_path)
@@ -1478,8 +1481,24 @@ def test_calendar_feed(env):
     feed = c.get(f"/cal/{token}.ics")                                                            # no Telegram headers
     assert feed.headers["content-type"].startswith("text/calendar") and "X-WR-CALNAME:KBTU App" in feed.text
     assert "SUMMARY:Hack" in feed.text and "SUMMARY:Talk\r\nLOCATION" in feed.text and "STATUS:CANCELLED" in feed.text and "Not mine" not in feed.text
-    page = c.get(f"/cal/{token}")
-    assert page.status_code == 200 and f"webcal://{cfg.domain}/cal/{token}.ics" in page.text
+    webcal, https = f"webcal://{cfg.domain}/cal/{token}.ics", f"https://{cfg.domain}/cal/{token}.ics"
+    google = "https://calendar.google.com/calendar/render?cid=" + urllib.parse.quote(webcal, safe="")
+    iphone = c.get(f"/cal/{token}", headers={"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"})
+    android = c.get(f"/cal/{token}", headers={"user-agent": "Mozilla/5.0 (Linux; Android 14; Pixel 8)", "accept-language": "kk-KZ,kk;q=0.9"})
+    assert iphone.status_code == android.status_code == 200
+    assert f'data-auto href="{webcal}"' in iphone.text and f'href="{google}"' in iphone.text   # subscribes at once; Google too
+    assert "data-auto href" not in android.text and webcal not in android.text              # webcal:// does nothing there
+    assert f'href="{google}"' in android.text and f'data-url="{https}"' in android.text and texts.CAL_PAGE["kk"][3] in android.text
+    for page in (iphone, android):
+        # the token is in the address: no Referer, nothing fetched from anywhere, only the page's own style and script run
+        assert page.headers["referrer-policy"] == "no-referrer" and page.headers["cache-control"] == "no-store"
+        assert set(re.findall(r"https?://[^\s\"'<>]+", page.text)) <= {google, https} and not re.search(r"\bsrc=|<link|@import|url\(", page.text)
+        csp = page.headers["content-security-policy"]
+        assert csp.startswith("default-src 'none';")
+        for tag in ("style", "script"):
+            body = re.search(f"<{tag}>(.*?)</{tag}>", page.text, re.S).group(1)
+            assert f"'sha256-{base64.b64encode(hashlib.sha256(body.encode()).digest()).decode()}'" in csp, tag
+    assert "<x-y>" not in calpage.render("d", '"><x-y>', "en", "") and {len(x) for x in texts.CAL_PAGE.values()} == {6}  # all escaped
     assert c.get("/cal/nobody.ics").status_code == 404 and c.get("/cal/nobody").status_code == 404
     assert delete_now(c, cfg, A) is None
     assert c.get(f"/cal/{token}.ics").status_code == 404                                        # gone with my data
