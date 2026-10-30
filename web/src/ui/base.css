@@ -171,14 +171,15 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .switch > span { display: flex; flex-direction: column; gap: 2px; }
 .switch b { font: 600 15px/1.3 var(--font-text); }
 .switch i { font-style: normal; }
-.switch input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; border-radius: 15px;
+.switch input, .sw-on input[role="switch"] { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; border-radius: 15px;
   background: var(--line-2); transition: background-color var(--t-base); }
-.switch input::after { content: ''; position: absolute; left: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
+.switch input::after, .sw-on input[role="switch"]::after { content: ''; position: absolute; left: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform var(--t-base) var(--ease); }
-/* on: the owner's pick from real screenshots (Oct 10): light, a solid blue track and a white knob; dark, a soft blue
+/* (.sw-on: a Settings list row with a switch, without the .switch row's layout)
+   on: the owner's pick from real screenshots (Oct 10): light, a solid blue track and a white knob; dark, a soft blue
    track and a blue knob (tokens.css --switch-on, --switch-knob) */
-.switch input:checked { background: var(--switch-on); }
-.switch input:checked::after { transform: translateX(20px); background: var(--switch-knob); }
+.switch input:checked, .sw-on input[role="switch"]:checked { background: var(--switch-on); }
+.switch input:checked::after, .sw-on input[role="switch"]:checked::after { transform: translateX(20px); background: var(--switch-knob); }
 
 /* the app's mark in the middle of a profile QR (the badge's corner, the full QR): a rounded square in the
    brand gradient, the shape of the badge photo */
@@ -253,3 +254,21 @@ html.lowfx .stagger > * { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* Settings' lists, the phone's own way (owner, Oct 30: "like Apple"): rows in a rounded group, a short label, the value
+   in grey and a chevron on the right; what needs saying goes in a small footnote under the group, never under a row */
+.set-group { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-m); background: var(--surface); }
+.set-row { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 11px 14px; text-align: left;
+  font: 500 16px/1.25 var(--font-text); color: var(--text); }
+.set-row + .set-row::before { content: ''; position: absolute; top: 0; right: 0; left: 52px; height: 1px; background: var(--line); }
+.set-group.plain .set-row + .set-row::before { left: 14px; }
+button.set-row:active { background: var(--surface-2); }
+.set-row > .lb { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* a long label takes two lines on a narrow phone, never "…" */
+.set-row > .val { flex: none; max-width: 50%; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set-row > .chev { flex: none; margin-right: -4px; color: var(--text-3); opacity: 0.7; }
+.set-row > .ico { flex: none; width: 26px; display: grid; place-items: center; color: var(--text-2); }
+.set-row.danger { justify-content: center; color: var(--danger-text); font-weight: 560; }
+.set-row.act { color: var(--accent-text); }
+.set-row.act.red { color: var(--danger-text); }
+.set-cap { margin: 22px 14px 7px; font: 500 13px/1.2 var(--font-text); letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.set-foot { margin: 7px 14px 0; font: 450 13px/1.4 var(--font-text); color: var(--text-3); }

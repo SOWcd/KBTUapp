@@ -1,190 +1,78 @@
 <script lang="ts">
-  // Profile → Settings, the third page (mockup v24; until then a sheet behind a gear). Language and theme,
-  // what the bot sends (switches right here), the phone, "My data" (only what an event asked for, once there is
-  // some: PLAN 71), "About the app" (who sees what, the rules, the code: an overlay, so Telegram's Back closes it),
-  // deleting the account last and quiet.
+  // Profile → Settings, the third page, the phone's own way (owner, Oct 30: "like Apple"; the page of hints, tiles and
+  // red bins under each row read as clutter): one short row each, its value in grey, a chevron; the choices and the
+  // explanations are a tap deeper (SettingsSheet). My phone, my city and deleting the account live under Privacy.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import Trash2 from '@lucide/svelte/icons/trash-2';
   import Languages from '@lucide/svelte/icons/languages';
   import SunMoon from '@lucide/svelte/icons/sun-moon';
-  import BellRing from '@lucide/svelte/icons/bell-ring';
-  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
-  import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import Bell from '@lucide/svelte/icons/bell';
+  import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import Smartphone from '@lucide/svelte/icons/smartphone';
-  import CalendarDays from '@lucide/svelte/icons/calendar-days';
-  import Phone from '@lucide/svelte/icons/phone';
-  import MapPin from '@lucide/svelte/icons/map-pin';
-  import EyeOff from '@lucide/svelte/icons/eye-off';
+  import Lock from '@lucide/svelte/icons/lock';
   import { session } from '../../lib/state/session.svelte';
-  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { api, type Settings } from '../../lib/api';
-  import { inner } from '../../lib/perms';
-  import { t, i18n, setLang, loadLang, LANGS, LANG_NAMES } from '../../lib/i18n/index.svelte';
-  import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
+  import { api } from '../../lib/api';
+  import { t, i18n, LANG_FULL } from '../../lib/i18n/index.svelte';
+  import { theme } from '../../lib/state/theme.svelte';
   import { power } from '../../lib/state/power.svelte';
   import { haptic, openLink, tg, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import { fmtPhone, kzPhone } from '../../lib/phone';
 
   const me = $derived(session.me);
-  // language and theme live on the phone; the server keeps them too, so the bot writes in your language
-  const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
-
-  // each row's mark: a tinted tile, like the phone's own settings (the eye finds a row by its colour and shape first)
-  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint', BellRing, '#FF5A4E'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint', CalendarPlus, '#FF9F0A'],
-    ['nForum', 'set.forum', 'set.forumHint', MessagesSquare, '#30B0C7']] as const;
-  // a switch saves at once and puts itself back if the server says no
-  async function set(k: (typeof SWITCHES)[number][0], on: boolean) {
-    if (!me) return;
-    haptic.tap();
-    me.settings[k] = on;
-    try { session.me = await api.updateMe({ [k]: on }); say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d'); }
-    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); } // the one on screen now
-  }
+  const s = $derived(me?.settings);
+  const bells = $derived(s ? [s.nRemind, s.nNewEvents, s.nForum].filter(Boolean).length : 0);
 
   // my events in the phone's calendar: Apple through our page that hands webcal:// over, the rest through Google. Asked
   // for on the tap: the page mounts unseen next to Me, and the address makes a feed token on the server
   let cal: { page: string; feed: string } | null = null;
   async function subscribe() {
-    haptic.tap();
     try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
     openLink(/^(ios|macos)$/.test(tg.platform) ? cal.page : 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(cal.feed));
   }
 
   // the app's icon on the home screen: the row only while it can be added and isn't yet
   let home = $state('unsupported');
-  void homeScreen.status().then((s) => (home = s));
+  void homeScreen.status().then((x) => (home = x));
   $effect(() => on('homeScreenAdded', () => { home = 'added'; say(t('set.homeDone'), 'rocket_3d'); }));
-
-  // My data (PLAN 71): the phone an event asked for, seen, changed or deleted here (null deletes it)
-  async function savePhone(phone: string | null, done: string) {
-    try { session.me = await api.updateMe({ phone }); haptic.ok(); say(done, 'sparkles_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
-  }
-  async function editPhone() {
-    haptic.tap();
-    const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true });
-    if (p) await savePhone(p, t('pd.saved'));
-  }
-  // the city from the club's roster (PLAN 95): off the profile, or gone
-  async function cityHidden(on: boolean) {
-    try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
-  }
-  async function dropCity() {
-    haptic.tap();
-    if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
-    try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
-  }
-  async function dropPhone() {
-    haptic.tap();
-    if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
-  }
-
-  // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
-  function deleteData() {
-    const a = data.myCard?.awards;
-    const tickets = data.events.filter((e) => e.my && e.my.status !== 'cancelled' && !inner(e)).length;
-    sheets.deleteAccount({ awards: a ? a.achievements.filter((x) => x.level > 0).length + a.badges.length : 0, tickets, clubs: me?.memberships.length ?? 0 });
-  }
 </script>
 
-{#snippet ic(Icon: typeof BellRing, c: string)}<span class="ico" style="--c:{c}" aria-hidden="true"><Icon size={18} strokeWidth={2.2} /></span>{/snippet}
+{#snippet row(Icon: typeof Bell, label: string, value: string, go: () => void)}
+  <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="ico"><Icon size={21} strokeWidth={1.9} /></span><span class="lb">{label}</span>
+    {#if value}<span class="val">{value}</span>{/if}<ChevronRight class="chev" size={18} /></button>
+{/snippet}
 
 <div class="page scroll stagger">
   <h1 class="ttl">{t('me.settings')}</h1>
-  <div class="rows surface">
-    <div class="r">{@render ic(Languages, '#5E5CE6')}<span class="lb">{t('me.guestLang')}</span>
-      <span class="seg">{#each LANGS as l (l)}<button class:on={i18n.lang === l} onclick={() => { if (i18n.lang !== l) { haptic.select(); keep({ lang: l }); void loadLang(l).then(() => reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang')); } }}>{LANG_NAMES[l]}</button>{/each}</span></div>
-    <div class="r">{@render ic(SunMoon, '#3B6BFF')}<span class="lb">{t('me.guestTheme')}</span>
-      <span class="seg"><button class:on={theme.current === 'dark'} onclick={(e) => { if (theme.current !== 'dark') { chooseTheme('dark', e.currentTarget); keep({ theme: 'dark' }); say(phrase('say.theme.dark'), 'crescent_moon_3d'); } }}>{t('theme.dark')}</button><button class:on={theme.current === 'light'} onclick={(e) => { if (theme.current !== 'light') { chooseTheme('light', e.currentTarget); keep({ theme: 'light' }); say(phrase('say.theme.light'), 'sparkles_3d'); } }}>{t('theme.light')}</button></span></div>
+
+  <div class="set-group">
+    {@render row(Languages, t('me.guestLang'), LANG_FULL[i18n.lang], () => sheets.settings('lang'))}
+    {@render row(SunMoon, t('me.guestTheme'), t(theme.current === 'dark' ? 'theme.dark' : 'theme.light'), () => sheets.settings('look'))}
   </div>
 
   {#if me?.student}
-    <h2 class="sec">{t('me.notifications')}<span>{t('set.notifyBot')}</span></h2>
-    <div class="rows surface">
-      {#each SWITCHES as [k, title, hint, Icon, c] (k)}
-        <label class="r switch">{@render ic(Icon, c)}<span><b>{t(title)}</b><i>{t(hint)}</i></span>
-          <input type="checkbox" role="switch" checked={me.settings[k]} onchange={(e) => set(k, e.currentTarget.checked)} /></label>
-      {/each}
+    <div class="set-group">
+      {@render row(Bell, t('me.notifications'), bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off'), () => sheets.settings('notify'))}
+      {@render row(CalendarDays, t('set.calShort'), '', subscribe)}
     </div>
-    <p class="note">{t('set.always')}</p>
   {/if}
 
-  <h2 class="sec">{t('set.phone')}</h2>
-  <div class="rows surface">
-    <button class="r" onclick={() => sheets.settings('power')}>{@render ic(BatteryMedium, '#34C759')}
-      <span class="lb">{t('power.title')}<i>{t(power.mode === 'auto' ? (power.lite ? 'power.sub.autoOn' : 'power.sub.autoOff') : power.mode === 'on' ? 'power.sub.on' : 'power.sub.off')}</i></span><ChevronRight size={18} /></button>
-    {#if home === 'unknown' || home === 'missed'}
-      <button class="r" onclick={() => { haptic.tap(); homeScreen.add(); }}>{@render ic(Smartphone, '#8E8E93')}<span class="lb">{t('set.home')}<i>{t('set.homeSub')}</i></span><ChevronRight size={18} /></button>
-    {/if}
-    {#if me?.student}
-      <button class="r" onclick={subscribe}>{@render ic(CalendarDays, '#FF375F')}<span class="lb">{t('me.calendar')}<i>{t('set.calendarSub')}</i></span><ChevronRight size={18} /></button>
-    {/if}
+  <div class="set-group">
+    {@render row(BatteryMedium, t('power.title'), t(`power.${power.mode}`), () => sheets.settings('power'))}
+    {#if home === 'unknown' || home === 'missed'}{@render row(Smartphone, t('set.homeShort'), '', () => homeScreen.add())}{/if}
   </div>
 
-  {#if me?.student?.phone || me?.city}
-    <h2 class="sec">{t('pd.title')}</h2>
-    <div class="rows surface">
-      {#if me.student?.phone}
-        <div class="r">{@render ic(Phone, '#34C759')}<button class="lb" onclick={editPhone}>{t('pd.phone')}<i>{kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone}</i></button>
-          <button class="x" aria-label={t('pd.del')} onclick={dropPhone}><Trash2 size={18} /></button></div>
-      {/if}
-      {#if me.city}
-        <div class="r">{@render ic(MapPin, '#FF9F0A')}<span class="lb">{t('pd.city')}<i>{me.city.name}</i></span>
-          <button class="x" aria-label={t('pd.del')} onclick={dropCity}><Trash2 size={18} /></button></div>
-        <label class="r switch">{@render ic(EyeOff, '#8E8E93')}<span><b>{t('pd.cityHide')}</b><i>{t('pd.cityNote')}</i></span>
-          <input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
-      {/if}
-    </div>
-    {#if me.student?.phone}<p class="note">{t('pd.note')}</p>{/if}
-  {/if}
-
-  <div class="rows surface about">
-    <button class="r" onclick={() => sheets.settings('privacy')}><span class="mk"><KbtuMark size={20} /></span>
-      <span class="lb">{t('set.about')}<i>{t('set.aboutSub')}</i></span><ChevronRight size={18} /></button>
+  <div class="set-group">
+    {@render row(Lock, t('set.privacy'), '', () => sheets.settings('privacy'))}
+    <button class="set-row" onclick={() => { haptic.tap(); sheets.settings('about'); }}><span class="ico"><KbtuMark size={20} /></span><span class="lb">{t('set.about')}</span><ChevronRight class="chev" size={18} /></button>
   </div>
-
-  {#if me?.student && !me.deleteAt}
-    <button class="del" onclick={deleteData}>{t('me.deleteData')}</button>
-  {/if}
   <div class="tail"></div>
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
+  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 22px; }
   .page > :global(*) { flex-shrink: 0; }
-  .ttl { margin: 6px 4px 8px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
-  .sec { display: flex; align-items: baseline; gap: 8px; margin: 20px 4px 0; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .sec span { font: 550 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); letter-spacing: 0; }
-  .rows { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); }
-  .r { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 16px; text-align: left; color: var(--text-3); }
-  .r + .r { box-shadow: inset 0 1px 0 var(--line); }
-  button.r:active { background: var(--surface-2); }
-  .lb, .switch b { flex: 1; min-width: 0; font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); }
-  .lb i, .switch i { display: block; margin-top: 2px; font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-3); }
-  .switch { justify-content: space-between; border-radius: 0; background: none; }
-  .switch > span:not(.ico) { flex: 1; }
-  .switch b { display: block; }
-  .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-full); background: var(--surface-2); }
-  .seg button { height: 30px; padding: 0 12px; border-radius: var(--r-full); font: 620 var(--fs-sub)/1 var(--font-text); color: var(--text-2); }
-  .seg button.on { background: var(--text); color: var(--bg); }
-  .note { margin: 0 4px; font: 500 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
-  button.lb { text-align: left; }
-  .x { display: flex; padding: 8px; margin-right: -8px; color: var(--danger-text); }
-  .about { margin-top: 20px; }
-  /* the tile: the colour solid, the mark white, a soft inner light on top (glass, not flat paint) */
-  .ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #fff;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--c) 82%, #fff), var(--c));
-    box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.45), 0 2px 6px -2px color-mix(in srgb, var(--c) 60%, transparent); }
-  .switch:has(input:active) .ico, button.r:active .ico { transform: scale(0.92); }
-  .ico { transition: transform var(--t-fast) var(--ease); }
-  .r { padding-left: 12px; }
-  .mk { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #2A4FD6, #5B2BC0); }
-  .del { align-self: center; margin-top: 18px; padding: 8px 14px; font: 600 var(--fs-body)/1 var(--font-text); color: var(--danger-text); }
+  .ttl { margin: 6px 4px -6px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
 </style>

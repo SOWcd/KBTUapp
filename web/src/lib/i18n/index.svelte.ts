@@ -8,6 +8,7 @@ export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Lang[] = ['ru', 'kk', 'en'];
 // each language by its own short name, the same whatever the app's language is
 export const LANG_NAMES: Record<Lang, string> = { ru: 'Рус', kk: 'Қаз', en: 'Eng' };
+export const LANG_FULL: Record<Lang, string> = { ru: 'Русский', kk: 'Қазақша', en: 'English' };
 export type { Key };
 
 // Russian is every missing key's fallback, so it ships in the boot bundle; the other two are their own chunks (a quarter

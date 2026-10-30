@@ -68,7 +68,7 @@ export const sheets = {
   /** my nickname and photo (Telegram's or my own), from Me and my badge's photo */
   look: () => {},
   /** behind the Settings page's rows: About the app (who sees what), power saving */
-  settings: (_kind: 'privacy' | 'power') => {},
+  settings: (_kind: 'lang' | 'look' | 'notify' | 'power' | 'privacy' | 'sees' | 'about') => {},
   /** the admin panel (pilot): clubs and their teams */
   admin: () => {},
   /** the campus map, on a floor (step 1: the 2023 plans) */

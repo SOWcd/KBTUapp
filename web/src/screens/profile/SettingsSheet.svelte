@@ -1,54 +1,177 @@
 <script lang="ts">
-  // Behind Settings' rows: power saving (this phone's, SPEC §8.2) and About the app (who sees what, SPEC §3; the rules,
-  // the code, a contact). The notification switches sit on the Settings page itself since Oct 21.
+  // A tap deeper than a Settings row, the phone's own way: a list to pick from with a check (language, appearance,
+  // power saving), the notification switches with a footnote under each, Privacy (my phone and city, who sees what, the
+  // policy, deleting the account) and About (the rules, the author, the code). The sign-in sheet's "What we store" opens
+  // Privacy (§4.1 consent).
+  import Check from '@lucide/svelte/icons/check';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Lock from '@lucide/svelte/icons/lock';
+  import Languages from '@lucide/svelte/icons/languages';
+  import SunMoon from '@lucide/svelte/icons/sun-moon';
+  import Bell from '@lucide/svelte/icons/bell';
+  import Info from '@lucide/svelte/icons/info';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { phrase } from '../../lib/state/data.svelte';
-  import { t, i18n } from '../../lib/i18n/index.svelte';
+  import { session } from '../../lib/state/session.svelte';
+  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
+  import { sheets } from '../../lib/state/sheets';
+  import { api, type Settings } from '../../lib/api';
+  import { inner } from '../../lib/perms';
+  import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang, type Key } from '../../lib/i18n/index.svelte';
+  import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
   import { haptic, openLink } from '../../lib/tg';
+  import { fmtPhone, kzPhone } from '../../lib/phone';
   import Sheet from '../../ui/Sheet.svelte';
 
-  let { overlay, kind }: { overlay: Overlay; kind: 'privacy' | 'power' } = $props();
+  type Kind = 'lang' | 'look' | 'notify' | 'power' | 'privacy' | 'sees' | 'about';
+  let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
+  const TITLE: Record<Kind, [Key, typeof Lock]> = { lang: ['me.guestLang', Languages], look: ['me.guestTheme', SunMoon], notify: ['me.notifications', Bell],
+    power: ['power.title', BatteryMedium], privacy: ['set.privacy', Lock], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+  const me = $derived(session.me);
+
+  // language and theme live on the phone; the server keeps them too, so the bot writes in your language
+  const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
+  function lang(l: Lang) {
+    if (i18n.lang === l) return;
+    haptic.select(); keep({ lang: l });
+    void loadLang(l).then(() => reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang'));
+  }
+  function look(x: 'dark' | 'light', el: Element) {
+    if (theme.current === x) return;
+    haptic.select(); chooseTheme(x, el); keep({ theme: x });
+    say(phrase(`say.theme.${x}`), x === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
+  }
   const POWER_EMOJI = { on: 'hot_beverage_3d', off: 'high_voltage_3d', auto: 'robot_3d' } as const;
   const NOW = { fps: 'power.now.fps', battery: 'power.now.battery', device: 'power.now.device' } as const;
   const now = $derived(power.mode === 'on' ? 'power.now.on' : power.mode === 'off' ? 'power.now.off' : power.why ? NOW[power.why] : 'power.now.autoOff');
-  // what we keep about a student first: the sign-in sheet's "What we store" opens this (§4.1 consent)
+
+  // a switch saves at once and puts itself back if the server says no
+  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint'], ['nForum', 'set.forum', 'set.forumHint']] as const;
+  async function set(k: (typeof SWITCHES)[number][0], on: boolean) {
+    if (!me) return;
+    haptic.tap();
+    me.settings[k] = on;
+    try { session.me = await api.updateMe({ [k]: on }); say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d'); }
+    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); } // the one on screen now
+  }
+
+  // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
+  // roster (PLAN 95), off the profile or gone
+  async function savePhone(phone: string | null, done: string) {
+    try { session.me = await api.updateMe({ phone }); haptic.ok(); say(done, 'sparkles_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
+  async function editPhone() {
+    haptic.tap();
+    const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true });
+    if (p) await savePhone(p, t('pd.saved'));
+  }
+  async function dropPhone() {
+    haptic.tap();
+    if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
+  }
+  async function cityHidden(on: boolean) {
+    try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
+    catch { say(t('common.error'), 'pleading_face_3d'); }
+  }
+  async function dropCity() {
+    haptic.tap();
+    if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
+    try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); }
+    catch { say(t('common.error'), 'pleading_face_3d'); }
+  }
+  // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
+  function deleteData() {
+    const a = data.myCard?.awards;
+    const tickets = data.events.filter((e) => e.my && e.my.status !== 'cancelled' && !inner(e)).length;
+    sheets.deleteAccount({ awards: a ? a.achievements.filter((x) => x.level > 0).length + a.badges.length : 0, tickets, clubs: me?.memberships.length ?? 0 });
+  }
+  // what we keep about a student first
   const SEES = [['set.portal', 'set.portalText'], ['set.allSee', 'set.allSeeText'], ['set.orgSee', 'set.orgSeeText'],
     ['set.teamSee', 'set.teamSeeText'], ['set.youSee', 'set.youSeeText'], ['set.never', 'set.neverText']] as const;
+  const page = (path: string) => openLink(`${location.origin}/${path}?lang=${i18n.lang}`);
 </script>
 
-<Sheet {overlay} title={t(kind === 'power' ? 'power.title' : 'set.about')} icon={kind === 'power' ? BatteryMedium : Lock}>
-  {#if kind === 'power'}
-    <h2 class="t-h2 hd">{t('power.title')}</h2>
-    <p class="t-callout lead">{t('power.lead')}</p>
-    <div class="seg modes">{#each POWER_MODES as m (m)}<button class:on={power.mode === m} onclick={() => { if (power.mode !== m) { haptic.select(); setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } }}>{t(`power.${m}`)}</button>{/each}</div>
-    <section class="blk now"><p class="t-callout">{t(now)}</p>
-      {#if power.mode === 'auto' && power.fps}<p class="t-foot">{t('power.fps', { n: power.fps })}</p>{/if}</section>
-    <p class="t-foot note">{t('power.what')}</p>
-  {:else}
-    <h2 class="t-h2 hd">{t('set.about')}</h2>
-    <div class="col">
-      {#each SEES as [h, text] (h)}
-        <section class="blk"><h3 class="t-cap">{t(h)}</h3><p class="t-callout">{t(text)}</p></section>
-      {/each}
+{#snippet pick(label: string, on: boolean, go: (el: Element) => void)}
+  <button class="set-row" aria-pressed={on} onclick={(e) => go(e.currentTarget)}><span class="lb">{label}</span>{#if on}<Check class="ok" size={20} strokeWidth={2.4} />{/if}</button>
+{/snippet}
+{#snippet link(label: string, go: () => void, value = '')}
+  <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}<ChevronRight class="chev" size={18} /></button>
+{/snippet}
+
+<Sheet {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]}>
+  <h2 class="t-h2 hd">{t(TITLE[kind][0])}</h2>
+  {#if kind === 'lang'}
+    <div class="set-group plain">{#each LANGS as l (l)}{@render pick(LANG_FULL[l], i18n.lang === l, () => lang(l))}{/each}</div>
+  {:else if kind === 'look'}
+    <div class="set-group plain">
+      {@render pick(t('theme.dark'), theme.current === 'dark', (el) => look('dark', el))}
+      {@render pick(t('theme.light'), theme.current === 'light', (el) => look('light', el))}
     </div>
-    <p class="t-foot note"><button class="link" onclick={() => openLink(`${location.origin}/privacy?lang=${i18n.lang}`)}>{t('login.consentLink')}</button> · <button class="link" onclick={() => openLink(`${location.origin}/terms?lang=${i18n.lang}`)}>{t('login.terms')}</button></p>
-    <p class="t-foot note">{t('set.contact')} <button class="link" onclick={() => openLink('https://t.me/Sowers')}>@Sowers</button></p>
-    <p class="t-foot note">{t('set.source')} <button class="link" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}>GitHub</button></p>
+  {:else if kind === 'power'}
+    <div class="set-group plain">
+      {#each POWER_MODES as m (m)}{@render pick(t(`power.${m}`), power.mode === m, () => { if (power.mode !== m) { haptic.select(); setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } })}{/each}
+    </div>
+    <p class="set-foot">{t(now)}{#if power.mode === 'auto' && power.fps} {t('power.fps', { n: power.fps })}{/if}</p>
+    <p class="set-foot">{t('power.lead')} {t('power.what')}</p>
+  {:else if kind === 'notify' && me}
+    {#each SWITCHES as [k, title, hint] (k)}
+      <div class="sw">
+        <label class="set-group plain sw-on"><span class="set-row"><span class="lb">{t(title)}</span>
+          <input type="checkbox" role="switch" checked={me.settings[k]} onchange={(e) => set(k, e.currentTarget.checked)} /></span></label>
+        <p class="set-foot">{t(hint)}</p>
+      </div>
+    {/each}
+    <p class="set-foot always">{t('set.always')}</p>
+  {:else if kind === 'privacy'}
+    {#if me?.student?.phone || me?.city}
+      <h3 class="set-cap">{t('pd.title')}</h3>
+      <div class="set-group plain sw-on">
+        {#if me.student?.phone}
+          {@render link(t('pd.phone'), editPhone, kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone)}
+          <button class="set-row act red" onclick={dropPhone}><span class="lb">{t('pd.phoneDel')}</span></button>
+        {/if}
+        {#if me.city}
+          <div class="set-row"><span class="lb">{t('pd.city')}</span><span class="val">{me.city.name}</span></div>
+          <label class="set-row"><span class="lb">{t('pd.cityHide')}</span><input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
+          <button class="set-row act red" onclick={dropCity}><span class="lb">{t('pd.cityDel')}</span></button>
+        {/if}
+      </div>
+      <p class="set-foot">{t('pd.note')}{#if me.city}. {t('pd.cityNote')}{/if}</p>
+    {/if}
+    <div class="set-group plain gap">
+      {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
+      {@render link(t('set.policy'), () => page('privacy'))}
+    </div>
+    {#if me?.student && !me.deleteAt}
+      <div class="set-group plain gap"><button class="set-row danger" onclick={deleteData}>{t('me.deleteData')}</button></div>
+    {/if}
+  {:else if kind === 'sees'}
+    <div class="set-group plain">
+      {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}
+    </div>
+  {:else if kind === 'about'}
+    <div class="set-group plain">
+      {@render link(t('set.terms'), () => page('terms'))}
+      {@render link(t('set.policy'), () => page('privacy'))}
+      {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers')}
+      {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub')}
+    </div>
   {/if}
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 8px; }
-  .lead { color: var(--text-2); margin-bottom: 14px; }
-  .col { display: flex; flex-direction: column; gap: 8px; }
-  .blk { padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
-  .blk h3 { margin-bottom: 4px; color: var(--text-2); }
-  .note { margin-top: 14px; padding: 0 2px; }
-  .link { color: var(--accent-text); font-weight: 620; }
-  .modes { display: flex; width: 100%; }
-  .modes button { flex: 1; height: 38px; font-size: 14px; text-align: center; }
-  .now { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+  .hd { margin: 4px 0 14px; }
+  .set-group { background: var(--surface-2); }
+  .set-row :global(.ok) { flex: none; color: var(--accent-text); }
+  .sw + .sw { margin-top: 18px; }
+  .always { margin-top: 22px; }
+  .gap { margin-top: 22px; }
+  .gap:first-of-type { margin-top: 0; }
+  /* who sees what: a heading and its text in each cell, read rather than tapped */
+  .see { padding: 12px 14px; }
+  .see + .see { border-top: 1px solid var(--line); }
+  .see b { display: block; font: 600 15px/1.3 var(--font-text); }
+  .see p { margin-top: 3px; font: 450 14px/1.45 var(--font-text); color: var(--text-2); }
 </style>
