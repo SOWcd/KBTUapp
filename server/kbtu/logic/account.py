@@ -5,8 +5,11 @@ import hashlib
 import json
 import re
 import secrets
+from itertools import combinations
+from math import comb
 from pathlib import Path
 
+from .. import portal
 from ..db import tx
 
 from .core import (ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
@@ -572,17 +575,99 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
 def schedule(con, v: Viewer) -> list[dict]:
     if not v.student:
         return []
+    got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins", v.id)
     return [{"weekday": c["weekday"], "begins": c["begins"], "ends": c["ends"], "subject": c["subject"], "kind": c["kind"],
-             "room": c["room"], "teacher": c["teacher"], "names": json.loads(c["names"]) if c["names"] else None}
-            for c in rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins", v.id)]
+             "room": c["room"], "teacher": c["teacher"], "names": n or None} for c, n in zip(got, _names(got))]
 
 
-def save_schedule(con, uid: int, lessons: list) -> None:
-    """Replaces the student's weekly classes (inside the caller's transaction)."""
+SCHED_LANGS = ("ru", "kk", "en")
+
+
+def _names(saved) -> list[dict]:
+    """Each saved class's names by language. A week the bot saved before it kept them (Oct 25-30) has its subject
+    alone: in the language its letters tell (portal.guess_lang), the same for the whole week (one page)."""
+    out = [json.loads(c["names"]) if c["names"] else {} for c in saved]
+    bare = [(c["subject"], n) for c, n in zip(saved, out) if c["subject"] not in n.values()]
+    if guess := portal.guess_lang([s for s, _ in bare]):
+        for s, n in bare:
+            n.setdefault(guess, s)
+    return out
+
+
+def sched_langs(names: list[dict]) -> list[str]:
+    """The languages a week is in: those at least half its classes have a name in (a class new in the last page has
+    that page's alone)."""
+    return [x for x in SCHED_LANGS if names and 2 * sum(x in n for n in names) >= len(names)]
+
+
+def _at(c: dict) -> int:
+    """A class's start in minutes from Monday 00:00."""
+    h, m = c["begins"].split(":")
+    return (c["weekday"] * 24 + int(h)) * 60 + int(m)
+
+
+def _room(c: dict) -> str:
+    return (c["room"] or "").strip().casefold()
+
+
+# How a new page's class finds itself among the saved ones, tier by tier, each class taken once. By its name in the
+# page's language, when the saved class has one: the same class; then moved within its day or to another room; then to
+# another day. A class with no name in that language (a page in a new language: other words, no course code) by its
+# place: day, time, kind and room; then another room at the same time; then another time on its day and in its room;
+# where two pairings fit as well (two classes at one time in one room, one gone), none: a wrong name is worse than one
+# in another language. ponytail: a page in a new language can't tell two classes that swapped times in one room of one
+# day; teachers aren't compared (written differently per language)
+_BY_NAME = (lambda c: (c["weekday"], c["begins"], c["ends"], c["kind"], _room(c), c["name"]),
+            lambda c: (c["weekday"], c["kind"], c["name"]),
+            lambda c: (c["kind"], c["name"]))
+_BY_PLACE = (lambda c: (c["weekday"], c["begins"], c["ends"], c["kind"], _room(c)),
+             lambda c: (c["weekday"], c["begins"], c["ends"], c["kind"]),
+             lambda c: (c["weekday"], c["kind"], _room(c)))
+
+
+def _pair(old: list[dict], new: list[dict], by_name: bool) -> list[tuple[dict, dict]]:
+    """One group's saved and new classes (each in the week's order) paired in that order, the fewest minutes moved:
+    the bigger side's extra ones stay unpaired; by place, a tie pairs none. A made-up page with hundreds of one class:
+    just in order."""
+    few, many = sorted((old, new), key=len)
+    keep = many
+    if comb(len(many), len(few)) <= 5000:
+        moved = lambda k: sum(abs(_at(a) - _at(b)) for a, b in zip(few, k))  # noqa: E731
+        keep, *rest = sorted(combinations(many, len(few)), key=moved)
+        if not by_name and rest and moved(rest[0]) == moved(keep):
+            return []
+    return [(a, b) if few is old else (b, a) for a, b in zip(few, keep)]
+
+
+def save_schedule(con, uid: int, lessons: list, lang: str | None = None) -> dict:
+    """A week from the portal's page (portal.Lesson; inside the caller's transaction): the truth about times, rooms and
+    which classes there are, so it replaces the student's rows, while each class keeps the names earlier pages in other
+    languages gave it and gets this page's (`lang`, by its day names; else guessed from its words). What changed, for
+    the bot's answer: the page's language, the week's languages before and after, classes added, removed and moved."""
+    saved = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins, id", uid)
+    lang = lang or portal.guess_lang([x.subject for x in lessons])
+    old = [{**c, "known": n, "name": n.get(lang)} for c, n in zip(map(dict, saved), _names(saved))]
+    new = sorted(({**vars(x), "name": x.subject} for x in lessons), key=_at)
+    for keys, among in ((_BY_NAME, old), (_BY_PLACE, [o for o in old if o["name"] is None])):
+        for key in keys:
+            groups: dict = {}
+            for o in among:
+                if not o.get("taken"):
+                    groups.setdefault(key(o), ([], []))[0].append(o)
+            for x in new:
+                if "was" not in x and key(x) in groups:
+                    groups[key(x)][1].append(x)
+            for o, x in (p for g in groups.values() if g[0] and g[1] for p in _pair(*g, keys is _BY_NAME)):
+                o["taken"], x["was"] = True, o
+    names = [{**(x["was"]["known"] if "was" in x else {}), **({lang: x["subject"]} if lang else {})} for x in new]
     con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (uid,))
     con.executemany("""INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, code, kind, room, teacher, names)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", [(uid, x.weekday, x.begins, x.ends, x.subject, x.code, x.kind, x.room, x.teacher,
-                                                     json.dumps(x.names, ensure_ascii=False) if getattr(x, "names", None) else None) for x in lessons])
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", [(uid, x["weekday"], x["begins"], x["ends"], x["subject"], x.get("code"), x["kind"],
+                                                     x["room"], x["teacher"], json.dumps(n, ensure_ascii=False) if n else None)
+                                                    for x, n in zip(new, names)])
+    kept = [x for x in new if "was" in x]
+    return {"lang": lang, "was": len(old), "had": sched_langs([o["known"] for o in old]), "has": sched_langs(names), "added": len(new) - len(kept),
+            "removed": len(old) - len(kept), "moved": sum(1 for x in kept if (_at(x), x["ends"], _room(x)) != (_at(x["was"]), x["was"]["ends"], _room(x["was"])))}
 
 
 def drop_my_schedule(con, v: Viewer) -> None:

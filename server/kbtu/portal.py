@@ -122,18 +122,21 @@ class _Tree(HTMLParser):
 
 # ---------------------------------------------------------------- the week
 
-DAYS = {**{d: i for i, d in enumerate(("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"), 1)},
-        # Russian and Kazakh (the portal's other languages)
-        **{d: i for i, d in enumerate(("\u043f\u043e\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u0438\u043a", "\u0432\u0442\u043e\u0440\u043d\u0438\u043a",
-                                       "\u0441\u0440\u0435\u0434\u0430", "\u0447\u0435\u0442\u0432\u0435\u0440\u0433", "\u043f\u044f\u0442\u043d\u0438\u0446\u0430",
-                                       "\u0441\u0443\u0431\u0431\u043e\u0442\u0430", "\u0432\u043e\u0441\u043a\u0440\u0435\u0441\u0435\u043d\u044c\u0435"), 1)},
-        **{d: i for i, d in enumerate(("\u0434\u04af\u0439\u0441\u0435\u043d\u0431\u0456", "\u0441\u0435\u0439\u0441\u0435\u043d\u0431\u0456",
-                                       "\u0441\u04d9\u0440\u0441\u0435\u043d\u0431\u0456", "\u0431\u0435\u0439\u0441\u0435\u043d\u0431\u0456", "\u0436\u04b1\u043c\u0430",
-                                       "\u0441\u0435\u043d\u0431\u0456", "\u0436\u0435\u043a\u0441\u0435\u043d\u0431\u0456"), 1)}}
+DAY_NAMES = {"en": ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"),
+             # Russian and Kazakh (the portal's other languages)
+             "ru": ("\u043f\u043e\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u0438\u043a", "\u0432\u0442\u043e\u0440\u043d\u0438\u043a",
+                    "\u0441\u0440\u0435\u0434\u0430", "\u0447\u0435\u0442\u0432\u0435\u0440\u0433", "\u043f\u044f\u0442\u043d\u0438\u0446\u0430",
+                    "\u0441\u0443\u0431\u0431\u043e\u0442\u0430", "\u0432\u043e\u0441\u043a\u0440\u0435\u0441\u0435\u043d\u044c\u0435"),
+             "kk": ("\u0434\u04af\u0439\u0441\u0435\u043d\u0431\u0456", "\u0441\u0435\u0439\u0441\u0435\u043d\u0431\u0456",
+                    "\u0441\u04d9\u0440\u0441\u0435\u043d\u0431\u0456", "\u0431\u0435\u0439\u0441\u0435\u043d\u0431\u0456", "\u0436\u04b1\u043c\u0430",
+                    "\u0441\u0435\u043d\u0431\u0456", "\u0436\u0435\u043a\u0441\u0435\u043d\u0431\u0456")}
+DAYS = {d: (i, lang) for lang, names in DAY_NAMES.items() for i, d in enumerate(names, 1)}  # a day's name: its number, its language
 KINDS = {"lecture": "lecture", "practice": "practice", "lab": "lab", "laboratory": "lab",
          "\u043b\u0435\u043a\u0446\u0438\u044f": "lecture", "\u043f\u0440\u0430\u043a\u0442\u0438\u043a\u0430": "practice",
          "\u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u043d\u0430\u044f": "lab", "\u0434\u04d9\u0440\u0456\u0441": "lecture",
          "\u0442\u04d9\u0436\u0456\u0440\u0438\u0431\u0435": "practice", "\u0437\u0435\u0440\u0442\u0445\u0430\u043d\u0430\u043b\u044b\u049b": "lab"}
+KK_ONLY = re.compile("[\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456]", re.I)  # Kazakh's own letters (none in Russian)
+CYRILLIC, LATIN = re.compile("[\u0400-\u04ff]"), re.compile("[a-z]", re.I)
 LECTURE_OVER = 100  # minutes: a class with no label longer than this is a lecture (lectures 2 h, practices 1 h, PE 1 h 40)
 HHMM = re.compile(r"(\d{1,2}):(\d{2})")
 
@@ -151,6 +154,7 @@ def _hhmm(minutes: int) -> str:
 class Week:
     name: str | None        # as the top bar shows it, for the caller's check
     lessons: list[Lesson]
+    lang: str | None = None  # the page's language (en / ru / kk) by its day names; None: names it doesn't know
 
 
 def parse(html: str) -> Week:
@@ -171,9 +175,11 @@ def parse(html: str) -> Week:
     m = HHMM.fullmatch(hours[0].words())
     base, per_hour = int(m[1]) * 60 + int(m[2]), _px(hours[0].style, "height") or 64.0
     out: list[Lesson] = []
+    langs: list[str] = []
     for i, col in enumerate(cols[1:], 1):
         title = next((n.words() for n in col.all() if n.has("text-sm", "font-medium")), "")
-        day = DAYS.get(title.strip().lower(), i if i <= 7 else None)
+        day, lang = DAYS.get(title.strip().lower(), (i if i <= 7 else None, None))
+        langs += [lang] if lang else []
         if not day:
             continue
         for b in col.all():
@@ -201,7 +207,18 @@ def parse(html: str) -> Week:
             out.append(Lesson(day, _hhmm(begins), _hhmm(ends), subject[:120], kind, (room or None) and room[:40], (teacher or None) and teacher[:80]))
     if not out:
         raise NotSchedule("empty")
-    return Week(name, sorted(out, key=lambda x: (x.weekday, x.begins)))
+    return Week(name, sorted(out, key=lambda x: (x.weekday, x.begins)), max(DAY_NAMES, key=langs.count) if langs else None)
+
+
+def guess_lang(names: list[str]) -> str | None:
+    """The language of class names with nothing else to tell it (a week the bot saved before it kept languages, or a
+    page whose day names it doesn't know): Latin letters English, Cyrillic Russian, Kazakh when a third of the names
+    have Kazakh's own letters. ponytail: letters, not words: a Kazakh week of loanwords only (Fizika) reads as Russian."""
+    names = list(set(names))
+    cyr = [x for x in names if CYRILLIC.search(x)]
+    if sum(1 for x in names if LATIN.search(x) and not CYRILLIC.search(x)) > len(cyr):
+        return "en"
+    return ("kk" if 3 * sum(1 for x in cyr if KK_ONLY.search(x)) >= len(cyr) else "ru") if cyr else None
 
 
 def same_person(shown: str | None, first: str, last: str) -> bool:

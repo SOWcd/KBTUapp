@@ -5,7 +5,8 @@
   // sign-in (`first`: "Later" says it stays on Home) and from the Home card until a schedule is there.
   // Oct 30 (owner): the portal is the first big button, and the iPhone way is shown as his own screen recording
   // (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
-  // This phone's own steps come first.
+  // This phone's own steps come first. `addLang` (the Week sheet's "Add a language"): the lead says to switch the
+  // portal's language first; the same page sent again adds that language's names (Oct 30).
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
@@ -14,7 +15,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, first = false }: { overlay: Overlay; first?: boolean } = $props();
+  let { overlay, first = false, addLang = false }: { overlay: Overlay; first?: boolean; addLang?: boolean } = $props();
   const PORTAL = 'https://uninet.kbtu.kz/student/schedule';
   const toBot = () => { haptic.tap(); openLink('https://t.me/KBTUappBot'); setTimeout(() => tgTry((w) => w.close()), 300); };
   const toPortal = () => { haptic.tap(); openLink(PORTAL); };
@@ -22,8 +23,8 @@
   const order = onAndroid ? (['android', 'iphone'] as const) : (['iphone', 'android'] as const);
 </script>
 
-<Sheet {overlay} title={t('sched.howTitle')} icon={CalendarDays}>
-  <p class="t-callout lead">{t('sched.howLead')}</p>
+<Sheet {overlay} title={t(addLang ? 'sched.addLang' : 'sched.howTitle')} icon={CalendarDays}>
+  <p class="t-callout lead">{t(addLang ? 'sched.langLead' : 'sched.howLead')}</p>
   <Button kind="secondary" size="l" full onclick={toPortal}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('sched.portal')}</Button>
   {#each order as os (os)}
     <h3 class="t-cap cap">{t(`sched.${os}`)}</h3>

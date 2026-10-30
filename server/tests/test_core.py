@@ -4848,6 +4848,22 @@ def test_org_names(env):
     assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")     # an abbr sent with it wins
 
 
+COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")
+
+
+def portal_page(lang: str = "en") -> str:
+    """tests/fixtures/portal_week.html (English) as the portal shows it in another language: its day names, the courses
+    in made-up names ("Imaginary Algebra (kk)"); the rooms, times and kinds the same."""
+    from kbtu import portal
+    html = (Path(__file__).parent / "fixtures" / "portal_week.html").read_text(encoding="utf-8")
+    if lang != "en":
+        for i, day in ((0, "Monday"), (1, "Tuesday"), (2, "Wednesday"), (5, "Saturday")):
+            html = html.replace(f">{day}<", f">{portal.DAY_NAMES[lang][i].title()}<")
+        for name in COURSES:
+            html = html.replace(f">{name}<", f">{name} ({lang})<")
+    return html
+
+
 def test_portal_schedule(env, monkeypatch):
     """The week from the portal's schedule page saved on the phone (PLAN 26): a Web Archive or an .mht sent to the bot.
     A made-up page (tests/fixtures/portal_week.html): the phone's one-day layout ignored, the days by name, times as
@@ -4885,7 +4901,8 @@ def test_portal_schedule(env, monkeypatch):
     c, cfg = env
     login(c, 50, "ali")                                                  # Ali Testov
     login(c, 51, "bek")                                                  # Bek Testov: someone else
-    files = {"F1": archive, "F2": mht, "F3": b"<html><body>no grid</body></html>"}
+    files = {"F1": archive, "F2": mht, "F3": b"<html><body>no grid</body></html>", "F4": portal_page("ru").encode(),
+             "F5": portal_page("kk").replace("10:00&ndash;11:40", "11:00&ndash;12:40").encode()}           # in Kazakh, PE an hour later
     class Resp:
         def __init__(self, body):
             self.body, self.content = body, body if isinstance(body, bytes) else b""
@@ -4907,11 +4924,22 @@ def test_portal_schedule(env, monkeypatch):
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]   # his own stays
     assert send(50, "F3", "page.html") == texts.bot_message("ru", "sched_not")[0]
     assert send(50, "F1", size=30_000_000) == texts.bot_message("ru", "sched_big")[0]
+    assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204                 # login()'s class gone: his first week
     assert send(50, "F1") == texts.bot_message("ru", "sched_ok", n=5)[0]
     got = c.get("/api/me/schedule", headers=tma(50)).json()
     assert [(x["weekday"], x["begins"], x["subject"], x["kind"]) for x in got] == [(w[0], w[1], w[3], w[4]) for w in want]
-    assert send(50, "F2", "Schedule.mht") == texts.bot_message("ru", "sched_ok", n=5)[0]       # again from Android: replaced, not doubled
+    # the page sent again: its language, then what changed in the week; counts and language names only
+    said = lambda *parts: " ".join(texts.bot_message("ru", k, **f)[0] for k, f in parts)  # noqa: E731
+    ru = texts.SCHED_LANG["ru"]
+    assert send(50, "F2", "Schedule.mht") == said(("sched_same", {"language": ru["en"]}), ("sched_nochange", {}))  # from Android: not doubled
     assert len(c.get("/api/me/schedule", headers=tma(50)).json()) == 5
+    assert send(50, "F4") == said(("sched_added", {"language": ru["ru"], "languages": f"{ru['ru']}, {ru['en']}"}))
+    assert send(50, "F5") == said(("sched_added", {"language": ru["kk"], "languages": f"{ru['ru']}, {ru['kk']}, {ru['en']}"}), ("sched_changed", {"n": 1}))
+    assert send(50, "F5") == said(("sched_same", {"language": ru["kk"]}), ("sched_nochange", {}))
+    got = c.get("/api/me/schedule", headers=tma(50)).json()
+    assert [(x["begins"], x["subject"]) for x in got][:2] == [("11:00", "Physical Education (kk)"), ("14:00", "Imaginary Algebra (kk)")]
+    assert got[0]["names"] == {"en": "Physical Education", "ru": "Physical Education (ru)", "kk": "Physical Education (kk)"}
+    assert all(len(x["names"]) == 3 for x in got)
     dump = "\n".join(con.iterdump())
     assert "00X000000" not in dump and "Phone Only Course" not in dump           # the student ID is never kept; the phone layout ignored
     assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})
@@ -4925,6 +4953,76 @@ def test_portal_schedule(env, monkeypatch):
     assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]
     assert c.delete("/api/me/schedule", headers=tma(52)).status_code == 204 and c.get("/api/me/schedule", headers=tma(52)).json() == []
+
+
+def test_schedule_languages(env):
+    """The week sent again with the portal in another language (owner, Oct 30): the page's language by its day names;
+    every page the truth about times, rooms and which classes there are; each class keeps its names in the languages
+    sent before, found again by its name where it has one in the page's language, else by its place in the week (a
+    page in another language has other words and no course code). No translation: only names the student's pages gave."""
+    from kbtu import portal
+    week = {x: portal.parse(portal_page(x)) for x in ("en", "ru", "kk")}
+    assert {x: w.lang for x, w in week.items()} == {"en": "en", "ru": "ru", "kk": "kk"}
+    assert portal.parse(re.sub(r">(Monday|Tuesday|Wednesday|Saturday)<", ">?<", portal_page())).lang is None  # day names it doesn't know
+    phys, alg, hist, kaz = ("\u0424\u0438\u0437\u0438\u043a\u0430", "\u0410\u043b\u0433\u0435\u0431\u0440\u0430", "\u0422\u0430\u0440\u0438\u0445",
+                            "\u049a\u0430\u0437\u0430\u049b \u0442\u0456\u043b\u0456")  # Fizika, Algebra; Tarikh, Qazaq tili (Kazakh's own letters)
+    g = portal.guess_lang
+    assert (g(["Calculus", "Physics"]), g([phys, alg]), g([phys, hist, kaz]), g(["101"]), g([])) == ("en", "ru", "kk", None, None)
+
+    c, cfg = env
+    ali, bek = login(c, 60, "ali"), login(c, 61, "bek")
+    con = db.connect(cfg.db_path)
+    def save(lessons, lang, uid=ali["id"]):
+        with db.tx(con):
+            return logic.save_schedule(con, uid, lessons, lang)
+    def mine(tg=60):
+        return [(x["weekday"], x["begins"], x["subject"], x["room"], x["names"]) for x in c.get("/api/me/schedule", headers=tma(tg)).json()]
+    def named(name, *langs):
+        return {x: name if x == "en" else f"{name} ({x})" for x in langs}
+    def did(got):
+        return got["added"], got["removed"], got["moved"]
+
+    # Russian first: login()'s English Calculus goes (a removed class goes); then Kazakh: each class both names
+    assert save(week["ru"].lessons, "ru") == {"lang": "ru", "was": 1, "had": ["en"], "has": ["ru"], "added": 5, "removed": 1, "moved": 0}
+    assert save(week["kk"].lessons, "kk") == {"lang": "kk", "was": 5, "had": ["ru"], "has": ["ru", "kk"], "added": 0, "removed": 0, "moved": 0}
+    assert [x[4] for x in mine()] == [named(n, "ru", "kk") for n in COURSES] and [x[2] for x in mine()] == [f"{n} (kk)" for n in COURSES]
+    # English with PE an hour later: the new time, the names of all three
+    later = portal.parse(portal_page().replace("10:00&ndash;11:40", "11:00&ndash;12:40")).lessons
+    assert save(later, "en") == {"lang": "en", "was": 5, "had": ["ru", "kk"], "has": ["ru", "kk", "en"], "added": 0, "removed": 0, "moved": 1}
+    assert mine()[0] == (1, "11:00", "Physical Education", "Gym", named("Physical Education", "ru", "kk", "en"))
+    # the same language again: nothing changed; then Algebra gone, the Saturday class in another room, a new one
+    assert did(save(later, "en")) == (0, 0, 0)
+    edited = [dataclasses.replace(x, room="403") if x.subject == "Unlabelled Short Course" else x for x in later if x.subject != "Imaginary Algebra"]
+    got = save([*edited, portal.Lesson(5, "09:00", "10:00", "Brand New Course", "practice", "101", None)], "en")
+    assert did(got) == (1, 1, 1) and got["had"] == got["has"] == ["ru", "kk", "en"]
+    now = {x[2]: x for x in mine()}
+    assert "Imaginary Algebra" not in now and now["Brand New Course"][4] == {"en": "Brand New Course"}        # a new class: its page's name alone
+    assert now["Unlabelled Short Course"][3:] == ("403", named("Unlabelled Short Course", "ru", "kk", "en"))
+    # Kazakh again: Algebra back with its Kazakh name alone (it was gone), the new class goes, PE and the room back
+    got = save(week["kk"].lessons, "kk")
+    assert got == {"lang": "kk", "was": 5, "had": ["ru", "kk", "en"], "has": ["ru", "kk", "en"], "added": 1, "removed": 1, "moved": 2}
+    assert [x[4] for x in mine()][:2] == [named("Physical Education", "ru", "kk", "en"), named("Imaginary Algebra", "kk")]
+    # in a language they have, two classes that swapped times and rooms keep each its own names
+    ru = {x.subject: x for x in week["ru"].lessons}
+    h, lo = ru["History of Made-Up Things (ru)"], ru["Unlabelled Long Course (ru)"]
+    swapped = [dataclasses.replace(h, begins=lo.begins, ends=lo.ends, room=lo.room), dataclasses.replace(lo, begins=h.begins, ends=h.ends, room=h.room)]
+    got = save([x for x in week["ru"].lessons if x not in (h, lo)] + swapped, "ru")
+    assert did(got) == (0, 0, 2)
+    now = {x[2]: x for x in mine()}
+    assert now["History of Made-Up Things (ru)"][1:4:2] == ("15:00", "305") and now["Unlabelled Long Course (ru)"][1] == "12:00"
+    assert now["History of Made-Up Things (ru)"][4] == named("History of Made-Up Things", "ru", "kk", "en")
+    assert now["Imaginary Algebra (ru)"][4] == named("Imaginary Algebra", "ru", "kk")                       # found again by its place
+    assert mine(61) == [(1, "09:00", "Calculus", "305", {"en": "Calculus"})]                                # another student's: untouched
+
+    # a week the bot saved before it kept languages (names NULL): its language from its letters, kept under a new one
+    with db.tx(con):
+        con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (bek["id"],))
+        con.executemany("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room) VALUES (?, 2, ?, ?, ?, 'lecture', '305')",
+                        [(bek["id"], "09:00", "10:50", phys), (bek["id"], "11:00", "12:50", alg)])
+    assert [x[4] for x in mine(61)] == [{"ru": phys}, {"ru": alg}]
+    kk = [portal.Lesson(2, "09:00", "10:50", "Fizika (kk)", "lecture", "305", None), portal.Lesson(2, "11:00", "12:50", "Algebra (kk)", "lecture", "305", None)]
+    assert save(kk, "kk", bek["id"])["had"] == ["ru"] and [x[4] for x in mine(61)] == [{"ru": phys, "kk": "Fizika (kk)"}, {"ru": alg, "kk": "Algebra (kk)"}]
+    assert len(mine()) == 5
 
 
 def test_bot_cards_for_helpers_and_invites(env):

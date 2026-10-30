@@ -72,6 +72,11 @@ ACH_NAMES = {
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
            "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter"},
 }
+SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
+    "ru": {"ru": "русский", "kk": "казахский", "en": "английский"},
+    "kk": {"ru": "орысша", "kk": "қазақша", "en": "ағылшынша"},
+    "en": {"ru": "Russian", "kk": "Kazakh", "en": "English"},
+}
 TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "Аңыз"), "en": ("I", "II", "III", "Legend")}
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
 
@@ -216,6 +221,11 @@ BOT = {
         "sched_bad": ("Не получилось прочитать файл. Сохрани страницу ещё раз (iPhone: «Веб-архив», Android: «Скачать страницу») и пришли сюда.", None),
         "sched_other": ("🔒 Это расписание другого студента: имя на странице не совпадает с твоим. Загрузить можно только своё.", None),
         "sched_big": ("Файл слишком большой — сохрани только страницу расписания.", None),
+        # the page sent again (Oct 30): its language, then what changed in the week (counts only)
+        "sched_same": ("🗓 Это тот же язык — {language}.", None),
+        "sched_added": ("🗓 Добавлен язык: {language}. Языки расписания: {languages}.", None),
+        "sched_nochange": ("В неделе ничего не изменилось.", None),
+        "sched_changed": ("Неделя обновлена, изменений: {n}.", None),
         "chat_suggested": ("💬 Предложенные чаты ждут проверки: {n}", "Открыть"),
         "chat_approved": ("🎉 Твой чат «{title}» теперь в каталоге КБТУ — спасибо!", "Открыть каталог"),
         "backup_failed": ("⚠️ Вторую ночь подряд копия базы не ушла в облако (R2). Посмотри логи сервера: строки «offsite».", None),
@@ -319,6 +329,10 @@ BOT = {
         "sched_bad": ("Файлды оқи алмадым. Бетті қайта сақта (iPhone: «Веб-архив», Android: «Бетті жүктеу») да, осында жібер.", None),
         "sched_other": ("🔒 Бұл басқа студенттің кестесі: беттегі аты сенікімен сәйкес емес. Тек өз кестеңді жүктей аласың.", None),
         "sched_big": ("Файл тым үлкен — тек кесте бетін сақта.", None),
+        "sched_same": ("🗓 Бұл сол тіл — {language}.", None),
+        "sched_added": ("🗓 Жаңа тіл қосылды: {language}. Кесте тілдері: {languages}.", None),
+        "sched_nochange": ("Аптада ештеңе өзгерген жоқ.", None),
+        "sched_changed": ("Апта жаңартылды, өзгерістер: {n}.", None),
         "chat_suggested": ("💬 Ұсынылған чаттар тексеруді күтуде: {n}", "Ашу"),
         "chat_approved": ("🎉 Сенің «{title}» чатың енді ҚБТУ каталогында — рахмет!", "Каталогты ашу"),
         "backup_failed": ("⚠️ Қатарынан екінші түн дерекқор көшірмесі бұлтқа (R2) жіберілмеді. Сервер логтарын қара: «offsite» жолдары.", None),
@@ -422,6 +436,10 @@ BOT = {
         "sched_bad": ("Couldn't read the file. Save the page again (iPhone: Web Archive, Android: Download page) and send it here.", None),
         "sched_other": ("🔒 This is another student's schedule: the name on the page isn't yours. Only your own can be loaded.", None),
         "sched_big": ("The file is too big: save just the schedule page.", None),
+        "sched_same": ("🗓 Same language: {language}.", None),
+        "sched_added": ("🗓 New language added: {language}. Your schedule's languages: {languages}.", None),
+        "sched_nochange": ("Nothing changed in your week.", None),
+        "sched_changed": ("Your week is updated, changes: {n}.", None),
         "chat_suggested": ("💬 Suggested chats waiting for review: {n}", "Open"),
         "chat_approved": ("🎉 Your chat “{title}” is now in KBTU's catalog — thanks!", "Open the catalog"),
         "backup_failed": ("⚠️ For the second night in a row the database copy didn't reach the cloud (R2). Check the server logs: the \"offsite\" lines.", None),

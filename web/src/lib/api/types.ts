@@ -448,7 +448,7 @@ export type CheckinResult =
   | { result: 'other_event' | 'cancelled' | 'not_found' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
-  names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language (signed in since Oct 11) */ }
+  names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in (Oct 30) */ }
 
 export interface Post {
   id: Id;

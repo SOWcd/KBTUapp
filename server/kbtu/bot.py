@@ -758,8 +758,10 @@ def _sched_file(msg: dict) -> dict | None:
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
     """A student's week from the portal's schedule page (portal.py; PLAN 26; Share -> Web Archive ->
-    Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one). The file is
-    read in memory and never kept; nothing of the page goes to the log; the student ID on it isn't read."""
+    Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one), each class
+    keeping its names in the languages sent before (the portal switched to another language, the page sent again: Oct
+    30). The answer has counts and language names only. The file is read in memory and never kept; nothing of the page
+    goes to the log; the student ID on it isn't read."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
         return None
@@ -784,8 +786,16 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     if not portal.same_person(week.name, u["first_name"], u["last_name"]):
         return say("sched_other")
     with db.tx(con):
-        logic.save_schedule(con, u["id"], week.lessons)
-    return say("sched_ok", "sched", n=len(week.lessons))
+        got = logic.save_schedule(con, u["id"], week.lessons, week.lang)
+    page, words = got["lang"], texts.pick(texts.SCHED_LANG, lang)
+    same, changes = page in got["had"], got["added"] + got["removed"] + got["moved"]
+    if not got["was"] or not page or not same and len(got["has"]) < 2:
+        return say("sched_ok", "sched", n=len(week.lessons))  # the first week, or a new language with nothing of the old left
+    said = (texts.bot_message(lang, "sched_same", language=words[page]) if same else
+            texts.bot_message(lang, "sched_added", language=words[page], languages=", ".join(words[x] for x in got["has"])))[0]
+    if changes or same:
+        said += " " + texts.bot_message(lang, "sched_changed" if changes else "sched_nochange", n=changes)[0]
+    return _reply(chat["id"], said, texts.bot_message(lang, "sched_ok", n=len(week.lessons))[1], "sched", cfg)
 
 
 def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg: Config | None = None, keys: list | None = None) -> dict:
