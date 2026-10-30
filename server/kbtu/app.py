@@ -1084,7 +1084,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
-        text = await eu_ai(con, msgs, max_tokens=1500, temperature=0.1, check=lambda a: bool(logic.assistant.filled(a)), timeout=30)
+        text = await eu_ai(con, msgs, max_tokens=1500, temperature=0.1, check=lambda a: bool(logic.assistant._parse(a)), timeout=30)
         return logic.assistant.filled(text)
 
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them

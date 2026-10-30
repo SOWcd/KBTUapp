@@ -5757,13 +5757,17 @@ def test_map_flaws(env):
     assert c.post("/api/map/flaws", headers=tma(9), json=flaw).status_code == 401                 # a guest
     for bad in ({**flaw, "floor": 7}, {**flaw, "u": 2}, {**flaw, "ver": "x"}, {**flaw, "body": "x"}):
         assert c.post("/api/map/flaws", headers=tma(1), json=bad).status_code == 400
+    nan = '{"ver": "kbtu", "floor": 1, "u": 0.4, "v": 0.3, "px": Infinity, "py": NaN, "body": "no number"}'
+    assert c.post("/api/map/flaws", headers={**tma(1), "content-type": "application/json"}, content=nan).status_code == 400
     assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 204
     assert c.get("/api/map/flaws", headers=tma(1)).status_code == 403
     got = c.get("/api/map/flaws", headers=tma(4)).json()
     assert [(x["floor"], x["body"], x["done"]) for x in got] == [(1, "the WC door doesn't exist", None)]
     c.post(f"/api/map/flaws/{got[0]['id']}/done", headers=tma(4))
     assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["done"]
-    for _ in range(9):
+    c.post("/api/map/flaws", headers=tma(1), json={**flaw, "body": "\x1b]0;title\x07 the \u202estair"})   # the admin's terminal
+    assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["body"] == "]0;title the stair"
+    for _ in range(8):
         c.post("/api/map/flaws", headers=tma(1), json=flaw)
     assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 429
     _board_on(c, cfg)

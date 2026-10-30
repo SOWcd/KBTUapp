@@ -11,6 +11,7 @@ import json
 import re
 import time
 
+from ..db import tx
 from .core import ApiError, Viewer, can, need_student, now, one, rows
 
 A_DAY = 30
@@ -79,9 +80,10 @@ def brief(con, v: Viewer) -> tuple[str, set[str], set[int]]:
 
 def _spend(con, v: Viewer) -> None:
     """One of the day's AI uses (the questions and the event fills together), counted before the model is asked."""
-    if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
-        raise ApiError("rate_limited", "assistant")
-    con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
+    with tx(con):  # one step across workers
+        if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
+            raise ApiError("rate_limited", "assistant")
+        con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
 
 
 def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str], set[int]]:

@@ -3,28 +3,37 @@ press on the plan, a line of text, and the spot lands in the admin's list with i
 mark ten a day each; students three, with the forum's switch (its policy section covers it). Fixed ones go 30 days after."""
 from __future__ import annotations
 
+import math
+import re
+
+from ..db import tx
 from .core import ApiError, Viewer, need_student, now, one, rows
 
 A_DAY, A_DAY_STUDENT = 10, 3
 KEEP = 30 * 86400
+_CTRL = re.compile("[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")
 
 
 def report(con, v: Viewer, body: dict, student: bool = False) -> None:
     """student: not the team (the route has checked the forum's switch and the consent)."""
     need_student(v)
-    ver, floor, text = body.get("ver"), body.get("floor"), " ".join(str(body.get("body") or "").split())
+    # control and bidi characters out: the notes are printed raw in the admin's terminal (`admin mapflaws`)
+    ver, floor = body.get("ver"), body.get("floor")
+    text = " ".join(_CTRL.sub("", str(body.get("body") or "")).split())
     try:
         u, w = float(body["u"]), float(body["v"])
         px, py = (float(body["px"]), float(body["py"])) if body.get("px") is not None else (None, None)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input") from None
     if ver not in ("main", "old", "kbtu") or not isinstance(floor, int) or isinstance(floor, bool) or not 0 <= floor <= 5 \
-            or not (0 <= u <= 1 and 0 <= w <= 1) or not 2 <= len(text) <= 300:
+            or not (0 <= u <= 1 and 0 <= w <= 1) or not 2 <= len(text) <= 300 \
+            or px is not None and not (math.isfinite(px) and math.isfinite(py)):
         raise ApiError("bad_input")
-    if one(con, "SELECT COUNT(*) FROM map_flaws WHERE user_id = ? AND created_at > ?", v.id, now() - 86400)[0] >= (A_DAY_STUDENT if student else A_DAY):
-        raise ApiError("rate_limited")
-    con.execute("INSERT INTO map_flaws (user_id, ver, floor, u, v, px, py, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (v.id, ver, floor, u, w, px, py, text, now()))
+    with tx(con):  # the count and the insert as one: parallel taps can't pass the day's limit
+        if one(con, "SELECT COUNT(*) FROM map_flaws WHERE user_id = ? AND created_at > ?", v.id, now() - 86400)[0] >= (A_DAY_STUDENT if student else A_DAY):
+            raise ApiError("rate_limited")
+        con.execute("INSERT INTO map_flaws (user_id, ver, floor, u, v, px, py, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (v.id, ver, floor, u, w, px, py, text, now()))
 
 
 def listing(con, v: Viewer) -> list[dict]:
