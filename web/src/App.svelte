@@ -203,11 +203,11 @@
     return null;
   });
 
-  // a tab's or a Pane's name is its large title on the page: the capsule takes it only once that has scrolled away (the
-  // name never shows twice); a sheet that names itself in its own header gets its icon alone
-  const capTitle = $derived(ui.busy || (capOf ? (capOf.quiet || capOf.mark ? null : capOf.title) : ui.gone[ui.tab] ? TAB_LABEL[ui.tab]() : null) || null);
+  // the capsule is always there and always says where you are and what's happening (owner, Oct 30: never an empty pill,
+  // it answers every tap): the busy word, else the top overlay's name, else the tab's (the live status wins on a tab)
+  const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live ? null : TAB_LABEL[ui.tab]()) || null);
   // a spinner while a tap's work runs; a view that forgot its own icon gets the app's mark (Sparkles is the assistant's alone)
-  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.quiet ? null : capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
+  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
   $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
