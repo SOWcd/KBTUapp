@@ -71,6 +71,7 @@
 
 <!-- under my lanyard, which stays in sight above and changes as I pick: so no big photo here -->
 <Sheet {overlay} see title={t('look.title')}>
+  {#if session.me}
   <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => upload(e.currentTarget.files?.[0])} />
   <!-- one block: a square "other photo" on the left (my own photo in it once I have one), the switch
        on the right -->
@@ -106,9 +107,10 @@
     onkeydown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); void saveNick(); } }} />
     {#if me.nick}<button class="x" onclick={clearNick} disabled={!!busy} aria-label={t('look.dropNick')}><X size={16} /></button>{/if}</label>
   <p class="t-foot hint">{t('look.nickHint', { name: real })}</p>
+  {/if}
 
   {#snippet footer()}
-    <Button kind="primary" size="l" full loading={busy === 'nick'} disabled={nick.trim() === (me.nick ?? '')} onclick={saveNick}>{t('look.saveNick')}</Button>
+    {#if session.me}<Button kind="primary" size="l" full loading={busy === 'nick'} disabled={nick.trim() === (me.nick ?? '')} onclick={saveNick}>{t('look.saveNick')}</Button>{/if}
   {/snippet}
 </Sheet>
 

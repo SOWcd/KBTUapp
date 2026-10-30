@@ -668,6 +668,7 @@ const kk: Dict = {
   'nav.label': 'Бөлімдер',
 
   'guest.title': 'KBTU арқылы кір',
+  'me.retry': 'Қайталау',
   'guest.text': 'Іс-шараларға жазыл, клубтарға жазыл, достар тап. Бұл бір рет қана.',
   'guest.button': 'KBTU арқылы кіру',
 

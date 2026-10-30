@@ -12,7 +12,7 @@
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
   import { say, ui } from '../../lib/state/ui.svelte';
@@ -80,6 +80,12 @@
       {#if asked}<b class="req num">{asked}</b>{/if}
       <ChevronRight size={18} />
     </button>
+  {:else if session.failed}
+    <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->
+    <section class="failed surface">
+      <p class="t-body">{t('common.offline')}</p>
+      <Button kind="secondary" size="m" onclick={() => { haptic.tap(); void loadMe(); }}>{t('me.retry')}</Button>
+    </section>
   {:else if session.ready}
     <section class="guest">
       <div class="mark"><KbtuMark /></div>
@@ -147,6 +153,8 @@
 
   .guest { display: flex; flex-direction: column; gap: 12px; padding: 22px 18px 18px; border-radius: var(--r-xl); background: radial-gradient(90% 80% at 20% 0%, rgba(124, 77, 255, 0.55), transparent 60%), linear-gradient(160deg, #2443B8, #101633); color: #fff; }
   .guest p { color: rgba(255, 255, 255, 0.82); }
+  .failed { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 18px; text-align: center; }
+  .failed p { color: var(--text-2); }
   .mark { color: #fff; width: 64px; height: 64px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 
   .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 16px; text-align: left; color: var(--text-3); }

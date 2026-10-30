@@ -668,6 +668,7 @@ const en: Dict = {
   'nav.label': 'Sections',
 
   'guest.title': 'Sign in with KBTU',
+  'me.retry': 'Try again',
   'guest.text': 'Register for events, follow clubs and find friends. You only do this once.',
   'guest.button': 'Sign in with KBTU',
 
