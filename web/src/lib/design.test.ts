@@ -1,16 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import ceilings from './design-ratchet.json';
 
 // The design system's ratchet (Oct 30): raw font sizes, raw px radii and raw hex colours in .svelte files may only go
 // down. Each file's count today is its ceiling (design-ratchet.json); a screen moved onto the tokens lowers its own.
 // After lowering on purpose: UPDATE_RATCHET=1 npx vitest run src/lib/design.test.ts, then review the JSON's diff.
 // ponytail: regex counts, not a CSS parser; a false hit only makes a ceiling one higher than it needs to be
 
-const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CEILINGS = path.join(SRC, 'lib', 'design-ratchet.json');
 type Count = { font: number; radius: number; hex: number };
+const KEYS = ['font', 'radius', 'hex'] as const;
+const SOURCES = import.meta.glob('/src/**/*.svelte', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 export function count(src: string): Count {
   const font = (src.match(/font(?:-size)?:[^;"'}\n]*?\d(?:\.\d+)?px/g) ?? []).length;
@@ -18,13 +16,6 @@ export function count(src: string): Count {
     .filter((d) => /(^|[^\d.])[1-9][\d.]*px/.test(d.replace(/var\([^)]*\)/g, ''))).length;
   const hex = (src.match(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])/g) ?? []).length;
   return { font, radius, hex };
-}
-
-function svelteFiles(dir: string): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const p = path.join(dir, e.name);
-    return e.isDirectory() ? svelteFiles(p) : e.name.endsWith('.svelte') ? [p] : [];
-  });
 }
 
 describe('design ratchet', () => {
@@ -35,19 +26,20 @@ describe('design ratchet', () => {
     expect(count('color: #fff; background: #3B6BFF; id="#app"').hex).toBe(2);
   });
 
-  it('no file has more raw font sizes, radii or colours than its ceiling', () => {
+  it('no file has more raw font sizes, radii or colours than its ceiling', async () => {
     const now: Record<string, Count> = {};
-    for (const f of svelteFiles(SRC)) {
-      const c = count(fs.readFileSync(f, 'utf8'));
-      if (c.font || c.radius || c.hex) now[path.relative(SRC, f).split(path.sep).join('/')] = c;
+    for (const [file, src] of Object.entries(SOURCES)) {
+      const c = count(src);
+      if (c.font || c.radius || c.hex) now[file.slice('/src/'.length)] = c;
     }
-    if (process.env.UPDATE_RATCHET) {
-      fs.writeFileSync(CEILINGS, JSON.stringify(Object.fromEntries(Object.entries(now).sort()), null, 1) + '\n');
+    if ((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.UPDATE_RATCHET) {
+      const fs = await import('node:fs' as string);
+      fs.writeFileSync(new URL('./design-ratchet.json', import.meta.url), JSON.stringify(Object.fromEntries(Object.entries(now).sort()), null, 1) + '\n');
       return;
     }
-    const ceil: Record<string, Count> = JSON.parse(fs.readFileSync(CEILINGS, 'utf8'));
-    const over = Object.entries(now).flatMap(([f, c]) => (['font', 'radius', 'hex'] as const)
-      .filter((k) => c[k] > (ceil[f]?.[k] ?? 0)).map((k) => `${f}: ${k} ${c[k]} > ${ceil[f]?.[k] ?? 0} (use the tokens in ui/tokens.css)`));
+    const ceil = ceilings as Record<string, Count>;
+    const over = Object.entries(now).flatMap(([f, c]) => KEYS.filter((k) => c[k] > (ceil[f]?.[k] ?? 0))
+      .map((k) => `${f}: ${k} ${c[k]} > ${ceil[f]?.[k] ?? 0} (use the tokens in ui/tokens.css)`));
     expect(over).toEqual([]);
   });
 });
