@@ -96,7 +96,7 @@ footer{padding-top:28px}
 # with a touch listener). Copy: the clipboard where it's allowed, a selected field (old WebViews) where not
 JS = """
 var go = document.getElementById("go"), copy = document.getElementById("copy");
-if (go.hasAttribute("data-auto")) location.href = go.href;
+if (go.hasAttribute("data-auto")) setTimeout(function () { location.href = go.href; }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1100); // the intro first
 document.querySelector("footer").addEventListener("click", function (e) {
   if (e.target.closest("a,button")) document.querySelector(".day").classList.add("added");
 });
