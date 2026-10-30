@@ -120,7 +120,7 @@
     <div class="set-group plain">
       {#each POWER_MODES as m (m)}{@render pick(t(`power.${m}`), power.mode === m, () => { if (power.mode !== m) { haptic.select(); setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } })}{/each}
     </div>
-    <p class="set-foot">{t(now)}{#if power.mode === 'auto' && power.fps} {t('power.fps', { n: power.fps })}{/if}</p>
+    <p class="set-foot">{t(now)}{#if power.mode === 'auto' && power.fps}{' '}{t('power.fps', { n: power.fps })}{/if}</p>
     <p class="set-foot">{t('power.lead')} {t('power.what')}</p>
   {:else if kind === 'notify' && me}
     {#each SWITCHES as [k, title, hint] (k)}

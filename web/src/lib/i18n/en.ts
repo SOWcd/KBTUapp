@@ -1480,7 +1480,7 @@ const en: Dict = {
   'set.forumHint': "When someone answers your thread or taps “I'm in”",
   'set.always': "Important messages always come: event changes, cancellations and updates, a freed-up seat, clubs' answers to your applications, friends' invitations.",
   'set.portal': "What we keep about you as a student",
-  'set.portalText': "The name, student ID and year you typed in (and, for those who signed in before 19 October, what came from the KBTU portal then: school, programme, email, phone, timetable). Delete it all in Profile → \"Delete account\".",
+  'set.portalText': "The name, student ID and year you typed in (and, for those who signed in before 19 October, what came from the KBTU portal then: school, programme, email, phone, timetable). Delete it all in Settings → \"Privacy\" → \"Delete account\".",
   'set.allSee': "All students see",
   'set.allSeeText': "Your first name and last initial or your nickname, your photo (Telegram's or your own), course and school, clubs and roles, awards, “about me”, how many events you've attended.",
   'set.orgSee': "Organizers — only for their own event or club",
