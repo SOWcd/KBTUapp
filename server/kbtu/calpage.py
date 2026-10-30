@@ -40,27 +40,32 @@ body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;color
  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 main,footer{width:100%;max-width:380px;margin:0 auto}
 main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
-h1{margin-top:40px;font-size:clamp(24px,7.4vw,30px);line-height:1.15;font-weight:700;letter-spacing:-.022em;text-wrap:balance}
-p{margin-top:10px;max-width:21em;color:var(--text-2);text-wrap:balance}
+h1{margin-top:40px;font-size:clamp(24px,7.4vw,30px);line-height:1.15;font-weight:700;letter-spacing:-.022em;text-wrap:balance;
+ animation:up .55s cubic-bezier(.2,.9,.22,1) .28s both}
+p{margin-top:10px;max-width:21em;color:var(--text-2);text-wrap:balance;animation:up .55s cubic-bezier(.2,.9,.22,1) .36s both}
 footer{padding-top:28px}
-/* the phone's calendar, an evening: one thing of mine, and a KBTU event arriving (opaque, as a calendar's: over the hour lines) */
-.day{position:relative;width:100%;max-width:300px;padding:8px 0;border-radius:26px;background:var(--card);box-shadow:var(--shadow);text-align:left}
-.day b{display:flex;align-items:center;gap:10px;height:34px;padding:0 16px;color:var(--text-3);
- font-size:11px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
-.day b::after{content:"";flex:1;height:1px;background:var(--line)}
+/* the phone's calendar, an evening: one thing of mine, and a KBTU event arriving (opaque, as a calendar's: over the hour
+   lines). Once, in 1.1 s, transform and opacity only: the card rises, its hours fade in as their lines draw, the event
+   drops into its slot on a spring and the grey one gives way; a tap on a button puts a check on the event */
+.day{position:relative;width:100%;max-width:300px;padding:8px 0;border-radius:26px;background:var(--card);box-shadow:var(--shadow);text-align:left;
+ animation:rise .6s cubic-bezier(.2,.9,.22,1) both}
+.day b{display:flex;align-items:center;gap:10px;height:34px;padding:0 16px;color:var(--text-3);font-size:11px;font-weight:500;line-height:1;
+ font-variant-numeric:tabular-nums;animation:fade .35s ease-out .12s both;animation-delay:calc(.12s + var(--d,0s))}
+.day b::after{content:"";flex:1;height:1px;background:var(--line);transform-origin:0 50%;
+ animation:draw .5s cubic-bezier(.2,.9,.22,1) .15s both;animation-delay:calc(.15s + var(--d,0s))}
+.day b:nth-child(2){--d:.06s}.day b:nth-child(3){--d:.12s}.day b:nth-child(4){--d:.18s}
 .ev{position:absolute;left:58px;right:14px;display:flex;flex-direction:column;gap:6px;padding:8px 10px 0 13px;border-radius:8px;overflow:hidden}
 .ev::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
 .ev i{display:block;height:6px;border-radius:3px;background:var(--c);opacity:.38}
-.mine{--c:var(--text-3);top:26px;height:25px;background:var(--mine)}
+.mine{--c:var(--text-3);top:26px;height:25px;background:var(--mine);animation:fade .35s ease-out .3s both,nudge .36s ease-in-out .55s}
 .mine i{width:42%;opacity:.45}
-.kb{--c:var(--accent);top:60px;height:49px;background:var(--kb);box-shadow:var(--lift);
- animation:arrive .8s cubic-bezier(.32,.72,0,1) .35s both}
+.kb{--c:var(--accent);top:60px;height:49px;background:var(--kb);box-shadow:var(--lift);animation:drop .62s cubic-bezier(.34,1.56,.64,1) .45s both}
 .kb span{display:flex;align-items:center;gap:6px;color:var(--accent-text)}
 .kb span i{flex:0 0 52%;height:7px;background:currentColor;opacity:.55}
 .kb>i{width:34%;opacity:.3}
 .mk{width:14px;height:12px;flex:none}
-@keyframes arrive{from{opacity:0;transform:translateY(10px) scale(.96)}}
-@media (prefers-reduced-motion:reduce){.kb{animation:none}}
+.tick{position:absolute;right:10px;top:50%;width:20px;height:20px;margin-top:-10px;fill:var(--accent);opacity:0;transform:scale(.3)}
+.added .tick{opacity:1;transform:none;animation:pop .5s cubic-bezier(.34,1.56,.64,1) both}
 .go,.alt{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border:0;border-radius:999px;font:inherit;
  font-weight:600;letter-spacing:-.01em;text-decoration:none;cursor:pointer;transition:transform .3s cubic-bezier(.34,1.45,.5,1),opacity .2s}
 .go{height:52px;background:var(--accent);color:#fff}
@@ -69,17 +74,33 @@ footer{padding-top:28px}
 .go:focus-visible,.alt:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .ic{width:17px;height:17px;flex:none}
 .alt .ic+.ic,.alt.done .ic:first-child{display:none}
-.alt.done{color:var(--ok)}.alt.done .ic+.ic{display:block}
+.alt.done{color:var(--ok)}.alt.done .ic+.ic{display:block;animation:pop .5s cubic-bezier(.34,1.56,.64,1) both}
+/* a real spring (16 % over, back, settled) where linear() is known: Safari 17.2+; its cubic-bezier cousin before that */
+@supports (animation-timing-function:linear(0,1)){.kb,.added .tick,.alt.done .ic+.ic{animation-timing-function:
+ linear(0,.069,.237,.449,.662,.849,.994,1.092,1.146,1.163,1.153,1.127,1.092,1.057,1.026,1.002,.986,.977,.973,.975,.979,.985,.99,.995,1)}}
+@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.97)}}
+@keyframes fade{from{opacity:0}}
+@keyframes draw{from{transform:scaleX(0)}}
+@keyframes drop{from{opacity:0;transform:translateY(-14px) scale(1.05)}}
+@keyframes nudge{45%{transform:translateY(-3px)}}
+@keyframes pop{from{opacity:0;transform:scale(.3)}}
+@keyframes up{from{opacity:0;transform:translateY(10px)}}
+@media (prefers-reduced-motion:reduce){*,::after{animation:none!important;transition:none!important}.go:active,.alt:active{transform:none}}
 @media (min-width:600px) and (min-height:720px){body{justify-content:center}main{flex:none}}
 @media (max-height:520px){.day{zoom:.75}h1{margin-top:28px}}
 @media (max-height:400px){.day{display:none}h1{margin-top:0}}
 .off{position:fixed;top:0;left:0;opacity:0}
 """
 
-# Apple: hand webcal:// over at once. Copy: the clipboard where it's allowed, a selected field (old WebViews) where not
+# Apple: hand webcal:// over at once. A tap on a button checks the event in the card (iOS Safari presses :active only
+# with a touch listener). Copy: the clipboard where it's allowed, a selected field (old WebViews) where not
 JS = """
 var go = document.getElementById("go"), copy = document.getElementById("copy");
 if (go.hasAttribute("data-auto")) location.href = go.href;
+document.querySelector("footer").addEventListener("click", function (e) {
+  if (e.target.closest("a,button")) document.querySelector(".day").classList.add("added");
+});
+document.addEventListener("touchstart", function () {}, {passive: true});
 if (copy) {
   var label = copy.querySelector("span"), idle = label.textContent, timer;
   var done = function () {
@@ -106,7 +127,8 @@ PAGE = Template("""<!doctype html><html lang="$lang"><head><meta charset="utf-8"
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#07080F">
 <title>$title</title><style>$css</style></head><body>
 <main><div class="day" aria-hidden="true"><b>17:00</b><b>18:00</b><b>19:00</b><b>20:00</b>
-<div class="ev mine"><i></i></div><div class="ev kb"><span>$mark<i></i></span><i></i></div></div>
+<div class="ev mine"><i></i></div><div class="ev kb"><span>$mark<i></i></span><i></i><svg class="tick" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10"/>
+<path d="m6 10.4 2.7 2.7 5.5-5.7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
 <h1>$title</h1><p>$text</p></main>
 <footer>$buttons</footer><script>$js</script></body></html>""")
 

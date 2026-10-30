@@ -1499,6 +1499,7 @@ def test_calendar_feed(env):
             body = re.search(f"<{tag}>(.*?)</{tag}>", page.text, re.S).group(1)
             assert f"'sha256-{base64.b64encode(hashlib.sha256(body.encode()).digest()).decode()}'" in csp, tag
     assert "<x-y>" not in calpage.render("d", '"><x-y>', "en", "") and {len(x) for x in texts.CAL_PAGE.values()} == {6}  # all escaped
+    assert "@media (prefers-reduced-motion:reduce){*,::after{animation:none!important;transition:none!important}" in calpage.CSS  # no motion asked: none
     assert c.get("/cal/nobody.ics").status_code == 404 and c.get("/cal/nobody").status_code == 404
     assert delete_now(c, cfg, A) is None
     assert c.get(f"/cal/{token}.ics").status_code == 404                                        # gone with my data
