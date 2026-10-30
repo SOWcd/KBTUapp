@@ -5945,6 +5945,7 @@ def test_assistant(env, monkeypatch):
     brief = seen[0][0]["content"]
     assert "SITE" in brief and "Physics" in brief and "room 256" in brief and "Hackathon" in brief and "Ann" not in brief and "24Bann" not in brief
     assert [m["role"] for m in seen[0]] == ["system", "user", "user"]
+    assert "Their classes tomorrow: none" in brief                                           # today's Physics isn't tomorrow's too
     for bad in ({"q": "x"}, {"q": "y" * 301}, {"q": "ok?", "history": "nope"}):
         assert c.post("/api/assistant", headers=tma(1), json=bad).status_code == 400
     from kbtu.logic import assistant
