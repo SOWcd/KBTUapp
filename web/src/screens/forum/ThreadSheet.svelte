@@ -147,7 +147,8 @@
   {/if}
 
   {#snippet footer()}
-    {#if th && th.status === 'live'}
+    <!-- status comes only to the author and moderators; anyone else can open only a live thread -->
+    {#if th && (th.status ?? 'live') === 'live'}
       <!-- who I answer as, Telegram's "send as" way: my face, or the mask, beside the field -->
       <div class="row">
         <button class="as" class:on={anon} aria-pressed={anon} aria-label={anon ? t('bd.asAnon') : t('bd.asMe')} onclick={() => { anon = !anon; haptic.select(); }}>
