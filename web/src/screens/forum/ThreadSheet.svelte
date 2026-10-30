@@ -19,6 +19,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import ThreadHead from './ThreadHead.svelte';
+  import TopicTag from './TopicTag.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: number } = $props();
   let th = $state<ThreadFull | null>(null);
@@ -29,6 +30,7 @@
   let revealed = $state<Record<string, PersonRef>>({});
   // the app's owner alone (the founder admin), as the anonymous switch promises
   const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
+  const me = $derived(session.me);
 
   const load = () => api.thread(id).then((x) => {
     if (!th) anon = x.mine && x.anon; // once: an anonymous author stays anonymous in their replies; a switch flipped by hand stays
@@ -80,7 +82,7 @@
   const replyName = (r: ThreadReply) => r.person && !r.anon ? r.person.name : r.op ? t('bd.author') : t('bd.anonN', { n: r.n ?? 0 });
 </script>
 
-<Sheet {overlay} tall title={th ? t(`bd.topic.${th.topic}`) : t('page.forum')}>
+<Sheet {overlay} tall title={t('page.forum')}>
   {#if gone}
     <p class="empty">{t('bd.gone')}</p>
   {:else if !th}
@@ -88,6 +90,7 @@
   {:else}
     <div class="top">
       <div class="head"><ThreadHead {th} tappable /></div>
+      <TopicTag topic={th.topic} />
       <button class="more" onclick={() => (menu = menu === 't' ? null : 't')} aria-label={t('common.more')} aria-expanded={menu === 't'}><Ellipsis size={18} /></button>
     </div>
     {#if menu === 't'}
@@ -105,7 +108,7 @@
       <section class="gather surface">
         <div class="gh">
           {#if th.joiners?.length}<span class="faces">{#each th.joiners as p (p.id)}<Avatar person={p} size={28} />{/each}</span>{/if}
-          <b>{t('bd.inCount', { n: th.joins ?? 0 })}</b>
+          <b>{t(th.mine ? 'bd.inCount' : 'bd.inOthers', { n: th.joins ?? 0 })}</b>
           {#if !th.mine}<button class="in-btn" class:on={th.joined} aria-pressed={th.joined} onclick={join}>{th.joined ? t('bd.inOn') : t('bd.inOff')}</button>{/if}
         </div>
         {#if th.mine && joiners?.length}
@@ -145,14 +148,13 @@
 
   {#snippet footer()}
     {#if th && th.status === 'live'}
-      <div class="compose">
-        <button class="as" class:on={anon} aria-pressed={anon} onclick={() => { anon = !anon; haptic.select(); }}>
-          <VenetianMask size={15} />{anon ? t('bd.asAnon') : t('bd.asMe')}
+      <!-- who I answer as, Telegram's "send as" way: my face, or the mask, beside the field -->
+      <div class="row">
+        <button class="as" class:on={anon} aria-pressed={anon} aria-label={anon ? t('bd.asAnon') : t('bd.asMe')} onclick={() => { anon = !anon; haptic.select(); }}>
+          {#if anon || !me}<VenetianMask size={20} />{:else}<Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={36} tappable={false} />{/if}
         </button>
-        <div class="row">
-          <textarea bind:value={draft} rows="1" maxlength="500" placeholder={t('bd.replyPh')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
-          <button class="send" disabled={!draft.trim() || sending} onclick={send} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
-        </div>
+        <textarea bind:value={draft} rows="1" maxlength="500" placeholder={t(anon ? 'bd.anonPh' : 'bd.replyPh')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
+        <button class="send" disabled={!draft.trim() || sending} onclick={send} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
       </div>
     {/if}
   {/snippet}
@@ -165,7 +167,7 @@
   .more { flex: none; width: 34px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
   .more:active { background: var(--surface-2); }
   .more.sm { width: 30px; height: 26px; margin-left: auto; }
-  .body { margin-top: 12px; font: 450 17px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .body { margin-top: 14px; font: 470 18px/1.45 var(--font-text); letter-spacing: -0.005em; white-space: pre-wrap; overflow-wrap: anywhere; }
   .life { margin-top: 8px; }
   .who-was { display: inline-block; margin-top: 6px; padding: 4px 9px; border-radius: var(--r-full); background: var(--danger-soft); color: var(--danger-text); font: 650 12px/1.2 var(--font-text); }
   .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; animation: c-in 220ms ease-out backwards; }
@@ -184,8 +186,10 @@
   .jr { display: flex; align-items: center; gap: 10px; }
   .jr b { flex: 1; min-width: 0; font: 600 14px/1.2 var(--font-text); }
   .tg { flex: none; height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
-  .cap { margin: 20px 2px 10px; }
-  .list { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
+  .cap { margin: 22px 2px 2px; }
+  .list { display: flex; flex-direction: column; padding-bottom: 8px; }
+  .list > .r { padding: 12px 0; }
+  .list > .r + .r { border-top: 1px solid var(--line); }
   .r { display: flex; gap: 10px; align-items: flex-start; animation: c-in 320ms cubic-bezier(.2, .9, .25, 1) backwards; }
   .r.held { opacity: 0.65; }
   @keyframes c-in { from { opacity: 0; transform: translateY(6px); } }
@@ -196,11 +200,11 @@
   .rh i { flex: none; font: 500 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
   .tag { flex: none; padding: 3px 7px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 700 10.5px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; }
   .rb p { margin-top: 3px; font: 450 15px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .compose { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-  .as { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r-full);
-    background: var(--surface-2); color: var(--text-2); font: 620 12.5px/1 var(--font-text); }
-  .as.on { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent); }
-  .row { display: flex; align-items: flex-end; gap: 8px; }
+  .row { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
+  .as { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2);
+    transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease); }
+  .as:active { transform: scale(0.92); }
+  .as.on { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
   .row textarea { flex: 1; min-width: 0; min-height: 44px; padding: 11px 14px; border-radius: 22px; resize: none; background: var(--surface-2); color: var(--text);
     font: 450 16px/1.4 var(--font-text); }
   .row textarea::placeholder { color: var(--text-3); }

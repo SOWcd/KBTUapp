@@ -10,10 +10,9 @@
   import { haptic } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import { grow } from '../../ui/grow';
-  import { TOPICS, TOPIC_EMOJI } from '../../lib/forum';
+  import { TOPICS, TOPIC_ICON, TOPIC_TINT } from '../../lib/forum';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import Emoji from '../../ui/Emoji.svelte';
 
   let { overlay, onmade }: { overlay: Overlay; onmade?: () => void } = $props();
   let topic = $state<Topic | null>(null), body = $state(''), anon = $state(false), busy = $state(false), done = false;
@@ -48,8 +47,9 @@
   <h2 class="t-h2 hd">{t('bd.newTitle')}</h2>
   <div class="topics">
     {#each TOPICS as k (k)}
-      <button class:on={topic === k} aria-pressed={topic === k} onclick={() => pick(k)}>
-        <Emoji name={TOPIC_EMOJI[k]} size={30} /><b>{t(`bd.topic.${k}`)}</b>
+      {@const Icon = TOPIC_ICON[k]}
+      <button class:on={topic === k} aria-pressed={topic === k} style:--tint={TOPIC_TINT[k]} onclick={() => pick(k)}>
+        <span class="ic"><Icon size={20} strokeWidth={2.2} /></span><b>{t(`bd.topic.${k}`)}</b>
       </button>
     {/each}
   </div>
@@ -68,14 +68,17 @@
 <style>
   .hd { margin: 4px 0 14px; }
   .topics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-  .topics button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 2px 9px; border-radius: 16px; background: var(--surface-2);
+  .topics button { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 11px 2px 10px; border-radius: 16px; background: var(--surface-2);
     transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease); }
   .topics button:active { transform: scale(0.94); }
-  .topics button.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent); }
-  .topics button.on :global(img) { animation: boop 420ms cubic-bezier(.2, 1.6, .4, 1); }
-  @keyframes boop { 30% { transform: scale(1.3) rotate(-8deg); } }
+  /* each topic's icon in its colour, no tile of paint under it (owner, Oct 30: coloured tiles look childish); the picked
+     one ringed in it */
+  .ic { height: 28px; display: grid; place-items: center; color: var(--tint); }
+  .topics button.on { background: color-mix(in srgb, var(--tint) 12%, var(--surface-2)); box-shadow: inset 0 0 0 1.5px var(--tint); }
+  .topics button.on .ic { animation: boop 420ms cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes boop { 30% { transform: scale(1.18) rotate(-8deg); } }
   .topics b { font: 620 11.5px/1.15 var(--font-text); text-align: center; color: var(--text-2); overflow-wrap: anywhere; }
-  .topics button.on b { color: var(--accent-text); }
+  .topics button.on b { color: var(--text); }
   .hint { margin: 10px 2px 0; animation: c-in 240ms ease-out; }
   @keyframes c-in { from { opacity: 0; transform: translateY(4px); } }
   .text { width: 100%; margin-top: 12px; min-height: 112px; padding: 13px 14px; border-radius: 18px; resize: none; background: var(--surface-2); color: var(--text);
