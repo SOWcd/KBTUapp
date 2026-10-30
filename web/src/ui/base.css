@@ -257,18 +257,22 @@ html.lowfx .stagger > * { animation: none; }
 
 /* Settings' lists, the phone's own way (owner, Oct 30: "like Apple"): rows in a rounded group, a short label, the value
    in grey and a chevron on the right; what needs saying goes in a small footnote under the group, never under a row */
-.set-group { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-m); background: var(--surface); }
-.set-row { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 11px 14px; text-align: left;
-  font: 500 16px/1.25 var(--font-text); color: var(--text); }
-.set-row + .set-row::before { content: ''; position: absolute; top: 0; right: 0; left: 52px; height: 1px; background: var(--line); }
-.set-group.plain .set-row + .set-row::before { left: 14px; }
+.set-group { display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: var(--surface); }
+.set-row { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 10px 16px; text-align: left;
+  font: 450 17px/1.25 var(--font-text); color: var(--text); }
+.set-row + .set-row::before { content: ''; position: absolute; top: 0; right: 0; left: 58px; height: 0.5px; background: var(--line-2); }
+.set-group.plain .set-row + .set-row::before { left: 16px; }
 button.set-row:active { background: var(--surface-2); }
 .set-row > .lb { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* a long label takes two lines on a narrow phone, never "…" */
 .set-row > .val { flex: none; max-width: 50%; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.set-row > .chev { flex: none; margin-right: -4px; color: var(--text-3); opacity: 0.7; }
-.set-row > .ico { flex: none; width: 26px; display: grid; place-items: center; color: var(--text-2); }
-.set-row.danger { justify-content: center; color: var(--danger-text); font-weight: 560; }
+.set-row > .chev { flex: none; margin-right: -4px; color: var(--text-3); opacity: 0.6; }
+/* a row's mark: a flat tile of one colour, white inside */
+.set-row > .tile { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--c); color: #fff; }
 .set-row.act { color: var(--accent-text); }
 .set-row.act.red { color: var(--danger-text); }
-.set-cap { margin: 22px 14px 7px; font: 500 13px/1.2 var(--font-text); letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
-.set-foot { margin: 7px 14px 0; font: 450 13px/1.4 var(--font-text); color: var(--text-3); }
+.set-cap { margin: 22px 16px 7px; font: 450 13px/1.2 var(--font-text); letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
+.set-foot { margin: 8px 16px 0; font: 450 13px/1.4 var(--font-text); color: var(--text-3); }
+
+/* the page under a pushed one (ui/Pane) drifts left and dims, as the phone does */
+.settings-root { transition: transform 440ms cubic-bezier(.32,.72,0,1), opacity 440ms ease; }
+html[data-pane] .settings-root { transform: translate3d(-28%, 0, 0); opacity: 0.5; }

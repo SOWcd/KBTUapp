@@ -1419,6 +1419,8 @@ const en: Dict = {
   'set.write': "Write to the author",
   'set.code': "Open source",
   'set.calFoot': "Your events show up in the phone's calendar and stay up to date.",
+  'pd.phoneEdit': "Change number",
+  'pd.phoneShort': "Phone",
   'pd.phoneDel': "Delete number",
   'pd.cityDel': "Delete city",
   'set.on': "On",

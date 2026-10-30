@@ -1,18 +1,21 @@
 <script lang="ts">
-  // A tap deeper than a Settings row, the phone's own way: a list to pick from with a check (language, appearance,
-  // power saving), the notification switches with a footnote under each, Privacy (my phone and city, who sees what, the
-  // policy, deleting the account) and About (the rules, the author, the code). The sign-in sheet's "What we store" opens
-  // Privacy (§4.1 consent).
+  // A Settings row's page, pushed in from the right (ui/Pane), the phone's own way: a list to pick from with a check
+  // (language, appearance, power saving), the notification switches with a footnote under each, Privacy (my phone and
+  // my city, each its own page with what can be done to it; who sees what; the policy; deleting the account) and About.
+  // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
   import Check from '@lucide/svelte/icons/check';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Lock from '@lucide/svelte/icons/lock';
   import Languages from '@lucide/svelte/icons/languages';
   import SunMoon from '@lucide/svelte/icons/sun-moon';
   import Bell from '@lucide/svelte/icons/bell';
   import Info from '@lucide/svelte/icons/info';
+  import Phone from '@lucide/svelte/icons/phone';
+  import MapPin from '@lucide/svelte/icons/map-pin';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -22,13 +25,16 @@
   import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { fmtPhone, kzPhone } from '../../lib/phone';
-  import Sheet from '../../ui/Sheet.svelte';
+  import Pane from '../../ui/Pane.svelte';
 
-  type Kind = 'lang' | 'look' | 'notify' | 'power' | 'privacy' | 'sees' | 'about';
+  type Kind = 'lang' | 'look' | 'notify' | 'power' | 'privacy' | 'phone' | 'city' | 'sees' | 'about';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { lang: ['me.guestLang', Languages], look: ['me.guestTheme', SunMoon], notify: ['me.notifications', Bell],
-    power: ['power.title', BatteryMedium], privacy: ['set.privacy', Lock], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+    power: ['power.title', BatteryMedium], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+  // where "‹ Back" goes: Privacy for its own pages, else Settings
+  const BACK: Key = $derived(kind === 'phone' || kind === 'city' || kind === 'sees' ? 'set.privacy' : 'me.settings');
   const me = $derived(session.me);
+  const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
   const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
@@ -57,18 +63,16 @@
   }
 
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
-  // roster (PLAN 95), off the profile or gone
-  async function savePhone(phone: string | null, done: string) {
-    try { session.me = await api.updateMe({ phone }); haptic.ok(); say(done, 'sparkles_3d'); }
+  // roster (PLAN 95), off the profile or gone. A deleted one takes its page with it.
+  async function savePhone(p: string | null, done: string) {
+    try { session.me = await api.updateMe({ phone: p }); haptic.ok(); say(done, 'sparkles_3d'); if (p == null) close(overlay.id); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function editPhone() {
-    haptic.tap();
     const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true });
     if (p) await savePhone(p, t('pd.saved'));
   }
   async function dropPhone() {
-    haptic.tap();
     if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
   }
   async function cityHidden(on: boolean) {
@@ -76,9 +80,8 @@
     catch { say(t('common.error'), 'pleading_face_3d'); }
   }
   async function dropCity() {
-    haptic.tap();
     if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
-    try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); }
+    try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); close(overlay.id); }
     catch { say(t('common.error'), 'pleading_face_3d'); }
   }
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
@@ -96,12 +99,16 @@
 {#snippet pick(label: string, on: boolean, go: (el: Element) => void)}
   <button class="set-row" aria-pressed={on} onclick={(e) => go(e.currentTarget)}><span class="lb">{label}</span>{#if on}<Check class="ok" size={20} strokeWidth={2.4} />{/if}</button>
 {/snippet}
-{#snippet link(label: string, go: () => void, value = '')}
-  <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}<ChevronRight class="chev" size={18} /></button>
+<!-- in the app: ›; out of it (out = true): ↗ -->
+{#snippet link(label: string, go: () => void, value = '', out = false)}
+  <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
+    {#if out}<ArrowUpRight class="chev" size={18} />{:else}<ChevronRight class="chev" size={18} />{/if}</button>
+{/snippet}
+{#snippet act(label: string, go: () => void, red = false)}
+  <button class="set-row act" class:red onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span></button>
 {/snippet}
 
-<Sheet {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]}>
-  <h2 class="t-h2 hd">{t(TITLE[kind][0])}</h2>
+<Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} back={t(BACK)}>
   {#if kind === 'lang'}
     <div class="set-group plain">{#each LANGS as l (l)}{@render pick(LANG_FULL[l], i18n.lang === l, () => lang(l))}{/each}</div>
   {:else if kind === 'look'}
@@ -125,53 +132,54 @@
     {/each}
     <p class="set-foot always">{t('set.always')}</p>
   {:else if kind === 'privacy'}
-    {#if me?.student?.phone || me?.city}
-      <h3 class="set-cap">{t('pd.title')}</h3>
-      <div class="set-group plain sw-on">
-        {#if me.student?.phone}
-          {@render link(t('pd.phone'), editPhone, kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone)}
-          <button class="set-row act red" onclick={dropPhone}><span class="lb">{t('pd.phoneDel')}</span></button>
-        {/if}
-        {#if me.city}
-          <div class="set-row"><span class="lb">{t('pd.city')}</span><span class="val">{me.city.name}</span></div>
-          <label class="set-row"><span class="lb">{t('pd.cityHide')}</span><input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
-          <button class="set-row act red" onclick={dropCity}><span class="lb">{t('pd.cityDel')}</span></button>
-        {/if}
+    <!-- my data: one row each, what can be done to it a tap deeper -->
+    {#if phone || me?.city}
+      <div class="set-group plain">
+        {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
+        {#if me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me.city.name)}{/if}
       </div>
-      <p class="set-foot">{t('pd.note')}{#if me.city}. {t('pd.cityNote')}{/if}</p>
     {/if}
-    <div class="set-group plain gap">
+    <div class="set-group plain" class:gap={phone || me?.city}>
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
-      {@render link(t('set.policy'), () => page('privacy'))}
+      {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </div>
     {#if me?.student && !me.deleteAt}
-      <div class="set-group plain gap"><button class="set-row danger" onclick={deleteData}>{t('me.deleteData')}</button></div>
+      <div class="set-group plain gap">{@render act(t('me.deleteData'), deleteData, true)}</div>
     {/if}
+  {:else if kind === 'phone'}
+    <div class="set-group plain"><div class="set-row"><span class="lb big">{phone}</span></div></div>
+    <p class="set-foot">{t('pd.note')}</p>
+    <div class="set-group plain gap">{@render act(t('pd.phoneEdit'), editPhone)}{@render act(t('pd.phoneDel'), dropPhone, true)}</div>
+  {:else if kind === 'city' && me?.city}
+    <div class="set-group plain sw-on">
+      <div class="set-row"><span class="lb big">{me.city.name}</span></div>
+      <label class="set-row"><span class="lb">{t('pd.cityHide')}</span><input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
+    </div>
+    <p class="set-foot">{t('pd.cityNote')}</p>
+    <div class="set-group plain gap">{@render act(t('pd.cityDel'), dropCity, true)}</div>
   {:else if kind === 'sees'}
     <div class="set-group plain">
       {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}
     </div>
   {:else if kind === 'about'}
     <div class="set-group plain">
-      {@render link(t('set.terms'), () => page('terms'))}
-      {@render link(t('set.policy'), () => page('privacy'))}
-      {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers')}
-      {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub')}
+      {@render link(t('set.terms'), () => page('terms'), '', true)}
+      {@render link(t('set.policy'), () => page('privacy'), '', true)}
+      {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
+      {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </div>
   {/if}
-</Sheet>
+</Pane>
 
 <style>
-  .hd { margin: 4px 0 14px; }
-  .set-group { background: var(--surface-2); }
   .set-row :global(.ok) { flex: none; color: var(--accent-text); }
-  .sw + .sw { margin-top: 18px; }
-  .always { margin-top: 22px; }
-  .gap { margin-top: 22px; }
-  .gap:first-of-type { margin-top: 0; }
+  .big { font-size: 19px; font-weight: 600; }
+  .sw + .sw { margin-top: 22px; }
+  .always { margin-top: 26px; }
+  .gap { margin-top: 26px; }
   /* who sees what: a heading and its text in each cell, read rather than tapped */
-  .see { padding: 12px 14px; }
+  .see { padding: 12px 16px; }
   .see + .see { border-top: 1px solid var(--line); }
-  .see b { display: block; font: 600 15px/1.3 var(--font-text); }
-  .see p { margin-top: 3px; font: 450 14px/1.45 var(--font-text); color: var(--text-2); }
+  .see b { display: block; font: 600 16px/1.3 var(--font-text); }
+  .see p { margin-top: 3px; font: 450 15px/1.45 var(--font-text); color: var(--text-2); }
 </style>
