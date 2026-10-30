@@ -5014,15 +5014,205 @@ def test_schedule_languages(env):
     assert now["Imaginary Algebra (ru)"][4] == named("Imaginary Algebra", "ru", "kk")                       # found again by its place
     assert mine(61) == [(1, "09:00", "Calculus", "305", {"en": "Calculus"})]                                # another student's: untouched
 
-    # a week the bot saved before it kept languages (names NULL): its language from its letters, kept under a new one
+    # a week the bot saved before it kept languages (names NULL): its language from its letters, to show and to match by,
+    # never written (a wrong guess would stick); a page in another language then carries only its own
     with db.tx(con):
         con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (bek["id"],))
-        con.executemany("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room) VALUES (?, 2, ?, ?, ?, 'lecture', '305')",
-                        [(bek["id"], "09:00", "10:50", phys), (bek["id"], "11:00", "12:50", alg)])
+        con.executemany("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room, teacher) VALUES (?, 2, ?, ?, ?, 'lecture', '305', ?)",
+                        [(bek["id"], "09:00", "10:50", phys, "Ivanov I."), (bek["id"], "11:00", "12:50", alg, "Ivanov I.")])
     assert [x[4] for x in mine(61)] == [{"ru": phys}, {"ru": alg}]
-    kk = [portal.Lesson(2, "09:00", "10:50", "Fizika (kk)", "lecture", "305", None), portal.Lesson(2, "11:00", "12:50", "Algebra (kk)", "lecture", "305", None)]
-    assert save(kk, "kk", bek["id"])["had"] == ["ru"] and [x[4] for x in mine(61)] == [{"ru": phys, "kk": "Fizika (kk)"}, {"ru": alg, "kk": "Algebra (kk)"}]
+    assert did(save([portal.Lesson(2, "09:00", "10:50", phys, "lecture", "305", "Ivanov I.")], "ru", bek["id"])) == (0, 1, 0)  # by its name
+    assert con.execute("SELECT names FROM schedule_classes WHERE user_id = ?", (bek["id"],)).fetchone()[0] == json.dumps({"ru": phys}, ensure_ascii=False)
+    with db.tx(con):
+        con.execute("UPDATE schedule_classes SET names = NULL WHERE user_id = ?", (bek["id"],))
+    got = save([portal.Lesson(2, "09:00", "10:50", "Fizika (kk)", "lecture", "305", "\u0418\u0432\u0430\u043d\u043e\u0432 \u0418.")], "kk", bek["id"])
+    assert (got["had"], got["has"], did(got)) == (["ru"], ["kk"], (0, 0, 0)) and [x[4] for x in mine(61)] == [{"kk": "Fizika (kk)"}]
     assert len(mine()) == 5
+
+
+def test_schedule_merge_safety(env):
+    """What keeps one course's names off another (the adversarial review, Oct 30). A page in a language a saved class
+    has finds it by its name; in a new language by its place and its teacher (Latin or Cyrillic alike), never without
+    one, and never where it could go two ways. Each saved class is taken once. Weeks as students' change: a course
+    dropped and another in its slot, a new semester, two swapping days, two labs at one time."""
+    from kbtu import portal
+    c, cfg = env
+    me = login(c, 70, "dana")
+    con = db.connect(cfg.db_path)
+    L = portal.Lesson
+    cyr = {"Ivanov I.": "\u0418\u0432\u0430\u043d\u043e\u0432 \u0418.", "Petrov P.": "\u041f\u0435\u0442\u0440\u043e\u0432 \u041f.",
+           "Akhmetov A.": "\u0410\u0445\u043c\u0435\u0442\u043e\u0432 \u0410."}  # how the Russian page writes them
+    def ru(x):  # a class as the Russian page shows it
+        return dataclasses.replace(x, subject=x.subject + " (ru)", teacher=cyr.get(x.teacher, x.teacher))
+    def week(*pages):  # a fresh week, then each (lessons, language) in turn: what the last did, the names by (day, start)
+        with db.tx(con):
+            con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (me["id"],))
+            for lessons, lang in pages:
+                got = logic.save_schedule(con, me["id"], lessons, lang)
+        return got, {(x["weekday"], x["begins"]): x["names"] for x in c.get("/api/me/schedule", headers=tma(70)).json()}
+    def did(got):
+        return got["added"], got["removed"], got["moved"]
+    calc, phys = L(1, "09:00", "10:50", "Calculus", "lecture", "305", "Ivanov I."), L(2, "11:00", "11:50", "Physics", "practice", "410", "Petrov P.")
+
+    # a new language: the same place and teacher (written in Cyrillic now) carries the names; Akhmetov too
+    akh = L(3, "13:00", "13:50", "Algebra", "practice", "212", "Akhmetov A.")
+    got, names = week(([calc, phys, akh], "en"), ([ru(calc), ru(phys), ru(akh)], "ru"))
+    assert did(got) == (0, 0, 0) and names[(3, "13:00")] == {"en": "Algebra", "ru": "Algebra (ru)"}
+    # S1 add/drop: Calculus dropped, Linear Algebra in its slot and hall (another teacher): no Calculus on it
+    got, names = week(([calc, phys], "en"), ([ru(L(1, "09:00", "10:50", "Linear Algebra", "lecture", "305", "Serikova S.")), ru(phys)], "ru"))
+    assert did(got) == (1, 1, 0) and names == {(1, "09:00"): {"ru": "Linear Algebra (ru)"}, (2, "11:00"): {"en": "Physics", "ru": "Physics (ru)"}}
+    # S2 same day and room, later: Physics dropped, Chemistry added
+    got, names = week(([phys], "en"), ([ru(L(2, "15:00", "15:50", "Chemistry", "practice", "410", "Bekova B."))], "ru"))
+    assert did(got) == (1, 1, 0) and names == {(2, "15:00"): {"ru": "Chemistry (ru)"}}
+    # S3 a new semester in a language the old week lacks: last term's names on none of it
+    got, names = week(([calc, phys], "en"), ([ru(L(1, "09:00", "10:50", "Databases", "lecture", "305", "Omarov O.")),
+                                             ru(L(2, "11:00", "11:50", "English B2", "practice", "410", "Lee L."))], "ru"))
+    assert did(got) == (2, 2, 0) and all(set(n) == {"ru"} for n in names.values())
+    # S4 two courses swap days in one hall at the same hours: neither takes the other's names
+    phys3 = L(3, "09:00", "10:50", "Physics", "lecture", "305", "Petrov P.")
+    got, names = week(([calc, phys3], "en"), ([ru(dataclasses.replace(phys3, weekday=1)), ru(dataclasses.replace(calc, weekday=3))], "ru"))
+    assert all(set(n) == {"ru"} for n in names.values())
+    # S5 two labs at one time in one room, both still there, the page's order reversed: each its own names
+    odd, even = L(2, "12:00", "12:50", "Lab Odd Weeks", "lab", "505", "Abenov A."), L(2, "12:00", "12:50", "Lab Even Weeks", "lab", "505", "Bekova B.")
+    got, _ = week(([odd, even], "en"), ([ru(even), ru(odd)], "ru"))
+    rows_ = {x["subject"]: x["names"] for x in c.get("/api/me/schedule", headers=tma(70)).json()}
+    assert did(got) == (0, 0, 0) and rows_["Lab Odd Weeks (ru)"] == {"en": "Lab Odd Weeks", "ru": "Lab Odd Weeks (ru)"}
+    # by place, two ways pair none: one teacher's two classes at one time, one gone; one class as near to two
+    got, names = week(([odd, dataclasses.replace(even, teacher="Abenov A.")], "en"), ([ru(odd)], "ru"))
+    assert did(got) == (1, 2, 0) and names == {(2, "12:00"): {"ru": "Lab Odd Weeks (ru)"}}
+    x9, y13 = L(1, "09:00", "09:50", "X", "practice", "403", "Ivanov I."), L(1, "13:00", "13:50", "Y", "practice", "403", "Ivanov I.")
+    got, names = week(([x9, y13], "en"), ([ru(dataclasses.replace(y13, begins="11:00", ends="11:50"))], "ru"))
+    assert names == {(1, "11:00"): {"ru": "Y (ru)"}}
+    # ... but one clearly nearer pairs: the fewest minutes moved, not the first in the day
+    got, names = week(([x9, dataclasses.replace(y13, begins="15:00", ends="15:50")], "en"), ([ru(dataclasses.replace(y13, begins="16:00", ends="16:50"))], "ru"))
+    assert did(got) == (0, 1, 1) and names == {(1, "16:00"): {"en": "Y", "ru": "Y (ru)"}}
+    # no teacher on either side: never by place
+    got, names = week(([dataclasses.replace(calc, teacher=None)], "en"), ([ru(dataclasses.replace(calc, teacher=None))], "ru"))
+    assert names == {(1, "09:00"): {"ru": "Calculus (ru)"}}
+
+    # in a language the saved class has, by place never: X dropped and Y in its slot with the same teacher stays Y alone
+    got, names = week(([x9], "en"), ([ru(x9)], "ru"), ([ru(dataclasses.replace(x9, subject="Y"))], "ru"))
+    assert did(got) == (1, 1, 0) and names == {(1, "09:00"): {"ru": "Y (ru)"}}
+    # a saved class is taken once: a second X on Monday is a new class, not the first one moved
+    got, _ = week(([x9], "en"), ([x9, dataclasses.replace(x9, begins="11:00", ends="11:50")], "en"))
+    assert did(got) == (1, 0, 0)
+    # by name to another day: the names come along
+    got, names = week(([x9], "en"), ([ru(x9)], "ru"), ([ru(dataclasses.replace(x9, weekday=4))], "ru"))
+    assert did(got) == (0, 0, 1) and names == {(4, "09:00"): {"en": "X", "ru": "X (ru)"}}
+    # by name within its day first, though another day's class is fewer minutes away
+    late = dataclasses.replace(x9, begins="20:00", ends="20:50")
+    got, names = week(([late], "en"), ([ru(late)], "ru"), ([ru(x9), ru(dataclasses.replace(x9, weekday=2, begins="06:00", ends="06:50"))], "ru"))
+    assert did(got) == (1, 0, 1) and names == {(1, "09:00"): {"en": "X", "ru": "X (ru)"}, (2, "06:00"): {"ru": "X (ru)"}}
+    # too many ways to weigh (a made-up week): by place none, by name in order
+    tens = [dataclasses.replace(x9, begins=f"{8 + i:02d}:00", ends=f"{8 + i:02d}:50") for i in range(10)]
+    fives = [dataclasses.replace(x9, begins=f"{8 + 2 * i:02d}:30", ends=f"{9 + 2 * i:02d}:10") for i in range(5)]
+    got, names = week((tens, "en"), ([ru(x) for x in fives], "ru"))
+    assert did(got) == (5, 10, 0) and all(set(n) == {"ru"} for n in names.values())
+    assert did(week((tens, "en"), (fives, "en"))[0]) == (0, 5, 5)
+
+
+def test_schedule_page_limits():
+    """A made-up page can't stop or stall the bot (the review, Oct 30): too deep, too many tags or texts, too many
+    classes: "not a schedule" at once; a stray end tag costs the same however deep the page is (it walked the whole
+    open stack: quadratic)."""
+    from kbtu import portal
+    for page, why in (("<html><body>" + "<div>" * 5000 + "</body></html>", "deep"),
+                      ("<html><body>" + "<div></div>" * 60_000 + "</body></html>", "big"),
+                      ("<html><body>" + "<!-- -->" * 120_000 + "</body></html>", "big")):
+        with pytest.raises(portal.NotSchedule, match=why):
+            portal.parse(page)
+    fixture = portal_page()
+    block = re.search(r'<div class="absolute rounded-sm[^>]*top: 384px.*?</div>\s*</div>', fixture, re.S)[0]
+    assert len(portal.parse(fixture.replace(block, block * 116)).lessons) == 120         # the most a week may have
+    with pytest.raises(portal.NotSchedule, match="many"):
+        portal.parse(fixture.replace(block, block * 117))
+    t = portal._Tree()
+    t.feed("<div><span><b>")
+    t.feed("</p></i>")                                    # stray: nothing closes
+    assert (t.at.tag, t.depth) == ("b", 3)
+    t.feed("</div>")                                      # its element and what was left open inside it
+    assert (t.at.tag, t.depth, sum(t.open.values())) == ("#root", 0, 0)
+
+    def took(depth):
+        page, best = "<html><body>" + "<div>" * depth + "</p>" * 30_000 + "</body></html>", 9e9
+        for _ in range(3):
+            start = time.perf_counter()
+            with pytest.raises(portal.NotSchedule):
+                portal.parse(page)
+            best = min(best, time.perf_counter() - start)
+        return best
+    assert took(190) < 3 * took(1)                        # was 10x slower 190 deep
+
+
+def test_schedule_bot_safety(env, monkeypatch):
+    """One page that breaks the parser never stops the bot for everyone (the review, Oct 30: the batch was retried
+    forever): the student hears "couldn't read the file", the others in the batch are answered once, the offset moves
+    on. An account deleted while its page was read doesn't get its week back."""
+    import httpx
+    from kbtu import portal
+    c, cfg = env
+    login(c, 50, "ali")
+    con = db.connect(cfg.db_path)
+    page, real = portal_page(), portal.parse
+    sent, t = [], logic.now()
+    batch = [{"update_id": 7, "message": {"message_id": 1, "chat": {"id": 60, "type": "private"}, "from": {"id": 60}, "date": t, "text": "hi"}},
+             {"update_id": 8, "message": {"message_id": 2, "chat": {"id": 50, "type": "private"}, "from": {"id": 50}, "date": t,
+                                          "document": {"file_id": "F", "file_name": "Schedule.html", "file_size": 9}}}]
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/getUpdates"):
+            return httpx.Response(200, json={"ok": True, "result": [u for u in batch if u["update_id"] >= int(request.url.params["offset"])]})
+        if request.url.path.endswith("/getFile"):
+            return httpx.Response(200, json={"ok": True, "result": {"file_path": "F"}})
+        if "/file/" in request.url.path:
+            return httpx.Response(200, content=page.encode())
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    async def hear(offset):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            return await bot.hear(cfg, http, offset)
+    def broken(html):
+        raise RecursionError("maximum recursion depth exceeded")
+    monkeypatch.setattr(portal, "parse", broken)
+    assert asyncio.run(hear(0)) == 9 and [m["chat_id"] for m in sent] == [60, 50]
+    assert sent[1]["text"] == texts.bot_message("ru", "sched_bad")[0]
+    sent.clear()
+    assert asyncio.run(hear(9)) == 9 and sent == []                                   # nothing again: the batch is done
+
+    def meanwhile(html):  # the student deletes the account while the bot reads the page
+        week = real(html)
+        logic.delete_me(db.connect(cfg.db_path), logic.Viewer(con.execute("SELECT id FROM users WHERE tg_id = 50").fetchone()[0], "user", True))
+        return week
+    monkeypatch.setattr(portal, "parse", meanwhile)
+    batch[:] = [{**batch[1], "update_id": 10}]
+    assert asyncio.run(hear(10)) == 11 and sent[-1]["text"] == texts.bot_message("ru", "sched_signin")[0]
+    assert con.execute("SELECT count(*) FROM schedule_classes s JOIN users u ON u.id = s.user_id WHERE u.tg_id = 50").fetchone()[0] == 0
+
+
+def test_schedule_match_unlocked(env, monkeypatch):
+    """The matcher runs outside the write lock (the review, Oct 30: 17 s held), the rows go in one short transaction
+    that checks the student is still there and their week is still the one matched against."""
+    from kbtu import portal
+    from kbtu.logic import account
+    c, cfg = env
+    me = login(c, 71, "dana")
+    con, other = db.connect(cfg.db_path), db.connect(cfg.db_path)
+    x9 = portal.Lesson(1, "09:00", "09:50", "X", "practice", "403", "Ivanov I.")
+    real, seen = account._merge, []
+
+    def merge(saved, lessons, lang):  # while it matches, another writer gets the lock at once
+        seen.append(con.in_transaction)
+        if len(seen) == 1:  # another page lands meanwhile: matched again against it, under the lock this time
+            with db.tx(other):
+                other.execute("UPDATE schedule_classes SET names = '{\"en\": \"Calculus\"}' WHERE user_id = ?", (me["id"],))
+        return real(saved, lessons, lang)
+    monkeypatch.setattr(account, "_merge", merge)
+    assert logic.save_schedule(con, me["id"], [x9], "en")["removed"] == 1 and seen == [False, True]
+    assert logic.save_schedule(con, me["id"], [x9], "en")["removed"] == 0
+    monkeypatch.setattr(account, "_merge", lambda *a: (logic.delete_me(other, logic.Viewer(me["id"], "user", True)), real(*a))[1])
+    assert logic.save_schedule(con, me["id"], [x9], "en") is None                    # gone meanwhile: nothing written
+    assert con.execute("SELECT count(*) FROM schedule_classes WHERE user_id = ?", (me["id"],)).fetchone()[0] == 0
 
 
 def test_bot_cards_for_helpers_and_invites(env):

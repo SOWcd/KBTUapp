@@ -785,8 +785,9 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
         return say("sched_bad")
     if not portal.same_person(week.name, u["first_name"], u["last_name"]):
         return say("sched_other")
-    with db.tx(con):
-        got = logic.save_schedule(con, u["id"], week.lessons, week.lang)
+    got = await asyncio.to_thread(logic.save_schedule, con, u["id"], week.lessons, week.lang)
+    if got is None:  # the account deleted while the page was read: its week doesn't come back
+        return say("sched_signin")
     page, words = got["lang"], texts.pick(texts.SCHED_LANG, lang)
     same, changes = page in got["had"], got["added"] + got["removed"] + got["moved"]
     if not got["was"] or not page or not same and len(got["has"]) < 2:
@@ -1031,8 +1032,13 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 if body:
                     con.execute("UPDATE users SET can_dm = 1 WHERE tg_id = ?", (body["chat_id"],))  # writing to the bot unblocks it
                     await _send(cfg, http, body)
-            except httpx.HTTPError as exc:
-                log.warning("ears: %s", type(exc).__name__)
+            except Exception as exc:  # one update that breaks (a page the parser chokes on) never stops the bot for everyone
+                log.warning("ears: %s", type(exc).__name__)  # the type only: never a page's words
+                if not isinstance(exc, httpx.HTTPError) and _sched_file(msg) and (msg.get("chat") or {}).get("type") == "private":
+                    try:
+                        await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "sched_bad")))
+                    except Exception as again:
+                        log.warning("ears: %s", type(again).__name__)
     finally:
         con.close()
     return offset

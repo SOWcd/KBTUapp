@@ -58,6 +58,10 @@ def page_html(data: bytes) -> str:
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr",
         "path", "circle", "rect", "line", "polyline", "polygon", "use"}
+# a made-up page must not stop or stall the bot (it reads one update at a time): thousands of nested tags blew the
+# recursion in Node.all() and stopped it for everyone (Oct 30). A real page nests far less and has a few thousand tags
+# and texts; every one the parser meets counts, so a page of nothing but end tags or comments stops early too
+MAX_DEPTH, MAX_PARTS = 200, 100_000
 
 
 class Node:
@@ -92,24 +96,42 @@ class _Tree(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.root = self.at = Node("#root", {}, None)
+        self.depth = self.parts = 0
+        self.open: dict[str, int] = {}  # how many of each tag are open, so a stray end tag is known at once
+
+    def _tick(self, *_) -> None:
+        self.parts += 1
+        if self.parts > MAX_PARTS:
+            raise NotSchedule("big")
+
+    handle_comment = handle_decl = handle_pi = unknown_decl = _tick
 
     def handle_starttag(self, tag, attrs):
+        self._tick()
         n = Node(tag, dict(attrs), self.at)
         self.at.kids.append(n)
         if tag not in VOID:
-            self.at = n
+            self.at, self.depth = n, self.depth + 1
+            self.open[tag] = self.open.get(tag, 0) + 1
+            if self.depth > MAX_DEPTH:
+                raise NotSchedule("deep")
 
     def handle_startendtag(self, tag, attrs):
+        self._tick()
         self.at.kids.append(Node(tag, dict(attrs), self.at))
 
     def handle_endtag(self, tag):
-        n = self.at
-        while n.up and n.tag != tag:
-            n = n.up
-        if n.up:  # a stray end tag closes nothing
-            self.at = n.up
+        self._tick()
+        if not self.open.get(tag):  # a stray end tag closes nothing (it walked the whole stack: quadratic on a made-up page)
+            return
+        while True:  # it closes its element and whatever was left open inside it
+            n, self.at, self.depth = self.at, self.at.up, self.depth - 1
+            self.open[n.tag] -= 1
+            if n.tag == tag:
+                return
 
     def handle_data(self, data):
+        self._tick()
         if data.strip() and self.at.tag not in ("script", "style"):
             # a text after a child goes to an empty child of its own, so words() keeps the order
             if self.at.kids:
@@ -137,6 +159,7 @@ KINDS = {"lecture": "lecture", "practice": "practice", "lab": "lab", "laboratory
          "\u0442\u04d9\u0436\u0456\u0440\u0438\u0431\u0435": "practice", "\u0437\u0435\u0440\u0442\u0445\u0430\u043d\u0430\u043b\u044b\u049b": "lab"}
 KK_ONLY = re.compile("[\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456]", re.I)  # Kazakh's own letters (none in Russian)
 CYRILLIC, LATIN = re.compile("[\u0400-\u04ff]"), re.compile("[a-z]", re.I)
+MAX_CLASSES = 120
 LECTURE_OVER = 100  # minutes: a class with no label longer than this is a lecture (lectures 2 h, practices 1 h, PE 1 h 40)
 HHMM = re.compile(r"(\d{1,2}):(\d{2})")
 
@@ -169,7 +192,7 @@ def parse(html: str) -> Week:
     if not grid:
         raise NotSchedule("grid")
     cols = [k for k in grid.kids if k.tag == "div"]
-    hours = [n for n in cols[0].all() if HHMM.fullmatch(n.words()) and _px(n.style, "height")] if cols else []
+    hours = [n for n in cols[0].all() if _px(n.style, "height") and HHMM.fullmatch(n.words())] if cols else []
     if not hours:
         raise NotSchedule("hours")
     m = HHMM.fullmatch(hours[0].words())
@@ -205,6 +228,8 @@ def parse(html: str) -> Week:
                 continue
             kind = KINDS.get(label.strip().lower()) or ("lecture" if ends - begins > LECTURE_OVER else "practice")
             out.append(Lesson(day, _hhmm(begins), _hhmm(ends), subject[:120], kind, (room or None) and room[:40], (teacher or None) and teacher[:80]))
+            if len(out) > MAX_CLASSES:  # a real week has 20-40; thousands held the write lock in the matcher for minutes
+                raise NotSchedule("many")
     if not out:
         raise NotSchedule("empty")
     return Week(name, sorted(out, key=lambda x: (x.weekday, x.begins)), max(DAY_NAMES, key=langs.count) if langs else None)
