@@ -20,3 +20,12 @@ it('shows the card number zero-padded, a dash while there is none', () => {
   expect(hero({ ...card(0), founder: true, no: 0 }).no).toBe('00000');
   expect(hero({ ...card(0), no: null }).no).toBe('—');
 });
+
+it('puts DMP, then the Student Government, before a higher role in a club on the lanyard', () => {
+  const org = (id: number, extra: object) => ({ id, slug: `o${id}`, name: `Org ${id}`, short: `O${id}`, emoji: 'x', cover: 0, kind: 'club', official: false, ...extra });
+  const c = card(1);
+  c.clubs = [{ org: org(1, {}), role: 'head', title: 'Head of Events' }, { org: org(2, { gov: true }), role: 'member', title: 'Minister' }] as PersonCard['clubs'];
+  expect(hero(c).title).toBe('Minister · Org 2');
+  c.clubs = [...c.clubs, { org: org(3, { kind: 'office' }), role: 'member', title: null }] as PersonCard['clubs'];
+  expect(hero(c).title).toMatch(/· Org 3$/);
+});

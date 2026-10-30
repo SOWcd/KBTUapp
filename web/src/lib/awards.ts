@@ -66,7 +66,10 @@ export function leftLine(a: Achievement): string {
 
 export function hero(p: PersonCard): HeroData {
   const earned = p.awards.achievements.filter((a) => a.level > 0);
-  const top = [...p.clubs].sort((a, b) => (b.role ? RANK[b.role] : 0) - (a.role ? RANK[a.role] : 0))[0];  // a role only to the club's own team
+  // the lanyard's line: the most important team first, DMP, then the Student Government, then clubs; within one tier the
+  // higher role (owner, Oct 31: a minister read "Head of Events · Choice"). A role only to the club's own team
+  const weight = (c: PersonCard['clubs'][number]) => (c.role ? 100 : 0) + (c.org.kind === 'office' ? 20 : c.org.gov ? 10 : 0) + (c.role ? RANK[c.role] : 0);
+  const top = [...p.clubs].sort((a, b) => weight(b) - weight(a))[0];
   const close = closest(p.awards.achievements);
   return {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
