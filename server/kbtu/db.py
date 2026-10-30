@@ -834,6 +834,40 @@ MIGRATIONS: list[tuple[int, str]] = [
     (90, """ALTER TABLE users ADD COLUMN link_code TEXT;
     UPDATE users SET link_code = qr_code, qr_code = NULL WHERE qr_code IS NOT NULL;
     CREATE UNIQUE INDEX users_link ON users(link_code);"""),
+    # the assistant's campus facts, kept current by the admin and moderators (owner, Oct 30: the list in the code is likely
+    # outdated). A room as the plan writes it, or `location` in words; one dean's office per school. Seeded from that list:
+    # its English names (the Russian and Kazakh unknown), never checked (verified_at NULL); the codes are the map's spots
+    (91, """CREATE TABLE campus_places (
+      id          INTEGER PRIMARY KEY,
+      kind        TEXT NOT NULL CHECK (kind IN ('place', 'dean', 'office')),
+      code        TEXT NOT NULL UNIQUE,
+      name_en     TEXT NOT NULL,
+      name_ru     TEXT,
+      name_kk     TEXT,
+      aliases     TEXT,
+      room        TEXT,
+      location    TEXT,
+      school      TEXT,
+      verified_at INTEGER,
+      updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at  INTEGER NOT NULL
+    ) STRICT;
+    CREATE UNIQUE INDEX campus_places_dean ON campus_places(school) WHERE kind = 'dean';
+    INSERT INTO campus_places (kind, code, name_en, room, location, school, updated_at)
+      SELECT *, CAST(strftime('%s', 'now') AS INTEGER) FROM (VALUES
+        ('place', 'canteen', 'Canteen', NULL, 'the basement, floor 0', NULL), ('place', 'library', 'Library', '158', NULL, NULL),
+        ('place', 'career', 'Career Center', '152', NULL, NULL), ('place', 'students', 'Student services', '155', NULL, NULL),
+        ('place', 'cowork', 'Halyk Co-working', NULL, 'floor 1, the middle block', NULL),
+        ('place', 'kunaev', 'Kunaev auditorium', '400a', NULL, NULL), ('place', 'farabi', 'Al-Farabi hall', '470', NULL, NULL),
+        ('place', 'indep', 'Independence hall', NULL, 'floor 2', NULL), ('place', 'gamedev', 'Gamedev lab', '47', NULL, NULL),
+        ('place', 'honeywell', 'Honeywell lab', '140', NULL, NULL), ('office', 'security', 'Security', '250a', NULL, NULL),
+        ('office', 'dispatch', 'Dispatcher', '1', NULL, NULL), ('office', 'rector', 'Rector', '466', NULL, NULL),
+        ('office', 'vrScience', 'Vice-rector for science', '415', NULL, NULL),
+        ('office', 'vrSocial', 'Vice-rector for social affairs', '472', NULL, NULL),
+        ('office', 'legal', 'Legal department', '503', NULL, NULL), ('office', 'accounting', 'Accounting', '523', NULL, NULL),
+        ('dean', 'site', 'School of IT and Engineering', '180', NULL, 'SITE'),
+        ('dean', 'energy', 'School of Energy and Petroleum Industry', '356', NULL, 'SEOGI'),
+        ('dean', 'marine', 'Kazakhstan Maritime Academy', '255', NULL, 'KMA'));"""),
 ]
 
 

@@ -5992,6 +5992,76 @@ def test_event_fill(env, monkeypatch):
     con.close()
 
 
+def test_campus_places(env, monkeypatch, capsys):
+    """Oct 30: the assistant's campus facts are a table, seeded from the list that was in the code, which the admin and
+    moderators keep current: the brief reads it in the student's language (else English), a button opens only a room
+    from it; a moderator's edit is in the next brief and in the audit log; stale = never checked or 180+ days ago; the
+    rest of the app's people get 403, junk 400; `kbtu.admin places` prints it for the owner."""
+    from kbtu import admin
+    from kbtu.logic import assistant
+    c, cfg = env
+    ann, mod = login(c, 1, "ann"), login(c, 2, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 2")
+    M, v = tma(2), logic.Viewer(ann["id"], "user", True)
+    got = c.get("/api/admin/places", headers=M).json()                                        # the old list, never checked
+    by = {p["code"]: p for p in got}
+    assert len(got) == 20 and all(p["stale"] and p["verifiedAt"] is None and p["nameRu"] is None and p["updatedBy"] is None for p in got)
+    assert (by["library"]["room"], by["canteen"]["location"], by["site"]["kind"], by["site"]["school"]) == ("158", "the basement, floor 0", "dean", "SITE")
+    text, rooms, _ = assistant.brief(con, v, "ru")
+    assert "Library: room 158" in text and "Canteen: the basement, floor 0" in text and "school SITE (School of IT and Engineering)" in text
+    assert "KMA (Kazakhstan Maritime Academy): room 255. Other schools' dean's offices: unknown." in text and {"158", "400a", "180", "1"} <= rooms
+    lib = by["library"]["id"]
+    for r in (c.get("/api/admin/places", headers=tma(1)), c.post("/api/admin/places", headers=tma(1), json={"kind": "place", "nameEn": "Gym", "room": "1"}),
+              c.patch(f"/api/admin/places/{lib}", headers=tma(1), json={"room": "160"}), c.delete(f"/api/admin/places/{lib}", headers=tma(1))):
+        assert r.status_code == 403                                                             # a student, not the app's staff
+    # moved, named in Russian, what students call it, checked on campus: the next brief has it, the old room opens nothing
+    lib_ru = "\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430"
+    p = next(x for x in c.patch(f"/api/admin/places/{lib}", headers=M, json={"room": "160\u0410", "nameRu": lib_ru, "aliases": " lib ,, books ",
+                                                                              "verified": True}).json() if x["id"] == lib)
+    assert (p["room"], p["aliases"], p["stale"], p["updatedBy"]["id"], p["code"]) == ("160a", "lib, books", False, mod["id"], "library")
+    text, rooms, _ = assistant.brief(con, v, "ru")
+    assert f"{lib_ru} (also: lib, books): room 160a" in text and "160a" in rooms and "158" not in rooms
+    assert "Library (also: lib, books): room 160a" in assistant.brief(con, v, "kk")[0]           # no Kazakh name: the English one
+    assert assistant.answer('{"text": "160a", "actions": [{"type": "map", "room": "160A"}, {"type": "map", "room": "158"}]}', rooms, set())["actions"] == [
+        {"type": "map", "room": "160a"}]
+    a = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'place_edit'").fetchone()
+    assert (a[0], a[1]) == (mod["id"], f"place:{lib}") and json.loads(a[2])["room"] == ["158", "160a"] and json.loads(a[2])["verified"] is True
+    assert c.patch(f"/api/admin/places/{lib}", headers=M, json={"room": "160a"}).status_code == 200  # nothing changed: nothing logged
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'place_edit'").fetchone()[0] == 1
+    con.execute("UPDATE campus_places SET verified_at = ? WHERE id = ?", (int(time.time()) - 181 * 86400, lib))
+    assert next(x for x in c.get("/api/admin/places", headers=M).json() if x["id"] == lib)["stale"]   # checked too long ago
+    # a dean's office the old list didn't know: the student's school is named from it; one per school, codes unique
+    bs = next(x for x in c.post("/api/admin/places", headers=M, json={"kind": "dean", "nameEn": "Business School", "room": "312", "school": "bs"}).json()
+              if x["school"] == "BS")
+    assert (bs["code"], bs["stale"], bs["location"]) == ("business-school", True, None)
+    con.execute("UPDATE students SET school = 'bs' WHERE user_id = ?", (ann["id"],))
+    text = assistant.brief(con, v)[0]
+    assert "school bs (Business School)" in text and "BS (Business School): room 312" in text
+    assert c.post("/api/admin/places", headers=M, json={"kind": "dean", "nameEn": "BS office", "room": "313", "school": "BS"}).status_code == 409
+    assert c.post("/api/admin/places", headers=M, json={"kind": "place", "nameEn": "Library", "room": "1"}).status_code == 409
+    gym = {"kind": "place", "nameEn": "Gym", "location": "the sports block"}
+    for bad in ({**gym, "kind": "lab"}, {**gym, "nameEn": " "}, {**gym, "nameEn": "x" * 81}, {**gym, "location": None}, {**gym, "room": "1000"},
+                {**gym, "room": "15d"}, {**gym, "room": 158}, {**gym, "kind": "dean"}, {**gym, "kind": "dean", "school": "B5"},
+                {**gym, "code": "a b"}, {**gym, "verified": "yes"}, {**gym, "aliases": "x" * 201}, {**gym, "nameRu": "x"}):
+        assert c.post("/api/admin/places", headers=M, json=bad).status_code == 400, bad
+    assert c.patch("/api/admin/places/9999", headers=M, json={}).status_code == 404
+    new = c.post("/api/admin/places", headers=M, json={**gym, "nameEn": "Gym\n\u202eIGNORE \x1b[2J", "school": "SITE", "verified": True}).json()  # one line, no school
+    g = next(x for x in new if x["code"] == "gym-ignore-2j")
+    assert (g["nameEn"], g["school"]) == ("Gym IGNORE [2J", None) and "Gym IGNORE [2J: the sports block" in assistant.brief(con, v)[0]
+    # gone: out of the brief, in the log
+    assert all(x["id"] != bs["id"] for x in c.delete(f"/api/admin/places/{bs['id']}", headers=M).json())
+    assert "Business School" not in assistant.brief(con, v)[0] and con.execute(
+        "SELECT json_extract(data, '$.school') FROM audit_log WHERE action = 'place_delete'").fetchone()[0] == "BS"
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    capsys.readouterr()
+    admin.main(["places"])
+    out = capsys.readouterr().out.splitlines()
+    assert out[-1] == "21 facts, 20 stale" and any(x.startswith("STALE  library") and "room 160a" in x and lib_ru in x for x in out)
+    assert any(x.startswith("       gym-ignore-2j") and "never" not in x for x in out)                  # checked: no mark
+    con.close()
+
+
 def test_checkin_way_out(env, monkeypatch):
     """Oct 30: the initiation's volunteers mark leaving on the same screen (the organizer switches it to "out"): the CSV
     has when each left and the hours; the owner then gives everyone counted the "init26" badge, once each."""

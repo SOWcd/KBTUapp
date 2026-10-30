@@ -28,6 +28,8 @@
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
+  .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
+                                ago (the admin and moderators edit them: /api/admin/places, the admin screen)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone
@@ -41,6 +43,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 
 from . import config, db
 from pathlib import Path
@@ -96,6 +99,14 @@ def main(args: list[str]) -> None:
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"
             print(f"#{r['id']}  {r['ver']} floor {r['floor']}  {at}  {r['body']}")
+    elif cmd == "places":  # the assistant's campus facts: what to check on campus
+        from .logic import assistant
+        got = assistant.places(con, Viewer(0, "admin", False))
+        for f in got:
+            names = " / ".join(x for x in (f["nameEn"], f["nameRu"], f["nameKk"]) if x) + (f" (also: {f['aliases']})" if f["aliases"] else "")
+            checked = time.strftime("%Y-%m-%d", time.gmtime(f["verifiedAt"] + 5 * 3600)) if f["verifiedAt"] else "never"
+            print(f"{'STALE' if f['stale'] else '':<5}  {f['code']:<12} {f['kind']:<6} {f['school'] or '':<6} {assistant.where(f):<28} checked {checked:<10}  {names}")
+        print(f"{len(got)} facts, {sum(f['stale'] for f in got)} stale")
     elif cmd == "users":
         for u in rows(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, u.role, s.user_id IS NOT NULL AS student
                 FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.tg_id > 0 ORDER BY u.created_at"""):
