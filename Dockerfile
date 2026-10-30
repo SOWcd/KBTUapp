@@ -30,6 +30,9 @@ VOLUME /var/lib/kbtu
 # DB_MUST_EXIST: refuse to start on a missing database (config.py); SQLite's temp files (big sorts) stay next to the
 # data instead of the container's /tmp on the plain disk
 ENV DB_PATH=/var/lib/kbtu/kbtu.db DB_MUST_EXIST=1 SQLITE_TMPDIR=/var/lib/kbtu WEB_DIST=/app/web/dist PYTHONUNBUFFERED=1
+# the student forum open to every student (owner, Oct 30); its privacy section 12 in force, everyone agrees again.
+# BOARD set on the server (Coolify) wins: BOARD=staff to try a change, BOARD=0 to close it
+ENV BOARD=1
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
 # secrets come from the environment (Coolify): BOT_TOKEN, TOKEN_KEY, ADMIN_TG_IDS, DOMAIN
