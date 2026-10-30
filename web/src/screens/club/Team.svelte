@@ -11,7 +11,7 @@
   import Users from '@lucide/svelte/icons/users';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { say, ui } from '../../lib/state/ui.svelte';
+  import { say, ui, close } from '../../lib/state/ui.svelte';
   import { data, loadTeam, studioChanged } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -75,7 +75,8 @@
     studioChanged();
   }
 
-  async function run(job: () => Promise<TeamMember[] | void>, done: string, emoji: string) {
+  /** true when the job went through (a failure says so itself) */
+  async function run(job: () => Promise<TeamMember[] | void>, done: string, emoji: string): Promise<boolean> {
     busy = true;
     try {
       const fresh = await job();
@@ -83,8 +84,10 @@
       if (done) { haptic.ok(); say(done, emoji); } else haptic.select();
       void loadSetup(m!.org.id);
       studioChanged();
+      return true;
     } catch (e) {
       haptic.error(); say(e instanceof ApiErr && e.message === 'president' ? t('team.presLeave') : t('common.error'), 'pleading_face_3d');
+      return false;
     } finally { busy = false; }
   }
   const org = () => m!.org.id;
@@ -117,7 +120,8 @@
     if (!m) return;
     if (m.role === 'president') { haptic.error(); say(t('team.presLeave'), 'pleading_face_3d'); return; }
     if (!(await sheets.ask({ title: t('team.leaveAsk', { club: m.org.name }), text: t('team.leaveText'), ok: t('team.leave'), cancel: t('common.cancel'), danger: true }))) return;
-    await run(() => api.removeMember(m.org.id, me!), t('team.left'), 'waving_hand_3d_default');
+    if (!(await run(() => api.removeMember(m.org.id, me!), t('team.left'), 'waving_hand_3d_default'))) return;
+    close(overlay.id); // not my team any more: the sheet would show the next club's
     void loadMe();
   }
 </script>

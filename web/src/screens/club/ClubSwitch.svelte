@@ -7,9 +7,9 @@
   const pick = (all: boolean) => { if (ui.allClubs !== all) { haptic.select(); ui.allClubs = all; } };
 </script>
 
-<div class="seg sw" role="tablist" aria-label={t('page.clubs')}>
-  <button role="tab" class:on={!ui.allClubs} aria-selected={!ui.allClubs} onclick={() => pick(false)}>{t('clubs.myClub')}</button>
-  <button role="tab" class:on={ui.allClubs} aria-selected={ui.allClubs} onclick={() => pick(true)}>{t('clubs.allTitle')}</button>
+<div class="seg sw" role="group" aria-label={t('page.clubs')}>
+  <button class:on={!ui.allClubs} aria-pressed={!ui.allClubs} onclick={() => pick(false)}>{t('clubs.myClub')}</button>
+  <button class:on={ui.allClubs} aria-pressed={ui.allClubs} onclick={() => pick(true)}>{t('clubs.allTitle')}</button>
 </div>
 
 <style>

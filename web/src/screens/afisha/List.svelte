@@ -264,7 +264,7 @@
     background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-sub)/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .row1:active { transform: scale(0.95); }
   .evh h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .evh span { font: 550 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+  .evh .num { font: 550 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
 
   /* the live stack: cards side by side, one at a time under the finger */
   .stack { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) 2px; scrollbar-width: none; scroll-padding: 0 var(--gutter); }

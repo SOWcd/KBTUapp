@@ -95,7 +95,7 @@
 
   <div class="head"><h3 class="t-cap">{t('fo.asks')}</h3><button class="new" onclick={() => sheets.newAsk(load)}><Plus size={16} />{t('fo.newAsk')}</button></div>
   {#if me?.skills.length}
-    <div class="filter hscroll" data-noswipe>
+    <div class="filter hscroll">
       <button class="chip" class:on={skill === null} onclick={() => (skill = null)}>{t('fo.all')}</button>
       {#each me.skills as s (s.id)}<button class="chip" class:on={skill === s.id} onclick={() => (skill = s.id)}>{s.name}</button>{/each}
     </div>

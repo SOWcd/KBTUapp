@@ -16,7 +16,8 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
   import { whenLine } from '../../lib/time';
-  import { openLink, shareCard, haptic } from '../../lib/tg';
+  import { openLink, shareCard, haptic, inTelegram } from '../../lib/tg';
+  import X from '@lucide/svelte/icons/x';
   import Emoji from '../../ui/Emoji.svelte';
   import Chip from '../../ui/Chip.svelte';
   import OrgTag from '../../ui/OrgTag.svelte';
@@ -29,6 +30,7 @@
 
   const list = $derived(data.events.filter((e) => e.status !== 'cancelled'));
   let root: HTMLDivElement;
+  let box: HTMLDivElement; // the dialog: the Feed and its close button, so a screen reader reaches both
   let cur = $state(0);
 
   // nav and capsule over the Feed take the tint of the slide on screen ('#RRGGBB' → 'r g b')
@@ -51,6 +53,9 @@
   onMount(() => {
     root.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
     const chrome = hideChrome();
+    // keyboard and screen readers: focus into the Feed, back to "In a row" when it goes (as Sheet does)
+    const opener = document.activeElement as HTMLElement | null;
+    box.focus({ preventScroll: true });
     const io = new IntersectionObserver((entries) => {
       for (const en of entries) if (en.isIntersecting) cur = Number((en.target as HTMLElement).dataset.i);
     }, { root, threshold: 0.6 });
@@ -58,7 +63,7 @@
     watch();
     const mo = new MutationObserver(watch);
     mo.observe(root, { childList: true });
-    return () => { io.disconnect(); mo.disconnect(); chrome(); };
+    return () => { io.disconnect(); mo.disconnect(); chrome(); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
   });
 
   // an event's video plays on the slide on screen, muted as in every feed, and loops; the next and the previous one
@@ -82,6 +87,7 @@
   }
 </script>
 
+<div class="box" bind:this={box} role="dialog" aria-modal="true" aria-label={t('page.feed')} tabindex="-1">
 <div class="feed" bind:this={root}>
   {#each list as e, i (e.id)}
     {@const st = e.my?.status}
@@ -156,10 +162,17 @@
     </div>
   {/if}
 </div>
+<!-- no Back button in a browser: the only way out but the last slide -->
+{#if !inTelegram && !overlay.closing}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}
+</div>
 
 <style>
-  .feed { position: absolute; inset: 0; z-index: var(--z-sheet); overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
+  .box { position: absolute; inset: 0; z-index: var(--z-sheet); }
+  .box:focus { outline: none; }
+  .feed { position: absolute; inset: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
   .feed::-webkit-scrollbar { display: none; }
+  .x { position: absolute; top: calc(var(--safe-top) + 12px); left: 12px; width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); color: #fff; }
   /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
      whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
   .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: #fff; background: var(--tint); transform: none; opacity: 1; }

@@ -3,7 +3,7 @@
   // brings them our card, once per event. Nothing upcoming yet: the way to Events.
   import Mail from '@lucide/svelte/icons/mail';
   import { api, ApiErr, type Id } from '../../lib/api';
-  import { say, close, ui, type Overlay } from '../../lib/state/ui.svelte';
+  import { say, close, ui, type Overlay, overlays } from '../../lib/state/ui.svelte';
   import { data } from '../../lib/state/data.svelte';
   import { t, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs } from '../../lib/time';
@@ -28,7 +28,8 @@
     } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'pleading_face_3d'); }
     finally { busy = null; }
   }
-  function toEvents() { close(overlay.id); ui.tab = 'afisha'; }
+  // the Afisha in sight: every sheet down (the person's and the Friends sheet were left over it)
+  function toEvents() { overlays.forEach((o) => close(o.id, true)); ui.tab = 'afisha'; } // as by a hand: a sheet with unsent text asks first
 </script>
 
 <Sheet {overlay} title={t('inv.toTitle', { name })}>

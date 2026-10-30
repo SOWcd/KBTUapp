@@ -71,7 +71,7 @@
     </button>
   {/if}
 
-  <div class="topics hscroll" role="tablist" aria-label={t('bd.topics')} data-noswipe>
+  <div class="topics hscroll" role="tablist" aria-label={t('bd.topics')}>
     <button role="tab" class:on={board.topic == null} aria-selected={board.topic == null} onclick={() => pick(null)}>{t('bd.all')}</button>
     {#each TOPICS as k (k)}
       {@const Icon = TOPIC_ICON[k]}

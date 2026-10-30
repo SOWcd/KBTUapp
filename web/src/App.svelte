@@ -75,6 +75,10 @@
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
   const feedPage = () => import('./screens/afisha/Feed.svelte');
+  // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame
+  const newsPage = () => import('./screens/afisha/News.svelte');
+  const friendsPage = () => import('./screens/profile/Friends.svelte');
+  const settingsPage = () => import('./screens/profile/SettingsPage.svelte');
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   // asked once the screen is free: an unlock or a deep link's sheet up at the start used to skip it until the next launch
@@ -85,8 +89,9 @@
     sheets.consent();
   };
   // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
-  // the Feed's too, so "In a row" opens in the tap's frame
-  const warmClub = () => { void feedPage().then((m) => loaded.set(feedPage, m)); if (!session.me?.memberships.length) return; void studioPage(); void teamPage().then((m) => loaded.set(teamPage, m)); };
+  // the Feed, News, Friends and Settings too (pages once, sheets now), so they open in the tap's frame
+  const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
+  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsPage].forEach(warm); if (!session.me?.memberships.length) return; void studioPage(); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmBoard = () => { if (!session.board) return; void boardPage(); if (session.me?.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -149,11 +154,11 @@
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
   sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
   sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
-  sheets.news = () => lazy(() => import('./screens/afisha/News.svelte'), {});
+  sheets.news = () => lazy(newsPage, {});
   sheets.feed = () => lazy(feedPage, {});
-  sheets.friends = () => lazy(() => import('./screens/profile/Friends.svelte'), {});
+  sheets.friends = () => lazy(friendsPage, {});
   sheets.team = () => lazy(teamPage, {});
-  sheets.settingsPage = () => lazy(() => import('./screens/profile/SettingsPage.svelte'), {});
+  sheets.settingsPage = () => lazy(settingsPage, {});
   setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- the Clubs tab: a member's has My club and All clubs (a switch on top of the content, tap only) ----
@@ -303,8 +308,8 @@
     const ref = p.match(/^ev_(\d+)_([A-Z2-7]{10})$/); // a club member's "My link": the sign-up goes to them
     if (ref) keepRef(Number(ref[1]), ref[2]);
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
-    // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club
-    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) return; ui.club = org; toClub(); sheets.team(); };
+    // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club; no longer in it: the club's page
+    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } ui.club = org; toClub(); sheets.team(); };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
   }
 
@@ -443,7 +448,7 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmClub, 3000); setTimeout(warmBoard, 1800); setTimeout(() => askConsent(), 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800); setTimeout(() => askConsent(), 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

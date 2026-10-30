@@ -46,13 +46,16 @@
   onMount(() => { if (student) void loadNews(); void loadAll(); }); // staff read the feed too
   $effect(() => { if (casts) untrack(() => seen(casts)); });
   // the unread broadcasts on screen count as read after a moment (their "new" stays until the next visit)
+  // (a sheet now: closed sooner, the marks still go, as Stories does)
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let pending: number[] = [];
+  const send = () => { const ids = pending; pending = []; if (ids.length) api.readPosts(ids).then(() => loadMe()).catch(() => {}); };
   function seen(list: Post[]) {
-    const ids = list.filter((p) => !p.read).map((p) => p.id);
+    pending = list.filter((p) => !p.read).map((p) => p.id);
     clearTimeout(timer);
-    if (ids.length) timer = setTimeout(() => api.readPosts(ids).then(() => loadMe()).catch(() => {}), 1500);
+    if (pending.length) timer = setTimeout(send, 1500);
   }
-  $effect(() => () => clearTimeout(timer));
+  $effect(() => () => { clearTimeout(timer); send(); });
 
   let open = $state<Set<number>>(new Set()); // posts unfolded
   const long = (p: Post) => p.body.length > 220 || p.body.split('\n').length > 4;
