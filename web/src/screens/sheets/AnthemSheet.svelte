@@ -163,13 +163,13 @@
 
 <style>
   .hd { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 8px 0 28px; text-align: center; }
-  .art { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 17px; background: var(--accent); color: #fff; }
+  .art { display: grid; place-items: center; width: 60px; height: 60px; border-radius: var(--r-m); background: var(--accent); color: var(--on-accent); }
 
   .part { margin-bottom: 26px; }
   .part h3 { margin-bottom: 10px; }
   /* big enough to sing from (20 px from a 400-px phone, 17 at 320); a line too long for the phone goes on under
      itself, indented, the two halves even */
-  .part p { padding-left: 0.8em; text-indent: -0.8em; font: 650 clamp(17px, 5vw, 20px)/1.4 var(--font-text); letter-spacing: -0.012em; text-wrap: balance;
+  .part p { padding-left: 0.8em; text-indent: -0.8em; font: 650 clamp(var(--fs-card), 5vw, calc(var(--fs-card) * 1.18))/1.4 var(--font-text); letter-spacing: -0.012em; text-wrap: balance;
     transition: color var(--t-base); }
   .part p.now { color: var(--accent-text); }
   .gap { display: block; height: 14px; }
@@ -179,7 +179,7 @@
   .chorus h3 { color: var(--accent-text); }
 
   .player { display: flex; align-items: center; gap: 14px; }
-  .play { position: relative; flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; }
+  .play { position: relative; flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); }
   .off :global(svg) { translate: 2px 0; } /* the triangle's weight sits left of its box */
   /* buffering: a thin ring around the button, no layout change */
   .play::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); opacity: 0; transition: opacity var(--t-base); }
@@ -188,7 +188,7 @@
   @media (prefers-reduced-motion: reduce) { .play.busy::after { animation: none; } }
 
   .seek { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 0 4px; touch-action: none; cursor: pointer; outline: none; }
-  .track { position: relative; height: 5px; border-radius: 3px; background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease); }
+  .track { position: relative; height: 5px; border-radius: var(--r-full); background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease); }
   .held .track { transform: scaleY(1.6); }
   .seek:focus-visible .track { box-shadow: 0 0 0 3px var(--accent-soft); }
   .track i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--text); }
@@ -202,8 +202,8 @@
 
   .tim { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
   .tap { flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; border-radius: var(--r-full);
-    background: var(--accent); color: #fff; font: 700 18px/1 var(--font-text); }
+    background: var(--accent); color: var(--on-accent); font: 700 var(--fs-card)/1 var(--font-text); }
   .tap small { font: 600 var(--fs-sub)/1 var(--font-text); opacity: 0.75; }
   .tap:disabled { opacity: 0.4; }
-  .raw { display: block; width: 100%; height: 64px; margin-top: 10px; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); font: 500 12px/1.35 ui-monospace, monospace; resize: none; }
+  .raw { display: block; width: 100%; height: 64px; margin-top: 10px; padding: 8px 10px; border-radius: var(--r-s); background: var(--surface-2); font: 500 var(--fs-cap)/1.35 ui-monospace, monospace; resize: none; }
 </style>

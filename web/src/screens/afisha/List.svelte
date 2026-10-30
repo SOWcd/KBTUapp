@@ -341,7 +341,7 @@
   .anth { margin: 0 0 14px; color: var(--text-3); }
   .anth .tx { flex: 1; }
   .anth b { color: var(--text); }
-  .anth .tile { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: #fff; }
+  .anth .tile { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-s); background: var(--accent); color: var(--on-accent); }
   .ev-act button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: var(--r-full);
     background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); color: #fff; font: 650 var(--fs-body)/1 var(--font-text); }
   .ev-act button:active { transform: scale(0.96); }
