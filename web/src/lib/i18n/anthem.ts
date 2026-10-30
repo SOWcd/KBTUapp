@@ -33,7 +33,7 @@ const PARTS: (Omit<AnthemPart, 'lines'> & { lines: string[] })[] = [
     'We keep our ancestors’ legacy alive',
     'And raise our banner high with pride.',
     '',
-    'KBTU – a place of hope and light,',
+    'A place of hope and light,',
     'Where driven youth reach shining heights.',
     'You are our honor, dream, and way,',
     'Leading us toward a brighter day.',
