@@ -868,6 +868,8 @@ MIGRATIONS: list[tuple[int, str]] = [
         ('dean', 'site', 'School of IT and Engineering', '180', NULL, 'SITE'),
         ('dean', 'energy', 'School of Energy and Petroleum Industry', '356', NULL, 'SEOGI'),
         ('dean', 'marine', 'Kazakhstan Maritime Academy', '255', NULL, 'KMA'));"""),
+    # a club role's name in Kazakh and English (`name` stays the required one, the fallback)
+    (92, "ALTER TABLE org_roles ADD COLUMN name_kk TEXT; ALTER TABLE org_roles ADD COLUMN name_en TEXT;"),
 ]
 
 

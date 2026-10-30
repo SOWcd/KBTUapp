@@ -769,13 +769,13 @@ def memo_sign(org: str, pos: dict[str, str], name: str, name_en: str, phone: str
                                            f"{name_en if lang == 'en' else name}\n{tel}" for lang in ("kk", "ru", "en"))
 
 
-def memo_pos(level: str, title: str | None) -> dict[str, str]:
+def memo_pos(level: str, title: str | None, kk: str | None = None, en: str | None = None) -> dict[str, str]:
     """The sender's position in kk, ru, en: a club role whose name has a known word (secretary first), else the role's
     name as typed in all three, else the level's."""
     if title:
         low = title.lower()
         hit = next((k for k, words in MEMO2_POS_WORDS.items() if any(w in low for w in words)), None)
-        return dict(MEMO2_POS[hit]) if hit else {"kk": title, "ru": title, "en": title}
+        return dict(MEMO2_POS[hit]) if hit else {"kk": kk or title, "ru": title, "en": en or title}
     return dict(MEMO2_POS.get(level, MEMO2_POS["member"]))
 
 

@@ -16,7 +16,7 @@
   import { untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { byRank, canGive, canManage, isAbove, may, RANK, roleName, ROLE_NAME, withNick } from '../../lib/perms';
+  import { byRank, canGive, canManage, isAbove, may, RANK, inLang, roleName, ROLE_NAME, titleOf, withNick } from '../../lib/perms';
   import { haptic } from '../../lib/tg';
   import { shareInvite } from '../../lib/invite';
   import LinkIcon from '@lucide/svelte/icons/link';
@@ -94,7 +94,7 @@
   const give = (x: TeamMember, role: OrgRole) =>
     run(() => api.updateMember(org(), x.person.id, { role, roleId: null }), t('team.roleSet', { name: x.person.name, role: ROLE_NAME[role] }), 'raising_hands_3d_default');
   const giveOwn = (x: TeamMember, r: ClubRole) =>
-    run(() => api.updateMember(org(), x.person.id, { roleId: r.id }), t('team.roleSet', { name: x.person.name, role: r.name }), 'raising_hands_3d_default');
+    run(() => api.updateMember(org(), x.person.id, { roleId: r.id }), t('team.roleSet', { name: x.person.name, role: inLang(r.name, r.nameKk, r.nameEn) }), 'raising_hands_3d_default');
   const probation = (x: TeamMember, on: boolean) =>
     run(() => api.updateMember(org(), x.person.id, { probation: on }), on ? t('team.probationSet', { name: x.person.name }) : t('team.probationPassed', { name: x.person.name }),
       on ? 'sparkles_3d' : 'party_popper_3d');
@@ -218,7 +218,7 @@
                   </span>
                 {/if}
               </span>
-              <span class="rl" class:top={x.role !== 'member' && !x.title} class:own={!!x.title} style={x.titleColor ? `--c:${x.titleColor}` : undefined}>{roleName(x.role, x.title)}</span>
+              <span class="rl" class:top={x.role !== 'member' && !x.title} class:own={!!x.title} style={x.titleColor ? `--c:${x.titleColor}` : undefined}>{roleName(x.role, titleOf(x))}</span>
             </button>
             {#if open === x.person.id}
               <div class="acts">
@@ -226,7 +226,7 @@
                   {@render deptRow(x)}
                   {#if ownLevel.length}
                     <span class="t-cap">{t('team.roleLabel')}</span>
-                    <div class="ar">{#each ownLevel as r (r.id)}<button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{r.name}</button>{/each}</div>
+                    <div class="ar">{#each ownLevel as r (r.id)}<button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{inLang(r.name, r.nameKk, r.nameEn)}</button>{/each}</div>
                   {/if}
                 {:else}
                   {@render deptRow(x)}
@@ -237,7 +237,7 @@
                       <!-- Member, or one of the club's roles, each its toggles (no levels by name); only rights I have -->
                       <button class="pill" class:on={x.role === 'member' && !x.title} disabled={busy || (x.role === 'member' && !x.title)} onclick={() => give(x, 'member')}>{ROLE_NAME.member}</button>
                       {#each (setup?.roles ?? []).filter((r) => canGive(m.role).includes(r.level) && r.rights.every((k) => may(m, k))) as r (r.id)}
-                        <button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{r.name}</button>
+                        <button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{inLang(r.name, r.nameKk, r.nameEn)}</button>
                       {/each}
                       <button class="pill add" onclick={() => sheets.teamSetup(m.org.id, refresh)}>{t('ts.newRole')}</button>
                     </div>

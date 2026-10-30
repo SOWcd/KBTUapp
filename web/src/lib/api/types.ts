@@ -133,6 +133,7 @@ export interface Org extends OrgRef {
   subscribed: boolean;
   myRole: OrgRole | null;
   myTitle?: string | null;      // the club's own name for my role (§2b)
+  myTitleKk?: string | null; myTitleEn?: string | null; // and in Kazakh, English (perms.inLang)
   myRights?: Right[];           // what I may do in it (§2)
   canBroadcast: boolean;
   canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
@@ -145,7 +146,7 @@ export interface OrgPatch { name?: string; short?: string; emoji?: string; cover
 /** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
  *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */
 /** Someone in a club as anyone sees them: name and role, never the @username (api.team is the club's own) */
-export interface Member { person: PersonRef; role: OrgRole; title: string | null }
+export interface Member { person: PersonRef; role: OrgRole; title: string | null; titleKk?: string | null; titleEn?: string | null }
 
 export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
 /** at the door (Member+): the real short name beside a nick */
@@ -180,7 +181,7 @@ export interface StudentProfile {
 /** A club role's rights (SPEC §2): door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile';
-export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; rights?: Right[]; oversee?: boolean }  // rights, oversee (DMP staff there): in my own memberships
+export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean }  // rights, oversee (DMP staff there): in my own memberships
 
 export interface Me {
   id: Id;
@@ -422,7 +423,7 @@ export interface DoorGuest { id: Id; name: string; at: Ts; linked: boolean; undo
 export interface TeamMember {
   person: PersonRef; fullName: string; username: string | null; role: OrgRole; joinedAt: Ts;
   quiet?: boolean;              // Vice+: 60 days without a check-in
-  roleId?: Id | null; title?: string | null; titleColor?: string | null; // the club's own role (§2b)
+  roleId?: Id | null; title?: string | null; titleKk?: string | null; titleEn?: string | null; titleColor?: string | null; // the club's own role (§2b)
   tags?: Id[];                  // the club's tags on them
   dept?: Id | null;             // their department: one of those tags marked department (PLAN 47)
   probation?: boolean; // for the club's Head+ and the person
@@ -431,7 +432,7 @@ export interface TeamMember {
 
 /** Team 2.0 (§2b): the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */
 export type ClubLevel = 'member' | 'head' | 'vice';
-export interface ClubRole { id: Id; name: string; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
+export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn?: string | null; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
 export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null; ban: boolean; note: string; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }

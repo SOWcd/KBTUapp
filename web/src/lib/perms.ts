@@ -1,5 +1,6 @@
 // The rank rule from SPEC §2, the UI's copy: it hides what you can't do; the server enforces it (logic.py).
 import type { ClubLevel, OrgRole, Right } from './api/types';
+import { i18n } from './i18n/index.svelte';
 
 export const RANK: Record<OrgRole, number> = { member: 1, head: 2, vice: 3, president: 4 };
 
@@ -28,6 +29,10 @@ export const canGive = (mine: OrgRole): OrgRole[] => (['vice', 'head', 'member']
 
 /** The club's own name for someone's role (§2b), else the level's. */
 export const roleName = (role: OrgRole, title?: string | null): string => title || ROLE_NAME[role];
+/** A club role's name in the app's language: the club may give it in Kazakh and English too, else its own name. */
+export const inLang = <T extends string | null | undefined>(name: T, kk?: string | null, en?: string | null): string | T =>
+  (i18n.lang === 'kk' ? kk : i18n.lang === 'en' ? en : null) || name;
+export const titleOf = (x: { title?: string | null; titleKk?: string | null; titleEn?: string | null }) => inLang(x.title, x.titleKk, x.titleEn);
 /** an organizer's line: the real name, the nick beside it */
 export const withNick = (real: string, p: { nick?: string | null }): string => (p.nick ? `${real} · ${p.nick}` : real);
 

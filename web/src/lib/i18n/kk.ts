@@ -209,6 +209,8 @@ const kk: Dict = {
   'ts.newRole': "Жаңа рөл",
   'ts.newTag': "Жаңа тег",
   'ts.rolePh': "Атауы, мысалы Manager",
+  'ts.roleKk': "Қазақша",
+  'ts.roleEn': "English",
   'ts.tagPh': "Атауы, мысалы SMM",
   'ts.level': "Не істей алады",
   'ts.locked': "Сұрларын беру мүмкін емес: олар сенің өзіңде жоқ немесе сенің деңгейіңде",

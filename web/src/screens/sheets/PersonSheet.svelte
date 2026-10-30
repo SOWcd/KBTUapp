@@ -1,7 +1,7 @@
 <script lang="ts">
   // The universal profile card (SPEC §4.12): the same sheet from any avatar or name in the app, with the same
   // hero as Me. Shows only what the viewer may see (§3) — the server filters.
-  import { roleName } from '../../lib/perms';
+  import { roleName, titleOf } from '../../lib/perms';
   import { achName, tierName } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
   import Hero from '../profile/Hero.svelte';
@@ -160,7 +160,7 @@
       <h3 class="sec">{t('person.clubs')}</h3>
       <div class="clubs">
         {#each p.clubs as m (m.org.id)}
-          <span class="club"><OrgLogo org={m.org} size={20} /><b>{nameOf(m.org)}</b>{#if m.role}<i>{roleName(m.role, m.title)}</i>{/if}</span>
+          <span class="club"><OrgLogo org={m.org} size={20} /><b>{nameOf(m.org)}</b>{#if m.role}<i>{roleName(m.role, titleOf(m))}</i>{/if}</span>
         {/each}
       </div>
     {/if}

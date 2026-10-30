@@ -2498,6 +2498,23 @@ def test_team_two(env):
     assert (ann["role"], ann["title"], ann["titleColor"]) == ("head", "SMM lead", "#FF4FA3")
     assert c.get("/api/me", headers=tma(10)).json()["memberships"][0]["title"] == "SMM lead"
     assert c.get("/api/orgs/1", headers=tma(10)).json()["myTitle"] == "SMM lead"
+    # its name in Kazakh and English: everywhere the title goes; empty or missing: none, and the app shows `name`
+    kk = "SMM \u0436\u0435\u0442\u0435\u043a\u0448\u0456\u0441\u0456"
+    assert c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": "x" * 25}).status_code == 400
+    role = next(r for r in c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": f" {kk} ", "nameEn": "SMM  lead EN"}).json()["roles"] if r["id"] == rid)
+    assert (role["name"], role["nameKk"], role["nameEn"]) == ("SMM lead", kk, "SMM lead EN")
+    titles = lambda o, k="title": (o[k], o[k + "Kk"], o[k + "En"])  # noqa: E731
+    assert titles(member(11, 10)) == titles(c.get("/api/me", headers=tma(10)).json()["memberships"][0]) == ("SMM lead", kk, "SMM lead EN")
+    assert titles(c.get("/api/orgs/1", headers=tma(10)).json(), "myTitle") == ("SMM lead", kk, "SMM lead EN")
+    assert titles(c.get(f"/api/users/{uid[10]}", headers=tma(11)).json()["clubs"][0]) == ("SMM lead", kk, "SMM lead EN")
+    assert titles(next(m for m in c.get("/api/orgs/1/people", headers=tma(11)).json() if m["person"]["id"] == uid[10])) == ("SMM lead", kk, "SMM lead EN")
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameEn": ""})  # an older app's edit (no nameKk) keeps it
+    assert titles(member(11, 10)) == ("SMM lead", kk, None)
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": None})
+    assert titles(member(11, 10)) == ("SMM lead", None, None)
+    # the memo signs with them; a known word still wins
+    assert texts.memo_pos("head", "SMM lead", kk, None) == {"kk": kk, "ru": "SMM lead", "en": "SMM lead"}
+    assert texts.memo_pos("head", "Head of SMM", kk, "x") == texts.memo_pos("head", "Head of SMM")
     assert c.patch(f"/api/orgs/1/roles/{treasurer}", headers=tma(21), json={"name": "Cash", "color": "#2FBF71", "level": "head"}).status_code == 403
     c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**smm, "level": "member"})                # its people move with it
     assert member(20, 10)["role"] == "member"

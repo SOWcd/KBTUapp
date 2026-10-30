@@ -26,7 +26,7 @@
   import { data, toggleJoin, toggleSub } from '../../lib/state/data.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { roleName } from '../../lib/perms';
+  import { inLang, roleName, titleOf } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { social } from '../../lib/social';
@@ -81,7 +81,7 @@
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
     </div>
 
-    {#if o.myRole}<p class="role">{t('club.myRole', { role: roleName(o.myRole, o.myTitle) })}</p>{/if}
+    {#if o.myRole}<p class="role">{t('club.myRole', { role: roleName(o.myRole, inLang(o.myTitle, o.myTitleKk, o.myTitleEn)) })}</p>{/if}
     {#if o.description}<p class="t-body about selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
       {#if translated(o, 'description')}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}{/if}
     {#if o.round && !o.myRole}<p class="rnd">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</p>
@@ -137,7 +137,7 @@
         {#each leaders as m (m.person.id)}
           <button class="pst" onclick={() => sheets.person(m.person.id)}>
             <Avatar person={m.person} size={44} tappable={false} />
-            <span><b class="ellipsis">{m.person.name}</b><small>{roleName(m.role, m.title)}</small></span>
+            <span><b class="ellipsis">{m.person.name}</b><small>{roleName(m.role, titleOf(m))}</small></span>
           </button>
         {/each}
         {#if (fetched?.members ?? o.members) > leaders.length && (!o.membersHidden || o.myRole)}

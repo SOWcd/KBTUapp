@@ -261,7 +261,7 @@ export interface Api {
   transfer(org: Id, user: Id): Promise<TeamMember[]>;
   // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans
   teamSetup(org: Id): Promise<TeamSetup>;
-  saveRole(org: Id, input: { name: string; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup>;  // conflict/'taken'
+  saveRole(org: Id, input: { name: string; nameKk?: string; nameEn?: string; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup>;  // conflict/'taken'
   deleteRole(org: Id, id: Id): Promise<TeamSetup>;
   saveTag(org: Id, input: { name: string; color: string; department?: boolean }, id?: Id): Promise<TeamSetup>;
   deleteTag(org: Id, id: Id): Promise<TeamSetup>;

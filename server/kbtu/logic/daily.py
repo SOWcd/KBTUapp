@@ -48,11 +48,11 @@ def _memo_sender(con, v: Viewer, oid: int) -> dict:
     """Who signs the memo: the sender's "First Last" (kk, ru), in Latin for en (passport style; fixed once by hand), the
     position in three languages from the club role (texts.memo_pos), the portal's phone; `memo_sign` keeps the fixes."""
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
-    m = one(con, "SELECT m.role, m.memo_sign, r.name FROM org_members m LEFT JOIN org_roles r ON r.id = m.role_id WHERE m.org_id = ? AND m.user_id = ?", oid, v.id)
+    m = one(con, "SELECT m.role, m.memo_sign, r.name, r.name_kk, r.name_en FROM org_members m LEFT JOIN org_roles r ON r.id = m.role_id WHERE m.org_id = ? AND m.user_id = ?", oid, v.id)
     fixed = json.loads(m["memo_sign"]) if m and m["memo_sign"] else {}
     name = f"{s['first_name']} {s['last_name']}" if s else ""
     lat = " ".join(w.capitalize() for w in "".join(receipt._LAT.get(c, c) for c in name.lower()).split())
-    pos = texts.memo_pos(m["role"] if m else "member", m["name"] if m else None)
+    pos = texts.memo_pos(m["role"] if m else "member", m["name"] if m else None, m["name_kk"] if m else None, m["name_en"] if m else None)
     return {"name": name, "nameEn": fixed.get("nameEn") or lat, "phone": texts.phone_line(s["phone"]) if s else None,
             **{k: fixed.get(k) or pos[k] for k in ("kk", "ru", "en")}, "fixed": bool(fixed)}
 

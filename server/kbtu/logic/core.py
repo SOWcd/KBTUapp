@@ -46,6 +46,15 @@ class Viewer:
     student: bool               # signed in with KBTU (only students act, §2)
 
 
+def titled(r, key: str = "title") -> dict:
+    """A club role's name and its Kazakh and English ones (the app picks by its language, roleName), from a row
+    with `{key}`, `{key}_kk`, `{key}_en`."""
+    return {key: r[key], f"{key}Kk": r[f"{key}_kk"], f"{key}En": r[f"{key}_en"]}
+
+
+TITLES = "t.name AS title, t.name_kk AS title_kk, t.name_en AS title_en"
+
+
 def now() -> int:
     return int(time.time())
 

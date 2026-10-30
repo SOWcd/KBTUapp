@@ -29,7 +29,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
     subs, members = count("subscriptions"), count("org_members")
     upcoming = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL
         AND starts_at > ? GROUP BY org_id""", *ids, core.now()))
-    mine = {r["org_id"]: r for r in rows(con, f"""SELECT m.org_id, m.role, t.name AS title, t.rights FROM org_members m
+    mine = {r["org_id"]: r for r in rows(con, f"""SELECT m.org_id, m.role, {core.TITLES}, t.rights FROM org_members m
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND m.org_id IN ({q})""", v.id, *ids)} if v.student else {}
     subscribed = {r[0] for r in rows(con, f"SELECT org_id FROM subscriptions WHERE user_id = ? AND org_id IN ({q})", v.id, *ids)} if v.student else set()
     asked = {r["org_id"]: r for r in rows(con, f"SELECT org_id, status, decided_at FROM join_requests WHERE user_id = ? AND org_id IN ({q}) ORDER BY id",
@@ -47,7 +47,7 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "myRequest": _request_state(asked.get(o["id"])),
         "subscribed": o["id"] in subscribed,
         "myRole": mine[o["id"]]["role"] if o["id"] in mine else None, "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
-        "myTitle": mine[o["id"]]["title"] if o["id"] in mine else None,
+        **({"myTitle": mine[o["id"]]["title"], "myTitleKk": mine[o["id"]]["title_kk"], "myTitleEn": mine[o["id"]]["title_en"]} if o["id"] in mine else {"myTitle": None}),
         "myRights": _ordered(_rights_from(mine[o["id"]]["role"], mine[o["id"]]["rights"])) if o["id"] in mine else [],
     } for o in found]
 
@@ -65,9 +65,9 @@ def org(con, v: Viewer, oid: int) -> dict:
 
 
 def _people(con, oid: int, where: str = "") -> list[dict]:
-    found = rows(con, f"""SELECT {PERSON_COLS}, m.role, t.name AS title FROM org_members m JOIN users u ON u.id = m.user_id
+    found = rows(con, f"""SELECT {PERSON_COLS}, m.role, {core.TITLES} FROM org_members m JOIN users u ON u.id = m.user_id
         JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ? {where}""", oid)
-    return sorted(({"person": person_ref(p), "role": p["role"], "title": p["title"]} for p in found),
+    return sorted(({"person": person_ref(p), "role": p["role"], **core.titled(p)} for p in found),
                   key=lambda m: (-RANK[m["role"]], m["person"]["name"]))
 
 

@@ -2,7 +2,7 @@
 // person sheet.
 import type { Achievement, Badge, Id, OrgRef, PersonCard } from './api';
 import { t, tn } from './i18n/index.svelte';
-import { RANK, roleName } from './perms';
+import { RANK, roleName, titleOf } from './perms';
 import { dayMonth } from './time';
 import { data } from './state/data.svelte';
 import { nameOf, schoolShort, shortOf } from './short';
@@ -75,7 +75,7 @@ export function hero(p: PersonCard): HeroData {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
     name: p.name,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
-    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, top.title)} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
+    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, titleOf(top))} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
     line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95
     bio: p.bio,
     no: p.no == null ? '—' : String(p.no).padStart(5, '0'),

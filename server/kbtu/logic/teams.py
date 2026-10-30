@@ -24,7 +24,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
         raise ApiError("forbidden")
     r = rights_of(con, v.id, oid)
     vice, head = "team" in r, "people" in r
-    found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, t.name AS title, t.color AS title_color,
+    found = rows(con, f"""SELECT {PERSON_COLS}, u.tg_username, m.role, m.joined_at, m.role_id, m.probation, {core.TITLES}, t.color AS title_color,
         (SELECT MAX(r.checked_in_at) FROM registrations r JOIN events e ON e.id = r.event_id WHERE e.org_id = m.org_id AND r.user_id = u.id) AS seen,
         (SELECT group_concat(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id) AS tags,
         (SELECT MIN(g.id) FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department) AS dept,
@@ -33,7 +33,7 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
         WHERE m.org_id = ?""", core.now() - QUIET_FOR, oid)
     return sorted(({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "username": p["tg_username"],
-                    "role": p["role"], "roleId": p["role_id"], "title": p["title"], "titleColor": p["title_color"],
+                    "role": p["role"], "roleId": p["role_id"], **core.titled(p), "titleColor": p["title_color"],
                     "tags": sorted(int(x) for x in (p["tags"] or "").split(",") if x), "dept": p["dept"], "joinedAt": p["joined_at"],
                     "quiet": vice and (p["seen"] or p["joined_at"]) < core.now() - QUIET_FOR,
                     **({"brought": p["brought"]} if head else {}),  # Head+: who came by their link in these 60 days (a member's KPI)
@@ -121,6 +121,14 @@ def _named(body: dict) -> tuple[str, str]:
     return name, color
 
 
+def _also(body: dict, key: str) -> str | None:
+    """A role's optional name in another language: the same rule as the name; empty: none (the name shows)."""
+    x = " ".join(str(body.get(key) or "").split())
+    if len(x) > 24:
+        raise ApiError("bad_input")
+    return x or None
+
+
 def team_setup(con, v: Viewer, oid: int) -> dict:
     """What Team needs besides the roster: the club's roles and tags (the whole team sees them), and for Vice+ the open
     removal requests (each says whether I outrank the person and so may decide) and the bans."""
@@ -128,7 +136,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
     if not mine:
         raise ApiError("forbidden")
     out: dict = {
-        "roles": [{"id": r["id"], "name": r["name"], "color": r["color"], "level": r["level"], "rights": _ordered(_rights_from(r["level"], r["rights"])),
+        "roles": [{"id": r["id"], **core.titled(r, "name"), "color": r["color"], "level": r["level"], "rights": _ordered(_rights_from(r["level"], r["rights"])),
                    "count": r["n"], "fixed": bool(r["fixed"])} for r in rows(con, """SELECT r.*,
             (SELECT COUNT(*) FROM org_members m WHERE m.role_id = r.id) AS n FROM org_roles r WHERE r.org_id = ?
             ORDER BY r.fixed DESC, r.fixed AND r.level = 'head', r.id""", oid)],
@@ -163,6 +171,7 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
     if not can(con, v, oid, "team"):
         raise ApiError("forbidden")
     name, color = _named(body)
+    kk, en = (_also(body, k) for k in ("nameKk", "nameEn"))
     rights = body["rights"] if "rights" in body else list(LEVEL_RIGHTS[body["level"]]) if body.get("level") in ("member", "head", "vice") else None
     if not isinstance(rights, list) or any(r not in RIGHTS for r in rights):
         raise ApiError("bad_input")
@@ -180,14 +189,17 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
                 raise ApiError("not_found")
             if RANK[r["level"]] >= RANK[mine] or r["fixed"] and RANK[level] > RANK[r["level"]]:
                 raise ApiError("forbidden")
+            kk = kk if "nameKk" in body else r["name_kk"]  # an older app's edit keeps them
+            en = en if "nameEn" in body else r["name_en"]
             if r["fixed"]:  # an official role keeps its name and level; its rights below the level may be tuned
-                name, level = r["name"], r["level"]
+                name, level, kk, en = r["name"], r["level"], r["name_kk"], r["name_en"]
         try:
             if rid is None:
-                con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                            (oid, name, color, level, ",".join(rights), core.now()))
+                con.execute("INSERT INTO org_roles (org_id, name, name_kk, name_en, color, level, rights, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (oid, name, kk, en, color, level, ",".join(rights), core.now()))
             else:
-                con.execute("UPDATE org_roles SET name = ?, color = ?, level = ?, rights = ? WHERE id = ?", (name, color, level, ",".join(rights), rid))
+                con.execute("UPDATE org_roles SET name = ?, name_kk = ?, name_en = ?, color = ?, level = ?, rights = ? WHERE id = ?",
+                            (name, kk, en, color, level, ",".join(rights), rid))
                 con.execute("UPDATE org_members SET role = ? WHERE org_id = ? AND role_id = ?", (level, oid, rid))
         except sqlite3.IntegrityError:
             raise ApiError("conflict", "taken") from None

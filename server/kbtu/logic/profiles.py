@@ -356,8 +356,8 @@ def person(con, v: Viewer, uid: int) -> dict:
         "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
         "attended": len(attended(con, uid)),
         # the role shows only to the club's own team: outside, just the club
-        "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, "title": m["title"] if m["mine"] else None} for m in rows(con, """
-            SELECT m.role, t.name AS title, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.* FROM org_members m
+        "clubs": [{"org": org_ref(con, m), "role": m["role"] if m["mine"] else None, **(core.titled(m) if m["mine"] else {"title": None})} for m in rows(con, f"""
+            SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.* FROM org_members m
             JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ?""", v.id, uid) if close],
         # where they were before (org_history, written by triggers): a role held at least a day, the club still shown;
         # the role by the same rule as above. Newest first

@@ -6,7 +6,7 @@
   import { api, type Id, type Member } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { roleName } from '../../lib/perms';
+  import { roleName, titleOf } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
 
   let { overlay, org, title }: { overlay: Overlay; org: Id; title: string } = $props();
@@ -24,7 +24,7 @@
         <button class="row" onclick={() => sheets.person(m.person.id)}>
           <Avatar person={m.person} size={40} tappable={false} />
           <b class="ellipsis">{m.person.name}</b>
-          {#if m.role !== 'member' || m.title}<span class="t-foot">{roleName(m.role, m.title)}</span>{/if}
+          {#if m.role !== 'member' || m.title}<span class="t-foot">{roleName(m.role, titleOf(m))}</span>{/if}
         </button>
       {/each}
     </div>

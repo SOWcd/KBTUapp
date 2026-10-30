@@ -209,6 +209,8 @@ const en: Dict = {
   'ts.newRole': "New role",
   'ts.newTag': "New tag",
   'ts.rolePh': "A name, e.g. Manager",
+  'ts.roleKk': "Қазақша",
+  'ts.roleEn': "English",
   'ts.tagPh': "A name, e.g. SMM",
   'ts.level': "What they can do",
   'ts.locked': "Greyed out ones can't be given: you don't have them yourself, or they're at your own level",

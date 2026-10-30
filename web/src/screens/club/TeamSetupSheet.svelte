@@ -14,7 +14,7 @@
   import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
-  import { isAbove, may, RANK, RIGHTS, ROLE_NAME, TEAM_COLORS, withNick } from '../../lib/perms';
+  import { inLang, isAbove, may, RANK, RIGHTS, ROLE_NAME, TEAM_COLORS, withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -36,13 +36,15 @@
   let kind = $state<'role' | 'tag' | null>(null);
   let fid = $state<Id | null>(null);
   let fname = $state('');
+  let fkk = $state(''); // the role's name in Kazakh and English: optional, else fname shows
+  let fen = $state('');
   let fcolor = $state(TEAM_COLORS[0]);
   let frights = $state<Right[]>([]);
   let ffixed = $state<ClubLevel | null>(null); // an official role: its name and level stay, rights up to the level
   let fdept = $state(false); // a tag that is a department (PLAN 47)
   let busy = $state(false);
   function edit(k: 'role' | 'tag', x?: ClubRole | ClubTag) {
-    kind = k; fid = x?.id ?? null; fname = x?.name ?? ''; fcolor = x?.color ?? TEAM_COLORS[(setup?.[k === 'role' ? 'roles' : 'tags'].length ?? 0) % TEAM_COLORS.length];
+    kind = k; fid = x?.id ?? null; fname = x?.name ?? ''; fkk = (x && 'nameKk' in x && x.nameKk) || ''; fen = (x && 'nameEn' in x && x.nameEn) || ''; fcolor = x?.color ?? TEAM_COLORS[(setup?.[k === 'role' ? 'roles' : 'tags'].length ?? 0) % TEAM_COLORS.length];
     frights = x && 'rights' in x ? [...x.rights] : ['door'];
     ffixed = x && 'fixed' in x && x.fixed ? x.level : null;
     fdept = !!(x && 'department' in x && x.department);
@@ -56,7 +58,7 @@
   async function save() {
     if (!kind || busy || !fname.trim()) return;
     busy = true;
-    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); say(phrase('say.tsSaved'), 'sparkles_3d'); }
+    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, nameKk: fkk, nameEn: fen, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); say(phrase('say.tsSaved'), 'sparkles_3d'); }
     catch (e) { oops(e); } finally { busy = false; }
   }
   async function drop() {
@@ -99,6 +101,10 @@
 {#snippet form()}
   <div class="form">
     <input bind:value={fname} disabled={!!ffixed} maxlength="24" placeholder={kind === 'role' ? t('ts.rolePh') : t('ts.tagPh')} enterkeyhint="done" />
+    {#if kind === 'role' && !ffixed}<!-- an official role's name is the app's own -->
+      <input bind:value={fkk} maxlength="24" placeholder={t('ts.roleKk')} enterkeyhint="done" lang="kk" />
+      <input bind:value={fen} maxlength="24" placeholder={t('ts.roleEn')} enterkeyhint="done" lang="en" />
+    {/if}
     <div class="colors">
       {#each TEAM_COLORS as c (c)}<button class:on={fcolor === c} style="--c:{c}" onclick={() => (fcolor = c)} aria-label={c}></button>{/each}
     </div>
@@ -146,7 +152,7 @@
         {#if kind === 'role' && fid === r.id}{@render form()}
         {:else}
           <button class="it" aria-expanded={mayEdit(r) ? undefined : peek === r.id} onclick={() => { if (mayEdit(r)) edit('role', r); else { haptic.select(); peek = peek === r.id ? null : r.id; } }}>
-            <span class="dot" style="--c:{r.color}"></span><span class="rn"><b class="ellipsis">{r.name}</b><i class="ellipsis">{summary(r)}</i></span><span class="n num">{r.count}</span></button>
+            <span class="dot" style="--c:{r.color}"></span><span class="rn"><b class="ellipsis">{inLang(r.name, r.nameKk, r.nameEn)}</b><i class="ellipsis">{summary(r)}</i></span><span class="n num">{r.count}</span></button>
           {#if peek === r.id}
             <div class="peek" transition:fold>
               {#each TOGGLES as x (x.key)}{@const on = r.rights.includes(x.key)}
