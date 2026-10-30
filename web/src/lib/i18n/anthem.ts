@@ -56,11 +56,16 @@ const PARTS: (Omit<AnthemPart, 'lines'> & { lines: string[] })[] = [
 // Each sung line's start in the recording (s), in the order sung: verse 1 (8 lines), the chorus (4), verse 2 (8), the
 // chorus (4), verse 3 (8), the chorus (4), 36 in all; [start, end] for a line with its end marked (a pause after it).
 // The creator taps and fixes them in the anthem sheet's editor (its timer) and the copied list goes here; until all 36
-// are in, the words don't follow the song. Oct 30: his first pass, slips and all (chorus 1 has a double tap, chorus 2
-// a missed line, so verse 3 on runs a line late): the editor is how he fixes them.
-export const TIMES: (number | [number, number])[] = [20.18, 24.4, 28.36, 32.19, 35.79, 39.58, 43.59, 47.76, 53.37, 57.14, 64.84, 65.62,
-  83.42, 87.24, 91.19, 95.77, 98.38, 102.27, 106.29, 112.11, 116.09, 119.65, 123.76, 142.48,
-  146.43, 150.25, 153.83, 157.54, 161.8, 165.58, 171.07, 177.34, 182.87, 186.45, 190.62, 196.87];
+// are in, the words don't follow the song.
+// the owner's taps (Oct 30) with his two slips mended by ear of the spacing: chorus 1's third line (~61.0; his 65.62
+// was a double tap) and chorus 2's last (~127.7, skipped, which shifted the rest; his last tap went); he fine-tunes
+// them in the creator's editor
+export const TIMES: (number | [number, number])[] = [20.18, 24.4, 28.36, 32.19, 35.79, 39.58, 43.59, 47.76,
+  53.37, 57.14, 61.0, 64.84,
+  83.42, 87.24, 91.19, 95.77, 98.38, 102.27, 106.29, 112.11,
+  116.09, 119.65, 123.76, 127.7,
+  142.48, 146.43, 150.25, 153.83, 157.54, 161.8, 165.58, 171.07,
+  177.34, 182.87, 186.45, 190.62];
 
 let k = 0;
 const at = (x: number | [number, number] | undefined) => (x == null ? { t: null, end: null } : Array.isArray(x) ? { t: x[0], end: x[1] } : { t: x, end: null });
