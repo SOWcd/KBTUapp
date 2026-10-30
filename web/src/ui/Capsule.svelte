@@ -54,6 +54,17 @@
     return { destroy: () => { ro.disconnect(); mo.disconnect(); } };
   }
 
+  // a new name (a tab, a page, a sheet, a word of work): it rises in out of a blur while the glass resizes, never a
+  // flat swap (owner, Oct 30: "it switches like a toggle")
+  let ttl: HTMLDivElement, said: string | null = null;
+  $effect(() => {
+    const now = title;
+    if (said && now && now !== said && ttl && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.documentElement.classList.contains('lowfx'))
+      ttl.animate([{ opacity: 0, transform: 'translateY(7px) scale(0.94)', filter: 'blur(5px)' }, { opacity: 1, transform: 'none', filter: 'none' }],
+        { duration: 380, easing: 'cubic-bezier(.2, .9, .25, 1.15)' });
+    said = now;
+  });
+
   const liveTop = $derived.by(() => {
     if (!live) return '';
     const left = live.at - now;
@@ -72,7 +83,7 @@
     {/if}
   </button>
   <!-- the title of the view on top, else the tab's -->
-  <div class="layer ttl" class:spin class:mk={mode === 'mark'} class:off={mode !== 'title' && mode !== 'mark'}>{#if icon && (title || mode === 'mark')}{@const Icon = icon}<Icon size={mode === 'mark' ? 18 : 16} strokeWidth={2.4} />{/if}<span class="ellipsis" use:fit>{title ?? ''}</span></div>
+  <div class="layer ttl" bind:this={ttl} class:spin class:mk={mode === 'mark'} class:off={mode !== 'title' && mode !== 'mark'}>{#if icon && (title || mode === 'mark')}{@const Icon = icon}<Icon size={mode === 'mark' ? 18 : 16} strokeWidth={2.4} />{/if}<span class="ellipsis" use:fit>{title ?? ''}</span></div>
 </div>
 
 <style>
