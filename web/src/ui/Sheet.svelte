@@ -91,7 +91,7 @@
     if (full || e.touches.length !== 1) return;
     const inBody = body.contains(e.target as Node);
     if (inBody && body.scrollTop > 0) return; // the list scrolls first
-    if ((e.target as Element).closest?.('textarea')) return; // a long text scrolls itself; dragging it closed the memo
+    if ((e.target as Element).closest?.('textarea, [role=slider]')) return; // a long text scrolls itself (dragging it closed the memo); a slider drags its own way
     startX = e.touches[0].clientX; startY = lastY = e.touches[0].clientY; lastT = performance.now(); v = 0;
     dragging = true; decided = false; currentY = 0;
   }

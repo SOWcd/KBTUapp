@@ -2138,6 +2138,17 @@ const ru = {
   'event.goFree': "Иду · бесплатно",
   'album.added': { one: "Добавлено {n} фото", few: "Добавлено {n} фото", many: "Добавлено {n} фото", other: "Добавлено {n} фото" },
   'rate.count': { one: "{n} оценка", few: "{n} оценки", many: "{n} оценок", other: "{n} оценки" },
+  'anthem.title': "Гимн КБТУ",
+  'anthem.learn': "Выучи к посвящению 31 октября",
+  'anthem.chorus': "Припев",
+  'anthem.play': "Слушать",
+  'anthem.pause': "Пауза",
+  'anthem.repeat': "Повтор",
+  'anthem.timing': "Разметка строк",
+  'anthem.tap': "Тап",
+  'anthem.undo': "Отменить",
+  'anthem.copy': "Скопировать",
+  'anthem.copied': "Скопировано",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };

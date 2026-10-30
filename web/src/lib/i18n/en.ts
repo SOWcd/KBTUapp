@@ -2119,6 +2119,17 @@ const en: Dict = {
   'event.goFree': "Going · free",
   'album.added': { one: "{n} photo added", other: "{n} photos added" },
   'rate.count': { one: "{n} rating", other: "{n} ratings" },
+  'anthem.title': "KBTU anthem",
+  'anthem.learn': "Learn it for the Oct 31 initiation",
+  'anthem.chorus': "Chorus",
+  'anthem.play': "Play",
+  'anthem.pause': "Pause",
+  'anthem.repeat': "Repeat",
+  'anthem.timing': "Line timing",
+  'anthem.tap': "Tap",
+  'anthem.undo': "Undo",
+  'anthem.copy': "Copy",
+  'anthem.copied': "Copied",
 };
 
 export default en;

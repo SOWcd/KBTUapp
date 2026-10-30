@@ -22,6 +22,8 @@
   import { sheets } from '../../lib/state/sheets';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Play from '@lucide/svelte/icons/play';
+  import Music from '@lucide/svelte/icons/music';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { classesOn, classesLeft } from '../../lib/classes';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -46,6 +48,7 @@
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
 
   const featured = $derived(data.posts.find((p) => p.featured));
+  const ANTHEM_UNTIL = at(2026, 10, 1); // the initiation is on Oct 31: its card goes at midnight after it, Almaty time
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard });
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
@@ -97,6 +100,14 @@
   </header>
   <StoryRow />
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
+  {#if now < ANTHEM_UNTIL}
+    <!-- the anthem to learn for the initiation, on top: gone by itself once Oct 31 is over -->
+    <button class="addw anth surface press" onclick={() => sheets.anthem()}>
+      <span class="tile"><Music size={20} /></span>
+      <span class="tx"><b>{t('anthem.title')}</b><small>{t('anthem.learn')}</small></span>
+      <ChevronRight size={18} />
+    </button>
+  {/if}
 
   {#if cards.length}
     <div class="stack" bind:this={stack} onscroll={onStack}>
@@ -326,6 +337,11 @@
   .addw span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .addw b { font: 680 var(--fs-body)/1.2 var(--font-text); }
   .addw small { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  /* the anthem's card: a flat tile, the words, a chevron at the row's end */
+  .anth { margin: 0 0 14px; color: var(--text-3); }
+  .anth .tx { flex: 1; }
+  .anth b { color: var(--text); }
+  .anth .tile { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: #fff; }
   .ev-act button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: var(--r-full);
     background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); color: #fff; font: 650 var(--fs-body)/1 var(--font-text); }
   .ev-act button:active { transform: scale(0.96); }

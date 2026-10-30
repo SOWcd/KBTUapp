@@ -129,6 +129,7 @@
   sheets.composer = (org, post) => lazy(() => import('./screens/club/PostComposer.svelte'), { org, post });
   sheets.createClub = () => lazy(() => import('./screens/sheets/CreateClubSheet.svelte'), {});
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
+  sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
@@ -265,6 +266,7 @@
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }   // the bot: "keep my account"
+    if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer

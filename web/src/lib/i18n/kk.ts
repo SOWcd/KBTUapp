@@ -2119,6 +2119,17 @@ const kk: Dict = {
   'event.goFree': "Барамын · тегін",
   'album.added': { one: "{n} фото қосылды", other: "{n} фото қосылды" },
   'rate.count': { one: "{n} баға", other: "{n} баға" },
+  'anthem.title': "ҚБТУ әнұраны",
+  'anthem.learn': "31 қазандағы студенттікке қабылдауға жаттап ал",
+  'anthem.chorus': "Қайырмасы",
+  'anthem.play': "Тыңдау",
+  'anthem.pause': "Кідірту",
+  'anthem.repeat': "Қайталау",
+  'anthem.timing': "Жолдарды белгілеу",
+  'anthem.tap': "Тап",
+  'anthem.undo': "Болдырмау",
+  'anthem.copy': "Көшіру",
+  'anthem.copied': "Көшірілді",
 };
 
 export default kk;

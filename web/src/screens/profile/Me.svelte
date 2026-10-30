@@ -2,7 +2,7 @@
   // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), then my friends as one row (the Friends sheet: requests,
   // everyone, Add; my tickets and saved events are on Afisha's list, not repeated here), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
-  // under it (one row, a small button to their own booking page), and the app's card (AppCard; it stays
+  // under it (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
   // on Me, not Settings).
   // Top right: the admin panel's shield, the pencil (my look), the gear (Settings, full screen; a guest's too: the language).
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -12,6 +12,7 @@
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import Music from '@lucide/svelte/icons/music';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack } from 'svelte';
@@ -133,6 +134,8 @@
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
     <div class="r psy"><span class="pi"><MessageCircleHeart size={18} /></span><span class="lb">{t('psy.kbtu')}</span>
       <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
+    <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
+    <button class="r psy" onclick={() => sheets.anthem()}><span class="pi"><Music size={18} /></span><span class="lb">{t('anthem.title')}</span><ChevronRight size={18} /></button>
   </div>
 
   {#if me?.referrals}<Invite r={me.referrals} />{/if}
