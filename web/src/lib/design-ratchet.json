@@ -2,586 +2,703 @@
  "App.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 3
+  "hex": 3,
+  "mix": 2
  },
  "screens/Screen.svelte": {
   "font": 7,
   "radius": 2,
-  "hex": 3
+  "hex": 3,
+  "mix": 4
  },
  "screens/admin/AdminAi.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/admin/AdminAudit.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/admin/AdminChats.svelte": {
   "font": 5,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/admin/AdminClubs.svelte": {
   "font": 8,
   "radius": 2,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "screens/admin/AdminSheet.svelte": {
   "font": 25,
   "radius": 6,
-  "hex": 4
+  "hex": 4,
+  "mix": 4
  },
  "screens/admin/AdminTeam.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 2
  },
  "screens/admin/GiveSheet.svelte": {
   "font": 6,
   "radius": 1,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "screens/admin/MapFlaws.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/afisha/Clubs.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "screens/afisha/Feed.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 10
+  "hex": 10,
+  "mix": 0
  },
  "screens/afisha/List.svelte": {
   "font": 12,
   "radius": 6,
-  "hex": 14
+  "hex": 14,
+  "mix": 3
  },
  "screens/afisha/News.svelte": {
   "font": 12,
   "radius": 1,
-  "hex": 5
+  "hex": 5,
+  "mix": 1
  },
  "screens/afisha/StoryRow.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/assistant/Assistant.svelte": {
   "font": 4,
   "radius": 2,
-  "hex": 2
+  "hex": 2,
+  "mix": 2
  },
  "screens/club/Attendees.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/ClubEditSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/CoverFocus.svelte": {
   "font": 2,
   "radius": 5,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/club/EventEditor.svelte": {
   "font": 11,
   "radius": 6,
-  "hex": 18
+  "hex": 18,
+  "mix": 1
  },
  "screens/club/EventManage.svelte": {
   "font": 9,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/JoinInbox.svelte": {
   "font": 3,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/MemoAsks.svelte": {
   "font": 5,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/MemoItemSheet.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/MemoSheet.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/OrgChats.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/PostComposer.svelte": {
   "font": 7,
   "radius": 2,
-  "hex": 1
+  "hex": 1,
+  "mix": 1
  },
  "screens/club/ReceiptSheet.svelte": {
   "font": 4,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/RemoveSheet.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/RosterRequests.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/RoundBoard.svelte": {
   "font": 22,
   "radius": 0,
-  "hex": 3
+  "hex": 3,
+  "mix": 1
  },
  "screens/club/RoundSetup.svelte": {
   "font": 8,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/Scanner.svelte": {
   "font": 10,
   "radius": 1,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/club/ScreenSheet.svelte": {
   "font": 5,
   "radius": 1,
-  "hex": 2
+  "hex": 2,
+  "mix": 1
  },
  "screens/club/ShortLinks.svelte": {
   "font": 2,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/club/Studio.svelte": {
   "font": 6,
   "radius": 3,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "screens/club/Team.svelte": {
   "font": 8,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 3
  },
  "screens/club/TeamSetupSheet.svelte": {
   "font": 9,
   "radius": 1,
-  "hex": 2
+  "hex": 2,
+  "mix": 2
  },
  "screens/club/VolunteersSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/dmp/Registry.svelte": {
   "font": 9,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/dmp/Roster.svelte": {
   "font": 4,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/Board.svelte": {
   "font": 12,
   "radius": 3,
-  "hex": 4
+  "hex": 4,
+  "mix": 1
  },
  "screens/forum/Forum.svelte": {
   "font": 9,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/ForumMod.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/NewThread.svelte": {
   "font": 2,
   "radius": 2,
-  "hex": 0
+  "hex": 0,
+  "mix": 1
  },
  "screens/forum/PersonCards.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/SkillPicker.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/ThreadHead.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/forum/ThreadSheet.svelte": {
   "font": 13,
   "radius": 2,
-  "hex": 2
+  "hex": 2,
+  "mix": 1
  },
  "screens/forum/TopicTag.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/map/CampusMap.svelte": {
   "font": 12,
   "radius": 15,
-  "hex": 39
+  "hex": 39,
+  "mix": 2
  },
  "screens/map/MapPad.svelte": {
   "font": 13,
   "radius": 9,
-  "hex": 21
+  "hex": 21,
+  "mix": 4
  },
  "screens/map/RouteUI.svelte": {
   "font": 20,
   "radius": 15,
-  "hex": 17
+  "hex": 17,
+  "mix": 0
  },
  "screens/profile/AddFriend.svelte": {
   "font": 11,
   "radius": 3,
-  "hex": 7
+  "hex": 7,
+  "mix": 0
  },
  "screens/profile/AppCard.svelte": {
   "font": 0,
   "radius": 3,
-  "hex": 12
+  "hex": 12,
+  "mix": 3
  },
  "screens/profile/Awards.svelte": {
   "font": 13,
   "radius": 3,
-  "hex": 6
+  "hex": 6,
+  "mix": 1
  },
  "screens/profile/DeleteSheet.svelte": {
   "font": 1,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/profile/Friends.svelte": {
   "font": 6,
   "radius": 3,
-  "hex": 5
+  "hex": 5,
+  "mix": 0
  },
  "screens/profile/Hero.svelte": {
   "font": 7,
   "radius": 6,
-  "hex": 40
+  "hex": 40,
+  "mix": 0
  },
  "screens/profile/Invite.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/profile/LookSheet.svelte": {
   "font": 3,
   "radius": 6,
-  "hex": 50
+  "hex": 50,
+  "mix": 0
  },
  "screens/profile/Me.svelte": {
   "font": 6,
   "radius": 7,
-  "hex": 18
+  "hex": 18,
+  "mix": 5
  },
  "screens/profile/MyQr.svelte": {
   "font": 5,
   "radius": 6,
-  "hex": 51
+  "hex": 51,
+  "mix": 0
  },
  "screens/profile/Recent.svelte": {
   "font": 2,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/profile/Settings.svelte": {
   "font": 2,
   "radius": 0,
-  "hex": 8
+  "hex": 8,
+  "mix": 0
  },
  "screens/profile/SettingsSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/AcademicSheet.svelte": {
   "font": 4,
   "radius": 1,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/sheets/AnswersSheet.svelte": {
   "font": 2,
   "radius": 2,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/sheets/AwardSheet.svelte": {
   "font": 5,
   "radius": 2,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/ChatsSheet.svelte": {
   "font": 5,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/ClubSheet.svelte": {
   "font": 8,
   "radius": 1,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/sheets/CommentsSheet.svelte": {
   "font": 11,
   "radius": 4,
-  "hex": 1
+  "hex": 1,
+  "mix": 1
  },
  "screens/sheets/CreateClubSheet.svelte": {
   "font": 7,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/EventSheet.svelte": {
   "font": 36,
   "radius": 13,
-  "hex": 5
+  "hex": 5,
+  "mix": 0
  },
  "screens/sheets/InviteSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/InviteToSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/LoginSheet.svelte": {
   "font": 4,
   "radius": 0,
-  "hex": 6
+  "hex": 6,
+  "mix": 1
  },
  "screens/sheets/PaySheet.svelte": {
   "font": 6,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/PcSheet.svelte": {
   "font": 0,
   "radius": 1,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/sheets/PeopleSheet.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/PersonSheet.svelte": {
   "font": 7,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/PhotoViewer.svelte": {
   "font": 2,
   "radius": 0,
-  "hex": 4
+  "hex": 4,
+  "mix": 0
  },
  "screens/sheets/ReportSheet.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/RosterAsk.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "screens/sheets/RosterWelcome.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 1
  },
  "screens/sheets/RoundApply.svelte": {
   "font": 13,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "screens/sheets/ScheduleHowTo.svelte": {
   "font": 1,
   "radius": 1,
-  "hex": 1
+  "hex": 1,
+  "mix": 1
  },
  "screens/sheets/Stories.svelte": {
   "font": 9,
   "radius": 2,
-  "hex": 14
+  "hex": 14,
+  "mix": 1
  },
  "screens/sheets/TicketView.svelte": {
   "font": 9,
   "radius": 3,
-  "hex": 7
+  "hex": 7,
+  "mix": 2
  },
  "screens/sheets/Unlock.svelte": {
   "font": 6,
   "radius": 0,
-  "hex": 9
+  "hex": 9,
+  "mix": 6
  },
  "screens/sheets/WeekSheet.svelte": {
   "font": 5,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/AiBadge.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 2
  },
  "ui/Avatar.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 8
+  "hex": 8,
+  "mix": 0
  },
  "ui/Button.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 6
+  "hex": 6,
+  "mix": 0
  },
  "ui/Capsule.svelte": {
   "font": 3,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "ui/ChatAvatar.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "ui/ChatKind.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 3
+  "hex": 3,
+  "mix": 0
  },
  "ui/Chip.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "ui/ClubRow.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 1
+  "hex": 1,
+  "mix": 0
  },
  "ui/EmojiPick.svelte": {
   "font": 1,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/Founder.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 11
+  "hex": 11,
+  "mix": 0
  },
  "ui/GovMark.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/LanyardBand.svelte": {
   "font": 8,
   "radius": 0,
-  "hex": 40
+  "hex": 40,
+  "mix": 0
  },
  "ui/LanyardHolo.svelte": {
   "font": 7,
   "radius": 1,
-  "hex": 40
+  "hex": 40,
+  "mix": 0
  },
  "ui/LinksEdit.svelte": {
   "font": 3,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/LookMark.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 12
+  "hex": 12,
+  "mix": 0
  },
  "ui/Medal.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 19
+  "hex": 19,
+  "mix": 0
  },
  "ui/Nav.svelte": {
   "font": 2,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/OrgLogo.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 13
+  "hex": 13,
+  "mix": 0
  },
  "ui/OrgTag.svelte": {
   "font": 2,
   "radius": 0,
-  "hex": 4
+  "hex": 4,
+  "mix": 0
  },
  "ui/Pane.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/Pin.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 6
+  "hex": 6,
+  "mix": 0
  },
  "ui/Poster.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "ui/Qr.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 2
+  "hex": 2,
+  "mix": 0
  },
  "ui/Sheet.svelte": {
   "font": 0,
   "radius": 1,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/Toast.svelte": {
   "font": 1,
   "radius": 0,
-  "hex": 0
+  "hex": 0,
+  "mix": 0
  },
  "ui/TwoGisMark.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 5
+  "hex": 5,
+  "mix": 0
  }
 }
