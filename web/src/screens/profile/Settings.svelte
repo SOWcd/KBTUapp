@@ -21,6 +21,7 @@
   import { haptic, openLink, homeScreen, on } from '../../lib/tg';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import { fitTitle } from '../../ui/title';
 
   const me = $derived(session.me);
   const s = $derived(me?.settings);
@@ -49,7 +50,7 @@
 {/snippet}
 
 <div class="page scroll stagger settings-root">
-  <h1 class="ttl">{t('me.settings')}</h1>
+  <h1 class="ttl" use:fitTitle>{t('me.settings')}</h1>
 
   <!-- who I am, the phone's account row: my face and name; Settings opens over Profile (its gear), so a tap closes it -->
   {#if me}

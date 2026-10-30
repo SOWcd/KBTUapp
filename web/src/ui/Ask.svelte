@@ -27,7 +27,7 @@
   {#if input?.tel}<label class="field say"><input type="tel" inputmode="tel" autocomplete="tel" placeholder={input.placeholder} bind:value={written} oninput={() => (written = fmtPhone(written))} /></label>
   {:else if input}<label class="field say"><textarea bind:value={written} rows="3" maxlength={input.max} placeholder={input.placeholder}></textarea></label>{/if}
   {#snippet footer()}
-    <div class="row">
+    <div class="row btns">
       <Button kind="neutral" size="l" full onclick={() => answer(false)}>{cancel}</Button>
       <Button kind={danger ? 'danger' : 'primary'} size="l" full disabled={!!input && said.length < 2} onclick={() => answer(true)}>{ok}</Button>
     </div>
@@ -40,5 +40,4 @@
   .say textarea { width: 100%; resize: none; }
   .say input { width: 100%; }
   .row { display: flex; gap: 10px; }
-  .row :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
 </style>

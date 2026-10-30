@@ -21,10 +21,11 @@
   import { chrome } from './chrome';
   import Emoji from './Emoji.svelte';
 
-  // title: null = the live status speaks
+  // title: null = the live status speaks; neither: the capsule fades away (an empty glass pill between Telegram's buttons
+  // looked broken). mark: the icon alone (a sheet that names itself in its own header)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type Props = { live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean };
-  let { live = null, title = null, icon = null, spin = false }: Props = $props();
+  type Props = { live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean; mark?: boolean };
+  let { live = null, title = null, icon = null, spin = false, mark = false }: Props = $props();
 
   const BOOT_MS = 2550; // from the webview opening; matched to Telegram's «KBTU App» → «Close» on iPhone
   const phone = inTelegram && /^(ios|android)$/.test(tg.platform);
@@ -32,7 +33,7 @@
   const wideClose = phone && !/^(en|kk)\b/i.test(tg.user?.language_code ?? 'en');
 
   let now = $state(Date.now() / 1000);
-  const mode = $derived(title || !live ? 'title' : 'live');
+  const mode = $derived(title ? 'title' : live ? 'live' : mark && icon ? 'mark' : 'none');
 
   onMount(() => {
     const tick = setInterval(() => { if (live) now = Date.now() / 1000; }, 1000);
@@ -61,7 +62,7 @@
   });
 </script>
 
-<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} use:glass={{ bloom: true }} use:chrome>
+<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} use:glass={{ bloom: true }} use:chrome>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <!-- live status -->
   <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live?.title}>
@@ -71,7 +72,7 @@
     {/if}
   </button>
   <!-- the title of the view on top, else the tab's -->
-  <div class="layer ttl" class:spin class:off={mode !== 'title'}>{#if icon && title}{@const Icon = icon}<Icon size={16} strokeWidth={2.4} />{/if}<span class="ellipsis" use:fit>{title ?? ''}</span></div>
+  <div class="layer ttl" class:spin class:mk={mode === 'mark'} class:off={mode !== 'title' && mode !== 'mark'}>{#if icon && (title || mode === 'mark')}{@const Icon = icon}<Icon size={mode === 'mark' ? 18 : 16} strokeWidth={2.4} />{/if}<span class="ellipsis" use:fit>{title ?? ''}</span></div>
 </div>
 
 <style>
@@ -90,8 +91,13 @@
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
   /* over the Feed (chrome.ts): dark glass tinted by the slide, the dark palette past the halfway point */
   .cap:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
-  /* never gone (SPEC §8.2): over a sheet or a full-screen view it says that view's title and takes no taps */
+  /* over a sheet or a full-screen view it says that view's title and takes no taps */
   :global(html[data-sheet]) .cap { z-index: calc(var(--z-sheet) + 5); pointer-events: none; }
+  /* light theme under a sheet: clear glass over the dark scrim made its ink unreadable; solid glass there */
+  :global(html[data-theme='light'][data-sheet]) .cap > .tone-base { background: var(--glass-solid); }
+  /* nothing to say (a tab whose large title is in view, no live status): the glass fades away */
+  .cap.none { opacity: 0; transform: translateY(-4px) scale(0.94); pointer-events: none; transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform var(--t-base) var(--ease); }
+  .cap:not(.none) { transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform 360ms var(--ease-spring); }
   @keyframes capIn { from { opacity: 0; transform: translateY(-8px) scale(0.94); } }
 
   .layer {
@@ -109,6 +115,7 @@
 
   .ttl { justify-content: center; gap: 7px; font: 650 14px/1 var(--font-text); letter-spacing: -0.01em; padding: 0 14px; }
   .ttl :global(svg) { flex: none; opacity: 0.8; }
+  .ttl.mk { gap: 0; }
   .ttl.spin :global(svg) { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

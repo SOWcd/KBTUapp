@@ -48,7 +48,7 @@
   {/if}
 
   <h3 class="t-cap cap">{t('fo.mod.catalog')}</h3>
-  <SearchField bind:value={q} placeholder={t('fo.mod.catalogPh')} />
+  <SearchField legacy bind:value={q} placeholder={t('fo.mod.catalogPh')} />
   <div class="list surface">
     {#each shown as s (s.id)}
       <button class="row" onclick={() => pick(s)}>

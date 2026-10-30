@@ -16,7 +16,7 @@
   import { time } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
-  import Chip from '../../ui/Chip.svelte';
+  import Tag from '../../ui/Tag.svelte';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
@@ -87,11 +87,11 @@
             {#if flagged(a)}<TriangleAlert size={17} />{:else}<ReceiptIcon size={17} />{/if}</button>{/if}
           {#if a.checkedInAt}
             {#if undoFor === a.person.id}<button class="undo" onclick={() => undo(a)}>{t('door.undo')}</button>{/if}
-            <Chip tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Chip>
+            <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
           {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
-          {:else if a.status === 'going'}<Chip tone="accent">{t('att.going')}</Chip>
-          {:else if a.status === 'hold'}<Chip tone="warning">{t('att.hold')}</Chip>
-          {:else}<Chip>{t('att.waitlist')}</Chip>{/if}
+          {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
+          {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
+          {:else}<Tag>{t('att.waitlist')}</Tag>{/if}
           {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
         </div>
       {:else}

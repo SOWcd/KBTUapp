@@ -51,6 +51,9 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   // /show (owner, Oct 29; /screen, the first name, still works): the organizer's big screen on a laptop (server
   // checkin.py), the app otherwise (the screen into the body: #app is a phone-wide column on a computer)
   if (/^\/(show|screen)\/?$/.test(location.pathname)) mount(Screen, { target: document.body });
+  // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
+  // a production build drops this branch and the chunk with it
+  else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) mount((await import('./screens/lab/Lab.svelte')).default, { target: app });
   else if (fromTelegram()) mount(App, { target: app });
   else {
     const Gate = (await import('./screens/OpenInTelegram.svelte')).default;

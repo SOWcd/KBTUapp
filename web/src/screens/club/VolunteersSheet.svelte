@@ -52,7 +52,7 @@
           </div>
           {#if x.note}<p class="note">«{x.note}»</p>{/if}
           {#if x.status === 'asked'}
-            <div class="acts">
+            <div class="acts btns">
               <Button kind="neutral" size="m" full onclick={() => decide(x, false)}>{t('jr.decline')}</Button>
               <Button kind="primary" size="m" full onclick={() => decide(x, true)}>{t('vol.yes')}</Button>
             </div>
@@ -78,7 +78,6 @@
   .who b { font: 650 15.5px/1.3 var(--font-text); }
   .note { margin: 0 2px; font: 500 14.5px/1.4 var(--font-text); color: var(--text-2); }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .acts :global(.btn.neutral) { background: var(--surface-3); }
   .state { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px; }
   .undo { height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-3); color: var(--text-2); font: 620 13px/1 var(--font-text); }

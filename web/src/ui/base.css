@@ -38,6 +38,18 @@ img { max-width: 100%; }
 .t-callout { font: 550 14px/1.35 var(--font-text); }
 .t-foot { font: 500 13px/1.35 var(--font-text); color: var(--text-2); }
 .t-cap { font: 650 11px/1.2 var(--font-text); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+/* the design system's type, one class per step of tokens.css --fs-* (the .t-* above stay as they are until their screens
+   move): Inter's own tracking per size; a long word breaks at its soft hyphen or at the edge, never "anywhere" */
+.fs-title { font: 800 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.03em; }
+.fs-t1 { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.022em; }
+.fs-sec { font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; }
+.fs-t3 { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+.fs-row { font: 450 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
+.fs-body { font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; }
+.fs-sub { font: 450 var(--fs-sub)/1.35 var(--font-text); }
+.fs-cap { font: 600 var(--fs-cap)/1.25 var(--font-text); }
+.fs-micro { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.005em; }
+.fs-title, .fs-t1, .fs-sec, .fs-t3, .fs-row, .fs-body { overflow-wrap: break-word; }
 .num { font-variant-numeric: tabular-nums; }
 .dim { color: var(--text-2); }
 .faint { color: var(--text-3); }
@@ -206,6 +218,10 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .scroll::-webkit-scrollbar { display: none; }
 .hscroll { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
 .hscroll::-webkit-scrollbar { display: none; }
+/* buttons that share a row (a sheet's footer pair, a card's actions): equal parts of it, a label may shrink */
+.btns .btn.full { flex: 1 1 0; width: auto; min-width: 0; }
+/* the keyboard's focus (Telegram Desktop, the staff on computers): a ring, never for a tap */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .press { transition: transform 450ms var(--ease-bounce); }
 .press:active { transform: scale(0.965); transition-duration: 80ms; }
 /* every button answers a press (owner, Oct 13: "buttons don't react at all"): a small give, zero specificity, so a
@@ -273,6 +289,7 @@ button.set-row:active { background: var(--surface-2); }
 .set-cap { margin: 22px 16px 7px; font: 450 13px/1.2 var(--font-text); letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
 .set-foot { margin: 8px 16px 0; font: 450 13px/1.4 var(--font-text); color: var(--text-3); }
 
-/* the page under a pushed one (ui/Pane) drifts left and dims, as the phone does */
-.settings-root { transition: transform 440ms cubic-bezier(.32,.72,0,1), opacity 440ms ease; }
-html[data-pane] .settings-root { transform: translate3d(-28%, 0, 0); opacity: 0.5; }
+/* the page under a pushed one (ui/Pane: a tab, a sheet, another pane) drifts left and dims, as the phone does; the host
+   keeps its transition until it is back in place */
+.pane-host { transition: transform 440ms cubic-bezier(.32,.72,0,1), opacity 440ms ease; }
+.pane-under { transform: translate3d(-28%, 0, 0); opacity: 0.5; }

@@ -10,13 +10,30 @@
   /* type scale (mockup v23; screens move to it one by one, 419 raw sizes before it): large title, section, card
      title, body, sub, caption, micro */
   --fs-title: 34px; --fs-sec: 22px; --fs-card: 17px; --fs-body: 15px; --fs-sub: 13px; --fs-cap: 12px; --fs-micro: 11px;
+  /* the design system's steps the scale lacked (Oct 30; a value never changes under an existing name): a person's or a
+     club's name in their sheet, big numbers in stat tiles, menu-like rows (Settings, the admin hub, pickers: data rows
+     stay at --fs-body), the tab bar's labels. Weights: 450, 600, 700, 800 (large titles only). The classes: base.css .fs-* */
+  --fs-t1: 28px; --fs-t3: 20px; --fs-row: 17px; --fs-tab: 10.5px;
 
-  /* spacing: 4-pt grid */
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
-  --gutter: 16px;
+  /* spacing: 4-pt grid; 22 between list groups (Settings), 28 between a screen's sections */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-7: 28px; --s-8: 32px; --s-10: 40px;
+  --gutter: 16px; --gap-group: 22px;
 
-  /* radii */
+  /* radii; --r-group: list groups (Settings' approved 12; cards stay --r-l 22) */
   --r-xs: 8px; --r-s: 12px; --r-tile: 14px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
+  --r-group: 12px;
+
+  /* the design system's control heights: L (a sheet's pinned primary, fields), M (buttons, search, icon buttons),
+     S (chips, segmented, small buttons, with a 44 px hit area); list rows: one line (Settings' 50), two lines, dense
+     (a data row without a tile) */
+  --ctl-l: 50px; --ctl-m: 44px; --ctl-s: 36px;
+  --row-h: 50px; --row-h2: 60px; --row-dense: 44px;
+
+  /* row icon tiles: one flat iOS colour each, a white glyph (Settings' palette) */
+  --tile-gray: #8E8E93; --tile-indigo: #5856D6; --tile-red: #FF3B30; --tile-orange: #FF9500; --tile-green: #34C759;
+  --tile-teal: #30B0C7; --tile-blue: #007AFF; --tile-accent: #3B6BFF; --tile-purple: #AF52DE; --tile-pink: #FF2D55;
+  /* ink on white: a filled button over a photo or a poster (onmedia) */
+  --ink: #0B1433;
 
   /* motion: transform and opacity only */
   --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
@@ -38,7 +55,7 @@
   --danger: #F0524A;
   --gold: #F5B13D;
 
-  /* tap targets */
+  /* tap targets; --btn-*: the buttons' heights before the design system (Button uses --ctl-* now) */
   --tap: 44px;
   --btn-l: 52px; --btn-m: 42px; --btn-s: 32px;
 
@@ -70,6 +87,13 @@
   --surface-3: #222637;
   --line: rgba(255, 255, 255, 0.07);
   --line-2: rgba(255, 255, 255, 0.13);
+  --separator: var(--line-2); /* 0.5 px between rows */
+  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed; the segmented thumb */
+  --fill: rgba(235, 238, 255, 0.12);
+  --fill-2: rgba(235, 238, 255, 0.2);
+  --thumb: rgba(235, 238, 255, 0.24);
+  --lens: rgba(244, 246, 255, 0.08); /* the tab bar's active tab: --text at 8 % (no color-mix: iOS 15) */
+  --menu-bg: rgba(30, 34, 52, 0.9); /* a Menu: thick glass, what is under it must not read through */
   --text: #F4F6FF;
   --text-2: rgba(240, 243, 255, 0.68);
   --text-3: rgba(232, 236, 255, 0.52); /* 4.8:1 or more on every dark surface (was 3.9; owner asked about the dark colours, Oct 6) */
@@ -91,6 +115,7 @@
   --glass-shadow: 0 22px 44px -14px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
   --chrome-ink: rgba(255, 255, 255, 0.85);
   --shadow-card: none;
+  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3);
   --scrim: rgba(3, 4, 10, 0.62);
   --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day (owner, Oct 24) */
 }
@@ -108,6 +133,12 @@
   --surface-3: #E1E5EF;
   --line: rgba(11, 20, 51, 0.07);
   --line-2: rgba(11, 20, 51, 0.13);
+  --separator: var(--line-2);
+  --fill: rgba(11, 20, 51, 0.075);
+  --fill-2: rgba(11, 20, 51, 0.13);
+  --thumb: #FFFFFF;
+  --lens: rgba(11, 20, 51, 0.08);
+  --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0B1433;
   --text-2: rgba(11, 20, 51, 0.70);
   --text-3: rgba(11, 20, 51, 0.60); /* 4.56:1 or more on every light surface (AA); text-2 moved to 0.70 to stay apart */
@@ -129,6 +160,7 @@
   --glass-shadow: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
   --chrome-ink: #4A5680;
   --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
+  --shadow-thumb: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
   --scrim: rgba(11, 20, 51, 0.32);
   --glow: none;
 }

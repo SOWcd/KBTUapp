@@ -17,6 +17,7 @@
   import PenLine from '@lucide/svelte/icons/pen-line';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
+  import { fitTitle, largeTitle } from '../../ui/title';
   import { glass } from '../../ui/glass';
   import { api, type EventCard, type Id, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
@@ -146,7 +147,7 @@
            (not inside the list) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
-        <span class="name"><span class="h"><h1 class="ellipsis">{nameOf(m.org)}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
+        <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={'club'}>{nameOf(m.org)}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
           <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, m.title)}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
       {/snippet}
       <div class="row">
@@ -222,7 +223,7 @@
         <!-- how full it is -->
         <div class="seats"><span class="t-foot"><b class="num">{tn('event.going', next.taken)}</b>{next.seats ? ' / ' + next.seats : ''}</span>
           {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
-        <div class="acts">
+        <div class="acts btns">
           {#if !next.guestHost}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
           {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
         </div>
@@ -325,7 +326,6 @@
   .move { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 6px; font: 620 14px/1 var(--font-text); color: var(--accent-text); }
   .moving { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
   .moving .field { flex: 1; min-width: 0; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .none { padding: 18px 16px; color: var(--text-2); }
   .seg { margin: 18px 0 12px; }
   .list { display: flex; flex-direction: column; gap: 8px; }

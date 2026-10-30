@@ -8,11 +8,14 @@
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
   import { haptic, inTelegram } from '../lib/tg';
-  import { sheets } from '../lib/state/sheets';
   import { t } from '../lib/i18n/index.svelte';
   import { glass } from './glass';
+  import { unsent } from './guard';
 
-  // title: what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it (settings)
+  // heading: the sheet's title in its own header row, at the top, wrapping, never cut (the design system: 50 of 56 Russian
+  // titles didn't fit the capsule at 320 px); the capsule then shows the sheet's icon alone. actions: that row's
+  // buttons on the right (a Toolbar, a ⋯).
+  // title: the old way, what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it
   // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
   // Without one, text typed here and not sent asks before a hand closes it (a pull lost a club's application).
   // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above
@@ -20,14 +23,16 @@
   // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
-  type Props = { overlay: Overlay; title?: string; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
-  $effect(() => { overlay.title = title; overlay.icon = icon; });
+  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
+    children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
+  $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
 
   let panel: HTMLDivElement;
   let scrim: HTMLDivElement;
   let body: HTMLDivElement;
   let gone = false;
+  let scrolled = $state(false);
 
   // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
   // put its top edge higher in one frame (details arriving after it opened: a person's card, a club); instead an added
@@ -59,27 +64,16 @@
     a.onfinish = () => removeOverlay(overlay.id);
   }
 
-  // each text field's value when first focused: a changed one is unsent text (a sent draft is cleared, so it doesn't ask);
-  // a search field never counts
-  const was = new Map<HTMLInputElement | HTMLTextAreaElement, string>();
-  function focusin(e: FocusEvent) {
-    const el = e.target;
-    const text = el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && /^(text|url|email|tel|number|)$/.test(el.getAttribute('type') ?? '') && el.enterKeyHint !== 'search');
-    if (text && !was.has(el)) was.set(el, el.value);
-  }
-  const typed = () => !!overlay.byUser && [...was].some(([el, v]) => el.isConnected && el.value.trim() !== v.trim());
-  async function askLeave() {
-    if (await sheets.ask({ title: t('ed.leaveAsk'), text: t('ed.leaveText'), ok: t('ed.leaveGo'), cancel: t('common.cancel'), danger: true })) close(overlay.id);
-  }
+  const guard = unsent(() => overlay);
 
   $effect(() => {
     if (!overlay.closing) return;
-    if (hold ? hold() : typed()) {
+    if (hold ? hold() : guard.typed()) {
       overlay.closing = false;
       panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
       panel.style.transform = 'translate3d(0,0,0)';
       currentY = 0;
-      (hold ? onhold : askLeave)?.();
+      (hold ? onhold : guard.ask)?.();
       return;
     }
     leave(currentY);
@@ -133,7 +127,7 @@
     panel.addEventListener('touchmove', onMove, { passive: false });
     panel.addEventListener('touchend', onEnd);
     panel.addEventListener('touchcancel', onEnd);
-    panel.addEventListener('focusin', focusin);
+    panel.addEventListener('focusin', guard.focusin);
     const chrome = hideChrome();
     return () => { ro.disconnect(); chrome(); back(); };
   });
@@ -144,7 +138,11 @@
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
-  <div class="body scroll" bind:this={body}>{@render children()}</div>
+  <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
+  <div class="body scroll" class:scrolled bind:this={body} onscroll={() => { if (scrolled !== body.scrollTop > 2) scrolled = !scrolled; }}>
+    {#if heading != null}<header class="hd"><h2 class="hdt">{heading}</h2>{#if actions}<span class="hda">{@render actions()}</span>{/if}</header>{/if}
+    {@render children()}
+  </div>
   {#if footer}<div class="foot">{@render footer()}</div>{/if}
 </div>
 
@@ -179,5 +177,12 @@
     border-top: 1px solid var(--line);
   }
   .hasfoot .body { padding-bottom: var(--s-4); }
+  .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
+  .full .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
+    mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
+  /* the heading row: the title wraps (a long word at its soft hyphen or the edge), the actions keep their place */
+  .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: var(--s-1) 2px var(--s-4); }
+  .hdt { min-width: 0; padding-top: 8px; font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; overflow-wrap: break-word; }
+  .hda { flex: none; display: inline-flex; gap: var(--s-2); }
   @keyframes fade { from { opacity: 0; } }
 </style>

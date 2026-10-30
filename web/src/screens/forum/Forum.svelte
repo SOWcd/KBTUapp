@@ -129,7 +129,7 @@
   {/each}
 
   <h3 class="t-cap cap">{t('fo.findPeople')}</h3>
-  <SearchField bind:value={q} placeholder={t('fo.findPh')} />
+  <SearchField legacy bind:value={q} placeholder={t('fo.findPh')} />
   {#if found}<div class="res"><PersonCards cards={found} /></div>{/if}
 </Sheet>
 

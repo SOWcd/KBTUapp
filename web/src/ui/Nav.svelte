@@ -1,30 +1,28 @@
 <script lang="ts">
-  // Bottom nav (liquid glass, floats). Equal tabs that stay put (four since the forum, Oct 30) (the owner's pick of four layouts,
-  // Oct 4: a widening active tab made the others jump on every switch); the active one shows its label
-  // inside one pill that slides under it with a jelly squash. Press and drag along the bar previews tabs;
-  // the tab switches on release. Shrinks to icons while scrolling down; hides under a sheet (and the Feed).
-  import Ticket from '@lucide/svelte/icons/ticket';
-  import Landmark from '@lucide/svelte/icons/landmark';
-  import MessagesSquare from '@lucide/svelte/icons/messages-square';
-  import UserRound from '@lucide/svelte/icons/circle-user-round';
+  // Bottom nav (liquid glass, floats), iOS 26's way (owner, Oct 30; review P1): every tab its icon over a small label,
+  // always; the active one tinted (--accent-text: a 10.5 px label needs 4.5:1, --accent doesn't reach it) on a soft lens
+  // that slides to it with a jelly squash. Equal tabs that stay put, one weight on and off, so nothing jumps while a
+  // drag previews them. Press and drag along the bar previews tabs; the tab switches on release. While scrolling down
+  // the labels fade and the icons settle in the middle (compositor only, the bar keeps its size under the thumb);
+  // hides under a sheet (and the Feed). The map: its own round glass button beside it.
   import MapIcon from '@lucide/svelte/icons/map';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
   import { glass, refract, jelly } from './glass';
+  import { TAB_ICON } from './icons';
 
   // the tabs shown (the forum only where the server opened it), each with its label and dot
   let { tabs, labels, dot = [] }: { tabs: Tab[]; labels: string[]; dot?: boolean[] } = $props();
   const N = $derived(tabs.length);
-  const ICON = { afisha: Ticket, forum: MessagesSquare, club: Landmark, profile: UserRound };
 
   let preview = $state<number | null>(null);
   const shown = $derived(preview ?? tabs.indexOf(ui.tab));
 
   let bar: HTMLElement;
-  let pill: HTMLSpanElement;
-  $effect(() => { void shown; jelly(pill); });
+  let lens: HTMLSpanElement;
+  $effect(() => { void shown; jelly(lens); });
   let drag: null | { x: number; on: boolean; id: number } = null;
   const idxAt = (x: number) => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(N - 1, Math.floor(((x - r.left) / r.width) * N))); };
   function down(e: PointerEvent) { drag = { x: e.clientX, on: false, id: e.pointerId }; }
@@ -54,14 +52,14 @@
 
 <div class="dock">
 <nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
-     onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up}>
+     onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up} style:--n={N}>
   <span class="tone-base" aria-hidden="true"></span>
-  <span class="pill" bind:this={pill} style="left:calc(4px + (100% - 8px) * {shown} / {N}); width:calc((100% - 8px) / {N})" aria-hidden="true"></span>
+  <span class="lens" bind:this={lens} style:translate="{shown * 100}% 0" aria-hidden="true"></span>
   {#each tabs as tab, i (tab)}
-    {@const Icon = ICON[tab]}
+    {@const Icon = TAB_ICON[tab]}
     <button class="tab" class:on={shown === i} aria-current={ui.tab === tab ? 'page' : undefined} onclick={() => pick(i)}>
       <span class="ic">
-        <Icon size={22} strokeWidth={1.9} />
+        <Icon size={24} strokeWidth={2} />
         {#if dot[i]}<i class="dot"></i>{/if}
       </span>
       <span class="lbl">{labels[i]}</span>
@@ -69,11 +67,11 @@
   {/each}
 </nav>
 <!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
-     to find); a round glass button of its own, like iOS 26's search, so the three tabs keep their width -->
-<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }}
+     to find); a round glass button of its own, like iOS 26's search, so the tabs keep their width -->
+<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }}
         onpointerdown={warm} onclick={openMap}>
   <span class="tone-base" aria-hidden="true"></span>
-  <MapIcon size={22} strokeWidth={1.9} />
+  <MapIcon size={24} strokeWidth={2} />
 </button>
 </div>
 
@@ -94,13 +92,11 @@
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
     background: none;
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55), 0 0 24px -6px var(--nav-glow, rgba(120, 150, 255, 0.4));
-    transition: height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
-  .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; container-type: inline-size; }
+  .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; }
   .mapb { width: 60px; display: grid; place-items: center; color: var(--chrome-ink); }
   .mapb > :global(svg) { position: relative; }
   .mapb:active { transform: scale(0.94); }
-  .mapb.mini { width: 50px; height: 50px; }
   /* an edge all the way round, but lit like glass, not drawn (the even
      bright outline looked fake): the shared rim's bright arc and its reflection over a faint edge, the colour fringes */
   .nav::after, .mapb::after {
@@ -111,30 +107,27 @@
       rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base, .mapb > .tone-base { background: var(--glass-clear); }
-  .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
-  .pill {
-    position: absolute; top: 4px; bottom: 4px; border-radius: var(--r-full); background: var(--text);
-    transition: left 380ms var(--ease-spring), background-color 200ms ease;
+  /* the lens: a soft rounded rect behind the active tab (--text at 8 %: seen on the near-white light bar too), moved by
+     `translate` so the jelly's `transform` squashes it on the way */
+  .lens {
+    position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full); background: var(--lens);
+    transition: translate 380ms var(--ease-spring);
   }
   .tab {
-    position: relative; flex: 1 1 0; min-width: 0; padding: 0 6px; display: flex; align-items: center; justify-content: center; gap: 0;
+    position: relative; flex: 1 1 0; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     color: var(--chrome-ink); border-radius: var(--r-full);
-    transition: color var(--t-base) var(--ease), gap 380ms var(--ease-spring), transform 350ms cubic-bezier(.3, 1.6, .5, 1);
+    transition: color var(--t-base) var(--ease), transform 350ms cubic-bezier(.3, 1.6, .5, 1);
   }
-  .tab:active { transform: scale(0.94); transition-duration: var(--t-base), 380ms, 80ms; }
-  .tab.on { color: var(--bg); gap: 7px; }
-  .ic { position: relative; display: inline-flex; flex: none; }
-  .dot { position: absolute; top: -1px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--glass-bg); }
+  .tab:active { transform: scale(0.94); transition-duration: var(--t-base), 80ms; }
+  .tab.on { color: var(--accent-text); }
+  .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
+  .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .lbl {
-    max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    font: 650 14px/1 var(--font-text); letter-spacing: -0.01em;
-    transition: max-width 380ms var(--ease-spring), opacity var(--t-base) var(--ease);
+    max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: clip;
+    font: 600 var(--fs-tab)/1.15 var(--font-text); letter-spacing: -0.01em;
+    transition: opacity var(--t-base) var(--ease);
   }
-  .tab.on .lbl { max-width: 120px; opacity: 1; }
-  .mini .tab.on .lbl { max-width: 0; opacity: 0; }
-  .mini .tab.on { gap: 0; }
-  /* a narrow bar (the map button beside it takes 68 px): a third of ~95 px, the longest label gets a size smaller */
-  /* four tabs: a quarter of ~90 px; the longest label (Profile) gets a size smaller; a 320 px phone's bar shows the icons alone */
-  @container (max-width: 380px) { .tab { padding: 0 2px; } .tab.on { gap: 5px; } .lbl { font-size: 13px; letter-spacing: -0.02em; } }
-  @container (max-width: 280px) { .tab.on .lbl { max-width: 0; opacity: 0; } .tab.on { gap: 0; } }
+  /* scrolling down: the labels fade, the icons settle in the middle; the bar keeps its size under the thumb */
+  .mini .lbl { opacity: 0; }
+  .mini .ic { transform: translateY(7px); }
 </style>

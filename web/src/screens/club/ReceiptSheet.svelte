@@ -54,7 +54,7 @@
   </div>
 
   {#snippet footer()}
-    <div class="acts">
+    <div class="acts btns">
       {#if flagged}<Button kind="secondary" size="l" full loading={busy === 'ok'} onclick={() => review(false)}>{t('rc.ok')}</Button>{/if}
       <Button kind="danger" size="l" full loading={busy === 'no'} onclick={() => review(true)}>{t('rc.reject')}</Button>
     </div>
@@ -78,5 +78,4 @@
   .wait { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
 </style>

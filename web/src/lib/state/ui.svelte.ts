@@ -25,6 +25,7 @@ export const ui = $state({
   club: start.club,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
   allClubs: false,         // the Clubs tab of a member: All clubs instead of My club (each launch starts on My club)
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
+  gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
 });
 
 export function persistNav(): void {
@@ -46,7 +47,9 @@ export function goTab(tab: Tab): void {
  *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
 /** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean }
+/** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
+ *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 

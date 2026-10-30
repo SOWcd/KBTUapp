@@ -41,7 +41,7 @@
   {/each}
   <p class="t-foot note">{t('sched.privacy')}</p>
   {#snippet footer()}
-    <div class="acts">
+    <div class="acts btns">
       {#if first}<Button kind="neutral" size="l" full onclick={() => close(overlay.id)}>{t('sched.later')}</Button>{/if}
       <Button kind="primary" size="l" full onclick={toBot}>{t('sched.bot')}</Button>
     </div>
@@ -65,5 +65,4 @@
   .steps span { font: 520 var(--fs-sub)/1.3 var(--font-text); }
   .note { margin: 14px 4px 0; }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
 </style>

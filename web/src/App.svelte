@@ -19,15 +19,11 @@
   import { api, ApiErr, localize } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
-  import Sparkles from '@lucide/svelte/icons/sparkles';
   import Ban from '@lucide/svelte/icons/ban';
   import Nav from './ui/Nav.svelte';
   import Capsule, { type Live } from './ui/Capsule.svelte';
-  import MessagesSquare from '@lucide/svelte/icons/messages-square';
-  // top and bottom bars never repeat an icon: the bottom is ticket / landmark / circle-user-round
-  import CalendarDays from '@lucide/svelte/icons/calendar-days';
-  import Shapes from '@lucide/svelte/icons/shapes';
-  import IdCardLanyard from '@lucide/svelte/icons/id-card-lanyard';
+  import { TAB_ICON } from './ui/icons';
+  import KbtuMark from './ui/KbtuMark.svelte';
   import Toast from './ui/Toast.svelte';
   import { feedChrome, unfeed } from './ui/chrome';
   import ListPage from './screens/afisha/List.svelte';
@@ -37,7 +33,7 @@
   import Ask from './ui/Ask.svelte';
   import { warmMap } from './lib/map';
 
-  setLucideProps({ size: 22, strokeWidth: 1.9 });
+  setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
   // A sheet in its own chunk needs the network the first time: offline, taps used to queue and all open on top of each
@@ -169,7 +165,6 @@
   $effect(() => { if (session.boardKnown && !session.board && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
   // a role changes a tab's content, never its name
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
-  const TAB_ICON: Record<Tab, typeof Shapes> = { afisha: CalendarDays, forum: MessagesSquare, club: Shapes, profile: IdCardLanyard };
   const TAB_DOT: Record<Tab, () => boolean> = {
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
     profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0,
@@ -185,7 +180,9 @@
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
-  const capOf = $derived([...overlays].reverse().find((o) => !o.closing && o.title));
+  // The top overlay that speaks decides (a Pane at rest is quiet but still the top: the capsule never names the page
+  // under it); a menu or an Ask says nothing and lets the one below speak.
+  const capOf = $derived([...overlays].reverse().find((o) => !o.closing && (o.title || o.quiet)));
   // over the Feed the capsule turns into tinted dark glass (chrome.ts); a titled overlay over it (the map, a sheet) takes
   // the normal chrome (owner's video, Oct 25: the map's capsule kept the Feed's tint)
   $effect(() => { feedChrome(capOf?.feed ? 1 : 0, 'opacity 220ms ease'); });
@@ -206,10 +203,11 @@
     return null;
   });
 
-  // nothing on top: the live status, else the tab's name
-  const capTitle = $derived(ui.busy || capOf?.title || (live ? null : TAB_LABEL[ui.tab]()));
-  // every state has an icon: a spinner while a tap's work runs, a sparkle if a view forgot its own
-  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? Sparkles) : TAB_ICON[ui.tab]);
+  // a tab's or a Pane's name is its large title on the page: the capsule takes it only once that has scrolled away (the
+  // name never shows twice); a sheet that names itself in its own header gets its icon alone
+  const capTitle = $derived(ui.busy || (capOf ? (capOf.quiet || capOf.mark ? null : capOf.title) : ui.gone[ui.tab] ? TAB_LABEL[ui.tab]() : null) || null);
+  // a spinner while a tap's work runs; a view that forgot its own icon gets the app's mark (Sparkles is the assistant's alone)
+  const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.quiet ? null : capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
   $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
@@ -489,7 +487,7 @@
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
-  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} /></div>
+  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
   {#each overlays as o (o.id)}

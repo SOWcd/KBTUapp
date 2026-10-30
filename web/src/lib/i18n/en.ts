@@ -482,6 +482,7 @@ const en: Dict = {
   'common.error': 'Something went wrong',
   'common.offline': 'No connection. Check your internet',
   'link.unknown': "This link doesn't work: it may be out of date",
+  'common.retry': 'Try again',
 
   'event.go': "I'm going",
   'event.goPrice': 'Going · {price}',

@@ -39,7 +39,7 @@
   {#each chosen as s (s.id)}<button class="chip on" onclick={() => (chosen = chosen.filter((c) => c.id !== s.id))}>{s.name}<X size={13} /></button>{/each}
   {#if !chosen.length}<span class="t-foot">{t('fo.noSkills')}</span>{/if}
 </div>
-<SearchField bind:value={q} placeholder={t('fo.skillFind')} />
+<SearchField legacy bind:value={q} placeholder={t('fo.skillFind')} />
 {#if near}
   <p class="t-foot hint">{t('fo.didYouMean')}</p>
   <div class="chips">{#each near as s (s.id)}<button class="chip" onclick={() => pick(s)}>{s.name}</button>{/each}

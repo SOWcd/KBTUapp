@@ -168,7 +168,7 @@
   {#snippet footer()}
     {#if o && !o.myRole}
       {@const sub = o.subscribed ? t('clubs.subscribed') : t('clubs.subscribe')}
-      <div class="acts">
+      <div class="acts btns">
         {#if join}
           <!-- next to a join action the bell needs no words -->
           <Button kind={o.subscribed ? 'neutral' : 'secondary'} size="l" label={sub} icon={bell} onclick={() => toggleSub(id)} />
@@ -206,8 +206,7 @@
   .rnd { align-self: center; margin: 10px auto 0; width: fit-content; padding: 7px 12px; border-radius: var(--r-full); background: var(--success-soft);
     color: var(--success-text); font: 650 13.5px/1.2 var(--font-text); }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
-  .acts :global(.btn:not(.full)) { width: var(--btn-l); padding: 0; }
+  .acts :global(.btn:not(.full)) { width: var(--ctl-l); padding: 0; }
   .acts :global(.btn:not(.full) .ic) { margin: 0; }
   .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
   .link { display: inline-flex; align-items: center; gap: 8px; height: 40px; max-width: 100%; padding: 0 14px 0 12px; border-radius: var(--r-full);

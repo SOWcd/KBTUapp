@@ -84,7 +84,7 @@
         <label class="field"><span class="t-cap">{t('adm.chatSchool')}</span><input bind:value={nch.school} maxlength="40" /></label>
         <label class="field"><span class="t-cap">{t('adm.chatCourse')}</span><select bind:value={nch.course}><option value={0}>{t('chats.everyone')}</option>{#each [1, 2, 3, 4, 5, 6] as n (n)}<option value={n}>{t('chats.course', { n })}</option>{/each}</select></label>
       </div>
-      <div class="acts">
+      <div class="acts btns">
         <Button kind="neutral" size="m" full onclick={() => (chatForm = false)}>{t('common.cancel')}</Button>
         <Button kind="primary" size="m" full type="submit" loading={busy} disabled={!nch.url.trim()}>{t('adm.chatAdd')}</Button>
       </div>
@@ -101,7 +101,6 @@
   .new { display: flex; flex-direction: column; gap: 10px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .seg.wide { display: flex; margin: 8px 0; }
   .seg.wide button { flex: 1; }
   select { width: 100%; height: 100%; background: none; color: var(--text); font: 500 16px/1 var(--font-text); }

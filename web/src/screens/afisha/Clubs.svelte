@@ -6,6 +6,7 @@
   // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
   // as a list. Categories wait for the server (orgs have no category yet).
   import SearchField from '../../ui/SearchField.svelte';
+  import { fitTitle, largeTitle } from '../../ui/title';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
@@ -73,7 +74,7 @@
 <div class="page scroll stagger">
   {#if session.me?.memberships.length}<ClubSwitch />{/if}
   <header class="hd">
-    <h1 class="t-h1">{t('clubs.title')}</h1>
+    <h1 class="t-h1" use:fitTitle use:largeTitle={'club'}>{t('clubs.title')}</h1>
   </header>
 
   <SearchField bind:value={q} placeholder={t('clubs.search')} raised />

@@ -31,7 +31,7 @@
       <div class="who"><Avatar person={r.person} size={44} />
         <span class="tx"><b class="ellipsis">{r.name}</b><i class="t-foot ellipsis">{t('ro.listed', { name: r.sheetName ?? '—' })}</i>
           <i class="t-foot ellipsis">{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
-      <div class="acts">
+      <div class="acts btns">
         <Button kind="neutral" size="m" full onclick={() => decide(r, false)}>{t('ro.decline')}</Button>
         <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('ro.confirm')}</Button>
       </div>
@@ -48,5 +48,4 @@
   .tx b { font: 650 15.5px/1.25 var(--font-text); }
   .tx i { font-style: normal; }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
 </style>

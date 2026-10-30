@@ -7,7 +7,7 @@
   import { sheets } from '../lib/state/sheets';
   import { prefetchEvent } from '../lib/state/data.svelte';
   import Poster from './Poster.svelte';
-  import Chip from './Chip.svelte';
+  import Tag from './Tag.svelte';
   import Avatar from './Avatar.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Bookmark from '@lucide/svelte/icons/bookmark';
@@ -30,18 +30,18 @@
     <span class="t-title clamp-2 title">{e.title}</span>
     <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</span>
     <span class="foot">
-      {#if e.toCheck && !cancelled}<Chip tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Chip>{/if}
-      {#if cancelled}<Chip tone="danger">{t('event.cancelled')}</Chip>
-      {:else if e.status === 'draft'}<Chip>{t('studio.draft')}</Chip>
-      {:else if over}{#if e.my?.checkedInAt}<Chip tone="success">{t('event.attended')}</Chip>{/if}
-      {:else if live}<Chip tone="success">{t('event.live')}</Chip>
-      {:else if st === 'going'}<Chip tone="accent">{t('event.youGo')}</Chip>
-      {:else if st === 'hold'}<Chip tone="warning">{t('event.pay', { price: money(e.price ?? 0) })}</Chip>
-      {:else if st === 'waitlist'}<Chip tone="neutral">{t('event.notifyOn')}</Chip>
-      {:else if full}<Chip tone="neutral">{t('event.full')}</Chip>
-      {:else if e.guestHost}<Chip tone="neutral">{t('event.partner')}</Chip>
-      {:else if e.visibility === 'members'}<Chip tone="accent">{t('event.teamOnly')}</Chip>
-      {:else if e.firstYear}<Chip tone="warning">{t('event.firstYear')}</Chip>{/if}
+      {#if e.toCheck && !cancelled}<Tag tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Tag>{/if}
+      {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>
+      {:else if e.status === 'draft'}<Tag>{t('studio.draft')}</Tag>
+      {:else if over}{#if e.my?.checkedInAt}<Tag tone="success">{t('event.attended')}</Tag>{/if}
+      {:else if live}<Tag tone="success">{t('event.live')}</Tag>
+      {:else if st === 'going'}<Tag tone="accent">{t('event.youGo')}</Tag>
+      {:else if st === 'hold'}<Tag tone="warning">{t('event.pay', { price: money(e.price ?? 0) })}</Tag>
+      {:else if st === 'waitlist'}<Tag tone="neutral">{t('event.notifyOn')}</Tag>
+      {:else if full}<Tag tone="neutral">{t('event.full')}</Tag>
+      {:else if e.guestHost}<Tag tone="neutral">{t('event.partner')}</Tag>
+      {:else if e.visibility === 'members'}<Tag tone="accent">{t('event.teamOnly')}</Tag>
+      {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
       {#if e.friends.length && !cancelled}
         <span class="fr">
           <span class="stack">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={20} tappable={false} />{/each}</span>

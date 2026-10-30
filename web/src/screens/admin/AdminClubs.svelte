@@ -154,7 +154,7 @@
       <label class="field"><span class="t-cap">{t('adm.name')}</span><input bind:value={nc.name} maxlength="60" enterkeyhint="next" /></label>
       <label class="switch"><span><b>{t('adm.official')}</b></span><input type="checkbox" role="switch" bind:checked={nc.official} /></label>
       <EmojiPick bind:value={nc.emoji} size={26} />
-      <div class="acts">
+      <div class="acts btns">
         <Button kind="neutral" size="m" full onclick={() => (adding = false)}>{t('common.cancel')}</Button>
         <Button kind="primary" size="m" full type="submit" loading={busy} disabled={nc.name.trim().length < 2}>{t('adm.create')}</Button>
       </div>
@@ -247,7 +247,6 @@
   .lead { margin-bottom: 14px; text-wrap: pretty; }
   .new { display: flex; flex-direction: column; gap: 10px; }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .find { display: flex; align-items: center; gap: 8px; height: 44px; margin-top: 14px; padding: 0 14px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-3); }
   .find input { flex: 1; min-width: 0; height: 100%; background: none; color: var(--text); font: 550 16px/1 var(--font-text); }
   .list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }

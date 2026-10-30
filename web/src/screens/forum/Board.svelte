@@ -16,6 +16,7 @@
   import { ago } from '../../lib/time';
   import { TOPICS, TOPIC_ICON, TOPIC_TINT, gathers } from '../../lib/forum';
   import Avatar from '../../ui/Avatar.svelte';
+  import { fitTitle, largeTitle } from '../../ui/title';
   import ThreadHead from './ThreadHead.svelte';
   import TopicTag from './TopicTag.svelte';
   import Emoji from '../../ui/Emoji.svelte';
@@ -58,7 +59,7 @@
 
 <div class="page scroll">
   <header class="hd">
-    <h1 class="t-h1">{t('page.forum')}</h1>
+    <h1 class="t-h1" use:fitTitle use:largeTitle={'forum'}>{t('page.forum')}</h1>
     <p class="t-foot">{t('bd.sub')}</p>
   </header>
 

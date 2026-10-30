@@ -85,7 +85,7 @@
               <Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + r.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>
             {/if}
           </div>
-          <div class="acts">
+          <div class="acts btns">
             <Button kind="neutral" size="m" full onclick={() => decide(r, false)}>{t('jr.decline')}</Button>
             <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('jr.accept')}</Button>
           </div>
@@ -105,7 +105,6 @@
   .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .who b { font: 650 15.5px/1.3 var(--font-text); }
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .acts :global(.btn.neutral) { background: var(--surface-3); } /* the card is surface-2 already */
   .cast { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; margin-top: 10px; padding: 0 12px 0 14px; border-radius: var(--r-l);
     background: var(--surface-2); text-align: left; color: var(--text-3); }

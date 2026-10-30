@@ -101,7 +101,7 @@
   {/if}
 
   {#snippet footer()}
-    <div class="acts">
+    <div class="acts btns">
       {#if ref}<Button kind="primary" size="l" full loading={inviting} onclick={invite}>{#snippet icon()}<Megaphone size={18} />{/snippet}{t('ref.invite')}</Button>{/if}
       {#if mine && a && a.level > 0}
         <Button kind={ref ? 'secondary' : 'primary'} size="l" full loading={sharing} onclick={shareIt}>{#snippet icon()}<Share size={18} />{/snippet}{t('aw.share')}</Button>
@@ -112,7 +112,6 @@
 
 <style>
   .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .stage { display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
   .big { position: relative; display: inline-flex; transform: rotateX(calc(var(--gy, 0) * -14deg)) rotateY(calc(var(--gx, 0) * 16deg)); transition: transform 160ms ease-out; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */

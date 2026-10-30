@@ -18,6 +18,7 @@
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, at } from '../../lib/time';
   import type { ClassItem, EventCard } from '../../lib/api';
   import EventRow from '../../ui/EventRow.svelte';
+  import { fitTitle, largeTitle } from '../../ui/title';
   import StoryRow from './StoryRow.svelte';
   import { sheets } from '../../lib/state/sheets';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -33,7 +34,7 @@
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
   import { openLink } from '../../lib/tg';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
-  import Chip from '../../ui/Chip.svelte';
+  import Tag from '../../ui/Tag.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import { ui } from '../../lib/state/ui.svelte';
   import { nameOf, shortOf } from '../../lib/short';
@@ -94,7 +95,7 @@
 
 <div class="page scroll">
   <header class="hd">
-    <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl">{t('common.today')}</h1></span>
+    <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the assistant: knows my school, timetable, the campus and what's on (with the forum's switch) -->
     {#if session.board}<button class="ask" onclick={() => sheets.assistant()}><Sparkles size={16} />{t('as.ask')}</button>{/if}
   </header>
@@ -169,7 +170,7 @@
 
   {#if featured}
     <button class="pin surface press" onclick={() => (openPost = !openPost)}>
-      <span class="pin-top"><Chip tone="warning">{tagName(featured.tag) ?? t('common.more')}</Chip><span class="t-foot">{nameOf(featured.org)}</span></span>
+      <span class="pin-top"><Tag tone="warning">{tagName(featured.tag) ?? t('common.more')}</Tag><span class="t-foot">{nameOf(featured.org)}</span></span>
       <span class="t-title">{featured.title}</span>
       <span class="t-body dim" class:clamp-2={!openPost}>{featured.body}</span>
     </button>

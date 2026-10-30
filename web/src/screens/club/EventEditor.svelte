@@ -619,7 +619,7 @@
     <div class="tail"></div>
   </div>
 
-  <footer class="foot glass glass-sheet">
+  <footer class="foot btns glass glass-sheet">
     {#if live}
       <Button kind="primary" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={() => submit('save')}>{t('common.save')}</Button>
     {:else}
@@ -725,5 +725,4 @@
   .tail { flex: none; height: calc(var(--safe-bottom) + 96px); }
 
   .foot { position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px); display: flex; gap: 8px; padding: 8px; border-radius: 24px; }
-  .foot :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
 </style>

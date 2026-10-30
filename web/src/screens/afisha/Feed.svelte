@@ -19,7 +19,7 @@
   import { openLink, shareCard, haptic, inTelegram } from '../../lib/tg';
   import X from '@lucide/svelte/icons/x';
   import Emoji from '../../ui/Emoji.svelte';
-  import Chip from '../../ui/Chip.svelte';
+  import Tag from '../../ui/Tag.svelte';
   import OrgTag from '../../ui/OrgTag.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import { feedTint } from '../../ui/chrome';
@@ -113,7 +113,7 @@
         {#if !e.video?.url && e.cover && e.slides?.length}
           <span class="dots" aria-hidden="true">{#each [e.cover, ...e.slides] as _, k (k)}<i class:on={k === (pic[e.id] ?? 0)}></i>{/each}</span>
         {/if}
-        <span class="org"><OrgTag org={e.org} />{#if e.guestHost}<Chip tone="onphoto">{t('event.partner')}</Chip>{/if}</span>
+        <span class="org"><OrgTag org={e.org} />{#if e.guestHost}<Tag tone="onphoto">{t('event.partner')}</Tag>{/if}</span>
         <h2 class="title">{e.title}</h2>
         <p class="meta">{whenLine(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</p>
         {#if e.friends.length}

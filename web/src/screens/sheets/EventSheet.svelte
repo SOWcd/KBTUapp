@@ -37,7 +37,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
-  import Chip from '../../ui/Chip.svelte';
+  import Tag from '../../ui/Tag.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import OrgTag from '../../ui/OrgTag.svelte';
@@ -262,7 +262,7 @@
         <Poster item={e} big play radius={22} dim={cancelled} />
       {/if}
       <button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>
-      {#if e.meeting}<span class="tag"><Chip tone="onphoto">{t('event.meeting')}</Chip></span>{:else if e.visibility === 'members'}<span class="tag"><Chip tone="onphoto">{t('event.teamOnly')}</Chip></span>{:else if e.visibility === 'leaders'}<span class="tag"><Chip tone="onphoto">{t('event.leaders')}</Chip></span>{:else if e.firstYear}<span class="tag"><Chip tone="warning">{t('event.firstYear')}</Chip></span>{/if}
+      {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
     </div>
 
     <h2 class="t-h2 title" class:strike={cancelled}>{e.title}</h2>
@@ -490,7 +490,7 @@
 
   {#snippet footer()}
     {#if e}
-      <div class="actions" inert={!!preview}>
+      <div class="actions btns" inert={!!preview}>
         <button class="ib" class:on={e.saved} onclick={() => toggleSaved(id)} aria-label={e.saved ? t('event.saved') : t('event.save')}>
           <Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />
         </button>
@@ -501,14 +501,14 @@
           {#if st === 'cancelled'}
             <Button kind="neutral" size="l" full onclick={() => toggleGoing(id)}>{t('lead.changed')}</Button>
           {:else}
-            <div class="ans"><Button kind="secondary" size="l" full onclick={() => declineInvite(id)}>{t('lead.no')}</Button>
+            <div class="ans btns"><Button kind="secondary" size="l" full onclick={() => declineInvite(id)}>{t('lead.no')}</Button>
               <Button kind="primary" size="l" full onclick={() => toggleGoing(id)}>{t('lead.yes')}</Button></div>
           {/if}
         {:else if e.meeting && crew && !going && !started}
           {#if st === 'cancelled'}
             <Button kind="neutral" size="l" full onclick={() => toggleGoing(id)}>{t('meet.changed')}</Button>
           {:else}
-            <div class="ans"><Button kind="secondary" size="l" full onclick={cantCome}>{t('lead.no')}</Button>
+            <div class="ans btns"><Button kind="secondary" size="l" full onclick={cantCome}>{t('lead.no')}</Button>
               <Button kind="primary" size="l" full onclick={() => toggleGoing(id)}>{t('lead.yes')}</Button></div>
           {/if}
         {:else if over && detail?.canAddPhotos && !e.meeting}
@@ -519,7 +519,7 @@
           <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('event.external')}</Button>
         {:else if going && inner(e)}
           <!-- a club's own event: no ticket, just the answer, changeable until it starts -->
-          <div class="ans">
+          <div class="ans btns">
             {#if !started}<Button kind="secondary" size="l" full onclick={() => (e.meeting ? cantCome() : e.visibility === 'leaders' ? declineInvite(id) : toggleGoing(id))}>{t('lead.no')}</Button>{/if}
             <span class="yes"><Check size={18} strokeWidth={2.6} />{t('event.youGo')}</span>
           </div>
@@ -623,7 +623,6 @@
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; border-radius: var(--r-full);
     background: var(--success-soft); color: var(--success-text); font: 650 16px/1 var(--font-text); }
-  .ans :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
   .lead { margin: 4px 0 12px; }
   .lc { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-bottom: 6px; border-radius: var(--r-m); background: var(--surface-2); }
   .ln { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -659,8 +658,7 @@
   .desc { color: var(--text); white-space: pre-line; }
 
   .actions { display: flex; gap: 8px; align-items: center; }
-  .actions :global(.btn.full) { flex: 1; width: auto; min-width: 0; }
-  .ib { width: var(--btn-l); height: var(--btn-l); flex: none; border-radius: 16px; background: var(--surface-2); color: var(--text); display: flex; align-items: center; justify-content: center; transition: transform var(--t-fast) var(--ease), color var(--t-base); }
+  .ib { width: var(--ctl-l); height: var(--ctl-l); flex: none; border-radius: 16px; background: var(--surface-2); color: var(--text); display: flex; align-items: center; justify-content: center; transition: transform var(--t-fast) var(--ease), color var(--t-base); }
   .ib:active { transform: scale(0.94); }
   .ib.on { color: var(--warning); }
   /* the organizer's updates: an accent note pinned under the title */

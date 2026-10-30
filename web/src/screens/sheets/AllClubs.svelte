@@ -19,7 +19,7 @@
 
 <Sheet {overlay} tall title={t('clubs.allTitle')}>
   <h2 class="t-h2 hd">{t('clubs.allTitle')}<span>{all.length}</span></h2>
-  <SearchField bind:value={q} placeholder={t('clubs.search')} />
+  <SearchField legacy bind:value={q} placeholder={t('clubs.search')} />
   <p class="t-foot note">{t('clubs.allNote')}</p>
   <div class="list surface">
     {#each list as o (o.id)}<ClubRow org={o} sub={sub(o)} />{:else}<p class="t-foot empty">{t('clubs.nothing')}</p>{/each}
