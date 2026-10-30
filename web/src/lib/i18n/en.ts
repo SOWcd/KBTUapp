@@ -2139,6 +2139,10 @@ const en: Dict = {
   'anthem.undo': "Undo",
   'anthem.copy': "Copy",
   'anthem.copied': "Copied",
+  'anthem.restamp': "Re-tap from this line",
+  'anthem.endHere': "The line ends here",
+  'anthem.endClear': "Clear the line's end",
+  'anthem.stop': "Done",
 };
 
 export default en;

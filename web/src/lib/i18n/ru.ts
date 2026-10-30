@@ -2158,6 +2158,10 @@ const ru = {
   'anthem.undo': "Отменить",
   'anthem.copy': "Скопировать",
   'anthem.copied': "Скопировано",
+  'anthem.restamp': "Перебить с этой строки",
+  'anthem.endHere': "Конец строки здесь",
+  'anthem.endClear': "Убрать конец строки",
+  'anthem.stop': "Готово",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };

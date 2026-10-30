@@ -2139,6 +2139,10 @@ const kk: Dict = {
   'anthem.undo': "Болдырмау",
   'anthem.copy': "Көшіру",
   'anthem.copied': "Көшірілді",
+  'anthem.restamp': "Осы жолдан қайта белгілеу",
+  'anthem.endHere': "Жолдың соңы осында",
+  'anthem.endClear': "Жолдың соңын өшіру",
+  'anthem.stop': "Дайын",
 };
 
 export default kk;
