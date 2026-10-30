@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import shutil
+import sqlite3
 import time
 import types
 from pathlib import Path
@@ -5083,9 +5084,19 @@ def test_schedule_merge_safety(env):
     x9, y13 = L(1, "09:00", "09:50", "X", "practice", "403", "Ivanov I."), L(1, "13:00", "13:50", "Y", "practice", "403", "Ivanov I.")
     got, names = week(([x9, y13], "en"), ([ru(dataclasses.replace(y13, begins="11:00", ends="11:50"))], "ru"))
     assert names == {(1, "11:00"): {"ru": "Y (ru)"}}
-    # ... but one clearly nearer pairs: the fewest minutes moved, not the first in the day
+    # ... even one clearly nearer: two of one teacher's in one room on one day pair none (the review, Oct 30)
     got, names = week(([x9, dataclasses.replace(y13, begins="15:00", ends="15:50")], "en"), ([ru(dataclasses.replace(y13, begins="16:00", ends="16:50"))], "ru"))
-    assert did(got) == (0, 1, 1) and names == {(1, "16:00"): {"en": "Y", "ru": "Y (ru)"}}
+    assert did(got) == (1, 2, 0) and names == {(1, "16:00"): {"ru": "Y (ru)"}}
+    # one alone there with its teacher, at another time: pairs
+    got, names = week(([y13], "en"), ([ru(dataclasses.replace(y13, begins="16:00", ends="16:50"))], "ru"))
+    assert did(got) == (0, 0, 1) and names == {(1, "16:00"): {"en": "Y", "ru": "Y (ru)"}}
+    # course A swapped for B, one teacher, room and day, X staying: B doesn't take A's names
+    b15 = dataclasses.replace(y13, subject="B", begins="15:00", ends="15:50")
+    got, names = week(([x9, y13], "en"), ([ru(x9), ru(b15)], "ru"))
+    assert did(got) == (1, 1, 0) and names == {(1, "09:00"): {"en": "X", "ru": "X (ru)"}, (1, "15:00"): {"ru": "B (ru)"}}
+    # two at one time on both sides, both still there (one teacher, one room): neither takes the other's names
+    got, names = week(([odd, dataclasses.replace(even, teacher="Abenov A.")], "en"), ([ru(dataclasses.replace(even, teacher="Abenov A.")), ru(odd)], "ru"))
+    assert did(got) == (2, 2, 0) and all(set(n) == {"ru"} for n in names.values())
     # no teacher on either side: never by place
     got, names = week(([dataclasses.replace(calc, teacher=None)], "en"), ([ru(dataclasses.replace(calc, teacher=None))], "ru"))
     assert names == {(1, "09:00"): {"ru": "Calculus (ru)"}}
@@ -5118,9 +5129,14 @@ def test_schedule_page_limits():
     from kbtu import portal
     for page, why in (("<html><body>" + "<div>" * 5000 + "</body></html>", "deep"),
                       ("<html><body>" + "<div></div>" * 60_000 + "</body></html>", "big"),
-                      ("<html><body>" + "<!-- -->" * 120_000 + "</body></html>", "big")):
+                      ("<html><body>" + "<!-- -->" * 120_000 + "</body></html>", "big"),
+                      ("<html><body>" + "<div>" * 190 + "x" * 1_000_001 + "</body></html>", "big")):  # words read 190 times
         with pytest.raises(portal.NotSchedule, match=why):
             portal.parse(page)
+    start = time.perf_counter()  # an .mht of empty parts: refused before email's parser (minutes, GBs)
+    with pytest.raises(portal.NotSchedule, match="big"):
+        portal.page_html(b"MIME-Version: 1.0\nContent-Type: multipart/related; boundary=b\n\n" + b"--b\n\n\n" * 300_000 + b"--b--\n")
+    assert time.perf_counter() - start < 1
     fixture = portal_page()
     block = re.search(r'<div class="absolute rounded-sm[^>]*top: 384px.*?</div>\s*</div>', fixture, re.S)[0]
     assert len(portal.parse(fixture.replace(block, block * 116)).lessons) == 120         # the most a week may have
@@ -5179,6 +5195,15 @@ def test_schedule_bot_safety(env, monkeypatch):
     assert sent[1]["text"] == texts.bot_message("ru", "sched_bad")[0]
     sent.clear()
     assert asyncio.run(hear(9)) == 9 and sent == []                                   # nothing again: the batch is done
+    real_one = bot.one
+    def locked(con_, sql, *a):  # the database locked in the ban check: that update skipped, the offset moves on
+        if "banned_at" in sql:
+            raise sqlite3.OperationalError("database is locked")
+        return real_one(con_, sql, *a)
+    monkeypatch.setattr(bot, "one", locked)
+    assert asyncio.run(hear(0)) == 9
+    monkeypatch.setattr(bot, "one", real_one)
+    sent.clear()
 
     def meanwhile(html):  # the student deletes the account while the bot reads the page
         week = real(html)

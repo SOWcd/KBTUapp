@@ -40,6 +40,8 @@ def page_html(data: bytes) -> str:
             raise NotSchedule("webarchive") from exc
     head = data[:2048].lower()
     if b"multipart/related" in head or b"mime-version" in head:
+        if data.count(b"\n--") > MAX_MIME:  # hundreds of thousands of empty parts took minutes and GBs in email's parser
+            raise NotSchedule("big")
         msg = email.message_from_bytes(data, policy=policy.default)
         for part in msg.walk():
             if part.get_content_type() == "text/html":
@@ -62,6 +64,9 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "met
 # recursion in Node.all() and stopped it for everyone (Oct 30). A real page nests far less and has a few thousand tags
 # and texts; every one the parser meets counts, so a page of nothing but end tags or comments stops early too
 MAX_DEPTH, MAX_PARTS = 200, 100_000
+# and its words (each one is read once per tag above it: 19 MB of text 195 deep took 30 s); an .mht's parts (a real
+# one has a part per picture and font, a few hundred)
+MAX_TEXT, MAX_MIME = 1_000_000, 2000
 
 
 class Node:
@@ -96,7 +101,7 @@ class _Tree(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.root = self.at = Node("#root", {}, None)
-        self.depth = self.parts = 0
+        self.depth = self.parts = self.chars = 0
         self.open: dict[str, int] = {}  # how many of each tag are open, so a stray end tag is known at once
 
     def _tick(self, *_) -> None:
@@ -133,6 +138,9 @@ class _Tree(HTMLParser):
     def handle_data(self, data):
         self._tick()
         if data.strip() and self.at.tag not in ("script", "style"):
+            self.chars += len(data)
+            if self.chars > MAX_TEXT:
+                raise NotSchedule("big")
             # a text after a child goes to an empty child of its own, so words() keeps the order
             if self.at.kids:
                 t = Node("#text", {}, self.at)

@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import secrets
+from collections import Counter
 from itertools import combinations
 from math import comb
 from pathlib import Path
@@ -626,8 +627,10 @@ def _who(c: dict) -> str:
 # another day. A class with no name in that language (a page in a new language: other words, no course code) by its
 # place and its teacher (a course dropped and another taken in its slot, a new semester: another teacher), never
 # without one: day, time, kind, room; then another room at the same time; then another time on its day in its room.
-# By place, what could go two ways pairs none: a wrong name is worse than one in another language. ponytail: a teacher
-# spelt apart in Latin and Cyrillic beyond _who's rules, or missing, carries no names over (the safe side)
+# By place only a class alone with its key in both weeks pairs (two of one teacher's in one room on one day: course A
+# swapped for B would take A's names); what could go two ways pairs none: a wrong name is worse than one in another
+# language. ponytail: a teacher spelt apart in Latin and Cyrillic beyond _who's rules, or missing, carries no names
+# over (the safe side); one course swapped for another of the same teacher, room and day, the only one there, does
 _BY_NAME = (lambda c: (c["weekday"], c["begins"], c["ends"], c["kind"], _room(c), c["name"]),
             lambda c: (c["weekday"], c["kind"], c["name"]),
             lambda c: (c["kind"], c["name"]))
@@ -637,19 +640,15 @@ _BY_PLACE = (lambda c: (c["weekday"], c["begins"], c["ends"], c["kind"], _room(c
 PAIR_MAX = 200  # ways to pair one group weighed at most (a real group has 1-4 classes)
 
 
-def _pair(old: list[dict], new: list[dict], by_name: bool) -> list[tuple[dict, dict]]:
-    """One group's saved and new classes (each in the week's order) paired in that order, the fewest minutes moved:
-    the bigger side's extra ones stay unpaired. By place, what could go two ways pairs none: a tie, two classes at one
-    time on one side, more ways than PAIR_MAX. By name (the same names either way) a group that big pairs in order."""
+def _pair(old: list[dict], new: list[dict]) -> list[tuple[dict, dict]]:
+    """One group's saved and new classes by name (each in the week's order) paired in that order, the fewest minutes
+    moved: the bigger side's extra ones stay unpaired; more ways than PAIR_MAX (a made-up page) in order (the same
+    names either way)."""
     few, many = sorted((old, new), key=len)
-    flip = lambda pairs: [(a, b) if few is old else (b, a) for a, b in pairs]  # noqa: E731
-    if not by_name and any(len({_at(c) for c in side}) < len(side) for side in (old, new)):
-        return []
-    if comb(len(many), len(few)) > PAIR_MAX:
-        return flip(zip(few, many)) if by_name else []
-    moved = lambda k: sum(abs(_at(a) - _at(b)) for a, b in zip(few, k))  # noqa: E731
-    keep, *rest = sorted(combinations(many, len(few)), key=moved)
-    return [] if not by_name and rest and moved(rest[0]) == moved(keep) else flip(zip(few, keep))
+    keep = many
+    if comb(len(many), len(few)) <= PAIR_MAX:
+        keep = min(combinations(many, len(few)), key=lambda k: sum(abs(_at(a) - _at(b)) for a, b in zip(few, k)))
+    return [(a, b) if few is old else (b, a) for a, b in zip(few, keep)]
 
 
 def save_schedule(con, uid: int, lessons: list, lang: str | None = None) -> dict | None:
@@ -691,7 +690,10 @@ def _merge(saved, lessons: list, lang: str | None) -> tuple[dict, list[dict], li
             for x in new:
                 if "was" not in x and key(x) in groups:
                     groups[key(x)][1].append(x)
-            for o, x in (p for g in groups.values() if g[0] and g[1] for p in _pair(*g, keys is _BY_NAME)):
+            if keys is _BY_PLACE:  # alone with its key in both whole weeks, taken or not
+                alone = [{k for k, n in Counter(map(key, side)).items() if n == 1} for side in (old, new)]
+                groups = {k: g for k, g in groups.items() if k in alone[0] and k in alone[1]}
+            for o, x in (p for g in groups.values() if g[0] and g[1] for p in (_pair(*g) if keys is _BY_NAME else zip(*g))):
                 o["taken"], x["was"] = True, o
     names = [{**(x["was"]["stored"] if "was" in x else {}), **({page: x["subject"]} if page else {})} for x in new]
     kept = [x for x in new if "was" in x]
