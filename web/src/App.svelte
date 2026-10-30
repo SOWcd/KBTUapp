@@ -311,6 +311,8 @@
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club; no longer in it: the club's page
     const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } ui.club = org; toClub(); sheets.team(); };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
+    // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
+    else if (p) say(t('link.unknown'), 'thinking_face_3d');
   }
 
   // the app was closed while away at Microsoft (the page returns to plain Telegram): someone new types the student ID

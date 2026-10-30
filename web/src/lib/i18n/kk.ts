@@ -481,6 +481,7 @@ const kk: Dict = {
   'common.tomorrow': 'Ертең',
   'common.error': 'Бірдеңе дұрыс болмады',
   'common.offline': 'Байланыс жоқ. Интернетті тексер',
+  'link.unknown': 'Бұл сілтеме жұмыс істемейді: ескірген болуы мүмкін',
 
   'event.go': 'Барамын',
   'event.goPrice': 'Барамын · {price}',

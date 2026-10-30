@@ -481,6 +481,7 @@ const ru = {
   'common.tomorrow': 'Завтра',
   'common.error': 'Что-то пошло не так',
   'common.offline': 'Нет связи. Проверь интернет',
+  'link.unknown': 'Эта ссылка не работает: возможно, она устарела',
 
   'event.go': 'Иду',
   'event.goPrice': 'Иду · {price}',

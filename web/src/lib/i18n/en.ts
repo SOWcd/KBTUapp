@@ -481,6 +481,7 @@ const en: Dict = {
   'common.tomorrow': 'Tomorrow',
   'common.error': 'Something went wrong',
   'common.offline': 'No connection. Check your internet',
+  'link.unknown': "This link doesn't work: it may be out of date",
 
   'event.go': "I'm going",
   'event.goPrice': 'Going · {price}',
