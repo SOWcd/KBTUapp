@@ -103,18 +103,18 @@ def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str],
     return msgs, rooms, events
 
 
-def _parse(text: str) -> dict:
-    """The JSON object in a model's answer (some wrap it in prose or a code fence); {} when there's none."""
+def _parse(text: str) -> dict | None:
+    """The JSON object in a model's answer (some wrap it in prose or a code fence); None when there's none."""
     m = re.search(r"\{.*\}", text, re.S)
     try:
-        x = json.loads(m.group(0)) if m else {}
+        x = json.loads(m.group(0)) if m else None
     except ValueError:
-        return {}
-    return x if isinstance(x, dict) else {}
+        return None
+    return x if isinstance(x, dict) else None
 
 
 def _json(text: str) -> dict | None:
-    x = _parse(text)
+    x = _parse(text) or {}
     return x if isinstance(x.get("text"), str) and x["text"].strip() else None
 
 
@@ -165,9 +165,16 @@ def fill_prompt(con, v: Viewer, org: int, text: object) -> list[dict]:
             {"role": "user", "content": t}]
 
 
+def fill_answered(text: str) -> bool:
+    """The model gave the form: an object of its fields (nulls for what the text doesn't say), or an empty one. Else the
+    next model is asked."""
+    x = _parse(text)
+    return x is not None and (not x or bool(x.keys() & {"title", "place", "description", "date", "start", "end", "price"}))
+
+
 def filled(text: str) -> dict:
     """The model's form, each field kept only in the shape the editor takes (anything else: left for the person)."""
-    x, out = _parse(text), {}
+    x, out = _parse(text) or {}, {}
     for k, most in (("title", 80), ("place", 80), ("description", 2000)):
         if isinstance(x.get(k), str) and x[k].strip():
             out[k] = x[k].strip()[:most]

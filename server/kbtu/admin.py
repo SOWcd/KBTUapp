@@ -45,6 +45,14 @@ from pathlib import Path
 
 from .logic import RANK, Viewer, _slug_free, create_org, delete_me, deletion_hash, find_user, now, one, rows, set_role
 
+# names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
+# text that reads backwards)
+_UNSAFE, _print = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]"), print
+
+
+def print(*a, **k) -> None:  # noqa: A001
+    _print(*(_UNSAFE.sub("?", str(x)) for x in a), **k)
+
 
 def _user(con, who: str):
     u = find_user(con, who)

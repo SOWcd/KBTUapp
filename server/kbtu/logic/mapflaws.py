@@ -19,7 +19,7 @@ def report(con, v: Viewer, body: dict, student: bool = False) -> None:
     need_student(v)
     # control and bidi characters out: the notes are printed raw in the admin's terminal (`admin mapflaws`)
     ver, floor = body.get("ver"), body.get("floor")
-    text = " ".join(_CTRL.sub("", str(body.get("body") or "")).split())
+    text = " ".join(_CTRL.sub(" ", str(body.get("body") or "")).split())
     try:
         u, w = float(body["u"]), float(body["v"])
         px, py = (float(body["px"]), float(body["py"])) if body.get("px") is not None else (None, None)

@@ -5703,7 +5703,7 @@ def test_student_forum_pages(env):
     assert len(first) == T.PAGE and len(rest) == 6 and not {x["id"] for x in first} & {x["id"] for x in rest}
     con.close()
 
-def test_event_questions(env):
+def test_event_questions(env, monkeypatch):
     """Oct 30: an event's own questions at sign-up. The editor sets up to five (text or a choice); signing up answers
     them (a required one, a choice from its options); the organizers see the answers in Attendees and the CSV; they
     go 30 days after the event."""
@@ -5738,6 +5738,8 @@ def test_event_questions(env):
     rows_ = texts.attendees_csv("en", "Hackathon", logic.attendees_export(con, logic.Viewer(pres["id"], "user", True), eid)[1])[1].decode()
     assert "Your team?" in rows_.splitlines()[0] and "Bugs Bunny" in rows_
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 31 * 86400, eid))
+    t = int(time.time())
+    set_clock(monkeypatch, lambda: (t + 5 * 3600) // 86400 * 86400 - 5 * 3600 + 600)          # 00:10, when it runs
     logic.stats_day(con)                                                                    # the nightly round
     assert con.execute("SELECT answers FROM registrations WHERE event_id = ?", (eid,)).fetchone()[0] is None
     con.close()
@@ -5765,10 +5767,10 @@ def test_map_flaws(env):
     assert [(x["floor"], x["body"], x["done"]) for x in got] == [(1, "the WC door doesn't exist", None)]
     c.post(f"/api/map/flaws/{got[0]['id']}/done", headers=tma(4))
     assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["done"]
-    c.post("/api/map/flaws", headers=tma(1), json={**flaw, "body": "\x1b]0;title\x07 the \u202estair"})   # the admin's terminal
+    c.post("/api/map/flaws", headers=tma(1), json={**flaw, "body": "\x1b]0;title\x07the\n\u202estair"})   # the admin's terminal
     assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["body"] == "]0;title the stair"
     for _ in range(8):
-        c.post("/api/map/flaws", headers=tma(1), json=flaw)
+        assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 204
     assert c.post("/api/map/flaws", headers=tma(1), json=flaw).status_code == 429
     _board_on(c, cfg)
     assert [c.post("/api/map/flaws", headers=tma(2), json=mine).status_code for _ in range(4)] == [204, 204, 204, 429]
@@ -5843,6 +5845,9 @@ def test_event_fill(env, monkeypatch):
     assert c.post(f"/api/orgs/{org}/events/fill", headers=tma(9), json={"text": "short"}).status_code == 400
     from kbtu.logic import assistant
     assert assistant.filled('{"date": "2026-02-31", "price": true, "title": 5}') == {} and assistant.filled("nope") == {}
+    # what counts as the model's answer (else the next model is asked): its form, even all empty; not junk
+    assert [assistant.fill_answered(x) for x in ('{"title": null, "date": null}', "{}", "```json\n{\"place\": \"256\"}\n```",
+                                                 '{"error": "busy"}', "[]", "sorry", '{"title": ')] == [True, True, True, False, False, False, False]
     con.close()
 
 
