@@ -235,12 +235,17 @@ def reset_cal_token(con, v: Viewer) -> None:
 def cal_feed(con, token: str, link) -> str:
     """Everything I go to, from a month ago on: the phone's calendar refreshes it on its own (hourly asked), so a new
     registration shows up and a cancelled one goes; a cancelled event stays, struck through."""
-    u = one(con, "SELECT u.id, u.lang FROM users u JOIN students s ON s.user_id = u.id WHERE u.cal_token = ?", token) if token else None
+    u = one(con, "SELECT u.id, u.lang, u.role FROM users u JOIN students s ON s.user_id = u.id WHERE u.cal_token = ?", token) if token else None
     if not u:
         raise ApiError("not_found")
-    evs = rows(con, """SELECT e.*, o.name AS org_name FROM registrations r JOIN events e ON e.id = r.event_id JOIN orgs o ON o.id = e.org_id
+    # what the app would show me now: a club I left or was banned from keeps its team-only events to itself, a club the
+    # admin hid is gone (privacy review: the feed kept telling them)
+    v = Viewer(u["id"], u["role"], True)
+    roles, hidden = _roles(con, v), _hidden_orgs(con)
+    evs = [e for e in rows(con, """SELECT e.*, o.name AS org_name FROM registrations r JOIN events e ON e.id = r.event_id JOIN orgs o ON o.id = e.org_id
         WHERE r.user_id = ? AND r.status IN ('going', 'hold') AND e.status IN ('published', 'cancelled') AND e.hidden_at IS NULL
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? ORDER BY e.starts_at LIMIT 300""", u["id"], NO_END, core.now() - 30 * 86400)
+        if _visible(con, v, e, roles, hidden)]
     return _calendar([x for e in evs for x in _vevent(e, link(e["id"]), u["lang"])], "X-WR-CALNAME:KBTU App", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H")
 
 

@@ -1471,7 +1471,10 @@ def test_calendar_feed(env):
     for eid, status, title in ((1, "published", "Hack\rDTSTART:19700101T000000Z"), (2, "cancelled", "Talk"), (3, "published", "Not mine")):
         con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
             VALUES (?, 1, ?, ?, '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (eid, status, title, start, pres["id"]))
-    for eid in (1, 2):
+    # a team-only event of a club Ali isn't (or no longer is) in: the app hides it from him, so does the feed
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at, visibility)
+        VALUES (4, 1, 'published', 'Team only', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0, 'members')""", (start, pres["id"]))
+    for eid in (1, 2, 4):
         con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, 0, 0)", (eid, ali["id"], f"T{eid}ABCD"))
     A = tma(91, "Ali")
     links = c.post("/api/me/calendar", headers=A).json()
@@ -1481,6 +1484,7 @@ def test_calendar_feed(env):
     feed = c.get(f"/cal/{token}.ics")                                                            # no Telegram headers
     assert feed.headers["content-type"].startswith("text/calendar") and "X-WR-CALNAME:KBTU App" in feed.text
     assert "\r" not in feed.text.replace("\r\n", "") and "HackDTSTART" in feed.text.replace("\r\n ", "")  # a bare CR can't start a property
+    assert "Team only" not in feed.text                                                         # what the app hides from him
     assert "SUMMARY:Hack" in feed.text and "SUMMARY:Talk\r\nLOCATION" in feed.text and "STATUS:CANCELLED" in feed.text and "Not mine" not in feed.text
     webcal, https = f"webcal://{cfg.domain}/cal/{token}.ics", f"https://{cfg.domain}/cal/{token}.ics"
     google = "https://calendar.google.com/calendar/render?cid=" + urllib.parse.quote(webcal, safe="")
