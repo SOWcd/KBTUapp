@@ -173,7 +173,8 @@ def ics_sig(eid: int) -> str:
 
 
 def _ics_text(s: str) -> str:
-    return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+    # a bare CR is a line break to some calendar apps: an organizer's title could add properties to every feed
+    return s.replace("\r", "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
 def _fold(line: str) -> str:
@@ -223,6 +224,12 @@ def cal_token(con, v: Viewer) -> str:
         t = secrets.token_urlsafe(18)
         con.execute("UPDATE users SET cal_token = ? WHERE id = ?", (t, v.id))
     return t
+
+
+def reset_cal_token(con, v: Viewer) -> None:
+    """A leaked feed address told where I'd be: the old one stops at once, the next tap on Calendar makes a new one."""
+    need_student(v)
+    con.execute("UPDATE users SET cal_token = NULL WHERE id = ?", (v.id,))
 
 
 def cal_feed(con, token: str, link) -> str:

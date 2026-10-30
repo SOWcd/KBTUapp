@@ -19,7 +19,7 @@ MARK = ('<svg class="mk" viewBox="0 0 28 24"><g fill="currentColor"><rect x="1" 
         '<rect x="12.5" y="7" width="3" height="11" rx="1.5"/><rect x="17.75" y="7" width="3" height="11" rx="1.5"/>'
         '<rect x="23" y="7" width="3" height="11" rx="1.5"/><rect x="0" y="19.5" width="28" height="3" rx="1.5"/></g></svg>')
 # lucide's arrow-up-right (the row leaves for Google), copy and check
-ICON = '<svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none"stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">{}</svg>'
+ICON = '<svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">{}</svg>'
 OUT = ICON.format('<path d="M7 7h10v10M7 17 17 7"/>')
 COPY = ICON.format('<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>')
 DONE = ICON.format('<path d="M20 6 9 17l-5-5"/>')

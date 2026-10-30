@@ -84,6 +84,12 @@
     try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); close(overlay.id); }
     catch { say(t('common.error'), 'pleading_face_3d'); }
   }
+  // the calendar's address leaked (sent to someone, a shared screen): the old one stops, Calendar makes a new one
+  async function resetCal() {
+    if (!(await sheets.ask({ title: t('set.calResetAsk'), text: t('set.calResetText'), ok: t('set.calResetOk'), cancel: t('common.cancel'), danger: true }))) return;
+    try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
     const a = data.myCard?.awards;
@@ -144,6 +150,7 @@
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </div>
     {#if me?.student && !me.deleteAt}
+      <div class="set-group plain gap">{@render act(t('set.calReset'), resetCal, true)}</div>
       <div class="set-group plain gap">{@render act(t('me.deleteData'), deleteData, true)}</div>
     {/if}
   {:else if kind === 'phone'}

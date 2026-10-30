@@ -10,6 +10,7 @@ import { haptic, requestWriteAccess } from '../tg';
 import { burst } from '../../ui/burst';
 import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
+import { clearCache } from './cache';
 
 export const data = $state({
   events: [] as EventCard[],
@@ -290,6 +291,11 @@ export async function dropSchedule(): Promise<void> {
     await api.deleteSchedule();
     skipped.clear();
     try { localStorage.removeItem(SKIP_KEY); } catch { /* blocked */ }
+    clearCache(); // the phone's saved copy of the app's data held the week for days (privacy review)
     haptic.ok(); say(t('pd.deleted'), 'sparkles_3d');
-  } catch { data.schedule = before; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  } catch {
+    // the server's own word, not the week from before: it may have deleted it, or a newer upload may have come
+    data.schedule = await api.schedule().catch(() => before);
+    haptic.error(); say(t('common.error'), 'pleading_face_3d');
+  }
 }

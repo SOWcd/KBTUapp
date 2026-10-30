@@ -29,9 +29,9 @@
   // my events in the phone's calendar, through our page (server/kbtu/calpage.py): it hands webcal:// to Apple's calendar,
   // leads the rest to Google and has the address to copy for any other app. Asked for on the tap, not when Settings
   // opens: the address makes a feed token on the server
-  let cal: { page: string; feed: string } | null = null;
   async function subscribe() {
-    try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
+    let cal: { page: string; feed: string };
+    try { cal = await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; } // asked each time: a reset kills the old link
     openLink(cal.page);
   }
 

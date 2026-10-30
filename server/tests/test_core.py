@@ -1468,7 +1468,7 @@ def test_calendar_feed(env):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     start = int(time.time()) + 86400
-    for eid, status, title in ((1, "published", "Hack"), (2, "cancelled", "Talk"), (3, "published", "Not mine")):
+    for eid, status, title in ((1, "published", "Hack\rDTSTART:19700101T000000Z"), (2, "cancelled", "Talk"), (3, "published", "Not mine")):
         con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
             VALUES (?, 1, ?, ?, '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (eid, status, title, start, pres["id"]))
     for eid in (1, 2):
@@ -1480,6 +1480,7 @@ def test_calendar_feed(env):
     assert links["feed"] == f"webcal://{cfg.domain}/cal/{token}.ics"
     feed = c.get(f"/cal/{token}.ics")                                                            # no Telegram headers
     assert feed.headers["content-type"].startswith("text/calendar") and "X-WR-CALNAME:KBTU App" in feed.text
+    assert "\r" not in feed.text.replace("\r\n", "") and "HackDTSTART" in feed.text.replace("\r\n ", "")  # a bare CR can't start a property
     assert "SUMMARY:Hack" in feed.text and "SUMMARY:Talk\r\nLOCATION" in feed.text and "STATUS:CANCELLED" in feed.text and "Not mine" not in feed.text
     webcal, https = f"webcal://{cfg.domain}/cal/{token}.ics", f"https://{cfg.domain}/cal/{token}.ics"
     google = "https://calendar.google.com/calendar/render?cid=" + urllib.parse.quote(webcal, safe="")
@@ -1501,9 +1502,14 @@ def test_calendar_feed(env):
     assert "<x-y>" not in calpage.render("d", '"><x-y>', "en", "") and {len(x) for x in texts.CAL_PAGE.values()} == {6}  # all escaped
     assert "@media (prefers-reduced-motion:reduce){*,::after{animation:none!important;transition:none!important}" in calpage.CSS  # no motion asked: none
     assert c.get("/cal/nobody.ics").status_code == 404 and c.get("/cal/nobody").status_code == 404
+    # a leaked address can be reset: the old one is dead at once, the next tap makes another
+    old = c.post("/api/me/calendar", headers=A).json()["page"].rsplit("/", 1)[1]
+    assert c.delete("/api/me/calendar", headers=A).status_code == 204
+    assert c.get(f"/cal/{old}.ics").status_code == 404 and c.get(f"/cal/{old}").status_code == 404
+    token = c.post("/api/me/calendar", headers=A).json()["page"].rsplit("/", 1)[1]
+    assert token not in ("", old)
     assert delete_now(c, cfg, A) is None
     assert c.get(f"/cal/{token}.ics").status_code == 404                                        # gone with my data
-
 
 def test_unlock_moment(env):
     """A check-in that brings a new achievement level: the date it was reached, the bot's message once, and the

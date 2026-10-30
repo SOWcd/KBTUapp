@@ -304,6 +304,7 @@ export const server: Api = {
   registryExport: () => call('POST', '/registry/export'),
   markUnlocked: (code, level) => call('POST', '/me/unlocked', { code, level }),
   calendarFeed: () => call('POST', '/me/calendar'),
+  resetCalendar: () => call('DELETE', '/me/calendar'),
   eventInvites: (id) => call('GET', `/events/${id}/invites`),
   inviteFriend: (id, userId) => call('POST', `/events/${id}/invites`, { userId }),
   addAlbumPhoto: (id, file) => call('POST', `/events/${id}/photos`, file),

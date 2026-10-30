@@ -17,7 +17,7 @@ from .core import (ApiError, DOOR_EARLY, DOOR_LATE, GOV_SLUG, HOLD, LEVEL_RIGHTS
     shown_name, taken)  # noqa: F401
 from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _ics_text, _receipt_flags,
     _receipt_slot, _remind, _ticket_code, _vevent, _visible, _volunteers_view, add_receipt, add_seats, cal_feed,
-    cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event,
+    cal_token, reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event,
     event_ics, events, ics_sig, notify, past_events, promote, receipt_open, receipt_path, register, review_receipt,
     set_saved, sweep_holds, tickets, title_in, unregister, volunteer_apply, volunteer_decide, volunteer_leave,
     volunteers_list)  # noqa: F401

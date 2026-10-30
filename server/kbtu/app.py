@@ -471,6 +471,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         t = logic.cal_token(con, v)
         return {"page": f"https://{cfg.domain}/cal/{t}", "feed": f"webcal://{cfg.domain}/cal/{t}.ics"}
 
+    @app.delete("/api/me/calendar", status_code=204)
+    def reset_my_calendar(con: Con, v: Me):
+        logic.reset_cal_token(con, v)
+
     @app.get("/cal/{token}.ics")
     def calendar_feed(token: str, con: Con):
         body = logic.cal_feed(con, token, lambda eid: f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}")

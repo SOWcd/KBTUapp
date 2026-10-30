@@ -239,6 +239,7 @@ export interface Api {
   registryExport(): Promise<void>;                        // every roster as a CSV into my chat with the bot
   markUnlocked(code: string, level: number): Promise<{ unlocked: Me['unlocked'] }>; // the unlock moment was shown
   calendarFeed(): Promise<{ page: string; feed: string }>;     // my events in the phone's calendar (a kept secret address)
+  resetCalendar(): Promise<void>;                              // the old address stops; the next calendarFeed() makes a new one
   eventInvites(id: Id): Promise<FriendInvite[]>;               // "Bring a friend": my friends and where they stand
   inviteFriend(id: Id, userId: Id): Promise<FriendInvite[]>;    // the bot brings them our card; once per friend and event
   addAlbumPhoto(id: Id, file: Blob): Promise<EventFull>;        // the guests' album (canAddPhotos); re-encoded like a cover
