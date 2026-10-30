@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Profile → Settings, the third page, the phone's own way (owner, Oct 30: "like Apple"; the page of hints, tiles and
+  // Profile → Settings, full screen from the gear (SettingsPage), the phone's own way (owner, Oct 30: "like Apple"; the page of hints, tiles and
   // red bins under each row read as clutter): one short row each, its value in grey, a chevron; the choices and the
   // explanations are a tap deeper (SettingsSheet). My phone, my city and deleting the account live under Privacy.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -12,7 +12,7 @@
   import Lock from '@lucide/svelte/icons/lock';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import { session } from '../../lib/state/session.svelte';
-  import { say, ui } from '../../lib/state/ui.svelte';
+  import { say, close } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api } from '../../lib/api';
   import { t, i18n, LANG_FULL } from '../../lib/i18n/index.svelte';
@@ -27,7 +27,7 @@
   const bells = $derived(s ? [s.nRemind, s.nNewEvents, s.nForum].filter(Boolean).length : 0);
 
   // my events in the phone's calendar: Apple through our page that hands webcal:// over, the rest through Google. Asked
-  // for on the tap: the page mounts unseen next to Me, and the address makes a feed token on the server
+  // for on the tap, not when Settings opens: the address makes a feed token on the server
   let cal: { page: string; feed: string } | null = null;
   async function subscribe() {
     try { cal ??= await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
@@ -50,10 +50,10 @@
 <div class="page scroll stagger settings-root">
   <h1 class="ttl">{t('me.settings')}</h1>
 
-  <!-- who I am, the phone's account row: my face and name, a tap opens my profile page -->
+  <!-- who I am, the phone's account row: my face and name; Settings opens over Profile (its gear), so a tap closes it -->
   {#if me}
     <div class="set-group">
-      <button class="set-row acct" onclick={() => { haptic.tap(); ui.page.profile = 1; }}>
+      <button class="set-row acct" onclick={() => { haptic.tap(); close(); }}>
         <Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={54} tappable={false} />
         <span class="lb"><b>{me.name}</b><i>{me.student ? [me.student.studentId, me.student.school].filter(Boolean).join(' · ') : '@' + (me.tg.username ?? '')}</i></span>
         <ChevronRight class="chev" size={18} /></button>
