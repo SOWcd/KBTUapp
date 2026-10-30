@@ -1,10 +1,9 @@
 <script lang="ts">
-  // Bottom nav (liquid glass, floats), iOS 26's way (owner, Oct 30; review P1): every tab its icon over a small label,
-  // always; the active one tinted (--accent-text: a 10.5 px label needs 4.5:1, --accent doesn't reach it) on a soft lens
-  // that slides to it with a jelly squash. Equal tabs that stay put, one weight on and off, so nothing jumps while a
-  // drag previews them. Press and drag along the bar previews tabs; the tab switches on release. While scrolling down
-  // the labels fade and the icons settle in the middle (compositor only, the bar keeps its size under the thumb);
-  // hides under a sheet (and the Feed). The map: its own round glass button beside it.
+  // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
+  // each icon only repeated it); the active one tinted on a soft lens that slides to it with a jelly squash. Equal tabs
+  // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
+  // switches on release. Shrinks while scrolling down; hides under a sheet (and the Feed). The map: its own round glass
+  // button beside it.
   import MapIcon from '@lucide/svelte/icons/map';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
@@ -57,18 +56,17 @@
   <span class="lens" bind:this={lens} style:translate="{shown * 100}% 0" aria-hidden="true"></span>
   {#each tabs as tab, i (tab)}
     {@const Icon = TAB_ICON[tab]}
-    <button class="tab" class:on={shown === i} aria-current={ui.tab === tab ? 'page' : undefined} onclick={() => pick(i)}>
+    <button class="tab" class:on={shown === i} aria-current={ui.tab === tab ? 'page' : undefined} aria-label={labels[i]} onclick={() => pick(i)}>
       <span class="ic">
         <Icon size={24} strokeWidth={2} />
         {#if dot[i]}<i class="dot"></i>{/if}
       </span>
-      <span class="lbl">{labels[i]}</span>
     </button>
   {/each}
 </nav>
 <!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the tabs keep their width -->
-<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }}
+<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }}
         onpointerdown={warm} onclick={openMap}>
   <span class="tone-base" aria-hidden="true"></span>
   <MapIcon size={24} strokeWidth={2} />
@@ -92,6 +90,7 @@
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
     background: none;
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55), 0 0 24px -6px var(--nav-glow, rgba(120, 150, 255, 0.4));
+    transition: height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
   .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; }
   .mapb { width: 60px; display: grid; place-items: center; color: var(--chrome-ink); }
@@ -122,12 +121,7 @@
   .tab.on { color: var(--accent-text); }
   .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
   .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
-  .lbl {
-    max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: clip;
-    font: 600 var(--fs-tab)/1.15 var(--font-text); letter-spacing: -0.01em;
-    transition: opacity var(--t-base) var(--ease);
-  }
-  /* scrolling down: the labels fade, the icons settle in the middle; the bar keeps its size under the thumb */
-  .mini .lbl { opacity: 0; }
-  .mini .ic { transform: translateY(7px); }
+  /* scrolling down: the bar shrinks to a slimmer pill, the map button with it */
+  .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
+  .mapb.mini { width: 50px; height: 50px; }
 </style>
