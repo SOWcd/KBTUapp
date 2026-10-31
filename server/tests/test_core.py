@@ -6851,6 +6851,56 @@ def test_prefill_rest(env, monkeypatch, capsys):
     con.close()
 
 
+def test_prefill_rest_review_fixes(env, monkeypatch, capsys):
+    """latin-rest-claim-code-review.md (made-up people): the rest import badges a signed-up student and fills nothing (a
+    phone they deleted stays deleted); a kept row is gone by its mail, an ID taken after the main import doesn't bring it
+    back; a list the main import never ran is refused; two mail-less rows with one ID match by nothing; rows with neither
+    mail nor ID go with the account whose name they have; a doubled displayName word is no Latin name; the policy says
+    the ID and name match too."""
+    import io
+    from pathlib import Path
+    from kbtu import admin
+    from kbtu.logic.account import latin_from_ms
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    assert latin_from_ms({"displayName": "Aidos Aidos Serikbayev", "givenName": "Aidos", "surname": "Serikbayev"})[0] is None
+    assert "or the same student ID and name" in (Path(logic.__file__).parents[1] / "i18n/legal/privacy.en.html").read_text()
+    ann = login(c, 21, "ann")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET student_id = '25B020001', email = 'ann@kbtu.kz', ms_oid = 'oid-ann' WHERE user_id = ?", (ann["id"],))
+    lines = ["email,student_id,last,first,middle,school,phone,came",
+             "kept@kbtu.kz,25B020002,Kept,Kim,,,+7 701 000 00 22,1",     # used at sign-in, then the phone deleted
+             "gone@kbtu.kz,25B020003,Gone,Gil,,,,1",                     # used, the account deleted; the ID someone's later
+             ",25B020009,Shared,Sam,,,,0",                               # no mail, one ID for two people
+             ",25B020009,Other,Oleg,,,,0",
+             ",,Testov,Ann,,,,0",                                        # neither: goes with Ann's account
+             ",,Other,Person,,,,0"]
+
+    def run(cmd: str, name: str) -> str:
+        monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(("\n".join(lines) + "\n").encode())))
+        capsys.readouterr()
+        admin.main([cmd, "--list", name])
+        return capsys.readouterr().out
+    run("prefill-import", "l1")
+    con.execute("UPDATE meta SET value = ? WHERE key = 'prefill_list:l1'", (str(int(time.time()) - 100),))
+    uid = c.get("/api/me", headers=tma(22)).json()["id"]
+    logic.ms_remember(con, uid, {"oid": "oid-22", "email": "kept@kbtu.kz", "first": "Kim", "last": "Kept", "employeeId": "", "profile": {}})
+    assert c.post("/api/kbtu/manual", headers=tma(22), json={"studentId": "25B020002", "consentVersion": logic.CONSENT}).status_code == 200
+    assert c.patch("/api/me", headers=tma(22), json={"phone": None}).status_code == 200
+    con.execute("DELETE FROM prefill WHERE email = 'gone@kbtu.kz'")
+    bob = login(c, 23, "bob")
+    con.execute("UPDATE students SET student_id = '25B020003' WHERE user_id = ?", (bob["id"],))
+    with pytest.raises(SystemExit):
+        run("prefill-rest", "l2")                                                       # the main import never ran it
+    assert run("prefill-rest", "l1").split("\n")[0] == "rows 6  in_prefill 0  gone 1  matched 1  badged 0  stored 4  sits 4"
+    assert con.execute("SELECT phone FROM students WHERE user_id = ?", (uid,)).fetchone()[0] is None
+    assert [tuple(r) for r in con.execute("SELECT last_name, student_id FROM prefill_rest ORDER BY id")] == [
+        ("Shared", None), ("Other", None), ("Testov", None), ("Other", None)]
+    logic.delete_me(con, logic.Viewer(ann["id"], "user", True))
+    assert [r[0] for r in con.execute("SELECT first_name FROM prefill_rest ORDER BY id")] == ["Sam", "Oleg", "Person"]
+    con.close()
+
+
 def test_claim_link(env, monkeypatch, capsys):
     """The volunteers' badge by a link (prefill-rest-and-claim-review.md B): admin claim new prints a gl_ link many open,
     each student gets it once and at once, a second open is fine, closed after its day or by claim close; one-time

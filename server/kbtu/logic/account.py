@@ -117,8 +117,9 @@ def latin_from_ms(profile: dict, middle: str | None = None) -> tuple[dict | None
         if w <= given and w <= sur:
             return None, "ambiguous"
         side["first" if w <= given else "last" if w <= sur else "rest"].append(t)
-    if roster._words(" ".join(side["first"])) != given or roster._words(" ".join(side["last"])) != sur:
-        return None, "side"
+    if roster._words(" ".join(side["first"])) != given or roster._words(" ".join(side["last"])) != sur \
+            or any(len(side[k]) != len({frozenset(roster._words(t)) for t in side[k]}) for k in ("first", "last")):
+        return None, "side"  # a side missing, or a word written twice (Aidos Aidos)
     if len(side["rest"]) > 1:
         return None, "rest"
     mid = side["rest"][0] if side["rest"] and middle and roster._words(side["rest"][0]) == roster._words(middle) else None
@@ -218,20 +219,24 @@ def _prefill_sort(got: list[dict]) -> tuple[Counter, dict[str, dict], list[dict]
 def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     """The rest of a freshmen list (admin prefill-rest, the same CSV as prefill-import): the rows the main import didn't
     keep (review prefill-rest-and-claim-review.md A). A confirmed student whose KBTU mail or student ID the row has, and
-    whose name it is: the badge if they came, what their row lacks, nothing stored. Otherwise the row waits in
+    whose name it is: the badge if they came, nothing else (their profile is theirs: a phone they deleted must not
+    come back), nothing stored. Otherwise the row waits in
     prefill_rest for ms_link: a KBTU mail only (else NULL), the ID only when it is valid and the list's one person's,
     the phone only well-formed; the ID as typed stays for the owner (never shown, never matched). A row with neither
     mail nor ID just sits (the owner keeps everything). Rows still in prefill, or kept once and gone since (used, or an
-    account deleted), are skipped. Each `name` once. Counts only. ValueError: ran already."""
+    account deleted: no student has its mail, and its ID wasn't held when the main import ran), are skipped. Each
+    `name` once, after prefill-import ran it. Counts only. ValueError: ran already, or the main import never did."""
     _, good, rest = _prefill_sort(got)
     n = Counter(rows=len(got))
     # an ID given to two mails, or a mail given two IDs: which person is it? Those rows match by their mail only
-    pairs = {(x["email"], x["student_id"]) for x in [*good.values(), *rest] if x["student_id"]}
-    per_sid, per_mail = Counter(sid for _, sid in pairs), Counter(e for e, _ in pairs if e)
-    shared = {sid for e, sid in pairs if per_sid[sid] > 1 or e and per_mail[e] > 1}
+    same = {(x["email"], x["student_id"], _text(x.get("last"), 40), _text(x.get("first"), 40)) for x in [*good.values(), *rest] if x["student_id"]}
+    per_sid = Counter(sid for _, sid, *_ in same)
+    per_mail = Counter(e for e, _ in {(e, sid) for e, sid, *_ in same} if e)
+    shared = {sid for e, sid, *_ in same if per_sid[sid] > 1 or e and per_mail[e] > 1}
     with tx(con):
-        if one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
-            raise ValueError(name)
+        main = one(con, "SELECT value FROM meta WHERE key = ?", f"prefill_list:{name}")
+        if not main or one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
+            raise ValueError(name)  # a typo'd name would count every kept row gone, or store it again
         con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"prefill_rest:{name}", str(core.now())))
         for x in [*good.values(), *rest]:
             kbtu = x["email"] if re.fullmatch(r"[a-z0-9._%+-]+@kbtu\.kz", x["email"]) else None
@@ -243,12 +248,14 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
             if x["email"] in good and one(con, "SELECT 1 FROM prefill WHERE email = ?", x["email"]):
                 n["in_prefill"] += 1
             elif s and prefill_mine(p, s["first_name"], s["last_name"]):
-                n["badged"] += bool(p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", s["user_id"]))
-                _fill_lat(con, s["user_id"], json.loads(s["ms_profile"] or "{}"), _from_list(con, s["user_id"], p))
+                if p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", s["user_id"]):
+                    profiles._grant(con, None, s["user_id"], "init26f")
+                    n["badged"] += 1
                 n["matched"] += 1
-            elif x["email"] in good and not one(con, "SELECT 1 FROM students WHERE lower(email) = ? OR student_id = ?", x["email"], x["student_id"]) \
-                    and not one(con, "SELECT 1 FROM prefill WHERE student_id = ?", x["student_id"]):
-                n["gone"] += 1  # kept by the main import (nothing held its mail or ID), used or deleted since: never back
+            elif x["email"] in good and not one(con, "SELECT 1 FROM students WHERE lower(email) = ?", x["email"]) \
+                    and not one(con, """SELECT 1 FROM students WHERE student_id = ? AND verified_at <= ?
+                        UNION ALL SELECT 1 FROM prefill WHERE student_id = ? AND email != ?""", x["student_id"], int(main[0]), x["student_id"], x["email"]):
+                n["gone"] += 1  # kept by the main import (its ID free then), used or deleted since: never back
             else:
                 con.execute("""INSERT INTO prefill_rest (email, student_id, raw_id, last_name, first_name, middle_name, school, phone, came)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (kbtu, sid, _text(x.get("raw_id"), 40), p["last_name"], p["first_name"],
@@ -893,7 +900,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM prefill_rest WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
             UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))""", (v.id, f"ms:{v.id}"))
         if s_ := one(con, "SELECT student_id, first_name, last_name FROM students WHERE user_id = ?", v.id):
-            for r in rows(con, "SELECT * FROM prefill_rest WHERE student_id = ?", s_["student_id"]):
+            # by my ID, or with neither a mail nor an ID (they match nothing), where the name is mine
+            for r in rows(con, "SELECT * FROM prefill_rest WHERE student_id = ? OR (email IS NULL AND student_id IS NULL)", s_["student_id"]):
                 if prefill_mine(r, s_["first_name"], s_["last_name"]):
                     con.execute("DELETE FROM prefill_rest WHERE id = ?", (r["id"],))
         fks = _user_fks(con)

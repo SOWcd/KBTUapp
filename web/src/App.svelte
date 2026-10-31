@@ -248,7 +248,7 @@
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
     if (pr) { presidentByLink(Number(pr[1]), pr[2]); return; }
-    const gl = p.match(/^gl_([0-9a-f]{24})$/); // the creator's one-time award link
+    const gl = p.match(/^gl_([0-9a-f]{24})$/); // the creator's award link (one-time, or many's: admin claim new)
     if (gl) {
       ui.tab = 'profile';
       asStudent(async () => {

@@ -297,7 +297,7 @@ def main(args: list[str]) -> None:
             try:
                 n = prefill_rest_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]], args[2])
             except ValueError:
-                sys.exit(f"list {args[2]!r}: its rest was stored already (each list once)")
+                sys.exit(f"list {args[2]!r}: its rest was stored already, or prefill-import never ran it (run that first)")
             print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "in_prefill", "gone", "matched", "badged", "stored", "sits")))
             print(f"{one(con, 'SELECT COUNT(*) FROM prefill_rest')[0]} rows wait in prefill_rest")
             return
