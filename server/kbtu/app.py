@@ -1092,7 +1092,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
                 return {"text": "", "actions": [], **logic.assistant.care(con, lang)}
             raise
-        return logic.assistant.reply(con, text, rooms, events, lang)
+        return logic.assistant.reply(con, text, rooms, events, lang, msgs[-1]["content"])
 
     # its feedback (logic/assistant.py): a 👍/👎 on an answer's signed topic; on 👎, the one question and answer if sent
     @app.post("/api/assistant/vote", status_code=204)

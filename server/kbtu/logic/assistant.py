@@ -42,7 +42,7 @@ Reply with JSON only, no other text:
 {{"text": "...", "actions": [{{"type": "map", "room": "180"}}, {{"type": "event", "id": 12}}], "known": true, "topic": "dean office SITE", "care": false}}
 actions: at most 3, only for rooms or event ids that appear in the facts and help with this question; [] if none.
 known: false only when the student asked for a fact these facts don't hold. topic: what was asked, 2-6 words in
-English, no names of people and nothing about the student.
+lowercase English (acronyms as they are), no names of people and nothing about the student.
 care: true only when the student's latest message speaks of wanting to die, hurting themselves, not wanting to live,
 or being in danger now, in any language, including slang. Not for jokes or exaggeration about studies ({not_care}),
 or rudeness to you ({hate}, insults): answer those normally and kindly. When care is true, write one or two warm
@@ -155,90 +155,156 @@ def answer(text: str, rooms: set[str], events: set[int]) -> dict:
 
 # ------------------------------------------------------------ distress and feedback (review, Oct 31)
 # A student in distress gets the helplines (texts.HELP_CARD, a fixed template) under the answer: the model's own "care"
-# flag reads the conversation; the keywords below only stand in when there's no model answer (down, or the day's 30
-# used). Nothing of it is kept but one global count a week, never tied to anyone (no alert, no mark, no block).
-# Feedback: the model's topic of a question it couldn't answer, 👍/👎 with the answer's topic, and on 👎 the one question
-# and answer the student chooses to send. None tied to a person; 30 days; the admin reads it (Admin → AI).
+# flag reads the conversation; the narrow keywords below stand in when there's no model answer (down, or the day's 30
+# used) and catch what the model missed. Nothing of it is kept but one global count a week, never tied to anyone (no
+# alert, no mark, no block). Feedback: the model's topic of a question it couldn't answer, 👍/👎 with the answer's
+# topic, and on 👎 the one question and answer (its timetable taken out) the student chooses to send. None tied to a
+# person; 30 days; the admin reads it (Admin → AI).
 
-KEY = b""                 # app.py sets it from the server's key: signs the topic a vote comes back with
+KEY = b""                 # app.py sets it from the server's key: signs an answer's mark and its question and answer
 KEEP = 30 * 86400
-DAY_MARKS, DAY_SENT = 2000, 200   # ponytail: global caps a day (no user id to cap by); one student can use them up
+DAY_MARKS, DAY_SENT = 2000, 200   # global caps a day (no user id to cap by); a client's burst is capped per worker below
+_END = r"(?=\s*(?:[.!?,;)]|$))"   # at the end of a clause: "I don't want to live." but not "... to live in the dorm"
 _CARE_WORDS = re.compile("|".join((
     "\u043f\u043e\u043a\u043e\u043d\u0447(\u0438\u0442\u044c|\u0443) \u0441 \u0441\u043e\u0431\u043e\u0439",  # ru: end it (myself)
-    "\u043d\u0435 \u0445\u043e\u0447(\u0443|\u0435\u0442\u0441\u044f) (\u0431\u043e\u043b\u044c\u0448\u0435 )?\u0436\u0438\u0442\u044c",  # don't want to live (any more)
-    "\u0436\u0438\u0442\u044c \u043d\u0435 \u0445\u043e\u0447\u0443",  # (same, word order)
-    "\u0443\u0431(\u0438\u0442\u044c|\u044c\u044e) \u0441\u0435\u0431\u044f",  # kill myself
+    "\u043d\u0435 \u0445\u043e\u0447(\u0443|\u0435\u0442\u0441\u044f) (\u0431\u043e\u043b\u044c\u0448\u0435 )?\u0436\u0438\u0442\u044c" + _END,  # don't want to live (any more)
+    "\u0436\u0438\u0442\u044c \u043d\u0435 \u0445\u043e\u0447\u0443( \u0443\u0436\u0435| \u0431\u043e\u043b\u044c\u0448\u0435)?" + _END,  # (same, word order)
+    "(?<![\u0430-\u044f])\u0443\u0431(\u0438\u0442\u044c|\u044c\u044e) \u0441\u0435\u0431\u044f",  # kill myself (not "\u043f\u043e\u0433\u0443\u0431\u0438\u0442\u044c \u0441\u0435\u0431\u044f", ruin oneself)
     "\u0441\u0443\u0438\u0446\u0438\u0434", "\u0441\u0430\u043c\u043e\u0443\u0431\u0438\u0439",  # suicide (ru, kk)
     "\u043f\u043e\u0432\u0435\u0441\u0438\u0442\u044c\u0441\u044f", "\u043f\u043e\u0432\u0435\u0448\u0443\u0441\u044c",  # hang myself
     "\u0432\u0441\u043a\u0440(\u044b\u0442\u044c|\u043e\u044e) \u0432\u0435\u043d\u044b",  # cut my veins
-    "\u0445\u043e\u0447\u0443 \u0443\u043c\u0435\u0440\u0435\u0442\u044c", "\u0432\u044b\u043f\u0438\u043b\u0438\u0442\u044c\u0441\u044f",  # want to die; slang
-    "\u04e9\u0437\u0456\u043c\u0434\u0456 \u04e9\u043b\u0442\u0456\u0440",  # kk: kill myself
-    "\u04e9\u043c\u0456\u0440 \u0441\u04af\u0440\u0433\u0456\u043c \u043a\u0435\u043b\u043c\u0435\u0439\u0434\u0456",  # don't want to live
+    "\u0445\u043e\u0447\u0443 \u0443\u043c\u0435\u0440\u0435\u0442\u044c", "(\u043d\u0435\u0442|\u043d\u0435 \u0432\u0438\u0436\u0443) \u0441\u043c\u044b\u0441\u043b\u0430 \u0436\u0438\u0442\u044c", "\u0443\u0441\u0442\u0430\u043b(\u0430)? \u0436\u0438\u0442\u044c", "\u043b\u0443\u0447\u0448\u0435 \u0431\u044b \u044f \u0443\u043c\u0435\u0440(\u043b\u0430)?",  # want to die; no point living; tired of living
+    "\u04e9\u0437\u0456\u043c\u0434\u0456([- ]\u04e9\u0437\u0456\u043c)? \u04e9\u043b\u0442\u0456\u0440",  # kk: kill myself
+    "(^|[.!?,] *)(\u043c\u0435\u043d |\u0435\u043d\u0434\u0456 )?\u04e9\u043c\u0456\u0440 \u0441\u04af\u0440\u0433\u0456\u043c \u043a\u0435\u043b\u043c\u0435\u0439\u0434\u0456" + _END,  # don't want to live (not "in Almaty")
     "\u04e9\u043b\u0433\u0456\u043c \u043a\u0435\u043b\u0435\u0434\u0456",  # want to die
     "\u0430\u0441\u044b\u043b\u044b\u043f \u04e9\u043b",  # hang myself
     "\u04e9\u0437\u0456\u043c\u0435 \u049b\u043e\u043b \u0436\u04b1\u043c\u0441\u0430",  # lay hands on myself
-    r"\bkill(ing)? myself\b", r"\bsuicid", r"\bend(ing)? my life\b", r"\bwant(ed)? to die\b", r"\bdon'?t want to (live|be alive)\b",
-    r"\b(hurt|harm|cut)(ing)? myself\b", r"\bself[- ]?harm", r"\bkms\b",
+    r"\bkill(ing)? myself\b", r"\bsuicid(e|al)\b(?! squad| burn)", r"\bend(ing)? my life\b", r"\bwant(ed)? to die\b",
+    r"\bdon'?t want to (live|be alive)( anymore| any more)?" + _END, r"\b(hurting|harming) myself\b",
+    r"\b(want to|wanna|going to|gonna|will|'ll) (hurt|harm|cut) myself\b", r"\bself[- ]?harm",
 )))
+_HITS: dict[tuple, list[int]] = {}
+
+
+def _burst(key: tuple, most: int, window: int) -> bool:
+    """A per-worker cap in memory (nothing stored): at most `most` in `window` seconds for this key."""
+    if len(_HITS) > 10000:
+        _HITS.clear()  # ponytail: forgets everyone at once; a worker this busy wants a real limiter
+    t = now()
+    h = [x for x in _HITS.get(key, ()) if x > t - window]
+    ok = len(h) < most
+    _HITS[key] = h + [t] if ok else h
+    return ok
 
 
 def distress(q: object) -> bool:
-    """The keyword backstop: only phrases that mean it (never "I'll die at the exams"); used with no model answer."""
+    """The keyword backstop: only phrases that mean it (never "I'll die at the exams" or "I don't want to live in the
+    dorm"); used with no model answer, and to keep a missed one's topic out of the table."""
     return isinstance(q, str) and bool(_CARE_WORDS.search(" ".join(q.lower().replace("\u0451", "\u0435").replace("\u2019", "'").split())))
 
 
 def care(con, lang: str) -> dict:
-    """The help card, and the week's one global count (nothing else of it is kept)."""
+    """The help card, and the week's one global count (nothing else of it is kept); the count takes at most 30 an hour
+    per worker, so a loop can't make it meaningless (a global cap: nothing per person, not even in memory)."""
     from .. import texts
-    con.execute("INSERT INTO assist_care (week, n) VALUES (?, 1) ON CONFLICT (week) DO UPDATE SET n = n + 1", (now() // (7 * 86400),))
+    if _burst(("care",), 30, 3600):
+        con.execute("INSERT INTO assist_care (week, n) VALUES (?, 1) ON CONFLICT (week) DO UPDATE SET n = n + 1", (now() // (7 * 86400),))
     return {"care": True, "help": texts.HELP_CARD.get(lang, texts.HELP_CARD["ru"])}
 
 
 def _topic(x: object) -> str | None:
-    """The model's topic as kept: short English words only (a stray name in another alphabet or any markup goes)."""
-    t = " ".join(re.sub(r"[^a-z0-9 '-]", " ", x.lower()).split())[:60] if isinstance(x, str) else ""
+    """The model's topic as kept: short lowercase English words; none at all if it holds another alphabet or a
+    capitalised word past the first (a name: "Professor Ivanov ..."; acronyms like SITE stay)."""
+    if not isinstance(x, str) or re.search(r"[^\x00-\x7f]", x) or any(w[:1].isupper() and not w.isupper() for w in x.split()[1:]):
+        return None
+    t = " ".join(re.sub(r"[^a-z0-9 '-]", " ", x.lower()).split())[:60]
     return t if len(t) >= 3 else None
 
 
-def _sign(topic: str) -> str:
-    return hmac.new(KEY, topic.encode(), hashlib.sha256).hexdigest()[:20]
+def _sign(*parts: object) -> str:
+    return hmac.new(KEY, "|".join(map(str, parts)).encode(), hashlib.sha256).hexdigest()[:24]
 
 
-def reply(con, text: str, rooms: set[str], events: set[int], lang: str) -> dict:
-    """The answer for the student: with the help card when the model says care (then no topic and no vote: nothing of
-    it is kept); else the topic is kept when the model didn't know, and comes back signed for a 👍/👎."""
+def _one_line(x: str) -> str:
+    return " ".join(x.split())
+
+
+def reply(con, text: str, rooms: set[str], events: set[int], lang: str, q: str = "") -> dict:
+    """The answer for the student: with the help card when the model says care or the keywords do (then no topic and
+    no vote: nothing of it is kept); else the topic is kept when the model didn't know. `mark` (topic, day, a one-time
+    nonce, signed) is for one 👍/👎; `pair` signs this question and answer, the only ones a 👎 may send."""
     out, x = answer(text, rooms, events), _json(text) or {}
-    if x.get("care") is True:
+    if x.get("care") is True or distress(q):
         return out | care(con, lang)
     topic = _topic(x.get("topic"))
     if topic:
+        day, nonce = now() // 86400, secrets.token_hex(8)
         if x.get("known") is False:
-            con.execute("INSERT INTO assist_marks (day, kind, topic) VALUES (?, 'unknown', ?)", (now() // 86400, topic))
-        out["mark"] = f"{topic}.{_sign(topic)}"
+            con.execute("INSERT INTO assist_marks (day, kind, topic) VALUES (?, 'unknown', ?)", (day, topic))
+        out["mark"] = f"{topic}.{day}.{nonce}.{_sign('mark', topic, day, nonce)}"
+        out["pair"] = _sign("pair", nonce, _one_line(q), out["text"])
     return out
 
 
-def vote(con, v: Viewer, body: dict) -> None:
-    """👍 or 👎 on an answer: the day, the vote and the answer's topic (signed by us: no text of the student's)."""
-    need_student(v)
-    mark, kind = body.get("mark"), body.get("vote")
-    topic, _, sig = mark.rpartition(".") if isinstance(mark, str) else ("", "", "")
-    if kind not in ("up", "down") or not topic or not hmac.compare_digest(sig, _sign(topic)):
+def _mark(body: dict) -> tuple[str, int, str]:
+    """A mark we signed, today's or yesterday's: (topic, day, nonce); else bad_input."""
+    m = body.get("mark")
+    parts = m.rsplit(".", 3) if isinstance(m, str) else []
+    if len(parts) != 4 or not parts[1].isdigit() or not hmac.compare_digest(parts[3], _sign("mark", *parts[:3])) \
+            or not 0 <= now() // 86400 - int(parts[1]) <= 1:
         raise ApiError("bad_input")
+    return parts[0], int(parts[1]), parts[2]
+
+
+def _busy(v: Viewer) -> None:
+    if not _burst(("fb", v.id), 20, 600):  # one client's loop, per worker (nothing stored)
+        raise ApiError("rate_limited")
+
+
+def vote(con, v: Viewer, body: dict) -> None:
+    """👍 or 👎 on an answer, once per answer (its nonce): the day, the vote and the answer's topic (signed by us)."""
+    need_student(v)
+    topic, _, nonce = _mark(body)
+    kind = body.get("vote")
+    if kind not in ("up", "down"):
+        raise ApiError("bad_input")
+    _busy(v)
     day = now() // 86400
-    if one(con, "SELECT COUNT(*) FROM assist_marks WHERE day = ?", day)[0] < DAY_MARKS:
+    with tx(con):
+        if one(con, "SELECT COUNT(*) FROM assist_marks WHERE day = ? AND kind != 'unknown'", day)[0] >= DAY_MARKS:
+            raise ApiError("rate_limited")
+        if con.execute("INSERT INTO assist_votes (nonce, day, kind) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", (nonce, day, kind)).rowcount == 0:
+            raise ApiError("conflict", "voted")
         con.execute("INSERT INTO assist_marks (day, kind, topic) VALUES (?, ?, ?)", (day, kind, topic))
 
 
+def _unclassed(con, uid: int, a: str) -> str:
+    """The answer without my timetable (it would point at me): my subjects, my rooms and any time of day generalised."""
+    for c in rows(con, "SELECT DISTINCT subject, room FROM schedule_classes WHERE user_id = ?", uid):
+        for w, put in ((c["subject"], "[class]"), (c["room"], "[room]")):
+            if w and w.strip():
+                a = re.sub(rf"(?<!\w){re.escape(w.strip())}(?!\w)", put, a, flags=re.I)
+    return re.sub(r"(?<!\d)\d{1,2}[:.]\d{2}(?!\d)", "[time]", a)
+
+
 def send(con, v: Viewer, body: dict) -> None:
-    """On 👎, the student's own choice: this one question and answer, without their name or account, for the admin."""
+    """After a 👎 on this answer, the student's own choice: this one question and answer (signed by us at the answer,
+    so nothing else can be planted), without their name, account or timetable, for the admin."""
     need_student(v)
-    q, a = (" ".join(_CTRL.sub(" ", x).split()) if isinstance(x, str) else "" for x in (body.get("q"), body.get("a")))
-    if not 2 <= len(q) <= Q_MAX or not 1 <= len(a) <= 1200:
+    _, _, nonce = _mark(body)
+    q, a, pair = body.get("q"), body.get("a"), body.get("pair")
+    if not isinstance(q, str) or not isinstance(a, str) or not isinstance(pair, str) \
+            or not hmac.compare_digest(pair, _sign("pair", nonce, _one_line(q), a)):
         raise ApiError("bad_input")
+    _busy(v)
     day = now() // 86400
-    if one(con, "SELECT COUNT(*) FROM assist_sent WHERE day = ?", day)[0] < DAY_SENT:
-        con.execute("INSERT INTO assist_sent (day, q, a) VALUES (?, ?, ?)", (day, q, a))
+    with tx(con):
+        if one(con, "SELECT COUNT(*) FROM assist_sent WHERE day = ?", day)[0] >= DAY_SENT:
+            raise ApiError("rate_limited", "sent")  # the client says so: not stored today
+        if con.execute("UPDATE assist_votes SET kind = 'sent' WHERE nonce = ? AND kind = 'down'", (nonce,)).rowcount == 0:
+            raise ApiError("conflict", "not_down")  # no 👎 on it, or sent already
+        con.execute("INSERT INTO assist_sent (day, q, a) VALUES (?, ?, ?)",
+                    (day, _CTRL.sub(" ", _one_line(q))[:Q_MAX], _unclassed(con, v.id, _CTRL.sub(" ", a))[:1200]))
 
 
 def seen(con) -> dict:
@@ -413,3 +479,4 @@ def sweep(con) -> None:
     con.execute("DELETE FROM assist_uses WHERE at < ?", (now() - 2 * 86400,))
     con.execute("DELETE FROM assist_marks WHERE day < ?", ((now() - KEEP) // 86400,))
     con.execute("DELETE FROM assist_sent WHERE day < ?", ((now() - KEEP) // 86400,))
+    con.execute("DELETE FROM assist_votes WHERE day < ?", (now() // 86400 - 2,))

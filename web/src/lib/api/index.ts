@@ -181,7 +181,7 @@ export interface Api {
   mapFlawDone(id: Id, done: boolean): Promise<void>;
   assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<AssistReply>; // the students' assistant
   assistantVote(mark: string, vote: 'up' | 'down'): Promise<void>; // 👍/👎 on an answer's signed topic
-  assistantSend(q: string, a: string): Promise<void>; // on 👎, the student's own tap: this one question and answer, no name
+  assistantSend(mark: string, pair: string, q: string, a: string): Promise<void>; // on 👎, the student's own tap: this one signed question and answer, no name
   eventFill(org: Id, text: string): Promise<{ title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number }>; // a new event from its announcement (AI)
   qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)

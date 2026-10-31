@@ -889,6 +889,13 @@ MIGRATIONS: list[tuple[int, str]] = [
       week INTEGER PRIMARY KEY,
       n    INTEGER NOT NULL
     ) STRICT;"""),
+    # an answer's one-time nonce once voted on (one vote an answer; a sent pair needs its thumbs down first); no user id,
+    # 2 days (assistant.sweep)
+    (94, """CREATE TABLE assist_votes (
+      nonce TEXT PRIMARY KEY,
+      day   INTEGER NOT NULL,
+      kind  TEXT NOT NULL CHECK (kind IN ('up', 'down', 'sent'))
+    ) STRICT;"""),
 ]
 
 

@@ -14,7 +14,7 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
-  import { type Overlay } from '../../lib/state/ui.svelte';
+  import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
   import { chat, type Turn } from '../../lib/state/assistant.svelte';
@@ -57,12 +57,15 @@
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
     haptic.select(); m.vote = v;
-    api.assistantVote(m.mark, v).catch(() => (m.vote = undefined));
+    api.assistantVote(m.mark, v).catch((e) => { if (!(e instanceof ApiErr && e.code === 'conflict')) m.vote = undefined; }); // conflict: counted already
   }
   function send(m: Turn) {
-    if (m.sent || !m.q) return;
+    if (m.sent || !m.q || !m.mark || !m.pair) return;
     haptic.tap(); m.sent = true;
-    api.assistantSend(m.q, m.text).catch(() => { m.sent = false; haptic.error(); });
+    api.assistantSend(m.mark, m.pair, m.q, m.text).catch((e) => {
+      m.sent = false; haptic.error();
+      say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'as.sendFull' : 'common.error'), 'pleading_face_3d'); // past the day's cap: not kept, said so
+    });
   }
 </script>
 
