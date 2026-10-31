@@ -60,6 +60,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
 - **The bot** sends templates with a button into the app, never a user's words.
+- **One Back**: Telegram's BackButton is the only Back. No "‹ Back" links, arrows or close buttons of our own that
+  duplicate it (a full-screen overlay's bottom x is the one exception: ui/CloseX.svelte).
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
   `svelte-autofixer`: run a new or changed component through it until it reports nothing.
 - **Style**: match the code around you; short comments that say why. Deliberate shortcuts are marked

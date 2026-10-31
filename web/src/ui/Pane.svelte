@@ -1,17 +1,17 @@
 <script lang="ts">
   // A page pushed over another, the phone's own way (Settings' rows, owner Oct 30: "like Apple"; a sheet from below read
   // as cheap there): it slides in from the right while the page under it (a tab, a sheet, another pane) drifts left;
-  // "‹ Back", Telegram's Back or a swipe from the left edge takes it away the same road. Its large title fits its line
+  // Telegram's Back or a swipe from the left edge takes it away the same road (no "‹ Back" of our own: owner, Oct 31,
+  // Telegram's is the only Back button). Its large title fits its line
   // (34 down to 24); the capsule shows the live status or nothing until that title scrolls away, then the title.
   // Text typed and not sent asks before a hand closes it, as in a Sheet.
   import type { Component, Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
   import { fitTitle, largeTitle } from './title';
   import { unsent } from './guard';
 
-  let { overlay, title, icon, back, children }: { overlay: Overlay; title: string; icon?: Component<any>; back: string; children: Snippet } = $props();
+  let { overlay, title, icon, children }: { overlay: Overlay; title: string; icon?: Component<any>; children: Snippet } = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let el: HTMLDivElement;
@@ -72,7 +72,6 @@
 
 <div class="pane scroll" class:scrolled role="region" aria-label={title} bind:this={el} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}
   onscroll={() => { if (scrolled !== el.scrollTop > 2) scrolled = !scrolled; }}>
-  <button class="back" onclick={() => close(overlay.id, true)}><ChevronLeft size={26} strokeWidth={2.2} />{back}</button>
   <h1 class="ttl" use:fitTitle use:largeTitle={(g) => (overlay.quiet = !g)}>{title}</h1>
   {@render children()}
   <div class="tail"></div>
@@ -84,10 +83,6 @@
   /* the scroll edge: content fades out under the capsule instead of running into it */
   .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
     mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
-  .back { position: relative; display: inline-flex; align-items: center; gap: 0; margin: -6px 0 0 -8px; height: 36px; padding-right: 8px;
-    color: var(--accent-text); font: 500 var(--fs-row)/1 var(--font-text); }
-  .back::after { content: ''; position: absolute; inset: -4px 0; } /* 36 seen, 44 to the finger */
-  .back:active { opacity: 0.5; }
   .ttl { margin: 8px 4px 18px; font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; overflow-wrap: break-word; }
   .tail { height: calc(var(--safe-bottom) + 40px); }
 </style>

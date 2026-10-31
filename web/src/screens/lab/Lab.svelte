@@ -102,7 +102,7 @@
     ? open(Sheet, { title: t('page.awards'), full: true, children: longBody })
     : open(Sheet, { heading: kind === 'short' ? 'Board games night' : t('set.privacy'), icon: kind === 'short' ? Ticket : Lock, tall: kind === 'tall',
       actions: sheetTools, children: kind === 'short' ? shortBody : longBody, footer: sheetFoot });
-  const pane = () => open(Pane, { title: t('me.notifications'), icon: Bell, back: t('me.settings'), children: paneBody });
+  const pane = () => open(Pane, { title: t('me.notifications'), icon: Bell, children: paneBody });
 </script>
 
 {#snippet shortBody()}

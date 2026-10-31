@@ -25,7 +25,6 @@
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
   // where "‹ Back" goes: Privacy for its own pages, else Settings
-  const BACK: Key = $derived(kind === 'phone' || kind === 'city' || kind === 'sees' ? 'set.privacy' : 'me.settings');
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -89,7 +88,7 @@
   <button class="set-row act" class:red onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span></button>
 {/snippet}
 
-<Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} back={t(BACK)}>
+<Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]}>
   {#if kind === 'notify' && me}
     {#each SWITCHES as [k, title, hint] (k)}
       <div class="sw">
