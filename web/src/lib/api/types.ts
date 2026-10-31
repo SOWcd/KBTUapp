@@ -196,7 +196,7 @@ export interface Me {
   nick: string | null;
   photo: { telegram: boolean /* "Photo from Telegram" */; tg: string | null; own: string | null };
   student: StudentProfile | null; // null = guest
-  msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
+  msPending?: { first: string; last: string; email: string; prefill?: { studentId: string; first?: string | null; last?: string | null } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list or the freshmen list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the student forum is open to me (the server's BOARD switch)
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row

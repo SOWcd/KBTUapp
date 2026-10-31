@@ -58,6 +58,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "party_popper_3d", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
+    ("init26f", "partying_face_3d", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
 ]
 
 
@@ -76,7 +77,7 @@ def _counts(con, uid: int) -> dict[str, int]:
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
-            "init26": grants.get("init26", 0)}
+            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0)}
 
 
 def brought(con, uid: int) -> int:

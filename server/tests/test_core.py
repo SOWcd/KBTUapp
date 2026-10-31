@@ -6569,3 +6569,82 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
     assert mirror.take(con, 500, mirror.Msg(id=1, date=0, text="Meetup moved\nAt 8", photo=pic, views=9)) == tg
     assert mirror.comments(con, 500, 1, ["\u0412\u0441\u0442\u0440\u0435\u0447\u0430 \u0432 \u0441\u0435\u043c\u044c"]) == 0   # the channel's translation neither
     assert wiped(tg) and con.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == n
+
+
+def test_freshmen_prefill(env, monkeypatch, capsys):
+    """The Oct 31 2026 initiation's freshmen list (admin prefill-import, made-up people): IDs normalised, bad and doubled
+    rows dropped, counts printed and never a value, a second run changes nothing; only the student whose KBTU mail it is
+    sees it, in their own form; linking fills what their row lacks, gives "came" its badge and deletes the row; never an
+    ID another student holds; deleting an account takes its row along."""
+    import io
+    from kbtu import admin, checkin
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    login(c, 1, "held")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET student_id = '25B000009', email = 'held@kbtu.kz' WHERE student_id = '24Bheld'")
+    lines = ["email,student_id,last,first,middle,school,phone,came",
+             "A_One@kbtu.kz, 25\u0432 01 0001 ,Oneova,Aya,Sultanqyzy,SITE,8 701 000 00 01,1",   # Cyrillic Ve, spaces, upper mail
+             "b_two@kbtu.kz,25\u0418O10002,Twoev,Bek,,ISE,+7 701 000 00 02,0",                   # Cyrillic I; an O for a zero
+             "b_two@kbtu.kz,25B010002,Twoev,Bek,,ISE,,0",                                        # the same again: collapsed
+             "c_three@kbtu.kz,25B010003,,,,,,1",
+             "c_three@kbtu.kz,25B010033,,,,,,1",                                                 # one mail, two IDs
+             "d_four@kbtu.kz,25B010004,,,,,,0",
+             "e_five@kbtu.kz,25B010004,,,,,,0",                                                  # one ID, two mails
+             "f_six@gmail.com,25B010006,,,,,,0",                                                 # not a KBTU mail
+             ",25B010007,,,,,,0",
+             "g_seven@kbtu.kz,hello,,,,,,0",
+             "h_eight@kbtu.kz,99B010008,,,,,,0",                                                 # a year ahead
+             "held@kbtu.kz,25B010010,,,,,,1",                                                    # signed up already
+             "i_nine@kbtu.kz,25B000009,,,,,,1"]                                                  # another student's ID
+
+    def run(text: str) -> str:
+        monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(text.encode())))
+        capsys.readouterr()
+        admin.main(["prefill-import"])
+        return capsys.readouterr().out
+    out = run("\n".join(lines) + "\n")
+    assert out.split("\n")[0] == "rows 13  kept 2  same 1  bad_email 2  bad_id 2  dup_email 2  dup_id 2  signed_up 1  id_held 1"
+    assert "kbtu.kz" not in out and "25B" not in out and "Aya" not in out                 # counts only
+    assert run("\n".join(lines) + "\n").split("\n")[0].split("  ")[1] == "kept 2"          # a second run: the same two rows
+    assert [tuple(r) for r in con.execute("SELECT email, student_id, phone, came FROM prefill ORDER BY email")] == [
+        ("a_one@kbtu.kz", "25B010001", "+77010000001", 1), ("b_two@kbtu.kz", "25B010002", "+77010000002", 0)]
+    with pytest.raises(SystemExit):
+        run("email,student_id\nx@kbtu.kz,25B010001\n")                                     # the wrong header: nothing
+    with pytest.raises(SystemExit) as e:
+        run(lines[0] + "\nx@kbtu.kz,25B010011,,,,,,yes\n")
+    assert "line 2" in str(e.value) and "x@" not in str(e.value)
+    assert [logic.account.norm_sid(x) for x in ("25b010001", "25\u041c010001", "2\u041e\u04120100", "25X12")] \
+        == ["25B010001", "25M010001", None, None]
+    # only the student Microsoft vouches for sees it, in their own form
+    who = lambda tg, mail: {"oid": f"oid-{tg}", "email": mail, "first": "", "last": "", "employeeId": "", "profile": {}}  # noqa: E731
+    uid = {tg: c.get("/api/me", headers=tma(tg)).json()["id"] for tg in (2, 3, 4)}
+    logic.ms_remember(con, uid[2], who(2, "a_one@kbtu.kz"))
+    logic.ms_remember(con, uid[3], who(3, "z_other@kbtu.kz"))
+    assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "25B010001", "first": "Aya", "last": "Oneova"}
+    assert c.get("/api/me", headers=tma(3)).json()["msPending"]["prefill"] is None
+    assert c.get("/api/me", headers=tma(4)).json()["msPending"] is None
+    # never an ID another student holds, from either list
+    con.execute("INSERT INTO prefill (email, student_id) VALUES ('z_other@kbtu.kz', '25B000009')")
+    assert checkin.prefill(con, "z_other@kbtu.kz") is None
+    assert checkin.new(con, "Meeting", [{"email": "z_other@kbtu.kz", "name": "Z Other", "studentId": "25B000009"}], None)
+    assert checkin.prefill(con, "z_other@kbtu.kz") is None
+    # linking: what the row lacks, the badge for "came", the row gone
+    r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "25B010001", "firstName": "Aya", "lastName": "Oneova",
+                                                           "consentVersion": logic.CONSENT})
+    assert r.status_code == 200, r.text
+    s = con.execute("SELECT middle_name, school, phone FROM students WHERE user_id = ?", (uid[2],)).fetchone()
+    assert tuple(s) == ("Sultanqyzy", "SITE", "+77010000001")
+    assert not con.execute("SELECT 1 FROM prefill WHERE email = 'a_one@kbtu.kz'").fetchone()
+    ach = {a["code"]: a["level"] for a in c.get(f"/api/users/{uid[2]}", headers=tma(1)).json()["awards"]["achievements"]}
+    assert ach["init26f"] == 1 and ach["init26"] == 0
+    out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
+    assert bot._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
+    # deleting an account before it linked: its row goes too
+    logic.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz"))
+    logic.delete_me(con, logic.Viewer(uid[4], "user", False))
+    assert not con.execute("SELECT 1 FROM prefill WHERE email = 'b_two@kbtu.kz'").fetchone()
+    con.execute("INSERT INTO prefill (email, student_id) VALUES ('held@kbtu.kz', '25B010010')")   # a student's own mail
+    delete_now(c, cfg, tma(1))
+    assert not con.execute("SELECT 1 FROM prefill WHERE email = 'held@kbtu.kz'").fetchone()
+    con.close()

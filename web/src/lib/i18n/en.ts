@@ -168,6 +168,8 @@ const en: Dict = {
   'ci.left': "Leaving marked. Thanks for \u201c{title}\u201d!",
   'ach.init26.name': "Initiation volunteer",
   'ach.init26.how': "Volunteered at KBTU's 2026 freshmen initiation.",
+  'ach.init26f.name': "Initiation 2026",
+  'ach.init26f.how': "Was at KBTU's 2026 freshmen initiation.",
   'page.news': 'News',
   'page.team': 'Team',
   'team.remove': "Remove",

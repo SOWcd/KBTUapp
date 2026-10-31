@@ -282,9 +282,15 @@ def became_student(con, uid: int) -> None:
 
 
 def prefill(con, email: str | None) -> dict | None:
-    """The student ID the organizers' list has for this KBTU mail (open sessions only)"""
+    """The student ID an organizers' list has for this KBTU mail (open sessions only), else the freshmen list's
+    (admin prefill-import) with its names. Never an ID another student holds: a typo in a list would hand it over."""
     if not email:
         return None
-    r = one(con, """SELECT x.student_id FROM qr_expected x JOIN qr_sessions s ON s.id = x.session_id
-        WHERE x.email = ? AND x.student_id IS NOT NULL AND s.ended_at IS NULL ORDER BY s.id DESC""", email.strip().lower())
-    return {"studentId": r[0]} if r else None
+    free = "NOT EXISTS (SELECT 1 FROM students t WHERE t.student_id = x.student_id)"
+    e = email.strip().lower()
+    r = one(con, f"""SELECT x.student_id FROM qr_expected x JOIN qr_sessions s ON s.id = x.session_id
+        WHERE x.email = ? AND x.student_id IS NOT NULL AND s.ended_at IS NULL AND {free} ORDER BY s.id DESC""", e)
+    if r:
+        return {"studentId": r[0]}
+    r = one(con, f"SELECT x.student_id, x.first_name, x.last_name FROM prefill x WHERE x.email = ? AND {free}", e)
+    return {"studentId": r[0], "first": r[1], "last": r[2]} if r else None

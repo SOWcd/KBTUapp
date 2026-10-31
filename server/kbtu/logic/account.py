@@ -33,10 +33,76 @@ def ms_link(con, uid: int, who: dict) -> None:
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], core.now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
+    # the freshmen list's row for this mail (Microsoft vouched for it): what my row lacks, the initiation badge; then gone
+    p = one(con, "DELETE FROM prefill WHERE email = ? RETURNING *", str(who["email"] or "").lower())
+    if p:
+        con.execute("""UPDATE students SET middle_name = COALESCE(NULLIF(middle_name, ''), ?), school = COALESCE(NULLIF(school, ''), ?),
+            phone = COALESCE(NULLIF(phone, ''), ?) WHERE user_id = ?""", (p["middle_name"], p["school"], p["phone"], uid))
+        if p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", uid):
+            profiles._grant(con, None, uid, "init26f")
     link_door_guests(con, uid)
     checkin.became_student(con, uid)  # a QR scan waiting for the sign-up counts now (the form's and the relink's path)
     if before is not None:
         _celebrate(con, by[0], before)
+
+
+SID_LOOKS = str.maketrans({"\u0412": "B", "\u0418": "B", "\u041c": "M"})  # Cyrillic Ve, I, Em typed for Latin B, B, M (I is B's key on the Russian layout)
+_ZERO = str.maketrans("O\u041e", "00")  # an O, Latin or Cyrillic, where a digit goes
+SID_SHAPE = re.compile("([0-9O\u041e]{2})([A-NP-Z]{1,2})([0-9O\u041e]{5,7})")  # app.STUDENT_ID, an O in a digit's place allowed (so never a letter)
+
+
+def norm_sid(raw: object) -> str | None:
+    """A list's student ID as the app writes it, or None: no guessing beyond the fixed table (review 5)."""
+    m = SID_SHAPE.fullmatch("".join(str(raw or "").split()).upper().translate(SID_LOOKS))
+    sid = m and m[1].translate(_ZERO) + m[2] + m[3].translate(_ZERO)
+    return sid if sid and isinstance(c := core.course_of(sid), int) and 1 <= c <= 6 else None
+
+
+PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
+
+
+def prefill_import(con, got: list[dict]) -> dict[str, int]:
+    """The freshmen list (admin prefill-import): one row per KBTU mail, upserted, so a second run changes nothing.
+    Dropped: a bad mail or ID, an ID given to two mails, a mail given two IDs, a mail or ID a student already has.
+    Counts only: the caller prints them, never a value."""
+    n = Counter(rows=len(got))
+    good: dict[str, dict] = {}
+    by_email: dict[str, list[str]] = {}
+    for r in got:  # each row lands in exactly one count: they add up to `rows`
+        email, sid = "".join(str(r.get("email") or "").split()).lower(), norm_sid(r.get("student_id"))
+        if not re.fullmatch(r"[a-z0-9._%+-]+@kbtu\.kz", email):
+            n["bad_email"] += 1
+        elif not sid:
+            n["bad_id"] += 1
+        else:
+            by_email.setdefault(email, []).append(sid)
+            n["same"] += email in good  # the same mail again: one row
+            good.setdefault(email, {**r, "email": email, "student_id": sid})
+    for e in [e for e, ids in by_email.items() if len(set(ids)) > 1]:  # one mail, two IDs: which one is it
+        n["dup_email"] += len(by_email[e])
+        n["same"] -= len(by_email[e]) - 1
+        del good[e]
+    ids = Counter(r["student_id"] for r in good.values())
+    for e in [e for e, r in good.items() if ids[r["student_id"]] > 1]:  # one ID, two mails: a typo somewhere
+        n["dup_id"] += 1
+        del good[e]
+    text = lambda x, k: " ".join(str(x or "").split())[:k] or None  # noqa: E731
+    with tx(con):
+        for r in good.values():
+            if one(con, "SELECT 1 FROM students WHERE lower(email) = ?", r["email"]):
+                n["signed_up"] += 1
+            elif one(con, "SELECT 1 FROM students WHERE student_id = ? UNION ALL SELECT 1 FROM prefill WHERE student_id = ? AND email != ?",
+                     r["student_id"], r["student_id"], r["email"]):
+                n["id_held"] += 1
+            else:
+                con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
+                    last_name = excluded.last_name, first_name = excluded.first_name, middle_name = excluded.middle_name,
+                    school = excluded.school, phone = excluded.phone, came = excluded.came""",
+                            (r["email"], r["student_id"], text(r.get("last"), 40), text(r.get("first"), 40), text(r.get("middle"), 40),
+                             text(r.get("school"), 120), kz_phone(r.get("phone")), int(str(r.get("came") or "").strip() == "1")))
+                n["kept"] += 1
+    return dict(n)
 
 
 def refer(con, v: Viewer, code: object) -> None:
@@ -140,7 +206,7 @@ def me(con, v: Viewer) -> dict:
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
-        # prefill: the student ID an organizers' check-in list has for this KBTU mail (checkin.py)
+        # prefill: the student ID (and names) an organizers' check-in list or the freshmen list has for this KBTU mail (checkin.py)
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"])}
                      if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
@@ -562,6 +628,9 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
         photos = [p for f in mine + avatars + kept for p in _drop_unused(con, f)]
         photos += [tgpic] if tgpic and chatlist.photo_free(con, tgpic) else []
+        # the freshmen list's row for my mail or my unfinished Microsoft sign-in's (keyed by email: no foreign key)
+        con.execute("""DELETE FROM prefill WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
+            UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))""", (v.id, f"ms:{v.id}"))
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))

@@ -66,11 +66,14 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала"},
+           "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026"},
     "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы"},
+           "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы",
+           "init26": "Бастамашылық волонтёры", "init26f": "Бастамашылық 2026"},
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter"},
+           "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "init26": "Initiation volunteer", "init26f": "Initiation 2026"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
     "ru": {"ru": "русский", "kk": "казахский", "en": "английский"},

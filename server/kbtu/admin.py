@@ -36,6 +36,9 @@
   .venv/bin/python -m kbtu.admin channel-ask [--send]   the active clubs with no public main channel and whether their
                                 President can get the ask (counts, club names); --send asks each by the bot to link it
                                 (once per club: a second run reaches only those who started the bot since)
+  .venv/bin/python -m kbtu.admin prefill-import < list.csv   the freshmen list (Oct 31 2026 initiation) for their sign-up
+                                form: a CSV with the header email,student_id,last,first,middle,school,phone,came (came 0/1);
+                                upserted by email (a second run changes nothing); prints counts only, never a value
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -215,7 +218,7 @@ def main(args: list[str]) -> None:
         came = [c for c in counts if c["regular"]]
         print(f"{len(counts)} students, {len(came)} came to an event at least once; each level: share of all / of those who came")
         for code, _, needs, _ in ACHIEVEMENTS:
-            if code in ("first50", "creator_laugh", "creator_found", "bugs", "init26"):
+            if code in ("first50", "creator_laugh", "creator_found", "bugs", "init26", "init26f"):
                 continue  # given by hand or at sign-in: no counter to tune
             vals = sorted(c[code] for c in counts)
             at = lambda q: vals[min(len(vals) - 1, int(q * len(vals)))] if vals else 0  # noqa: E731
@@ -243,6 +246,25 @@ def main(args: list[str]) -> None:
             print(f"queued {len(todo)}")
         else:
             print("nothing sent (add --send)")
+    elif cmd == "prefill-import" and len(args) == 1:  # values never printed: an error names the line, not what's on it
+        import csv
+        import io
+        from .logic.account import PREFILL_COLS, prefill_import
+        reader = csv.reader(io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8-sig", newline=""))
+        try:
+            got = list(reader)
+        except (csv.Error, UnicodeDecodeError):
+            sys.exit(f"line {reader.line_num + 1}: not a UTF-8 CSV line; nothing imported")
+        if not got or tuple(c.strip().lower() for c in got[0]) != PREFILL_COLS:
+            sys.exit("the first line must be: " + ",".join(PREFILL_COLS))
+        for i, r in enumerate(got[1:], 2):
+            if len(r) != len(PREFILL_COLS) or r[-1].strip() not in ("0", "1", ""):
+                sys.exit(f"line {i}: {len(PREFILL_COLS)} columns wanted, came 0 or 1; nothing imported")
+        if len(got) < 2:
+            sys.exit("no rows")
+        n = prefill_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]])
+        print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "kept", "same", "bad_email", "bad_id", "dup_email", "dup_id", "signed_up", "id_held")))
+        print(f"{one(con, 'SELECT COUNT(*) FROM prefill')[0]} rows wait in prefill")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

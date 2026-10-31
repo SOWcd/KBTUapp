@@ -896,6 +896,18 @@ MIGRATIONS: list[tuple[int, str]] = [
       day   INTEGER NOT NULL,
       kind  TEXT NOT NULL CHECK (kind IN ('up', 'down', 'sent'))
     ) STRICT;"""),
+    # the freshmen list of the Oct 31 2026 initiation (admin prefill-import), keyed by the KBTU email: shown only to
+    # that student in their own sign-up form, gone when they link (account.ms_link) or delete the account
+    (95, """CREATE TABLE prefill (
+      email       TEXT PRIMARY KEY,
+      student_id  TEXT NOT NULL,
+      last_name   TEXT,
+      first_name  TEXT,
+      middle_name TEXT,
+      school      TEXT,
+      phone       TEXT,
+      came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
+    ) STRICT;"""),
 ]
 
 
