@@ -60,8 +60,14 @@
     const was = me?.student?.[k] ?? '';
     const v = await sheets.askText({ title: t(label), text: t('pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
     if (v == null || v.trim() === was) return;
+    // a typo would spend the once: the new value read back before it's saved
+    if (!(await sheets.ask({ title: v.trim(), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
     try { session.me = await api.updateMe({ [k]: v }); haptic.ok(); say(t('pd.saved'), 'sparkles_3d'); }
-    catch (e) { haptic.error(); say(t((e instanceof ApiErr && WHY[e.message]) || 'common.error'), 'pleading_face_3d'); }
+    catch (e) {
+      haptic.error();
+      const why = e instanceof ApiErr ? (e.message === 'bad_input' ? (k === 'studentId' ? 'pd.badSid' : 'pd.badName') : WHY[e.message]) : undefined;
+      say(t(why ?? 'common.error'), 'pleading_face_3d');
+    }
   }
   async function cityHidden(on: boolean) {
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }

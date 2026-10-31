@@ -59,7 +59,7 @@ import time
 from . import config, db
 from pathlib import Path
 
-from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
+from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
 # text that reads backwards)
@@ -205,7 +205,10 @@ def main(args: list[str]) -> None:
         print(f"@{u['tg_username'] or u['tg_id']}: student {sid}")
     elif cmd == "fix" and len(args) == 3 and args[2] == "reset":  # support: My data's one-time corrections again
         u = _user(con, args[1])
-        n = con.execute("UPDATE students SET fixed = '' WHERE user_id = ?", (u["id"],)).rowcount
+        with db.tx(con):
+            n = con.execute("UPDATE students SET fixed = '' WHERE user_id = ?", (u["id"],)).rowcount
+            if n:
+                log_action(con, None, "identity_fix_reset", f"user:{u['id']}")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("can correct the student ID and name once more" if n else "not a student"))
     elif cmd == "fix" and len(args) == 4 and args[2] in ("sid", "last", "first", "middle"):
         u = _user(con, args[1])

@@ -46,7 +46,7 @@
   // the example ID starts with this intake's year, so a first-year sees their own: the year of the last
   // August, as a 26B student still enters in spring 2027
   const yr = parts(nowTs()), sidEx = `${String(yr.m >= 7 ? yr.y : yr.y - 1).slice(2)}B123456`;
-  const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}[A-Z]{1,2}\d{4,7}$/;  // server core.STUDENT_ID (a master's 26MD1234 too)
+  const NAME = /^[\p{L}][\p{L}\-' ]{0,39}$/u, SID = /^\d{2}(?:[A-Z]\d{5,7}|[A-Z]{2}\d{4,7})$/;  // server core.STUDENT_ID (a master's 26MD1234 too)
   // Microsoft's names are taken as they are (the server uses them); typed only where the account has none
   const mReady = $derived((!!pending?.last || NAME.test(m.lastName.trim())) && (!!pending?.first || NAME.test(m.firstName.trim()))
     && SID.test(m.studentId.trim().toUpperCase()) && !busy);  // the year comes from the ID (audit M3)

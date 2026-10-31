@@ -6697,25 +6697,30 @@ def test_same_person_kazakh_spellings():
     assert not same_person("\u0418\u0432\u0430\u043d\u043e\u0432 \u0418\u0432\u0430\u043d", "Petr", "Sidorov")
 
 
-def test_identity_fix_once(env):
+def test_identity_fix_once(env, monkeypatch):
     """Settings -> My data: the student ID and each name corrected once (review identity-edit-review.md); the ID within
     its intake year and free, first/last only as KBTU's own name in another spelling; the old value in the audit log;
     the admin's path has no once and no tolerance. A master's 4-digit ID is a valid one."""
     c, cfg = env
     ali, bek, staff = login(c, 10, "ali"), login(c, 11, "bek"), login(c, 12, "stf")
     con = db.connect(cfg.db_path)
-    con.execute("""UPDATE students SET student_id = '26B031234', first_name = 'Aidos', last_name = 'Serikbayev', course = 1,
+    con.execute("""UPDATE students SET student_id = '26B031234', first_name = 'Aidos', last_name = 'Serikbayev', course = 3,
         ms_profile = '{"givenName": "Aidos", "surname": "Serikbayev"}' WHERE user_id = ?""", (ali["id"],))
     con.execute("UPDATE students SET student_id = '26B031235' WHERE user_id = ?", (bek["id"],))
     con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (staff["id"],))
     fix = lambda **b: c.patch("/api/me", headers=tma(10), json=b)  # noqa: E731
     assert fix(studentId="25B031236").json()["message"] == "sid_year"         # another intake: support
+    con.execute("INSERT INTO prefill (email, student_id) VALUES ('other@kbtu.kz', '26B031240')")
+    assert fix(studentId="26B031240").json()["message"] == "sid_taken"       # kept for another mail by the freshmen list
+    assert fix(studentId="26B\uff10\uff13\uff11\uff12\uff13\uff19").status_code == 400  # fullwidth digits: a clone of a real ID
     r = fix(studentId="26B031235")                                           # bek's: refused, not spent
     assert r.status_code == 409 and r.json()["message"] == "sid_taken"
     me = fix(studentId=" 26b 031237").json()["student"]
-    assert me["studentId"] == "26B031237" and me["course"] == 1 and "studentId" not in me["fixable"]
+    assert me["studentId"] == "26B031237" and me["course"] == 3 and "studentId" not in me["fixable"]  # a typo: the course stays
     assert fix(studentId="26B031238").json()["message"] == "fixed"           # once
     assert fix(lastName="Kim").json()["message"] == "name_far"               # someone else's name: support
+    assert fix(lastName="Serikbayev Rector").json()["message"] == "name_far"  # KBTU's words kept, one added
+    assert fix(firstName="Aidos Bekzat").json()["message"] == "name_far"
     surname = "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432"
     assert fix(lastName=surname).json()["student"]["lastName"] == surname    # KBTU's name in Cyrillic
     assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName"]  # nothing changed: not spent
@@ -6730,3 +6735,9 @@ def test_identity_fix_once(env):
     s = con.execute("SELECT last_name, student_id, course, fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()
     assert tuple(s) == ("Kim", "24MD1234", 2, "student_id,last_name,middle_name")
     assert logic.STUDENT_ID.fullmatch("26MD1234") and logic.account.norm_sid("26md1234") == "26MD1234"
+    assert not logic.STUDENT_ID.fullmatch("25B0101") and logic.account.norm_sid("25B0101") is None  # a bachelor's: 5 digits at least
+    from kbtu import admin
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    admin.main(["fix", "10", "reset"])                                      # support gives the once back, logged
+    assert con.execute("SELECT fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()[0] == ""
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'identity_fix_reset' AND target = ?", (f"user:{ali['id']}",)).fetchone()[0] == 1

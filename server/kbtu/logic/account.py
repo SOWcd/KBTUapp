@@ -66,7 +66,7 @@ def norm_sid(raw: object) -> str | None:
     """A list's student ID as the app writes it, or None: no guessing beyond the fixed table (review 5)."""
     m = SID_SHAPE.fullmatch("".join(str(raw or "").split()).upper().translate(SID_LOOKS))
     sid = m and m[1].translate(_ZERO) + m[2] + m[3].translate(_ZERO)
-    return sid if sid and isinstance(c := core.course_of(sid), int) and 1 <= c <= 6 else None
+    return sid if sid and STUDENT_ID.fullmatch(sid) and isinstance(c := core.course_of(sid), int) and 1 <= c <= 6 else None  # 4 digits: two letters only
 
 
 def prefill_mine(p, first: str | None, last: str | None) -> bool:
@@ -338,40 +338,47 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
     (`kbtu.admin fix`: no once, no year rule, no tolerance). The email is never changed: it is the KBTU Microsoft login
     (ms_link writes it from the token), what ties this row to a real person. Review: .claude/reports/identity-edit-review.md"""
     from .. import roster  # imports logic: here, not at the top
-    s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
-    if not s or not admin and (s["manual"] or s["consent_version"] == "staff"):
-        raise ApiError("forbidden")  # unconfirmed: Microsoft's names come first; staff: the ID is a placeholder
-    if not admin and col in s["fixed"].split(","):
-        raise ApiError("conflict", "fixed")
     v = " ".join(str(raw or "").split())
-    course = None
     if col == "student_id":
         v = v.replace(" ", "").upper()
         course = core.course_of(v)
         if not STUDENT_ID.fullmatch(v) or not isinstance(course, int) or not 1 <= course <= 6:
             raise ApiError("bad_input")
-        if not admin and v[:2] != s["student_id"][:2]:
-            raise ApiError("bad_input", "sid_year")  # the intake year is the year of study (free 1st-year seats): support
     elif v and not NAME.fullmatch(v) or not v and col != "middle_name":
         raise ApiError("bad_input")
-    elif col != "middle_name" and not admin:
-        # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
-        # renaming oneself to someone else would fool every organizer's list, the door and the club rosters
-        ms = json.loads(s["ms_profile"] or "{}")
-        new = {"first_name": s["first_name"], "last_name": s["last_name"], col: v}
-        if not roster.same_person(f"{new['first_name']} {new['last_name']}", ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"]):
-            raise ApiError("bad_input", "name_far")
     v = v or None
-    if v == s[col]:
-        return  # nothing changes: the once isn't spent
+    # the row and its once read under the write lock (BEGIN IMMEDIATE): two taps at once can't both spend it
     with tx(con):
-        held = col == "student_id" and one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", v, uid)
+        s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
+        if not s or not admin and (s["manual"] or s["consent_version"] == "staff"):
+            raise ApiError("forbidden")  # unconfirmed: Microsoft's names come first; staff: the ID is a placeholder
+        if not admin and col in s["fixed"].split(","):
+            raise ApiError("conflict", "fixed")
+        if v == s[col]:
+            return  # nothing changes: the once isn't spent
+        if col == "student_id" and not admin and v[:2] != s["student_id"][:2]:
+            raise ApiError("bad_input", "sid_year")  # the intake year is the year of study (free 1st-year seats): support
+        if col in ("first_name", "last_name") and not admin:
+            # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
+            # two of its words kept and none added, or one could rename into someone else ("Serikbayev Aidos" then
+            # first "Bekzat") or a title, and fool every organizer's list, the door and the club rosters
+            ms = json.loads(s["ms_profile"] or "{}")
+            ref = (ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"])
+            new = " ".join(v if c == col else s[c] for c in ("first_name", "last_name"))
+            if not roster.same_person(new, *ref) or roster._words(new) - roster._words(" ".join(ref)):
+                raise ApiError("bad_input", "name_far")
+        # an ID is free when no student has it and the freshmen list doesn't keep it for another mail (that student's
+        # sign-up form would offer it, and the check-in CSV would match me to them)
+        held = col == "student_id" and (one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", v, uid)
+                                        or one(con, "SELECT NULL FROM prefill WHERE student_id = ? AND email != ?", v, (s["email"] or "").lower()))
         if held:
-            id_clash(con, v, uid, held[0])  # the admins hear, as at sign-up; the once isn't spent
+            if held[0]:
+                id_clash(con, v, uid, held[0])  # the admins hear, as at sign-up; the once isn't spent
         else:
             con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
                         (v, s["fixed"] if admin else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
-            if course:
+            # the course follows the year and degree letter only: a typo in the number keeps the stored one (a repeater's)
+            if col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v):
                 con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (course, core.academic_year(), uid))
             log_action(con, None if admin else uid, "identity_fix", f"user:{uid}", json.dumps({"field": col, "old": s[col], "new": v}, ensure_ascii=False))
     if held:
