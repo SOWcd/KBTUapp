@@ -72,6 +72,8 @@
   // the lanyard's own motion (LanyardBand's loops) runs only while the card is on screen and its tab open: a hidden tab
   // and a card scrolled away would animate for nobody
   let seen = $state(true);
+  // and while a full-screen overlay (one with a mark in the capsule: the QR, the map) covers my card
+  const covered = $derived(mine && overlays.some((o) => !o.closing && o.icon));
   $effect(() => {
     const io = new IntersectionObserver(([e]) => (seen = e.isIntersecting));
     io.observe(swing);
@@ -113,11 +115,12 @@
 </script>
 
 <section class="h">
-<div class="hang {face}" class:rest={!live || !seen}>
+<div class="hang {face}" class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <div class="badge" use:glass>
-      {#if banded(face)}<LanyardBand look={face} wide />{/if}
+      {#if face === 'sower'}<i class="rings z" aria-hidden="true"></i>{/if}
+      {#if banded(face)}<LanyardBand look={face} wide qr={mine} />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
         <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[face]}><LookMark look={face} /></m.default>{/await}</button>
@@ -157,6 +160,7 @@
 
 <style>
   .rest :global(*) { animation-play-state: paused !important; }
+  .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
   .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
   /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
@@ -186,7 +190,7 @@
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
   /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
   .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
-  .top.mine .id { padding-right: 62px; } /* the name never runs under the QR */
+  .top.mine .id, .cheer .id, .knights .id { padding-right: 62px; } /* the name never runs under the QR or the club's object */
   .top.mine .nm { font-size: 20px; }
   .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
     box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(10, 15, 36, 0.06); transition: transform var(--t-fast) var(--ease); }
@@ -229,7 +233,7 @@
   /* SOWER, the creator's alone (Oct 14 after four drafts): black, rings spreading from behind the QR's corner; the strap white with black letters */
   .sower { --role: rgba(255, 255, 255, 0.92); }
   .sower .badge { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
-  .sower .badge::before { content: ''; position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none;
+  .rings { position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none; --z: -2; /* depth: base.css */
     background: repeating-radial-gradient(circle, transparent 0 17px, rgba(255, 255, 255, 0.12) 17px 18.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }

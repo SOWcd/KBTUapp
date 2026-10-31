@@ -23,34 +23,36 @@
   import KbtuMark from './KbtuMark.svelte';
   import KnightsHelm from './KnightsHelm.svelte';
 
-  let { look, wide = false }: { look: Look; wide?: boolean } = $props();
+  // qr: the card carries my QR (Hero on Me); without it a club's object takes the QR's column alone
+  let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   // Moments' date stamp, as an old film camera burns it into the corner: today
   const d = new Date(), two = (n: number) => String(n).padStart(2, '0');
   const stamp = `'${two(d.getFullYear() % 100)} ${two(d.getMonth() + 1)} ${two(d.getDate())}`;
   const gid = 'sxr' + Math.random().toString(36).slice(2, 8); // gradient ids are page-global: the picker draws several
 </script>
 
-<div class="band {look}" class:wide aria-hidden="true">
+<div class="band {look}" class:wide class:qr aria-hidden="true">
   {#if look === 'cheer'}
-    <span class="pan"><img src={panther} alt="" /><img class="eyes" src={pantherEyes} alt="" /></span>{#if wide}<i class="gloss"></i>{/if}
+    {#if wide}<i class="halo z"></i><i class="ground"></i>{/if}
+    <span class="pan" class:z={wide}><img src={panther} alt="" /><img class="eyes" src={pantherEyes} alt="" /></span>{#if wide}<i class="gloss"></i>{/if}
   {:else if look === 'knights'}
-    {#if wide}<span class="beamw"><i class="beam"></i></span><span class="pin"><KnightsHelm metal /></span><i class="gloss"></i>
+    {#if wide}<span class="beamw z"><i class="beam"></i></span><i class="ground"></i><span class="pin z"><KnightsHelm metal /></span><i class="gloss"></i>
     {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
-    {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
+    {#if wide}<i class="vf z"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="ap z" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex' && wide}
     <!-- the profile's card: the Oct 29 art (owner, Oct 31: both redraws of it were worse) with what he asked on top: their
          name big in outline, motion (the streaks drift, the arrow glows and a glint runs up it), gloss and depth -->
-    <i class="streaks"></i><i class="drift"></i><b class="big">STUDEX</b><b class="big foil" aria-hidden="true">STUDEX</b>
-    <svg class="dec sxa par" viewBox="0 0 340 221" preserveAspectRatio="none">
+    <i class="streaks z"></i><i class="drift"></i><b class="big z">STUDEX</b><b class="big foil z" aria-hidden="true">STUDEX</b>
+    <svg class="dec sxa par z" viewBox="0 0 340 221" preserveAspectRatio="none">
       <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="rgb(169, 33, 26)" /></linearGradient></defs>
       <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="glow29" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
       <path class="cut29" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" />
 </svg>
     <!-- the glint in an SVG of its own: its dash moving repaints only this, not the wedge and the blurred glow -->
-    <svg class="dec sxg par" viewBox="0 0 340 221" preserveAspectRatio="none"><path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
+    <svg class="dec sxg par z" viewBox="0 0 340 221" preserveAspectRatio="none"><path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
     <i class="flare"></i><i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
@@ -73,10 +75,11 @@
     <b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>
       <span class="tag">BE STUDENT. BE EXCELLENT.</span>
   {:else if look === 'kbtu'}
-    <img class="dec gl" src={guilloche} alt="" /><span class="mark"><KbtuMark size={wide ? 150 : 70} /></span>
+    <img class="dec gl" src={guilloche} alt="" />
+    {#if wide}<span class="colw z"><span class="mark"><KbtuMark size={150} /></span></span>{:else}<span class="mark"><KbtuMark size={70} /></span>{/if}
     {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
   {:else if look === 'faces'}
-    <i class="beams"></i><i class="bokeh"></i><img class="hands" src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
+    <i class="beams"></i><i class="bokeh" class:z={wide}></i><img class="hands" class:z={wide} src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
   {/if}
 </div>
 
@@ -97,16 +100,15 @@
     animation: sxdrift 7s linear infinite; }
   @keyframes sxdrift { to { transform: translate(-21.6px, -40.6px); } }
   /* their name big behind, in outline: seen, but the name on the card stays the one read. Depth with the phone's tilt
-     (--gx/--gy from the badge's glass): the name floats nearest and moves most, the arrow less, the streaks least */
+     (base.css .z): the name floats nearest and moves most, the arrow less, the streaks least (owner-tuned: +8, +3, -2.5) */
   .big { position: absolute; z-index: 1; right: -18px; bottom: 30px; font: italic 900 98px/1 var(--font-display); letter-spacing: -0.04em; white-space: nowrap;
-    color: rgba(255, 255, 255, 0.1); /* filled, not outlined: a stroke drew the glyphs' overlaps (squares inside the X) */
-    transform: translate(calc(var(--gx, 0) * -8px), calc(var(--gy, 0) * -5px)); transition: transform 400ms ease-out; }
+    color: rgba(255, 255, 255, 0.1); /* filled, not outlined: a stroke drew the glyphs' overlaps (squares inside the X) */ --z: 8; }
   /* a holographic foil inside the letters, its rainbow sliding with the tilt like a real foil print */
   .big.foil { color: transparent; opacity: 0.16; mix-blend-mode: screen;
     background: linear-gradient(100deg, rgb(255, 166, 218), rgb(185, 163, 255), rgb(134, 227, 255), rgb(166, 255, 214), rgb(255, 230, 154), rgb(255, 166, 218)) 0 0 / 300% 100%;
     background-position: calc(50% + var(--gx, 0) * 40%) 0; -webkit-background-clip: text; background-clip: text; }
-  .par { transform: translate(calc(var(--gx, 0) * -3px), calc(var(--gy, 0) * -2px)) scale(1.02); transition: transform 400ms ease-out; }
-  .streaks { transform: translate(calc(var(--gx, 0) * 2.5px), calc(var(--gy, 0) * 1.5px)) scale(1.02); }
+  .par { --z: 3; --zs: 1.02; }
+  .streaks { --z: -2.5; --zs: 1.02; }
   /* a star of light at the arrow's tip when the glint reaches it (the glint's cycle: 5 s, from 1 s, arrives at 30 %) */
   .flare { position: absolute; z-index: 1; left: calc(33.7% - 22px); top: calc(6.3% - 22px); width: 44px; height: 44px; pointer-events: none; opacity: 0; mix-blend-mode: screen;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, rgba(255, 255, 255, 0.5) 4px, transparent 60%),
@@ -152,6 +154,7 @@
     linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
   .gl { opacity: 0.13; mix-blend-mode: screen; }
   .mark { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; color: #fff; filter: drop-shadow(0 6px 18px rgba(124, 77, 255, 0.8)); }
+  .colw { position: absolute; inset: 0; pointer-events: none; --z: -3; } /* the colonnade far behind; .mark keeps its rotate */
   .wide .mark { left: auto; top: auto; right: -26px; bottom: 36px; transform: rotate(-8deg); opacity: 0.12; filter: none; }
   .word { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 800 7.5px/1 var(--font-text); letter-spacing: 0.28em; color: rgba(255, 255, 255, 0.7); }
   /* Cheerleading: their navy and black, the black panther from their logo in a still navy halo, its eyes the only gold
@@ -164,17 +167,25 @@
   @keyframes cheyes { 0%, 64% { opacity: 0.7; } 78% { opacity: 1; } 92%, 100% { opacity: 0.7; } }
   /* the card: navy under the text, black at the bottom right; the whole head in the gap between the QR and the strip,
      centred under the QR (anchored right and top, so 320 px and a taller card need no second set of numbers) */
-  .cheer.wide { background: radial-gradient(70px 58px at calc(100% - 43px) 98px, rgba(84, 92, 158, 0.6), transparent 72%),
-    linear-gradient(160deg, rgb(30, 33, 62), rgb(20, 22, 44) 55%, rgb(9, 10, 20)); }
-  .wide .pan { left: auto; right: 26px; top: 77px; height: 42px; margin: 0;
-    transform: translate(calc(var(--gx, 0) * -2px), calc(var(--gy, 0) * -1px)); transition: transform 400ms ease-out; }
+  .cheer.wide { background: linear-gradient(160deg, rgb(30, 33, 62), rgb(20, 22, 44) 55%, rgb(9, 10, 20)); }
+  /* the club's object (Cheer's panther, Knights' pin) stands on the strip on the QR's axis, 43 px from the right edge:
+     its foot 2 px behind the strip (anchored right and bottom, so 320 px and a taller card need no second set of numbers),
+     near with the tilt (+5) over a still contact shadow, so it lifts off its own shadow. Without a QR it takes that
+     column alone, taller. No filter on it (offscreen passes in the tilted card on old WebKit). */
+  .ground { position: absolute; right: calc(43px - var(--gw) / 2); bottom: 38px; width: var(--gw); height: 8px; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.45), transparent); }
+  .cheer .ground { --gw: 25px; } /* 70 % of the head's width */
+  .wide:not(.qr).cheer .ground { --gw: 36px; }
+  .halo { position: absolute; right: -27px; bottom: 4px; width: 140px; height: 116px; pointer-events: none; --z: -2; /* centred on the head */
+    background: radial-gradient(closest-side, rgba(84, 92, 158, 0.6), transparent 72%); }
+  .wide .pan { left: auto; top: auto; right: 25px; bottom: 40px; height: 44px; margin: 0; --z: 5; }
+  .wide:not(.qr) .pan { right: 17px; height: 64px; }
   /* the gloss, and a 1 px gold trim round the edge (a uniform's braid) */
   .cheer .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.08), transparent 65%), linear-gradient(180deg, transparent 70%, rgba(0, 0, 0, 0.2));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(232, 192, 98, 0.22); }
   /* still: the eyes stay gold (they are the composition) */
-  @media (prefers-reduced-motion: reduce) { .eyes { animation: none; opacity: 0.85; } .pan { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .eyes { animation: none; opacity: 0.85; } }
   :global(html.lowfx) .eyes { animation: none; opacity: 0.85; }
-  :global(html.lowfx) .pan { transform: none; }
 
   /* Knights: their blue (from the logo's pixels), a jersey's side piping at the edge (vertical, where StudEx's cut is
      diagonal). The badge's band: lit from the top, the whole logo, ending in the pass's own blue (MyQr) with no seam. */
@@ -185,11 +196,11 @@
   .knights .art { left: 50%; top: 20px; height: 94px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35)); }
   /* the card: darker at the top left (the role line keeps 4.5:1 under the gloss and the beam's spill), a pool of light
      at the pin's foot. Everything new is anchored right, so 320 px needs no second set of numbers. */
-  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(45% 60% at 87% 78%, rgba(70, 135, 240, 0.5), transparent 70%),
+  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(45% 60% at calc(100% - 43px) calc(100% - 36px), rgba(70, 135, 240, 0.5), transparent 70%),
     linear-gradient(160deg, rgb(22, 63, 130), rgb(16, 48, 106) 55%, rgb(10, 30, 74)); }
   /* one spotlight, a 36° cone (6° core) whose centre is its apex: 40 px above the card at the QR's centre, straight
      down (Knights' light is vertical, StudEx's diagonal). The QR hides its top; it falls from behind it onto the pin. */
-  .beamw { position: absolute; inset: 0; pointer-events: none; transform: translate(calc(var(--gx, 0) * -2px), calc(var(--gy, 0) * -1px)); transition: transform 400ms ease-out; }
+  .beamw { position: absolute; inset: 0; pointer-events: none; --z: -2; } /* behind the pin with the tilt */
   .beam { position: absolute; right: -104px; top: -190px; width: 300px; height: 300px; pointer-events: none; transform-origin: 50% 50%;
     background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.22) 0deg 3deg, rgba(190, 215, 255, 0) 18deg 342deg, rgba(190, 215, 255, 0.22) 357deg);
     animation: knsweep 12s ease-in-out infinite alternate; }
@@ -201,16 +212,17 @@
   /* the pin: their helmet in silver standing on the strip under the QR, nearest with the tilt. It catches the light as
      the beam crosses it: with the sweep's ease-in-out, 38-62 % is the beam within ±2° of it. Same duration, direction
      and (no) delay as the sweep, or the two drift apart. */
-  .pin { position: absolute; right: 10px; top: 78px; height: 48px; aspect-ratio: 252 / 264; pointer-events: none;
-    transform: translate(calc(var(--gx, 0) * -6px), calc(var(--gy, 0) * -3px)); transition: transform 400ms ease-out; }
+  .pin { position: absolute; right: 13px; bottom: 40px; height: 44px; aspect-ratio: 252 / 264; pointer-events: none; --z: 5; } /* the helmet's body at 29 % of the box: on the axis */
+  .wide:not(.qr) .pin { right: 5px; height: 64px; } /* 5 px off the axis: at 0 the plume touched the edge */
+  .knights .ground { --gw: 29px; }
+  .wide:not(.qr).knights .ground { --gw: 42px; }
   .knights .pin :global(.lit) { animation: knlit 12s linear infinite alternate; }
   @keyframes knlit { 0%, 38% { opacity: 0; } 50% { opacity: 0.45; } 62%, 100% { opacity: 0; } }
   .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
   /* still: the beam rests straight down on the pin, still drawn (it is the composition, not an effect) */
-  @media (prefers-reduced-motion: reduce) { .beam { animation: none; } .knights .pin :global(.lit) { display: none; } .pin, .beamw { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .beam { animation: none; } .knights .pin :global(.lit) { display: none; } }
   :global(html.lowfx) .beam { animation: none; }
   :global(html.lowfx) .knights .pin :global(.lit) { display: none; }
-  :global(html.lowfx) .pin, :global(html.lowfx) .beamw { transform: none; }
 
   /* Moments: terracotta, rust and olive washes as on their poster, a strip of film above and below the wordmark */
   .moments { background: radial-gradient(55% 75% at 28% 62%, rgba(122, 116, 66, 0.95), transparent 72%),
@@ -234,7 +246,7 @@
   .exif { position: absolute; left: 30px; bottom: 3px; font: 650 7.5px/1 var(--font-text); letter-spacing: 0.12em; color: rgba(246, 226, 205, 0.75); }
   .exif b { color: #FF5A3C; font-weight: 400; }
   /* a viewfinder's corners around the profile's card */
-  .vf { position: absolute; inset: 8px 8px 5px; pointer-events: none; opacity: 0.55; --l: rgba(246, 226, 205, 0.9);
+  .vf { position: absolute; inset: 8px 8px 5px; pointer-events: none; opacity: 0.55; --z: 2; --l: rgba(246, 226, 205, 0.9); /* above the picture */
     background: linear-gradient(var(--l), var(--l)) 0 0 / 16px 1.5px, linear-gradient(var(--l), var(--l)) 0 0 / 1.5px 16px,
       linear-gradient(var(--l), var(--l)) 100% 0 / 16px 1.5px, linear-gradient(var(--l), var(--l)) 100% 0 / 1.5px 16px,
       linear-gradient(var(--l), var(--l)) 0 100% / 16px 1.5px, linear-gradient(var(--l), var(--l)) 0 100% / 1.5px 16px,
@@ -242,9 +254,9 @@
     background-repeat: no-repeat; }
   .date { position: absolute; right: 16px; bottom: 22px; font: 700 10px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: 0.08em;
     color: #FF9A3C; text-shadow: 0 0 6px rgba(255, 120, 40, 0.9); opacity: 0.9; }
-  .wide .date { right: 22px; bottom: 50px; font-size: 9px; } /* just above the strip */
+  .wide .date { right: 14px; bottom: 50px; font-size: 9px; } /* just above the strip, its edge on the QR's */
   .moments .art { left: 50%; top: 55%; width: 210px; transform: translate(-50%, -50%); filter: drop-shadow(0 0 14px rgba(255, 228, 200, 0.55)); }
-  .band.moments.wide .art { left: auto; top: auto; right: -34px; bottom: -40px; width: 180px; height: auto; transform: none; opacity: 0.2; filter: none; }
+  .ap { right: -34px; bottom: -40px; width: 180px; opacity: 0.2; --z: -3; } /* the profile's card: the lens's aperture, far */
 
   /* Faces: black, a violet-pink-orange glow from their wordmark, the hands' triangle */
   .faces { background: radial-gradient(60% 80% at 50% 110%, rgba(200, 64, 255, 0.5), transparent 70%),
@@ -261,11 +273,11 @@
   .wide .beams { background: repeating-conic-gradient(from 10deg at -8% 110%, transparent 0 4deg, rgba(192, 75, 255, 0.32) 4deg 4.4deg, transparent 4.4deg 9deg),
       repeating-conic-gradient(from 280deg at 108% 112%, transparent 0 6deg, rgba(255, 79, 154, 0.26) 6deg 6.4deg, transparent 6.4deg 12deg);
     -webkit-mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); }
-  .bokeh { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+  .bokeh { position: absolute; inset: 0; pointer-events: none; --z: 3; /* lights in front, out of focus; no blend: on the black it was the same */
     background: radial-gradient(circle at 12% 78%, rgba(255, 79, 154, 0.45) 0 5px, transparent 9px), radial-gradient(circle at 28% 30%, rgba(110, 123, 255, 0.4) 0 3px, transparent 6px),
       radial-gradient(circle at 74% 82%, rgba(255, 164, 61, 0.45) 0 6px, transparent 10px), radial-gradient(circle at 90% 40%, rgba(192, 75, 255, 0.45) 0 4px, transparent 8px),
       radial-gradient(circle at 56% 18%, rgba(255, 255, 255, 0.35) 0 2px, transparent 4px), radial-gradient(circle at 40% 88%, rgba(192, 75, 255, 0.35) 0 3px, transparent 7px); }
-  .hands { left: 50%; bottom: -6px; width: 300px; transform: translateX(-50%); opacity: 0.16; }
+  .hands { left: 50%; bottom: -6px; width: 300px; margin-left: -150px; opacity: 0.16; }
   .faces .art { left: 50%; top: 50%; height: 80px; transform: translate(-50%, calc(-50% + 10px)); /* 14 px clear of the slot */ filter: drop-shadow(0 4px 18px rgba(200, 64, 255, 0.45)); }
-  .wide .hands { left: auto; right: -40px; bottom: 44px; width: 230px; transform: none; opacity: 0.2; }
+  .wide .hands { left: auto; right: -40px; bottom: 44px; width: 230px; margin: 0; opacity: 0.2; --z: -3; }
 </style>

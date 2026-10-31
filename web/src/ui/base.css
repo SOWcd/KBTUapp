@@ -293,3 +293,14 @@ button.set-row:active { background: var(--surface-2); }
    keeps its transition until it is back in place */
 .pane-host { transition: transform 440ms cubic-bezier(.32,.72,0,1), opacity 440ms ease; }
 .pane-under { transform: translate3d(-28%, 0, 0); opacity: 0.5; }
+
+/* Lanyard depth, one grammar for every lanyard's art (.claude/reports/lanyard-standard-spec.md): a layer floats --z px at
+   full tilt (+ near, against the tilt; - far, with it; vertically 0.6 of that), from the badge glass's --gx/--gy. Only art
+   moves: text, photo, QR and strip stay on the plane. An element with .z has no transform of its own (wrap it); --zs is an
+   overscan scale. will-change: --gx changes all the time while the phone is held, a promotion per transition would
+   re-rasterise the layer. Off under power saving (it stops the gyro: --gx would freeze off-centre), reduced motion, and on
+   a card hidden or covered (Hero's .rest): a move under the QR's blurred scrim re-blurs it every frame. */
+.z { transform: translate(calc(var(--gx, 0) * var(--z, 0) * -1px), calc(var(--gy, 0) * var(--z, 0) * -0.6px)) scale(var(--zs, 1));
+  transition: transform 400ms ease-out; will-change: transform; }
+html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
+@media (prefers-reduced-motion: reduce) { .z { transform: scale(var(--zs, 1)); transition: none; } }

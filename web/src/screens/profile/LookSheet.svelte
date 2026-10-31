@@ -136,6 +136,8 @@
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 6px; scrollbar-width: none; }
   .skins::-webkit-scrollbar { display: none; }
   .ly .mini :global(*) { animation: none !important; } /* swatches stay still: many full lanyards at once */
+  .mini { --gx: 0; --gy: 0; } /* and flat: no depth layer (base.css .z) ever moves or gets its own layer here */
+  .mini :global(.z) { will-change: auto; }
   .ly { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; padding: 8px 6px 8px; border-radius: 16px; background: var(--surface-2);
     box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--t-fast), transform var(--t-fast) var(--ease); }
   .ly:active { transform: scale(0.95); }
