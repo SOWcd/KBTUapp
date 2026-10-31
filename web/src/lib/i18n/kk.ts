@@ -1345,7 +1345,7 @@ const kk: Dict = {
   'clubs.allNote': "Алдымен ең үлкендері; әзірге ешкім жоқ клубтар соңында.",
   'studio.postShort': 'Жаңалық',
   'studio.postSub': 'шеңберлерге жазу',
-  'studio.channelShort': 'Арна → жаңалықтар',
+  'studio.channelShort': 'Арна',
   'studio.channelLink': 'Қосу',
   'studio.channelOff': 'Көшірілмейді',
   'join.apply': "Өтінім беру",

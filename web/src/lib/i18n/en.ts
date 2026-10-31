@@ -1345,7 +1345,7 @@ const en: Dict = {
   'clubs.allNote': "The biggest first; clubs nobody has joined yet at the end.",
   'studio.postShort': 'News',
   'studio.postSub': 'post to the circles',
-  'studio.channelShort': 'Channel → news',
+  'studio.channelShort': 'Channel',
   'studio.channelLink': 'Link',
   'studio.channelOff': 'Not copied',
   'join.apply': "Apply",
