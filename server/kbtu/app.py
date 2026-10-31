@@ -54,10 +54,7 @@ async def _picture(fn, *args):
         raise ApiError("bad_input", "not_an_image") from None
 
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
-# typed in by the student (the KBTU-password sign-in is gone since Oct 19): a name in any alphabet (hyphen, apostrophe, space), and a student ID like
-# 24B031234 (year, a letter or two for the degree, the number)
-NAME = re.compile(r"[^\W\d_](?:[^\W\d_]|[-' ]){0,39}")
-STUDENT_ID = re.compile(r"\d{2}[A-Z]{1,2}\d{5,7}")
+NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (the KBTU-password sign-in is gone since Oct 19)
 
 
 async def read_upload(request: Request) -> bytes:

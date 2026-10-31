@@ -24,6 +24,10 @@ LEVEL_RIGHTS = {lv: frozenset(r for r, need in RIGHTS.items() if RANK[need] <= R
 PROFILE_QR = re.compile(r"\bu_(\d+)_([A-Z2-7]{10})\b")  # a badge QR: …?startapp=u_<id>_<code> (§4.4)
 TWO_GIS = re.compile(r"^https://(?:[a-z]+\.)?2gis\.(?:kz|ru|com)/", re.I)
 SEASON_MONTHS = (2, 8)  # a season starts in February and in August (§4.11)
+# typed in by the student: a name in any alphabet (hyphen, apostrophe, space), and a student ID like 24B031234 or a
+# master's 26MD1234 (year, a letter or two for the degree, the number: 4 digits in the registrar's own list)
+NAME = re.compile(r"[^\W\d_](?:[^\W\d_]|[-' ]){0,39}")
+STUDENT_ID = re.compile(r"\d{2}[A-Z]{1,2}\d{4,7}")
 
 
 class ApiError(Exception):

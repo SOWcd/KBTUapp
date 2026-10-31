@@ -13,7 +13,7 @@ from pathlib import Path
 from .. import portal
 from ..db import tx
 
-from .core import (ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
+from .core import (NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     need_student, one, org_ref, person_ref, rows, shown_name)
 
 
@@ -59,7 +59,7 @@ def ms_link(con, uid: int, who: dict) -> None:
 
 SID_LOOKS = str.maketrans({"\u0412": "B", "\u0418": "B", "\u041c": "M"})  # Cyrillic Ve, I, Em typed for Latin B, B, M (I is B's key on the Russian layout)
 _ZERO = str.maketrans("O\u041e", "00")  # an O, Latin or Cyrillic, where a digit goes
-SID_SHAPE = re.compile("([0-9O\u041e]{2})([A-NP-Z]{1,2})([0-9O\u041e]{5,7})")  # app.STUDENT_ID, an O in a digit's place allowed (so never a letter)
+SID_SHAPE = re.compile("([0-9O\u041e]{2})([A-NP-Z]{1,2})([0-9O\u041e]{4,7})")  # core.STUDENT_ID, an O in a digit's place allowed (so never a letter)
 
 
 def norm_sid(raw: object) -> str | None:
@@ -233,9 +233,11 @@ def me(con, v: Viewer) -> dict:
         "id": u["id"], "tg": {"id": u["tg_id"], "username": u["tg_username"], "firstName": u["tg_first_name"], "lastName": u["tg_last_name"]},
         "avatar": avatar_of(name_row), "name": shown_name(name_row), "nick": u["nick"],
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": avatar_of({**name_row, "own_photo": None}), "own": f"media/{own['path']}.t.webp" if own else None},
-        "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "email": s["email"],
+        "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "middleName": s["middle_name"], "email": s["email"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
-                    "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
+                    "ms": s["ms_oid"] is not None, "consent": s["consent_version"],
+                    # what My data still lets me correct myself (fix_identity): nothing for staff
+                    "fixable": [k for k, c in FIXABLE.items() if c not in s["fixed"].split(",") and s["consent_version"] != "staff"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         # prefill: the student ID an organizers' check-in list, or the freshmen list when the name matches, has for this KBTU mail (checkin.py)
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
@@ -327,6 +329,55 @@ def _qr_code(con, uid: int, col: str = "qr_code") -> str:
     return code
 
 
+FIXABLE = {"studentId": "student_id", "lastName": "last_name", "firstName": "first_name", "middleName": "middle_name"}
+
+
+def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> None:
+    """Settings → My data: a student corrects their student ID or a name once each (it came in wrong: a classmate's ID
+    from the freshmen list, a typo at sign-up, the name in another script); after that only support, the admin
+    (`kbtu.admin fix`: no once, no year rule, no tolerance). The email is never changed: it is the KBTU Microsoft login
+    (ms_link writes it from the token), what ties this row to a real person. Review: .claude/reports/identity-edit-review.md"""
+    from .. import roster  # imports logic: here, not at the top
+    s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
+    if not s or not admin and (s["manual"] or s["consent_version"] == "staff"):
+        raise ApiError("forbidden")  # unconfirmed: Microsoft's names come first; staff: the ID is a placeholder
+    if not admin and col in s["fixed"].split(","):
+        raise ApiError("conflict", "fixed")
+    v = " ".join(str(raw or "").split())
+    course = None
+    if col == "student_id":
+        v = v.replace(" ", "").upper()
+        course = core.course_of(v)
+        if not STUDENT_ID.fullmatch(v) or not isinstance(course, int) or not 1 <= course <= 6:
+            raise ApiError("bad_input")
+        if not admin and v[:2] != s["student_id"][:2]:
+            raise ApiError("bad_input", "sid_year")  # the intake year is the year of study (free 1st-year seats): support
+    elif v and not NAME.fullmatch(v) or not v and col != "middle_name":
+        raise ApiError("bad_input")
+    elif col != "middle_name" and not admin:
+        # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
+        # renaming oneself to someone else would fool every organizer's list, the door and the club rosters
+        ms = json.loads(s["ms_profile"] or "{}")
+        new = {"first_name": s["first_name"], "last_name": s["last_name"], col: v}
+        if not roster.same_person(f"{new['first_name']} {new['last_name']}", ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"]):
+            raise ApiError("bad_input", "name_far")
+    v = v or None
+    if v == s[col]:
+        return  # nothing changes: the once isn't spent
+    with tx(con):
+        held = col == "student_id" and one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", v, uid)
+        if held:
+            id_clash(con, v, uid, held[0])  # the admins hear, as at sign-up; the once isn't spent
+        else:
+            con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
+                        (v, s["fixed"] if admin else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
+            if course:
+                con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (course, core.academic_year(), uid))
+            log_action(con, None if admin else uid, "identity_fix", f"user:{uid}", json.dumps({"field": col, "old": s[col], "new": v}, ensure_ascii=False))
+    if held:
+        raise ApiError("conflict", "sid_taken")
+
+
 def update_me(con, v: Viewer, patch: dict) -> dict:
     sets: dict[str, object] = {}
     for k, col in SETTINGS.items():
@@ -368,6 +419,10 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         if patch["phone"] is not None and not phone:
             raise ApiError("bad_input")
         con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
+    for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
+        if k in patch:
+            need_student(v)
+            fix_identity(con, v.id, col, patch[k])
     if "city" in patch and patch["city"] is not None:
         raise ApiError("bad_input")  # it came from the club's roster (PLAN 95): it can only be deleted
     if "city" in patch:  # Settings → My data

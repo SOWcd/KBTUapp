@@ -20,6 +20,10 @@
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft
+  .venv/bin/python -m kbtu.admin fix <@username | telegram id> <sid | last | first | middle> "<value>"
+                                support: the student ID or a name changed (no once, no year rule, no name tolerance;
+                                the old value to the audit log); "" clears the middle name
+  .venv/bin/python -m kbtu.admin fix <@username | telegram id> reset   My data's one-time corrections allowed again
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
@@ -55,7 +59,7 @@ import time
 from . import config, db
 from pathlib import Path
 
-from .logic import RANK, Viewer, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
+from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
 # text that reads backwards)
@@ -191,7 +195,7 @@ def main(args: list[str]) -> None:
         print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} retired")
     elif cmd == "student" and len(args) == 6:
         u, sid, t = _user(con, args[1]), args[2].upper(), now()
-        if not re.fullmatch(r"\d{2}[A-Z]{1,2}\d{5,7}", sid) or args[5] not in "123456" or len(args[5]) != 1:
+        if not STUDENT_ID.fullmatch(sid) or args[5] not in "123456" or len(args[5]) != 1:
             sys.exit("student id like 24B031234; course 1-6")
         if one(con, "SELECT 1 FROM students WHERE user_id = ? OR student_id = ?", u["id"], sid):
             sys.exit("this person or this student ID is linked already: unlink first")
@@ -199,6 +203,18 @@ def main(args: list[str]) -> None:
             con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at,
                 verified_at, synced_at) VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, ?)""", (u["id"], sid, args[3], args[4], int(args[5]), t, t, t))
         print(f"@{u['tg_username'] or u['tg_id']}: student {sid}")
+    elif cmd == "fix" and len(args) == 3 and args[2] == "reset":  # support: My data's one-time corrections again
+        u = _user(con, args[1])
+        n = con.execute("UPDATE students SET fixed = '' WHERE user_id = ?", (u["id"],)).rowcount
+        print(f"@{u['tg_username'] or u['tg_id']}: " + ("can correct the student ID and name once more" if n else "not a student"))
+    elif cmd == "fix" and len(args) == 4 and args[2] in ("sid", "last", "first", "middle"):
+        u = _user(con, args[1])
+        col = {"sid": "student_id", "last": "last_name", "first": "first_name", "middle": "middle_name"}[args[2]]
+        try:
+            fix_identity(con, u["id"], col, args[3], admin=True)  # no once, no year rule, no name tolerance; the old value to the audit log
+        except ApiError as e:
+            sys.exit(f"refused: {e.code} {e.message}".strip())  # sid_taken: unlink the holder first
+        print(f"@{u['tg_username'] or u['tg_id']}: {args[2]} changed")
     elif cmd == "stats":  # people are students only: staff aren't counted
         real = "user_id NOT IN (SELECT user_id FROM students WHERE consent_version = 'staff')"
         for name, sql in (("opened the app", "SELECT count(*) FROM users WHERE tg_id > 0"),

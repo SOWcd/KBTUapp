@@ -9,7 +9,7 @@ use kbtu.logic as before. A test that patches the clock or a limit patches the m
 
 from __future__ import annotations
 
-from .core import (ApiError, DOOR_EARLY, DOOR_LATE, GOV_SLUG, HOLD, LEVEL_RIGHTS, NO_END, PERSON, PERSON_COLS,
+from .core import (NAME, STUDENT_ID, ApiError, DOOR_EARLY, DOOR_LATE, GOV_SLUG, HOLD, LEVEL_RIGHTS, NO_END, PERSON, PERSON_COLS,
     PROFILE_QR, RANK, RIGHTS, SEASON_MONTHS, TWO_GIS, Viewer, _by_id, _door_ref, _event_cover, _free_seat, _may, _once,
     _org, _qs, _rights, _rights_from, _roles, academic_year, add_photo, at_least, avatar_of, can, card, cards,
     clean_nick, course_cap, course_day, course_of, free_taken, friend_ids, full, log, log_action, media_shape,
@@ -28,7 +28,7 @@ from .account import (CONSENT, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FORUM, DELET
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     deletion_hash, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me, me, ms_apply, ms_link, ms_pending, ms_remember, ms_sweep,
-    refer, roster_requests, save_schedule, schedule, set_photo, update_me)  # noqa: F401
+    FIXABLE, fix_identity, refer, roster_requests, save_schedule, schedule, set_photo, update_me)  # noqa: F401
 from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, REAPPLY, RESERVED,
     SCHOOLS, SCHOOLS_VERSION, SHORT, SLUG, TRANSLIT, _HEAD, _KB, _SEP, _TAIL, _acronym, _club_app, _keep_name,
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,

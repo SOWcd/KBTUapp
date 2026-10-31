@@ -14,7 +14,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { api } from '../../lib/api';
+  import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
   import { t, i18n, type Key } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
@@ -51,6 +51,17 @@
   }
   async function dropPhone() {
     if (await sheets.ask({ title: t('pd.delAsk'), text: t('pd.delText'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true })) await savePhone(null, t('pd.deleted'));
+  }
+  // my name and student ID: corrected once each (it came in wrong), then through support; the server holds the rules
+  // (account.fix_identity: the ID's year stays, the name stays KBTU's in another spelling at most)
+  const FIELDS: [Fixable, Key][] = [['lastName', 'login.lastName'], ['firstName', 'login.firstName'], ['middleName', 'pd.middle'], ['studentId', 'pd.sid']];
+  const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'login.sidTaken', fixed: 'pd.support' };
+  async function fix(k: Fixable, label: Key) {
+    const was = me?.student?.[k] ?? '';
+    const v = await sheets.askText({ title: t(label), text: t('pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
+    if (v == null || v.trim() === was) return;
+    try { session.me = await api.updateMe({ [k]: v }); haptic.ok(); say(t('pd.saved'), 'sparkles_3d'); }
+    catch (e) { haptic.error(); say(t((e instanceof ApiErr && WHY[e.message]) || 'common.error'), 'pleading_face_3d'); }
   }
   async function cityHidden(on: boolean) {
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
@@ -100,15 +111,25 @@
     <p class="set-foot always">{t('set.always')}</p>
   {:else if kind === 'privacy'}
     <!-- my data: one row each, what can be done to it a tap deeper -->
-    {#if phone || me?.city}
+    {#if me?.student || phone || me?.city}
       <div class="set-group plain">
+        {#if me?.student}
+          {@const st = me.student}
+          <!-- who I am: correctable once (›), then a plain row; the email is the Microsoft login, never edited -->
+          {#each FIELDS as [k, label] (k)}
+            {#if st.fixable.includes(k)}{@render link(t(label), () => void fix(k, label), st[k] ?? '')}
+            {:else if st[k]}<div class="set-row"><span class="lb">{t(label)}</span><span class="val">{st[k]}</span></div>{/if}
+          {/each}
+          {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val">{st.email}</span></div>{/if}
+        {/if}
         {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
         {#if me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me.city.name)}{/if}
       </div>
+      {#if me?.student && me.student.fixable.length < FIELDS.length && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
     {/if}
     {#if me?.student}
       <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing) -->
-      <label class="set-group plain sw-on" class:gap={phone || me.city}><span class="set-row"><span class="lb">{t('set.showGoing')}</span>
+      <label class="set-group plain sw-on gap"><span class="set-row"><span class="lb">{t('set.showGoing')}</span>
         <input type="checkbox" role="switch" checked={me.settings.showGoing} onchange={(e) => set('showGoing', e.currentTarget.checked, true)} /></span></label>
     {/if}
     <div class="set-group plain" class:gap={phone || me?.city || me?.student}>

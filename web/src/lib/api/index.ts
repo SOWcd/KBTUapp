@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -14,7 +14,8 @@ export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
-  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null; city?: null; cityHidden?: boolean }): Promise<Me>;  // phone, city: null deletes it
+  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null; city?: null; cityHidden?: boolean }
+    & { [k in Fixable]?: string }): Promise<Me>;  // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back
   /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';

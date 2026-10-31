@@ -6627,7 +6627,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     with pytest.raises(SystemExit) as e:
         run(lines[0] + "\nx@kbtu.kz,25B010011,,,,,,yes\n", "x2")
     assert "line 2" in str(e.value) and "x@" not in str(e.value)
-    assert [logic.account.norm_sid(x) for x in ("25b010001", "25\u041c010001", "2\u041e\u04120100", "25X12")] \
+    assert [logic.account.norm_sid(x) for x in ("25b010001", "25\u041c010001", "2\u041e\u0412010", "25X12")] \
         == ["25B010001", "25M010001", None, None]
     # only the student Microsoft vouches for sees it, and only when the name matches too (Latin vs Cyrillic)
     who = lambda tg, mail, first, last: {"oid": f"oid-{tg}", "email": mail, "first": first, "last": last, "employeeId": "", "profile": {}}  # noqa: E731
@@ -6695,3 +6695,38 @@ def test_same_person_kazakh_spellings():
     assert same_person("\u041c\u0443\u0441\u0430\u0435\u0432 \u041d\u04b1\u0440\u0441\u04b1\u043b\u0442\u0430\u043d", "Nursultan", "Mussayev")
     assert same_person("\u0410\u0445\u043c\u0435\u0442\u043e\u0432\u0430 \u04d8\u0441\u0435\u043b", "\u00c4sel", "Akhmetova")
     assert not same_person("\u0418\u0432\u0430\u043d\u043e\u0432 \u0418\u0432\u0430\u043d", "Petr", "Sidorov")
+
+
+def test_identity_fix_once(env):
+    """Settings -> My data: the student ID and each name corrected once (review identity-edit-review.md); the ID within
+    its intake year and free, first/last only as KBTU's own name in another spelling; the old value in the audit log;
+    the admin's path has no once and no tolerance. A master's 4-digit ID is a valid one."""
+    c, cfg = env
+    ali, bek, staff = login(c, 10, "ali"), login(c, 11, "bek"), login(c, 12, "stf")
+    con = db.connect(cfg.db_path)
+    con.execute("""UPDATE students SET student_id = '26B031234', first_name = 'Aidos', last_name = 'Serikbayev', course = 1,
+        ms_profile = '{"givenName": "Aidos", "surname": "Serikbayev"}' WHERE user_id = ?""", (ali["id"],))
+    con.execute("UPDATE students SET student_id = '26B031235' WHERE user_id = ?", (bek["id"],))
+    con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (staff["id"],))
+    fix = lambda **b: c.patch("/api/me", headers=tma(10), json=b)  # noqa: E731
+    assert fix(studentId="25B031236").json()["message"] == "sid_year"         # another intake: support
+    r = fix(studentId="26B031235")                                           # bek's: refused, not spent
+    assert r.status_code == 409 and r.json()["message"] == "sid_taken"
+    me = fix(studentId=" 26b 031237").json()["student"]
+    assert me["studentId"] == "26B031237" and me["course"] == 1 and "studentId" not in me["fixable"]
+    assert fix(studentId="26B031238").json()["message"] == "fixed"           # once
+    assert fix(lastName="Kim").json()["message"] == "name_far"               # someone else's name: support
+    surname = "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432"
+    assert fix(lastName=surname).json()["student"]["lastName"] == surname    # KBTU's name in Cyrillic
+    assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName"]  # nothing changed: not spent
+    assert fix(middleName="Kairatuly").json()["student"]["middleName"] == "Kairatuly"
+    assert fix(middleName="X").json()["message"] == "fixed"
+    assert fix(email="x@kbtu.kz").json()["student"]["email"] == ali["student"]["email"]  # never: it's the Microsoft login
+    log = [json.loads(d) for (d,) in con.execute("SELECT data FROM audit_log WHERE action = 'identity_fix' AND target = ? ORDER BY id", (f"user:{ali['id']}",))]
+    assert [(x["field"], x["old"]) for x in log] == [("student_id", "26B031234"), ("last_name", "Serikbayev"), ("middle_name", None)]
+    assert c.patch("/api/me", headers=tma(12), json={"middleName": "A"}).status_code == 403  # staff: a placeholder ID
+    logic.fix_identity(con, ali["id"], "last_name", "Kim", admin=True)       # support: anything, any time
+    logic.fix_identity(con, ali["id"], "student_id", "24MD1234", admin=True)
+    s = con.execute("SELECT last_name, student_id, course, fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()
+    assert tuple(s) == ("Kim", "24MD1234", 2, "student_id,last_name,middle_name")
+    assert logic.STUDENT_ID.fullmatch("26MD1234") and logic.account.norm_sid("26md1234") == "26MD1234"

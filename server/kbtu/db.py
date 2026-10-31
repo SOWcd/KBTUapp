@@ -908,6 +908,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       phone       TEXT,
       came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
     ) STRICT;"""),
+    # Settings → My data: the fields a student corrected themselves (each once: student_id, last_name, first_name,
+    # middle_name, comma-separated); the old values are in audit_log (identity_fix). Gone with the row
+    (96, "ALTER TABLE students ADD COLUMN fixed TEXT NOT NULL DEFAULT '';"),
 ]
 
 

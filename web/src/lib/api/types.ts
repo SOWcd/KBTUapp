@@ -168,6 +168,7 @@ export interface Settings {
   hideFirstYear: boolean;
 }
 
+export type Fixable = 'studentId' | 'lastName' | 'firstName' | 'middleName';
 export interface StudentProfile {
   studentId: string;
   firstName: string;
@@ -180,6 +181,8 @@ export interface StudentProfile {
   syncedAt: Ts;
   ms: boolean;     // signed in with the KBTU Microsoft account
   consent: string; // the policy version agreed to (lib/legal.ts); 'staff' and 'admin': added by hand
+  middleName: string | null;
+  fixable: Fixable[]; // what Settings → My data still lets me correct myself (once each; then support)
 }
 
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */
