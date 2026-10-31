@@ -3,7 +3,8 @@
   // card keeps its size, so the art is the card's background: the symbol big on the
   // right, the pom-poms beside the QR; else a band on top of the full-screen badge, the art in the middle.
   // Art: the panther and the Knights emblem cut from the clubs' logos. Knights (redrawn Oct 31): their blue, a jersey's
-  // side piping, on the card only their helmet pressed in (the whole logo's detail turned to noise behind the text).
+  // side piping; v2 (Oct 31): the knight under the arena light, one spotlight sweeping slowly down from behind the QR
+  // onto a silver pin of their helmet (on the card) or their whole logo (on the badge's band).
   // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band; on the
   // profile's card only the lens's aperture (lucide's), as the wordmark ran under the name.
   // Faces (a party club): their gradient wordmark over the hands' triangle from their logo, drawn white, on a club
@@ -32,7 +33,8 @@
   {#if look === 'cheer'}
     <img class="dec" src={wide ? cheerWide : cheerTall} alt="" /><img class="art" src={panther} alt="" />
   {:else if look === 'knights'}
-    {#if wide}<span class="crest"><KnightsHelm emboss /></span><i class="gloss"></i>{:else}<img class="art" src={knights} alt="" />{/if}
+    {#if wide}<span class="beamw"><i class="beam"></i></span><span class="pin"><KnightsHelm metal /></span><i class="gloss"></i>
+    {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
     {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
@@ -162,18 +164,37 @@
      diagonal). The badge's band: lit from the top, the whole logo, ending in the pass's own blue (MyQr) with no seam. */
   .knights { --pipe: transparent 7px, rgba(255, 255, 255, 0.22) 7px 9px, transparent 9px 12px, rgba(255, 255, 255, 0.12) 12px 13px, transparent 13px;
     background: linear-gradient(90deg, var(--pipe)), linear-gradient(270deg, var(--pipe)),
+      radial-gradient(50% 40% at 50% 100%, rgba(80, 145, 245, 0.45), transparent 70%),
       radial-gradient(60% 90% at 50% 0%, rgba(58, 123, 234, 0.5), transparent 70%), linear-gradient(180deg, rgb(28, 76, 148), rgb(15, 43, 102)); }
   .knights .art { left: 50%; top: 20px; height: 94px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35)); }
-  /* the card: lit from the bottom right behind the helmet, darker under the text (the role line keeps 4.5:1) */
-  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(70% 90% at 100% 100%, rgba(58, 123, 234, 0.45), transparent 70%),
-    linear-gradient(160deg, rgb(28, 76, 148), rgb(22, 63, 130) 55%, rgb(14, 42, 98)); }
-  /* the helmet moves a little with the tilt (like StudEx's name). Under the QR, not behind it (owner, Oct 31: hidden
-     there, nobody could tell what it was): the plume and the dome between the QR and the strip, the chin behind the strip */
-  .crest { position: absolute; right: -6px; top: 70px; height: 120px; aspect-ratio: 252 / 264;
-    transform: translate(calc(var(--gx, 0) * -4px), calc(var(--gy, 0) * -2.5px)); transition: transform 400ms ease-out; }
-  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.12), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
-  @media (prefers-reduced-motion: reduce) { .crest { transform: none; } }
-  :global(html.lowfx) .crest { transform: none; }
+  /* the card: darker at the top left (the role line keeps 4.5:1 under the gloss and the beam's spill), a pool of light
+     at the pin's foot. Everything new is anchored right, so 320 px needs no second set of numbers. */
+  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(45% 60% at 87% 78%, rgba(70, 135, 240, 0.5), transparent 70%),
+    linear-gradient(160deg, rgb(22, 63, 130), rgb(16, 48, 106) 55%, rgb(10, 30, 74)); }
+  /* one spotlight, a 36° cone (6° core) whose centre is its apex: 40 px above the card at the QR's centre, straight
+     down (Knights' light is vertical, StudEx's diagonal). The QR hides its top; it falls from behind it onto the pin. */
+  .beamw { position: absolute; inset: 0; pointer-events: none; transform: translate(calc(var(--gx, 0) * -2px), calc(var(--gy, 0) * -1px)); transition: transform 400ms ease-out; }
+  .beam { position: absolute; right: -104px; top: -190px; width: 300px; height: 300px; pointer-events: none; transform-origin: 50% 50%;
+    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.16) 0deg 3deg, rgba(190, 215, 255, 0) 18deg 342deg, rgba(190, 215, 255, 0.16) 357deg);
+    animation: knsweep 12s ease-in-out infinite alternate; }
+  @keyframes knsweep { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+  /* the badge's band: the same light, centred over the slot, wider and a little dimmer, ±5° */
+  .band.knights:not(.wide) .beam { left: 50%; right: auto; top: -210px; margin-left: -150px; animation-name: knsweepb;
+    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.14) 0deg 4deg, rgba(190, 215, 255, 0) 24deg 336deg, rgba(190, 215, 255, 0.14) 356deg); }
+  @keyframes knsweepb { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+  /* the pin: their helmet in silver standing on the strip under the QR, nearest with the tilt. It catches the light as
+     the beam crosses it: with the sweep's ease-in-out, 38-62 % is the beam within ±2° of it. Same duration, direction
+     and (no) delay as the sweep, or the two drift apart. */
+  .pin { position: absolute; right: 10px; top: 78px; height: 48px; aspect-ratio: 252 / 264; pointer-events: none;
+    transform: translate(calc(var(--gx, 0) * -6px), calc(var(--gy, 0) * -3px)); transition: transform 400ms ease-out; }
+  .knights .pin :global(.lit) { animation: knlit 12s linear infinite alternate; }
+  @keyframes knlit { 0%, 38% { opacity: 0; } 50% { opacity: 0.45; } 62%, 100% { opacity: 0; } }
+  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+  /* still: the beam rests straight down on the pin, still drawn (it is the composition, not an effect) */
+  @media (prefers-reduced-motion: reduce) { .beam { animation: none; } .knights .pin :global(.lit) { display: none; } .pin, .beamw { transform: none; } }
+  :global(html.lowfx) .beam { animation: none; }
+  :global(html.lowfx) .knights .pin :global(.lit) { display: none; }
+  :global(html.lowfx) .pin, :global(html.lowfx) .beamw { transform: none; }
 
   /* Moments: terracotta, rust and olive washes as on their poster, a strip of film above and below the wordmark */
   .moments { background: radial-gradient(55% 75% at 28% 62%, rgba(122, 116, 66, 0.95), transparent 72%),
