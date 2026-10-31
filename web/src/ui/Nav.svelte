@@ -39,8 +39,10 @@
   // the button gives under the finger and springs back as the map grows out of it (CampusMap's iris)
   function openMap(e: MouseEvent) {
     const b = e.currentTarget as HTMLElement, r = b.getBoundingClientRect();
-    mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
     mapFrom.cap = copyCap();
+    // the bar comes back to full size under the map, so the map closes into the full button, where its own one sits
+    ui.navMini = false;
     b.animate([{ transform: 'scale(1)' }, { transform: 'scale(0.84)', offset: 0.35 }, { transform: 'scale(1.06)', offset: 0.75 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
     sheets.map();
   }

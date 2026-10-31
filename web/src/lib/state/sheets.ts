@@ -17,7 +17,7 @@ export function copyCap(): CapCopy | null {
 }
 /** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
  *  the capsule as it was before the map changed it */
-export const mapFrom: { at: { x: number; y: number } | null; cap: CapCopy | null } = { at: null, cap: null };
+export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
 
 export const sheets = {
   person: (_id: Id) => {},

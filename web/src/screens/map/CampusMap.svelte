@@ -563,7 +563,11 @@
       return;
     }
     const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }, far = reach(iris.at);
-    panel.animate({ clipPath: [iris(30), iris(far)] }, o);
+    panel.animate({ clipPath: [iris(iris.at.r), iris(far)] }, o);
+    // the map's own round button grows out of the one tapped (owner, Oct 31: from the slim bar the small button and
+    // the big one read as two buttons): it starts on the tapped one's place and size and settles on its own
+    const shut = panel.querySelector<HTMLElement>('.shut'), sb = shut?.getBoundingClientRect();
+    if (shut && sb?.width) shut.animate({ transform: [`translate(${iris.at.x - sb.left - sb.width / 2}px, ${iris.at.y - sb.top - sb.height / 2}px) scale(${(iris.at.r * 2) / sb.width})`, 'none'] }, o);
     // Telegram's Close turns into Back a moment into the circle, not at the tap nor at its end (owner, PLAN 80)
     setTimeout(() => (overlay.holdBack = false), BACK_AFTER);
     // the map breathes out to meet you: a touch larger at first, it settles as the circle opens
@@ -594,7 +598,7 @@
     if (iris && !gone) void tick().then(() => requestAnimationFrame(() => { if (!gone) mapCap = copyCap(); }));
   });
   // two capsules meet on the circle's edge: the real one and a still copy, each masked to its side, every frame
-  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean, c = iris!.at) {
+  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean, c: { x: number; y: number } = iris!.at) {
     const real = document.querySelector<HTMLElement>('.cap');
     const w = document.createElement('div');
     w.className = copy.theme;
@@ -617,7 +621,7 @@
   }
   // the circle's edge lit like the glass (owner, Oct 25: without it the map "just takes over like a picture"): a ring
   // of its own over the panel, its size animated with the clip (a scaled ring would thicken its line)
-  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[], c = iris!.at): HTMLElement {
+  function halo(from: number, to: number, o: KeyframeAnimationOptions, opacity: number[], c: { x: number; y: number } = iris!.at): HTMLElement {
     const h = document.createElement('i');
     h.className = 'map-halo';
     h.style.cssText = `left:${c.x}px;top:${c.y}px`;
