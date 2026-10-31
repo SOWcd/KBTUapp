@@ -46,9 +46,9 @@
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(loadMyCard); });
   // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
-  const shown = $derived<PersonCard | null>(card ? { ...card, skin: me?.skin } : (me?.student ? {
+  const shown = $derived<PersonCard | null>(card ? { ...card, skin: ui.tryOn?.id ?? me?.skin } : (me?.student ? {
     id: me.id, name: me.name, avatar: me.avatar, founder: me.founder, no: me.no, course: me.student.course, school: me.student.school, bio: me.bio,
-    attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: me.skin,
+    attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: ui.tryOn?.id ?? me.skin,
   } : null));
 
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
@@ -134,6 +134,8 @@
     const r = ++run, q = calm();
     phase = 'leaving'; hold = true; pending = false;
     haptic.soft();
+    // a lanyard tried on but not mine to wear (owner, Oct 31): said so, and mine turns back
+    if (ui.tryOn) { say(t('look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
     icons(false, q);
     fades = all('[data-unit]').map((u) => u.animate(q ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px)' }],
       { duration: q ? 150 : 140, easing: IN, fill: 'forwards' }));

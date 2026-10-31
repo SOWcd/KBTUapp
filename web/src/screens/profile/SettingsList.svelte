@@ -53,6 +53,8 @@
     ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: o.name, word: STRAP[skinOf(o)!], locked: !mine.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
 
+  // a locked one can be tried on: the lanyard above wears it, the check then says it isn't mine (Me) and turns it back
+  const worn = $derived(ui.tryOn?.id ?? me?.skin);
   let busy = false;
   // no toast on a skin (owner, Oct 29): the lanyard above turns at once (Hero); a failure puts the old one back
   async function pickSkin(id: number | 'sower' | null) {
@@ -165,9 +167,8 @@
         <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
         <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
           {#each swatches as k (k.id ?? 'kbtu')}
-            <button class="ly {k.kind}" role="radio" aria-checked={me.skin === k.id} aria-disabled={'locked' in k && k.locked} class:on={me.skin === k.id}
-                    class:locked={'locked' in k && k.locked}
-                    onclick={() => { if ('locked' in k && k.locked) { haptic.warn(); return say(t('look.locked', { name: k.name }), 'locked_3d'); } haptic.select(); void pickSkin(k.id); }}>
+            <button class="ly {k.kind}" role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
+                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <span class="cd">{#if banded(k.kind as Look)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
               {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
