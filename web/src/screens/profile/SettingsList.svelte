@@ -34,7 +34,7 @@
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { haptic, openLink, on, tg } from '../../lib/tg';
+  import { haptic, openLink, on } from '../../lib/tg';
   import { menu, type MenuItem } from '../../ui/menu';
   import { skinOf, skinned, STRAP, banded, type Look } from '../../lib/awards';
   import LanyardBand from '../../ui/LanyardBand.svelte';
@@ -117,15 +117,15 @@
   // transition's snapshots never hold it; the icon's tail plays in the live new snapshot, the circle opening on it
   let glyph = $derived(theme.current);
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx');
-  function look(x: Theme | null, ic: Element) {
-    if (theme.chosen === x) return;
-    keep({ theme: x });
-    const to = x ?? tg.colorScheme();
-    if (to === theme.current) return chooseTheme(x); // the look stays: nothing to play
+  // no "as in the system" item: until a pick the app follows Telegram's scheme on its own (owner, Oct 31)
+  function look(to: Theme, ic: Element) {
+    if (theme.chosen === to) return;
+    keep({ theme: to });
+    if (to === theme.current) return chooseTheme(to); // the look stays: nothing to play
     glyph = to;
     setTimeout(() => {
       haptic.rigid();
-      chooseTheme(x, ic);
+      chooseTheme(to, ic);
       say(phrase(`say.theme.${to}`), to === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
     }, still() ? 0 : 160);
   }
@@ -189,8 +189,8 @@
     <h2 class="set-h" class:first={!me?.student} tabindex="-1">{t('set.app')}</h2>
     <div class="set-group">
       {@render row(Languages, t('me.guestLang'), LANG_FULL[i18n.lang], 'menu', (r) => open('lang', at(r), LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))), 'lang')}
-      {@render row(Sun, t('me.guestTheme'), t(theme.chosen ? `theme.${theme.chosen}` : 'theme.system'), 'menu', (r) => open('theme', at(r), (['dark', 'light', null] as const).map((x) => ({
-        label: t(x ? `theme.${x}` : 'theme.system'), checked: theme.chosen === x, onselect: () => look(x, r.querySelector('.ic')!) }))), 'theme')}
+      {@render row(Sun, t('me.guestTheme'), t(`theme.${theme.current}`), 'menu', (r) => open('theme', at(r), (['dark', 'light'] as const).map((x) => ({
+        label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, r.querySelector('.ic')!) }))), 'theme')}
       {#if me?.student}
         {@render row(Bell, t('me.notifications'), bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off'), 'in', () => sheets.settings('notify'))}
         {@render row(CalendarDays, t('set.calShort'), '', 'out', () => void subscribe())}
