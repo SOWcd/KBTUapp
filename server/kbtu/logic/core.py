@@ -27,6 +27,8 @@ SEASON_MONTHS = (2, 8)  # a season starts in February and in August (§4.11)
 # typed in by the student: a name in any alphabet (hyphen, apostrophe, space), and a student ID like 24B031234 or a
 # master's 26MD1234 (year, a degree letter and 5-7 digits, or two letters and 4-7: the registrar's masters); ASCII digits only
 NAME = re.compile(r"[^\W\d_](?:[^\W\d_]|[-' ]){0,39}")
+_LAT = "A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f"  # Latin letters, accented too (U+00D7 and U+00F7 are signs)
+LATIN_NAME = re.compile(f"[{_LAT}](?:[{_LAT}]|[-' ]){{0,39}}")  # the Latin name columns (My data)
 STUDENT_ID = re.compile(r"\d{2}(?:[A-Z]\d{5,7}|[A-Z]{2}\d{4,7})", re.ASCII)  # a fullwidth digit would clone a real ID
 
 
@@ -99,7 +101,7 @@ def overseer(con, v: Viewer) -> bool:
         WHERE m.user_id = ? AND o.can_oversee = 1 AND m.role != 'member'""", v.id) is not None)
 
 
-PERSON_COLS = ("u.id, u.tg_first_name, u.tg_last_name, u.tg_photo_url, u.tg_photo_path, u.tg_photo_src, u.is_founder, u.mark, u.show_going, s.first_name, s.last_name, u.nick,"
+PERSON_COLS = ("u.id, u.tg_first_name, u.tg_last_name, u.tg_photo_url, u.tg_photo_path, u.tg_photo_src, u.is_founder, u.mark, u.show_going, s.first_name, s.last_name, s.first_lat, s.last_lat, u.nick,"
                " u.role AS platform_role,"  # aliased: lists join a club role as `role`
                " CASE WHEN u.avatar_tg = 0 THEN (SELECT path FROM files WHERE id = u.avatar_file_id) END AS own_photo")
 PERSON = f"SELECT {PERSON_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id"
@@ -196,6 +198,15 @@ def shown_name(p: sqlite3.Row) -> str:
     return p["nick"] or short_name(p)
 
 
+def name_i18n(p) -> dict:
+    """The short name in the English UI: the Latin one where KBTU's directory, the freshmen list or the student gave it
+    (the client's localize() swaps it in); a nick, or no Latin name: as in every language. ponytail: never a generated
+    transliteration (latin-names-review.md: a spelling is personal); a display-only one needs its own title-cased table."""
+    if p["nick"] or "first_lat" not in p.keys() or not p["first_lat"]:
+        return {}
+    return {"i18n": {"en": {"name": f"{p['first_lat']} {p['last_lat'][:1] + '.' if p['last_lat'] else ''}".strip()}}}
+
+
 def avatar_of(p: sqlite3.Row) -> str | None:
     """My own photo while the "Photo from Telegram" switch is off, else Telegram's (refreshed on every open): our copy
     once the bot has made it, t.me until then."""
@@ -206,7 +217,7 @@ def avatar_of(p: sqlite3.Row) -> str | None:
 def person_ref(p: sqlite3.Row) -> dict:
     # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
-    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff}
+    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff, **name_i18n(p)}
 
 
 def _door_ref(p: sqlite3.Row) -> dict:

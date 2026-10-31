@@ -911,6 +911,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Settings → My data: the fields a student corrected themselves (each once: student_id, last_name, first_name,
     # middle_name, comma-separated); the old values are in audit_log (identity_fix). Gone with the row
     (96, "ALTER TABLE students ADD COLUMN fixed TEXT NOT NULL DEFAULT '';"),
+    # the name in Latin as KBTU's directory (Microsoft's displayName, account.latin_from_ms) or the freshmen list spells it,
+    # or as the student typed it in My data; never generated (review latin-names-review.md). The English UI and the exports
+    (97, """ALTER TABLE students ADD COLUMN last_lat TEXT; ALTER TABLE students ADD COLUMN first_lat TEXT;
+    ALTER TABLE students ADD COLUMN middle_lat TEXT;"""),
 ]
 
 

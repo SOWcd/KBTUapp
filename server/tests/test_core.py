@@ -781,7 +781,7 @@ def test_attendees_csv(env):
     assert data.startswith(codecs.BOM_UTF8) and caption == "Attendees: Talk"
     head, row = data.decode("utf-8-sig").splitlines()
     assert head.split(";") == list(texts.CSV_HEAD["en"])
-    assert row.split(";")[:9] == ["Testov", "Ali", "", "24Bali", "2", "SITE", "'=HYPERLINK(1)", "'+77001234567", "going"]
+    assert row.split(";")[:13] == ["Testov", "Ali", "", "", "", "", "", "24Bali", "2", "SITE", "'=HYPERLINK(1)", "'+77001234567", "going"]
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'attendees_export'").fetchone()[0] == 1
 
 
@@ -5797,7 +5797,7 @@ def test_qr_checkin(env, monkeypatch):
     assert c.post("/api/checkin", headers=tma(3), json={"p": p}).status_code == 409       # finished
     rows_ = _csv(c, 9, sid).splitlines()
     assert [r.split(",")[0] for r in rows_[1:]] == ["came (not on the list)", "came", "absent"]
-    assert rows_[2].split(",")[9] == "B" and rows_[1].split(",")[9] == "A"                     # the tier column
+    assert rows_[2].split(",")[13] == "B" and rows_[1].split(",")[13] == "A"                     # the tier column
     con.close()
 
 
@@ -5823,7 +5823,7 @@ def test_qr_checkin_edges(env, monkeypatch):
     import csv
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
     assert [r[0] for r in rows_[1:]] == ["came", "scanned, not signed in", "scanned, not signed in"]   # by ID: not absent
-    assert (rows_[1][1], rows_[1][6]) == ("'=HYPERLINK(1)", "'+7 (700) 000-00-00")      # no formulas in Excel
+    assert (rows_[1][1], rows_[1][10]) == ("'=HYPERLINK(1)", "'+7 (700) 000-00-00")     # no formulas in Excel
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 200       # had a mark: may come back
     uid2, uid4 = (c.get("/api/me", headers=tma(u)).json()["id"] for u in (2, 4))
     logic.ms_remember(con, uid2, {"oid": "oid-2", "email": "two@kbtu.kz", "first": "Two", "last": "Person", "employeeId": "", "profile": {}})
@@ -6329,8 +6329,8 @@ def test_checkin_way_out(env, monkeypatch):
     stale = f"ci_{sid}_{was}_{checkin._sig(cfg.token_key, f'ci.{sid}.{was}')}"
     assert c.post("/api/checkin", headers=tma(2), json={"p": stale}).json()["message"] == "qr_old"
     rows_ = list(csv.reader(_csv(c, 9, sid).splitlines()))
-    ann_row = next(r for r in rows_[1:] if r[3] == "24Bann")
-    assert ann_row[10] and float(ann_row[11]) >= 1.9 and not next(r for r in rows_[1:] if r[3] == "24Bbob")[10]
+    ann_row = next(r for r in rows_[1:] if r[7] == "24Bann")
+    assert ann_row[14] and float(ann_row[15]) >= 1.9 and not next(r for r in rows_[1:] if r[7] == "24Bbob")[14]
     # the badge: the owner only, everyone counted, once
     assert c.post(f"/api/screens/{sid}/grant", headers=tma(9), json={"code": "init26"}).status_code == 403
     login(c, 4, "boss")
@@ -6648,8 +6648,8 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     # linking with the row's ID and name: what the row lacks, the badge for "came", the row gone, nothing to check
     r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "25B010001", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
-    s = con.execute("SELECT middle_name, school, phone FROM students WHERE user_id = ?", (uid[2],)).fetchone()
-    assert tuple(s) == ("Sultanqyzy", "SITE", "+77010000001")
+    s = con.execute("SELECT middle_name, middle_lat, school, phone FROM students WHERE user_id = ?", (uid[2],)).fetchone()
+    assert tuple(s) == (None, "Sultanqyzy", "SITE", "+77010000001")  # a Latin middle name: the Latin column
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'a_one@kbtu.kz'").fetchone()
     assert ach(uid[2])["init26f"] == 1 and ach(uid[2])["init26"] == 0 and alerts() == []
     out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
@@ -6723,7 +6723,7 @@ def test_identity_fix_once(env, monkeypatch):
     assert fix(firstName="Aidos Bekzat").json()["message"] == "name_far"
     surname = "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432"
     assert fix(lastName=surname).json()["student"]["lastName"] == surname    # KBTU's name in Cyrillic
-    assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName"]  # nothing changed: not spent
+    assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName", "lastLat", "firstLat", "middleLat"]  # nothing changed: not spent
     assert fix(middleName="Kairatuly").json()["student"]["middleName"] == "Kairatuly"
     assert fix(middleName="X").json()["message"] == "fixed"
     assert fix(email="x@kbtu.kz").json()["student"]["email"] == ali["student"]["email"]  # never: it's the Microsoft login
@@ -6741,3 +6741,57 @@ def test_identity_fix_once(env, monkeypatch):
     admin.main(["fix", "10", "reset"])                                      # support gives the once back, logged
     assert con.execute("SELECT fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()[0] == ""
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'identity_fix_reset' AND target = ?", (f"user:{ali['id']}",)).fetchone()[0] == 1
+
+
+def test_latin_names(env, monkeypatch, capsys):
+    """The name in Latin (latin-names-review.md, made-up people): read from Microsoft's displayName word by word or a Latin
+    freshmen-list row, never generated; a Latin list middle name never lands in the Cyrillic column; never over a value
+    on a relink; My data takes Latin letters only, KBTU's name in another spelling, an empty one filled without spending
+    the once; the English UI gets it through i18n; the admin's probe prints counts only, --apply fills the empty ones."""
+    from kbtu import admin
+    from kbtu.logic.account import latin_from_ms
+    from kbtu.roster import same_person
+    aidos, sur, mid = "\u0410\u0439\u0434\u043e\u0441", "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432", "\u041a\u0430\u0439\u0440\u0430\u0442\u0443\u043b\u044b"
+    pr = lambda dn: {"displayName": dn, "givenName": aidos, "surname": sur}  # noqa: E731
+    assert latin_from_ms(pr("Aidos Serikbayev"))[0] == {"first_lat": "Aidos", "last_lat": "Serikbayev", "middle_lat": None}
+    assert latin_from_ms(pr("Serikbayev Aidos Kairatuly"), mid)[0]["middle_lat"] == "Kairatuly"
+    assert latin_from_ms(pr("Serikbayev Aidos Kairatuly"))[0]["middle_lat"] is None          # no known middle: dropped
+    for bad in ("s_serikbayev@kbtu.kz", f"{aidos} {sur}", "Serikbayev A.", "Aidos Serikbayev (Student)", "Aidos Serikbayev 23B",
+                "Aidos Serikbayev Kairat Uly", "Aidos", ""):
+        assert latin_from_ms(pr(bad))[0] is None, bad
+    assert same_person("\u0429\u0443\u043a\u0438\u043d \u0418\u0432\u0430\u043d", "Ivan", "Shchukin")
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    uid, bek = login(c, 10, "ali")["id"], login(c, 11, "bek")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET first_name = ?, last_name = ? WHERE user_id IN (?, ?)", (aidos, sur, uid, bek))
+    con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name) VALUES
+        ('ali@kbtu.kz', '24Bali', 'Serikbaev', 'Aidos', 'Kairatuly')""")
+    who = lambda dn: {"oid": "oid-a", "email": "ali@kbtu.kz", "first": aidos, "last": sur, "profile": pr(dn)}  # noqa: E731
+    lat = lambda u: tuple(con.execute("SELECT last_lat, first_lat, middle_lat, middle_name FROM students WHERE user_id = ?", (u,)).fetchone())  # noqa: E731
+    logic.ms_link(con, uid, who("Aidos Serikbayev"))
+    assert lat(uid) == ("Serikbayev", "Aidos", "Kairatuly", None)       # the directory over the list; its Latin middle: Latin
+    logic.ms_link(con, uid, who("Serikbaev Aidos"))
+    assert lat(uid)[0] == "Serikbayev"                                   # a relink never over a value
+    fix = lambda **b: c.patch("/api/me", headers=tma(10), json=b)  # noqa: E731
+    assert fix(lastLat=sur).json()["error"] == "bad_input"            # Latin letters only
+    assert fix(lastLat="Kim").json()["message"] == "name_far"
+    con.execute("UPDATE students SET middle_lat = NULL WHERE user_id = ?", (uid,))
+    assert "middleLat" in fix(middleLat="Kairatovich").json()["student"]["fixable"]  # an empty one filled: not spent
+    st = fix(lastLat="Serikbaiev").json()["student"]
+    assert st["lastLat"] == "Serikbaiev" and "lastLat" not in st["fixable"]
+    assert fix(lastLat="Serikbayev").json()["message"] == "fixed"
+    ref = lambda: logic.person_ref(con.execute(logic.PERSON + " WHERE u.id = ?", (uid,)).fetchone())  # noqa: E731
+    assert ref()["i18n"] == {"en": {"name": "Aidos S."}} and c.get("/api/me", headers=tma(10)).json()["i18n"]["en"]["name"] == "Aidos S."
+    con.execute("UPDATE users SET nick = 'Ace' WHERE id = ?", (uid,))
+    assert "i18n" not in ref()                                           # a nick is the same in every language
+    # the probe: counts only; --apply fills the empty columns of those linked before, once
+    con.execute("UPDATE students SET ms_profile = ? WHERE user_id = ?", (json.dumps(pr("Aidos Serikbayev")), bek))
+    capsys.readouterr()
+    admin.main(["latin-names"])
+    out = capsys.readouterr().out
+    assert "parse_ok" in out and "nothing written" in out and "Aidos" not in out and "Serik" not in out and lat(bek)[0] is None
+    admin.main(["latin-names", "--apply"])
+    admin.main(["latin-names", "--apply"])
+    assert lat(bek) == ("Serikbayev", "Aidos", None, None)
+    con.close()

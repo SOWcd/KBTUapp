@@ -20,7 +20,7 @@
   .venv/bin/python -m kbtu.admin student <@username | telegram id> <student id> <first> <last> <course>
                                 a student with no KBTU Microsoft account, checked by hand (their student card): the only
                                 way in besides Microsoft
-  .venv/bin/python -m kbtu.admin fix <@username | telegram id> <sid | last | first | middle> "<value>"
+  .venv/bin/python -m kbtu.admin fix <@username | telegram id> <sid | last | first | middle | last-lat | first-lat | middle-lat> "<value>"
                                 support: the student ID or a name changed (no once, no year rule, no name tolerance;
                                 the old value to the audit log); "" clears the middle name
   .venv/bin/python -m kbtu.admin fix <@username | telegram id> reset   My data's one-time corrections allowed again
@@ -44,6 +44,8 @@
                                 for their sign-up form: a CSV with the header email,student_id,last,first,middle,school,phone,came
                                 (came 0/1); each <name> runs once; came=1 of a student signed up already (same ID and name): the badge;
                                 prints counts only, never a value
+  .venv/bin/python -m kbtu.admin latin-names [--apply]   the Latin names KBTU's directory gives (Microsoft's displayName):
+                                its shape in counts only; --apply fills the empty Latin columns of those linked already
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -210,9 +212,10 @@ def main(args: list[str]) -> None:
             if n:
                 log_action(con, None, "identity_fix_reset", f"user:{u['id']}")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("can correct the student ID and name once more" if n else "not a student"))
-    elif cmd == "fix" and len(args) == 4 and args[2] in ("sid", "last", "first", "middle"):
+    elif cmd == "fix" and len(args) == 4 and args[2] in ("sid", "last", "first", "middle", "last-lat", "first-lat", "middle-lat"):
         u = _user(con, args[1])
-        col = {"sid": "student_id", "last": "last_name", "first": "first_name", "middle": "middle_name"}[args[2]]
+        col = {"sid": "student_id", "last": "last_name", "first": "first_name", "middle": "middle_name",
+               "last-lat": "last_lat", "first-lat": "first_lat", "middle-lat": "middle_lat"}[args[2]]
         try:
             fix_identity(con, u["id"], col, args[3], admin=True)  # no once, no year rule, no name tolerance; the old value to the audit log
         except ApiError as e:
@@ -290,6 +293,12 @@ def main(args: list[str]) -> None:
         print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "kept", "same", "badged", "bad_email", "bad_id", "dup_email", "dup_id",
                                                      "signed_up", "id_held", "bad_phone")))
         print(f"{one(con, 'SELECT COUNT(*) FROM prefill')[0]} rows wait in prefill")
+    elif cmd == "latin-names" and args[1:] in ([], ["--apply"]):  # counts only, never a name
+        from .logic.account import latin_names
+        n = latin_names(con, "--apply" in args)
+        for k in sorted(n):
+            print(f"{n[k]:>8}  {k}")
+        print("written" if "--apply" in args else "nothing written (add --apply)")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

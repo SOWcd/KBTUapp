@@ -524,9 +524,9 @@ def bot_message(lang: str, kind: str, **fields: object) -> tuple[str, str | None
 # The attendee list as a CSV (SPEC §6): headers and statuses in the organizer's language.
 # "Year of study", not "course", in what DMP reads (their rule for forms: KBTU has years of study, not courses).
 CSV_HEAD = {
-    "ru": ("Фамилия", "Имя", "Telegram", "ID студента", "Год обучения", "Школа", "Почта", "Телефон", "Статус", "Записался", "Пришёл", "Записан у входа", "Отмечен вручную"),
-    "kk": ("Тегі", "Аты", "Telegram", "Студент ID", "Курс", "Мектеп", "Пошта", "Телефон", "Мәртебе", "Жазылды", "Келді", "Кіре берісте тіркелді", "Қолмен белгіленді"),
-    "en": ("Last name", "First name", "Telegram", "Student ID", "Year of study", "School", "Email", "Phone", "Status", "Registered", "Came", "At the door", "Checked in by hand"),
+    "ru": ("Фамилия", "Имя", "Отчество", "Фамилия (латиницей)", "Имя (латиницей)", "Отчество (латиницей)", "Telegram", "ID студента", "Год обучения", "Школа", "Почта", "Телефон", "Статус", "Записался", "Пришёл", "Записан у входа", "Отмечен вручную"),
+    "kk": ("Тегі", "Аты", "Әкесінің аты", "Тегі (латынша)", "Аты (латынша)", "Әкесінің аты (латынша)", "Telegram", "Студент ID", "Курс", "Мектеп", "Пошта", "Телефон", "Мәртебе", "Жазылды", "Келді", "Кіре берісте тіркелді", "Қолмен белгіленді"),
+    "en": ("Last name", "First name", "Middle name", "Last name (Latin)", "First name (Latin)", "Middle name (Latin)", "Telegram", "Student ID", "Year of study", "School", "Email", "Phone", "Status", "Registered", "Came", "At the door", "Checked in by hand"),
 }
 CSV_STATUS = {
     "ru": {"going": "идёт", "hold": "ждёт оплату", "waitlist": "лист ожидания", "yes": "да"},
@@ -544,9 +544,9 @@ def _cell(v) -> str:
 
 
 REGISTRY_HEAD = {
-    "ru": ("Клуб", "Роль", "Фамилия", "Имя", "ID студента", "Год обучения", "Школа", "В клубе с", "Telegram", "Почта", "Телефон"),
-    "kk": ("Клуб", "Рөл", "Тегі", "Аты", "Студент ID", "Курс", "Мектеп", "Клубта", "Telegram", "Пошта", "Телефон"),
-    "en": ("Club", "Role", "Last name", "First name", "Student ID", "Year of study", "School", "Member since", "Telegram", "Email", "Phone"),
+    "ru": ("Клуб", "Роль", "Фамилия", "Имя", "Отчество", "Фамилия (латиницей)", "Имя (латиницей)", "Отчество (латиницей)", "ID студента", "Год обучения", "Школа", "В клубе с", "Telegram", "Почта", "Телефон"),
+    "kk": ("Клуб", "Рөл", "Тегі", "Аты", "Әкесінің аты", "Тегі (латынша)", "Аты (латынша)", "Әкесінің аты (латынша)", "Студент ID", "Курс", "Мектеп", "Клубта", "Telegram", "Пошта", "Телефон"),
+    "en": ("Club", "Role", "Last name", "First name", "Middle name", "Last name (Latin)", "First name (Latin)", "Middle name (Latin)", "Student ID", "Year of study", "School", "Member since", "Telegram", "Email", "Phone"),
 }
 REGISTRY_CAPTION = {"ru": "Реестр клубов KBTU App", "kk": "KBTU App клубтар тізілімі", "en": "KBTU App clubs registry"}
 
@@ -561,7 +561,8 @@ def registry_csv(lang: str, people) -> tuple[str, bytes, str]:
     roles = {"president": "President", "vice": "Vice", "head": "Head", "member": "Member"}  # English in every language, as in the app
     for p in people:
         lead = p["role"] in ("president", "vice")
-        w.writerow([_cell(x) for x in (p["club"], roles[p["role"]], p["last_name"], p["first_name"], p["student_id"], p["course"], p["school"],
+        w.writerow([_cell(x) for x in (p["club"], roles[p["role"]], p["last_name"], p["first_name"], p["middle_name"], p["last_lat"],
+                                       p["first_lat"], p["middle_lat"], p["student_id"], p["course"], p["school"],
                                        day(p["joined_at"]), p["tg_username"] if lead else "", p["email"] if lead else "", p["phone"] if lead else "")])
     return "kbtu-clubs.csv", ("\ufeff" + out.getvalue()).encode(), REGISTRY_CAPTION[lang]
 
@@ -576,7 +577,7 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
     w.writerow([*CSV_HEAD[lang], *(_cell(q) for q in asked)])
     stamp = lambda ts: time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + 5 * 3600)) if ts else ""
     for p, a in zip(people, answers):
-        w.writerow([_cell(x) for x in (p["last_name"], p["first_name"], p["tg_username"], p["student_id"], p["course"], p["school"], p["email"],
+        w.writerow([_cell(x) for x in (p["last_name"], p["first_name"], p["middle_name"], p["last_lat"], p["first_lat"], p["middle_lat"], p["tg_username"], p["student_id"], p["course"], p["school"], p["email"],
                                        p["phone"], st[p["status"]], stamp(p["created_at"]), stamp(p["checked_in_at"]), st["yes"] if p["walk_in"] else "",
                                        st["yes"] if p["checkin_manual"] else "", *(a.get(q, "") for q in asked))])
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]

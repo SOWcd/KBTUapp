@@ -168,7 +168,7 @@ export interface Settings {
   hideFirstYear: boolean;
 }
 
-export type Fixable = 'studentId' | 'lastName' | 'firstName' | 'middleName';
+export type Fixable = 'studentId' | 'lastName' | 'firstName' | 'middleName' | 'lastLat' | 'firstLat' | 'middleLat';
 export interface StudentProfile {
   studentId: string;
   firstName: string;
@@ -182,6 +182,9 @@ export interface StudentProfile {
   ms: boolean;     // signed in with the KBTU Microsoft account
   consent: string; // the policy version agreed to (lib/legal.ts); 'staff' and 'admin': added by hand
   middleName: string | null;
+  lastLat: string | null;   // the name in Latin (KBTU's directory, the freshmen list or typed here): the exports, the English UI
+  firstLat: string | null;
+  middleLat: string | null;
   fixable: Fixable[]; // what Settings → My data still lets me correct myself (once each; then support)
 }
 

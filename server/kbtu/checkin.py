@@ -208,12 +208,12 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         raise ApiError("forbidden", "screen")
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["status", "name", "email", "student_id", "school", "course", "phone", "telegram", "checked_in", "tier", "left", "hours"])
+    w.writerow(["status", "name", "middle_name", "last_name_latin", "first_name_latin", "middle_name_latin", "email", "student_id", "school", "course", "phone", "telegram", "checked_in", "tier", "left", "hours"])
     hm = lambda ts: time.strftime("%H:%M:%S", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
     xs = rows(con, "SELECT * FROM qr_expected WHERE session_id = ? ORDER BY full_name", sid)
     by_mail, by_sid = {x["email"]: x for x in xs}, {x["student_id"]: x for x in xs if x["student_id"]}
     seen = set()
-    for r in rows(con, """SELECT m.done_at, m.scanned_at, m.left_at, st.first_name, st.last_name, st.email, st.student_id, st.school, st.course,
+    for r in rows(con, """SELECT m.done_at, m.scanned_at, m.left_at, st.first_name, st.last_name, st.middle_name, st.last_lat, st.first_lat, st.middle_lat, st.email, st.student_id, st.school, st.course,
             st.verified_at, u.tg_first_name, u.tg_last_name, u.tg_username FROM qr_marks m JOIN users u ON u.id = m.user_id
             LEFT JOIN students st ON st.user_id = m.user_id WHERE m.session_id = ?
             ORDER BY m.done_at IS NULL, COALESCE(m.done_at, m.scanned_at)""", sid):
@@ -223,13 +223,13 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         done = r["done_at"] is not None
         name = " ".join(n for n in (r["last_name"], r["first_name"]) if n) or " ".join(n for n in (r["tg_last_name"], r["tg_first_name"]) if n)
         w.writerow(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
-                    x["full_name"] if x else name, r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
+                    x["full_name"] if x else name, r["middle_name"], r["last_lat"], r["first_lat"], r["middle_lat"], r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
                     (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime((r["done_at"] or r["scanned_at"]) + 5 * 3600)),
                     ("A" if r["verified_at"] <= s["started_at"] else "B") if done else "", hm(r["left_at"]),
                     f"{(r['left_at'] - r['done_at']) / 3600:.1f}" if done and r["left_at"] and r["left_at"] > r["done_at"] else ""]))
     for x in xs:
         if x["email"] not in seen:
-            w.writerow(map(_cell, ["absent", x["full_name"], x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", "", "", ""]))
+            w.writerow(map(_cell, ["absent", x["full_name"], "", "", "", "", x["email"], x["student_id"], x["school"], x["course"], x["phone"], x["tg"], "", "", "", ""]))
     return "\ufeff" + out.getvalue()
 
 

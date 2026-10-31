@@ -16,7 +16,7 @@ from .core import (ApiError, PERSON, PERSON_COLS, RANK, Viewer, _org, log_action
 # ---------------------------------------------------------------- the clubs registry for DMP (§4.13)
 
 QUIET_FOR = 60 * 86400  # "hasn't come in a while": no check-in at the club's events for this long
-DMP_COLS = PERSON_COLS + ", u.tg_username, s.student_id, s.course, s.school, s.email, s.phone"
+DMP_COLS = PERSON_COLS + ", u.tg_username, s.student_id, s.course, s.school, s.email, s.phone, s.middle_name, s.middle_lat"
 
 
 def _overseer_only(con, v: Viewer) -> None:

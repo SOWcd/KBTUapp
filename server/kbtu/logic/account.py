@@ -1,6 +1,7 @@
 """Me: the profile, settings, the Microsoft sign-in, my photo, my schedule, deleting my data."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
@@ -13,8 +14,8 @@ from pathlib import Path
 from .. import portal
 from ..db import tx
 
-from .core import (NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
-    need_student, one, org_ref, person_ref, rows, shown_name)
+from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
+    name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
@@ -45,12 +46,11 @@ def ms_link(con, uid: int, who: dict) -> None:
                  else ("prefill_other_id", f"pf:{uid}") if s["student_id"] != p["student_id"] else None)
         for (owner,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0") if alert else []:
             notify(con, owner, *alert)
+    listed = {}
     if p and mine:
         con.execute("DELETE FROM prefill WHERE email = ?", (p["email"],))
-        con.execute("""UPDATE students SET middle_name = COALESCE(NULLIF(middle_name, ''), ?), school = COALESCE(NULLIF(school, ''), ?),
-            phone = COALESCE(NULLIF(phone, ''), ?) WHERE user_id = ?""", (p["middle_name"], p["school"], p["phone"], uid))
-        if p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", uid):
-            profiles._grant(con, None, uid, "init26f")
+        listed = _from_list(con, uid, p)
+    _fill_lat(con, uid, who.get("profile") or {}, listed)
     link_door_guests(con, uid)
     checkin.became_student(con, uid)  # a QR scan waiting for the sign-up counts now (the form's and the relink's path)
     if before is not None:
@@ -74,6 +74,103 @@ def prefill_mine(p, first: str | None, last: str | None) -> bool:
     Cyrillic or Latin, two words shared)."""
     from .. import roster  # imports logic: here, not at the top
     return roster.same_person(f"{p['last_name'] or ''} {p['first_name'] or ''} {p['middle_name'] or ''}", first or "", last or "")
+
+
+def _from_list(con, uid: int, p) -> dict:
+    """A freshmen list's row that is mine (ms_link): what my row lacks, the initiation badge if I came. Returns its names
+    that are in Latin, for _fill_lat: a Latin middle name goes to middle_lat, never into the Cyrillic column."""
+    lat = {c: p[k] for c, k in (("last_lat", "last_name"), ("first_lat", "first_name"), ("middle_lat", "middle_name"))
+           if p[k] and LATIN_NAME.fullmatch(p[k])}
+    con.execute("""UPDATE students SET middle_name = COALESCE(NULLIF(middle_name, ''), ?), school = COALESCE(NULLIF(school, ''), ?),
+        phone = COALESCE(NULLIF(phone, ''), ?) WHERE user_id = ?""", (None if "middle_lat" in lat else p["middle_name"], p["school"], p["phone"], uid))
+    if p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", uid):
+        profiles._grant(con, None, uid, "init26f")
+    return lat
+
+
+LAT_COLS = ("last_lat", "first_lat", "middle_lat")
+_LAT_WORD = re.compile(f"[{_LAT}]+(?:[-'][{_LAT}]+)*")
+
+
+def latin_from_ms(profile: dict, middle: str | None = None) -> tuple[dict | None, str]:
+    """My name in Latin from Microsoft's displayName, read word by word against its givenName and surname (Cyrillic in
+    KBTU's directory; review latin-names-review.md §1): every word Latin letters only (no login, mail, initial, digits or
+    note), each word one side's alone, both sides whole; one word more is the middle name only when it is my known one,
+    else dropped; two more: nothing. A wrong Latin name would reach the university's lists, a missing one shows blank.
+    (columns or None, why)"""
+    from .. import roster  # imports logic: here, not at the top
+    toks = str(profile.get("displayName") or "").split()
+    given, sur = roster._words(profile.get("givenName")), roster._words(profile.get("surname"))
+    if not toks or not given or not sur:
+        return None, "empty"
+    if not all(_LAT_WORD.fullmatch(t) for t in toks):
+        return None, "script"
+    side: dict[str, list[str]] = {"first": [], "last": [], "rest": []}
+    for t in toks:
+        w = roster._words(t)
+        if w <= given and w <= sur:
+            return None, "ambiguous"
+        side["first" if w <= given else "last" if w <= sur else "rest"].append(t)
+    if roster._words(" ".join(side["first"])) != given or roster._words(" ".join(side["last"])) != sur:
+        return None, "side"
+    if len(side["rest"]) > 1:
+        return None, "rest"
+    mid = side["rest"][0] if side["rest"] and middle and roster._words(side["rest"][0]) == roster._words(middle) else None
+    return {"first_lat": " ".join(side["first"]), "last_lat": " ".join(side["last"]), "middle_lat": mid}, "ok"
+
+
+def _fill_lat(con, uid: int, profile: dict, listed: dict) -> int:
+    """The Latin name columns still empty that I never corrected: from KBTU's directory, else my freshmen list row's.
+    Never over a value or a fix of mine (a relink, the backfill). Returns how many columns it filled."""
+    s = one(con, "SELECT middle_name, last_lat, first_lat, middle_lat, fixed FROM students WHERE user_id = ?", uid)
+    ms = latin_from_ms(profile, s["middle_name"])[0] or {}
+    sets = {c: v for c in LAT_COLS if (v := ms.get(c) or listed.get(c)) and s[c] is None and c not in s["fixed"].split(",")}
+    if sets:
+        con.execute(f"UPDATE students SET {', '.join(c + ' = ?' for c in sets)} WHERE user_id = ?", (*sets.values(), uid))
+    return len(sets)
+
+
+def latin_names(con, apply: bool = False) -> Counter:
+    """admin latin-names: the shape of what KBTU's directory gives (counts only, never a value; review §9), and with
+    `apply` the backfill of the students linked before the Latin columns, in one transaction (idempotent: empty columns only)."""
+    from .. import roster
+    n: Counter = Counter()
+    cyr = re.compile("[\u0400-\u04ff]")
+    with tx(con) if apply else contextlib.nullcontext():
+        for s in rows(con, "SELECT * FROM students WHERE consent_version != 'staff'"):
+            n["students"] += 1
+            ms = json.loads(s["ms_profile"] or "{}")
+            n["ms_profile"] += bool(ms)
+            n["middle_name_latin"] += bool(s["middle_name"] and LATIN_NAME.fullmatch(s["middle_name"]))
+            n["name_cols_latin"] += any(s[c] and LATIN_NAME.fullmatch(s[c]) for c in ("first_name", "last_name"))
+            for c in s["fixed"].split(","):
+                n[f"fixed_{c}"] += bool(c)
+            dn = str(ms.get("displayName") or "")
+            if not dn.strip():
+                continue
+            n["display_name"] += 1
+            toks = dn.split()
+            n["script_" + ("junk" if re.search(r"[@_\d.]", dn) else "mixed" if cyr.search(dn) and re.search("[A-Za-z]", dn)
+                           else "cyrillic" if cyr.search(dn) else "latin")] += 1
+            n[f"tokens_{min(len(toks), 4)}"] += 1
+            w0 = roster._words(toks[0])
+            n["first_token_" + ("surname" if w0 and w0 <= roster._words(ms.get("surname")) else
+                                "given" if w0 and w0 <= roster._words(ms.get("givenName")) else "neither")] += 1
+            n["hyphen"] += "-" in dn
+            n["apostrophe"] += "'" in dn
+            n["accent"] += any(ord(ch) > 127 and not cyr.match(ch) for ch in dn)
+            got, why = latin_from_ms(ms, s["middle_name"])
+            n[f"parse_{why}"] += 1
+            if got:
+                n["parse_with_middle"] += bool(got["middle_lat"])
+                n["would_fill"] += s["first_lat"] is None and "first_lat" not in s["fixed"].split(",")
+            if apply:
+                n["filled_columns"] += _fill_lat(con, s["user_id"], ms, {})
+        for p in rows(con, "SELECT last_name, first_name, middle_name FROM prefill"):
+            lat = [bool(p[k] and LATIN_NAME.fullmatch(p[k])) for k in ("last_name", "first_name")]
+            n["prefill_" + ("latin" if all(lat) else "mixed" if any(lat) else "other")] += 1
+            n["prefill_middle_latin"] += bool(p["middle_name"] and LATIN_NAME.fullmatch(p["middle_name"]))
+    return n
 
 
 PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
@@ -231,9 +328,10 @@ def me(con, v: Viewer) -> dict:
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
         "id": u["id"], "tg": {"id": u["tg_id"], "username": u["tg_username"], "firstName": u["tg_first_name"], "lastName": u["tg_last_name"]},
-        "avatar": avatar_of(name_row), "name": shown_name(name_row), "nick": u["nick"],
+        "avatar": avatar_of(name_row), "name": shown_name(name_row), **name_i18n(name_row), "nick": u["nick"],
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": avatar_of({**name_row, "own_photo": None}), "own": f"media/{own['path']}.t.webp" if own else None},
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "middleName": s["middle_name"], "email": s["email"],
+                    "lastLat": s["last_lat"], "firstLat": s["first_lat"], "middleLat": s["middle_lat"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"],
                     # what My data still lets me correct myself (fix_identity): nothing for staff
@@ -329,12 +427,14 @@ def _qr_code(con, uid: int, col: str = "qr_code") -> str:
     return code
 
 
-FIXABLE = {"studentId": "student_id", "lastName": "last_name", "firstName": "first_name", "middleName": "middle_name"}
+FIXABLE = {"studentId": "student_id", "lastName": "last_name", "firstName": "first_name", "middleName": "middle_name",
+           "lastLat": "last_lat", "firstLat": "first_lat", "middleLat": "middle_lat"}
 
 
 def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> None:
     """Settings → My data: a student corrects their student ID or a name once each (it came in wrong: a classmate's ID
-    from the freshmen list, a typo at sign-up, the name in another script); after that only support, the admin
+    from the freshmen list, a typo at sign-up, the name in another script); the Latin name the same way, Latin letters
+    only, and an empty one filled doesn't spend the once (no displayName to read it from); after that only support, the admin
     (`kbtu.admin fix`: no once, no year rule, no tolerance). The email is never changed: it is the KBTU Microsoft login
     (ms_link writes it from the token), what ties this row to a real person. Review: .claude/reports/identity-edit-review.md"""
     from .. import roster  # imports logic: here, not at the top
@@ -343,6 +443,9 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
         v = v.replace(" ", "").upper()
         course = core.course_of(v)
         if not STUDENT_ID.fullmatch(v) or not isinstance(course, int) or not 1 <= course <= 6:
+            raise ApiError("bad_input")
+    elif col in LAT_COLS:  # Latin letters only: what goes to the university's lists in Latin
+        if v and not LATIN_NAME.fullmatch(v) or not v and col != "middle_lat":
             raise ApiError("bad_input")
     elif v and not NAME.fullmatch(v) or not v and col != "middle_name":
         raise ApiError("bad_input")
@@ -358,13 +461,14 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             return  # nothing changes: the once isn't spent
         if col == "student_id" and not admin and v[:2] != s["student_id"][:2]:
             raise ApiError("bad_input", "sid_year")  # the intake year is the year of study (free 1st-year seats): support
-        if col in ("first_name", "last_name") and not admin:
+        if col in ("first_name", "last_name", "first_lat", "last_lat") and not admin:
             # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
             # two of its words kept and none added, or one could rename into someone else ("Serikbayev Aidos" then
             # first "Bekzat") or a title, and fool every organizer's list, the door and the club rosters
             ms = json.loads(s["ms_profile"] or "{}")
             ref = (ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"])
-            new = " ".join(v if c == col else s[c] for c in ("first_name", "last_name"))
+            # the Latin pair: the other half's Latin, else its Cyrillic (_words reads both scripts as one)
+            new = " ".join(v if c == col else s[c] or s[c[:-4] + "_name"] for c in (("first_lat", "last_lat") if col in LAT_COLS else ("first_name", "last_name")))
             if not roster.same_person(new, *ref) or roster._words(new) - roster._words(" ".join(ref)):
                 raise ApiError("bad_input", "name_far")
         # an ID is free when no student has it and the freshmen list doesn't keep it for another mail (that student's
@@ -376,7 +480,8 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
                 id_clash(con, v, uid, held[0])  # the admins hear, as at sign-up; the once isn't spent
         else:
             con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
-                        (v, s["fixed"] if admin else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
+                        (v, s["fixed"] if admin or col in LAT_COLS and s[col] is None  # an empty Latin one filled: not spent
+                         else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
             # the course follows the year and degree letter only: a typo in the number keeps the stored one (a repeater's)
             if col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v):
                 con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (course, core.academic_year(), uid))

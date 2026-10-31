@@ -519,7 +519,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     of personal data goes to the audit log."""
     e = _staff_event(con, v, eid, "events")
     # the phone only where this event asked for it (one club's ask reached every club's list)
-    found = rows(con, """SELECT s.last_name, s.first_name, u.tg_username, s.student_id, s.course, s.school, s.email,
+    found = rows(con, """SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.student_id, s.course, s.school, s.email,
             CASE WHEN ? THEN s.phone END AS phone,
             r.status, r.created_at, r.checked_in_at, r.walk_in, r.checkin_manual, r.answers
         FROM registrations r JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id

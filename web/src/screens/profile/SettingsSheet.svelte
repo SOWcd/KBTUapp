@@ -54,18 +54,21 @@
   }
   // my name and student ID: corrected once each (it came in wrong), then through support; the server holds the rules
   // (account.fix_identity: the ID's year stays, the name stays KBTU's in another spelling at most)
-  const FIELDS: [Fixable, Key][] = [['lastName', 'login.lastName'], ['firstName', 'login.firstName'], ['middleName', 'pd.middle'], ['studentId', 'pd.sid']];
+  const FIELDS: [Fixable, Key][] = [['lastName', 'login.lastName'], ['firstName', 'login.firstName'], ['middleName', 'pd.middle'],
+    ['lastLat', 'pd.lastLat'], ['firstLat', 'pd.firstLat'], ['middleLat', 'pd.middleLat'], ['studentId', 'pd.sid']];
+  const LAT: Fixable[] = ['lastLat', 'firstLat', 'middleLat'];
   const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'login.sidTaken', fixed: 'pd.support' };
   async function fix(k: Fixable, label: Key) {
     const was = me?.student?.[k] ?? '';
-    const v = await sheets.askText({ title: t(label), text: t('pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
+    const fill = LAT.includes(k) && !was; // an empty Latin one filled doesn't spend the once (the server's rule)
+    const v = await sheets.askText({ title: t(label), text: t(fill ? 'pd.latFill' : 'pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
     if (v == null || v.trim() === was) return;
     // a typo would spend the once: the new value read back before it's saved
-    if (!(await sheets.ask({ title: v.trim(), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
+    if (!fill && !(await sheets.ask({ title: v.trim(), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
     try { session.me = await api.updateMe({ [k]: v }); haptic.ok(); say(t('pd.saved'), 'sparkles_3d'); }
     catch (e) {
       haptic.error();
-      const why = e instanceof ApiErr ? (e.message === 'bad_input' ? (k === 'studentId' ? 'pd.badSid' : 'pd.badName') : WHY[e.message]) : undefined;
+      const why = e instanceof ApiErr ? (e.message === 'bad_input' ? (k === 'studentId' ? 'pd.badSid' : LAT.includes(k) ? 'pd.badLat' : 'pd.badName') : WHY[e.message]) : undefined;
       say(t(why ?? 'common.error'), 'pleading_face_3d');
     }
   }
