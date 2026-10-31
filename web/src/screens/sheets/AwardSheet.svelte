@@ -55,6 +55,8 @@
   const DRAWN: Record<string, string> = { medal_init26: GLOW[3], medal_init26f: GLOW[2] };
   const round = $derived(!!a || !!it.founder || !!it.idea);
   const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[Math.min(a.level, 4)] : GLOW[0]));
+  // the same metal darker, for the line over the name on a light sheet (the bright gold is 1.7:1 on white)
+  const deep = $derived(glow.split(',').map((c) => Math.round(+c * 0.55)).join(', '));
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
   const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
@@ -73,7 +75,7 @@
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     <span class="big" class:round bind:this={medal}><Award {it} size={round ? 196 : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span>
   </div>
-  {#if kicker}<p class="kick" style:color={glow ? `rgb(${glow})` : null}>{kicker}</p>{/if}
+  {#if kicker}<p class="kick" class:metal={!!glow} style:--k={glow} style:--kd={deep}>{kicker}</p>{/if}
   <h2 class="t-h2 name">{it.name}</h2>
 
   {#if a}
@@ -143,6 +145,8 @@
     animation: sweep 1.3s 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
   @keyframes sweep { to { background-position: -30% 0; } }
   .kick { text-align: center; margin-top: 4px; font: 700 var(--fs-cap)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+  .kick.metal { color: rgb(var(--k)); }
+  :global(html[data-theme='light']) .kick.metal { color: rgb(var(--kd)); }
   .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 18px; border-radius: var(--r-l); overflow: hidden; background: var(--line); }
   .facts div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2); }
   .facts b { font: 720 var(--fs-card)/1.2 var(--font-display); }
