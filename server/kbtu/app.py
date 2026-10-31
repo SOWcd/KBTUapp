@@ -1069,11 +1069,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     async def eu_ai(con, msgs: list[dict], **kw) -> str:
         """The assistant's model call: the EU host only (the policy's section 12); none answered: 503."""
-        try:
-            async with httpx.AsyncClient() as http:
-                return (await llm.chat(cfg, http, msgs, con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, **kw))[0]
-        except (llm.Busy, llm.BadAnswers):
-            raise ApiError("unavailable", "assistant") from None
+        # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
+        async with httpx.AsyncClient() as http:
+            for last in (False, True):
+                try:
+                    return (await llm.chat(cfg, http, msgs, con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, **kw))[0]
+                except llm.BadAnswers:
+                    if last:
+                        raise ApiError("unavailable", "assistant") from None
+                except llm.Busy:
+                    raise ApiError("unavailable", "assistant") from None
 
     # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
     @app.post("/api/assistant")
