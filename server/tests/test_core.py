@@ -6683,3 +6683,15 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert [k for k, _ in alerts()] == ["prefill_no_match", "prefill_other_id"]              # the alert naming them went too
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'held@kbtu.kz'").fetchone()
     con.close()
+
+
+def test_same_person_kazakh_spellings():
+    """Passport Latin vs the Cyrillic list: -ayev/-aev, -iyeva/-ieva, a hyphen, Kazakh letters, accents (review, Oct 31)."""
+    from kbtu.roster import same_person
+    assert same_person("\u0422\u043e\u043a\u0442\u0430\u0440\u0431\u0430\u0435\u0432 \u0415\u0440\u043b\u0430\u043d", "Yerlan", "Toktarbayev")
+    assert same_person("\u0410\u0431\u0430\u0435\u0432\u0430 \u0410\u0439\u0433\u0435\u0440\u0438\u043c", "Aigerim", "Abayeva")
+    assert same_person("\u0410\u043b\u0438\u0435\u0432\u0430 \u041c\u0430\u0440\u0438\u044f", "Mariya", "Aliyeva")
+    assert same_person("\u0418\u0431\u0440\u0430\u0435\u0432 \u0410\u0440\u0443\u0436\u0430\u043d", "Aru-Zhan", "Ibrayev")
+    assert same_person("\u041c\u0443\u0441\u0430\u0435\u0432 \u041d\u04b1\u0440\u0441\u04b1\u043b\u0442\u0430\u043d", "Nursultan", "Mussayev")
+    assert same_person("\u0410\u0445\u043c\u0435\u0442\u043e\u0432\u0430 \u04d8\u0441\u0435\u043b", "\u00c4sel", "Akhmetova")
+    assert not same_person("\u0418\u0432\u0430\u043d\u043e\u0432 \u0418\u0432\u0430\u043d", "Petr", "Sidorov")

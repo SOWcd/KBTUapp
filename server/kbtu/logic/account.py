@@ -73,7 +73,7 @@ def prefill_mine(p, first: str | None, last: str | None) -> bool:
     """The freshmen list's row is this KBTU account's: its name matches too, as a club roster's row (roster.same_person:
     Cyrillic or Latin, two words shared)."""
     from .. import roster  # imports logic: here, not at the top
-    return roster.same_person(f"{p['last_name'] or ''} {p['first_name'] or ''}", first or "", last or "")
+    return roster.same_person(f"{p['last_name'] or ''} {p['first_name'] or ''} {p['middle_name'] or ''}", first or "", last or "")
 
 
 PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
@@ -114,7 +114,7 @@ def prefill_import(con, got: list[dict], name: str) -> dict[str, int]:
         for r in good.values():
             s = one(con, "SELECT user_id, student_id, ms_oid, first_name, last_name FROM students WHERE lower(email) = ?", r["email"])
             if s and r["came"] and s["ms_oid"] and s["student_id"] == r["student_id"] \
-                    and prefill_mine({"last_name": r.get("last"), "first_name": r.get("first")}, s["first_name"], s["last_name"]) \
+                    and prefill_mine({"last_name": r.get("last"), "first_name": r.get("first"), "middle_name": r.get("middle")}, s["first_name"], s["last_name"]) \
                     and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", s["user_id"]):
                 profiles._grant(con, None, s["user_id"], "init26f")  # signed up before the list came: the badge, not the row
                 n["badged"] += 1

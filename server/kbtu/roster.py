@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 import sqlite3
 
 from .logic import academic_year, kz_phone, now, one, rows, set_role, tx
@@ -34,12 +35,16 @@ def latin(s: str) -> str:
 
 
 def _words(name: str | None) -> set[str]:
-    """A name's words as one spelling: Latin, lowercase, the usual both-ways spellings made one (Yerlan/Erlan,
-    Zhanna/Janna, Akhmet/Ahmet, Qasym/Kasym), doubled letters single."""
+    """A name's words as one spelling: Latin, lowercase, accents off (Ä, Ğ, ı), a hyphen inside a name dropped
+    (Aru-Zhan for the list's one word), the usual both-ways spellings made one (Yerlan/Erlan, Zhanna/Janna, Akhmet/Ahmet, Qasym/Kasym,
+    Toktarbayev for the list's -aev), doubled letters single."""
+    s = unicodedata.normalize("NFKD", latin(name or "").replace("\u0131", "i"))
+    s = re.sub(r"(?<=\w)-(?=\w)", "", "".join(c for c in s if not unicodedata.combining(c)))
     out = set()
-    for w in re.findall(r"[^\W\d_]+", latin(name or "")):
+    for w in re.findall(r"[^\W\d_]+", s):
         for a, b in (("dzh", "zh"), ("kh", "h"), ("q", "k"), ("y", "i"), ("j", "zh")):
             w = w.replace(a, b)
+        w = re.sub(r"([aeiou])ie", r"\1e", w)  # passport Latin "aye"/"iye" for the Cyrillic "ae"/"ie" (Abayeva, Aliyeva)
         out.add(re.sub(r"(.)\1+", r"\1", re.sub(r"^ie", "e", w)))
     return out
 
