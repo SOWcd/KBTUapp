@@ -9,15 +9,18 @@
   const multi = $derived(a.levels.length > 1);
   const tier = $derived(a.level === 0 ? 'none' : !multi ? 'one' : (['bronze', 'silver', 'gold', 'legend'][a.level - 1] ?? 'legend'));
   const hidden = $derived(a.secret && a.level === 0);
+  // a drawn medal of its own (the 2026 initiation's, owner Nov 1): the picture is the whole medal, no rim or disc
+  const drawn = $derived(a.emoji.startsWith('medal_'));
 </script>
 
+{#if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${a.emoji}.webp`} alt="" draggable="false" /></span>{:else}
 <span class="medal {tier}" style="width:{size}px;height:{size}px">
   <span class="disc">
     {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>
     {:else if a.emoji === 'n500'}<span class="coin" style="width:{Math.round(size * 0.66)}px;font-size:{Math.round(size * 0.22)}px"><b class="num">500</b></span>
     {:else}<Emoji name={a.emoji} size={Math.round(size * 0.58)} />{/if}
   </span>
-</span>
+</span>{/if}
 
 <style>
   .medal { position: relative; flex: none; border-radius: 50%; padding: 3px; display: inline-flex; }
@@ -39,6 +42,9 @@
   .legend { background: conic-gradient(from 210deg, #FF6BD6, #7C4DFF, #35D0FF, #2FD3A0, #FFD23F, #FF6BD6); animation: spin 9s linear infinite; }
   .legend .disc { animation: spin 9s linear infinite reverse; }
   :global(html.lowfx) .legend, :global(html.lowfx) .legend .disc { animation: none; } /* power saving */
+  .drawn, .medal.drawn:not(.none) { padding: 0; background: none; box-shadow: none; }
+  .drawn img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45)); }
+  .drawn.none img { filter: grayscale(1); opacity: 0.38; }
   .medal:not(.none) { box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6); }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
