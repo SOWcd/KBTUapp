@@ -52,7 +52,7 @@
   // the stage's light: the metal's own colour (one-level accent, bronze, silver, gold, legend; a drawn medal its metal);
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
-  const DRAWN: Record<string, string> = { medal_init26: GLOW[3], medal_init26f: GLOW[2] };
+  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2] }; // a new art gets a new name: phones keep the old file for hours
   const round = $derived(!!a || !!it.founder || !!it.idea);
   const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[Math.min(a.level, 4)] : GLOW[0]));
   // the same metal darker, for the line over the name on a light sheet (the bright gold is 1.7:1 on white)

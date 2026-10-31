@@ -57,8 +57,8 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
-    ("init26", "medal_init26", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
-    ("init26f", "medal_init26f", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
+    ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
+    ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
 ]
 
 
