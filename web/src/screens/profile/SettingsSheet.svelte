@@ -123,10 +123,10 @@
           {@const st = me.student}
           <!-- who I am: correctable once (›), then a plain row; the email is the Microsoft login, never edited -->
           {#each FIELDS as [k, label] (k)}
-            {#if st.fixable.includes(k)}{@render link(t(label), () => void fix(k, label), st[k] ?? '')}
+            {#if st.fixable?.includes(k)}{@render link(t(label), () => void fix(k, label), st[k] ?? '')}
             {:else if st[k]}<div class="set-row"><span class="lb">{t(label)}</span><span class="val">{st[k]}</span></div>{/if}
           {/each}
-          {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val">{st.email}</span></div>{/if}
+          {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val wide">{st.email}</span></div>{/if}
         {/if}
         {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
         {#if me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me.city.name)}{/if}

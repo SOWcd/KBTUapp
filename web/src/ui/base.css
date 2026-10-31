@@ -281,6 +281,7 @@ html.lowfx .stagger > * { animation: none; }
 button.set-row:active { background: var(--surface-2); }
 .set-row > .lb { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* a long label takes two lines on a narrow phone, never "…" */
 .set-row > .val { flex: none; max-width: 50%; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set-row > .val.wide { max-width: 75%; white-space: normal; overflow-wrap: anywhere; text-align: right; } /* the email whole, on two lines if it must (owner, Oct 31) */
 .set-row > .chev { flex: none; margin-right: -4px; color: var(--text-3); opacity: 0.6; }
 /* a row's mark: a plain grey glyph, no tile (the line between rows starts at the label: 16 + 24 + 12) */
 .set-row > .ic { flex: none; width: 24px; display: grid; place-items: center; color: var(--text-2); }
