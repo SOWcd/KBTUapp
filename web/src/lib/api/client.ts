@@ -101,7 +101,6 @@ export const server: Api = {
   register: (id, ref, phone, answers) => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}) }),
   unregister: (id) => call('DELETE', `/events/${id}/registration`),
   setSaved: (id, on) => call(on ? 'PUT' : 'DELETE', `/events/${id}/saved`),
-  tickets: () => call('GET', '/me/tickets'),
 
   orgs: () => call('GET', '/orgs'),
   adminOrgs: () => call('GET', '/admin/orgs'),
@@ -110,7 +109,6 @@ export const server: Api = {
   people: (org) => call('GET', `/orgs/${org}/people`),
   invite: (org, dept) => call('POST', `/orgs/${org}/invites`, dept ? { dept } : {}),
   acceptInvite: (token) => call('POST', `/invites/${token}`),
-  changeRole: (org, user, role) => call('PATCH', `/orgs/${org}/members/${user}`, { role }),
   removeMember: (org, user) => call('DELETE', `/orgs/${org}/members/${user}`),
   transfer: (org, user) => call('POST', `/orgs/${org}/transfer`, { userId: user }),
   teamSetup: (org) => call('GET', `/orgs/${org}/team`),

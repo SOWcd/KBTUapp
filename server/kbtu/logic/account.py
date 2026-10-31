@@ -198,7 +198,7 @@ def _skin(con, uid: int) -> int | str | None:
     """The badge I show (badges as skins): a club's id, "sower" (the creator's own), None for KBTU's.
     My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the newest club I joined
     that has a badge, the creator's own for the creator (a new club's badge comes by itself); of
-    several, the one where my role is highest, as the picker lists them (LookSheet)."""
+    several, the one where my role is highest, as the picker lists them (SettingsList)."""
     u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
         return None
@@ -726,5 +726,5 @@ from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
-from .seats import _remind, _ticket_code, notify, promote, tickets  # noqa: E402
+from .seats import _remind, _ticket_code, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402

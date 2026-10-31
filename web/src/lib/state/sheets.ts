@@ -47,9 +47,7 @@ export const sheets = {
   manage: (_id: Id) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (_org: Id) => {},
-  /** the clubs' rosters (PLAN 95): the welcome before the KBTU sign-in, a row under another name, the claims I confirm */
-  rosterWelcome: (_spots: RosterSpot[]) => {},
-  rosterAsk: (_row: RosterSpot & { id: Id; dept: string | null }) => {},
+  /** the clubs' rosters (PLAN 95): the claims I confirm */
   rosterRequests: (_ondone?: () => void) => {},
   /** one memo item (a room, guests...) without an event, dated from the memo's week `from`; `oninsert` takes its text */
   /** an event's volunteer applications (the organizers) */
@@ -138,8 +136,6 @@ export const sheets = {
   /** an award up close; `mine` adds Share */
   award: (_it: ShelfItem, _mine?: boolean) => {},
   /** In-app confirmation (never a system dialog); resolves true on "ok". */
-  /** a computer: the app is made for phones (once, until "continue") */
-  pc: (_ok: () => void) => {},
   ask: (_q: Ask): Promise<boolean> => Promise.resolve(false),
   /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,
    *  handed over as +7XXXXXXXXXX; value: filled in to edit; line: one line, Enter answers (a nick) */

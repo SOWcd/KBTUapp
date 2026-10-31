@@ -101,7 +101,7 @@
   .cap > .tone-base { background: var(--glass-clear); }
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
   /* over the Feed (chrome.ts): dark glass tinted by the slide, the dark palette past the halfway point */
-  .cap:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; --chrome-ink: rgba(255, 255, 255, 0.85); }
+  .cap:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; }
   /* over a sheet or a full-screen view it says that view's title and takes no taps */
   :global(html[data-sheet]) .cap { z-index: calc(var(--z-sheet) + 5); pointer-events: none; }
   /* light theme under a sheet: clear glass over the dark scrim made its ink unreadable; solid glass there */

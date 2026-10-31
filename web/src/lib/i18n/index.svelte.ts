@@ -6,8 +6,6 @@ import { tg } from '../tg';
 
 export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Lang[] = ['ru', 'kk', 'en'];
-// each language by its own short name, the same whatever the app's language is
-export const LANG_NAMES: Record<Lang, string> = { ru: 'Рус', kk: 'Қаз', en: 'Eng' };
 export const LANG_FULL: Record<Lang, string> = { ru: 'Русский', kk: 'Қазақша', en: 'English' };
 export type { Key };
 

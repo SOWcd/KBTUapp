@@ -20,7 +20,7 @@
   --gutter: 16px; --gap-group: 22px;
 
   /* radii; --r-group: list groups and cards share 22 (owner, Oct 31: settings under the lanyard) */
-  --r-xs: 8px; --r-s: 12px; --r-tile: 14px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
+  --r-xs: 8px; --r-s: 12px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
   --r-group: 22px;
 
   /* the design system's control heights: L (a sheet's pinned primary, fields), M (buttons, search, icon buttons),
@@ -114,9 +114,7 @@
   --glass-solid: rgba(24, 28, 44, 0.96);
   --glass-bloom: rgba(255, 255, 255, 0.5);
   --glass-sheen: rgba(255, 255, 255, 0.32);
-  --glass-rim: rgba(255, 255, 255, 0.10);
   --glass-shadow: 0 22px 44px -14px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
-  --chrome-ink: rgba(255, 255, 255, 0.85);
   --shadow-card: none;
   --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3);
   --scrim: rgba(3, 4, 10, 0.62);
@@ -161,9 +159,7 @@
   --glass-solid: rgba(255, 255, 255, 0.97);
   --glass-bloom: rgba(255, 255, 255, 0.95);
   --glass-sheen: rgba(255, 255, 255, 0.32);
-  --glass-rim: rgba(255, 255, 255, 0.85);
   --glass-shadow: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
-  --chrome-ink: #4A5680;
   --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
   --shadow-thumb: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
   --scrim: rgba(11, 20, 51, 0.32);

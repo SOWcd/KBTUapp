@@ -36,7 +36,6 @@ export interface Api {
   meetingAnswers(id: Id): Promise<MeetingAnswer[]>;          // a club meeting's Head+: everyone expected (§2b)
   unregister(id: Id): Promise<EventCard>;
   setSaved(id: Id, on: boolean): Promise<void>;
-  tickets(): Promise<EventCard[]>;
 
   orgs(): Promise<Org[]>;
   // admin (pilot): clubs and their teams; who = @username or a Telegram ID of someone who opened the app once
@@ -258,7 +257,6 @@ export interface Api {
   // the club's invite link (§4.5, Vice+): the same token until replaced; a student who opens it is a Member at once
   invite(org: Id, dept?: Id): Promise<{ token: string }>;   // dept: the newcomer lands in that department
   acceptInvite(token: string): Promise<Org>;
-  changeRole(org: Id, user: Id, role: OrgRole): Promise<TeamMember[]>;
   removeMember(org: Id, user: Id): Promise<void>;          // my own id = leave; a President: conflict/'president'
   transfer(org: Id, user: Id): Promise<TeamMember[]>;
   // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans

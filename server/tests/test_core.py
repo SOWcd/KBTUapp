@@ -118,7 +118,7 @@ def test_core_loop(env):
 
     # Ali drops out: Zhan gets the seat and a bot message is queued
     assert c.delete(f"/api/events/{eid}/registration", headers=tma(10)).json()["my"]["status"] == "cancelled"
-    ticket = c.get("/api/me/tickets", headers=tma(30)).json()[0]["my"]
+    ticket = c.get(f"/api/events/{eid}", headers=tma(30)).json()["my"]
     assert ticket["status"] == "going"
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'seat_free'", (zhan["id"],)).fetchone()
 

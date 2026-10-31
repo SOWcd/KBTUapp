@@ -123,7 +123,7 @@ async def student(http: httpx.AsyncClient, uid: int, upcoming: list[int], orgs: 
     while time.monotonic() < until:
         await go("GET", "/api/me")  # the app's start: me, then these together, then friends and my card
         await asyncio.gather(go("GET", "/api/events"), go("GET", "/api/orgs"), go("GET", "/api/me/schedule"), go("GET", "/api/posts?scope=all"))
-        await asyncio.gather(go("GET", "/api/friends"), go("GET", f"/api/users/{uid}"), go("GET", "/api/me/tickets"))
+        await asyncio.gather(go("GET", "/api/friends"), go("GET", f"/api/users/{uid}"))
         for e in rnd.sample(upcoming, 3):  # looking around
             await go("GET", f"/api/events/{e}")
         e = rnd.choice(upcoming)

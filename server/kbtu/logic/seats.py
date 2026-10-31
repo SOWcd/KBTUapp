@@ -567,15 +567,6 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
         con.execute("DELETE FROM saved_events WHERE user_id = ? AND event_id = ?", (v.id, eid))
 
 
-def tickets(con, v: Viewer) -> list[dict]:
-    if not v.student:
-        return []
-    found = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-        WHERE r.user_id = ? AND r.status IN ('going','hold','waitlist') AND COALESCE(e.ends_at, e.starts_at + ?) > ?
-        ORDER BY e.starts_at""", v.id, NO_END, core.now())
-    return cards(con, v, found)
-
-
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402

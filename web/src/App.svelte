@@ -65,7 +65,6 @@
   sheets.photos = (photos, start, onremove, ongone) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
-  sheets.pc = (ok) => lazy(pcSheet, { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
   sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
@@ -103,8 +102,6 @@
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
-  sheets.rosterWelcome = (spots) => lazy(rosterWelcome, { spots });
-  sheets.rosterAsk = (row) => lazy(rosterAsk, { row });
   sheets.rosterRequests = (ondone) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
