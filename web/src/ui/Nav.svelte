@@ -77,10 +77,13 @@
   .dock {
     position: absolute; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 10px); z-index: var(--z-nav);
     display: flex; justify-content: center; align-items: center; gap: 8px; pointer-events: none;
-    transition: transform var(--t-slow) var(--ease-spring);
+    transition: transform var(--t-slow) var(--ease-spring), visibility 0s;
   }
   .dock > * { pointer-events: auto; }
-  :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); }
+  /* gone once it has slid away: off screen its two backdrop filters were still composited under every sheet and the
+     map (iOS has a budget for them, the map's glass drew without its backdrop once it ran short); back at once */
+  :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); visibility: hidden;
+    transition: transform var(--t-slow) var(--ease-spring), visibility 0s var(--t-slow); }
   .nav, .mapb {
     position: relative; flex: none; height: 60px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
     /* the capsule's clear glass (on the big bar the dark frosted body read as plastic) */

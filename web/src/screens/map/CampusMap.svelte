@@ -344,12 +344,14 @@
     ghost.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, ease).finished.catch(() => {}).finally(() => ghost.remove());
     if (fresh) { fresh.style.transformOrigin = o; fresh.animate({ transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] }, ease); }
   }
-  // every floor's picture decoded ahead, so the new one is there the moment the floor changes
-  const ahead: HTMLImageElement[] = [];
+  // the floors next to this one decoded ahead, so the new one is there the moment the floor changes (a swipe goes one
+  // floor; a far one on the rail decodes from the cache under the cross-fade). Held only while the main map shows: all
+  // six were ~60 MB of decoded pixels kept for the whole visit, on the other maps too (the glass went grey, Oct 31)
   $effect(() => {
     if (ver !== 'main') return;
-    ahead.length = 0;
-    for (const f of railFloors) { const im = new Image(); im.src = `${TILES}f${f}/o.webp`; void im.decode().catch(() => {}); ahead.push(im); }
+    const i = railFloors.indexOf(cur);
+    const held = railFloors.slice(Math.max(0, i - 1), i + 2).map((f) => { const im = new Image(); im.src = `${TILES}f${f}/o.webp`; void im.decode().catch(() => {}); return im; });
+    return () => { held.length = 0; };
   });
   function pick(n: number) { void goTo(n); }
   function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, px: x, py: y, dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
@@ -573,13 +575,17 @@
     // the map breathes out to meet you: a touch larger at first, it settles as the circle opens
     stage.animate({ transform: ['scale(1.08)', 'none'], transformOrigin: [`${iris.at.x}px ${iris.at.y - stage.offsetTop}px`, `${iris.at.x}px ${iris.at.y - stage.offsetTop}px`] }, o);
     // the page under it steps back (iOS's way): it stays put under the map, so it's clear the map came over it
-    under = document.querySelector<HTMLElement>('.app > .tab.on')?.animate(
+    underEl = document.querySelector<HTMLElement>('.app > .tab.on');
+    under = underEl?.animate(
       { transform: ['none', 'scale(0.94)'], opacity: [1, 0.45], transformOrigin: [`${iris.at.x}px ${iris.at.y}px`, `${iris.at.x}px ${iris.at.y}px`] }, { ...o, fill: 'forwards' }) ?? null;
+    // once covered, the page under isn't drawn at all: held as a scaled, faded layer it kept its pictures and glass
+    // composited under the map the whole visit; it shows again the moment the map starts closing
+    under?.finished.then(() => { if (!gone && underEl) underEl.style.visibility = 'hidden'; }, () => {});
     const h = halo(30, far, o, [1, 1, 1, 0]);
     // the capsule is cut by the circle (owner, Oct 25): inside it already says "Map", outside it's still the old one
     if (iris.cap) split(h, iris.cap, false);
   }
-  let under: Animation | null = null;
+  let under: Animation | null = null, underEl: HTMLElement | null = null;
   // opened from the nav's round button (owner, Oct 25: "one with the bar"): the map grows out of that circle and
   // shrinks back into it; clip-path only, the map under it is painted once
   const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
@@ -639,7 +645,7 @@
     d.map = ''; // the toast drops under the floor row there (Toast.svelte)
     ro.observe(stage);
     stage.addEventListener('wheel', wheel, { passive: false });
-    return () => { delete d.map; ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
+    return () => { delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); stage.removeEventListener('wheel', wheel); clearTimeout(settleT); clearTimeout(glideT); undoChrome(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
@@ -665,6 +671,7 @@
       if (mapCap) split(h, mapCap, true, c);
       undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
       stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
+      underEl?.style.removeProperty('visibility');
       const page = document.querySelector<HTMLElement>('.app > .tab.on');
       if (under && page) {
         const u = under;
