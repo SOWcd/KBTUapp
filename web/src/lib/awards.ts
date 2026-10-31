@@ -85,8 +85,9 @@ export function hero(p: PersonCard): HeroData {
     earned: earned.length,
     total: p.awards.achievements.length,
     next: close ? `${achName(close)}: ${leftLine(close).replace(/^./, (c) => c.toLowerCase())}` : null,
-    shelf: (p.shelf?.length ? p.shelf.map((k) => shelfItem(p, k)).filter((x): x is ShelfItem => !!x)
-      : [...earned.map(achItem), ...p.awards.badges.map(badgeItem)]).slice(0, 6),
+    // the picked ones first, then the rest in their free places: a new award shows at once (owner, Nov 1)
+    shelf: [...new Map([...(p.shelf ?? []).map((k) => shelfItem(p, k)), ...earned.map(achItem), ...p.awards.badges.map(badgeItem)]
+      .filter((x): x is ShelfItem => !!x).map((x) => [x.key, x])).values()].slice(0, 6),
   };
 }
 
