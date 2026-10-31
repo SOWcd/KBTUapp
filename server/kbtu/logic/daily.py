@@ -287,7 +287,9 @@ def wipe_hidden_posts(con) -> list[str]:
     """Daily: a post hidden 30 days ago (moderation's undo window, TAKEDOWN_KEEP) is wiped (wipe_post). Files to
     remove from disk."""
     with tx(con):
-        return [f for r in rows(con, "SELECT id FROM posts WHERE hidden_at <= ? AND title != ''", core.now() - TAKEDOWN_KEEP)
+        # anything left, not only a title: a comment or a translation that raced the delete is swept too
+        return [f for r in rows(con, """SELECT id FROM posts p WHERE hidden_at <= ? AND (title != '' OR body != '' OR photo_file_id IS NOT NULL
+                OR i18n IS NOT NULL OR EXISTS (SELECT 1 FROM comments c WHERE c.post_id = p.id))""", core.now() - TAKEDOWN_KEEP)
                 for f in wipe_post(con, r[0])]
 
 

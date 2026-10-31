@@ -147,16 +147,18 @@ def update_post(con, v: Viewer, pid: int, body: dict) -> dict:
         raise ApiError("bad_input")
     if sets.keys() - {"pinned"}:
         sets["edited_at"] = core.now()
-    with tx(con):
+    with tx(con):  # checked again under the write lock: a delete meanwhile wiped it, and an edit mustn't refill it
+        if not one(con, "SELECT 1 FROM posts WHERE id = ? AND hidden_at IS NULL", pid):
+            raise ApiError("not_found")
         if sets.get("pinned"):
             con.execute("UPDATE posts SET pinned = 0 WHERE org_id = ? AND id != ?", (p["org_id"], pid))
         if sets:
-            con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?", (*sets.values(), pid))  # keys from above
+            con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ? AND hidden_at IS NULL", (*sets.values(), pid))  # keys from above
     return post_shape(con, v, one(con, "SELECT * FROM posts WHERE id = ?", pid))
 
 
 def hide_post(con, v: Viewer, pid: int) -> list[str]:
-    """Take a post down (its club's Head+ or the admin). Its club's delete wipes it at once (wipe_post); an admin's or
+    """Take a post down (whoever has its club's posts right, or an admin or moderator). Its club's delete wipes it at once (wipe_post); an admin's or
     moderator's without the club's right only hides it (a moderation act, undone within 30 days; daily wipes it then).
     The row stays for reactions and the audit trail. Returns files to remove from disk."""
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid)

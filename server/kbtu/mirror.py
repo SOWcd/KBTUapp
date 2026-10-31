@@ -266,7 +266,8 @@ def comments(con, channel: int, msg_id: int, texts: list[str]) -> int:
     the post lacks is that language's text. How many languages it gave."""
     n = 0
     with tx(con):
-        t = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND msg_id = ? AND lang IS NULL", channel, msg_id)
+        t = one(con, """SELECT post_id FROM tg_post_msgs WHERE channel = ? AND msg_id = ? AND lang IS NULL
+            AND post_id IN (SELECT id FROM posts WHERE hidden_at IS NULL)""", channel, msg_id)  # a post deleted meanwhile stays wiped
         if not t:
             return 0
         for text in texts:

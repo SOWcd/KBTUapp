@@ -334,10 +334,10 @@ def purge(cfg: Config, con) -> None:
     """The accounts whose week ran out (logic.delete_due), and their files on disk (app.py keeps them in the same places)."""
     home = Path(cfg.db_path).resolve().parent
     receipts, photos = logic.delete_due(con)
+    media.drop(home / "receipts", receipts)  # first: a failing step below mustn't leave the deleted accounts' receipts on disk
     photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
-    photos += [p for p in logic.wipe_hidden_posts(con) if logic.photo_free(con, p)]  # and the posts hidden 30 days ago
-    media.drop(home / "receipts", receipts)
     media.drop(home / "media", photos)
+    media.drop(home / "media", [p for p in logic.wipe_hidden_posts(con) if logic.photo_free(con, p)])  # and the posts hidden 30 days ago
 
 
 async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
