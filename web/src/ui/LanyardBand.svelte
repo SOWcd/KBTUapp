@@ -40,14 +40,36 @@
     {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex'}
-    <i class="streaks"></i><i class="dots"></i><b class="ghost">STUDEX</b>
-    <!-- the red wedge drawn, so its white cut runs exactly along it: on the profile's card between the photo and the
-         name (it crossed the text) -->
-    <svg class="dec sxa" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio={wide ? 'none' : 'xMinYMid slice'}>
-      <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="#A9211A" /></linearGradient></defs>
-      {#if wide}<path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="cut" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" />
-      {:else}<path d="M0 0H208.2L122.1 124H0Z" fill="url(#{gid})" /><path class="cut" d="M171 31.6L191.6 24L191.7 46M191.6 24L120.7 126" stroke-width="5" />{/if}</svg>
-    {#if !wide}<b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>{/if}
+    <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
+         glint runs up the arrow now and then. On the profile's card the split runs between the photo and the name. -->
+    <svg class="dec" viewBox="0 0 340 {wide ? 221 : 124}" preserveAspectRatio={wide ? 'none' : 'xMinYMid slice'}>
+      <defs>
+        <linearGradient id="{gid}r" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0503A" /><stop offset=".55" stop-color="#C92E22" /><stop offset="1" stop-color="#8E1A14" /></linearGradient>
+        <linearGradient id="{gid}s" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0" /><stop offset=".5" stop-color="#fff" /><stop offset="1" stop-color="#fff" stop-opacity="0" /></linearGradient>
+      </defs>
+      {#if wide}
+        <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid}r)" />
+        <g class="sxs" stroke="url(#{gid}s)" vector-effect="non-scaling-stroke">
+          <path d="M-6 200L52 52" stroke-opacity=".22" /><path d="M-18 150L22 48" stroke-opacity=".16" />
+          <path d="M150 221L214 58" stroke-opacity=".2" /><path d="M210 214L262 82" stroke-opacity=".14" /><path d="M262 221L340 22" stroke-opacity=".18" /><path d="M300 160L346 44" stroke-opacity=".12" />
+        </g>
+        <path class="glow" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
+        <path class="cut" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
+        <path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" />
+      {:else}
+        <path d="M0 0H208.2L122.1 124H0Z" fill="url(#{gid}r)" />
+        <g class="sxs" stroke="url(#{gid}s)">
+          <path d="M10 124L70 38" stroke-opacity=".2" /><path d="M60 110L104 46" stroke-opacity=".14" />
+          <path d="M226 124L300 18" stroke-opacity=".2" /><path d="M276 120L340 28" stroke-opacity=".14" /><path d="M320 124L380 38" stroke-opacity=".18" />
+        </g>
+        <path class="glow" d="M191.6 24L120.7 126" />
+        <path class="cut" d="M171 31.6L191.6 24L191.7 46M191.6 24L120.7 126" />
+        <path class="glint" d="M120.7 126L191.6 24" pathLength="100" />
+      {/if}
+    </svg>
+    <i class="sheen"></i>
+    {#if !wide}<b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>
+      <span class="tag">BE STUDENT. BE EXCELLENT.</span>{/if}
   {:else if look === 'kbtu'}
     <img class="dec gl" src={guilloche} alt="" /><span class="mark"><KbtuMark size={wide ? 150 : 70} /></span>
     {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
@@ -62,27 +84,26 @@
   img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
   .dec { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
-  /* StudEx (redrawn Oct 29: the old diagonal was flat): their red and navy split on a rising diagonal, speed streaks
-     on both halves, the wordmark with a mortarboard on the band; the cut between the halves is the logo's arrow,
-     its X on it on the band (StudEx, Oct 30: a separate arrow didn't belong) */
-  .studex { background: linear-gradient(135deg, #0F2350, #1D3B7A 55%, #0B1C44); }
-  .streaks { position: absolute; inset: 0; pointer-events: none;
-    background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.07) 18px 19px, transparent 19px 46px),
-      radial-gradient(60% 80% at 82% 10%, rgba(90, 140, 255, 0.35), transparent 70%), radial-gradient(50% 70% at 10% 100%, rgba(255, 120, 90, 0.3), transparent 70%); }
-  /* the logo's white cut between the red and the navy */
-  .cut { fill: none; stroke: #fff; stroke-opacity: 0.92; stroke-linecap: round; stroke-linejoin: round; }
-  .sxa { z-index: 0; }
-  .studex .streaks, .studex .dots, .studex .ghost { z-index: 1; }
-  /* halftone fading out of the red corner, and the name huge and faint behind, like a team jersey */
-  .dots { position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1px, transparent 1.6px) 0 0 / 7px 7px;
-    -webkit-mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); }
-  .ghost { position: absolute; right: -14px; bottom: -22px; font: italic 900 92px/1 var(--font-display); letter-spacing: -0.04em; color: #fff; opacity: 0.06; white-space: nowrap; }
-  .wide .ghost { bottom: 34px; font-size: 104px; }
-  .sxw { position: absolute; left: 22px; top: 40px; font: 900 40px/1 var(--font-display); letter-spacing: -0.02em; color: #fff;
+  /* StudEx (redrawn Oct 31 from their brand kit: the Oct 29 wedge with halftone and a ghost name read as clutter): deep
+     navy lit from the top right, the red half in their poster's gradient, white streaks along the arrow's slope, the
+     arrow itself with a soft glow, a glint running up it every few seconds */
+  .studex { background: radial-gradient(70% 90% at 92% 0%, rgba(74, 118, 230, 0.55), transparent 70%), linear-gradient(160deg, rgb(26, 56, 120), rgb(16, 38, 87) 55%, rgb(10, 24, 56)); }
+  .sxs { fill: none; stroke-width: 1.5; stroke-linecap: round; }
+  .cut { fill: none; stroke: rgba(255, 255, 255, 1); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+  .band:not(.wide) .cut { stroke-width: 4.5; }
+  .glow { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 12; stroke-linecap: round; filter: blur(6px); }
+  .glint { fill: none; stroke: rgba(255, 255, 255, 1); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 14 120; stroke-dashoffset: 14; opacity: 0.9;
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 1)); animation: sxglint 5s 1s cubic-bezier(.5, 0, .3, 1) infinite; }
+  @keyframes sxglint { 0% { stroke-dashoffset: 14; } 30%, 100% { stroke-dashoffset: -106; } }
+  @media (prefers-reduced-motion: reduce) { .glint { display: none; } }
+  :global(html.lowfx) .glint, :global(html.lowfx) .glow { display: none; }
+  /* a glossy top light over both halves, like printed card stock */
+  .sheen { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(170deg, rgba(255, 255, 255, 0.14), transparent 38%); }
+  .sxw { position: absolute; left: 22px; top: 36px; font: 900 40px/1 var(--font-display); letter-spacing: -0.02em; color: #fff;
     text-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); }
   .sxw i { font-style: normal; }
   .cap { position: absolute; left: -10px; top: -15px; width: 30px; transform: rotate(-16deg); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
+  .tag { position: absolute; right: 16px; bottom: 14px; font: 800 7.5px/1 var(--font-text); letter-spacing: 0.24em; color: rgba(255, 255, 255, 0.7); }
   /* KBTU, the app's own: the brand's blue and violet, a guilloche as on an ID card, the colonnade */
   .kbtu { background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), radial-gradient(60% 80% at 100% 100%, rgba(59, 107, 255, 0.5), transparent 70%),
     linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
