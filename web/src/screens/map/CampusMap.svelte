@@ -657,6 +657,9 @@
       const bt = b?.getBoundingClientRect(), dm = dock && getComputedStyle(dock).transform !== 'none' ? new DOMMatrix(getComputedStyle(dock).transform) : null;
       const c = bt ? { x: bt.left + bt.width / 2 - (dm?.e ?? 0), y: bt.top + bt.height / 2 - (dm?.f ?? 0) } : iris.at;
       const end = bt ? bt.width / 2 : 30, far = reach(c);
+      // the map's own button goes back into the one it came from (owner, Oct 31: the bar stays as it was, slim or full)
+      const shut = panel.querySelector<HTMLElement>('.shut'), sb = shut?.getBoundingClientRect();
+      if (shut && sb?.width) shut.animate({ transform: ['none', `translate(${c.x - sb.left - sb.width / 2}px, ${c.y - sb.top - sb.height / 2}px) scale(${(end * 2) / sb.width})`] }, { ...o, fill: 'forwards' });
       const circle = (r: number) => `circle(${r}px at ${c.x}px ${c.y}px)`;
       const h = halo(far, end, o, [1, 1, 1], c); // held to the end: the ripples take over from it at the button's size
       if (mapCap) split(h, mapCap, true, c);
