@@ -4,7 +4,7 @@
 // The switch flows: a view transition grows the new theme as a circle from the tapped button, the way
 // Telegram's own night-mode switch does, or fades it in when Telegram changes the scheme on its own.
 import { flushSync } from 'svelte';
-import { paint, on, tg } from '../tg';
+import { haptic, paint, on, tg } from '../tg';
 
 export type Theme = 'light' | 'dark';
 const KEY = 'kb-theme';
@@ -68,6 +68,7 @@ export function reveal(change: () => void, done: () => void, from?: Element, loo
     root.animate({ clipPath: [`circle(0 at ${at.x}px ${at.y}px)`, `circle(${r}px at ${at.x}px ${at.y}px)`] },
       { duration: 480, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', pseudoElement: '::view-transition-new(root)' });
     setTimeout(paint, 480 * timeAt(Math.min(1, Math.hypot(at.x - innerWidth / 2, at.y) / r))); // the top centre, where Telegram's buttons are
+    setTimeout(() => running === vt && haptic.soft(), 480); // the landing: a soft tick as the circle covers the screen
   }).catch(() => {});
   const tidy = () => { paint(); if (running === vt) { running = null; root.classList.remove('vt-circle', 'vt-lang', 'vt-solid'); } };
   vt.finished.then(tidy, tidy);
