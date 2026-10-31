@@ -50,6 +50,9 @@
                                 a student confirmed with the row's KBTU mail or ID and its name gets the badge (came) and
                                 what their row lacks now; the rest wait in prefill_rest for their student's sign-in (the
                                 mail or a valid ID, and the name; never the ID itself); counts only
+  .venv/bin/python -m kbtu.admin claim new <code> --until YYYY-MM-DD   a link many open for an award (the volunteers'
+                                init26 in their chat): each signed-in student gets it once, at once, until that day ends
+                                (Almaty); prints the t.me link. claim close <token>: it stops now
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -311,6 +314,18 @@ def main(args: list[str]) -> None:
         for k in sorted(n):
             print(f"{n[k]:>8}  {k}")
         print("written" if "--apply" in args else "nothing written (add --apply)")
+    elif cmd == "claim" and len(args) == 5 and args[1] == "new" and args[3] == "--until":
+        import calendar
+        from .logic.profiles import claim_link
+        try:  # the end of that day in Almaty (UTC+5)
+            token = claim_link(con, args[2], calendar.timegm(time.strptime(args[4], "%Y-%m-%d")) + 86400 - 5 * 3600)
+        except (ValueError, ApiError):
+            sys.exit("claim new <init26 | creator_laugh | creator_found> --until YYYY-MM-DD (today or later; the owner set: founder)")
+        print(f"https://t.me/{config.load().bot_username}?startapp=gl_{token}")
+        print(f"until {args[4]} 23:59 Almaty; to stop it early: claim close {token}")
+    elif cmd == "claim" and len(args) == 3 and args[1] == "close":
+        n = con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ? AND multi = 1 AND expires_at > ?", (now(), args[2], now())).rowcount
+        print("closed" if n else "no open claim link with that token")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

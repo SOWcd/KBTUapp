@@ -254,7 +254,7 @@
       asStudent(async () => {
         try { await api.useGrantLink(gl[1]); await loadMe(); void loadMyCard(); haptic.ok(); } // loadMe brings the unlock moment
         catch { haptic.error(); say(t('give.linkDead'), 'pleading_face_3d'); }
-      });
+      }, p); // a guest's Microsoft sign-in round trip keeps the link (takeAgain)
       return;
     }
     const fr = p.match(/^fr_([0-9a-f]{24})$/);

@@ -6849,3 +6849,33 @@ def test_prefill_rest(env, monkeypatch, capsys):
     logic.delete_me(con, logic.Viewer(uid, "user", True))
     assert [r[0] for r in con.execute("SELECT last_name FROM prefill_rest WHERE student_id = '25B010007' OR email IS NOT NULL")] == ["Other"]
     con.close()
+
+
+def test_claim_link(env, monkeypatch, capsys):
+    """The volunteers' badge by a link (prefill-rest-and-claim-review.md B): admin claim new prints a gl_ link many open,
+    each student gets it once and at once, a second open is fine, closed after its day or by claim close; one-time
+    links work as before."""
+    from kbtu import admin
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    boss, ann, bob, cat = login(c, 60, "boss"), login(c, 61, "ann"), login(c, 62, "bob"), login(c, 63, "cat")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))
+    day = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 5 * 3600))
+    with pytest.raises(SystemExit):
+        admin.main(["claim", "new", "bugs", "--until", day])                    # Bug hunter: one by one only
+    capsys.readouterr()
+    admin.main(["claim", "new", "init26", "--until", day])
+    link = capsys.readouterr().out.split("\n")[0]
+    token = re.fullmatch(r"https://t\.me/\w+\?startapp=gl_([0-9a-f]{24})", link)[1]
+    use = lambda tg: c.post(f"/api/grant-links/{token}", headers=tma(tg)).json()  # noqa: E731
+    assert use(61) == use(62) == use(61) == {"code": "init26"}                   # many, and again is fine
+    n = lambda uid: con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'init26'", (uid,)).fetchone()[0]  # noqa: E731
+    assert (n(ann["id"]), n(bob["id"])) == (1, 1)
+    assert con.execute("SELECT expires_at FROM grant_links WHERE token = ?", (token,)).fetchone()[0] > time.time()
+    admin.main(["claim", "close", token])
+    assert use(63)["error"] == "closed" and n(cat["id"]) == 0
+    one_time = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "creator_laugh")
+    assert c.post(f"/api/grant-links/{one_time}", headers=tma(61)).json() == {"code": "creator_laugh"}
+    assert c.post(f"/api/grant-links/{one_time}", headers=tma(62)).json()["error"] == "closed"
+    con.close()

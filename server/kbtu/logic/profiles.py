@@ -184,15 +184,32 @@ def grant_link(con, v: Viewer, code: object) -> str:
 
 
 def use_grant_link(con, v: Viewer, token: str) -> dict:
-    """A student opened an award link: theirs, celebrated like any new level. A used or old link is 'closed'."""
+    """A student opened an award link: theirs, celebrated like any new level. A used or old link is 'closed'. A link
+    for many (`multi`, admin claim new) gives each student the award once until it expires; opened again by one who
+    has it: fine, nothing more (a chat's link gets tapped twice)."""
     need_student(v)
     with tx(con):
-        r = one(con, "SELECT * FROM grant_links WHERE token = ? AND used_by IS NULL AND expires_at > ?", token, core.now())
+        r = one(con, "SELECT * FROM grant_links WHERE token = ? AND (multi = 1 OR used_by IS NULL) AND expires_at > ?", token, core.now())
         if not r:
             raise ApiError("closed")
-        _grant(con, r["created_by"], v.id, r["code"])
-        con.execute("UPDATE grant_links SET used_by = ?, used_at = ? WHERE token = ?", (v.id, core.now(), token))
+        if not r["multi"]:
+            _grant(con, r["created_by"], v.id, r["code"])
+            con.execute("UPDATE grant_links SET used_by = ?, used_at = ? WHERE token = ?", (v.id, core.now(), token))
+        elif not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
+            _grant(con, r["created_by"], v.id, r["code"])
     return {"code": r["code"]}
+
+
+def claim_link(con, code: str, until: int) -> str:
+    """admin claim new: a link many students open for `code` (not Bug hunter: that one is earned one by one), given by
+    the owner, until `until`. Signed-in KBTU students only, one award each; forwarded beyond the chat: accepted (owner)."""
+    owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
+    if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
+        raise ApiError("bad_input")
+    token = secrets.token_hex(12)
+    con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi) VALUES (?, ?, ?, ?, ?, 1)",
+                (token, code, owner[0], core.now(), until))
+    return token
 
 
 def ungrant(con, v: Viewer, gid: int) -> None:

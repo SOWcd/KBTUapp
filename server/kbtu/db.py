@@ -932,6 +932,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX prefill_rest_email ON prefill_rest(email);
     CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);"""),
+    # an award link many may open until it expires, one award each (admin claim new: the volunteers' badge in their chat)
+    (99, "ALTER TABLE grant_links ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 
