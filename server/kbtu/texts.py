@@ -92,6 +92,21 @@ CAL_PAGE = {  # (title, text, subscribe: Apple's button, Google's, copy the addr
            "Add to Google Calendar", "Copy link", "Copied"),
 }
 
+# The assistant's help card (logic/assistant.py): shown under the answer when the model (or, with no model, the keyword
+# backstop) sees a student in distress. A fixed template, never model-written, so a model's mistake can't drop the
+# numbers (review, Oct 31: safe messaging, no diagnosis, no promise of contact; 1303 first, it's 24/7).
+HELP_CARD = {
+    "ru": "Похоже, тебе сейчас очень тяжело. Мне жаль, что так.\nЯ всего лишь бот, но есть люди, которые выслушают прямо сейчас — бесплатно и анонимно:\n"
+          "1303 — психологическая помощь в Алматы, круглосуточно\n150 — телефон доверия для молодёжи, можно и написать в чат\n"
+          "Если ты в опасности прямо сейчас — звони 112.\nИ если можешь, напиши тому, кому доверяешь.",
+    "kk": "Қазір саған өте ауыр сияқты. Осылай болғанына өкінемін.\nМен жай ғана ботпын, бірақ сені дәл қазір тыңдайтын адамдар бар — тегін және анонимді:\n"
+          "1303 — Алматыдағы психологиялық көмек, тәулік бойы\n150 — жастарға арналған сенім телефоны, чатқа да жазуға болады\n"
+          "Дәл қазір қауіп төніп тұрса — 112-ге қоңырау шал.\nМүмкін болса, өзің сенетін адамға жаз.",
+    "en": "It sounds like things are really hard right now. I'm sorry it's like this.\nI'm only a bot, but there are people who will listen right now — free and anonymous:\n"
+          "1303 — psychological help in Almaty, around the clock\n150 — the helpline for young people; you can write to their chat too\n"
+          "If you're in danger right now, call 112.\nAnd if you can, message someone you trust.",
+}
+
 
 def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> tuple[str, str, str]:
     """(title, HTML text, button) for an achievement card; the tier only when the achievement has levels."""

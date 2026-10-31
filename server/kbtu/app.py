@@ -201,6 +201,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
+    logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
 
     # ------------------------------------------------------------ errors
 
@@ -1084,9 +1085,23 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/assistant")
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
-        msgs, rooms, events = logic.assistant.prompt(con, v, body, lang)
-        text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
-        return logic.assistant.answer(text, rooms, events)
+        try:
+            msgs, rooms, events = logic.assistant.prompt(con, v, body, lang)
+            text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
+        except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
+            if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
+                return {"text": "", "actions": [], **logic.assistant.care(con, lang)}
+            raise
+        return logic.assistant.reply(con, text, rooms, events, lang)
+
+    # its feedback (logic/assistant.py): a 👍/👎 on an answer's signed topic; on 👎, the one question and answer if sent
+    @app.post("/api/assistant/vote", status_code=204)
+    def assistant_vote(con: Con, v: BoardWrite, body: dict = Body(...)):
+        logic.assistant.vote(con, v, body)
+
+    @app.post("/api/assistant/send", status_code=204)
+    def assistant_send(con: Con, v: BoardWrite, body: dict = Body(...)):
+        logic.assistant.send(con, v, body)
 
     # its campus facts, kept current by the admin and moderators (the stale ones marked); each call answers the list
     @app.get("/api/admin/places")

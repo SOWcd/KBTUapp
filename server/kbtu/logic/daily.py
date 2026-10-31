@@ -272,7 +272,7 @@ def admin_ai(con, v: Viewer, chain: list[str] | None = None) -> dict:
     return {**ai_state(con), "chain": chain or [], "usage": llm.usage(con),
             "events": {"done": count(f"{ev} AND e.lang IS NOT NULL", core.now()), "waiting": count(f"{ev} AND e.lang IS NULL AND e.ai_tries < ?", core.now(), AI_TRIES)},
             "clubs": {"done": count(f"{og} AND lang IS NOT NULL"), "waiting": count(f"{og} AND lang IS NULL AND ai_tries < ?", AI_TRIES)},
-            "failed": failed}
+            "failed": failed, "assistant": assistant.seen(con)}
 
 
 def ai_retry(con, v: Viewer) -> None:

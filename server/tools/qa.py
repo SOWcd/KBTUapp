@@ -4,7 +4,7 @@ paid event, starts the real server on it with the postman off, and prints a link
 them: Telegram's initData rides in the link's hash, signed with a made-up bot token, the way Telegram passes it, so
 the real telegram-web-app.js reads it. Nothing leaves this machine.
 
-    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db]
+    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai]
 
 OCR of receipts runs if tesseract with the rus and kaz models is installed (TESSDATA_PREFIX for a local copy)."""
 from __future__ import annotations
@@ -94,10 +94,26 @@ def link(port: int, tg: int, first: str) -> str:
                                                                    "tgWebAppThemeParams": theme})
 
 
+def fake_ai_app():
+    """The app with a made-up assistant model (--fake-ai, no AI key here): it doesn't know, with a topic to vote on; a
+    question the keyword backstop would catch comes back with the care flag, to see the help card."""
+    from kbtu import app, llm
+    from kbtu.logic import assistant
+
+    async def chat(cfg, http, msgs, **kw):
+        q = msgs[-1]["content"]
+        care = assistant.distress(q)
+        return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
+                           "actions": [], "known": False, "topic": "qa made up topic", "care": care}), "qa"
+    llm.chat = chat
+    return app.create()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--db", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "kbtu-qa.db"))
+    ap.add_argument("--fake-ai", action="store_true", help="a made-up assistant model (fake_ai_app)")
     a = ap.parse_args()
     seed(a.db)
     for _, tg, first, _ in PEOPLE:
@@ -105,7 +121,7 @@ def main() -> None:
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
            "BOARD": os.environ.get("BOARD", "1")}  # the student forum on, as it will be after its policy part
-    subprocess.run([sys.executable, "-m", "uvicorn", "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
+    subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 
 

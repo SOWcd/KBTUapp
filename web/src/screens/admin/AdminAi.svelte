@@ -1,13 +1,14 @@
 <script lang="ts">
   // Admin → AI: the translator of event and club texts (PLAN 9, ai.py):
   // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
-  // get three more tries); and the AI chain (llm.py), each link's answers and failures today.
+  // get three more tries); and the AI chain (llm.py), each link's answers and failures today; the assistant's feedback (30 days, none of it tied to a person).
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import { api, type AdminAi } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { dayMonthShort } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
@@ -62,6 +63,25 @@
       <div class="go"><Button kind="secondary" size="m" full loading={busy} onclick={retry}>{t('ai.retry')}</Button></div>
     {/if}
     <p class="t-foot note">{t('ai.note')}</p>
+    {@const as = ai.assistant}
+    <h3 class="sec">{t('ai.assistant')}</h3>
+    <div class="rows surface">
+      <div class="r link"><span>{t('ai.votes', { up: as.up, down: as.downs })}</span></div>
+      {#each as.care as w (w.week)}<div class="r link"><span class="ellipsis">{t('ai.care')} · {t('ai.week', { date: dayMonthShort(w.week * 7 * 86400) })}</span><i class="num">{w.n}</i></div>{/each}
+    </div>
+    {#each [['ai.unknown', as.unknown], ['ai.downTopics', as.down]] as const as [title, list] (title)}
+      {#if list.length}
+        <h3 class="sec">{t(title)}</h3>
+        <div class="rows surface">{#each list as x (x.topic)}<div class="r link"><span class="ellipsis">{x.topic}</span><i class="num">{x.n}</i></div>{/each}</div>
+      {/if}
+    {/each}
+    {#if as.sent.length}
+      <h3 class="sec">{t('ai.sent')}</h3>
+      <div class="rows surface">
+        {#each as.sent as x (x.id)}<div class="qa selectable"><b>{x.q}</b><span>{x.a}</span><i>{dayMonthShort(x.day * 86400)}</i></div>{/each}
+      </div>
+    {/if}
+    <p class="t-foot note">{t('ai.asNote')}</p>
   {/if}
 </Sheet>
 
@@ -89,5 +109,9 @@
   .r span { flex: 1; min-width: 0; }
   .r i { flex: none; font: 500 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
   .go { margin-top: 10px; }
+  .qa { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; font: 500 var(--fs-sub)/1.35 var(--font-text); }
+  .qa + .qa { box-shadow: inset 0 1px 0 var(--line); }
+  .qa span { color: var(--text-2); white-space: pre-wrap; }
+  .qa i { font: 500 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
   .note { margin: 16px 4px 0; }
 </style>

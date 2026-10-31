@@ -870,6 +870,25 @@ MIGRATIONS: list[tuple[int, str]] = [
         ('dean', 'marine', 'Kazakhstan Maritime Academy', '255', NULL, 'KMA'));"""),
     # a club role's name in Kazakh and English (`name` stays the required one, the fallback)
     (92, "ALTER TABLE org_roles ADD COLUMN name_kk TEXT; ALTER TABLE org_roles ADD COLUMN name_en TEXT;"),
+    # the assistant's feedback (review, Oct 31), none of it tied to a person: the model's short topic of a question it
+    # couldn't answer and the thumbs up/down on an answer (with its topic); a question and answer a student chose to send
+    # after a thumbs down (all by UTC day, 30 days: assistant.sweep); how many times a week the helplines were shown
+    (93, """CREATE TABLE assist_marks (
+      day   INTEGER NOT NULL,
+      kind  TEXT NOT NULL CHECK (kind IN ('unknown', 'up', 'down')),
+      topic TEXT NOT NULL
+    ) STRICT;
+    CREATE INDEX assist_marks_day ON assist_marks(day);
+    CREATE TABLE assist_sent (
+      id  INTEGER PRIMARY KEY,
+      day INTEGER NOT NULL,
+      q   TEXT NOT NULL,
+      a   TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE assist_care (
+      week INTEGER PRIMARY KEY,
+      n    INTEGER NOT NULL
+    ) STRICT;"""),
 ]
 
 

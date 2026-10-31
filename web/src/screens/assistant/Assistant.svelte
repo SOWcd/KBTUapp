@@ -1,18 +1,26 @@
 <script lang="ts">
   // The students' assistant (server logic/assistant.py; owner, Oct 30: "where is my dean's office?" and the app knows
   // the school, the year, the timetable, the campus, what's on). A chat: suggestions to start, the answer with up to
-  // three buttons (a room on the map, an event), checked by the server against what it told the model.
+  // three buttons (a room on the map, an event), checked by the server against what it told the model. Under an answer
+  // 👍/👎 (on 👎, the student may send that one question and answer); when the server sees distress, its fixed help card
+  // with the helplines (review, Oct 31: nothing of it is kept or sent by us; the student calls or writes themselves).
   import { untrack } from 'svelte';
   import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
+  import ThumbsDown from '@lucide/svelte/icons/thumbs-down';
+  import Phone from '@lucide/svelte/icons/phone';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import { api, ApiErr } from '../../lib/api';
   import { type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
   import { chat, type Turn } from '../../lib/state/assistant.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
+  import { PSYCHOLOGIST } from '../../lib/academic';
   import { grow } from '../../ui/grow';
   import Sheet from '../../ui/Sheet.svelte';
   import Emoji from '../../ui/Emoji.svelte';
@@ -28,12 +36,12 @@
     q = q.trim();
     if (!q || busy) return;
     haptic.tap();
-    const history = chat.turns.slice(-6).map(({ role, text }) => ({ role, text }));
+    const history = chat.turns.filter((m) => m.text).slice(-6).map(({ role, text }) => ({ role, text }));
     chat.turns.push({ role: 'user', text: q });
     draft = ''; busy = true;
     try {
       const a = await api.assistant(q, history);
-      chat.turns.push({ role: 'assistant', text: a.text, actions: a.actions });
+      chat.turns.push({ role: 'assistant', ...a, q });
       haptic.soft();
     } catch (e) {
       const why = e instanceof ApiErr ? e.code : '';
@@ -45,6 +53,17 @@
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void ask(draft); } };
   const label = (a: NonNullable<Turn['actions']>[number]) => a.type === 'map' ? t('as.onMap', { room: a.room }) : eventById(a.id)?.title ?? t('as.event');
   const go = (a: NonNullable<Turn['actions']>[number]) => { haptic.tap(); if (a.type === 'map') sheets.map(a.room); else sheets.event(a.id); };
+  // optimistic: the tap shows at once; a failed call quietly takes it back
+  function vote(m: Turn, v: 'up' | 'down') {
+    if (m.vote || !m.mark) return;
+    haptic.select(); m.vote = v;
+    api.assistantVote(m.mark, v).catch(() => (m.vote = undefined));
+  }
+  function send(m: Turn) {
+    if (m.sent || !m.q) return;
+    haptic.tap(); m.sent = true;
+    api.assistantSend(m.q, m.text).catch(() => { m.sent = false; haptic.error(); });
+  }
 </script>
 
 <Sheet {overlay} tall title={t('as.title')}>
@@ -58,14 +77,37 @@
       </div>
     {/if}
     {#each chat.turns as m, i (i)}
-      <div class="b {m.role}">
-        <p class="selectable">{m.text}</p>
-        {#if m.actions?.length}
-          <div class="acts">{#each m.actions as a, k (k)}
-            <button onclick={() => go(a)}>{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}<span class="ellipsis">{label(a)}</span></button>
-          {/each}</div>
+      {#if m.text}
+        <div class="b {m.role}">
+          <p class="selectable">{m.text}</p>
+          {#if m.actions?.length}
+            <div class="acts">{#each m.actions as a, k (k)}
+              <button onclick={() => go(a)}>{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}<span class="ellipsis">{label(a)}</span></button>
+            {/each}</div>
+          {/if}
+        </div>
+      {/if}
+      {#if m.mark && !m.care}
+        <div class="rate">
+          <button class:on={m.vote === 'up'} disabled={!!m.vote} aria-label={t('as.good')} onclick={() => vote(m, 'up')}><ThumbsUp size={15} /></button>
+          <button class:on={m.vote === 'down'} disabled={!!m.vote} aria-label={t('as.bad')} onclick={() => vote(m, 'down')}><ThumbsDown size={15} /></button>
+        </div>
+        {#if m.vote === 'down'}
+          <div class="offer">{#if m.sent}<p class="t-foot">{t('as.sent')}</p>{:else}
+            <button onclick={() => send(m)}>{t('as.sendQ')}</button><p class="t-foot">{t('as.sendNote')}</p>{/if}</div>
         {/if}
-      </div>
+      {/if}
+      {#if m.care && m.help}
+        <div class="b assistant help">
+          <p class="selectable">{m.help}</p>
+          <div class="lines">
+            <!-- ponytail: a tel: link; Telegram's openLink takes http(s) only. If a client won't dial, the number is in the text above -->
+            <a class="first" href="tel:1303" onclick={() => haptic.tap()}><Phone size={16} />{t('as.call1303')}</a>
+            <button onclick={() => { haptic.tap(); openLink('https://wa.me/77081060810'); }}><MessageCircle size={16} />{t('as.write150')}</button>
+            <button onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}><HeartHandshake size={16} />{t('as.psych')}</button>
+          </div>
+        </div>
+      {/if}
     {/each}
     {#if busy}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
   </div>
@@ -100,6 +142,20 @@
   .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .acts button { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 32px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
+  .rate { display: flex; gap: 2px; margin: -4px 0 0 4px; }
+  .rate button { display: grid; place-items: center; width: 32px; height: 28px; border-radius: var(--r-full); color: var(--text-3);
+    transition: color var(--t-fast), transform var(--t-fast); }
+  .rate button:not(:disabled):active { transform: scale(0.88); }
+  .rate button.on { color: var(--accent-text); }
+  .rate button:disabled:not(.on) { opacity: 0.35; }
+  .offer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 86%; margin: -2px 0 0 8px; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  .offer button { padding: 6px 0; color: var(--accent-text); font: 650 var(--fs-body)/1.2 var(--font-text); }
+  .offer p { color: var(--text-3); }
+  .help { max-width: 92%; }
+  .lines { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .lines a, .lines button { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: var(--r-full);
+    background: var(--surface); color: var(--text); font: 650 var(--fs-body)/1 var(--font-text); text-decoration: none; }
+  .lines .first { background: var(--accent); color: var(--on-accent); }
   .typing { display: flex; gap: 5px; padding: 14px 16px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: dot 1s ease-in-out infinite; }
   .typing i:nth-child(2) { animation-delay: 150ms; } .typing i:nth-child(3) { animation-delay: 300ms; }
