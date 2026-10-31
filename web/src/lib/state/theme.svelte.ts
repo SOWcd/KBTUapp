@@ -30,6 +30,11 @@ export function applyTheme(t: Theme, telegramToo = true): void {
 export const paintFor = (t: Theme) => paint(t === 'light' ? '#F3F5FB' : '#07080F');
 
 const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Android/.test(navigator.userAgent); // iPhone, Mac Safari
+const FEATHER = 28;
+const DUSK = `radial-gradient(closest-side, black calc(100% - ${FEATHER}px), transparent)`;
+// ponytail: not yet timed on a phone (a mask repaints the full-screen snapshot each frame); if frames drop, `soft = false`
+// brings the hard clip-path circle back
+const soft = typeof CSS !== 'undefined' && CSS.supports('mask-image', DUSK);
 let running: ViewTransition | null = null; // a second tap mid-way starts over; only the latest one tidies up
 /** the running theme or language switch, if any: its glass is solid until it ends (vt-solid) */
 export const switching = () => running?.finished.catch(() => {});
@@ -64,10 +69,16 @@ export function reveal(change: () => void, done: () => void, from?: Element, loo
   let painted = false;
   const paint = () => { if (!painted && running === vt) { painted = true; done(); } };
   if (at) vt.ready.then(() => {
-    const r = Math.hypot(Math.max(at.x, innerWidth - at.x), Math.max(at.y, innerHeight - at.y));
-    root.animate({ clipPath: [`circle(0 at ${at.x}px ${at.y}px)`, `circle(${r}px at ${at.x}px ${at.y}px)`] },
-      { duration: 480, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', pseudoElement: '::view-transition-new(root)' });
-    setTimeout(paint, 480 * timeAt(Math.min(1, Math.hypot(at.x - innerWidth / 2, at.y) / r))); // the top centre, where Telegram's buttons are
+    // the circle's edge is soft, a FEATHER px fade like dusk (a mask growing from the tap); a hard clip-path edge where
+    // the webview has no unprefixed mask (Chrome before 120 has view transitions but only -webkit-mask)
+    const f = soft ? FEATHER : 0, r = Math.hypot(Math.max(at.x, innerWidth - at.x), Math.max(at.y, innerHeight - at.y)) + f;
+    root.animate(soft ? {
+      maskImage: [DUSK, DUSK], maskRepeat: ['no-repeat', 'no-repeat'],
+      maskSize: ['0 0', `${2 * r}px ${2 * r}px`], maskPosition: [`${at.x}px ${at.y}px`, `${at.x - r}px ${at.y - r}px`],
+    } : { clipPath: [`circle(0 at ${at.x}px ${at.y}px)`, `circle(${r}px at ${at.x}px ${at.y}px)`] },
+    { duration: 480, easing: 'cubic-bezier(0.3, 0, 0.2, 1)', pseudoElement: '::view-transition-new(root)' });
+    // the top centre, where Telegram's buttons are: the middle of the soft edge passes it
+    setTimeout(paint, 480 * timeAt(Math.min(1, (Math.hypot(at.x - innerWidth / 2, at.y) + f / 2) / r)));
     setTimeout(() => running === vt && haptic.soft(), 480); // the landing: a soft tick as the circle covers the screen
   }).catch(() => {});
   const tidy = () => { paint(); if (running === vt) { running = null; root.classList.remove('vt-circle', 'vt-lang', 'vt-solid'); } };
