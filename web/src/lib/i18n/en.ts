@@ -1322,6 +1322,7 @@ const en: Dict = {
   'ref.count': {one: "{n} brought", other: "{n} brought"},
   'ref.next': "Recruiter at {n}",
   'ref.invite': "Invite",
+  'ref.qr': "Let a friend point their camera here to open KBTU App",
   'ref.text': "Join KBTU App",
   'ach.referral.name': "Recruiter",
   'ach.referral.how': "Invite friends with your link: each one who signs in with KBTU counts.",

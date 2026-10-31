@@ -1322,6 +1322,7 @@ const kk: Dict = {
   'ref.count': {one: "{n} келді", other: "{n} келді"},
   'ref.next': "{n}-ден Шақырушы",
   'ref.invite': "Шақыру",
+  'ref.qr': "Досың камерасын бағыттасын — KBTU App ашылады",
   'ref.text': "KBTU App-қа кел",
   'ach.referral.name': "Шақырушы",
   'ach.referral.how': "Достарыңды сілтемеңмен шақыр: KBTU арқылы кірген әрқайсысы есептеледі.",

@@ -1341,6 +1341,7 @@ const ru = {
   'ref.count': {one: "{n} пришёл", few: "{n} пришли", many: "{n} пришли", other: "{n} пришли"},
   'ref.next': "Зазывала с {n}",
   'ref.invite': "Позвать",
+  'ref.qr': "Пусть друг наведёт камеру — и откроет KBTU App",
   'ref.text': "Залетай в KBTU App",
   'ach.referral.name': "Зазывала",
   'ach.referral.how': "Зови друзей своей ссылкой: считается каждый, кто вошёл через KBTU.",
