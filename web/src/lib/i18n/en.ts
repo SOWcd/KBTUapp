@@ -702,6 +702,7 @@ const en: Dict = {
   'look.dropNick': "Remove the nick",
   'look.nick': "Nickname",
   'look.nickPh': "What to call you",
+  'look.locked': "The {name} lanyard is for club members only",
   'look.skin': "Lanyard",
   'look.badNick': "A nickname is 2–24 characters, no @ or links",
   'look.badPhoto': "That doesn't look like a photo",

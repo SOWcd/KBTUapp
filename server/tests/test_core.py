@@ -2952,7 +2952,7 @@ def test_saved_tomorrow(env, monkeypatch):
 
 def test_badge_skin(env):
     """Badge skins: I show the badge of an official club I'm in, or the KBTU one; never picked, a club
-    with a badge shows by itself; my pick holds, and others see it. Since Oct 20 anyone may try on any club's; the
+    with a badge shows by itself; my pick holds, and others see it. A club's is its members' alone (Oct 31); the
     creator's own is his alone."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
@@ -2967,14 +2967,18 @@ def test_badge_skin(env):
     assert c.patch("/api/me", headers=P, json={"skin": None}).json()["skin"] is None  # picked KBTU: it holds
     for bad in (2, 3, "1", True, "sower"):  # not official, not a club, not an id, not the creator
         assert c.patch("/api/me", headers=P, json={"skin": bad}).status_code == 400
-    assert c.patch("/api/me", headers=A, json={"skin": 1}).json()["skin"] == 1  # not in it: tried on all the same
+    assert c.patch("/api/me", headers=A, json={"skin": 1}).status_code == 400  # not in it: not his to wear
+    con.execute("UPDATE users SET skin_pick = 'org', skin_org = 1 WHERE id = ?", (ali["id"],))  # one picked while it was open
+    con.commit()
+    assert c.get("/api/me", headers=A).json()["skin"] is None                     # falls back to the KBTU one
+    assert c.get(f"/api/users/{ali['id']}", headers=P).json()["skin"] is None
     con.execute("UPDATE users SET skin_pick = NULL, skin_org = NULL WHERE id = ?", (ali["id"],))
     con.commit()
     assert c.patch("/api/me", headers=P, json={"skin": 1}).json()["skin"] == 1
     assert c.get(f"/api/users/{pres['id']}", headers=A).json()["skin"] == 1
     con.execute("DELETE FROM org_members WHERE org_id = 1")
     con.commit()
-    assert c.get("/api/me", headers=P).json()["skin"] == 1  # a pick holds after leaving: anyone may wear it
+    assert c.get("/api/me", headers=P).json()["skin"] is None  # left the club: its lanyard goes with it
     con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] is None  # never picked: only a club I'm in comes by itself

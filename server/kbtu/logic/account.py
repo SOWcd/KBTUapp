@@ -212,9 +212,10 @@ def _skin(con, uid: int) -> int | str | None:
 
 
 def _skin_ok(con, uid: int, oid: int):
-    """Any club's lanyard can be tried on, member or not; the
-    creator's own stays his. ponytail: uid unused while it's open to all; a membership check comes back if he closes it."""
-    return one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND {SKINNED}", oid)
+    """A club's lanyard is its members' alone (owner, Oct 31: it was open to all); read on every look, so a pick of a club
+    I'm not in (or left) falls back by itself (`_skin`)."""
+    return one(con, f"SELECT 1 FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? WHERE o.id = ? AND {SKINNED}",
+               uid, oid)
 
 
 def _qr_code(con, uid: int, col: str = "qr_code") -> str:

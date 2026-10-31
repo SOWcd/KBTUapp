@@ -45,12 +45,13 @@
   const bells = $derived(s ? [s.nRemind, s.nNewEvents, s.nForum].filter(Boolean).length : 0);
   const real = $derived(me?.student ? `${me.student.firstName} ${me.student.lastName.slice(0, 1)}.` : '');
 
-  // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's to try on, KBTU's
-  // last; SOWER first for the founder
+  // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
+  // Oct 31: a club's lanyard is its members' alone; the server holds it too, `_skin_ok`), KBTU's last; SOWER first for the founder
   const mine = $derived(me ? [...me.memberships].sort(byRank).map((m) => m.org).filter(skinned) : []);
   const skins = $derived([...mine, ...data.orgs.filter((o) => skinned(o) && !mine.some((x) => x.id === o.id))]);
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
-    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: o.name, word: STRAP[skinOf(o)!] })), { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
+    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: o.name, word: STRAP[skinOf(o)!], locked: !mine.some((x) => x.id === o.id) })),
+    { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
 
   let busy = false;
   // no toast on a skin (owner, Oct 29): the lanyard above turns at once (Hero); a failure puts the old one back
@@ -164,9 +165,12 @@
         <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
         <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
           {#each swatches as k (k.id ?? 'kbtu')}
-            <button class="ly {k.kind}" role="radio" aria-checked={me.skin === k.id} class:on={me.skin === k.id} onclick={() => { haptic.select(); void pickSkin(k.id); }}>
+            <button class="ly {k.kind}" role="radio" aria-checked={me.skin === k.id} aria-disabled={'locked' in k && k.locked} class:on={me.skin === k.id}
+                    class:locked={'locked' in k && k.locked}
+                    onclick={() => { if ('locked' in k && k.locked) { haptic.warn(); return say(t('look.locked', { name: k.name }), 'locked_3d'); } haptic.select(); void pickSkin(k.id); }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <span class="cd">{#if banded(k.kind as Look)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
+              {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
               <b class="ellipsis">{k.name}</b>
             </button>
           {/each}
@@ -251,6 +255,10 @@
     box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--t-fast), transform var(--t-fast) var(--ease); }
   .ly:active { transform: scale(0.95); }
   .ly.on { box-shadow: inset 0 0 0 2px var(--accent); }
+  /* someone else's club: seen, not worn; a small lock on the card's corner */
+  .ly { position: relative; }
+  .ly.locked .st, .ly.locked .cl, .ly.locked .cd { opacity: 0.45; filter: saturate(0.4); }
+  .ly .lk { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--text); color: var(--bg); }
   .ly .st { width: 12px; height: 26px; display: flex; justify-content: center; overflow: hidden; background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); }
   .ly .st i { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 4.5px/12px var(--font-text); font-style: normal; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.85); white-space: nowrap; }
   .ly .cl { width: 18px; height: 7px; margin-bottom: -4px; z-index: 1; border-radius: 3px; background: linear-gradient(180deg, #F4F6FB, #9AA4B8); }

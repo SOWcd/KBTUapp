@@ -702,6 +702,7 @@ const kk: Dict = {
   'look.dropNick': "Никті алып тастау",
   'look.nick': "Ник",
   'look.nickPh': "Саған қалай жүгінейік",
+  'look.locked': "{name} ланьярды тек клуб мүшелеріне",
   'look.skin': "Ланьярд",
   'look.badNick': "Ник — 2–24 таңба, @ және сілтемесіз",
   'look.badPhoto': "Бұл фотоға ұқсамайды",

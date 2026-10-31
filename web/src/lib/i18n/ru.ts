@@ -722,6 +722,7 @@ const ru = {
   'look.nick': "Ник",
   'look.nickPh': "Как тебя называть",
   'look.skin': "Ланьярд",
+  'look.locked': "Ланьярд {name} — только для участников клуба",
   'look.badNick': "Ник — от 2 до 24 символов, без @ и ссылок",
   'look.badPhoto': "Это не похоже на фото",
   'look.photoSet': "Фото обновлено",
