@@ -3,6 +3,7 @@
 import type { Component } from 'svelte';
 import { haptic } from '../tg';
 import { queue } from '../moments';
+import { switching } from './theme.svelte';
 
 export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
 // the forum second (Oct 30): the students' everyday place, next to the events
@@ -90,6 +91,9 @@ export function removeOverlay(id: number): void {
 export const toast = $state({ text: '', emoji: 'party_popper_3d', id: 0 });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function say(text: string, emoji = 'sparkles_3d'): void {
+  // a toast born mid-switch came solid and cleared up after (owner, Oct 31): it waits for the switch to end
+  const vt = switching();
+  if (vt) { vt.then(() => say(text, emoji)); return; }
   toast.text = text; toast.emoji = emoji; toast.id++;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (toast.text = ''), 2600);

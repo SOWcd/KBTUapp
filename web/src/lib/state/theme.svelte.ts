@@ -31,6 +31,8 @@ export const paintFor = (t: Theme) => paint(t === 'light' ? '#F3F5FB' : '#07080F
 
 const webkit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Android/.test(navigator.userAgent); // iPhone, Mac Safari
 let running: ViewTransition | null = null; // a second tap mid-way starts over; only the latest one tidies up
+/** the running theme or language switch, if any: its glass is solid until it ends (vt-solid) */
+export const switching = () => running?.finished.catch(() => {});
 
 // cubic-bezier(.3, 0, .2, 1), the circle's easing: the share of its duration it takes to reach progress p
 const curve = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
