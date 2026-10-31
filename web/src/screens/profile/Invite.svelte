@@ -19,7 +19,7 @@
   }
 </script>
 
-<div class="inv surface">
+<div class="inv surface" data-away><!-- data-away: it leaves while Me's settings are open -->
   <Emoji name="megaphone_3d" size={44} />
   <span class="tx"><b>{t('ref.title')}</b><i>{tn('ref.count', r.count)}{next ? ` · ${t('ref.next', { n: next })}` : ''}</i></span>
   <button class="go" disabled={busy} onclick={invite}>{t('ref.invite')}</button>

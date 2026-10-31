@@ -68,7 +68,7 @@
   sheets.pc = (ok) => lazy(pcSheet, { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
-  sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
+  sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
   // My club is for club members only: its page and views are their own chunks
   const studioPage = () => import('./screens/club/Studio.svelte');
   const teamPage = () => import('./screens/club/Team.svelte');
@@ -76,7 +76,7 @@
   // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame
   const newsPage = () => import('./screens/afisha/News.svelte');
   const friendsPage = () => import('./screens/profile/Friends.svelte');
-  const settingsPage = () => import('./screens/profile/SettingsPage.svelte');
+  const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
   // a launch moment: asked once the screen is free (a deep link's sheet up at the start used to skip it)
@@ -87,9 +87,9 @@
     return lazy(consentSheet, {});
   };
   // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
-  // the Feed, News, Friends and Settings too (pages once, sheets now), so they open in the tap's frame
+  // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsPage].forEach(warm); if (!session.me?.memberships.length) return; void studioPage(); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList].forEach(warm); if (!session.me?.memberships.length) return; void studioPage(); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmBoard = () => { if (!session.board) return; void boardPage(); if (session.me?.student) void loadBoard(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -152,13 +152,11 @@
   sheets.report = (target, id, about, onsent) => asStudent(() => lazy(() => import('./screens/sheets/ReportSheet.svelte'), { target, id, about, onsent }));
   sheets.invite = (id, title) => lazy(() => import('./screens/sheets/InviteSheet.svelte'), { id, title });
   sheets.addFriend = (mode) => lazy(() => import('./screens/profile/AddFriend.svelte'), { share: mode === 'share' });
-  sheets.look = () => lazy(() => import('./screens/profile/LookSheet.svelte'), {});
   sheets.settings = (kind) => lazy(() => import('./screens/profile/SettingsSheet.svelte'), { kind });
   sheets.news = () => lazy(newsPage, {});
   sheets.feed = () => lazy(feedPage, {});
   sheets.friends = () => lazy(friendsPage, {});
   sheets.team = () => lazy(teamPage, {});
-  sheets.settingsPage = () => lazy(settingsPage, {});
   setLoginHook((after, lock) => sheets.login(after, lock));
 
   // ---- the Clubs tab: a member's has My club and All clubs (a switch on top of the content, tap only) ----

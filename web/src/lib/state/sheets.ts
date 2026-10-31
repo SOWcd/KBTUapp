@@ -65,10 +65,8 @@ export const sheets = {
   teamSetup: (_org: Id, _onchange?: () => void) => {},
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
-  /** my nickname and photo (Telegram's or my own), from Me and my badge's photo */
-  look: () => {},
-  /** behind the Settings page's rows: About the app (who sees what), power saving */
-  settings: (_kind: 'lang' | 'look' | 'notify' | 'power' | 'privacy' | 'phone' | 'city' | 'sees' | 'about') => {},
+  /** the pages pushed from the settings under my lanyard (Me): notifications, privacy and its pages, about */
+  settings: (_kind: 'notify' | 'privacy' | 'phone' | 'city' | 'sees' | 'about') => {},
   /** the admin panel (pilot): clubs and their teams */
   admin: () => {},
   /** the campus map, on a floor (step 1: the 2023 plans) */
@@ -80,12 +78,11 @@ export const sheets = {
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
   /** what used to be a tab's other pages (Oct 30: one tab, one screen): every post (Afisha's "All"), the Feed full screen
-   *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row), Settings (Profile's gear) */
+   *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row) */
   news: () => {},
   feed: () => {},
   friends: () => {},
   team: () => {},
-  settingsPage: () => {},
   /** a new post for a club (Head+), from Studio */
   composer: (_org: Id, _post?: Post) => {},
   /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */
@@ -145,7 +142,7 @@ export const sheets = {
   pc: (_ok: () => void) => {},
   ask: (_q: Ask): Promise<boolean> => Promise.resolve(false),
   /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,
-   *  handed over as +7XXXXXXXXXX */
-  askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean }): Promise<string | null> => Promise.resolve(null),
+   *  handed over as +7XXXXXXXXXX; value: filled in to edit; line: one line, Enter answers (a nick) */
+  askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean; value?: string; line?: boolean }): Promise<string | null> => Promise.resolve(null),
   answers: (_title: string, _questions: import('../api').Question[]): Promise<{ q: string; a: string }[] | null> => Promise.resolve(null), // an event's own questions at sign-up
 };

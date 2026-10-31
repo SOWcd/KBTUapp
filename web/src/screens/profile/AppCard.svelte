@@ -17,7 +17,7 @@
 
 <!-- v25: three cards, not rows, but grown-up: the brand's small solid tile, the name, one line under
      it; the group is a forum with topics, so it says so. No "found a bug" line -->
-<div class="appc surface">
+<div class="appc surface" data-away><!-- data-away: it leaves while Me's settings are open -->
   <div class="ap-h"><span class="mk"><KbtuMark size={20} /></span><b>KBTU App</b></div>
   <div class="ap-t">
     <button class="apt" onclick={() => openLink(TG_NEWS)}><span class="ic" style="--c:#2AABEE"><Megaphone size={17} /></span>

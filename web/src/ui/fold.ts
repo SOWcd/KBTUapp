@@ -3,7 +3,8 @@
 import { slide } from 'svelte/transition';
 import { cubicOut } from 'svelte/easing';
 
-const calm = () => document.documentElement.classList.contains('lowfx') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** lowfx or "reduce motion": motion goes calm (no translate, short fades) */
+export const calm = () => document.documentElement.classList.contains('lowfx') || matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function fold(node: Element, _?: unknown, opts?: { direction?: 'in' | 'out' | 'both' }) {
   if (calm()) return { duration: 0 };

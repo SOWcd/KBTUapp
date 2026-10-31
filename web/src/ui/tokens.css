@@ -19,9 +19,9 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-7: 28px; --s-8: 32px; --s-10: 40px;
   --gutter: 16px; --gap-group: 22px;
 
-  /* radii; --r-group: list groups (Settings' approved 12; cards stay --r-l 22) */
+  /* radii; --r-group: list groups and cards share 22 (owner, Oct 31: settings under the lanyard) */
   --r-xs: 8px; --r-s: 12px; --r-tile: 14px; --r-m: 16px; --r-l: 22px; --r-xl: 28px; --r-full: 999px;
-  --r-group: 12px;
+  --r-group: 22px;
 
   /* the design system's control heights: L (a sheet's pinned primary, fields), M (buttons, search, icon buttons),
      S (chips, segmented, small buttons, with a 44 px hit area); list rows: one line (Settings' 50), two lines, dense

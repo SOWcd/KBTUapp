@@ -359,12 +359,6 @@
   "hex": 1,
   "mix": 0
  },
- "screens/profile/LookSheet.svelte": {
-  "font": 3,
-  "radius": 6,
-  "hex": 50,
-  "mix": 0
- },
  "screens/profile/Me.svelte": {
   "font": 6,
   "radius": 7,
@@ -383,10 +377,10 @@
   "hex": 0,
   "mix": 0
  },
- "screens/profile/Settings.svelte": {
+ "screens/profile/SettingsList.svelte": {
   "font": 2,
-  "radius": 0,
-  "hex": 8,
+  "radius": 6,
+  "hex": 42,
   "mix": 0
  },
  "screens/profile/SettingsSheet.svelte": {

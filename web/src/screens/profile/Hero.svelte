@@ -27,10 +27,11 @@
   import { burst } from '../../ui/burst';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
-  // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
-  let { p, qr = null, live = true, shelf = true }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean } = $props();
+  // live: the badge's screen is open (Me: the Profile tab; a sheet: always). onphoto: my photo tapped (Me: settings, or
+  // the photo's menu at it while they're open)
+  let { p, qr = null, live = true, shelf = true, onphoto }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean; onphoto?: (el: Element) => void } = $props();
   const h = $derived(hero(p));
-  // the club badge they picked (a skin; picked in LookSheet), else the KBTU one
+  // the club badge they picked (a skin; picked in Me's settings), else the KBTU one
   const look = $derived(lookOf(p)); // the lanyard picked
   // the one on show: it trails `look` while a new one is put on, so the old face turns away before the new one shows
   let face = $state(untrack(() => look));
@@ -126,7 +127,7 @@
         <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[face]}><LookMark look={face} /></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
-        {#if mine}<button class="photo" onclick={() => sheets.look()} aria-label={t('look.title')}><Avatar person={h.person} size={74} tappable={false} /></button>
+        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /></button>
         {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /></span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
@@ -141,12 +142,13 @@
   </div>
 </div>
 
-{#if h.bio}<p class="t-callout bio">{h.bio}</p>{/if}
+<!-- data-away: these leave while Me's settings are open -->
+{#if h.bio}<p class="t-callout bio" data-away>{h.bio}</p>{/if}
 
 <!-- the award shelf: the showcase with empty places to fill, the count, and on mine the closest next
      award; mine opens the whole collection. Someone else's shows only when there's something on it. -->
 {#if shelf && (mine || h.shelf.length)}
-  <div class="shelf surface" class:wait={!h.loaded}>
+  <div class="shelf surface" class:wait={!h.loaded} data-away>
     {#if mine}<button class="sh" onclick={() => sheets.awards()}><b>{t('person.awards')}</b><span class="num">{h.loaded ? t('aw.of', { n: h.earned, total: h.total }) : ''}</span><ChevronRight size={16} /></button>
     {:else}<p class="sh"><b>{t('person.awards')}</b><span class="num">{t('aw.of', { n: h.earned, total: h.total })}</span></p>{/if}
     <div class="row">
