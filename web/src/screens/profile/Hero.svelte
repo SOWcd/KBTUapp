@@ -50,24 +50,24 @@
   // later, so the redraw never lands in a moving frame. The light comes from the angle: the face darkens as it turns
   // away, the new one comes out of the shade with a soft sheen. Transform and opacity only, on the compositor.
   let spinning = false, shade: HTMLElement;
-  // the edge's speed matched: TURN ends at slope 2 over 240 ms, LAND starts at slope 4.67 over 560 ms, both 0.75 deg/ms
+  // the edge's speed matched: TURN ends at slope 2 over 170 ms, LAND starts at slope 4.67 over 400 ms, both ~1.05 deg/ms (owner: 240+560 was slow)
   const TURN = 'cubic-bezier(.4, 0, .75, .5)', LAND = 'cubic-bezier(.12, .56, .25, 1)';
   function spin() {
     spinning = true;
     swing.style.willChange = 'transform';
-    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 240, easing: TURN, fill: 'forwards' });
-    shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 240, easing: TURN, fill: 'forwards' });
+    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 170, easing: TURN, fill: 'forwards' });
+    shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 170, easing: TURN, fill: 'forwards' });
     out.onfinish = async () => {
       face = untrack(() => look);
       haptic.soft();
       await tick();
       requestAnimationFrame(() => {
-        const back = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 560, easing: LAND });
+        const back = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
         out.cancel();
         shade.getAnimations().forEach((x) => x.cancel());
         shade.animate([{ opacity: 0.55, background: 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))' },
           { opacity: 0.5, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.22))', offset: 0.45 },
-          { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 560, easing: LAND });
+          { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 400, easing: LAND });
         back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) spin(); };
       });
     };
