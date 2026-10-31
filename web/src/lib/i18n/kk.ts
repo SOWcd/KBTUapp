@@ -1560,6 +1560,7 @@ const kk: Dict = {
   'create.button': "Клуб құру",
   'theme.light': 'Ашық',
   'theme.dark': 'Қараңғы',
+  'theme.system': 'Жүйе бойынша',
   'power.title': "Қуат үнемдеу",
   'power.auto': "Авто",
   'power.on': "Қосулы",

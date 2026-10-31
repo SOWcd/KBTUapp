@@ -18,7 +18,8 @@
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import Languages from '@lucide/svelte/icons/languages';
-  import SunMoon from '@lucide/svelte/icons/sun-moon';
+  import Sun from '@lucide/svelte/icons/sun';
+  import Moon from '@lucide/svelte/icons/moon';
   import Bell from '@lucide/svelte/icons/bell';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
@@ -31,9 +32,9 @@
   import { say, ui, overlays } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
-  import { theme, chooseTheme, reveal } from '../../lib/state/theme.svelte';
+  import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
-  import { haptic, openLink, on } from '../../lib/tg';
+  import { haptic, openLink, on, tg } from '../../lib/tg';
   import { menu, type MenuItem } from '../../ui/menu';
   import { skinOf, skinned, STRAP, banded, type Look } from '../../lib/awards';
   import LanyardBand from '../../ui/LanyardBand.svelte';
@@ -111,10 +112,22 @@
     keep({ lang: l });
     void loadLang(l).then(() => reveal(() => { setLang(l); say(phrase('say.lang'), 'speech_balloon_3d'); }, () => {}, undefined, 'lang'));
   }
-  function look(x: 'dark' | 'light', row: Element) {
-    if (theme.current === x) return;
-    chooseTheme(x, row); keep({ theme: x });
-    say(phrase(`say.theme.${x}`), x === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
+  // the theme is a snap (owner, Oct 31): the menu fades, the row's sun turns into the moon (or back) with a spring, and
+  // at its peak a click and the new theme grows from that icon. The menu is gone by then (its exit is 150 ms), so the
+  // transition's snapshots never hold it; the icon's tail plays in the live new snapshot, the circle opening on it
+  let glyph = $derived(theme.current);
+  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx');
+  function look(x: Theme | null, ic: Element) {
+    if (theme.chosen === x) return;
+    keep({ theme: x });
+    const to = x ?? tg.colorScheme();
+    if (to === theme.current) return chooseTheme(x); // the look stays: nothing to play
+    glyph = to;
+    setTimeout(() => {
+      haptic.rigid();
+      chooseTheme(x, ic);
+      say(phrase(`say.theme.${to}`), to === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
+    }, still() ? 0 : 160);
   }
   const POWER_EMOJI = { on: 'hot_beverage_3d', off: 'high_voltage_3d', auto: 'robot_3d' } as const;
   // my events in the phone's calendar, through our page (server/kbtu/calpage.py); asked on the tap: the address makes a
@@ -137,7 +150,8 @@
 {#snippet row(Icon: typeof Bell, label: string, value: string, end: 'in' | 'menu' | 'out', go: (row: HTMLElement) => void, key = '')}
   <button class="set-row" aria-haspopup={end === 'menu' ? 'menu' : undefined} aria-expanded={end === 'menu' ? isOpen(key) : undefined}
     onclick={(e) => { haptic.tap(); go(e.currentTarget); }}>
-    <span class="ic"><Icon size={20} strokeWidth={2} /></span><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
+    {#if key === 'theme'}<span class="ic sm" class:moon={glyph === 'dark'}><Sun size={20} strokeWidth={2} /><Moon size={20} strokeWidth={2} /></span>
+    {:else}<span class="ic"><Icon size={20} strokeWidth={2} /></span>{/if}<span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
     {#if end === 'in'}<ChevronRight class="chev" size={18} />{:else if end === 'menu'}<ChevronsUpDown class="chev" size={18} />{:else}<ArrowUpRight class="chev" size={18} />{/if}</button>
 {/snippet}
 
@@ -175,8 +189,8 @@
     <h2 class="set-h" class:first={!me?.student} tabindex="-1">{t('set.app')}</h2>
     <div class="set-group">
       {@render row(Languages, t('me.guestLang'), LANG_FULL[i18n.lang], 'menu', (r) => open('lang', at(r), LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))), 'lang')}
-      {@render row(SunMoon, t('me.guestTheme'), t(theme.current === 'dark' ? 'theme.dark' : 'theme.light'), 'menu', (r) => open('theme', at(r), (['dark', 'light'] as const).map((x) => ({
-        label: t(`theme.${x}`), checked: theme.current === x, instant: true, onselect: () => look(x, r) }))), 'theme')}
+      {@render row(Sun, t('me.guestTheme'), t(theme.chosen ? `theme.${theme.chosen}` : 'theme.system'), 'menu', (r) => open('theme', at(r), (['dark', 'light', null] as const).map((x) => ({
+        label: t(x ? `theme.${x}` : 'theme.system'), checked: theme.chosen === x, onselect: () => look(x, r.querySelector('.ic')!) }))), 'theme')}
       {#if me?.student}
         {@render row(Bell, t('me.notifications'), bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off'), 'in', () => sheets.settings('notify'))}
         {@render row(CalendarDays, t('set.calShort'), '', 'out', () => void subscribe())}
@@ -205,6 +219,13 @@
   .spacer { height: 44px; } /* a guest: the check sits where the student's gear does, never on the first title */
   .gap { margin-top: 28px; }
   .act .ic { color: inherit; }
+  /* the theme row's sun and moon, one over the other; the one leaving turns away and shrinks, the other springs in */
+  .sm > :global(svg) { grid-area: 1 / 1; transition: transform 300ms var(--ease-bounce), opacity 120ms ease; }
+  .sm > :global(svg:last-child), .sm.moon > :global(svg:first-child) { opacity: 0; transform: rotate(-90deg) scale(0.3); }
+  .sm.moon > :global(svg:first-child) { transform: rotate(90deg) scale(0.3); }
+  .sm.moon > :global(svg:last-child) { opacity: 1; transform: none; }
+  :global(html.lowfx) .sm > :global(svg) { transition: none; }
+  @media (prefers-reduced-motion: reduce) { .sm > :global(svg) { transition: none; } }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }

@@ -73,13 +73,14 @@ export function reveal(change: () => void, done: () => void, from?: Element, loo
 
 /** Telegram's surfaces (its buttons over the top, the status bar's tint) turn as the circle reaches the top, so the
  *  top changes with the rest of it (they used to snap over after the circle). */
-function flow(t: Theme, from?: Element): void {
-  if (t !== theme.current) reveal(() => applyTheme(t, false), () => applyTheme(theme.current), from);
+function flow(t: Theme, from?: Element, also = () => {}): void {
+  if (t !== theme.current) reveal(() => { also(); applyTheme(t, false); }, () => applyTheme(theme.current), from);
+  else also();
 }
 
-/** The person's pick; `from` is the tapped button, where the new theme starts to grow. */
-export function chooseTheme(t: Theme, from?: Element): void {
-  theme.chosen = t;
-  try { localStorage.setItem(KEY, t); } catch { /* blocked */ }
-  flow(t, from);
+/** The person's pick, or null: Telegram's again; `from` is where the new theme starts to grow (the theme row's icon).
+ *  The pick lands inside the change, so the old snapshot still says the old one (the settings row's value) */
+export function chooseTheme(t: Theme | null, from?: Element): void {
+  try { if (t) localStorage.setItem(KEY, t); else localStorage.removeItem(KEY); } catch { /* blocked */ }
+  flow(t ?? tg.colorScheme(), from, () => (theme.chosen = t));
 }

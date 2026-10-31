@@ -1560,6 +1560,7 @@ const en: Dict = {
   'create.button': "Create a club",
   'theme.light': 'Light',
   'theme.dark': 'Dark',
+  'theme.system': 'System',
   'power.title': "Power saving",
   'power.auto': "Auto",
   'power.on': "On",

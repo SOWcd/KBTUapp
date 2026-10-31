@@ -1579,6 +1579,7 @@ const ru = {
   'create.button': "Создать клуб",
   'theme.light': 'Светлая',
   'theme.dark': 'Тёмная',
+  'theme.system': 'Как в системе',
   'power.title': "Энерго­сбере­жение",
   'power.auto': "Авто",
   'power.on': "Вкл",
