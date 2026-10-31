@@ -135,6 +135,7 @@
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down) */
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 6px; scrollbar-width: none; }
   .skins::-webkit-scrollbar { display: none; }
+  .ly .mini :global(*) { animation: none !important; } /* swatches stay still: many full lanyards at once */
   .ly { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; padding: 8px 6px 8px; border-radius: 16px; background: var(--surface-2);
     box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--t-fast), transform var(--t-fast) var(--ease); }
   .ly:active { transform: scale(0.95); }

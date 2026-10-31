@@ -45,7 +45,9 @@
       <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="rgb(169, 33, 26)" /></linearGradient></defs>
       <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="glow29" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
       <path class="cut29" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" />
-      <path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
+</svg>
+    <!-- the glint in an SVG of its own: its dash moving repaints only this, not the wedge and the blurred glow -->
+    <svg class="dec sxg par" viewBox="0 0 340 221" preserveAspectRatio="none"><path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
     <i class="flare"></i><i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
@@ -62,8 +64,8 @@
         </g>
         <path class="glow" d="M191.6 24L120.7 126" />
         <path class="cut" d="M171 31.6L191.6 24L191.7 46M191.6 24L120.7 126" />
-        <path class="glint" d="M120.7 126L191.6 24" pathLength="100" />
     </svg>
+    <svg class="dec sxg" viewBox="0 0 340 124" preserveAspectRatio="xMinYMid slice"><path class="glint" d="M120.7 126L191.6 24" pathLength="100" /></svg>
     <i class="sheen"></i>
     <b class="sxw"><svg class="cap" viewBox="0 0 40 26"><path d="M20 2L39 10L20 18L1 10Z" fill="#fff" /><path d="M9 14V21C14 25 26 25 31 21V14L20 19Z" fill="#fff" fill-opacity=".85" /><path d="M36 11V20" stroke="#fff" stroke-width="1.5" /></svg>STUD<i>EX</i></b>
       <span class="tag">BE STUDENT. BE EXCELLENT.</span>
@@ -110,15 +112,15 @@
     animation: sxflare 5s 1s ease-out infinite; }
   @keyframes sxflare { 0%, 24% { opacity: 0; transform: scale(0.3) rotate(0deg); } 31% { opacity: 1; transform: scale(1.1) rotate(20deg); } 48%, 100% { opacity: 0; transform: scale(0.6) rotate(45deg); } }
   /* the arrow lit: a soft glow breathing under the white cut */
-  .glow29 { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 10; stroke-linecap: round; filter: blur(5px); animation: sxbreathe 3.2s ease-in-out infinite; }
-  @keyframes sxbreathe { 50% { opacity: 0.35; } }
+  .glow29 { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 10; stroke-linecap: round; filter: blur(5px); } /* still: a blurred layer that changes repaints every frame */
   /* gloss and depth, like a printed plastic card: a curved light from the top, a bevel along the edge */
   .gloss { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit;
     background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 55%, transparent 70%),
       linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.18));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px rgba(0, 0, 0, 0.3); }
-  @media (prefers-reduced-motion: reduce) { .drift, .glow29 { animation: none; } .flare { display: none; } }
-  :global(html.lowfx) .drift, :global(html.lowfx) .glow29 { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .drift { animation: none; } .flare { display: none; } }
+  :global(html.lowfx) .drift { animation: none; }
+  .sxg { z-index: 1; }
   :global(html.lowfx) .flare, :global(html.lowfx) .foil { display: none; }
   .cut29 { fill: none; stroke: rgba(255, 255, 255, 0.92); stroke-linecap: round; stroke-linejoin: round; }
   .sxa { z-index: 0; }

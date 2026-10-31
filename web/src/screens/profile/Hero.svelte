@@ -44,6 +44,14 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
+  // the lanyard's own motion (LanyardBand's loops) runs only while the card is on screen and its tab open: a hidden tab
+  // and a card scrolled away would animate for nobody
+  let seen = $state(true);
+  $effect(() => {
+    const io = new IntersectionObserver(([e]) => (seen = e.isIntersecting));
+    io.observe(swing);
+    return () => io.disconnect();
+  });
   // a new lanyard put on: the badge turns over on its strap (owner, Oct 31: the right way, but it jerked and the light
   // stripe looked childish). One continuous half turn: it speeds up to its edge and leaves the edge at that same speed
   // (matched curves, no overshoot, no sway); the new face is put on while edge-on and the turn goes on only a frame
@@ -80,7 +88,7 @@
 </script>
 
 <section class="h">
-<div class="hang {face}">
+<div class="hang {face}" class:rest={!live || !seen}>
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <div class="badge" use:glass>
@@ -123,6 +131,7 @@
 </section>
 
 <style>
+  .rest :global(*) { animation-play-state: paused !important; }
   .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
   /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
