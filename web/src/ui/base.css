@@ -163,12 +163,12 @@ img { max-width: 100%; }
    whenever what's behind moves), glass with an almost solid body; the rim and sheen stay, they are static paint.
    The components stop their own endless motion under html.lowfx. */
 html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } /* over the themes' own blurs */
-:root.lowfx, :root.lowfx[data-theme], .lowfx .theme-light, .lowfx .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+:root.lowfx, :root.lowfx[data-theme], .lowfx .theme-light, .lowfx .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 /* "Reduce transparency" in the system's settings: solid glass, power saving or not (Chromium reports it: Android,
    Windows; Safari doesn't, for fingerprinting) */
 @media (prefers-reduced-transparency: reduce) {
   .glass { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-  :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+  :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 }
 .surface { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-card); }
 
@@ -242,7 +242,7 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
    backdrop layers of a hidden page and rebuilds them ~300 ms after the return, the glass showed bare meanwhile
    (owner's video, Oct 29) */
 :root.vt-solid, .vt-solid .theme-light, .vt-solid .theme-dark,
-:root.glass-wake, .glass-wake .theme-light, .glass-wake .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); }
+:root.glass-wake, .glass-wake .theme-light, .glass-wake .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 :root:not(.vt-solid, .glass-wake), :root:not(.vt-solid, .glass-wake) .theme-light, :root:not(.vt-solid, .glass-wake) .theme-dark {
   transition: --glass-bg 360ms ease, --glass-pill-bg 360ms ease, --glass-clear 360ms ease;
 }

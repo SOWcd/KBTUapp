@@ -1,6 +1,6 @@
 <script lang="ts">
   // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
-  // each icon only repeated it); the active one tinted on a soft lens that slides to it with a jelly squash. Equal tabs
+  // each icon only repeated it); the active one in full ink on a darker pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
   // switches on release. Shrinks while scrolling down; hides under a sheet (and the Feed). The map: its own round glass
   // button beside it.
@@ -89,15 +89,15 @@
     -webkit-backdrop-filter: blur(20px) saturate(160%) brightness(1.04);
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
     background: none;
-    box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55), 0 0 24px -6px var(--nav-glow, rgba(120, 150, 255, 0.4));
+    box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55);
     transition: height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
   .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; }
-  .mapb { width: 60px; display: grid; place-items: center; color: var(--chrome-ink); }
+  .mapb { width: 60px; display: grid; place-items: center; color: var(--text); }
   .mapb > :global(svg) { position: relative; }
   .mapb:active { transform: scale(0.94); }
-  /* an edge all the way round, but lit like glass, not drawn (the even
-     bright outline looked fake): the shared rim's bright arc and its reflection over a faint edge, the colour fringes */
+  /* an edge all the way round, but lit like glass, not drawn (the even bright outline looked fake): the shared rim's
+     bright arc and its reflection over a faint edge, the colour fringes (the owner keeps them: they make the glass) */
   .nav::after, .mapb::after {
     background:
       radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
@@ -105,7 +105,7 @@
       linear-gradient(90deg, rgba(255, 120, 200, 0.4), transparent 18%, transparent 82%, rgba(90, 190, 255, 0.45)),
       rgba(255, 255, 255, 0.16);
   }
-  .nav > .tone-base, .mapb > .tone-base { background: var(--glass-clear); }
+  .nav > .tone-base, .mapb > .tone-base { background: var(--dock); }
   /* the lens: a soft rounded rect behind the active tab (--text at 8 %: seen on the near-white light bar too), moved by
      `translate` so the jelly's `transform` squashes it on the way */
   .lens {
@@ -114,11 +114,11 @@
   }
   .tab {
     position: relative; flex: 1 1 0; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-    color: var(--chrome-ink); border-radius: var(--r-full);
+    color: var(--dock-ink); border-radius: var(--r-full);
     transition: color var(--t-base) var(--ease), transform 350ms cubic-bezier(.3, 1.6, .5, 1);
   }
   .tab:active { transform: scale(0.94); transition-duration: var(--t-base), 80ms; }
-  .tab.on { color: var(--accent-text); }
+  .tab.on { color: var(--text); }
   .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
   .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   /* scrolling down: the bar shrinks to a slimmer pill, the map button with it */

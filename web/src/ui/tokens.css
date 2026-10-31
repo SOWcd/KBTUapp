@@ -92,7 +92,10 @@
   --fill: rgba(235, 238, 255, 0.12);
   --fill-2: rgba(235, 238, 255, 0.2);
   --thumb: rgba(235, 238, 255, 0.24);
-  --lens: rgba(244, 246, 255, 0.08); /* the tab bar's active tab: --text at 8 % (no color-mix: iOS 15) */
+  /* the tab bar (owner's pick, Oct 31: Opal's): a smoky body, the active tab on a darker pill, its icon in --text */
+  --dock: rgba(28, 30, 38, 0.45);
+  --lens: rgba(0, 0, 0, 0.38);
+  --dock-ink: rgba(244, 246, 255, 0.55);
   --menu-bg: rgba(30, 34, 52, 0.9); /* a Menu: thick glass, what is under it must not read through */
   --text: #F4F6FF;
   --text-2: rgba(240, 243, 255, 0.68);
@@ -137,7 +140,9 @@
   --fill: rgba(11, 20, 51, 0.075);
   --fill-2: rgba(11, 20, 51, 0.13);
   --thumb: #FFFFFF;
-  --lens: rgba(11, 20, 51, 0.08);
+  --dock: rgba(250, 251, 255, 0.62);
+  --lens: rgba(11, 20, 51, 0.09);
+  --dock-ink: rgba(11, 20, 51, 0.5);
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0B1433;
   --text-2: rgba(11, 20, 51, 0.70);

@@ -1335,7 +1335,6 @@ const ru = {
   'aw.have': "Получено",
   'aw.toLevel': "до уровня {tier}",
   'unlock.kicker': "Новое достижение",
-  'unlock.ok': "Круто!",
   'aw.earned': "Получено {date}",
   'aw.share': "Поделиться",
   'aw.shareText': "Моя награда в KBTU App: {name}",

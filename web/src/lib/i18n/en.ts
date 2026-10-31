@@ -1316,7 +1316,6 @@ const en: Dict = {
   'aw.have': "Earned",
   'aw.toLevel': "to level {tier}",
   'unlock.kicker': "New achievement",
-  'unlock.ok': "Great!",
   'aw.earned': "Earned {date}",
   'aw.share': "Share",
   'aw.shareText': "My award on KBTU App: {name}",

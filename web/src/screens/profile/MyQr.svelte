@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CloseX from '../../ui/CloseX.svelte';
   // My QR — the back of my badge. Opens over a blurred scrim like the ticket, follows the phone's tilt and
   // leans toward a pressing finger. The code holds only a link into the app (my profile; the friend invite
   // takes its place once friends exist, SPEC §4.7), in the brand gradient with the app's mark in the middle
@@ -90,7 +91,7 @@
     </div>
   </div>
   <p class="hint">{t('me.qrHint')}</p>
-  <button class="pill glass glass-pill" use:glass onclick={() => close(overlay.id)}>{t('common.close')}</button>
+  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -104,7 +105,7 @@
   .wrap {
     position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 16px);
+    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 84px);
   }
   .wrap > :global(*) { pointer-events: auto; }
   .stage { perspective: 900px; display: flex; flex-direction: column; align-items: center; padding-top: 46px; }

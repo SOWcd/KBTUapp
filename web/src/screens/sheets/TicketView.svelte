@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CloseX from '../../ui/CloseX.svelte';
   // The ticket: a pass in the event's colour with the entry QR (KBTU<code>, the organizer's mark in the
   // middle). Opens from the event sheet, Profile → Me, the live capsule and t.me links (tk_<id>).
   // Telegram's Back, a tap outside or Close dismisses it. The pass is lit like the glass: its light and
@@ -125,9 +126,9 @@
         <button class="pill glass glass-pill" use:glass onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={18} />{t('tk.calendar')}</button>
         <button class="pill glass glass-pill danger" use:glass onclick={cancelReg}>{t('event.cancelReg')}</button>
       {/if}
-      <button class="pill glass glass-pill" use:glass onclick={() => close(overlay.id)}>{t('common.close')}</button>
     </div>
   {/if}
+  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -145,7 +146,7 @@
   .wrap {
     position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 16px);
+    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 84px);
   }
   .wrap > :global(*) { pointer-events: auto; }
   .stage { perspective: 900px; }

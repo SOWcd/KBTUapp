@@ -1316,7 +1316,6 @@ const kk: Dict = {
   'aw.have': "Алынды",
   'aw.toLevel': "{tier} деңгейге дейін",
   'unlock.kicker': "Жаңа жетістік",
-  'unlock.ok': "Керемет!",
   'aw.earned': "Алынды: {date}",
   'aw.share': "Бөлісу",
   'aw.shareText': "KBTU App-тағы марапатым: {name}",
