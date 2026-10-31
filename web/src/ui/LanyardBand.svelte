@@ -2,7 +2,9 @@
   // A club's own art on its lanyard (drafts in KBTUapp-OLD/design/lanyards). `wide`: the profile's
   // card keeps its size, so the art is the card's background: the symbol big on the
   // right, the pom-poms beside the QR; else a band on top of the full-screen badge, the art in the middle.
-  // Art: the panther and the Knights emblem cut from the clubs' logos. Knights (redrawn Oct 31): their blue, a jersey's
+  // Art: the panther and the Knights emblem cut from the clubs' logos. Cheerleading v2 (Oct 31): the panther in the dark,
+  // back-lit by a still navy halo, its gold eyes catching the light now and then; on the card the whole head under the QR
+  // (owner: never half hidden behind it). Knights (redrawn Oct 31): their blue, a jersey's
   // side piping; v2 (Oct 31): the knight under the arena light, one spotlight sweeping slowly down from behind the QR
   // onto a silver pin of their helmet (on the card) or their whole logo (on the badge's band).
   // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band; on the
@@ -11,9 +13,8 @@
   // night's black with laser beams and lights in the haze.
   import type { Look } from '../lib/awards';
   import panther from '../assets/lanyards/panther.webp';
+  import pantherEyes from '../assets/lanyards/panther-eyes.webp';
   import knights from '../assets/lanyards/knights.webp';
-  import cheerWide from '../assets/lanyards/cheer-wide.svg?url';
-  import cheerTall from '../assets/lanyards/cheer-tall.svg?url';
   import moments from '../assets/lanyards/moments.webp';
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
   import faces from '../assets/lanyards/faces.webp';
@@ -31,7 +32,7 @@
 
 <div class="band {look}" class:wide aria-hidden="true">
   {#if look === 'cheer'}
-    <img class="dec" src={wide ? cheerWide : cheerTall} alt="" /><img class="art" src={panther} alt="" />
+    <span class="pan"><img src={panther} alt="" /><img class="eyes" src={pantherEyes} alt="" /></span>{#if wide}<i class="gloss"></i>{/if}
   {:else if look === 'knights'}
     {#if wide}<span class="beamw"><i class="beam"></i></span><span class="pin"><KnightsHelm metal /></span><i class="gloss"></i>
     {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
@@ -153,12 +154,27 @@
   .mark { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; color: #fff; filter: drop-shadow(0 6px 18px rgba(124, 77, 255, 0.8)); }
   .wide .mark { left: auto; top: auto; right: -26px; bottom: 36px; transform: rotate(-8deg); opacity: 0.12; filter: none; }
   .word { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 800 7.5px/1 var(--font-text); letter-spacing: 0.28em; color: rgba(255, 255, 255, 0.7); }
-  /* Cheerleading: rays behind the panther, gold and pink pom-poms, confetti */
-  .cheer { background: repeating-conic-gradient(from 0deg at var(--c, 50% 78%), rgba(255, 255, 255, 0.06) 0 5deg, transparent 5deg 13deg),
-    radial-gradient(circle at var(--c, 50% 78%), #5560C2, #2E3258 48%, #14162E); }
-  .cheer.wide { --c: 88% 100%; }
-  .cheer .art { left: 50%; bottom: -12px; height: 128px; transform: translateX(-50%); }
-  .band.wide .art { left: auto; right: -16px; bottom: -30px; height: 168px; transform: none; opacity: 0.22; }
+  /* Cheerleading: their navy and black, the black panther from their logo in a still navy halo, its eyes the only gold
+     in the art. The badge's band: the whole head centred, the band ending in the pass's navy (MyQr) with no seam. */
+  .cheer { background: radial-gradient(34% 50% at 50% 58%, rgba(84, 92, 158, 0.6), transparent 72%), linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
+  .pan { position: absolute; left: 50%; top: 24px; height: 94px; aspect-ratio: 534 / 653; margin-left: -38.5px; pointer-events: none; }
+  .pan img { inset: 0; width: 100%; height: 100%; }
+  .eyes { opacity: 0.7; animation: cheyes 9s ease-in-out infinite; }
+  /* eyeshine: the gold warms for ~2.5 s every 9 s, never a blink, never off */
+  @keyframes cheyes { 0%, 64% { opacity: 0.7; } 78% { opacity: 1; } 92%, 100% { opacity: 0.7; } }
+  /* the card: navy under the text, black at the bottom right; the whole head in the gap between the QR and the strip,
+     centred under the QR (anchored right and top, so 320 px and a taller card need no second set of numbers) */
+  .cheer.wide { background: radial-gradient(70px 58px at calc(100% - 43px) 98px, rgba(84, 92, 158, 0.6), transparent 72%),
+    linear-gradient(160deg, rgb(30, 33, 62), rgb(20, 22, 44) 55%, rgb(9, 10, 20)); }
+  .wide .pan { left: auto; right: 26px; top: 77px; height: 42px; margin: 0;
+    transform: translate(calc(var(--gx, 0) * -2px), calc(var(--gy, 0) * -1px)); transition: transform 400ms ease-out; }
+  /* the gloss, and a 1 px gold trim round the edge (a uniform's braid) */
+  .cheer .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.08), transparent 65%), linear-gradient(180deg, transparent 70%, rgba(0, 0, 0, 0.2));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(232, 192, 98, 0.22); }
+  /* still: the eyes stay gold (they are the composition) */
+  @media (prefers-reduced-motion: reduce) { .eyes { animation: none; opacity: 0.85; } .pan { transform: none; } }
+  :global(html.lowfx) .eyes { animation: none; opacity: 0.85; }
+  :global(html.lowfx) .pan { transform: none; }
 
   /* Knights: their blue (from the logo's pixels), a jersey's side piping at the edge (vertical, where StudEx's cut is
      diagonal). The badge's band: lit from the top, the whole logo, ending in the pass's own blue (MyQr) with no seam. */

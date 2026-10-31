@@ -146,9 +146,9 @@
 
   /* each look's body and strap below its band (LanyardBand), as on the badge (Hero.svelte) */
   .cheer { --role: #FFC83D; }
-  .cheer .pass { background: linear-gradient(180deg, #1D2042, #0A0B17); }
-  .cheer .strap { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
-  .cheer .strap span { color: #FFC83D; }
+  .cheer .pass { background: linear-gradient(180deg, rgb(24, 26, 52) 124px, rgb(9, 10, 20)); } /* from the band's last colour where it ends: no seam */
+  .cheer .strap { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); box-shadow: inset 1px 0 0 rgba(232, 192, 98, 0.45), inset -1px 0 0 rgba(232, 192, 98, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25); }
+  .cheer .strap span { color: rgb(255, 200, 61); }
   .knights { --role: #9CC2FF; }
   .knights .pass { background: linear-gradient(180deg, #0F2B66, #071631); }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }

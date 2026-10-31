@@ -3,7 +3,7 @@
   // the same art as its lanyard (ui/LanyardBand) on its colours.
   import type { Look } from '../lib/awards';
   import KbtuMark from './KbtuMark.svelte';
-  import panther from '../assets/lanyards/panther.webp';
+  import panther from '../assets/lanyards/panther-mark.webp'; // white: a black head on navy is a blob this small
   import KnightsHelm from './KnightsHelm.svelte';
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
   import hands from '../assets/lanyards/faces-hands.webp';
@@ -24,8 +24,8 @@
   .sower { background: #0A0A0A; }
   .studex { background: linear-gradient(135deg, #DE3B2E, #A9271E); }
   .studex svg { width: 58%; }
-  .cheer { background: radial-gradient(circle at 50% 80%, #5560C2, #1D2042); }
-  .cheer img { width: 80%; height: 80%; }
+  .cheer { background: radial-gradient(circle at 50% 70%, rgb(70, 77, 136), rgb(24, 26, 52)); }
+  .cheer img { width: 78%; height: 78%; }
   .knights { background: linear-gradient(150deg, rgb(47, 107, 208), rgb(14, 42, 98)); }
   .helm { display: flex; width: 70%; height: 70%; } /* the helmet alone: the whole logo was a smudge this small */
   .helm :global(svg) { width: 100%; height: 100%; } /* not base.css's .appmark svg (64%) */

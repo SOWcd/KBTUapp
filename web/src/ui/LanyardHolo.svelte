@@ -9,7 +9,7 @@
 <div class="holo {look}">
   {#if look === 'sower'}<b class="w sw">SOWER</b>
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
-  {:else if look === 'cheer'}<b class="w ch">✦ CHEERLEADING</b>
+  {:else if look === 'cheer'}<b class="w ch">CHEERLEADING</b>
   {:else if look === 'knights'}<b class="w kn">KNIGHTS</b>
   {:else if look === 'moments'}<b class="w mo">MOMENTS</b>
   {:else if look === 'faces'}<b class="w fa">FACES FAMILY</b>
@@ -36,9 +36,13 @@
   .sx { gap: 0; font: 900 16px/1 var(--font-display); letter-spacing: -0.03em; color: #173064; }
   .sx i { font-style: normal; color: rgb(214, 38, 27); }
   .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; }
-  .cheer { background-image: linear-gradient(100deg, #FFE7A3 10%, #FFC6E0 40%, #fff 55%, #FFE7A3 90%); color: #2E3258;
-    box-shadow: 0 0 0 1px rgba(255, 200, 61, 0.6), 0 6px 18px -6px rgba(255, 95, 162, 0.6); }
-  .ch { font: 700 11px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.2em; }
+  /* Cheerleading: brushed gold, one specular sliding with the tilt (Knights' mechanism in their gold), their navy on it
+     (5.5:1 on the darkest stop) */
+  .cheer { background: linear-gradient(100deg, transparent 38%, rgba(255, 248, 228, 0.45) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(100deg, rgb(196, 154, 64), rgb(236, 204, 128) 50%, rgb(190, 148, 60));
+    color: rgb(29, 32, 66); box-shadow: inset 0 0 0 1px rgba(255, 236, 190, 0.6), inset 0 -1px 2px rgba(70, 46, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
+  .cheer span { font-variant-numeric: tabular-nums; }
+  .ch { font: 800 11px/1 var(--font-display); letter-spacing: 0.2em; }
   /* Knights: their blue as a material, a specular band sliding with the tilt (not silver: that is StudEx's and Sower's) */
   .knights { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
     linear-gradient(100deg, rgb(47, 107, 208), rgb(28, 76, 148));

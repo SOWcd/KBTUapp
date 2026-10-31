@@ -182,8 +182,8 @@
      LanyardHolo) */
   .role { color: var(--role, #A9C0FF); }
   .cheer { --role: #FFC83D; }
-  .cheer .strap { background: linear-gradient(90deg, #1E2140, #3A3F72 50%, #1E2140); }
-  .cheer .strap span { color: #FFC83D; }
+  .cheer .strap { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); box-shadow: inset 1px 0 0 rgba(232, 192, 98, 0.45), inset -1px 0 0 rgba(232, 192, 98, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25); } /* their navy, gold stitches at the edges */
+  .cheer .strap span { color: rgb(255, 200, 61); }
   .knights { --role: #9CC2FF; }
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
