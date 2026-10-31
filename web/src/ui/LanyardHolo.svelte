@@ -47,7 +47,10 @@
   .moments { background-image: linear-gradient(100deg, #F2DEC8 15%, #E3A985 40%, #F6E7D6 55%, #C9C391 75%, #F2DEC8 90%); color: #3A2016;
     box-shadow: inset 0 0 0 1px rgba(58, 32, 22, 0.15); }
   .mo { font: 800 12px/1 var(--font-display); letter-spacing: 0.34em; }
-  .faces { background-image: linear-gradient(100deg, #6E7BFF, #C04BFF 30%, #FF4F9A 55%, #FFA43D 80%, #6E7BFF); color: #fff;
-    box-shadow: 0 6px 18px -6px rgba(200, 64, 255, 0.6); }
-  .fa { font: italic 900 12px/1 var(--font-display); letter-spacing: 0.14em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+  /* Faces: black glass, their gradient in the name's letters and a thin line under the strip (white on their bright
+     gradient was 3:1); the letters' gradient a tint lighter than the wordmark's, so its violet keeps 4.5:1 on black */
+  .faces { background: linear-gradient(100deg, rgb(110, 123, 255), rgb(192, 75, 255) 30%, rgb(255, 79, 154) 55%, rgb(255, 164, 61) 80%) 0 100% / 100% 2px no-repeat, linear-gradient(180deg, rgb(30, 24, 42), rgb(12, 10, 18));
+    color: rgba(255, 255, 255, 0.88); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 18px -6px rgba(200, 64, 255, 0.6); }
+  .fa { font: italic 900 12px/1 var(--font-display); letter-spacing: 0.14em; color: transparent; -webkit-background-clip: text; background-clip: text;
+    background-image: linear-gradient(100deg, rgb(160, 170, 255), rgb(214, 140, 255) 30%, rgb(255, 135, 185) 60%, rgb(255, 190, 110)); }
 </style>

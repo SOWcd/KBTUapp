@@ -188,6 +188,7 @@
   .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
   .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
   .moments { --role: #F4D9BE; }
+  .moments .meta { color: rgba(255, 255, 255, 0.84); } /* with the darker column behind it (LanyardBand), 4.5:1 */
   .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
   .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
