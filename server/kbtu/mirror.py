@@ -5,16 +5,17 @@ are tested without Telegram.
 The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror); the userbot joins it
 itself and leaves it when it stops being one. A post is a channel post (an album is one post): its text as typed (the
 first line the title), its photo copied, a video or a file only as a link to the post; edits follow, a deletion takes
-it down; Telegram's views and reaction counts show instead of ours, and comments stay in Telegram. Nobody is notified
+it down and wipes its text and photo; Telegram's views and reaction counts show instead of ours, and comments stay in Telegram. Nobody is notified
 of a mirrored post. Nothing but the channel's own posts is kept."""
 from __future__ import annotations
 
 import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from . import ai
-from .logic import now, one, rows, tx
+from . import ai, media
+from .logic import _drop_unused, now, one, photo_free, rows, tx
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
 FIRST_DAYS = 30           # ... of the last 30 days
@@ -52,6 +53,12 @@ def wanted(con) -> dict[str, int]:
         if name := username(c["url"]):
             out.setdefault(name, c["org_id"])
     return out
+
+
+def has_channel(con, oid: int) -> bool:
+    """The org's main chat is a public channel: one the userbot can mirror (admin channel-ask asks the rest for one)."""
+    c = one(con, "SELECT kind, url FROM chats WHERE org_id = ? AND main = 1", oid)
+    return bool(c and c["kind"] == "channel" and username(c["url"]))
 
 
 def to_join(con) -> list[str]:
@@ -264,10 +271,11 @@ def comments(con, channel: int, msg_id: int, texts: list[str]) -> int:
     return n
 
 
-def gone(con, channel: int, ids: list[int]) -> list[int]:
-    """Channel posts deleted: a post whose every message went is taken down (hidden: our reactions and the audit stay).
+def gone(con, channel: int, ids: list[int], root: Path | None = None) -> list[int]:
+    """Channel posts deleted: a post whose every message went is taken down (hidden: our reactions and the audit stay)
+    and wiped: its text emptied, its copied photo deleted (from disk too, under root, when nothing else shows it).
     The posts taken down."""
-    down = []
+    down, paths = [], []
     with tx(con):
         for t in rows(con, f"SELECT post_id, lang FROM tg_post_msgs WHERE channel = ? AND lang IS NOT NULL AND msg_id IN ({','.join('?' * len(ids))})",
                       channel, *ids) if ids else []:
@@ -279,9 +287,19 @@ def gone(con, channel: int, ids: list[int]) -> list[int]:
                                            channel, *ids)} if ids else set():
             con.execute(f"DELETE FROM tg_post_msgs WHERE channel = ? AND post_id = ? AND msg_id IN ({','.join('?' * len(ids))})", (channel, pid, *ids))
             if not one(con, "SELECT 1 FROM tg_post_msgs WHERE post_id = ?", pid):
-                con.execute("UPDATE posts SET hidden_at = COALESCE(hidden_at, ?) WHERE id = ?", (now(), pid))
+                fid = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)[0]
+                con.execute("""UPDATE posts SET hidden_at = COALESCE(hidden_at, ?), title = '', body = '', i18n = NULL, lang = NULL,
+                    tr_by = NULL, photo_file_id = NULL WHERE id = ?""", (now(), pid))
+                paths += _drop_unused(con, fid)
                 down.append(pid)
+    if root:
+        media.drop(root, [p for p in paths if photo_free(con, p)])
     return down
+
+
+def alive(con) -> None:
+    """The userbot's heartbeat (each sign-in, each finished sweep): bot.userbot_round tells the owner when it stops."""
+    con.execute("INSERT INTO meta (key, value) VALUES ('userbot_ok', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(now()),))
 
 
 def recent(con, channel: int) -> list[int]:

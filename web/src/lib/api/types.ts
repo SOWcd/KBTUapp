@@ -181,7 +181,7 @@ export interface StudentProfile {
 /** A club role's rights (SPEC §2): door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile';
-export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean }  // rights, oversee (DMP staff there): in my own memberships
+export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null }  // rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
 
 export interface Me {
   id: Id;

@@ -58,6 +58,7 @@ async def run(cfg: Config) -> None:
                 log.warning("userbot: signed in as id %d", (await client.get_me()).id)  # never the phone or the name
                 said = True
             con = db.connect(cfg.db_path)
+            mirror.alive(con)
             await client.get_dialogs()  # the joined channels' access hashes: a StringSession keeps no entities
             work = Mirror(cfg, client, con)
             work.listen()
@@ -94,7 +95,7 @@ class Mirror:
         async def deleted(ev) -> None:
             channel = getattr(ev.original_update, "channel_id", None)  # a deletion elsewhere has none: not ours
             if channel and mirror.source(self.con, channel) is not None:
-                mirror.gone(self.con, channel, list(ev.deleted_ids))
+                mirror.gone(self.con, channel, list(ev.deleted_ids), self.root)
 
         self.client.add_event_handler(fresh, events.NewMessage())
         self.client.add_event_handler(fresh, events.MessageEdited())
@@ -242,11 +243,12 @@ class Mirror:
                     for i in range(0, len(ids), 100):
                         chunk = ids[i:i + 100]
                         got = await self.client.get_messages(ent, ids=chunk)
-                        mirror.gone(self.con, channel, [n for n, m in zip(chunk, got) if m is None])
+                        mirror.gone(self.con, channel, [n for n, m in zip(chunk, got) if m is None], self.root)
                         for m in got:
                             if m is not None:
                                 await self.guard(self.post(m))
                     await asyncio.sleep(2)
+                mirror.alive(self.con)
             except FloodWaitError as exc:
                 log.warning("userbot: flood wait %ds", exc.seconds)
                 await asyncio.sleep(exc.seconds + 5)

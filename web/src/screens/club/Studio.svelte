@@ -5,7 +5,7 @@
   // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state.
   // Several clubs → a picker on top. Drafts open the editor; the rest the organizer's screen for Head+
   // (EventManage: money, people, tools), the event sheet for Members. Look of mockup v24: the club's
-  // mark by its name, the next event with how full it is, the actions as tiles. "Link a channel" waits for its backend.
+  // mark by its name, the next event with how full it is, the actions as tiles, the channel's first (Vice+).
   import Plus from '@lucide/svelte/icons/plus';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -15,6 +15,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
   import PenLine from '@lucide/svelte/icons/pen-line';
+  import Rss from '@lucide/svelte/icons/rss';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
@@ -244,9 +245,11 @@
     {/if}
 
     <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
-         the memo to DMP; inviting lives on Team, editing the club up top -->
-    {#if staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
+         the memo to DMP; inviting lives on Team, editing the club up top. First, to Vice+ (who link chats): the channel
+         whose posts the userbot copies into the news, or "Link" -->
+    {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="qa">
+        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Rss size={22} /><b>{t('studio.channelShort')}</b><small class="ell">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></button>{/if}
         {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></button>{/if}
@@ -308,6 +311,7 @@
   .qt:active { transform: scale(0.97); }
   .qt b { margin-top: 10px; font: 680 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
   .qt small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
+  .qt .ell { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .qd { position: absolute; top: 12px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); font-style: normal; text-align: center; }
   .sec { margin: 26px 4px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
   .seats { display: flex; flex-direction: column; gap: 6px; }

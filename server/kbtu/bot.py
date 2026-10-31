@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, llm, logic, media, offsite, portal, receipt, texts, userbot, video
+from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -149,8 +149,12 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT title, why FROM asks WHERE id = ? AND status = 'hidden'", int(ref[1]))
         why = texts.pick(texts.ASK_WHY, lang).get(a["why"] or "") if a else None
         return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"fa_{ref[1]}") if why else None
-    if kind in ("backup_failed", "backup_ok"):  # bf:<day> / bo:<day>, to the admins: no copy reached R2 two nights running; back again
+    if kind in ("backup_failed", "backup_ok", "userbot_off", "userbot_ok"):  # bf/bo:<day> to the admins; uo/ub:<since> to the owner
         return (*texts.bot_message(lang, kind), "")
+    if kind == "channel_ask":  # ca:<org>, to the club's President (admin channel-ask): gone once the club has its channel
+        o = one(con, """SELECT o.name FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
+            WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))
+        return (*texts.bot_message(lang, kind, name=o["name"]), f"ce_{ref[1]}") if o and not mirror.has_channel(con, int(ref[1])) else None
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
         return (*texts.bot_message(lang, kind, when=texts.when(at, lang).split(",")[0]), "me") if at else None
@@ -521,6 +525,23 @@ def backup_day(cfg: Config, con) -> None:
 _offsite: asyncio.Task | None = None  # the upload running in its thread; one at a time
 
 
+USERBOT_QUIET = 2 * 3600  # no sweep finished for this long (they run every half hour): the userbot is down
+
+
+def userbot_round(con) -> None:
+    """The owner hears once per outage that the userbot went quiet (meta userbot_ok: its heartbeat, mirror.alive;
+    userbot_alert: raised), and once when it's back. No heartbeat at all (qa, tests, never set up): nothing."""
+    beat, alert = one(con, "SELECT value FROM meta WHERE key = 'userbot_ok'"), one(con, "SELECT value FROM meta WHERE key = 'userbot_alert'")
+    if not beat or bool(alert) == (now() - int(beat[0]) > USERBOT_QUIET):
+        return
+    for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
+        logic.notify(con, uid, "userbot_ok" if alert else "userbot_off", f"ub:{alert[0]}" if alert else f"uo:{beat[0]}")
+    if alert:
+        con.execute("DELETE FROM meta WHERE key = 'userbot_alert'")
+    else:
+        con.execute("INSERT INTO meta (key, value) VALUES ('userbot_alert', ?)", (beat[0],))
+
+
 def offsite_round(cfg: Config, con) -> None:
     """After the nightly copy (backup_day): it and the receipts to R2, on Sundays the media too (offsite.py). In a thread,
     so the postman isn't held; a day counts only after R2's 200, tried again hourly until then. Each object is named
@@ -587,6 +608,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
         backup_day(cfg, con)  # a nightly copy of the database, 14 kept
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
+        userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
         if logic._once(con, "chats_day", str(now() // 86400)):

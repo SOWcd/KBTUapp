@@ -6378,3 +6378,115 @@ def test_partner_events(env):
     month = next(x for x in c.get("/api/registry/orgs", headers=tma(80, "Dmp")).json() if x["org"]["id"] == 1)["month"]
     assert (month["events"], month["registrations"]) == (1, 1)                                         # the club's own only
     assert c.patch(f"/api/events/{eid}", headers=tma(21), json={**body, "guestHost": None}).json()["externalUrl"] is None  # off: the link goes too
+
+
+def test_userbot_heartbeat_alert(env, monkeypatch):
+    """The userbot's heartbeat (meta userbot_ok, each sweep): quiet for over two hours, the owner alone hears it once per
+    outage, across rounds and restarts, and once when it's back; with no heartbeat at all (qa, tests) nothing is said."""
+    from kbtu import mirror
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO users (tg_id, role, is_founder, created_at, seen_at) VALUES (9001, 'admin', 1, 0, 0)")
+    con.execute("INSERT INTO users (tg_id, role, created_at, seen_at) VALUES (9002, 'admin', 0, 0)")      # another admin: not told
+    rows_of = lambda kind: [tuple(r) for r in con.execute(  # noqa: E731
+        "SELECT u.tg_id, b.ref FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = ?", (kind,))]
+    clock = [10**9]
+    for mod in (bot, mirror):
+        monkeypatch.setattr(mod, "now", lambda: clock[0])
+    set_clock(monkeypatch, lambda: clock[0])
+    for _ in range(3):
+        bot.userbot_round(con)                                          # no heartbeat key: silent
+    assert not rows_of("userbot_off")
+    mirror.alive(con)
+    clock[0] += bot.USERBOT_QUIET - 60
+    bot.userbot_round(con)                                              # quiet, but not long enough
+    assert not rows_of("userbot_off")
+    clock[0] += 120
+    bot.userbot_round(con)
+    clock[0] += 3600
+    bot.userbot_round(con)                                              # still down: no second alert
+    assert rows_of("userbot_off") == [(9001, f"uo:{10**9}")]
+    m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'userbot_off'").fetchone()
+    text, button, start = bot._render(con, m)
+    assert "userbot" in text and button is None and start == ""
+    mirror.alive(con)                                                   # back
+    bot.userbot_round(con)
+    bot.userbot_round(con)
+    assert len(rows_of("userbot_ok")) == 1 and not con.execute("SELECT 1 FROM meta WHERE key = 'userbot_alert'").fetchone()
+    clock[0] += bot.USERBOT_QUIET + 1                                   # a new outage: told again, once
+    bot.userbot_round(con)
+    bot.userbot_round(con)
+    assert len(rows_of("userbot_off")) == 2
+
+
+def test_mirror_gone_wipes_the_post(env, tmp_path):
+    """A channel post deleted: its post here is taken down with its text emptied and its copied photo deleted, the row
+    and the files on disk; a picture another post still shows stays."""
+    import io
+    from PIL import Image
+    from kbtu import mirror
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    mirror.joined(con, 500, "mic_news")
+    pics = []
+    for color in ("red", "green"):
+        png = io.BytesIO()
+        Image.new("RGB", (40, 30), color).save(png, "PNG")
+        pics.append(media.save(png.getvalue(), tmp_path))
+    a = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text="Open mic tonight\nAt 7", photo=pics[0]))
+    b = mirror.take(con, 500, mirror.Msg(id=2, date=logic.now(), text="Same poster", photo=pics[1]))
+    c2 = mirror.take(con, 500, mirror.Msg(id=3, date=logic.now(), text="Poster again", photo=pics[1]))  # the same picture: one file
+    on_disk = lambda p: (tmp_path / f"{p['path']}.webp").exists()  # noqa: E731
+    assert on_disk(pics[0]) and on_disk(pics[1])
+    assert sorted(mirror.gone(con, 500, [1, 2], tmp_path)) == sorted([a, b])
+    gone = con.execute("SELECT title, body, i18n, photo_file_id, hidden_at FROM posts WHERE id = ?", (a,)).fetchone()
+    assert (gone["title"], gone["body"], gone["i18n"], gone["photo_file_id"]) == ("", "", None, None) and gone["hidden_at"]
+    assert not on_disk(pics[0]) and not con.execute("SELECT 1 FROM files WHERE path = ?", (pics[0]["path"],)).fetchone()
+    assert on_disk(pics[1]) and con.execute("SELECT photo_file_id FROM posts WHERE id = ?", (c2,)).fetchone()[0]   # still shown
+    mirror.gone(con, 500, [3], tmp_path)
+    assert not on_disk(pics[1]) and not con.execute("SELECT 1 FROM files WHERE kind = 'post_photo'").fetchone()
+
+
+def test_channel_ask(env, monkeypatch, capsys):
+    """admin channel-ask: the active clubs with no public main channel; their President is asked by the bot (only with
+    --send, only one who gets DMs, once per club, also one leading two clubs); clubs without a President are named; the
+    ask is dropped once the club has its channel. Studio's tile: the main channel to Vice+, from /api/me."""
+    from kbtu import admin
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    pres, mute, head = login(c, 80, "pres"), login(c, 81, "mute"), login(c, 82, "head")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET can_dm = 1 WHERE id IN (?, ?)", (pres["id"], head["id"]))
+    for i, (slug, kind, name, status) in enumerate([("ch", "club", "Has Channel", "active"), ("a", "club", "Alpha", "active"),
+                                                    ("b", "club", "Beta", "active"), ("p", "club", "Private Only", "active"),
+                                                    ("x", "club", "Nobody", "active"), ("h", "club", "Hidden", "hidden"),
+                                                    ("s", "school", "School", "active")], 1):
+        con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, status, created_at) VALUES (?, ?, ?, ?, 'X', 'laptop_3d', ?, 0)",
+                    (i, slug, kind, name, status))
+    for oid, uid in ((1, pres["id"]), (2, pres["id"]), (3, pres["id"]), (4, mute["id"]), (6, pres["id"]), (7, pres["id"])):
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0)", (oid, uid))
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'head', 0)", (head["id"],))
+    con.execute("""INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES
+        ('Has', 'channel', 'https://t.me/has_ch', 0, 'org', 1, 1), ('Secret', 'channel', 'https://t.me/+Secret1', 0, 'org', 4, 1)""")
+    asks = lambda: sorted(r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE kind = 'channel_ask'"))  # noqa: E731
+    capsys.readouterr()
+    admin.main(["channel-ask"])
+    out = capsys.readouterr().out
+    assert asks() == [] and "nothing sent" in out
+    assert "to ask 2" in out and "President can't get DMs 1" in out and "no President 1" in out and "Nobody" in out
+    assert "Has Channel" not in out and "Hidden" not in out and "School" not in out and "24B" not in out
+    admin.main(["channel-ask", "--send"])
+    admin.main(["channel-ask", "--send"])                               # a second run: nobody asked twice
+    assert asks() == ["ca:2", "ca:3"]
+    assert "asked before 2" in capsys.readouterr().out
+    m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE ref = 'ca:2'").fetchone()
+    text, button, start = bot._render(con, m)
+    assert "Alpha" in text and button and start == "ce_2"
+    tiles = {x["org"]["id"]: x for x in c.get("/api/me", headers=tma(80)).json()["memberships"]}
+    assert tiles[1]["channel"] == {"title": "Has", "mirror": True} and tiles[2]["channel"] is None
+    assert "channel" not in c.get("/api/me", headers=tma(82)).json()["memberships"][0]   # a Head doesn't link chats
+    assert c.get("/api/me", headers=tma(81)).json()["memberships"][0]["channel"] == {"title": "Secret", "mirror": False}
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1)")
+    assert bot._render(con, m) is None                                  # linked meanwhile: not sent

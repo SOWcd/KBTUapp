@@ -100,6 +100,12 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
         notify(con, uid, "id_clash", f"ic:{sid}:{new}:{old}", held)
 
 
+def _channel(c) -> dict | None:
+    """An org's main chat for Studio's tile: its name, and whether its posts reach the news (a public channel, the switch on)."""
+    from .. import mirror  # it imports this package
+    return {"title": c["title"], "mirror": bool(c["mirror"] and c["kind"] == "channel" and mirror.username(c["url"]))} if c else None
+
+
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
     if v.student:
@@ -110,6 +116,9 @@ def me(con, v: Viewer) -> dict:
     s = None if relink else s
     members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
+    # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
+    mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
+                                          *(m["id"] for m in members))} if members else {}
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, core.now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
@@ -143,7 +152,8 @@ def me(con, v: Viewer) -> dict:
         "settings": {k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [{"org": org_ref(con, m), "role": m["role"], **core.titled(m), "rights": _ordered(_rights_from(m["role"], m["rights"])),
-                         "oversee": bool(m["can_oversee"] and m["role"] != "member")} for m in members],
+                         "oversee": bool(m["can_oversee"] and m["role"] != "member"),
+                         **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {})} for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "reports": sum(_about(con, t, i) != v.id for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"))

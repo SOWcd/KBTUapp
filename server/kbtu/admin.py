@@ -33,7 +33,10 @@
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone
-  .venv/bin/python -m kbtu.admin redelete                               after restoring a copy: the accounts deleted since
+  .venv/bin/python -m kbtu.admin channel-ask [--send]   the active clubs with no public main channel and whether their
+                                President can get the ask (counts, club names); --send asks each by the bot to link it
+                                (once per club: a second run reaches only those who started the bot since)
+  .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
@@ -48,7 +51,7 @@ import time
 from . import config, db
 from pathlib import Path
 
-from .logic import RANK, Viewer, _slug_free, create_org, delete_me, deletion_hash, find_user, now, one, rows, set_role
+from .logic import RANK, Viewer, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
 # text that reads backwards)
@@ -219,6 +222,27 @@ def main(args: list[str]) -> None:
             share = lambda n, of: f"{sum(c[code] >= n for c in of) * 100 / max(1, len(of)):.1f}%"  # noqa: E731
             print(f"{code:>8}  p50 {at(.5)}  p90 {at(.9)}  p99 {at(.99)}  max {vals[-1] if vals else 0}  |  "
                   + "  ".join(f"{n}: {share(n, counts)} / {share(n, came)}" for n in needs))
+    elif cmd == "channel-ask" and args[1:] in ([], ["--send"]):  # run it only while meta userbot_ok is fresh
+        from . import mirror
+        clubs = [o for o in rows(con, """SELECT o.id, o.name, u.id AS uid, u.can_dm, u.banned_at FROM orgs o
+                LEFT JOIN org_members m ON m.org_id = o.id AND m.role = 'president' LEFT JOIN users u ON u.id = m.user_id
+                WHERE o.kind = 'club' AND o.status = 'active' AND o.can_broadcast = 0 ORDER BY o.name""") if not mirror.has_channel(con, o["id"])]
+        nobody = [o["name"] for o in clubs if not o["uid"]]
+        mute = [o["name"] for o in clubs if o["uid"] and (not o["can_dm"] or o["banned_at"])]
+        asked = {o["id"] for o in clubs if o["uid"] and one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'channel_ask' AND ref = ?",
+                                                             o["uid"], f"ca:{o['id']}")}
+        todo = [o for o in clubs if o["uid"] and o["can_dm"] and not o["banned_at"] and o["id"] not in asked]
+        print(f"clubs without a public channel {len(clubs)}: to ask {len(todo)}, asked before {len(asked)}, "
+              f"President can't get DMs {len(mute)}, no President {len(nobody)}")
+        for title, names in (("to ask", [o["name"] for o in todo]), ("no DMs (Studio shows them the row)", mute), ("no President", nobody)):
+            if names:
+                print(f"{title}: " + ", ".join(names))
+        if "--send" in args:
+            for o in todo:
+                notify(con, o["uid"], "channel_ask", f"ca:{o['id']}")
+            print(f"queued {len(todo)}")
+        else:
+            print("nothing sent (add --send)")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

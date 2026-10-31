@@ -6,6 +6,7 @@
   import Lock from '@lucide/svelte/icons/lock';
   import { api, ApiErr, type Id, type StudioChat } from '../../lib/api';
   import { say } from '../../lib/state/ui.svelte';
+  import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { compact, addBotLink } from '../../lib/chats';
@@ -16,13 +17,20 @@
   let { org }: { org: Id } = $props();
   let chats = $state<StudioChat[]>([]);
   $effect(() => { api.orgChats(org).then((l) => (chats = l)).catch(() => {}); });
+  // a change here shows on Studio's channel tile at once (it reads my memberships, loaded with the app)
+  function keep(l: StudioChat[]): StudioChat[] {
+    const mine = session.me?.memberships.find((x) => x.org.id === org);
+    const c = l.find((x) => x.main);
+    if (mine && mine.channel !== undefined) mine.channel = c ? { title: c.title, mirror: c.mirror && c.kind === 'channel' && !c.closed } : null;
+    return l;
+  }
 
   let link = $state('');
   let busy = $state(false);
   async function add(ev: Event) {
     ev.preventDefault();
     busy = true;
-    try { chats = await api.addOrgChat(org, link.trim()); link = ''; haptic.ok(); }
+    try { chats = keep(await api.addOrgChat(org, link.trim())); link = ''; haptic.ok(); }
     catch (e) {
       haptic.error();
       const why = !(e instanceof ApiErr) ? 'common.error' : e.code === 'unavailable' ? 'chats.why.later' : e.message === 'notchat' ? 'chats.why.notchat'
@@ -31,16 +39,16 @@
     } finally { busy = false; }
   }
   async function main(c: StudioChat) {
-    try { chats = await api.mainOrgChat(org, c.id); haptic.select(); }
+    try { chats = keep(await api.mainOrgChat(org, c.id)); haptic.select(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function mirror(c: StudioChat, on: boolean) {
-    try { chats = await api.mirrorOrgChat(org, c.id, on); haptic.select(); }
+    try { chats = keep(await api.mirrorOrgChat(org, c.id, on)); haptic.select(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   async function drop(c: StudioChat) {
     if (!(await sheets.ask({ title: t('oc.dropAsk', { title: c.title }), ok: t('oc.drop'), cancel: t('common.cancel'), danger: true }))) return;
-    try { chats = await api.dropOrgChat(org, c.id); haptic.warn(); }
+    try { chats = keep(await api.dropOrgChat(org, c.id)); haptic.warn(); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   // a channel counts subscribers, a group members, as Telegram says
