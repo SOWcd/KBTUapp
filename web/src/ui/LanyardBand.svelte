@@ -40,11 +40,15 @@
     {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex' && wide}
-    <!-- the profile's card keeps the Oct 29 art (owner, Oct 31: both redraws of it were worse) -->
-    <i class="streaks"></i><i class="dots"></i><b class="ghost">STUDEX</b>
+    <!-- the profile's card: the Oct 29 art (owner, Oct 31: both redraws of it were worse) with what he asked on top: their
+         name big in outline, motion (the streaks drift, the arrow glows and a glint runs up it), gloss and depth -->
+    <i class="streaks"></i><i class="drift"></i><i class="dots"></i><b class="big">STUDEX</b>
     <svg class="dec sxa" viewBox="0 0 340 221" preserveAspectRatio="none">
       <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="rgb(169, 33, 26)" /></linearGradient></defs>
-      <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="cut29" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" /></svg>
+      <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="glow29" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
+      <path class="cut29" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" />
+      <path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
+    <i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
          glint runs up the arrow now and then. On the profile's card the split runs between the photo and the name. -->
@@ -82,14 +86,31 @@
   /* StudEx's profile card, the Oct 29 art: the red wedge, its white cut, speed streaks, halftone, the name faint behind */
   .studex.wide { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .streaks { position: absolute; inset: 0; pointer-events: none; z-index: 1;
-    background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.07) 18px 19px, transparent 19px 46px),
-      radial-gradient(60% 80% at 82% 10%, rgba(90, 140, 255, 0.35), transparent 70%), radial-gradient(50% 70% at 10% 100%, rgba(255, 120, 90, 0.3), transparent 70%); }
+    background: radial-gradient(60% 80% at 82% 10%, rgba(90, 140, 255, 0.35), transparent 70%), radial-gradient(50% 70% at 10% 100%, rgba(255, 120, 90, 0.3), transparent 70%); }
+  /* the speed lines, drifting: one period (46 px) along the gradient's direction (-28deg) and round again, so the loop
+     can't be seen; a moved layer, not a repainted background */
+  .drift { position: absolute; inset: -60px; pointer-events: none; z-index: 1;
+    background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.08) 18px 19px, transparent 19px 46px);
+    animation: sxdrift 7s linear infinite; }
+  @keyframes sxdrift { to { transform: translate(-21.6px, -40.6px); } }
+  /* their name big behind, in outline: seen, but the name on the card stays the one read */
+  .big { position: absolute; z-index: 1; right: -18px; bottom: 30px; font: italic 900 98px/1 var(--font-display); letter-spacing: -0.04em; white-space: nowrap;
+    color: rgba(255, 255, 255, 0.05); -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3); }
+  /* the arrow lit: a soft glow breathing under the white cut */
+  .glow29 { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 10; stroke-linecap: round; filter: blur(5px); animation: sxbreathe 3.2s ease-in-out infinite; }
+  @keyframes sxbreathe { 50% { opacity: 0.35; } }
+  /* gloss and depth, like a printed plastic card: a curved light from the top, a bevel along the edge */
+  .gloss { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit;
+    background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 55%, transparent 70%),
+      linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.18));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px rgba(0, 0, 0, 0.3); }
+  @media (prefers-reduced-motion: reduce) { .drift, .glow29 { animation: none; } }
+  :global(html.lowfx) .drift, :global(html.lowfx) .glow29 { animation: none; }
   .cut29 { fill: none; stroke: rgba(255, 255, 255, 0.92); stroke-linecap: round; stroke-linejoin: round; }
   .sxa { z-index: 0; }
   .dots { position: absolute; inset: 0; pointer-events: none; opacity: 0.5; z-index: 1;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1px, transparent 1.6px) 0 0 / 7px 7px;
     -webkit-mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); }
-  .ghost { position: absolute; z-index: 1; right: -14px; bottom: 34px; font: italic 900 104px/1 var(--font-display); letter-spacing: -0.04em; color: rgba(255, 255, 255, 1); opacity: 0.06; white-space: nowrap; }
   /* StudEx (redrawn Oct 31 from their brand kit: the Oct 29 wedge with halftone and a ghost name read as clutter): deep
      navy lit from the top right, the red half in their poster's gradient, white streaks along the arrow's slope, the
      arrow itself with a soft glow, a glint running up it every few seconds */
