@@ -48,14 +48,16 @@
         <linearGradient id="{gid}s" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0" /><stop offset=".5" stop-color="#fff" /><stop offset="1" stop-color="#fff" stop-opacity="0" /></linearGradient>
       </defs>
       {#if wide}
-        <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid}r)" />
+        <!-- the profile's card: the red half wide as on their poster, the name white on it; the arrow rises past the
+             end of the text and behind the QR -->
+        <path d="M0 0H300L232 221H0Z" fill="url(#{gid}r)" />
         <g class="sxs" stroke="url(#{gid}s)" vector-effect="non-scaling-stroke">
-          <path d="M-6 200L52 52" stroke-opacity=".22" /><path d="M-18 150L22 48" stroke-opacity=".16" />
-          <path d="M150 221L214 58" stroke-opacity=".2" /><path d="M210 214L262 82" stroke-opacity=".14" /><path d="M262 221L340 22" stroke-opacity=".18" /><path d="M300 160L346 44" stroke-opacity=".12" />
+          <path d="M40 221L108 0" stroke-opacity=".14" /><path d="M120 205L172 36" stroke-opacity=".18" /><path d="M-24 170L28 0" stroke-opacity=".12" /><path d="M190 221L226 104" stroke-opacity=".14" />
+          <path d="M316 221L350 110" stroke-opacity=".2" /><path d="M330 130L362 26" stroke-opacity=".12" />
         </g>
-        <path class="glow" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
-        <path class="cut" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
-        <path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" />
+        <path class="glow" d="M298 8L230 223" vector-effect="non-scaling-stroke" />
+        <path class="cut" d="M283.7 20.4L298 8L302.9 26.2M298 8L230 223" vector-effect="non-scaling-stroke" />
+        <path class="glint" d="M230 223L298 8" pathLength="100" vector-effect="non-scaling-stroke" />
       {:else}
         <path d="M0 0H208.2L122.1 124H0Z" fill="url(#{gid}r)" />
         <g class="sxs" stroke="url(#{gid}s)">

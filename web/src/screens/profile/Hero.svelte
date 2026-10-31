@@ -21,13 +21,16 @@
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
   import { QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
+  import { haptic } from '../../lib/tg';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
   let { p, qr = null, live = true, shelf = true }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean } = $props();
   const h = $derived(hero(p));
   // the club badge they picked (a skin; picked in LookSheet), else the KBTU one
-  const look = $derived(lookOf(p)); // the class and the strap's word
+  const look = $derived(lookOf(p)); // the lanyard picked
+  // the one on show: it trails `look` while a new one is put on, so the old face turns away before the new one shows
+  let face = $state(untrack(() => look));
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
@@ -41,30 +44,46 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
-  // a new lanyard put on turns in like a card flipped to its new face (owner: the re-swing looked cheap): edge-on,
-  // a little past, settled; the eye goes to the badge, not to a toast
-  let worn = untrack(() => look);
-  // one motion on the compositor (owner: the first try stuttered): no opacity (a fading layer this big re-rasterizes),
-  // a single overshooting curve instead of keyframes, the layer promoted only while it turns
-  const flip = [{ transform: 'rotateY(-62deg)' }, { transform: 'none' }];
-  $effect(() => {
-    if (look === worn) return;
-    worn = look;
-    if (still()) return;
+  // a new lanyard put on: the badge spins on its strap like a real one (owner, Oct 31: the old turn-in looked so-so;
+  // the old face was never seen). The old face turns away to its edge, the new one is put on there with a tap felt,
+  // it turns in past square and settles, a light runs across it, and it sways once on the strap. Transform only, on
+  // the compositor; the layer promoted only while it turns. A pick made mid-spin lands at the edge: the newest wins.
+  let spinning = false, flash: HTMLElement;
+  function spin() {
+    spinning = true;
     swing.style.willChange = 'transform';
-    swing.animate(flip, { duration: 560, easing: 'cubic-bezier(.3,1.35,.5,1)' }).onfinish = () => (swing.style.willChange = '');
+    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg) scale(0.97)' }], { duration: 210, easing: 'cubic-bezier(.55, 0, .9, .5)', fill: 'forwards' });
+    out.onfinish = () => {
+      face = untrack(() => look);
+      haptic.soft();
+      const back = swing.animate([
+        { transform: 'rotateY(-90deg) scale(0.97)' },
+        { transform: 'rotateY(14deg) scale(1.015)', offset: 0.55 },
+        { transform: 'rotateY(-5deg)', offset: 0.78 },
+        { transform: 'rotateZ(-1.2deg)', offset: 0.9 },
+        { transform: 'none' },
+      ], { duration: 900, easing: 'cubic-bezier(.22, .9, .3, 1)' });
+      out.cancel();
+      flash.animate([{ transform: 'translateX(-120%)', opacity: 1 }, { transform: 'translateX(120%)', opacity: 1 }], { duration: 700, delay: 140, easing: 'cubic-bezier(.3, .6, .3, 1)' });
+      back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) spin(); };
+    };
+  }
+  $effect(() => {
+    if (look === untrack(() => face) || spinning) return;
+    if (still()) face = look;
+    else spin();
   });
 </script>
 
 <section class="h">
-<div class="hang {look}">
+<div class="hang {face}">
   <div class="swing" bind:this={swing}>
-    <div class="strap" aria-hidden="true"><span>{STRAP[look]}</span></div>
+    <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <div class="badge" use:glass>
-      {#if banded(look)}<LanyardBand {look} wide />{/if}
+      {#if banded(face)}<LanyardBand look={face} wide />{/if}
       <span class="slot" aria-hidden="true"></span>
       {#if mine}
-        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[look]}><LookMark {look} /></m.default>{/await}</button>
+        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[face]}><LookMark look={face} /></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={() => sheets.look()} aria-label={t('look.title')}><Avatar person={h.person} size={74} tappable={false} /></button>
@@ -75,7 +94,8 @@
           <span class="meta">{h.line}</span>
         </span>
       </div>
-      <span class="foot"><LanyardHolo {look} no={h.no} /></span>
+      <span class="foot"><LanyardHolo look={face} no={h.no} /></span>
+      <i class="flash" bind:this={flash} aria-hidden="true"></i>
     </div>
     <div class="clip" aria-hidden="true"></div>
   </div>
@@ -117,6 +137,9 @@
     transform: rotateX(calc(var(--gy, 0) * -6deg)) rotateY(calc(var(--gx, 0) * 8deg));
     transition: transform 160ms ease-out;
   }
+  /* the light across a new lanyard (the spin above): off the card until it runs */
+  .flash { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transform: translateX(-120%);
+    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 255, 255, 0.1) 54%, transparent 66%); }
   /* a sheen that slides with the tilt */
   .badge::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.13) 46%, transparent 60%);
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
