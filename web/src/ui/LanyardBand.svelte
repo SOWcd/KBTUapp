@@ -175,7 +175,7 @@
      down (Knights' light is vertical, StudEx's diagonal). The QR hides its top; it falls from behind it onto the pin. */
   .beamw { position: absolute; inset: 0; pointer-events: none; transform: translate(calc(var(--gx, 0) * -2px), calc(var(--gy, 0) * -1px)); transition: transform 400ms ease-out; }
   .beam { position: absolute; right: -104px; top: -190px; width: 300px; height: 300px; pointer-events: none; transform-origin: 50% 50%;
-    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.16) 0deg 3deg, rgba(190, 215, 255, 0) 18deg 342deg, rgba(190, 215, 255, 0.16) 357deg);
+    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.22) 0deg 3deg, rgba(190, 215, 255, 0) 18deg 342deg, rgba(190, 215, 255, 0.22) 357deg);
     animation: knsweep 12s ease-in-out infinite alternate; }
   @keyframes knsweep { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
   /* the badge's band: the same light, centred over the slot, wider and a little dimmer, ±5° */
