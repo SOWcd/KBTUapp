@@ -941,7 +941,7 @@
   .exit { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
   /* the same glass as its neighbours, lit from inside in the accent: this is where you are (owner, Oct 29: the solid
      white disc was too loud) */
-  .shut { position: relative; width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--accent); }
+  .shut { position: relative; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--accent); }
   .shut::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
     background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%);
     box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }

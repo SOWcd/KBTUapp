@@ -23,7 +23,6 @@ function restore(): { tab: Tab; club: number | null } {
 const start = restore();
 export const ui = $state({
   tab: start.tab,
-  navMini: false,          // bottom nav shrinks to icons while scrolling down
   club: start.club,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
   allClubs: false,         // the Clubs tab of a member: All clubs instead of My club (each launch starts on My club)
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)

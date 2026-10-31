@@ -2,7 +2,7 @@
   // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
   // each icon only repeated it); the active one in full ink on a darker pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
-  // switches on release. Shrinks while scrolling down; hides under a sheet (and the Feed). The map: its own round glass
+  // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The map: its own round glass
   // button beside it.
   import MapIcon from '@lucide/svelte/icons/map';
   import { sheets, mapFrom, copyCap } from '../lib/state/sheets';
@@ -50,7 +50,7 @@
 </script>
 
 <div class="dock">
-<nav class="nav glass glass-pill" class:mini={ui.navMini} bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
+<nav class="nav glass glass-pill" bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up} style:--n={N}>
   <span class="tone-base" aria-hidden="true"></span>
   <span class="lens" bind:this={lens} style:translate="{shown * 100}% 0" aria-hidden="true"></span>
@@ -66,7 +66,7 @@
 </nav>
 <!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the tabs keep their width -->
-<button class="mapb glass glass-pill" class:mini={ui.navMini} aria-label={t('map.open')} use:glass={{ bloom: true }}
+<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }}
         onpointerdown={warm} onclick={openMap}>
   <span class="tone-base" aria-hidden="true"></span>
   <MapIcon size={24} strokeWidth={2} />
@@ -85,7 +85,7 @@
   :global(html[data-sheet]) .dock { transform: translateY(calc(100% + 40px)); visibility: hidden;
     transition: transform var(--t-slow) var(--ease-spring), visibility 0s var(--t-slow); }
   .nav, .mapb {
-    position: relative; flex: none; height: 60px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
+    position: relative; flex: none; height: 54px; border-radius: var(--r-full); touch-action: none; overflow: hidden;
     /* the capsule's clear glass (on the big bar the dark frosted body read as plastic) */
     /* calmer than it was (what scrolled under it smeared through "crookedly"): a stronger blur, less
        saturation; still the one backdrop filter, the rim and glow below are plain paint */
@@ -93,10 +93,9 @@
     backdrop-filter: var(--refract, blur(20px) saturate(160%) brightness(1.04));
     background: none;
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.55);
-    transition: height var(--t-base) var(--ease), width var(--t-base) var(--ease);
   }
-  .nav { width: min(360px, calc(100% - 68px)); padding: 4px; display: flex; }
-  .mapb { width: 60px; display: grid; place-items: center; color: var(--text); }
+  .nav { width: min(250px, calc(100% - 100px)); padding: 4px; display: flex; }
+  .mapb { width: 54px; display: grid; place-items: center; color: var(--text); }
   .mapb > :global(svg) { position: relative; }
   .mapb:active { transform: scale(0.94); }
   /* an edge all the way round, but lit like glass, not drawn (the even bright outline looked fake): the shared rim's
@@ -124,7 +123,4 @@
   .tab.on { color: var(--text); }
   .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
   .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
-  /* scrolling down: the bar shrinks to a slimmer pill, the map button with it */
-  .nav.mini { height: 50px; width: min(250px, calc(100% - 100px)); }
-  .mapb.mini { width: 50px; height: 50px; }
 </style>

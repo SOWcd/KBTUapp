@@ -461,19 +461,7 @@
     });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
-    // nav shrinks to icons while scrolling down a page, comes back on the way up
-    const last = new WeakMap<EventTarget, number>();
-    const onScroll = (e: Event) => {
-      const el = e.target as HTMLElement;
-      if (!el || typeof el.scrollTop !== 'number') return;
-      const y = el.scrollTop, prev = last.get(el);
-      last.set(el, y);
-      if (prev == null || Math.abs(y - prev) < 6) return;
-      const mini = y > prev && y > 60;
-      if (mini !== ui.navMini) ui.navMini = mini;
-    };
-    document.addEventListener('scroll', onScroll, true);
-    return () => { clearInterval(tick); document.removeEventListener('scroll', onScroll, true); removeEventListener('keydown', esc); };
+    return () => { clearInterval(tick); removeEventListener('keydown', esc); };
   });
 </script>
 
