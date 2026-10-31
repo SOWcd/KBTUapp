@@ -49,6 +49,15 @@
   const pct = $derived(a && next ? Math.min(100, Math.max(3, (a.count / next.need) * 100)) : 100); // as the words say: 6 of 15
   const share = (x: number) => (x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)));
   const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
+  // the stage's light: the metal's own colour (one-level accent, bronze, silver, gold, legend; a drawn medal its metal);
+  // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
+  const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
+  const DRAWN: Record<string, string> = { medal_init26: GLOW[3], medal_init26f: GLOW[2] };
+  const round = $derived(!!a || !!it.founder || !!it.idea);
+  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[Math.min(a.level, 4)] : GLOW[0]));
+  // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
+  const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
+    : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
   let medal: HTMLSpanElement;
   onMount(() => {
@@ -60,24 +69,31 @@
 </script>
 
 <Sheet {overlay} title={it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge')}>
-  <div class="stage" use:glass>
-    <span class="big" class:round={!!a || !!it.founder || !!it.idea} bind:this={medal}><Award {it} size={132} /><span class="shine"></span></span>
+  <div class="stage" class:lit={round && !!glow} style:--glow={glow} use:glass>
+    {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
+    <span class="big" class:round bind:this={medal}><Award {it} size={round ? 196 : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span>
   </div>
+  {#if kicker}<p class="kick" style:color={glow ? `rgb(${glow})` : null}>{kicker}</p>{/if}
   <h2 class="t-h2 name">{it.name}</h2>
 
   {#if a}
-    {#if a.level && tiers}<p class="tier">{t('aw.level', { tier: tierOf(a.level - 1) })}</p>{/if}
     {#if a.now}<p class="tier">{tn('ach.streakNow', a.now)}</p>{/if}
     <p class="t-callout how">{t(`ach.${a.code}.how` as 'ach.regular.how')}</p>
-    {#if a.level && a.at}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
+    {#if a.level && a.at && tiers}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
     {#if !hidden}
-      {#if next}
+      {#if a.level && !tiers}
+        <!-- earned, one level: the day and how rare, side by side (once: no "Earned" above and below) -->
+        <div class="facts">
+          <div><b>{a.at ? dayMonth(a.at) : t('aw.have')}</b>{#if a.at}<span>{t('aw.gotOn')}</span>{/if}</div>
+          <div><b>{share(Math.max(a.levels[0].rarity, 0.001))}%</b><span>{t('aw.haveIt')}</span></div>
+        </div>
+      {:else if next}
         <div class="prog">
           <div class="row"><b>{t('ach.progress', { count: a.count, need: next.need })}</b>{#if tiers}<span>{t('aw.toLevel', { tier: tierOf(a.levels.indexOf(next)) })}</span>{/if}</div>
           <div class="bar"><span style="width:{pct}%"></span></div>
         </div>
       {:else}
-        <p class="top">{tiers ? t('aw.topCount', { count: a.count }) : t('aw.have')}</p>
+        <p class="top">{t('aw.topCount', { count: a.count })}</p>
       {/if}
       {#if tiers}
         <div class="ladder">
@@ -89,12 +105,11 @@
             </div>
           {/each}
         </div>
-      {:else}
+      {:else if !a.level}
         <p class="t-foot rar">{t('person.rarity', { p: share(a.levels[0].rarity) })}</p>
       {/if}
     {/if}
   {:else if b}
-    <p class="tier">{nameOf(b.org)} · {dayMonth(b.at)}</p>
     <p class="t-callout how">{t('aw.badgeHow')}</p>
   {:else if it.founder || it.idea}
     <p class="t-callout how">{t('seal.one')}</p>
@@ -112,8 +127,27 @@
 
 <style>
   .acts { display: flex; gap: 8px; }
-  .stage { display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
-  .big { position: relative; display: inline-flex; transform: rotateX(calc(var(--gy, 0) * -14deg)) rotateY(calc(var(--gx, 0) * 16deg)); transition: transform 160ms ease-out; }
+  .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
+  .lit { padding: 26px 0 22px; }
+  /* behind the medal: a soft halo of its metal and slow rays, both fading out well inside the sheet */
+  .halo, .rays { position: absolute; left: 50%; top: 50%; width: min(330px, 100%); aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%; }
+  .halo { background: radial-gradient(closest-side, rgba(var(--glow), 0.6), rgba(var(--glow), 0.22) 55%, transparent); }
+  .rays { background: repeating-conic-gradient(rgba(var(--glow), 0.22) 0 6deg, transparent 6deg 18deg);
+    mask: radial-gradient(closest-side, black 34%, transparent 92%); animation: turn 80s linear infinite; }
+  :global(html.lowfx) .rays { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .rays, .sweep { animation: none; } }
+  @keyframes turn { to { rotate: 360deg; } }
+  /* one pass of light across the metal as it lands */
+  .sweep { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: soft-light; background-size: 260% 100%;
+    background-image: linear-gradient(110deg, transparent 42%, rgba(255, 255, 255, 0.8) 50%, transparent 58%); background-position: 130% 0;
+    animation: sweep 1.3s 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+  @keyframes sweep { to { background-position: -30% 0; } }
+  .kick { text-align: center; margin-top: 4px; font: 700 var(--fs-cap)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 18px; border-radius: var(--r-l); overflow: hidden; background: var(--line); }
+  .facts div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2); }
+  .facts b { font: 720 var(--fs-card)/1.2 var(--font-display); }
+  .facts span { font: 560 var(--fs-cap)/1.25 var(--font-text); color: var(--text-2); }
+  .big { position: relative; z-index: 1; display: inline-flex; transform: rotateX(calc(var(--gy, 0) * -14deg)) rotateY(calc(var(--gx, 0) * 16deg)); transition: transform 160ms ease-out; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
   .round .shine { display: block; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: soft-light;
