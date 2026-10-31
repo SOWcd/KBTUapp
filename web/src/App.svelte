@@ -3,7 +3,7 @@
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
-  import { ui, TABS, overlays, open, close, persistNav, say, type Tab } from './lib/state/ui.svelte';
+  import { ui, TABS, overlays, open, close, persistNav, say, moment, type Tab } from './lib/state/ui.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
@@ -41,11 +41,12 @@
   let want = 0;
   // a chunk already loaded opens in the tap's own task: import() resolves a task later even then
   const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
-  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>): void {
+  // (the promise settles once it's open or given up: a queued moment waits for it, lib/moments.ts)
+  function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>): Promise<void> {
     const mine = ++want, got = loaded.get(load);
-    if (got) { open(got.default, props); return; }
+    if (got) { open(got.default, props); return Promise.resolve(); }
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-    load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+    return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want) open(m.default, props); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
   // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
   // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
@@ -63,7 +64,8 @@
   sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
   sheets.photos = (photos, start, onremove, ongone) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
-  sheets.pc = (ok) => lazy(() => import('./screens/sheets/PcSheet.svelte'), { ok });
+  const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
+  sheets.pc = (ok) => lazy(pcSheet, { ok });
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
   sheets.askText = ({ placeholder, max, tel, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
@@ -77,12 +79,12 @@
   const settingsPage = () => import('./screens/profile/SettingsPage.svelte');
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
   // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
-  // asked once the screen is free: an unlock or a deep link's sheet up at the start used to skip it until the next launch
-  const askConsent = (tries = 0) => {
+  // a launch moment: asked once the screen is free (a deep link's sheet up at the start used to skip it)
+  const consentSheet = () => import('./screens/sheets/ConsentSheet.svelte');
+  const askConsent = () => {
     const s = session.me?.student;
     if (!s || session.me?.deleteAt || ['staff', 'admin', session.policy].includes(s.consent)) return;
-    if (overlays.length) { if (tries < 40) setTimeout(() => askConsent(tries + 1), 1500); return; }
-    sheets.consent();
+    return lazy(consentSheet, {});
   };
   // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
   // the Feed, News, Friends and Settings too (pages once, sheets now), so they open in the tap's frame
@@ -100,8 +102,9 @@
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
-  sheets.rosterWelcome = (spots) => lazy(() => import('./screens/sheets/RosterWelcome.svelte'), { spots });
-  sheets.rosterAsk = (row) => lazy(() => import('./screens/sheets/RosterAsk.svelte'), { row });
+  const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
+  sheets.rosterWelcome = (spots) => lazy(rosterWelcome, { spots });
+  sheets.rosterAsk = (row) => lazy(rosterAsk, { row });
   sheets.rosterRequests = (ondone) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
@@ -118,7 +121,7 @@
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit });
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
-  sheets.consent = () => lazy(() => import('./screens/sheets/ConsentSheet.svelte'), {});
+  sheets.consent = () => lazy(consentSheet, {});
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
   sheets.clubEdit = (org, at) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org, at });
   sheets.people = (org, title) => lazy(() => import('./screens/sheets/PeopleSheet.svelte'), { org, title });
@@ -131,7 +134,7 @@
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
-  sheets.schedHowTo = (first) => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), { first });
+  sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
   sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});
   sheets.forum = (ask) => lazy(() => import('./screens/forum/Forum.svelte'), { ask });
   sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
@@ -227,9 +230,8 @@
       const key = r.welcome?.length ? 'welcome' : r.ask?.length ? `ask:${r.ask[0].id}` : '';
       if (!key || rosterShown.has(key)) return;
       rosterShown.add(key);
-      // after whatever the start shows (an award, the consent): it waits until nothing else is open
-      const show = () => (overlays.some((o) => !o.closing) ? setTimeout(show, 1200) : r.welcome?.length ? sheets.rosterWelcome(r.welcome) : sheets.rosterAsk(r.ask![0]));
-      setTimeout(show, 1800);
+      // a launch moment: after whatever the start shows (the consent, ...), once nothing else is open
+      moment(() => (r.welcome?.length ? lazy(rosterWelcome, { spots: r.welcome }) : lazy(rosterAsk, { row: r.ask![0] })));
     });
   });
 
@@ -370,13 +372,14 @@
       if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
       if (session.me?.oversee) void loadRegistry();
     });
-    if (st && !wasStudent && booted) setTimeout(celebrate, 1600);
+    if (st && !wasStudent && booted) moment(celebrate);
     wasStudent = st;
   });
+  // each level is one launch moment; "First 500" isn't one: it's the lanyard's drop on the first Profile open (Hero)
   async function celebrate() {
-    const me = session.me, next = me?.unlocked?.[0];
+    const me = session.me, next = me?.unlocked?.find((x) => x.code !== 'first50');
     if (!me || !next) return;
-    const done = () => api.markUnlocked(next.code, next.level).then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; setTimeout(celebrate, 700); }).catch(() => {});
+    const done = () => api.markUnlocked(next.code, next.level).then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; moment(celebrate); }).catch(() => {});
     const a = (await api.person(me.id).catch(() => null))?.awards.achievements.find((x) => x.code === next.code && x.level > 0);
     if (!a) { void done(); return; }
     const m = await import('./screens/sheets/Unlock.svelte');
@@ -434,7 +437,7 @@
   // (never forbid; warn properly, not a toast)
   function computerHint() {
     try { if (!onComputer || localStorage.getItem('kb-pc2')) return; } catch { return; }
-    sheets.pc(() => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } });
+    return lazy(pcSheet, { ok: () => { try { localStorage.setItem('kb-pc2', '1'); } catch { /* blocked: it asks again next time */ } } });
   }
 
   onMount(() => {
@@ -450,7 +453,14 @@
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
-    Promise.all([loadMe(), loadAfisha()]).then(() => { if (session.banned) return; if (tg.startParam !== 'exit' && !/^(ci|sh)_/.test(tg.startParam)) greet(); deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800); setTimeout(() => askConsent(), 2200); booted = true; if (!tg.startParam) setTimeout(celebrate, 1400); setTimeout(computerHint, 1200); });
+    Promise.all([loadMe(), loadAfisha()]).then(() => {
+      if (session.banned) return;
+      // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
+      if (!tg.startParam && !session.me?.msPending) greet();
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800);
+      // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
+      moment(computerHint); moment(askConsent); booted = true; setTimeout(() => moment(celebrate));
+    });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
     // nav shrinks to icons while scrolling down a page, comes back on the way up

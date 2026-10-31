@@ -1,21 +1,21 @@
 <script lang="ts">
   // How the week gets into the app (PLAN 26): the portal's schedule page saved on the phone and sent to
   // the bot, which reads the whole week (server portal.py) and answers "found N classes". iPhone: Safari's Share ->
-  // Options -> Web Archive -> Telegram; Android: Chrome's "Download page" (.mht). Offered right after the Microsoft
-  // sign-in (`first`: "Later" says it stays on Home) and from the Home card until a schedule is there.
+  // Options -> Web Archive -> Telegram; Android: Chrome's "Download page" (.mht). Offered from Today's card until a
+  // schedule is there (no longer right after the sign-in: one thing at a time, the onboarding plan of Oct 31).
   // Oct 30 (owner): the portal is the first big button, and the iPhone way is shown as his own screen recording
   // (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
   // This phone's own steps come first. `addLang` (the Week sheet's "Add a language"): the lead says to switch the
   // portal's language first; the same page sent again adds that language's names (Oct 30).
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
-  import { close, type Overlay } from '../../lib/state/ui.svelte';
+  import type { Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, onAndroid, openLink, tgTry } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, first = false, addLang = false }: { overlay: Overlay; first?: boolean; addLang?: boolean } = $props();
+  let { overlay, addLang = false }: { overlay: Overlay; addLang?: boolean } = $props();
   const PORTAL = 'https://uninet.kbtu.kz/student/schedule';
   const toBot = () => { haptic.tap(); openLink('https://t.me/KBTUappBot'); setTimeout(() => tgTry((w) => w.close()), 300); };
   const toPortal = () => { haptic.tap(); openLink(PORTAL); };
@@ -42,7 +42,6 @@
   <p class="t-foot note">{t('sched.privacy')}</p>
   {#snippet footer()}
     <div class="acts btns">
-      {#if first}<Button kind="neutral" size="l" full onclick={() => close(overlay.id)}>{t('sched.later')}</Button>{/if}
       <Button kind="primary" size="l" full onclick={toBot}>{t('sched.bot')}</Button>
     </div>
   {/snippet}

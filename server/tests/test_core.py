@@ -1602,6 +1602,7 @@ def test_first_fifty(env, monkeypatch):
     assert f["no"] == 0 and f["unlocked"] == first
     a, b = login(c, 70, "aa"), login(c, 71, "bb")
     assert (a["no"], b["no"]) == (1, 2) and a["unlocked"] == b["unlocked"] == first
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'ach:first50:1'").fetchone()  # no push: the app shows it
     delete_now(c, cfg, tma(70, "Aa"))
     cc = login(c, 72, "cc")
     assert cc["no"] == 3 and cc["unlocked"] == []                       # past the 2; number 1 stays empty

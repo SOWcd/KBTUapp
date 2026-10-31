@@ -2,6 +2,7 @@
 // closes the top one (the prototype had a hand-written chain of 15 ifs for this).
 import type { Component } from 'svelte';
 import { haptic } from '../tg';
+import { queue } from '../moments';
 
 export type Tab = 'afisha' | 'forum' | 'club' | 'profile';
 // the forum second (Oct 30): the students' everyday place, next to the events
@@ -75,6 +76,10 @@ export function hideChrome(): () => void {
     if (left > 0) d.sheet = String(left); else delete d.sheet;
   };
 }
+
+/** A moment nobody tapped for (the computer sheet, the consent, a roster sheet, an award): it opens only once nothing
+ *  is open, 600 ms after the last one (lib/moments.ts). A tap or a deep link opens at once, never through here. */
+export const moment = queue(() => overlays.some((o) => !o.closing));
 
 export function removeOverlay(id: number): void {
   const i = overlays.findIndex((x) => x.id === id);

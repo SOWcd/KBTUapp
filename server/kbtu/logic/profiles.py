@@ -258,7 +258,7 @@ def card_no(con, uid: int) -> None:
 
 def first_fifty(con, uid: int) -> None:
     """At a KBTU sign-in: the card number, then "First 500" (§4.11), the cards 00001-00500 (and the Creator's 00000).
-    Kept as a grant; celebrated like any new level."""
+    Kept as a grant; celebrated in the app only."""
     card_no(con, uid)
     u = one(con, "SELECT card_no, is_founder FROM users WHERE id = ?", uid)
     if not (u["is_founder"] or (u["card_no"] or FIRST_N + 1) <= FIRST_N) or one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", uid):
@@ -267,7 +267,8 @@ def first_fifty(con, uid: int) -> None:
     log_action(con, None, "first50", f"user:{uid}")
     con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'first50', 1, ?)
         ON CONFLICT (user_id, code) DO UPDATE SET level = MAX(level, 1), reached_at = excluded.reached_at""", (uid, core.now()))
-    notify(con, uid, "achievement", "ach:first50:1")
+    # no bot push: the app shows it the same minute (the lanyard's drop on the first Profile open), a DM on top of the
+    # first run was one window too many (onboarding plan, Oct 31)
 
 
 def unlocked(con, v: Viewer) -> list[dict]:

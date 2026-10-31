@@ -11,8 +11,7 @@
   import { api, ApiErr } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadAfisha, phrase } from '../../lib/state/data.svelte';
-  import { sheets } from '../../lib/state/sheets';
+  import { loadAfisha, phrase } from '../../lib/state/data.svelte';
   import { t, i18n } from '../../lib/i18n/index.svelte';
   import { haptic, openLink, on } from '../../lib/tg';
   import { nowTs, parts } from '../../lib/time';
@@ -41,9 +40,7 @@
   });
   // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
   $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; m.studentId ||= pending.prefill?.studentId ?? ''; } });
-  $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha().then(offerWeek); close(overlay.id); setTimeout(() => after?.(), 380); } });
-  // signed in, no timetable yet, nothing else to do next: "load your schedule? 1 minute", skippable (PLAN 26)
-  const offerWeek = () => { if (!after && !data.schedule.length) setTimeout(() => sheets.schedHowTo(true), 500); };
+  $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); setTimeout(() => after?.(), 380); } });
 
   let m = $state({ lastName: '', firstName: '', studentId: '', course: 0 });
   // the example ID starts with this intake's year, so a first-year sees their own: the year of the last
@@ -60,11 +57,11 @@
     try {
       session.me = await api.manualLogin({ lastName: m.lastName.trim(), firstName: m.firstName.trim(), studentId: m.studentId.trim().toUpperCase(), course: m.course }, session.policy);
       haptic.ok();
+      try { localStorage.setItem('kb-arrive', String(session.me.id)); } catch { /* blocked: no drop, nothing lost */ } // Profile's first open: the badge drops in (Hero)
       say(phrase('say.welcome', { name: session.me.student?.firstName ?? '' }), 'partying_face_3d');
       await loadAfisha();
       close(overlay.id);
-      setTimeout(() => after?.(), 380);
-      offerWeek();
+      setTimeout(() => after?.(), 380); // nothing else opens: the timetable's ask is Today's card (onboarding plan)
     } catch (e) {
       haptic.error();
       const why = e instanceof ApiErr ? e.message || e.code : '';

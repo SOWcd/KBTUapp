@@ -111,7 +111,7 @@ export const sheets = {
   /** every club, the biggest first (the Clubs tab's "All clubs · N") */
   allClubs: () => {},
   /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
-  schedHowTo: (_first?: boolean) => {},
+  schedHowTo: () => {},
   /** my whole week of classes */
   week: () => {},
   /** the forum (F1 find people), a request opened in it */

@@ -22,6 +22,9 @@
   import { QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { api } from '../../lib/api';
+  import { say, overlays, moment } from '../../lib/state/ui.svelte';
+  import { burst } from '../../ui/burst';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always)
@@ -43,7 +46,29 @@
   let swing: HTMLDivElement;
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
-  $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
+  $effect(() => { if (live) untrack(() => { if (due()) later(); else if (!still()) swing.animate(frames, { duration: 1400 }); }); });
+  // signed in from Profile itself: the sign-in sheet is still closing over it, so the drop waits for a free screen
+  const later = () => { if (!overlays.some((o) => !o.closing)) { arrive(); return; } swing.style.opacity = '0'; moment(arrive); };
+  // the one wow of the first run (onboarding plan, Oct 31): the first Profile open after the sign-in, the badge drops in
+  // from above with its number (Unlock's medal curve), lands with a haptic and a burst, then swings as always; one toast.
+  // Due: "First 500" not yet celebrated (it has no Unlock of its own now), or the sign-up's mark (LoginSheet: past 500)
+  function due(): boolean {
+    const me = session.me;
+    if (!mine || !me || p.id !== me.id || p.no == null) return false;
+    let mark = false;
+    try { mark = localStorage.getItem('kb-arrive') === String(me.id); localStorage.removeItem('kb-arrive'); } catch { /* blocked */ }
+    return mark || !!me.unlocked?.some((x) => x.code === 'first50');
+  }
+  function arrive() {
+    swing.style.opacity = '';
+    const award = session.me?.unlocked?.find((x) => x.code === 'first50');
+    if (award) void api.markUnlocked(award.code, award.level).then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; }).catch(() => {});
+    const land = () => { const r = swing.getBoundingClientRect(); haptic.ok(); burst(false, { x: r.left + r.width / 2, y: r.top + r.height / 2 }); say(t(p.no! <= 500 ? 'me.arrived' : 'me.arrivedNo', { no: h.no }), 'party_popper_3d'); };
+    if (still()) { land(); return; }
+    swing.animate([{ transform: 'translateY(-70vh) rotate(-12deg)', opacity: 0 }, { transform: 'translateY(0) rotate(5deg)', opacity: 1, offset: 0.68 },
+      { transform: 'none' }], { duration: 880, easing: 'cubic-bezier(.2,.9,.25,1)' }).onfinish = () => swing.animate(frames, { duration: 1400 });
+    setTimeout(land, 600);
+  }
   // the lanyard's own motion (LanyardBand's loops) runs only while the card is on screen and its tab open: a hidden tab
   // and a card scrolled away would animate for nobody
   let seen = $state(true);

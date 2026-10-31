@@ -157,14 +157,6 @@
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as k, i (k)}<i class:on={i === shown}></i>{/each}</div>{/if}
   {/if}
 
-  {#if session.me?.student && !data.schedule.length}
-    <!-- no timetable yet: how to get it in (PLAN 26), until it's there -->
-    <button class="addw surface press" onclick={() => sheets.schedHowTo()}>
-      <Emoji name="spiral_calendar_3d" size={40} />
-      <span><b>{t('sched.cardTitle')}</b><small>{t('sched.cardSub')}</small></span>
-    </button>
-  {/if}
-
   <div class="evh"><span><h2>{t('list.title')}</h2><span class="num">{tn('list.week', weekCount)}</span></span>
     {#if data.events.some((e) => e.status !== 'cancelled')}<button class="row1" onclick={() => sheets.feed()}><Play size={14} fill="currentColor" />{t('list.inRow')}</button>{/if}</div>
 
@@ -177,8 +169,17 @@
   {/if}
 
   {#each days as day (day.d)}
+    <!-- no timetable yet: today's place asks for it (PLAN 26) instead of a "free day" we can't know (onboarding plan) -->
+    {@const ask = day.d === today && !!session.me?.student && !data.schedule.length}
+    {#if day.items.length || ask || data.schedule.length}
     <section class="dayblk">
       <h2 class="dh"><span class:td={day.d === today}>{head(day.d)}</span><span class="t-foot">{dayMonth(dayTs(day.d) + 12 * 3600)}</span></h2>
+      {#if ask}
+        <button class="addw inday surface press" onclick={() => sheets.schedHowTo()}>
+          <Emoji name="spiral_calendar_3d" size={40} />
+          <span><b>{t('sched.cardTitle')}</b><small>{t('sched.cardSub')}</small></span>
+        </button>
+      {/if}
 
       {#each day.items as it (it.key)}
         {#if 'c' in it}
@@ -203,10 +204,11 @@
         {/if}
       {/each}
 
-      {#if !day.items.length}
+      {#if !day.items.length && !ask}
         <p class="empty t-foot">{t('list.freeDay')}</p>
       {/if}
     </section>
+    {/if}
   {/each}
   {#if data.eventsReady && data.events.filter((e) => e.status !== 'cancelled').length < 6}
     <!-- the first weeks of the pilot: a short list should read as "more is coming", not as an empty app -->
@@ -337,6 +339,7 @@
   .addw { display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 14px; padding: 14px 16px; border-radius: var(--r-l); text-align: left; }
   .addw span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .addw b { font: 680 var(--fs-body)/1.2 var(--font-text); }
+  .addw.inday { margin-top: 0; }
   .addw small { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   /* the anthem's card: a flat tile, the words, a chevron at the row's end */
   .anth { margin: 0 0 14px; color: var(--text-3); }
