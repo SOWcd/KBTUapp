@@ -37,7 +37,7 @@
     {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
-    {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" /><i class="tscrim"></i>
+    {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex' && wide}
     <!-- the profile's card: the Oct 29 art (owner, Oct 31: both redraws of it were worse) with what he asked on top: their
@@ -50,7 +50,7 @@
 </svg>
     <!-- the glint in an SVG of its own: its dash moving repaints only this, not the wedge and the blurred glow -->
     <svg class="dec sxg par" viewBox="0 0 340 221" preserveAspectRatio="none"><path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
-    <i class="flare"></i><i class="gloss"></i><i class="tscrim"></i>
+    <i class="flare"></i><i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
          glint runs up the arrow now and then. On the profile's card the split runs between the photo and the name. -->
@@ -126,11 +126,6 @@
   :global(html.lowfx) .flare, :global(html.lowfx) .foil { display: none; }
   .cut29 { fill: none; stroke: rgba(255, 255, 255, 0.92); stroke-linecap: round; stroke-linejoin: round; }
   .sxa { z-index: 0; }
-  /* the name's column a shade darker in the card's own colour (4.5:1 for the role and meta lines over the big name, the
-     gloss and the light): a soft oval behind the text, over the art, under the text */
-  .tscrim { position: absolute; z-index: 1; left: 70px; right: 30px; top: 6px; height: 128px; pointer-events: none;
-    background: radial-gradient(closest-side, var(--scrim) 55%, transparent); }
-  .studex .tscrim { --scrim: rgba(10, 26, 64, 0.72); }
   /* StudEx (redrawn Oct 31 from their brand kit: the Oct 29 wedge with halftone and a ghost name read as clutter): deep
      navy lit from the top right, the red half in their poster's gradient, white streaks along the arrow's slope, the
      arrow itself with a soft glow, a glint running up it every few seconds */
@@ -233,7 +228,6 @@
     color: #FF9A3C; text-shadow: 0 0 6px rgba(255, 120, 40, 0.9); opacity: 0.9; }
   .wide .date { right: 22px; bottom: 50px; font-size: 9px; } /* just above the strip */
   .moments .art { left: 50%; top: 55%; width: 210px; transform: translate(-50%, -50%); filter: drop-shadow(0 0 14px rgba(255, 228, 200, 0.55)); }
-  .moments .tscrim { --scrim: rgba(52, 22, 13, 0.75); }
   .band.moments.wide .art { left: auto; top: auto; right: -34px; bottom: -40px; width: 180px; height: auto; transform: none; opacity: 0.2; filter: none; }
 
   /* Faces: black, a violet-pink-orange glow from their wordmark, the hands' triangle */

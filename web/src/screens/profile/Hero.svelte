@@ -196,6 +196,9 @@
   .faces .strap span { color: #fff; }
   /* StudEx (kept over the band on Oct 20): red, a white cut, navy, the logo's arrow a faint watermark */
   .studex { --role: rgba(255, 255, 255, 0.92); }
+  /* a soft shadow under the text where the art runs behind it (owner, Oct 31: a dark patch behind the column was crude) */
+  .studex .id { text-shadow: 0 1px 2px rgba(6, 18, 48, 0.6), 0 0 14px rgba(6, 18, 48, 0.55); }
+  .moments .id { text-shadow: 0 1px 2px rgba(40, 16, 8, 0.6), 0 0 14px rgba(40, 16, 8, 0.55); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   /* SOWER, the creator's alone (Oct 14 after four drafts): black, rings spreading from behind the QR's corner; the strap white with black letters */
