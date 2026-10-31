@@ -915,6 +915,23 @@ MIGRATIONS: list[tuple[int, str]] = [
     # or as the student typed it in My data; never generated (review latin-names-review.md). The English UI and the exports
     (97, """ALTER TABLE students ADD COLUMN last_lat TEXT; ALTER TABLE students ADD COLUMN first_lat TEXT;
     ALTER TABLE students ADD COLUMN middle_lat TEXT;"""),
+    # the rest of that freshmen list (admin prefill-rest): rows the main import couldn't key by one KBTU mail and one ID.
+    # Matched at ms_link by the KBTU mail or a valid ID, and the name; never fills the ID. raw_id: as typed, the owner's
+    # alone. Gone when used or with the account (account.delete_me)
+    (98, """CREATE TABLE prefill_rest (
+      id          INTEGER PRIMARY KEY,
+      email       TEXT,
+      student_id  TEXT,
+      raw_id      TEXT,
+      last_name   TEXT,
+      first_name  TEXT,
+      middle_name TEXT,
+      school      TEXT,
+      phone       TEXT,
+      came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
+    ) STRICT;
+    CREATE INDEX prefill_rest_email ON prefill_rest(email);
+    CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);"""),
 ]
 
 

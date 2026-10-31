@@ -6795,3 +6795,57 @@ def test_latin_names(env, monkeypatch, capsys):
     admin.main(["latin-names", "--apply"])
     assert lat(bek) == ("Serikbayev", "Aidos", None, None)
     con.close()
+
+
+def test_prefill_rest(env, monkeypatch, capsys):
+    """The rest of the freshmen list (prefill-rest-and-claim-review.md A, made-up people): rows the main import didn't keep;
+    a confirmed student with the row's mail or ID and name is badged now; the others wait (a shared ID matches by nothing,
+    the raw ID kept for the owner only) and give their student the badge and what their row lacks at sign-in, never the
+    ID; rows kept once and gone since never come back; deleting an account takes its rows, not a namesake's by ID."""
+    import io
+    from kbtu import admin
+    c, cfg = env
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    came, held = login(c, 5, "came"), login(c, 1, "held")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET student_id = '25B000005', email = 'came@kbtu.kz', ms_oid = 'oid-came' WHERE user_id = ?", (came["id"],))
+    con.execute("UPDATE students SET student_id = '25B000009', email = 'held@kbtu.kz', ms_oid = 'oid-held' WHERE user_id = ?", (held["id"],))
+    lines = ["email,student_id,last,first,middle,school,phone,came",
+             "a_one@kbtu.kz,25B010001,Ospanova,Aya,,SITE,,1",            # kept by the main import
+             ",25B010007,Bekov,Dana,,ISE,+7 701 000 00 07,1",            # no mail: by ID and name
+             "x_mail@gmail.com,25B010008,Shared,One,,,,0",               # an ID another row has too: matches nothing
+             "y_mail@kbtu.kz,25B010008,Shared,Two,,,,0",
+             "came@kbtu.kz,25B099999,Testov,Came,,,,1",                  # signed up, another ID: badged now
+             ",hello,Nobody,Known,,,,0",                                 # neither: it sits
+             "h_typo@kbtu.kz,25B000009,Testov,Held,,,,1",                # the ID a student holds, their name: badged now
+             "z_gone@kbtu.kz,25B010010,Gone,Zed,,,,1"]                   # kept, then used or deleted
+
+    def run(cmd: str, name: str) -> str:
+        monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(("\n".join(lines) + "\n").encode())))
+        capsys.readouterr()
+        admin.main([cmd, "--list", name])
+        return capsys.readouterr().out
+    run("prefill-import", "init26")
+    con.execute("DELETE FROM prefill WHERE email = 'z_gone@kbtu.kz'")
+    out = run("prefill-rest", "init26")
+    assert out.split("\n")[0] == "rows 8  in_prefill 2  gone 1  matched 2  badged 2  stored 3  sits 2"
+    assert "kbtu.kz" not in out and "25B" not in out and "Dana" not in out                # counts only
+    with pytest.raises(SystemExit):
+        run("prefill-rest", "init26")                                                     # each list once
+    ach = lambda uid: {a["code"]: a["level"] for a in c.get(f"/api/users/{uid}", headers=tma(1)).json()["awards"]["achievements"]}  # noqa: E731
+    assert ach(came["id"])["init26f"] == 1 and ach(held["id"])["init26f"] == 1
+    assert [tuple(r) for r in con.execute("SELECT email, student_id, raw_id FROM prefill_rest ORDER BY raw_id")] == [
+        (None, "25B010007", "25B010007"), (None, None, "25B010008"), (None, None, "hello")]
+    # Dana signs in with another mail and her own ID: the badge and her phone, the row gone; a namesake's ID row stays
+    con.execute("INSERT INTO prefill_rest (student_id, last_name, first_name, came) VALUES ('25B010007', 'Other', 'Person', 1)")
+    uid = c.get("/api/me", headers=tma(7)).json()["id"]
+    logic.ms_remember(con, uid, {"oid": "oid-7", "email": "d_bekova@kbtu.kz", "first": "Dana", "last": "Bekov", "employeeId": "", "profile": {}})
+    assert c.post("/api/kbtu/manual", headers=tma(7), json={"studentId": "25B010007", "consentVersion": logic.CONSENT}).status_code == 200
+    assert tuple(con.execute("SELECT student_id, phone, school FROM students WHERE user_id = ?", (uid,)).fetchone()) == ("25B010007", "+77010000007", "ISE")
+    assert ach(uid)["init26f"] == 1
+    assert [r[0] for r in con.execute("SELECT last_name FROM prefill_rest WHERE student_id = '25B010007'")] == ["Other"]
+    con.execute("INSERT INTO prefill_rest (student_id, last_name, first_name) VALUES ('25B010007', 'Bekov', 'Dana')")
+    con.execute("INSERT INTO prefill_rest (email, last_name, first_name) VALUES ('d_bekova@kbtu.kz', 'Bekova', 'D')")
+    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    assert [r[0] for r in con.execute("SELECT last_name FROM prefill_rest WHERE student_id = '25B010007' OR email IS NOT NULL")] == ["Other"]
+    con.close()

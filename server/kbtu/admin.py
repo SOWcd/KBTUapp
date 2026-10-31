@@ -46,6 +46,10 @@
                                 prints counts only, never a value
   .venv/bin/python -m kbtu.admin latin-names [--apply]   the Latin names KBTU's directory gives (Microsoft's displayName):
                                 its shape in counts only; --apply fills the empty Latin columns of those linked already
+  .venv/bin/python -m kbtu.admin prefill-rest --list <name> < list.csv   the same list's rows prefill-import didn't keep:
+                                a student confirmed with the row's KBTU mail or ID and its name gets the badge (came) and
+                                what their row lacks now; the rest wait in prefill_rest for their student's sign-in (the
+                                mail or a valid ID, and the name; never the ID itself); counts only
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -269,11 +273,11 @@ def main(args: list[str]) -> None:
             print(f"queued {len(todo)}")
         else:
             print("nothing sent (add --send)")
-    elif cmd == "prefill-import" and len(args) == 3 and args[1] == "--list" and re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", args[2]):
+    elif cmd in ("prefill-import", "prefill-rest") and len(args) == 3 and args[1] == "--list" and re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", args[2]):
         # values never printed: an error names the line, not what's on it
         import csv
         import io
-        from .logic.account import PREFILL_COLS, prefill_import
+        from .logic.account import PREFILL_COLS, prefill_import, prefill_rest_import
         reader = csv.reader(io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8-sig", newline=""))
         try:
             got = list(reader)
@@ -286,6 +290,14 @@ def main(args: list[str]) -> None:
                 sys.exit(f"line {i}: {len(PREFILL_COLS)} columns wanted, came 0 or 1; nothing imported")
         if len(got) < 2:
             sys.exit("no rows")
+        if cmd == "prefill-rest":
+            try:
+                n = prefill_rest_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]], args[2])
+            except ValueError:
+                sys.exit(f"list {args[2]!r}: its rest was stored already (each list once)")
+            print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "in_prefill", "gone", "matched", "badged", "stored", "sits")))
+            print(f"{one(con, 'SELECT COUNT(*) FROM prefill_rest')[0]} rows wait in prefill_rest")
+            return
         try:
             n = prefill_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]], args[2])
         except ValueError:
