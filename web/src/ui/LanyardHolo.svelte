@@ -8,7 +8,7 @@
 
 <div class="holo {look}">
   {#if look === 'sower'}<b class="w sw">SOWER</b>
-  {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX<svg class="sxar" viewBox="0 0 14 14" aria-hidden="true"><path d="M1 13L12 2M6 2H12V8" /></svg></b>
+  {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
   {:else if look === 'cheer'}<b class="w ch">✦ CHEERLEADING</b>
   {:else if look === 'knights'}<b class="w kn">KNIGHTS</b>
   {:else if look === 'moments'}<b class="w mo">MOMENTS</b>
@@ -24,7 +24,7 @@
   .w { display: flex; align-items: center; gap: 7px; font: inherit; }
   /* StudEx (owner, Oct 31: the rainbow made it like every other lanyard; review: .claude/reports/studex-strip-review.md):
      a pearl strip, one light sliding with the tilt and a faint cool one slower behind it, their name as in their logo
-     (STUD red, EX navy) with the logo's arrow rising off the X */
+     (STUD red, EX navy); no arrow here: the card above has it (owner: two arrows read as a tautology) */
   .studex { color: rgb(23, 48, 100); background-image:
       linear-gradient(100deg, transparent 40%, rgba(255, 255, 255, 0.9) 50%, transparent 60%),
       linear-gradient(100deg, transparent 30%, rgba(200, 216, 255, 0.55) 50%, transparent 70%),
@@ -32,7 +32,6 @@
     background-size: 260% 100%, 200% 100%, 100% 100%; background-position: calc(50% + var(--gx, 0) * 110%) 0, calc(50% + var(--gx, 0) * 40%) 0, 0 0;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(23, 48, 100, 0.16), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .studex span { font-variant-numeric: tabular-nums; }
-  .sxar { width: 11px; height: 11px; margin: -9px 0 0 -1px; fill: none; stroke: rgb(23, 48, 100); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   .sower { background-image: linear-gradient(100deg, #fff 25%, #D9D9DE 40%, #fff 52%, #C9C9CF 62%, #fff 75%); color: #0A0A0A; }
   .sx { gap: 0; font: 900 16px/1 var(--font-display); letter-spacing: -0.03em; color: #173064; }
   .sx i { font-style: normal; color: rgb(214, 38, 27); }

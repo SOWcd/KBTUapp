@@ -22,7 +22,7 @@
     {/each}
     <rect x="180" y="0" width="260" height="280" fill="rgba(255, 255, 255, 0.28)" mask="url(#{id}u)" />
     <rect x="180" y="0" width="260" height="280" fill="rgba(0, 0, 0, 0.22)" mask="url(#{id}d)" />
-    {#each D as d (d)}<path {d} fill="rgba(255, 255, 255, 0.07)" />{/each}
+    {#each D as d (d)}<path {d} fill="rgba(255, 255, 255, 0.13)" />{/each}
   {:else}
     {#each D as d (d)}<path {d} fill="white" />{/each}
   {/if}

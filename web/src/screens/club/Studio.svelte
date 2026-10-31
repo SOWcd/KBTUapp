@@ -15,7 +15,7 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
   import PenLine from '@lucide/svelte/icons/pen-line';
-  import Rss from '@lucide/svelte/icons/rss';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
@@ -249,7 +249,7 @@
          whose posts the userbot copies into the news, or "Link" -->
     {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="qa">
-        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Rss size={22} /><b>{t('studio.channelShort')}</b><small class="ell">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></button>{/if}
+        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Megaphone size={22} /><b>{t('studio.channelShort')}</b><small class="ell">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></button>{/if}
         {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></button>{/if}

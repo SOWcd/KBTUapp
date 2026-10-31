@@ -165,9 +165,9 @@
   /* the card: lit from the bottom right behind the helmet, darker under the text (the role line keeps 4.5:1) */
   .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(70% 90% at 100% 100%, rgba(58, 123, 234, 0.45), transparent 70%),
     linear-gradient(160deg, rgb(28, 76, 148), rgb(22, 63, 130) 55%, rgb(14, 42, 98)); }
-  /* the helmet moves a little with the tilt (like StudEx's name). The card is 164 tall: the plume runs behind the QR like
-     print under a sticker, the dome and the visor show below it, the chin goes behind the strip */
-  .crest { position: absolute; right: -24px; top: 24px; height: 150px; aspect-ratio: 252 / 264;
+  /* the helmet moves a little with the tilt (like StudEx's name). Under the QR, not behind it (owner, Oct 31: hidden
+     there, nobody could tell what it was): the plume and the dome between the QR and the strip, the chin behind the strip */
+  .crest { position: absolute; right: -6px; top: 70px; height: 120px; aspect-ratio: 252 / 264;
     transform: translate(calc(var(--gx, 0) * -4px), calc(var(--gy, 0) * -2.5px)); transition: transform 400ms ease-out; }
   .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.12), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
   @media (prefers-reduced-motion: reduce) { .crest { transform: none; } }
