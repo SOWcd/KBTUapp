@@ -96,10 +96,10 @@
   /* their name big behind, in outline: seen, but the name on the card stays the one read. Depth with the phone's tilt
      (--gx/--gy from the badge's glass): the name floats nearest and moves most, the arrow less, the streaks least */
   .big { position: absolute; z-index: 1; right: -18px; bottom: 30px; font: italic 900 98px/1 var(--font-display); letter-spacing: -0.04em; white-space: nowrap;
-    color: rgba(255, 255, 255, 0.05); -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.1); /* filled, not outlined: a stroke drew the glyphs' overlaps (squares inside the X) */
     transform: translate(calc(var(--gx, 0) * -14px), calc(var(--gy, 0) * -8px)); transition: transform 160ms ease-out; }
   /* a holographic foil inside the letters, its rainbow sliding with the tilt like a real foil print */
-  .big.foil { -webkit-text-stroke: 0; color: transparent; opacity: 0.2; mix-blend-mode: screen;
+  .big.foil { color: transparent; opacity: 0.2; mix-blend-mode: screen;
     background: linear-gradient(100deg, rgb(255, 166, 218), rgb(185, 163, 255), rgb(134, 227, 255), rgb(166, 255, 214), rgb(255, 230, 154), rgb(255, 166, 218)) 0 0 / 300% 100%;
     background-position: calc(50% + var(--gx, 0) * 70%) 0; -webkit-background-clip: text; background-clip: text; }
   .par { transform: translate(calc(var(--gx, 0) * -5px), calc(var(--gy, 0) * -3px)) scale(1.04); transition: transform 160ms ease-out; }

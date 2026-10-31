@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   // The profile hero, shared by Me and the person sheet (owner's pick of three): the profile as a KBTU
   // event badge on a lanyard — clubs print their titles in English on theirs, so this one does too. It hangs
@@ -44,28 +44,32 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   // it swings in each time its screen opens (not only when the app opens), never on scroll
   $effect(() => { if (live && !still()) swing.animate(frames, { duration: 1400 }); });
-  // a new lanyard put on: the badge spins on its strap like a real one (owner, Oct 31: the old turn-in looked so-so;
-  // the old face was never seen). The old face turns away to its edge, the new one is put on there with a tap felt,
-  // it turns in past square and settles, a light runs across it, and it sways once on the strap. Transform only, on
-  // the compositor; the layer promoted only while it turns. A pick made mid-spin lands at the edge: the newest wins.
-  let spinning = false, flash: HTMLElement;
+  // a new lanyard put on: the badge turns over on its strap (owner, Oct 31: the right way, but it jerked and the light
+  // stripe looked childish). One continuous half turn: it speeds up to its edge and leaves the edge at that same speed
+  // (matched curves, no overshoot, no sway); the new face is put on while edge-on and the turn goes on only a frame
+  // later, so the redraw never lands in a moving frame. The light comes from the angle: the face darkens as it turns
+  // away, the new one comes out of the shade with a soft sheen. Transform and opacity only, on the compositor.
+  let spinning = false, shade: HTMLElement;
+  // the edge's speed matched: TURN ends at slope 2 over 240 ms, LAND starts at slope 4.67 over 560 ms, both 0.75 deg/ms
+  const TURN = 'cubic-bezier(.4, 0, .75, .5)', LAND = 'cubic-bezier(.12, .56, .25, 1)';
   function spin() {
     spinning = true;
     swing.style.willChange = 'transform';
-    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg) scale(0.97)' }], { duration: 210, easing: 'cubic-bezier(.55, 0, .9, .5)', fill: 'forwards' });
-    out.onfinish = () => {
+    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 240, easing: TURN, fill: 'forwards' });
+    shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 240, easing: TURN, fill: 'forwards' });
+    out.onfinish = async () => {
       face = untrack(() => look);
       haptic.soft();
-      const back = swing.animate([
-        { transform: 'rotateY(-90deg) scale(0.97)' },
-        { transform: 'rotateY(14deg) scale(1.015)', offset: 0.55 },
-        { transform: 'rotateY(-5deg)', offset: 0.78 },
-        { transform: 'rotateZ(-1.2deg)', offset: 0.9 },
-        { transform: 'none' },
-      ], { duration: 900, easing: 'cubic-bezier(.22, .9, .3, 1)' });
-      out.cancel();
-      flash.animate([{ transform: 'translateX(-120%)', opacity: 1 }, { transform: 'translateX(120%)', opacity: 1 }], { duration: 700, delay: 140, easing: 'cubic-bezier(.3, .6, .3, 1)' });
-      back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) spin(); };
+      await tick();
+      requestAnimationFrame(() => {
+        const back = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 560, easing: LAND });
+        out.cancel();
+        shade.getAnimations().forEach((x) => x.cancel());
+        shade.animate([{ opacity: 0.55, background: 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))' },
+          { opacity: 0.5, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.22))', offset: 0.45 },
+          { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 560, easing: LAND });
+        back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) spin(); };
+      });
     };
   }
   $effect(() => {
@@ -95,7 +99,7 @@
         </span>
       </div>
       <span class="foot"><LanyardHolo look={face} no={h.no} /></span>
-      <i class="flash" bind:this={flash} aria-hidden="true"></i>
+      <i class="shade" bind:this={shade} aria-hidden="true"></i>
     </div>
     <div class="clip" aria-hidden="true"></div>
   </div>
@@ -137,9 +141,9 @@
     transform: rotateX(calc(var(--gy, 0) * -6deg)) rotateY(calc(var(--gx, 0) * 8deg));
     transition: transform 160ms ease-out;
   }
-  /* the light across a new lanyard (the spin above): off the card until it runs */
-  .flash { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; transform: translateX(-120%);
-    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 255, 255, 0.1) 54%, transparent 66%); }
+  /* the light on a lanyard turning over (the spin above): unseen at rest */
+  .shade { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; border-radius: inherit;
+    background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
   /* a sheen that slides with the tilt */
   .badge::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.13) 46%, transparent 60%);
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
