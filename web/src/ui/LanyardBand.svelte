@@ -1,9 +1,9 @@
 <script lang="ts">
   // A club's own art on its lanyard (drafts in KBTUapp-OLD/design/lanyards). `wide`: the profile's
   // card keeps its size, so the art is the card's background: the symbol big on the
-  // right, the pom-poms or the ball beside the QR; else a band on top of the full-screen badge, the art in the middle.
-  // Art: the panther and the Knights emblem cut from the clubs' logos; Knights' ball is three sports in one (they play
-  // basketball, football and volleyball: a student's idea from their tryout poster, Oct 20), white line art like the emblem.
+  // right, the pom-poms beside the QR; else a band on top of the full-screen badge, the art in the middle.
+  // Art: the panther and the Knights emblem cut from the clubs' logos. Knights (redrawn Oct 31): their blue, a jersey's
+  // side piping, on the card only their helmet pressed in (the whole logo's detail turned to noise behind the text).
   // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band; on the
   // profile's card only the lens's aperture (lucide's), as the wordmark ran under the name.
   // Faces (a party club): their gradient wordmark over the hands' triangle from their logo, drawn white, on a club
@@ -13,13 +13,13 @@
   import knights from '../assets/lanyards/knights.webp';
   import cheerWide from '../assets/lanyards/cheer-wide.svg?url';
   import cheerTall from '../assets/lanyards/cheer-tall.svg?url';
-  import ball from '../assets/lanyards/knights-ball.svg?url';
   import moments from '../assets/lanyards/moments.webp';
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
   import faces from '../assets/lanyards/faces.webp';
   import hands from '../assets/lanyards/faces-hands.webp';
   import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
   import KbtuMark from './KbtuMark.svelte';
+  import KnightsHelm from './KnightsHelm.svelte';
 
   let { look, wide = false }: { look: Look; wide?: boolean } = $props();
   // Moments' date stamp, as an old film camera burns it into the corner: today
@@ -32,9 +32,7 @@
   {#if look === 'cheer'}
     <img class="dec" src={wide ? cheerWide : cheerTall} alt="" /><img class="art" src={panther} alt="" />
   {:else if look === 'knights'}
-    <svg class="dec" viewBox="0 0 340 112" preserveAspectRatio="xMidYMid slice"><g fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="2">
-      <path d="M-10 8H350" /><circle cx="170" cy="8" r="34" /><path d="M120 112V64H220V112" /><path d="M150 64A20 20 0 0 1 190 64" /><path d="M40 112A130 130 0 0 1 300 112" /></g></svg>
-    <img class="ball" src={ball} alt="" /><img class="art" src={knights} alt="" />
+    {#if wide}<span class="crest"><KnightsHelm emboss /></span><i class="gloss"></i>{:else}<img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
     {#if wide}<i class="vf"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="art" src={aperture} alt="" />
@@ -157,13 +155,23 @@
   .cheer.wide { --c: 88% 100%; }
   .cheer .art { left: 50%; bottom: -12px; height: 128px; transform: translateX(-50%); }
   .band.wide .art { left: auto; right: -16px; bottom: -30px; height: 168px; transform: none; opacity: 0.22; }
-  .band.knights.wide .art { right: -26px; bottom: -18px; height: 150px; }
 
-  /* Knights: royal blue, speed stripes, the court's lines, the emblem */
-  .knights { background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0 10px, transparent 10px 26px), linear-gradient(150deg, #3A7BEA, #1C4C94 55%, #0D2A63); }
-  .knights .art { left: 50%; top: 10px; height: 112px; transform: translateX(-50%); }
-  .ball { right: -14px; bottom: -20px; width: 88px; opacity: 0.9; }
-  .wide .ball { right: 26px; bottom: 47px; width: 40px; } /* just above the strip */
+  /* Knights: their blue (from the logo's pixels), a jersey's side piping at the edge (vertical, where StudEx's cut is
+     diagonal). The badge's band: lit from the top, the whole logo, ending in the pass's own blue (MyQr) with no seam. */
+  .knights { --pipe: transparent 7px, rgba(255, 255, 255, 0.22) 7px 9px, transparent 9px 12px, rgba(255, 255, 255, 0.12) 12px 13px, transparent 13px;
+    background: linear-gradient(90deg, var(--pipe)), linear-gradient(270deg, var(--pipe)),
+      radial-gradient(60% 90% at 50% 0%, rgba(58, 123, 234, 0.5), transparent 70%), linear-gradient(180deg, rgb(28, 76, 148), rgb(15, 43, 102)); }
+  .knights .art { left: 50%; top: 20px; height: 94px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35)); }
+  /* the card: lit from the bottom right behind the helmet, darker under the text (the role line keeps 4.5:1) */
+  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(70% 90% at 100% 100%, rgba(58, 123, 234, 0.45), transparent 70%),
+    linear-gradient(160deg, rgb(28, 76, 148), rgb(22, 63, 130) 55%, rgb(14, 42, 98)); }
+  /* the helmet moves a little with the tilt (like StudEx's name). The card is 164 tall: the plume runs behind the QR like
+     print under a sticker, the dome and the visor show below it, the chin goes behind the strip */
+  .crest { position: absolute; right: -24px; top: 24px; height: 150px; aspect-ratio: 252 / 264;
+    transform: translate(calc(var(--gx, 0) * -4px), calc(var(--gy, 0) * -2.5px)); transition: transform 400ms ease-out; }
+  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.12), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+  @media (prefers-reduced-motion: reduce) { .crest { transform: none; } }
+  :global(html.lowfx) .crest { transform: none; }
 
   /* Moments: terracotta, rust and olive washes as on their poster, a strip of film above and below the wordmark */
   .moments { background: radial-gradient(55% 75% at 28% 62%, rgba(122, 116, 66, 0.95), transparent 72%),

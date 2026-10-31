@@ -40,9 +40,11 @@
   .cheer { background-image: linear-gradient(100deg, #FFE7A3 10%, #FFC6E0 40%, #fff 55%, #FFE7A3 90%); color: #2E3258;
     box-shadow: 0 0 0 1px rgba(255, 200, 61, 0.6), 0 6px 18px -6px rgba(255, 95, 162, 0.6); }
   .ch { font: 700 11px/1 Georgia, 'Times New Roman', serif; letter-spacing: 0.2em; }
-  .knights { background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0 6px, transparent 6px 14px), linear-gradient(90deg, #1C4C94, #2F6BD0);
-    color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
-  .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; }
+  /* Knights: their blue as a material, a specular band sliding with the tilt (not silver: that is StudEx's and Sower's) */
+  .knights { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(100deg, rgb(47, 107, 208), rgb(28, 76, 148));
+    color: rgba(255, 255, 255, 0.8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), inset 0 -1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
+  .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; color: white; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
   .moments { background-image: linear-gradient(100deg, #F2DEC8 15%, #E3A985 40%, #F6E7D6 55%, #C9C391 75%, #F2DEC8 90%); color: #3A2016;
     box-shadow: inset 0 0 0 1px rgba(58, 32, 22, 0.15); }
   .mo { font: 800 12px/1 var(--font-display); letter-spacing: 0.34em; }
