@@ -42,13 +42,13 @@
   {:else if look === 'studex' && wide}
     <!-- the profile's card: the Oct 29 art (owner, Oct 31: both redraws of it were worse) with what he asked on top: their
          name big in outline, motion (the streaks drift, the arrow glows and a glint runs up it), gloss and depth -->
-    <i class="streaks"></i><i class="drift"></i><i class="dots"></i><b class="big">STUDEX</b>
-    <svg class="dec sxa" viewBox="0 0 340 221" preserveAspectRatio="none">
+    <i class="streaks"></i><i class="drift"></i><b class="big">STUDEX</b><b class="big foil" aria-hidden="true">STUDEX</b>
+    <svg class="dec sxa par" viewBox="0 0 340 221" preserveAspectRatio="none">
       <defs><linearGradient id={gid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EE4A33" /><stop offset="1" stop-color="rgb(169, 33, 26)" /></linearGradient></defs>
       <path d="M0 0H120.9L34 221H0Z" fill="url(#{gid})" /><path class="glow29" d="M114.6 14L33.2 223" vector-effect="non-scaling-stroke" />
       <path class="cut29" d="M99.6 24L114.6 14L118.9 31.5M114.6 14L33.2 223" stroke-width="4" />
       <path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
-    <i class="gloss"></i>
+    <i class="flare"></i><i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
          glint runs up the arrow now and then. On the profile's card the split runs between the photo and the name. -->
@@ -93,9 +93,24 @@
     background: repeating-linear-gradient(-28deg, transparent 0 18px, rgba(255, 255, 255, 0.08) 18px 19px, transparent 19px 46px);
     animation: sxdrift 7s linear infinite; }
   @keyframes sxdrift { to { transform: translate(-21.6px, -40.6px); } }
-  /* their name big behind, in outline: seen, but the name on the card stays the one read */
+  /* their name big behind, in outline: seen, but the name on the card stays the one read. Depth with the phone's tilt
+     (--gx/--gy from the badge's glass): the name floats nearest and moves most, the arrow less, the streaks least */
   .big { position: absolute; z-index: 1; right: -18px; bottom: 30px; font: italic 900 98px/1 var(--font-display); letter-spacing: -0.04em; white-space: nowrap;
-    color: rgba(255, 255, 255, 0.05); -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3); }
+    color: rgba(255, 255, 255, 0.05); -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.3);
+    transform: translate(calc(var(--gx, 0) * -14px), calc(var(--gy, 0) * -8px)); transition: transform 160ms ease-out; }
+  /* a holographic foil inside the letters, its rainbow sliding with the tilt like a real foil print */
+  .big.foil { -webkit-text-stroke: 0; color: transparent; opacity: 0.2; mix-blend-mode: screen;
+    background: linear-gradient(100deg, rgb(255, 166, 218), rgb(185, 163, 255), rgb(134, 227, 255), rgb(166, 255, 214), rgb(255, 230, 154), rgb(255, 166, 218)) 0 0 / 300% 100%;
+    background-position: calc(50% + var(--gx, 0) * 70%) 0; -webkit-background-clip: text; background-clip: text; }
+  .par { transform: translate(calc(var(--gx, 0) * -5px), calc(var(--gy, 0) * -3px)) scale(1.04); transition: transform 160ms ease-out; }
+  .streaks { transform: translate(calc(var(--gx, 0) * 4px), calc(var(--gy, 0) * 3px)) scale(1.05); }
+  /* a star of light at the arrow's tip when the glint reaches it (the glint's cycle: 5 s, from 1 s, arrives at 30 %) */
+  .flare { position: absolute; z-index: 1; left: calc(33.7% - 22px); top: calc(6.3% - 22px); width: 44px; height: 44px; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, rgba(255, 255, 255, 0.5) 4px, transparent 60%),
+      linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.7) 50%, transparent 80%) center / 100% 1.5px no-repeat,
+      linear-gradient(transparent 20%, rgba(255, 255, 255, 0.7) 50%, transparent 80%) center / 1.5px 100% no-repeat;
+    animation: sxflare 5s 1s ease-out infinite; }
+  @keyframes sxflare { 0%, 24% { opacity: 0; transform: scale(0.3) rotate(0deg); } 31% { opacity: 1; transform: scale(1.1) rotate(20deg); } 48%, 100% { opacity: 0; transform: scale(0.6) rotate(45deg); } }
   /* the arrow lit: a soft glow breathing under the white cut */
   .glow29 { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 10; stroke-linecap: round; filter: blur(5px); animation: sxbreathe 3.2s ease-in-out infinite; }
   @keyframes sxbreathe { 50% { opacity: 0.35; } }
@@ -104,13 +119,11 @@
     background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 55%, transparent 70%),
       linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.18));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 8px rgba(0, 0, 0, 0.3); }
-  @media (prefers-reduced-motion: reduce) { .drift, .glow29 { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .drift, .glow29 { animation: none; } .flare { display: none; } }
   :global(html.lowfx) .drift, :global(html.lowfx) .glow29 { animation: none; }
+  :global(html.lowfx) .flare, :global(html.lowfx) .foil { display: none; }
   .cut29 { fill: none; stroke: rgba(255, 255, 255, 0.92); stroke-linecap: round; stroke-linejoin: round; }
   .sxa { z-index: 0; }
-  .dots { position: absolute; inset: 0; pointer-events: none; opacity: 0.5; z-index: 1;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1px, transparent 1.6px) 0 0 / 7px 7px;
-    -webkit-mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); mask: radial-gradient(70% 90% at 0% 100%, #000, transparent 70%); }
   /* StudEx (redrawn Oct 31 from their brand kit: the Oct 29 wedge with halftone and a ghost name read as clutter): deep
      navy lit from the top right, the red half in their poster's gradient, white streaks along the arrow's slope, the
      arrow itself with a soft glow, a glint running up it every few seconds */
