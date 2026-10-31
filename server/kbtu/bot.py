@@ -151,6 +151,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"fa_{ref[1]}") if why else None
     if kind in ("backup_failed", "backup_ok", "userbot_off", "userbot_ok"):  # bf/bo:<day> to the admins; uo/ub:<since> to the owner
         return (*texts.bot_message(lang, kind), "")
+    if kind in ("prefill_no_match", "prefill_other_id", "prefill_id_held"):  # pn/pf:<user>, ph:<user>:<holder>, to the owner (account.ms_link)
+        return (*texts.bot_message(lang, kind, user=ref[1], holder=ref[-1]), "")
     if kind == "channel_ask":  # ca:<org>, to the club's President (admin channel-ask): gone once the club has its channel
         o = one(con, """SELECT o.name FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
             WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))

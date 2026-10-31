@@ -281,9 +281,10 @@ def became_student(con, uid: int) -> None:
                 logic.screen_came(con, r["event_id"], uid, t)
 
 
-def prefill(con, email: str | None) -> dict | None:
+def prefill(con, email: str | None, ms: dict | None = None) -> dict | None:
     """The student ID an organizers' list has for this KBTU mail (open sessions only), else the freshmen list's
-    (admin prefill-import) with its names. Never an ID another student holds: a typo in a list would hand it over."""
+    (admin prefill-import) when its name is the Microsoft account's (`ms`: account.prefill_mine). Never an ID another
+    student holds: a typo in a list would hand it over."""
     if not email:
         return None
     free = "NOT EXISTS (SELECT 1 FROM students t WHERE t.student_id = x.student_id)"
@@ -292,5 +293,5 @@ def prefill(con, email: str | None) -> dict | None:
         WHERE x.email = ? AND x.student_id IS NOT NULL AND s.ended_at IS NULL AND {free} ORDER BY s.id DESC""", e)
     if r:
         return {"studentId": r[0]}
-    r = one(con, f"SELECT x.student_id, x.first_name, x.last_name FROM prefill x WHERE x.email = ? AND {free}", e)
-    return {"studentId": r[0], "first": r[1], "last": r[2]} if r else None
+    r = one(con, f"SELECT x.* FROM prefill x WHERE x.email = ? AND {free}", e)
+    return {"studentId": r["student_id"]} if r and ms and logic.account.prefill_mine(r, ms.get("first"), ms.get("last")) else None

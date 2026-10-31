@@ -6573,20 +6573,24 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
 
 def test_freshmen_prefill(env, monkeypatch, capsys):
     """The Oct 31 2026 initiation's freshmen list (admin prefill-import, made-up people): IDs normalised, bad and doubled
-    rows dropped, counts printed and never a value, a second run changes nothing; only the student whose KBTU mail it is
-    sees it, in their own form; linking fills what their row lacks, gives "came" its badge and deletes the row; never an
-    ID another student holds; deleting an account takes its row along."""
+    rows dropped, counts printed and never a value, each list once; a student already confirmed with the row's ID who
+    came gets the badge at once; only the student whose KBTU mail it is sees it, in their own form, with names only where
+    Microsoft has none; linking with the row's ID fills what their row lacks and gives "came" its badge, with another ID
+    nothing; the row goes either way; never an ID another student holds; deleting an account takes its row along."""
     import io
     from kbtu import admin, checkin
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     login(c, 1, "held")
+    came = login(c, 5, "came")
     con = db.connect(cfg.db_path)
-    con.execute("UPDATE students SET student_id = '25B000009', email = 'held@kbtu.kz' WHERE student_id = '24Bheld'")
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (came["id"],))  # the owner hears of mismatches
+    con.execute("UPDATE students SET student_id = '25B000009', email = 'held@kbtu.kz', ms_oid = 'oid-held' WHERE student_id = '24Bheld'")
+    con.execute("UPDATE students SET student_id = '25B000005', email = 'came@kbtu.kz', ms_oid = 'oid-came' WHERE student_id = '24Bcame'")
     lines = ["email,student_id,last,first,middle,school,phone,came",
-             "A_One@kbtu.kz, 25\u0432 01 0001 ,Oneova,Aya,Sultanqyzy,SITE,8 701 000 00 01,1",   # Cyrillic Ve, spaces, upper mail
+             "A_One@kbtu.kz, 25\u0432 01 0001 ,\u041e\u0441\u043f\u0430\u043d\u043e\u0432\u0430,\u0410\u0439\u0430,Sultanqyzy,SITE,8 701 000 00 01,1",   # Cyrillic Ve, spaces, upper mail
              "b_two@kbtu.kz,25\u0418O10002,Twoev,Bek,,ISE,+7 701 000 00 02,0",                   # Cyrillic I; an O for a zero
-             "b_two@kbtu.kz,25B010002,Twoev,Bek,,ISE,,0",                                        # the same again: collapsed
+             "b_two@kbtu.kz,25B010002,Twoev,Bek,,ISE,,1",                                        # the same again: one row, came
              "c_three@kbtu.kz,25B010003,,,,,,1",
              "c_three@kbtu.kz,25B010033,,,,,,1",                                                 # one mail, two IDs
              "d_four@kbtu.kz,25B010004,,,,,,0",
@@ -6595,56 +6599,87 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
              ",25B010007,,,,,,0",
              "g_seven@kbtu.kz,hello,,,,,,0",
              "h_eight@kbtu.kz,99B010008,,,,,,0",                                                 # a year ahead
-             "held@kbtu.kz,25B010010,,,,,,1",                                                    # signed up already
-             "i_nine@kbtu.kz,25B000009,,,,,,1"]                                                  # another student's ID
+             "held@kbtu.kz,25B010010,,,,,,1",                                                    # signed up already, another ID
+             "came@kbtu.kz,25B000005,Testov,Came,,,,1",                                          # signed up already, came: badged
+             "i_nine@kbtu.kz,25B000009,,,,,,1",                                                  # another student's ID
+             "j_ten@kbtu.kz,26B010010,\u0422\u0435\u043d,\u0416\u0430\u043d,,,77010000001.0,0"]                                      # this intake; an Excel phone
 
-    def run(text: str) -> str:
+    def run(text: str, name: str) -> str:
         monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(text.encode())))
         capsys.readouterr()
-        admin.main(["prefill-import"])
+        admin.main(["prefill-import", "--list", name])
         return capsys.readouterr().out
-    out = run("\n".join(lines) + "\n")
-    assert out.split("\n")[0] == "rows 13  kept 2  same 1  bad_email 2  bad_id 2  dup_email 2  dup_id 2  signed_up 1  id_held 1"
+    out = run("\n".join(lines) + "\n", "init26")
+    assert out.split("\n")[0] == ("rows 15  kept 3  same 1  badged 1  bad_email 2  bad_id 2  dup_email 2  dup_id 2  signed_up 1  "
+                                  "id_held 1  bad_phone 1")
     assert "kbtu.kz" not in out and "25B" not in out and "Aya" not in out                 # counts only
-    assert run("\n".join(lines) + "\n").split("\n")[0].split("  ")[1] == "kept 2"          # a second run: the same two rows
     assert [tuple(r) for r in con.execute("SELECT email, student_id, phone, came FROM prefill ORDER BY email")] == [
-        ("a_one@kbtu.kz", "25B010001", "+77010000001", 1), ("b_two@kbtu.kz", "25B010002", "+77010000002", 0)]
-    with pytest.raises(SystemExit):
-        run("email,student_id\nx@kbtu.kz,25B010001\n")                                     # the wrong header: nothing
+        ("a_one@kbtu.kz", "25B010001", "+77010000001", 1), ("b_two@kbtu.kz", "25B010002", "+77010000002", 1),
+        ("j_ten@kbtu.kz", "26B010010", None, 0)]
+    ach = lambda uid: {a["code"]: a["level"] for a in c.get(f"/api/users/{uid}", headers=tma(1)).json()["awards"]["achievements"]}  # noqa: E731
+    assert ach(came["id"])["init26f"] == 1
     with pytest.raises(SystemExit) as e:
-        run(lines[0] + "\nx@kbtu.kz,25B010011,,,,,,yes\n")
+        run("\n".join(lines) + "\n", "init26")                                             # each list once
+    assert "once" in str(e.value)
+    assert run("\n".join(lines) + "\n", "init26b").split("\n")[0].startswith("rows 15  kept 3  same 1  badged 0")
+    with pytest.raises(SystemExit):
+        run("email,student_id\nx@kbtu.kz,25B010001\n", "x1")                               # the wrong header: nothing
+    with pytest.raises(SystemExit) as e:
+        run(lines[0] + "\nx@kbtu.kz,25B010011,,,,,,yes\n", "x2")
     assert "line 2" in str(e.value) and "x@" not in str(e.value)
     assert [logic.account.norm_sid(x) for x in ("25b010001", "25\u041c010001", "2\u041e\u04120100", "25X12")] \
         == ["25B010001", "25M010001", None, None]
-    # only the student Microsoft vouches for sees it, in their own form
-    who = lambda tg, mail: {"oid": f"oid-{tg}", "email": mail, "first": "", "last": "", "employeeId": "", "profile": {}}  # noqa: E731
-    uid = {tg: c.get("/api/me", headers=tma(tg)).json()["id"] for tg in (2, 3, 4)}
-    logic.ms_remember(con, uid[2], who(2, "a_one@kbtu.kz"))
-    logic.ms_remember(con, uid[3], who(3, "z_other@kbtu.kz"))
-    assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "25B010001", "first": "Aya", "last": "Oneova"}
-    assert c.get("/api/me", headers=tma(3)).json()["msPending"]["prefill"] is None
+    # only the student Microsoft vouches for sees it, and only when the name matches too (Latin vs Cyrillic)
+    who = lambda tg, mail, first, last: {"oid": f"oid-{tg}", "email": mail, "first": first, "last": last, "employeeId": "", "profile": {}}  # noqa: E731
+    uid = {tg: c.get("/api/me", headers=tma(tg)).json()["id"] for tg in (2, 3, 4, 6, 7)}
+    logic.ms_remember(con, uid[2], who(2, "a_one@kbtu.kz", "Aya", "Ospanova"))
+    logic.ms_remember(con, uid[3], who(3, "z_typo@kbtu.kz", "Zed", "Other"))
+    con.execute("INSERT INTO prefill (email, student_id, last_name, first_name, phone, came) VALUES ('z_typo@kbtu.kz', '25B010050', 'Serikov', 'Bolat', '+77010000099', 1)")
+    assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "25B010001"}
+    assert c.get("/api/me", headers=tma(3)).json()["msPending"]["prefill"] is None          # another person's name: nothing
     assert c.get("/api/me", headers=tma(4)).json()["msPending"] is None
     # never an ID another student holds, from either list
-    con.execute("INSERT INTO prefill (email, student_id) VALUES ('z_other@kbtu.kz', '25B000009')")
-    assert checkin.prefill(con, "z_other@kbtu.kz") is None
-    assert checkin.new(con, "Meeting", [{"email": "z_other@kbtu.kz", "name": "Z Other", "studentId": "25B000009"}], None)
-    assert checkin.prefill(con, "z_other@kbtu.kz") is None
-    # linking: what the row lacks, the badge for "came", the row gone
-    r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "25B010001", "firstName": "Aya", "lastName": "Oneova",
-                                                           "consentVersion": logic.CONSENT})
+    con.execute("INSERT INTO prefill (email, student_id, last_name, first_name, came) VALUES ('h_eld@kbtu.kz', '25B000009', 'Ten', 'Jan', 1)")
+    assert checkin.prefill(con, "h_eld@kbtu.kz", {"first": "Jan", "last": "Ten"}) is None
+    assert checkin.new(con, "Meeting", [{"email": "q_list@kbtu.kz", "name": "Q List", "studentId": "25B000009"}], None)
+    assert checkin.prefill(con, "q_list@kbtu.kz") is None
+    alerts = lambda: [tuple(r) for r in con.execute(  # noqa: E731
+        "SELECT kind, ref FROM bot_outbox WHERE user_id = ? AND kind LIKE 'prefill_%' ORDER BY id", (came["id"],))]
+    # linking with the row's ID and name: what the row lacks, the badge for "came", the row gone, nothing to check
+    r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "25B010001", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
     s = con.execute("SELECT middle_name, school, phone FROM students WHERE user_id = ?", (uid[2],)).fetchone()
     assert tuple(s) == ("Sultanqyzy", "SITE", "+77010000001")
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'a_one@kbtu.kz'").fetchone()
-    ach = {a["code"]: a["level"] for a in c.get(f"/api/users/{uid[2]}", headers=tma(1)).json()["awards"]["achievements"]}
-    assert ach["init26f"] == 1 and ach["init26"] == 0
+    assert ach(uid[2])["init26f"] == 1 and ach(uid[2])["init26"] == 0 and alerts() == []
     out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
     assert bot._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
+    # a typo'd mail, another person's name: nothing from the row, no badge, the row stays; the owner hears (ids only)
+    r = c.post("/api/kbtu/manual", headers=tma(3), json={"studentId": "25B010099", "consentVersion": logic.CONSENT})
+    assert r.status_code == 200, r.text
+    assert con.execute("SELECT phone FROM students WHERE user_id = ?", (uid[3],)).fetchone()[0] is None
+    assert ach(uid[3])["init26f"] == 0 and con.execute("SELECT 1 FROM prefill WHERE email = 'z_typo@kbtu.kz'").fetchone()
+    assert alerts() == [("prefill_no_match", f"pn:{uid[3]}")]
+    # the name matches but the row's ID is another student's: used, and the owner hears
+    logic.ms_remember(con, uid[6], who(6, "h_eld@kbtu.kz", "Jan", "Ten"))
+    assert c.post("/api/kbtu/manual", headers=tma(6), json={"studentId": "26B010011", "consentVersion": logic.CONSENT}).status_code == 200
+    held = con.execute("SELECT user_id FROM students WHERE student_id = '25B000009'").fetchone()[0]
+    assert ach(uid[6])["init26f"] == 1 and alerts()[1:] == [("prefill_id_held", f"ph:{uid[6]}:{held}")]
+    # the name matches (Cyrillic list, Latin Microsoft) but the student gives another ID than the row's
+    logic.ms_remember(con, uid[7], who(7, "j_ten@kbtu.kz", "Zhan", "Ten"))
+    assert c.post("/api/kbtu/manual", headers=tma(7), json={"studentId": "26B010012", "consentVersion": logic.CONSENT}).status_code == 200
+    assert alerts()[2:] == [("prefill_other_id", f"pf:{uid[7]}")]
+    assert not con.execute("SELECT 1 FROM prefill WHERE email = 'j_ten@kbtu.kz'").fetchone()
+    for kind, ref in alerts():
+        out = con.execute("SELECT * FROM bot_outbox WHERE kind = ? AND ref = ?", (kind, ref)).fetchone()
+        text = bot._render(con, {**dict(out), "lang": "en"})[0]
+        assert f"#{ref.split(':')[1]}" in text and "kbtu.kz" not in text and "B0" not in text and "Serikov" not in text
     # deleting an account before it linked: its row goes too
-    logic.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz"))
+    logic.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz", "Bek", "Twoev"))
     logic.delete_me(con, logic.Viewer(uid[4], "user", False))
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'b_two@kbtu.kz'").fetchone()
     con.execute("INSERT INTO prefill (email, student_id) VALUES ('held@kbtu.kz', '25B010010')")   # a student's own mail
     delete_now(c, cfg, tma(1))
+    assert [k for k, _ in alerts()] == ["prefill_no_match", "prefill_other_id"]              # the alert naming them went too
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'held@kbtu.kz'").fetchone()
     con.close()

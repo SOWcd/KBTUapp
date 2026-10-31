@@ -33,9 +33,20 @@ def ms_link(con, uid: int, who: dict) -> None:
         last_name = CASE WHEN manual = 1 THEN COALESCE(NULLIF(?, ''), last_name) ELSE last_name END WHERE user_id = ?""",
                 (who["oid"], who["email"], core.now(), json.dumps(who.get("profile") or {}, ensure_ascii=False), who["first"], who["last"], uid))
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
-    # the freshmen list's row for this mail (Microsoft vouched for it): what my row lacks, the initiation badge; then gone
-    p = one(con, "DELETE FROM prefill WHERE email = ? RETURNING *", str(who["email"] or "").lower())
+    # the freshmen list's row for this mail (typed at registration, so a classmate's by mistake is possible): mine only
+    # when the name matches too. Mine: what my row lacks, the initiation badge, then gone. Not mine: nothing, it stays.
+    # Either way the owner hears (ids only) what to check: no name match, another ID than the row's, the row's ID held
+    p = one(con, "SELECT * FROM prefill WHERE email = ?", str(who["email"] or "").lower())
+    s = one(con, "SELECT first_name, last_name, student_id FROM students WHERE user_id = ?", uid)
     if p:
+        mine = prefill_mine(p, s["first_name"], s["last_name"])
+        held = one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", p["student_id"], uid)
+        alert = (("prefill_no_match", f"pn:{uid}") if not mine else ("prefill_id_held", f"ph:{uid}:{held[0]}") if held
+                 else ("prefill_other_id", f"pf:{uid}") if s["student_id"] != p["student_id"] else None)
+        for (owner,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0") if alert else []:
+            notify(con, owner, *alert)
+    if p and mine:
+        con.execute("DELETE FROM prefill WHERE email = ?", (p["email"],))
         con.execute("""UPDATE students SET middle_name = COALESCE(NULLIF(middle_name, ''), ?), school = COALESCE(NULLIF(school, ''), ?),
             phone = COALESCE(NULLIF(phone, ''), ?) WHERE user_id = ?""", (p["middle_name"], p["school"], p["phone"], uid))
         if p["came"] and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", uid):
@@ -58,26 +69,35 @@ def norm_sid(raw: object) -> str | None:
     return sid if sid and isinstance(c := core.course_of(sid), int) and 1 <= c <= 6 else None
 
 
+def prefill_mine(p, first: str | None, last: str | None) -> bool:
+    """The freshmen list's row is this KBTU account's: its name matches too, as a club roster's row (roster.same_person:
+    Cyrillic or Latin, two words shared)."""
+    from .. import roster  # imports logic: here, not at the top
+    return roster.same_person(f"{p['last_name'] or ''} {p['first_name'] or ''}", first or "", last or "")
+
+
 PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
 
 
-def prefill_import(con, got: list[dict]) -> dict[str, int]:
-    """The freshmen list (admin prefill-import): one row per KBTU mail, upserted, so a second run changes nothing.
-    Dropped: a bad mail or ID, an ID given to two mails, a mail given two IDs, a mail or ID a student already has.
-    Counts only: the caller prints them, never a value."""
+def prefill_import(con, got: list[dict], name: str) -> dict[str, int]:
+    """The freshmen list (admin prefill-import): one row per KBTU mail. Each list `name` runs once (meta), so a row
+    whose account was deleted never comes back. Dropped: a bad mail or ID, an ID given to two mails, a mail given two
+    IDs, a mail or ID a student already has; a student already confirmed with the row's ID and name who came gets the badge
+    now (badged). Counts only: the caller prints them, never a value. ValueError: this list ran already."""
     n = Counter(rows=len(got))
     good: dict[str, dict] = {}
     by_email: dict[str, list[str]] = {}
-    for r in got:  # each row lands in exactly one count: they add up to `rows`
+    for r in got:  # each row lands in exactly one count: they add up to `rows` (bad_phone aside: the row stays)
         email, sid = "".join(str(r.get("email") or "").split()).lower(), norm_sid(r.get("student_id"))
+        came = int(str(r.get("came") or "").strip() == "1")
         if not re.fullmatch(r"[a-z0-9._%+-]+@kbtu\.kz", email):
             n["bad_email"] += 1
         elif not sid:
             n["bad_id"] += 1
         else:
             by_email.setdefault(email, []).append(sid)
-            n["same"] += email in good  # the same mail again: one row
-            good.setdefault(email, {**r, "email": email, "student_id": sid})
+            n["same"] += email in good  # the same mail again: one row, "came" if any of them says so
+            good.setdefault(email, {**r, "email": email, "student_id": sid, "came": 0})["came"] |= came
     for e in [e for e, ids in by_email.items() if len(set(ids)) > 1]:  # one mail, two IDs: which one is it
         n["dup_email"] += len(by_email[e])
         n["same"] -= len(by_email[e]) - 1
@@ -88,19 +108,30 @@ def prefill_import(con, got: list[dict]) -> dict[str, int]:
         del good[e]
     text = lambda x, k: " ".join(str(x or "").split())[:k] or None  # noqa: E731
     with tx(con):
+        if one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_list:{name}"):
+            raise ValueError(name)
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"prefill_list:{name}", str(core.now())))
         for r in good.values():
-            if one(con, "SELECT 1 FROM students WHERE lower(email) = ?", r["email"]):
+            s = one(con, "SELECT user_id, student_id, ms_oid, first_name, last_name FROM students WHERE lower(email) = ?", r["email"])
+            if s and r["came"] and s["ms_oid"] and s["student_id"] == r["student_id"] \
+                    and prefill_mine({"last_name": r.get("last"), "first_name": r.get("first")}, s["first_name"], s["last_name"]) \
+                    and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'init26f'", s["user_id"]):
+                profiles._grant(con, None, s["user_id"], "init26f")  # signed up before the list came: the badge, not the row
+                n["badged"] += 1
+            elif s:
                 n["signed_up"] += 1
             elif one(con, "SELECT 1 FROM students WHERE student_id = ? UNION ALL SELECT 1 FROM prefill WHERE student_id = ? AND email != ?",
                      r["student_id"], r["student_id"], r["email"]):
                 n["id_held"] += 1
             else:
+                phone = kz_phone(r.get("phone"))
+                n["bad_phone"] += bool(text(r.get("phone"), 40) and not phone)  # kept without it: a bad export shows here
                 con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
                     last_name = excluded.last_name, first_name = excluded.first_name, middle_name = excluded.middle_name,
                     school = excluded.school, phone = excluded.phone, came = excluded.came""",
                             (r["email"], r["student_id"], text(r.get("last"), 40), text(r.get("first"), 40), text(r.get("middle"), 40),
-                             text(r.get("school"), 120), kz_phone(r.get("phone")), int(str(r.get("came") or "").strip() == "1")))
+                             text(r.get("school"), 120), phone, r["came"]))
                 n["kept"] += 1
     return dict(n)
 
@@ -206,8 +237,8 @@ def me(con, v: Viewer) -> dict:
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "consent": s["consent_version"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
-        # prefill: the student ID (and names) an organizers' check-in list or the freshmen list has for this KBTU mail (checkin.py)
-        "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"])}
+        # prefill: the student ID an organizers' check-in list, or the freshmen list when the name matches, has for this KBTU mail (checkin.py)
+        "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
                      if not s and not relink and (p := ms_pending(con, v.id)) else None,
         "relink": relink,
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
@@ -644,6 +675,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{v.id}", f"mscode:{v.id}"))  # an unfinished Microsoft sign-in: its profile too
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
+        con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
+                    (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
         # his unsent invites in friends' queues; who he was in the role history
         con.execute("DELETE FROM bot_outbox WHERE kind = 'friend_invite' AND ref LIKE ? AND sent_at IS NULL", (f"fi:%:{v.id}",))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target = ?", (f"user:{v.id}",))

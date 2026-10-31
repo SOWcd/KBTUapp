@@ -39,7 +39,7 @@
     return () => { document.removeEventListener("visibilitychange", back); off(); };
   });
   // back from Microsoft as someone new: the account's names (they win on the server too), only the ID and year to type
-  $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName || (pending.prefill?.first ?? ''); m.lastName = pending.last || m.lastName || (pending.prefill?.last ?? ''); m.studentId ||= pending.prefill?.studentId ?? ''; } });
+  $effect(() => { if (pending) { away = false; m.firstName = pending.first || m.firstName; m.lastName = pending.last || m.lastName; m.studentId ||= pending.prefill?.studentId ?? ''; } });
   $effect(() => { if (away && done) { away = false; haptic.ok(); say(t('login.msDone'), 'sparkles_3d'); void loadAfisha(); close(overlay.id); setTimeout(() => after?.(), 380); } });
 
   let m = $state({ lastName: '', firstName: '', studentId: '', course: 0 });

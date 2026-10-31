@@ -36,9 +36,10 @@
   .venv/bin/python -m kbtu.admin channel-ask [--send]   the active clubs with no public main channel and whether their
                                 President can get the ask (counts, club names); --send asks each by the bot to link it
                                 (once per club: a second run reaches only those who started the bot since)
-  .venv/bin/python -m kbtu.admin prefill-import < list.csv   the freshmen list (Oct 31 2026 initiation) for their sign-up
-                                form: a CSV with the header email,student_id,last,first,middle,school,phone,came (came 0/1);
-                                upserted by email (a second run changes nothing); prints counts only, never a value
+  .venv/bin/python -m kbtu.admin prefill-import --list <name> < list.csv   the freshmen list (Oct 31 2026 initiation)
+                                for their sign-up form: a CSV with the header email,student_id,last,first,middle,school,phone,came
+                                (came 0/1); each <name> runs once; came=1 of a student signed up already (same ID and name): the badge;
+                                prints counts only, never a value
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -246,7 +247,8 @@ def main(args: list[str]) -> None:
             print(f"queued {len(todo)}")
         else:
             print("nothing sent (add --send)")
-    elif cmd == "prefill-import" and len(args) == 1:  # values never printed: an error names the line, not what's on it
+    elif cmd == "prefill-import" and len(args) == 3 and args[1] == "--list" and re.fullmatch(r"[A-Za-z0-9_.-]{1,40}", args[2]):
+        # values never printed: an error names the line, not what's on it
         import csv
         import io
         from .logic.account import PREFILL_COLS, prefill_import
@@ -262,8 +264,12 @@ def main(args: list[str]) -> None:
                 sys.exit(f"line {i}: {len(PREFILL_COLS)} columns wanted, came 0 or 1; nothing imported")
         if len(got) < 2:
             sys.exit("no rows")
-        n = prefill_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]])
-        print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "kept", "same", "bad_email", "bad_id", "dup_email", "dup_id", "signed_up", "id_held")))
+        try:
+            n = prefill_import(con, [dict(zip(PREFILL_COLS, r)) for r in got[1:]], args[2])
+        except ValueError:
+            sys.exit(f"list {args[2]!r} was imported already: each list runs once (a deleted account's row must not come back)")
+        print("  ".join(f"{k} {n.get(k, 0)}" for k in ("rows", "kept", "same", "badged", "bad_email", "bad_id", "dup_email", "dup_id",
+                                                     "signed_up", "id_held", "bad_phone")))
         print(f"{one(con, 'SELECT COUNT(*) FROM prefill')[0]} rows wait in prefill")
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
