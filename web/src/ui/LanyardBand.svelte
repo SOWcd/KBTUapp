@@ -97,13 +97,13 @@
      (--gx/--gy from the badge's glass): the name floats nearest and moves most, the arrow less, the streaks least */
   .big { position: absolute; z-index: 1; right: -18px; bottom: 30px; font: italic 900 98px/1 var(--font-display); letter-spacing: -0.04em; white-space: nowrap;
     color: rgba(255, 255, 255, 0.1); /* filled, not outlined: a stroke drew the glyphs' overlaps (squares inside the X) */
-    transform: translate(calc(var(--gx, 0) * -4px), calc(var(--gy, 0) * -2.5px)); transition: transform 400ms ease-out; }
+    transform: translate(calc(var(--gx, 0) * -8px), calc(var(--gy, 0) * -5px)); transition: transform 400ms ease-out; }
   /* a holographic foil inside the letters, its rainbow sliding with the tilt like a real foil print */
-  .big.foil { color: transparent; opacity: 0.12; mix-blend-mode: screen;
+  .big.foil { color: transparent; opacity: 0.16; mix-blend-mode: screen;
     background: linear-gradient(100deg, rgb(255, 166, 218), rgb(185, 163, 255), rgb(134, 227, 255), rgb(166, 255, 214), rgb(255, 230, 154), rgb(255, 166, 218)) 0 0 / 300% 100%;
-    background-position: calc(50% + var(--gx, 0) * 25%) 0; -webkit-background-clip: text; background-clip: text; }
-  .par { transform: translate(calc(var(--gx, 0) * -1.5px), calc(var(--gy, 0) * -1px)) scale(1.02); transition: transform 400ms ease-out; }
-  .streaks { transform: translate(calc(var(--gx, 0) * 1.5px), calc(var(--gy, 0) * 1px)) scale(1.02); }
+    background-position: calc(50% + var(--gx, 0) * 40%) 0; -webkit-background-clip: text; background-clip: text; }
+  .par { transform: translate(calc(var(--gx, 0) * -3px), calc(var(--gy, 0) * -2px)) scale(1.02); transition: transform 400ms ease-out; }
+  .streaks { transform: translate(calc(var(--gx, 0) * 2.5px), calc(var(--gy, 0) * 1.5px)) scale(1.02); }
   /* a star of light at the arrow's tip when the glint reaches it (the glint's cycle: 5 s, from 1 s, arrives at 30 %) */
   .flare { position: absolute; z-index: 1; left: calc(33.7% - 22px); top: calc(6.3% - 22px); width: 44px; height: 44px; pointer-events: none; opacity: 0; mix-blend-mode: screen;
     background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, rgba(255, 255, 255, 0.5) 4px, transparent 60%),
