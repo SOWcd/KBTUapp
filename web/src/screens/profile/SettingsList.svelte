@@ -224,8 +224,22 @@
   .sm > :global(svg:last-child), .sm.moon > :global(svg:first-child) { opacity: 0; transform: rotate(-90deg) scale(0.3); }
   .sm.moon > :global(svg:first-child) { transform: rotate(90deg) scale(0.3); }
   .sm.moon > :global(svg:last-child) { opacity: 1; transform: none; }
-  :global(html.lowfx) .sm > :global(svg) { transition: none; }
-  @media (prefers-reduced-motion: reduce) { .sm > :global(svg) { transition: none; } }
+  /* the sun goes out: its rays draw in one by one round the clock, then the bare disk turns into the moon (it fades a
+     beat later so the rays are seen); on the way back they grow out the other way round. Lucide's paths are N, S, NW,
+     SE, W, E, SW, NE; --i is each one's place clockwise from the top */
+  .sm > :global(svg:first-child path) { transform-origin: 12px 12px; transition: transform 140ms var(--ease-bounce) calc(60ms + (7 - var(--i)) * 14ms); }
+  .sm.moon > :global(svg:first-child) { transition: transform 300ms var(--ease-bounce), opacity 120ms ease 90ms; }
+  .sm.moon > :global(svg:first-child path) { transform: scale(0); transition: transform 90ms var(--ease-in) calc(var(--i) * 10ms); }
+  .sm :global(path:nth-of-type(1)) { --i: 0; }
+  .sm :global(path:nth-of-type(8)) { --i: 1; }
+  .sm :global(path:nth-of-type(6)) { --i: 2; }
+  .sm :global(path:nth-of-type(4)) { --i: 3; }
+  .sm :global(path:nth-of-type(2)) { --i: 4; }
+  .sm :global(path:nth-of-type(7)) { --i: 5; }
+  .sm :global(path:nth-of-type(5)) { --i: 6; }
+  .sm :global(path:nth-of-type(3)) { --i: 7; }
+  :global(html.lowfx) .sm > :global(svg), :global(html.lowfx) .sm :global(path) { transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { .sm > :global(svg), .sm :global(path) { transition: none !important; } }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
