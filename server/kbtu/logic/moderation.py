@@ -286,7 +286,8 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
         if target == "comment":
             n = con.execute("UPDATE comments SET deleted_at = NULL, deleted_by = NULL WHERE id = ? AND deleted_at IS NOT NULL", (tid,)).rowcount
         elif target in ("post", "event"):
-            n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL", (tid,)).rowcount
+            # a wiped post (its club deleted it, or 30 days passed: wipe_post) has nothing left to bring back
+            n = con.execute(f"UPDATE {target}s SET hidden_at = NULL WHERE id = ? AND hidden_at IS NOT NULL AND title != ''", (tid,)).rowcount
         elif target in ("thread", "reply"):
             if threads.owner_of(con, target, tid) == v.id:  # their own: another moderator decides
                 raise ApiError("forbidden")

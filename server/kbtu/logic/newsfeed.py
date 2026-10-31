@@ -155,15 +155,29 @@ def update_post(con, v: Viewer, pid: int, body: dict) -> dict:
     return post_shape(con, v, one(con, "SELECT * FROM posts WHERE id = ?", pid))
 
 
-def hide_post(con, v: Viewer, pid: int) -> None:
-    """Take a post down (its club's Head+ or the admin). Hidden, not erased: reactions and the audit trail stay."""
+def hide_post(con, v: Viewer, pid: int) -> list[str]:
+    """Take a post down (its club's Head+ or the admin). Its club's delete wipes it at once (wipe_post); an admin's or
+    moderator's without the club's right only hides it (a moderation act, undone within 30 days; daily wipes it then).
+    The row stays for reactions and the audit trail. Returns files to remove from disk."""
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
     if not p:
         raise ApiError("not_found")
-    if v.role not in ("admin", "moderator") and not can(con, v, p["org_id"], "posts"):
+    club = can(con, v, p["org_id"], "posts")
+    if v.role not in ("admin", "moderator") and not club:
         raise ApiError("forbidden")
-    con.execute("UPDATE posts SET hidden_at = ? WHERE id = ?", (core.now(), pid))
-    log_action(con, v.id, "post_hide", f"post:{pid}")
+    with tx(con):
+        con.execute("UPDATE posts SET hidden_at = ? WHERE id = ?", (core.now(), pid))
+        log_action(con, v.id, "post_hide", f"post:{pid}")
+        return wipe_post(con, pid) if club else []
+
+
+def wipe_post(con, pid: int) -> list[str]:
+    """A taken-down post erased: its text, translations and photo (the file too when nothing else shows it) and the
+    comments under it. The row stays (reactions, the audit). Inside the caller's tx; returns files to remove from disk."""
+    fid = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)[0]
+    con.execute("UPDATE posts SET title = '', body = '', i18n = NULL, lang = NULL, tr_by = NULL, photo_file_id = NULL WHERE id = ?", (pid,))
+    con.execute("DELETE FROM comments WHERE post_id = ?", (pid,))
+    return _drop_unused(con, fid)
 
 
 def read_posts(con, v: Viewer, ids: list) -> None:
@@ -214,6 +228,7 @@ def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
+from .account import _drop_unused  # noqa: E402
 from .clubs import orgs  # noqa: E402
 from .moderation import _thread, comments  # noqa: E402
 from .oversight import _admin  # noqa: E402

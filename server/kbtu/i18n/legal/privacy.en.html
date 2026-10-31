@@ -58,7 +58,7 @@
 
 <h2>6. Where and how long</h2>
 <p>The database is on a server in the Republic of Kazakhstan (Almaty). A backup is made every night, encrypted on our server and kept in Cloudflare R2 for about 30 days; only the operator can decrypt it: the key is neither on the server nor at Cloudflare.</p>
-<p>Data is kept while you have an account. The days you opened the app are kept for 30 days; our copies of the bot's messages lose their text after 30 days.</p>
+<p>Data is kept while you have an account. The days you opened the app are kept for 30 days; our copies of the bot's messages lose their text after 30 days. A post its club deletes is erased at once with its comments; one taken down by a moderator, after 30 days.</p>
 <p>After you delete your account, the data leaves the database at once and the backups within 30 days (no later than 37 days after the request, counting the week to cancel). So that deleted data doesn't come back when a backup is restored, we keep a separate record of the deletion: its time and a hash of the Telegram ID with a secret salt; the record is deleted after 40 days.</p>
 
 <h2>7. Your rights</h2>

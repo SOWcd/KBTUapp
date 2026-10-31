@@ -605,7 +605,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.delete("/api/posts/{pid}", status_code=204)
     def hide_post(pid: int, con: Con, v: Me):
-        logic.hide_post(con, v, pid)
+        media.drop(photos, [p for p in logic.hide_post(con, v, pid) if logic.photo_free(con, p)])
 
     @app.post("/api/posts/read", status_code=204)
     def read_posts(con: Con, v: Me, body: dict = Body(...)):

@@ -283,11 +283,21 @@ def ai_retry(con, v: Viewer) -> None:
         con.execute(f"UPDATE orgs SET ai_tries = 0 WHERE lang IS NULL AND ai_tries >= ? AND id IN (SELECT id {_AI_ORGS})", (AI_TRIES,))
 
 
+def wipe_hidden_posts(con) -> list[str]:
+    """Daily: a post hidden 30 days ago (moderation's undo window, TAKEDOWN_KEEP) is wiped (wipe_post). Files to
+    remove from disk."""
+    with tx(con):
+        return [f for r in rows(con, "SELECT id FROM posts WHERE hidden_at <= ? AND title != ''", core.now() - TAKEDOWN_KEEP)
+                for f in wipe_post(con, r[0])]
+
+
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
 from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
+from .moderation import TAKEDOWN_KEEP  # noqa: E402
+from .newsfeed import wipe_post  # noqa: E402
 from . import assistant, mapflaws, threads  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402

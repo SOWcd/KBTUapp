@@ -6490,3 +6490,60 @@ def test_channel_ask(env, monkeypatch, capsys):
     assert c.get("/api/me", headers=tma(81)).json()["memberships"][0]["channel"] == {"title": "Secret", "mirror": False}
     con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1)")
     assert bot._render(con, m) is None                                  # linked meanwhile: not sent
+
+
+def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
+    """A club deleting its own post wipes it at once (text, translations, photo, the comments under it); a moderator's
+    delete only hides it, restorable, until the nightly round wipes it 30 days later; a wiped post can't be restored;
+    an edit in Telegram doesn't bring a deleted channel post back; a photo another post still shows stays."""
+    import io
+    from PIL import Image
+    from kbtu import mirror
+    c, cfg = env
+    head, mod = login(c, 51, "head"), login(c, 52, "mod")
+    H, Mo = tma(51, "Head"), tma(52, "Mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'head', 0)", (head["id"],))
+    con.execute("""INSERT INTO files (id, sha256, kind, mime, bytes, path, owner_id, created_at) VALUES
+        (1, 'a', 'event_cover', 'image/webp', 1, 'pa', ?, 0), (2, 'b', 'event_cover', 'image/webp', 1, 'pb', ?, 0)""", (head["id"], head["id"]))
+    own, shared, other, modded = (c.post("/api/orgs/1/posts", headers=H, json={"title": t, "photoId": f}).json()["id"]
+                                  for t, f in (("Own", 1), ("Shared", 2), ("Other", 2), ("Modded", None)))
+    con.execute("INSERT INTO comments (post_id, user_id, body, created_at) VALUES (?, ?, 'hi', 0)", (own, mod["id"]))
+    wiped = lambda pid: tuple(con.execute("SELECT title, body, i18n, photo_file_id FROM posts WHERE id = ?", (pid,)).fetchone()) == ("", "", None, None)  # noqa: E731
+    restore = lambda pid: c.post(f"/api/admin/taken-down/post/{pid}/restore", headers=Mo).status_code  # noqa: E731
+
+    # the club's delete: wiped at once, its photo's row gone; a photo another post shows stays
+    assert c.delete(f"/api/posts/{own}", headers=H).status_code == 204
+    assert wiped(own) and not con.execute("SELECT 1 FROM comments WHERE post_id = ?", (own,)).fetchone()
+    assert not con.execute("SELECT 1 FROM files WHERE id = 1").fetchone()
+    assert c.delete(f"/api/posts/{shared}", headers=H).status_code == 204
+    assert wiped(shared) and con.execute("SELECT photo_file_id FROM posts WHERE id = ?", (other,)).fetchone()[0] == 2
+    assert restore(own) == 404                                                  # nothing left to bring back
+
+    # a moderator's delete: only hidden, restorable
+    assert c.delete(f"/api/posts/{modded}", headers=Mo).status_code == 204
+    assert tuple(con.execute("SELECT title, hidden_at IS NOT NULL FROM posts WHERE id = ?", (modded,)).fetchone()) == ("Modded", 1)
+    assert restore(modded) == 204
+    assert c.delete(f"/api/posts/{modded}", headers=Mo).status_code == 204
+    # the nightly round: not before 30 days, then wiped
+    assert logic.wipe_hidden_posts(con) == [] and not wiped(modded)
+    real = logic.now
+    set_clock(monkeypatch, lambda: real() + 31 * 86400)
+    logic.wipe_hidden_posts(con)
+    assert wiped(modded)
+    set_clock(monkeypatch, real)
+
+    # a channel post deleted in the app by its club: a later edit in Telegram neither revives it nor makes a new post
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('IT News', 'channel', 'https://t.me/it_news', 0, 'org', 1, 1)")
+    mirror.joined(con, 500, "it_news")
+    png = io.BytesIO()
+    Image.new("RGB", (40, 30), "red").save(png, "PNG")
+    pic = media.save(png.getvalue(), tmp_path)
+    tg = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text="Meetup\nAt 7", photo=pic))
+    assert c.delete(f"/api/posts/{tg}", headers=H).status_code == 204 and wiped(tg)
+    n = con.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+    assert mirror.needs_photo(con, 500, 1, None) is False
+    assert mirror.take(con, 500, mirror.Msg(id=1, date=0, text="Meetup moved\nAt 8", photo=pic, views=9)) == tg
+    assert wiped(tg) and con.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == n

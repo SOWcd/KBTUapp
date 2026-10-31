@@ -36,7 +36,7 @@ from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFF
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
     people, seed_schools, slug_for, start_by_slug, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hide_post, post_shape, post_shapes, posts,
-    react, read_posts, unread_broadcasts, update_post)  # noqa: F401
+    react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
     add_chat, add_org_chat, approve_chat, bot_added, bot_left, chat_card, chat_handle, chat_input, chat_link,
     chat_opened, chat_orgs, chat_refreshed, chats, delete_chat, drop_org_chat, main_org_chat, may_chats,
@@ -64,7 +64,7 @@ from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MA
     remove_album_photo, screen_came, shade, undo_checkin, undo_door_guest, update_event)  # noqa: F401
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
     admin_stats, ai_retry, day_of, memo, memo_again, memo_item, memo_opened, memo_sent, memo_sign, memo_week,
-    saved_day, stats_day, tba_day, visit)  # noqa: F401
+    saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
 from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, _ask_removal, _below, _manage, _named, _ordered,
     _remove, accept_invite, banned, decide_removal, delete_role, delete_tag, dept_of, invite, map_graph,
     president_link, remove, remove_member, save_role, save_tag, team, team_setup, transfer, unban, update_member)  # noqa: F401

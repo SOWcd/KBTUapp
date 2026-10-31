@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import ai, media
-from .logic import _drop_unused, now, one, photo_free, rows, tx
+from .logic import now, one, photo_free, rows, tx, wipe_post
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
 FIRST_DAYS = 30           # ... of the last 30 days
@@ -130,10 +130,11 @@ def _counts(m: Msg) -> dict:
 
 
 def needs_photo(con, channel: int, m_id: int, grouped: int | None) -> bool:
-    """Whether a message's photo is worth downloading: a new post, or one (or its album) without a photo yet."""
-    p = one(con, """SELECT p.photo_file_id FROM tg_post_msgs t JOIN posts p ON p.id = t.post_id
+    """Whether a message's photo is worth downloading: a new post, or one (or its album) without a photo yet; never
+    one taken down (an edit in Telegram doesn't bring a deleted post's photo back)."""
+    p = one(con, """SELECT p.photo_file_id, p.hidden_at FROM tg_post_msgs t JOIN posts p ON p.id = t.post_id
         WHERE t.channel = ? AND (t.msg_id = ? OR (? IS NOT NULL AND t.grouped = ?)) LIMIT 1""", channel, m_id, grouped, grouped)
-    return not p or p["photo_file_id"] is None
+    return not p or p["photo_file_id"] is None and p["hidden_at"] is None
 
 
 def take(con, channel: int, m: Msg) -> int | None:
@@ -149,6 +150,12 @@ def take(con, channel: int, m: Msg) -> int | None:
         album = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND grouped = ?", channel, m.grouped) if m.grouped and not had else None
         pid = (had or album)["post_id"] if (had or album) else None
         lang = ai.lang_of(m.text) if m.text.strip() else None
+        if pid and one(con, "SELECT hidden_at FROM posts WHERE id = ?", pid)["hidden_at"]:
+            # taken down here (by its club or a moderator): an edit in Telegram brings back neither its text nor its photo
+            if not had:
+                con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, NULL)", (channel, m.id, pid, m.grouped))
+            _counted(con, channel, pid, m)
+            return pid
         if had and had["lang"]:  # a translation folded into another post: its edit is that language's text
             if m.text.strip():
                 _set_tr(con, pid, had["lang"], _split(m.text, title))
@@ -287,10 +294,8 @@ def gone(con, channel: int, ids: list[int], root: Path | None = None) -> list[in
                                            channel, *ids)} if ids else set():
             con.execute(f"DELETE FROM tg_post_msgs WHERE channel = ? AND post_id = ? AND msg_id IN ({','.join('?' * len(ids))})", (channel, pid, *ids))
             if not one(con, "SELECT 1 FROM tg_post_msgs WHERE post_id = ?", pid):
-                fid = one(con, "SELECT photo_file_id FROM posts WHERE id = ?", pid)[0]
-                con.execute("""UPDATE posts SET hidden_at = COALESCE(hidden_at, ?), title = '', body = '', i18n = NULL, lang = NULL,
-                    tr_by = NULL, photo_file_id = NULL WHERE id = ?""", (now(), pid))
-                paths += _drop_unused(con, fid)
+                con.execute("UPDATE posts SET hidden_at = COALESCE(hidden_at, ?) WHERE id = ?", (now(), pid))
+                paths += wipe_post(con, pid)
                 down.append(pid)
     if root:
         media.drop(root, [p for p in paths if photo_free(con, p)])

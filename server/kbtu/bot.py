@@ -335,6 +335,7 @@ def purge(cfg: Config, con) -> None:
     home = Path(cfg.db_path).resolve().parent
     receipts, photos = logic.delete_due(con)
     photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
+    photos += [p for p in logic.wipe_hidden_posts(con) if logic.photo_free(con, p)]  # and the posts hidden 30 days ago
     media.drop(home / "receipts", receipts)
     media.drop(home / "media", photos)
 
