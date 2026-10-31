@@ -6166,6 +6166,7 @@ def test_assistant(env, monkeypatch):
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
         VALUES (7, 1, 'published', 'Hackathon', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (int(time.time()) + 86400, ann["id"]))
     today = time.gmtime(time.time() + 5 * 3600).tm_wday + 1
+    con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (ann["id"],))  # login's Monday class: on a Sunday it's tomorrow's
     con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, room) VALUES (?, ?, '10:00', '10:50', 'Physics', '256')", (ann["id"], today))
     assert c.post("/api/assistant", headers=tma(1), json={"q": "where is my dean's office?"}).status_code == 404   # BOARD off
     _board_on(c, cfg)
