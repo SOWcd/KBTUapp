@@ -229,7 +229,7 @@ export function toggleSaved(id: Id): void {
     haptic.tap();
     if (on) burst(false, undefined, e.emoji); // "Save" with a purpose: a moment, and the bot reminds the day before
     try { await api.setSaved(id, on); say(phrase(on ? 'say.save' : 'say.unsave'), on ? 'sparkles_3d' : 'waving_hand_3d_default'); }
-    catch { e.saved = !on; say(t('common.error'), 'pleading_face_3d'); }
+    catch { e.saved = !on; say(t('common.error'), 'warning_3d'); }
   });
 }
 
@@ -260,7 +260,7 @@ export function toggleSub(id: Id): void {
     o.subscribed = on; o.subscribers += on ? 1 : -1;
     haptic.tap();
     try { await api.subscribe(id, on); say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
-    catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'pleading_face_3d'); }
+    catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   });
 }
 
@@ -296,6 +296,6 @@ export async function dropSchedule(): Promise<void> {
   } catch {
     // the server's own word, not the week from before: it may have deleted it, or a newer upload may have come
     data.schedule = await api.schedule().catch(() => before);
-    haptic.error(); say(t('common.error'), 'pleading_face_3d');
+    haptic.error(); say(t('common.error'), 'warning_3d');
   }
 }

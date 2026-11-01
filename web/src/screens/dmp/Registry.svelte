@@ -29,9 +29,9 @@
   $effect(() => {
     const b = back;
     untrack(() => {
-      if (b === 0) { void loadRegistry().then((ok) => { if (!ok) { data.registry ??= []; say(t('common.error'), 'pleading_face_3d'); } }); return; }
+      if (b === 0) { void loadRegistry().then((ok) => { if (!ok) { data.registry ??= []; say(t('common.error'), 'warning_3d'); } }); return; }
       past = null;
-      api.registry(b).then((l) => { if (b === back) past = l; }).catch(() => { past = []; say(t('common.error'), 'pleading_face_3d'); });
+      api.registry(b).then((l) => { if (b === back) past = l; }).catch(() => { past = []; say(t('common.error'), 'warning_3d'); });
     });
   });
   const monthTs = $derived.by(() => { const d = new Date((nowTs() + 5 * 3600) * 1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - back, 15) / 1000; });
@@ -55,7 +55,7 @@
   async function exportCsv() {
     sending = true; haptic.tap();
     try { await api.registryExport(); haptic.ok(); say(t('reg.sent'), 'sparkles_3d'); }
-    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'pleading_face_3d'); }
+    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
     finally { sending = false; }
   }
 </script>

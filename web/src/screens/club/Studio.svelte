@@ -94,7 +94,7 @@
   async function move() {
     if (!next || !room?.trim()) return;
     try { await api.changePlace(next.id, room.trim()); room = null; haptic.ok(); say(t('studio.moved'), 'sparkles_3d'); refresh(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
   let seg = $state(0);
@@ -130,7 +130,7 @@
   async function exportCsv() {
     exporting = true; haptic.tap();
     try { await api.registryExport(); haptic.ok(); say(t('reg.sent'), 'sparkles_3d'); }
-    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'pleading_face_3d'); }
+    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
     finally { exporting = false; }
   }
   // DMP's list (PLAN 95): students who say they're the one listed under another name, for the President (DMP: clubs

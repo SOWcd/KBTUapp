@@ -20,7 +20,7 @@
   async function yes() {
     busy = true;
     try { await api.rosterClaim(row.id); haptic.ok(); say(t('ro.asked'), 'raising_hands_3d_default'); close(overlay.id); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 </script>

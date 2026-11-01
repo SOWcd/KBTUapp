@@ -79,7 +79,7 @@
   async function act(job: () => Promise<unknown>, done: () => void, stranger = false) {
     acting = true;
     try { await job(); done(); friendsChanged(); await reload(stranger); }
-    catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'pleading_face_3d'); }
+    catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
     finally { acting = false; }
   }
   const welcome = () => { haptic.ok(); burst(); say(t('fr.accepted', { name: shown!.name }), 'partying_face_3d'); };
@@ -89,7 +89,7 @@
       const r = await api.askFriend(id);
       if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
       friendsChanged(); await reload();
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
     finally { acting = false; }
   }
   const accept = () => act(() => api.answerFriend(id, true), welcome);

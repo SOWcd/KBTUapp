@@ -36,7 +36,7 @@
     try {
       r = await api.round(org);
       apps = r ? await api.roundApps(r.id) : [];
-    } catch { say(t('common.error'), 'pleading_face_3d'); }
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
   $effect(() => { void load(); });
 
@@ -74,7 +74,7 @@
       if (mine) Object.assign(mine, { verdict, stars, note }); else a.votes.push({ by: t('cast.me'), mine: true, verdict, stars, note });
       haptic.select();
       if (walking) review(); else cur = null;
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function decide(s: AppStage, tagId: Id | null = null) {
     if (!cur) return;
@@ -83,12 +83,12 @@
       const res = await api.decideApp(a.id, { stage: s, tagId });
       a.stage = res.stage; a.takenTag = res.takenTag;
       haptic.ok(); cur = null;
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
   async function closeIntake() {
     if (!r || !(await sheets.ask({ title: t('cast.closeAsk'), text: t('cast.closeText'), ok: t('cast.closeGo'), cancel: t('common.cancel') }))) return;
-    try { r = await api.updateRound(r.id, { close: true }); haptic.ok(); studioChanged(); } catch { say(t('common.error'), 'pleading_face_3d'); }
+    try { r = await api.updateRound(r.id, { close: true }); haptic.ok(); studioChanged(); } catch { say(t('common.error'), 'warning_3d'); }
   }
   async function sendResults() {
     if (!r) return;
@@ -98,7 +98,7 @@
       const res = await api.sendRound(r.id);
       haptic.ok(); burst(); say(t('cast.sentDone', { n: res.accepted }), 'party_popper_3d');
       studioChanged(); close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // interviews: the slots by day with who booked them, adding a day's slots, inviting the shortlisted, who came
   let view = $state<'apps' | 'iv'>('apps');
@@ -127,7 +127,7 @@
       const res = await api.inviteRound(r.id);
       for (const a of apps) if (a.stage === 'next') a.invited = true;
       haptic.ok(); say(t('cast.ivInvited', { n: res.invited }), 'party_popper_3d');
-    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.message === 'no_slots' ? t('cast.ivNoSlots') : t('common.error'), 'pleading_face_3d'); }
+    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.message === 'no_slots' ? t('cast.ivNoSlots') : t('common.error'), 'warning_3d'); }
   }
   async function showed(appId: Id, came: boolean | null) {
     try {
@@ -135,14 +135,14 @@
       for (const s of slots) for (const p of s.people ?? []) if (p.appId === appId) p.showed = came;
       const a = apps.find((x) => x.id === appId); if (a) a.showed = came;
       haptic.select();
-    } catch { say(t('common.error'), 'pleading_face_3d'); }
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   function share() {
     haptic.tap();
     shareCard({ kind: 'rc', id: String(org) }, 'https://t.me/KBTUappBot?startapp=rc_' + org, r?.title ?? '')
       .then((sent) => { if (sent) say(t('cast.shared'), 'party_popper_3d'); })
-      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
 </script>
 

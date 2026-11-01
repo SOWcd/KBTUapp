@@ -65,7 +65,7 @@
     haptic.select();
     if (pickedDay === day) { pickedDay = null; picked = null; return; }
     pickedDay = day; picked = null;
-    try { const d = await api.adminDay(day); if (pickedDay === day) picked = d; } catch { say(t('common.error'), 'pleading_face_3d'); }
+    try { const d = await api.adminDay(day); if (pickedDay === day) picked = d; } catch { say(t('common.error'), 'warning_3d'); }
   }
   // a bar is ~8 px wide: the finger picks by where it is along the chart, and slides from day to day
   let scrub = false;
@@ -88,7 +88,7 @@
       if (abuse) void loadClosed();
       void loadMe(); // the count on the Admin row
       haptic.ok(); say(abuse ? t('adm.tgcAbused') : remove ? t('adm.removed') : r.removed ? t('adm.restored') : t('adm.kept'), 'raising_hands_3d_default');
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // a Telegram comment's line: the AI's word and each reporter as right / wrong and days since sign-in, never who
   const tgcLine = (r: ReportItem) => [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', ago(r.at)].filter(Boolean).join(' · ');
@@ -104,7 +104,7 @@
   $effect(() => { void loadClosed(); });
   async function reopen(x: TgcClosed) {
     try { await api.tgcReopen(x.person.id); closedR = (closedR ?? []).filter((y) => y.person.id !== x.person.id); haptic.ok(); say(t('adm.tgcReopened'), 'raising_hands_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- a wrong call undone: what I took down from the reports in the last 30 days, folded under its count ----
   let down = $state<TakenDown[] | null>(null);
@@ -113,7 +113,7 @@
   $effect(() => { void loadDown(); });
   async function undo(x: TakenDown) {
     try { await api.restore(x.target, x.id); down = (down ?? []).filter((y) => !(y.target === x.target && y.id === x.id)); haptic.ok(); say(t('adm.restored'), 'raising_hands_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- clubs waiting for the check (§4.6): yes creates the club with its applicant as President; no needs a reason ----
   let apps = $state<ClubApplication[] | null>(null);
@@ -129,7 +129,7 @@
       if (approve) { clubsN = (clubsN ?? 0) + 1; void loadAfisha(); }
       void loadMe();
       haptic.ok(); say(approve ? t('adm.cappYes', { name: a.name }) : t('adm.cappNo'), approve ? 'party_popper_3d' : 'waving_hand_3d_default');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 

@@ -91,7 +91,7 @@
       void loadAfisha(); // the club's "applied" mark
     } catch (x) {
       haptic.error();
-      say(x instanceof ApiErr && x.code === 'closed' ? t('cast.closed') : x instanceof ApiErr && x.message === 'member' ? t('join.already', { club: club?.name ?? '' }) : t('common.error'), 'pleading_face_3d');
+      say(x instanceof ApiErr && x.code === 'closed' ? t('cast.closed') : x instanceof ApiErr && x.message === 'member' ? t('join.already', { club: club?.name ?? '' }) : t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
   // the interview (invited after screening): the times with room, mine on top; another time any time before it starts
@@ -111,7 +111,7 @@
       if (r.mine) r.mine.slot = m ? { id: m.id, startsAt: m.startsAt, minutes: m.minutes, place: m.place } : null;
       picking = false; haptic.ok();
       if (m) say(t('cast.ivBooked', { when: dayMonth(m.startsAt) + ', ' + time(m.startsAt) }), 'spiral_calendar_3d');
-    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'full' ? t('cast.ivFull') : t('common.error'), 'pleading_face_3d');
+    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'full' ? t('cast.ivFull') : t('common.error'), 'warning_3d');
       api.roundSlots(r.id).then((y) => (slots = y)).catch(() => {}); }
   }
   function nothingFits() {
@@ -136,7 +136,7 @@
   async function withdraw() {
     if (!r || !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('cast.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep'), danger: true }))) return;
     try { await api.withdrawRound(r.id); haptic.soft(); void loadAfisha(); close(overlay.id); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

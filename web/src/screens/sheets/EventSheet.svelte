@@ -128,7 +128,7 @@
   async function addSeats(n: number) {
     adding2 = true;
     try { detail = await api.addSeats(id, n); studioChanged(); haptic.ok(); say(t('seats.added', { n }), 'raising_hands_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { adding2 = false; }
   }
 
@@ -167,7 +167,7 @@
       if (detail) detail = { ...detail, updates: fresh };
       draft = ''; writing = false;
       haptic.ok(); say(t('upd.sent'), 'party_popper_3d');
-    } catch (err) { haptic.error(); say(err instanceof ApiErr && err.code === 'rate_limited' ? t('upd.tooMany') : t('common.error'), 'pleading_face_3d'); }
+    } catch (err) { haptic.error(); say(err instanceof ApiErr && err.code === 'rate_limited' ? t('upd.tooMany') : t('common.error'), 'warning_3d'); }
     finally { sending = false; }
   }
   // ---- one tap after the event (checked-in people): a face sends the rating at once; a comment can follow ----
@@ -182,7 +182,7 @@
       detail = await api.rate(id, score, comment);
       if (comment) { noted = true; haptic.ok(); say(t('rate.saved'), 'sparkles_3d'); }
       else say(phrase('say.rated'), FACES[score - 1]);
-    } catch { rated = was; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { rated = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- the guests' album: who came adds photos (several at once, one upload after another); a mosaic of the first ----
   const photos = $derived(detail?.photos ?? []);
@@ -207,7 +207,7 @@
   }
   async function removePhoto(p: AlbumPhoto): Promise<AlbumPhoto[] | null> {
     try { detail = await api.removeAlbumPhoto(id, p.id); return detail.photos; }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); return null; }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); return null; }
   }
 
   const hidePhoto = (p: AlbumPhoto) => { if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
@@ -215,13 +215,13 @@
   async function removeUpdate(u: EventUpdate) {
     if (!(await sheets.ask({ title: t('upd.deleteAsk'), ok: t('upd.delete'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.deleteUpdate(id, u.id); if (detail) detail = { ...detail, updates: detail.updates.filter((x) => x.id !== u.id) }; haptic.soft(); say(t('say.updDeleted'), 'waving_hand_3d_default'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
 
   async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
 
   function share() {
@@ -230,7 +230,7 @@
     // absolute date: the card is read later, when "tomorrow" is wrong
     shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place), img: e.cover?.url ?? e.video?.poster?.url ?? '' },
       'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
-      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
@@ -239,7 +239,7 @@
     haptic.tap();
     shareCard({ kind: 'ev', id: String(id), mine: '1' }, `https://t.me/KBTUappBot?startapp=ev_${id}_${session.me?.qr?.split('_')[1] ?? ''}`, e.title)
       .then((sent) => { if (sent) say(t('event.myLinkSent'), 'party_popper_3d'); })
-      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
 </script>
 

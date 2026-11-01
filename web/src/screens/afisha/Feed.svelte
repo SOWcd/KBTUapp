@@ -83,7 +83,7 @@
     haptic.tap();
     shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, title)
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
-      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
 </script>
 

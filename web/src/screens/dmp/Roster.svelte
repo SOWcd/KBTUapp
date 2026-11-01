@@ -25,7 +25,7 @@
 
   let { overlay, org, onofficial }: { overlay: Overlay; org: OrgRef; onofficial?: (on: boolean) => void } = $props();
   let list = $state<RosterMember[] | null>(null);
-  $effect(() => { api.registryRoster(org.id).then((l) => (list = l)).catch(() => { list = []; say(t('common.error'), 'pleading_face_3d'); }); });
+  $effect(() => { api.registryRoster(org.id).then((l) => (list = l)).catch(() => { list = []; say(t('common.error'), 'warning_3d'); }); });
   const quiet = $derived((list ?? []).filter((m) => m.quiet).length);
 
   let official = $state(untrack(() => org.official));
@@ -42,7 +42,7 @@
       official = (await api.setOfficial(org.id, on)).official;
       onofficial?.(official);
       haptic.ok(); say(phrase(on ? 'reg.officialOn' : 'reg.officialOff'), on ? 'party_popper_3d' : 'waving_hand_3d_default');
-    } catch { el.checked = official; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { el.checked = official; haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 

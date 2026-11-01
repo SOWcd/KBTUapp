@@ -28,7 +28,7 @@
   let later = $state(false);
   let signing = $state<MemoSign | null>(null);
   let opened = false; // I opened Outlook or copied: back in the app, ask whether it went
-  const oops = () => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); };
+  const oops = () => { haptic.error(); say(t('common.error'), 'warning_3d'); };
   const load = () => api.memo(org, later).then((d) => { draft = d; text = d.text; printText = d.print?.text ?? ''; }).catch(oops);
   $effect(() => { load(); });
 

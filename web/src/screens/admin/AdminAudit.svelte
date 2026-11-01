@@ -10,7 +10,7 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let log = $state<AuditRow[] | null>(null);
-  $effect(() => { api.audit().then((l) => (log = l)).catch(() => { log = []; say(t('common.error'), 'pleading_face_3d'); }); });
+  $effect(() => { api.audit().then((l) => (log = l)).catch(() => { log = []; say(t('common.error'), 'warning_3d'); }); });
 
   const KNOWN = ['staff_role', 'ban', 'unban', 'report_remove', 'report_keep', 'restore', 'post_hide', 'feature', 'grant', 'ungrant',
     'official', 'org_create', 'org_edit', 'org_hide', 'role_change', 'presidency_transfer', 'president_handover', 'president_link',

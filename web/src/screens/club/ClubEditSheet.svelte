@@ -36,7 +36,7 @@
   let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false });
   $effect(() => {
     api.org(id).then((got) => { const x = original(got); o = x; /* as typed, never a translation (PLAN 9) */ f = { name: x.name, abbr: x.abbr ?? '', emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden }; logo = x.logo ? { url: x.logo } : null; })
-      .catch(() => { say(t('common.error'), 'pleading_face_3d'); close(overlay.id); });
+      .catch(() => { say(t('common.error'), 'warning_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
   async function pickLogo(ev: Event) {
@@ -82,7 +82,7 @@
       leaving = true; haptic.ok(); say(phrase('ce.saved'), 'sparkles_3d'); close(overlay.id);
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'pleading_face_3d');
+      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
   const hold = () => !leaving && changed;

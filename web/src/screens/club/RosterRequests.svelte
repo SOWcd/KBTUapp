@@ -20,7 +20,7 @@
     try {
       await api.rosterDecide(r.id, ok); haptic.ok(); say(t(ok ? 'ro.confirmed' : 'ro.declined'), ok ? 'party_popper_3d' : 'waving_hand_3d_default');
       list = (list ?? []).filter((x) => x.id !== r.id); ondone?.();
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

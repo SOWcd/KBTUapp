@@ -15,7 +15,7 @@
   const load = () => api.mapFlaws().then((l) => (list = l)).catch(() => (list = []));
   $effect(() => { void load(); });
   async function toggle(id: number, done: boolean) {
-    try { await api.mapFlawDone(id, done); haptic.select(); void load(); } catch { say(t('common.error'), 'pleading_face_3d'); }
+    try { await api.mapFlawDone(id, done); haptic.select(); void load(); } catch { say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

@@ -49,7 +49,7 @@
       haptic.ok(); burst(); say(t('nc.sent'), 'party_popper_3d');
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'pleading_face_3d');
+      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'warning_3d');
     } finally { sending = false; }
   }
   async function openClub(id: number) { await loadMe(); void loadAfisha(); close(overlay.id); sheets.club(id); }

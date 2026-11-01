@@ -20,7 +20,7 @@
       await api.rate(e.id, score);
       recent = recent.map((x) => (x.id === e.id && x.my ? { ...x, my: { ...x.my, rating: score } } : x));
       haptic.ok(); burst(); say(t('rate.thanks'), 'sparkles_3d');
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

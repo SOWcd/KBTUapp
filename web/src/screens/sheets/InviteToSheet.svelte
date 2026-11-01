@@ -26,7 +26,7 @@
       const st = l.find((x) => x.person.id === id)?.state;
       sent = { ...sent, [eid]: st === 'going' ? 'going' : 'invited' };
       haptic.ok(); say(t('inv.sent', { name }), 'love_letter_3d');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'warning_3d'); }
     finally { busy = null; }
   }
   // the Afisha in sight: every sheet down (the person's and the Friends sheet were left over it)

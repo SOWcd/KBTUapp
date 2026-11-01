@@ -46,13 +46,13 @@
       if (yes) { haptic.ok(); burst(); say(t('fr.accepted', { name: r.person.name }), 'partying_face_3d'); }
       else { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }
       void loadMe(); // the dot on the Profile tab
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = null; }
   }
   async function takeBack(r: FriendRow) {
     busy = r.person.id;
     try { await api.takeBackRequest(r.person.id); forgetPeople(); if (data.friends) data.friends = { ...data.friends, outgoing: data.friends.outgoing.filter((x) => x.person.id !== r.person.id) }; haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
     finally { busy = null; }
   }
 </script>

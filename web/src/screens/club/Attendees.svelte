@@ -47,11 +47,11 @@
       a.checkedInAt = r.at; a.manual = r.result === 'ok';
       haptic.ok();
       undoFor = a.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function undo(a: Attendee) {
     try { await api.undoCheckin(id, a.person.id); a.checkedInAt = null; a.manual = false; undoFor = null; haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
 
   let sending = $state(false);
@@ -61,7 +61,7 @@
       await api.exportAttendees(id);
       haptic.ok(); say(t('att.sent'), 'party_popper_3d');
     } catch (e) {
-      haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'pleading_face_3d');
+      haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d');
     } finally { sending = false; }
   }
 </script>

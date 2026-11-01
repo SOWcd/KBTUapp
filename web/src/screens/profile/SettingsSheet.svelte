@@ -36,14 +36,14 @@
     haptic.tap();
     me.settings[k] = on;
     try { session.me = await api.updateMe({ [k]: on }); if (!quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d'); }
-    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'pleading_face_3d'); } // the one on screen now
+    catch { if (session.me) session.me.settings[k] = !on; say(t('common.error'), 'warning_3d'); } // the one on screen now
   }
 
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
   // roster (PLAN 95), off the profile or gone. A deleted one takes its page with it.
   async function savePhone(p: string | null, done: string) {
     try { session.me = await api.updateMe({ phone: p }); haptic.ok(); say(done, 'sparkles_3d'); if (p == null) close(overlay.id); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function editPhone() {
     const p = await sheets.askText({ title: t('pd.phone'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true });
@@ -74,18 +74,18 @@
   }
   async function cityHidden(on: boolean) {
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
   async function dropCity() {
     if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
     try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); close(overlay.id); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
   // the calendar's address leaked (sent to someone, a shared screen): the old one stops, Calendar makes a new one
   async function resetCal() {
     if (!(await sheets.ask({ title: t('set.calResetAsk'), text: t('set.calResetText'), ok: t('set.calResetOk'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // my week off the server, here too and not only in the Week sheet (owner, Nov 1)
   async function dropWeek() {

@@ -40,7 +40,7 @@
   let card = $state<number | null>(null); // the club opened in the list
   const oops = (e: unknown) => {
     haptic.error();
-    say(e instanceof ApiErr && e.message === 'who' ? t('adm.noUser') : e instanceof ApiErr && e.code === 'bad_input' ? t('adm.bad') : t('common.error'), 'pleading_face_3d');
+    say(e instanceof ApiErr && e.message === 'who' ? t('adm.noUser') : e instanceof ApiErr && e.code === 'bad_input' ? t('adm.bad') : t('common.error'), 'warning_3d');
   };
 
   // ---- a new club ----
@@ -84,7 +84,7 @@
       orgs = orgs!.map((x) => (x.id === o.id ? { ...x, official: on } : x));
       void loadAfisha(); // Clubs shows the ✓ at once
       haptic.ok(); say(phrase(on ? 'reg.officialOn' : 'reg.officialOff'), on ? 'party_popper_3d' : 'waving_hand_3d_default');
-    } catch { el.checked = o.official; haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { el.checked = o.official; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- a club's events, any of them deletable by the admin only (owner, Oct 13: a club asks him to remove a test,
   // test payments included). The confirm names what goes; payments or photos ask a second time, louder ----
@@ -137,7 +137,7 @@
     haptic.tap();
     shareCard({ kind: 'pres', id: String(o.id) }, 'https://t.me/KBTUappBot', o.name)
       .then((sent) => { if (sent) say(t('adm.presSent'), 'party_popper_3d'); })
-      .catch(() => { haptic.error(); say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
 </script>
 

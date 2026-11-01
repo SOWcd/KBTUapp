@@ -89,7 +89,7 @@
     p.mine[kind] = on; p.reactions[kind] += on ? 1 : -1; // at once; the server's answer settles it
     haptic.select();
     try { Object.assign(p, await api.react(p.id, kind, on)); if (on) say(phrase(kind === 'fire' ? 'say.fire' : 'say.heart'), kind === 'fire' ? 'fire_3d' : 'smiling_face_with_heart_eyes_3d'); }
-    catch { p.mine[kind] = !on; p.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'pleading_face_3d'); }
+    catch { p.mine[kind] = !on; p.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   }
   async function takeDown(p: Post) {
     if (!(await sheets.ask({ title: t('news.hideAsk'), text: t('news.hideText'), ok: t('news.hide'), cancel: t('common.cancel'), danger: true }))) return;
@@ -98,7 +98,7 @@
       if (data.news) data.news = { casts: data.news.casts.filter((x) => x.id !== p.id), posts: data.news.posts.filter((x) => x.id !== p.id) };
       data.posts = data.posts.filter((x) => x.id !== p.id);
       haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default');
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // moderators and the admin: a public post on top of Events → List for everyone, for three days (§2)
   let menu = $state<number | null>(null);
@@ -106,7 +106,7 @@
   async function pin(p: Post) {
     menu = null;
     try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadAll(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function feature(p: Post, days: number) {
     menu = null;
@@ -117,7 +117,7 @@
       data.posts = put(data.posts);
       haptic.ok(); say(days ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d');
       void loadAfisha(); // List's card follows
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news
   const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt));

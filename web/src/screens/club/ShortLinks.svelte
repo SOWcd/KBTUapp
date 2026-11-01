@@ -27,7 +27,7 @@
 
   async function copy(x: string) {
     try { await navigator.clipboard.writeText(`https://${host}/${x}`); haptic.ok(); say(t('sl.copied'), 'sparkles_3d'); }
-    catch { say(t('common.error'), 'pleading_face_3d'); }
+    catch { say(t('common.error'), 'warning_3d'); }
   }
   let busy = $state(false);
   async function add(ev: Event) {
@@ -40,13 +40,13 @@
     } catch (e) {
       haptic.error();
       const m = e instanceof ApiErr ? (e.message === 'taken' || e.message === 'limit' ? e.message : e.code === 'bad_input' ? 'bad' : '') : '';
-      say(m ? t(`sl.${m as 'taken'}`) : t('common.error'), 'pleading_face_3d');
+      say(m ? t(`sl.${m as 'taken'}`) : t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
   async function drop(x: string) {
     if (!(await sheets.ask({ title: t('sl.dropAsk', { link: `${host}/${x}` }), ok: t('sl.drop'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.dropShortLink(x); links = links.filter((l) => l.slug !== x); haptic.warn(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

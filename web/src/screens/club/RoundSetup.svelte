@@ -59,7 +59,7 @@
       tags = s.tags; newTag = '';
       const made = s.tags.find((x) => x.name === name);
       if (made && !deps.some((d) => d.tagId === made.id)) deps = [...deps, { tagId: made.id, about: '', places: '' }];
-    } catch { say(t('common.error'), 'pleading_face_3d'); }
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   const closes = $derived(fromInputs(closeDate, closeTime));
@@ -79,7 +79,7 @@
       if (r0) await api.updateRound(r0.id, input); else await api.openRound(org, input);
       haptic.ok(); say(r0 ? t('cast.updated') : t('cast.opened'), 'party_popper_3d');
       studioChanged(); onsaved?.(); close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 </script>

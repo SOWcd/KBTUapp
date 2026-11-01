@@ -50,7 +50,7 @@
   async function share() {
     sharing = true; haptic.tap();
     try { if (await shareCard({ kind: 'aw', code: a.code }, 'https://t.me/KBTUappBot?startapp=aw_' + a.code, t('aw.shareText', { name: achName(a) }))) say(phrase('say.shared'), 'party_popper_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { sharing = false; }
   }
 </script>

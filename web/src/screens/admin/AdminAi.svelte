@@ -14,7 +14,7 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let ai = $state<AdminAi | null>(null), busy = $state(false);
-  const load = () => api.adminAi().then((x) => (ai = x)).catch(() => say(t('common.error'), 'pleading_face_3d'));
+  const load = () => api.adminAi().then((x) => (ai = x)).catch(() => say(t('common.error'), 'warning_3d'));
   $effect(() => { void load(); });
   // Munito's answers as rows: plain fields as they are, anything nested as short JSON
   const flat = (x: unknown): [string, string][] => (x && typeof x === 'object' ? Object.entries(x as Record<string, unknown>) : [])
@@ -22,7 +22,7 @@
   async function retry() {
     busy = true;
     try { await api.aiRetry(); haptic.ok(); say(t('ai.retried'), 'sparkles_3d'); await load(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 </script>

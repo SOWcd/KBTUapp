@@ -17,7 +17,7 @@
 
   let { overlay }: { overlay: Overlay } = $props();
   let staff = $state<Staff | null>(null);
-  $effect(() => { api.staff().then((s) => (staff = s)).catch(() => say(t('common.error'), 'pleading_face_3d')); });
+  $effect(() => { api.staff().then((s) => (staff = s)).catch(() => say(t('common.error'), 'warning_3d')); });
 
   let q = $state(''), found = $state<StaffRow | null>(null), looking = $state(false);
   async function find() {
@@ -30,7 +30,7 @@
       found = staff && [...staff.team, ...staff.banned].some((x) => x.person.id === p.person.id) ? null : p;
       open = p.person.id; banning = false; haptic.select();
     }
-    catch (x) { found = null; haptic.error(); say(x instanceof ApiErr && x.code === 'not_found' ? t('staff.notFound') : t('common.error'), 'pleading_face_3d'); }
+    catch (x) { found = null; haptic.error(); say(x instanceof ApiErr && x.code === 'not_found' ? t('staff.notFound') : t('common.error'), 'warning_3d'); }
     finally { looking = false; }
   }
 
@@ -48,7 +48,7 @@
       if (found && [...staff.team, ...staff.banned].some((x) => x.person.id === found!.person.id)) { found = null; q = ''; }
       else if (found) found = { ...found, role: 'user', banned: false, banReason: null };
       banning = false; why = ''; haptic.ok(); say(done, emoji);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
   const setRole = (p: StaffRow, role: PlatformRole) => p.role !== role && act(() => api.setStaff(p.person.id, role), t('staff.roleSet'), 'sparkles_3d');

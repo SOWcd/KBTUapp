@@ -31,7 +31,7 @@
       haptic.ok(); say(reject ? t('rc.rejected') : t('rc.passed'), reject ? 'waving_hand_3d_default' : 'raising_hands_3d_default');
       ondone?.();
       close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = ''; }
   }
 </script>

@@ -94,7 +94,7 @@
     q.mine[kind] = on; q.reactions[kind] += on ? 1 : -1;
     haptic.select();
     try { Object.assign(q, await api.react(q.id, kind, on)); if (on) say(phrase(kind === 'fire' ? 'say.fire' : 'say.heart'), kind === 'fire' ? 'fire_3d' : 'smiling_face_with_heart_eyes_3d'); }
-    catch { q.mine[kind] = !on; q.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'pleading_face_3d'); }
+    catch { q.mine[kind] = !on; q.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   }
   async function pin() {
     if (!p) return;
@@ -106,13 +106,13 @@
       if (p.pinned) for (const x of groups.flatMap((gr) => gr.items)) if (x.post && x.post.org.id === p.org.id && x.post.id !== p.id) x.post.pinned = false;
       void loadNews();
     }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function feature(days: number) {
     if (!p) return;
     menu = false;
     try { Object.assign(p, await api.feature(p.id, days)); haptic.ok(); say(days ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d'); void loadAfisha(); void loadNews(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // a post taken down or reported leaves the stories at once
   function drop(q: Post) {
@@ -127,7 +127,7 @@
     const q = p;
     if (!(await sheets.ask({ title: t('news.hideAsk'), text: t('news.hideText'), ok: t('news.hide'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.hidePost(q.id); haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default'); drop(q); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   function report() { if (!p) return; menu = false; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
 </script>

@@ -81,7 +81,7 @@
       haptic.ok(); burst(); say(t('post.published'), 'party_popper_3d');
       void loadNews();
       close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 
@@ -93,7 +93,7 @@
       leaving = true; haptic.ok(); say(phrase('post.saved'), 'sparkles_3d');
       void loadNews();
       close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 

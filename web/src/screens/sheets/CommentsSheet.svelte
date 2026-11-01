@@ -42,7 +42,7 @@
       const e = kind === 'event' && x.asOrg ? data.studio[x.asOrg.id]?.find((c) => c.id === id) : null;
       if (e) e.questions = 0;
     })
-      .catch(() => { th = { items: [], on: false, canModerate: false, asOrg: null }; say(t('common.error'), 'pleading_face_3d'); });
+      .catch(() => { th = { items: [], on: false, canModerate: false, asOrg: null }; say(t('common.error'), 'warning_3d'); });
   });
   // the caller's count follows; untracked, or whatever the caller reads would loop back into this effect
   $effect(() => { if (th) { const n = th.items.length; untrack(() => onchange?.(n)); } });
@@ -57,19 +57,19 @@
       requestAnimationFrame(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }));
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('cm.tooFast') : e instanceof ApiErr && e.code === 'closed' ? t('cm.off') : t('common.error'), 'pleading_face_3d');
+      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('cm.tooFast') : e instanceof ApiErr && e.code === 'closed' ? t('cm.off') : t('common.error'), 'warning_3d');
     } finally { sending = false; }
   }
   async function remove(c: Comment) {
     if (!(await sheets.ask({ title: t('cm.deleteAsk'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; menu = null; haptic.soft(); say(t('say.cmDeleted'), 'waving_hand_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const report = (c: Comment) => { menu = null; sheets.report('comment', c.id, c.body); };
   async function toggle(ev: Event) {
     const on = (ev.currentTarget as HTMLInputElement).checked;
     try { th = await api.setComments(kind, id, on); haptic.select(); say(on ? phrase('say.cmOn') : t('say.cmOff'), on ? 'speech_balloon_3d' : 'locked_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   function reply(c: Comment) {
     replying = c; menu = null; haptic.select();

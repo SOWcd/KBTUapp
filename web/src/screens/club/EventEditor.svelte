@@ -248,7 +248,7 @@
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
-      }).catch(() => { say(t('common.error'), 'pleading_face_3d'); base = JSON.stringify(f); close(overlay.id); });
+      }).catch(() => { say(t('common.error'), 'warning_3d'); base = JSON.stringify(f); close(overlay.id); });
     }
     return hideChrome();
   });
@@ -324,7 +324,7 @@
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
         : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
-        : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'pleading_face_3d');
+        : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
 
@@ -360,7 +360,7 @@
       studioChanged();
       say(phrase('say.draftDeleted'), 'waving_hand_3d_default');
       close(overlay.id);
-    } catch { say(t('common.error'), 'pleading_face_3d'); } finally { busy = ''; }
+    } catch { say(t('common.error'), 'warning_3d'); } finally { busy = ''; }
   }
 </script>
 

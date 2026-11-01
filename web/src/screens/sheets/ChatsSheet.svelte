@@ -21,7 +21,7 @@
   async function whose(c: Chat, ev: Event) {
     const v = (ev.currentTarget as HTMLSelectElement).value;
     try { const x = await api.setChatOrg(c.id, v ? Number(v) : null); changed = { ...changed, [c.id]: x }; haptic.ok(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const label = (c: Chat) => c.school && c.course ? `${schoolShort(c.school)} · ${t('chats.course', { n: c.course })}` : (c.school && schoolShort(c.school)) ?? (c.course ? t('chats.course', { n: c.course }) : t('chats.everyone'));
   const groups = $derived.by(() => {

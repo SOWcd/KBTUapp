@@ -25,7 +25,7 @@
 
   let token = $state<string | null>(null);
   let joined = $state<PersonRef | null>(null); // who has just used the code: on the plate for a few seconds
-  const fresh = () => api.friendLink().then((l) => { token = l.token; }).catch(() => say(t('common.error'), 'pleading_face_3d'));
+  const fresh = () => api.friendLink().then((l) => { token = l.token; }).catch(() => say(t('common.error'), 'warning_3d'));
   void fresh().then(() => { if (share) void send(); });
 
   let quiet: ReturnType<typeof setTimeout> | undefined;
@@ -43,7 +43,7 @@
   onDestroy(() => { clearInterval(watch); clearTimeout(quiet); });
 
   async function send() {
-    try { await shareFriendLink(); } catch { say(t('common.error'), 'pleading_face_3d'); }
+    try { await shareFriendLink(); } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   // ---- by @username ----
@@ -70,7 +70,7 @@
       if (found.friendship === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: found.person.name }), 'partying_face_3d'); }
       else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
       friendsChanged();
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
     finally { asking = false; }
   }
 </script>

@@ -68,7 +68,7 @@
   function send(code: GrantItem['code']) {
     shareCard({ kind: 'gl', id: '0', code }, 'https://t.me/KBTUappBot', name(code))
       .then((sent) => { if (sent) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); } })
-      .catch(() => say(t('common.error'), 'pleading_face_3d'));
+      .catch(() => say(t('common.error'), 'warning_3d'));
   }
   async function takeBack(g: GrantItem) {
     if (!(await sheets.ask({ title: t('adm.takeBackAsk', { award: name(g.code), name: g.person.name }), ok: t('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
@@ -76,11 +76,11 @@
       await api.takeBackGrant(g.person.id, g.code);
       gave = (gave ?? []).filter((x) => x.person.id !== g.person.id || x.code !== g.code);
       haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default');
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function undo(g: GrantItem) {
     try { await api.ungrant(g.id); gave = (gave ?? []).filter((x) => x.id !== g.id); haptic.soft(); say(t('say.ungranted'), 'waving_hand_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

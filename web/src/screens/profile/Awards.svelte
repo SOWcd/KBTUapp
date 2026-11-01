@@ -62,7 +62,7 @@
       session.me = await api.updateMe({ showcase: picked });
       editing = false;
       haptic.ok(); say(t('awp.saved'), 'sparkles_3d');
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { saving = false; }
   }
   const preview = $derived(p ? picked.map((k) => shelfItem(p!, k)).filter((x): x is ShelfItem => !!x) : []);

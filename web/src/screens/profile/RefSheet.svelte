@@ -19,7 +19,7 @@
   async function send() {
     haptic.tap(); busy = true;
     try { await shareCard({ kind: 'rf', id: '0' }, link, t('ref.text'), () => (busy = false)); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 </script>

@@ -54,7 +54,7 @@
   async function grant(s: ScreenSession) {
     if (!(await sheets.ask({ title: t('scr.grantAsk'), text: t('scr.grantText', { n: s.done }), ok: t('scr.grant'), cancel: t('scr.keep') }))) return;
     try { const r = await api.screenGrant(s.session, 'init26'); haptic.ok(); say(t('scr.granted', { n: r.granted }), 'party_popper_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function act(s: ScreenSession, a: 'start' | 'finish' | 'unpair' | 'out' | 'in') {
     if (busy) return;
@@ -64,11 +64,11 @@
     try {
       const n = await api.screenAct(s.session, a);
       list = (list ?? []).map((x) => (x.session === n.session ? n : x)); haptic.ok();
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); } finally { busy = 0; }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = 0; }
   }
   async function csv(s: ScreenSession) {
     try { const l = await api.screenCsv(s.session); downloadFile(location.origin + l.url, l.name); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 

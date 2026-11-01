@@ -30,7 +30,7 @@
   const givable = (r: { key: Right; level: ClubLevel }) => !!mine && may(m, r.key) && RANK[r.level] < RANK[mine] && (!ffixed || RANK[r.level] <= RANK[ffixed]);
 
   let setup = $state<TeamSetup | null>(null);
-  const load = () => api.teamSetup(org).then((x) => (setup = x)).catch(() => say(t('common.error'), 'pleading_face_3d'));
+  const load = () => api.teamSetup(org).then((x) => (setup = x)).catch(() => say(t('common.error'), 'warning_3d'));
   $effect(() => { void load(); });
 
   // one form open at a time: a role or a tag, new (id null) or an edit
@@ -54,7 +54,7 @@
   const done = (x: TeamSetup) => { setup = x; kind = null; haptic.ok(); onchange?.(); };
   const oops = (e: unknown) => {
     haptic.error();
-    say(e instanceof ApiErr && e.message === 'taken' ? t('ts.taken') : e instanceof ApiErr && e.message === 'many' ? t('ts.many') : t('common.error'), 'pleading_face_3d');
+    say(e instanceof ApiErr && e.message === 'taken' ? t('ts.taken') : e instanceof ApiErr && e.message === 'many' ? t('ts.many') : t('common.error'), 'warning_3d');
   };
   async function save() {
     if (!kind || busy || !fname.trim()) return;

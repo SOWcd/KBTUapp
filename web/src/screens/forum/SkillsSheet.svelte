@@ -15,7 +15,7 @@
   async function save() {
     busy = true;
     try { await api.setForumMe({ skills: chosen.map((s) => s.id) }); haptic.ok(); onsaved?.(); close(overlay.id); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 </script>

@@ -33,7 +33,7 @@
     if (!it.ach) return;
     sharing = true; haptic.tap();
     try { if (await shareCard({ kind: 'aw', code: it.ach.code }, 'https://t.me/KBTUappBot?startapp=aw_' + it.ach.code, t('aw.shareText', { name: it.name }))) say(phrase('say.shared'), 'party_popper_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { sharing = false; }
   }
   // "Recruiter" is earned by my invite link: the link right here (owner, Oct 29: no hunting for it on Me)
@@ -43,7 +43,7 @@
     if (!ref) return;
     inviting = true; haptic.tap();
     try { await shareCard({ kind: 'rf', id: '0' }, `https://t.me/KBTUappBot?startapp=r_${ref.code}`, t('ref.text'), () => (inviting = false)); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { inviting = false; }
   }
   const a = $derived(it.ach), b = $derived(it.badge);

@@ -58,7 +58,7 @@
         code = '';
         if (camera && live === 'failed') setTimeout(() => { if (!gone) scan(); }, 1100); // the popup: the next one in the queue
       } else haptic.error(); // "already" too: a ticket used twice is a problem at the door
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); } finally { busy = false; }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = false; }
   }
   const scan = () => scanQr(t('scan.prompt'), (text) => { void check(text); return true; });
 
@@ -86,7 +86,7 @@
         undoFor = d.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);
       } else haptic.error();
       people = await api.door(id);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); } finally { busy = false; }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); } finally { busy = false; }
   }
   async function undo() {
     const uid = undoFor;
@@ -97,7 +97,7 @@
       if (count) count = { ...count, came: count.came - 1 };
       haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default');
       people = await api.door(id);
-    } catch { say(t('common.error'), 'pleading_face_3d'); }
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   onMount(() => {

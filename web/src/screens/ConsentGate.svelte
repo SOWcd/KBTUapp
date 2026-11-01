@@ -57,7 +57,7 @@
       const r = seal.getBoundingClientRect();
       burst(false, { x: r.left + r.width / 2, y: r.top + r.height / 2 }, 'sparkles_3d');
       setTimeout(() => (session.me = me), 750);
-    } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); busy = false; }
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); busy = false; }
   }
 </script>
 

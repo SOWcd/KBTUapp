@@ -24,11 +24,11 @@
   $effect(() => { api.chats().then((c) => { chats = c.all; pending = c.pending ?? []; }).catch(() => (chats = [])); });
   async function approve(c: Chat) {
     try { const x = await api.approveChat(c.id); pending = pending.filter((p) => p.id !== c.id); chats = [...(chats ?? []), x]; haptic.ok(); say(phrase('say.chatApproved'), 'party_popper_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function decline(c: Chat) {
     try { await api.deleteChat(c.id); pending = pending.filter((p) => p.id !== c.id); haptic.soft(); say(t('say.chatDeclined'), 'waving_hand_3d_default'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const admin = $derived(session.me?.role === 'admin');
   let orgs = $state<AdminOrg[]>([]);
@@ -36,7 +36,7 @@
   async function whose(c: Chat, ev: Event) {
     const v = (ev.currentTarget as HTMLSelectElement).value;
     try { const x = await api.setChatOrg(c.id, v ? Number(v) : null); chats = (chats ?? []).map((y) => (y.id === c.id ? x : y)); haptic.ok(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   let chatForm = $state(false);
   let nch = $state({ title: '', url: '', kind: 'group' as Chat['kind'], school: '', course: 0 });
@@ -47,12 +47,12 @@
       const c = await api.addChat({ title: nch.title.trim(), url: nch.url.trim(), kind: nch.kind, school: nch.school.trim() || null, course: nch.course || null });
       chats = [...(chats ?? []), c]; chatForm = false; nch = { title: '', url: '', kind: 'group', school: '', course: 0 };
       haptic.ok(); say(t('adm.chatAdded'), 'raising_hands_3d_default');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? t('adm.chatBad') : e instanceof ApiErr && e.message === 'org' ? t('chats.why.org') : t('common.error'), 'pleading_face_3d'); }
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? t('adm.chatBad') : e instanceof ApiErr && e.message === 'org' ? t('chats.why.org') : t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
   async function dropChat(c: Chat) {
     try { await api.deleteChat(c.id); chats = (chats ?? []).filter((x) => x.id !== c.id); haptic.soft(); say(t('say.chatDropped'), 'file_cabinet_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
 </script>

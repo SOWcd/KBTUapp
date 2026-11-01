@@ -13,6 +13,6 @@ export async function shareInvite(org: { id: number; name: string }, dept?: { id
     const link = `https://t.me/KBTUappBot?startapp=join_${org.id}_${(await api.invite(org.id, dept?.id)).token}`;
     const msg = dept ? t('team.inviteDeptMsg', { club: org.name, dept: dept.name }) : t('team.inviteMsg', { club: org.name });
     await shareCard({ kind: 'join', id: String(org.id) }, link, msg, () => (ui.busy = ''));
-  } catch { say(t('common.error'), 'pleading_face_3d'); }
+  } catch { say(t('common.error'), 'warning_3d'); }
   finally { ui.busy = ''; }
 }

@@ -44,7 +44,7 @@
       studioChanged(); // member counts and the Studio row
     } catch {
       list = [r, ...list!].sort((a, b) => a.id - b.id);
-      haptic.error(); say(t('common.error'), 'pleading_face_3d');
+      haptic.error(); say(t('common.error'), 'warning_3d');
     }
   }
 
@@ -52,7 +52,7 @@
     if (!o) return;
     o.recruiting = on;
     try { Object.assign(o, await api.setRecruiting(org, on)); say(phrase(on ? 'say.recruitOn' : 'say.recruitOff'), on ? 'raising_hands_3d_default' : 'sparkles_3d'); }
-    catch { o.recruiting = !on; say(t('common.error'), 'pleading_face_3d'); }
+    catch { o.recruiting = !on; say(t('common.error'), 'warning_3d'); }
   }
   const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), schoolShort(r.school)].filter(Boolean).join(' · ');
 </script>

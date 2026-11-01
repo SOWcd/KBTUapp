@@ -17,14 +17,14 @@
   let { overlay, id, title }: { overlay: Overlay; id: Id; title: string } = $props();
   let list = $state<FriendInvite[] | null>(null);
   let busy = $state<Id | null>(null);
-  $effect(() => { api.eventInvites(id).then((l) => (list = l)).catch(() => { list = []; say(t('common.error'), 'pleading_face_3d'); }); });
+  $effect(() => { api.eventInvites(id).then((l) => (list = l)).catch(() => { list = []; say(t('common.error'), 'warning_3d'); }); });
 
   async function invite(f: FriendInvite) {
     busy = f.person.id;
     try { list = await api.inviteFriend(id, f.person.id); haptic.ok(); say(t('inv.sent', { name: f.person.name }), 'love_letter_3d'); }
     catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : e instanceof ApiErr && e.code === 'closed' ? t('inv.closed') : t('common.error'), 'pleading_face_3d');
+      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : e instanceof ApiErr && e.code === 'closed' ? t('inv.closed') : t('common.error'), 'warning_3d');
     } finally { busy = null; }
   }
   function addFriends() { close(overlay.id); sheets.addFriend(); }

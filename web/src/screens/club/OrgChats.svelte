@@ -40,16 +40,16 @@
   }
   async function main(c: StudioChat) {
     try { chats = keep(await api.mainOrgChat(org, c.id)); haptic.select(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function mirror(c: StudioChat, on: boolean) {
     try { chats = keep(await api.mirrorOrgChat(org, c.id, on)); haptic.select(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function drop(c: StudioChat) {
     if (!(await sheets.ask({ title: t('oc.dropAsk', { title: c.title }), ok: t('oc.drop'), cancel: t('common.cancel'), danger: true }))) return;
     try { chats = keep(await api.dropOrgChat(org, c.id)); haptic.warn(); }
-    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // a channel counts subscribers, a group members, as Telegram says
   const count = (c: StudioChat) => (c.members ? tn(c.kind === 'channel' ? 'clubs.subscribers' : 'chats.members', c.members).replace(String(c.members), compact(c.members)) : '');

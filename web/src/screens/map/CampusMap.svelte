@@ -243,7 +243,7 @@
     const [px, py] = toPlan(ver, u, v);
     void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: cur }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
       .then((body) => body ? api.mapFlaw({ ver, floor: cur, u, v, px, py, body }).then(() => { haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d'); }) : undefined)
-      .catch(() => say(t('common.error'), 'pleading_face_3d'));
+      .catch(() => say(t('common.error'), 'warning_3d'));
   }
   function down(e: PointerEvent) {
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way

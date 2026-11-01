@@ -39,7 +39,7 @@
       say(t('del.done', { date: dayMonth(m.deleteAt ?? 0) }), 'waving_hand_3d_default');
     } catch (e) {
       haptic.error();
-      say(t('common.error'), 'pleading_face_3d');
+      say(t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
 </script>

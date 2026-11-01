@@ -67,7 +67,7 @@
 
   function oops(e: unknown) {
     haptic.error();
-    say(e instanceof ApiErr && e.message === 'nick' ? t('look.badNick') : e instanceof ApiErr && e.message === 'not_an_image' ? t('look.badPhoto') : t('common.error'), 'pleading_face_3d');
+    say(e instanceof ApiErr && e.message === 'nick' ? t('look.badNick') : e instanceof ApiErr && e.message === 'not_an_image' ? t('look.badPhoto') : t('common.error'), 'warning_3d');
   }
   // one change of my photo or nick at a time; `word`: what the capsule says meanwhile (an upload takes a moment)
   async function work(job: () => Promise<Me>, msg: (m: Me) => string, word = '') {
@@ -137,7 +137,7 @@
   // feed token on the server, and a reset kills the old link
   async function subscribe() {
     let cal: { page: string; feed: string };
-    try { cal = await api.calendarFeed(); } catch { say(t('common.error'), 'pleading_face_3d'); return; }
+    try { cal = await api.calendarFeed(); } catch { say(t('common.error'), 'warning_3d'); return; }
     openLink(cal.page);
   }
   $effect(() => on('homeScreenAdded', () => { home.v = 'added'; say(t('set.homeDone'), 'rocket_3d'); }));
