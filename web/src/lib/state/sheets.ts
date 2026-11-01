@@ -2,6 +2,7 @@
 // event row opens the event). App wires them up; components call these, so no import cycles.
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
 import type { ShelfItem } from '../awards';
+import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
 
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean };
@@ -38,7 +39,7 @@ export const sheets = {
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
   attendees: (_id: Id) => {},
-  assistant: () => {},                   // the students' assistant (with the forum's switch)
+  assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */

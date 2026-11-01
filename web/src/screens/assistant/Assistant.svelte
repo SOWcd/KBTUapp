@@ -17,7 +17,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { eventById } from '../../lib/state/data.svelte';
-  import { chat, type Turn } from '../../lib/state/assistant.svelte';
+  import { chat, type AskCtx, type Turn } from '../../lib/state/assistant.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { PSYCHOLOGIST } from '../../lib/academic';
@@ -26,10 +26,16 @@
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Emoji from '../../ui/Emoji.svelte';
 
-  let { overlay }: { overlay: Overlay } = $props();
+  // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
+  let { overlay, ctx }: { overlay: Overlay; ctx?: AskCtx } = $props();
+  untrack(() => {
+    if (chat.ctx?.kind === ctx?.kind && chat.ctx?.id === ctx?.id) return;
+    chat.turns = []; chat.ctx = ctx ?? null;
+  });
   let draft = $state(''), busy = $state(false);
   let list = $state<HTMLDivElement>();
-  const SUGGEST = ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const;
+  const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
+    : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
   const down = () => setTimeout(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
   $effect(() => { void chat.turns.length; untrack(down); });
 
@@ -41,7 +47,7 @@
     chat.turns.push({ role: 'user', text: q });
     draft = ''; busy = true;
     try {
-      const a = await api.assistant(q, history);
+      const a = await api.assistant(q, history, chat.ctx ? { kind: chat.ctx.kind, id: chat.ctx.id } : undefined);
       chat.turns.push({ role: 'assistant', ...a, q });
       haptic.soft();
     } catch (e) {
@@ -75,10 +81,12 @@
     {#if !chat.turns.length}
       <div class="hello">
         <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={44} /></span>
-        <h2 class="t-h2">{t('as.hello')}</h2>
-        <p class="t-callout">{t('as.helloText')}</p>
+        {#if chat.ctx}<h2 class="t-h2 clamp-2">{t('as.about', { title: chat.ctx.title })}</h2>
+        {:else}<h2 class="t-h2">{t('as.hello')}</h2><p class="t-callout">{t('as.helloText')}</p>{/if}
         <div class="sugg">{#each SUGGEST as k, i (k)}<button style="--i:{i}" onclick={() => ask(t(k))}>{t(k)}</button>{/each}</div>
       </div>
+    {:else if chat.ctx}
+      <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
     {/if}
     {#each chat.turns as m, i (i)}
       {#if m.text}
@@ -138,6 +146,8 @@
     animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(120ms + var(--i) * 60ms); transition: transform var(--t-fast) var(--ease); }
   .sugg button:active { transform: scale(0.95); }
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.92); } }
+  .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-cap)/1 var(--font-text); }
   .b { max-width: 86%; padding: 10px 14px; border-radius: 20px; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
   @keyframes in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
   .b p { font: 450 15.5px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }

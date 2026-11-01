@@ -176,7 +176,7 @@ export interface Api {
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
   mapFlawDone(id: Id, done: boolean): Promise<void>;
-  assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[]): Promise<AssistReply>; // the students' assistant
+  assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply>; // the students' assistant; context: the card it was asked from (the server reads its facts)
   assistantVote(mark: string, vote: 'up' | 'down'): Promise<void>; // 👍/👎 on an answer's signed topic
   assistantSend(mark: string, pair: string, q: string, a: string): Promise<void>; // on 👎, the student's own tap: this one signed question and answer, no name
   eventFill(org: Id, text: string): Promise<{ title?: string; date?: string; start?: string; end?: string; place?: string; description?: string; price?: number }>; // a new event from its announcement (AI)

@@ -95,6 +95,55 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int]]:
     return "\n".join(lines), rooms, {e["id"] for e in evs}
 
 
+def _when(t: int | None) -> str:
+    return time.strftime('%a %d %b %Y %H:%M', time.gmtime(t + 5 * 3600)) if t else "unknown"
+
+
+def card(con, ctx: object) -> tuple[str, int | None] | None:
+    """The card the student asked from ("Ask AI" on an event or a club): its facts read here by id, one query, never
+    the client's words; only what any student sees on it (a public, published or cancelled event of a shown club; an
+    active org), else None, the same as an unknown id. The event's id is one a button may open."""
+    if ctx is None:
+        return None
+    if not isinstance(ctx, dict) or ctx.get("kind") not in ("event", "club") or type(ctx.get("id")) is not int:
+        raise ApiError("bad_input")
+    if ctx["kind"] == "event":
+        e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.price, e.status,
+              e.first_year, e.external_url, e.reg_until, o.name AS org, c.name AS co FROM events e JOIN orgs o ON o.id = e.org_id
+              LEFT JOIN orgs c ON c.id = e.co_org_id AND c.status = 'active'
+            WHERE e.id = ? AND e.status IN ('published', 'cancelled') AND e.visibility = 'public' AND e.hidden_at IS NULL
+              AND o.status = 'active'""", ctx["id"])
+        if not e:
+            return None
+        bits = [f"[{e['id']}] {e['title']}", f"starts {_when(e['starts_at'])}" + (f", ends {_when(e['ends_at'])}" if e["ends_at"] else ""),
+                f"where: {e['place'] or 'to be announced'}" + (" (off campus, a 2GIS route on its page)" if e["place_url"] else ""),
+                f"organized by {e['org']}" + (f" with {e['co']}" if e["co"] else ""),
+                f"price {e['price']} tenge, paid by Kaspi in the app" if e["price"] else "free",
+                e["external_url"] and "registration on an outside site (its page has the link)",
+                e["reg_until"] and f"registration until {_when(e['reg_until'])}",
+                e["first_year"] and "for first-year students", e["status"] == "cancelled" and "CANCELLED"]
+        about, eid = e["description"], e["id"]
+        head = "an event's page"
+    else:
+        o = one(con, """SELECT o.name, o.kind, o.description, o.official, o.recruiting, o.links,
+              (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) AS members,
+              (SELECT MIN(closes_at) FROM rounds r WHERE r.org_id = o.id AND r.status = 'open' AND r.closes_at > ?) AS round
+            FROM orgs o WHERE o.id = ? AND o.status = 'active'""", now(), ctx["id"])
+        if not o:
+            return None
+        bits = [o["name"], {"club": "a student club", "school": "a school of KBTU", "council": "a student council",
+                            "office": "a university office", "app": "this app's own page"}.get(o["kind"], o["kind"]),
+                "registered with the university" if o["official"] else "a student initiative", f"{o['members']} members",
+                f"taking applications in a recruitment round until {_when(o['round'])} (the Apply button on its page)" if o["round"]
+                else "taking join requests (the Apply button on its page)" if o["recruiting"]
+                else "not taking applications now (one can write to it through its links)",
+                o["links"] != "[]" and f"links: {', '.join(json.loads(o['links']))}"]
+        about, eid = o["description"], None
+        head = "a club's page"
+    facts = "; ".join(str(b) for b in bits if b) + (f". About: {_one_line(about)[:1200]}" if about else "")
+    return f'The student opened you from {head} in the app; "this", "it", "here", "they" mean it: {facts}', eid
+
+
 def _spend(con, v: Viewer) -> None:
     """One of the day's AI uses (the questions and the event fills together), counted before the model is asked."""
     with tx(con):  # one step across workers
@@ -110,8 +159,11 @@ def prompt(con, v: Viewer, body: dict, lang: str) -> tuple[list[dict], set[str],
     past = body.get("history") or []
     if not 2 <= len(q) <= Q_MAX or not isinstance(past, list):
         raise ApiError("bad_input")
+    on = card(con, body.get("context"))  # before the allowance: a bad context costs nothing
     _spend(con, v)
     facts, rooms, events = brief(con, v, lang)
+    if on:
+        facts, events = f"{facts}\n{on[0]}", events | ({on[1]} if on[1] else set())
     msgs = [{"role": "system", "content": SYSTEM.format(lang=LANGS.get(lang, "Russian"), facts=facts, not_care=_NOT_CARE, hate=_HATE)}]
     for m in past[-TURNS:]:
         if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("text"), str):

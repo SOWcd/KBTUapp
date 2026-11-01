@@ -34,6 +34,7 @@
   import { fly } from '../../ui/fly';
   import { onMount } from 'svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
+  import AskAi from '../../ui/AskAi.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
   import Button from '../../ui/Button.svelte';
@@ -467,6 +468,8 @@
       <p class="t-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
       {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}
     {/if}
+    <!-- the server reads only a public, published event's facts: no row where it would know nothing -->
+    {#if !preview && e.status !== 'draft' && (e.visibility ?? 'public') === 'public'}<AskAi ctx={{ kind: 'event', id, title: e.title }} hint={t('as.askEvent')} />{/if}
     {#if detail?.discuss && !preview && !cancelled}
       <!-- the talk lives under the channel post, with Telegram's replies and reactions -->
       <button class="talk" onclick={() => openLink(detail!.discuss!)}>

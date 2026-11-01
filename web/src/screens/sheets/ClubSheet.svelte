@@ -15,6 +15,7 @@
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
+  import AskAi from '../../ui/AskAi.svelte';
   import Sheet from '../../ui/Sheet.svelte';
   import { TAB_ICON } from '../../ui/icons';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -95,6 +96,7 @@
         {/each}
       </div>
     {/if}
+    <AskAi ctx={{ kind: 'club', id: o.id, title: o.name }} hint={t('as.askClub')} />
 
     {#if chats.length || o.kind === 'app'}
       <h3 class="t-cap sec">{t('oc.title')}</h3>
