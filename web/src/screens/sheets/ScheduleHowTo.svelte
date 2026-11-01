@@ -3,36 +3,51 @@
   // the bot, which reads the whole week (server portal.py) and answers "found N classes". iPhone: Safari's Share ->
   // Options -> Web Archive -> Telegram; Android: Chrome's "Download page" (.mht). Offered from Today's card until a
   // schedule is there (no longer right after the sign-in: one thing at a time, the onboarding plan of Oct 31).
-  // Oct 30 (owner): the portal is the first big button, and the iPhone way is shown as his own screen recording
-  // (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
+  // Oct 30 (owner): the portal is the big button (Nov 2: the pinned one; no "open the bot", the steps say it), and
+  // the iPhone way is shown as his own screen recording (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
   // This phone's own steps come first. `addLang` (the Week sheet's "Add a language"): the lead says to switch the
   // portal's language first; the same page sent again adds that language's names (Oct 30).
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
-  import type { Overlay } from '../../lib/state/ui.svelte';
+  import { overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, onAndroid, openLink, tgTry } from '../../lib/tg';
+  import { haptic, onAndroid, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, addLang = false }: { overlay: Overlay; addLang?: boolean } = $props();
   const PORTAL = 'https://uninet.kbtu.kz/student/schedule';
-  const toBot = () => { haptic.tap(); openLink('https://t.me/KBTUappBot'); setTimeout(() => tgTry((w) => w.close()), 300); };
   const toPortal = () => { haptic.tap(); openLink(PORTAL); };
   const steps = (os: 'iphone' | 'android') => ([1, 2, 3] as const).map((i) => t(`sched.${os}${i}`));
   const order = onAndroid ? (['android', 'iphone'] as const) : (['iphone', 'android'] as const);
+  // Nov 2: the recording never moved on an iPhone in Telegram. Svelte leaves `muted` out of the cloned HTML and sets
+  // the property afterwards, so WebKit met an unmuted autoplay video and refused it, and nothing ever called play().
+  // Now play() is ours: muted (attribute too), while the sheet is on top, the app in front and the video in view;
+  // paused otherwise (battery). `loop` keeps it seamless: the same element, no poster between rounds.
+  const top = $derived(!overlay.closing && !overlays.some((o) => o.id > overlay.id && !o.closing));
+  function autoplay(el: HTMLVideoElement, on: boolean) {
+    let seen = false;
+    el.muted = el.defaultMuted = true;
+    const sync = () => { if (on && seen && !document.hidden) el.play().catch(() => {}); else el.pause(); };
+    const io = new IntersectionObserver(([e]) => { seen = e.isIntersecting; sync(); });
+    io.observe(el);
+    document.addEventListener('visibilitychange', sync);
+    return {
+      update(v: boolean) { on = v; sync(); },
+      destroy() { io.disconnect(); document.removeEventListener('visibilitychange', sync); el.pause(); },
+    };
+  }
 </script>
 
 <Sheet {overlay} title={t(addLang ? 'sched.addLang' : 'sched.howTitle')} icon={CalendarDays}>
   <p class="t-callout lead">{t(addLang ? 'sched.langLead' : 'sched.howLead')}</p>
-  <Button kind="secondary" size="l" full onclick={toPortal}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('sched.portal')}</Button>
   {#each order as os (os)}
     <h3 class="t-cap cap">{t(`sched.${os}`)}</h3>
     {#if os === 'iphone'}
       <div class="how">
-        <!-- muted + playsinline: iOS plays it in place, on its own, in a loop -->
-        <video class="phone" src="howto/schedule-iphone.mp4" poster="howto/schedule-iphone.jpg" autoplay muted loop playsinline preload="metadata"
-          aria-label={t('sched.video')}></video>
+        <!-- muted + playsinline: iOS plays it in place; play() comes from use:autoplay -->
+        <video class="phone" src="howto/schedule-iphone.mp4" poster="howto/schedule-iphone.jpg" muted loop playsinline preload="auto"
+          disablepictureinpicture aria-label={t('sched.video')} use:autoplay={top}></video>
         <ol class="steps">{#each steps(os) as s, i (i)}<li><b class="num">{i + 1}</b><span>{s}</span></li>{/each}</ol>
       </div>
     {:else}
@@ -42,14 +57,15 @@
   <p class="t-foot note">{t('sched.privacy')}</p>
   {#snippet footer()}
     <div class="acts btns">
-      <Button kind="primary" size="l" full onclick={toBot}>{t('sched.bot')}</Button>
+      <Button kind="primary" size="l" full onclick={toPortal}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('sched.portal')}</Button>
     </div>
   {/snippet}
 </Sheet>
 
 <style>
-  .lead { color: var(--text-2); margin: 4px 0 14px; }
-  .cap { margin: 20px 4px 8px; }
+  .lead { color: var(--text-2); margin: 4px 0 0; }
+  /* the names as their makers write them: iPhone, not IPHONE */
+  .cap { margin: 20px 4px 8px; text-transform: none; letter-spacing: 0.01em; }
   .how { display: grid; grid-template-columns: minmax(0, 132px) 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: var(--r-l);
     background: var(--surface); }
   /* the recording in a phone's outline: rounded like the screen it came from */
