@@ -95,7 +95,24 @@
     if (Math.abs(vel) > 6) haptic.tap();
     raf = requestAnimationFrame(coast);
   }
-  onMount(() => () => cancelAnimationFrame(raf));
+  // a drawn medal is a real 3D coin (WebGL, three.js in its own lazy chunk; owner, Nov 1: the CSS layers read cheap).
+  // The flat art shows until the first frame is drawn, and stays when there is no WebGL, under power saving or reduced
+  // motion. ponytail: the tier medals and seals keep the CSS coin; a canvas-painted face for them is the upgrade
+  const art = $derived(a && a.level && a.emoji.startsWith('medal_') ? a.emoji : '');
+  let gl = $state<'' | 'wait' | 'on'>('');
+  let host: HTMLSpanElement, stage: HTMLDivElement;
+  const tiltOf = (k: string) => parseFloat(stage?.style.getPropertyValue(k)) || 0; // glass.ts writes --gx/--gy here
+  onMount(() => {
+    let off: (() => void) | undefined, dead = false;
+    if (art && edge && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.documentElement.classList.contains('lowfx')) {
+      gl = 'wait';
+      import('../../ui/coin3d')
+        .then((m) => m.mountCoin(host, { src: `emoji/${art}.webp`, tint: edge, size: SIZE, state: () => ({ x: tiltOf('--gx'), y: tiltOf('--gy'), spin }) }))
+        .then((f) => { if (dead) f(); else { off = f; gl = 'on'; } })
+        .catch(() => { gl = ''; }); // no WebGL: the flat medal
+    }
+    return () => { dead = true; cancelAnimationFrame(raf); off?.(); };
+  });
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
   const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
@@ -130,10 +147,10 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
+  <div class="stage" bind:this={stage} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge} style:--edge={edge || null} bind:this={big}>{#if edge}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face"><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if edge && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={gl === 'on'}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -236,6 +253,9 @@
   /* the coin only turns, it never slides (owner, Nov 1). No transition: glass.ts's lerp already smooths --gx/--gy */
   .big { position: relative; display: inline-flex; will-change: transform; transform-style: preserve-3d;
     transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg + var(--spin, 0deg))); }
+  .big.flat { transform: none; }
+  .hid { visibility: hidden; }
+  .gl { position: absolute; inset: 0; pointer-events: none; }
   /* the face hides when it turns away; the back is the same disc, mirrored, darker and flatter, like a struck reverse */
   .face { position: relative; display: inline-flex; }
   .coin .face { -webkit-backface-visibility: hidden; backface-visibility: hidden; }

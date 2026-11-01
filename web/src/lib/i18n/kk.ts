@@ -1338,8 +1338,6 @@ const kk: Dict = {
   'aw.toLevel': "{tier} деңгейге дейін",
   'unlock.kicker': "Жаңа жетістік",
   'aw.earned': "Алынды: {date}",
-  'aw.gotOn': "алынды",
-  'aw.haveIt': "студентте бар",
   'aw.init26': "Бағыштау 2026 · Halyk Arena",
   'aw.share': "Бөлісу",
   'aw.shareText': "KBTU App-тағы марапатым: {name}",

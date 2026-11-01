@@ -1357,8 +1357,6 @@ const ru = {
   'aw.toLevel': "до уровня {tier}",
   'unlock.kicker': "Новое достижение",
   'aw.earned': "Получено {date}",
-  'aw.gotOn': "получено",
-  'aw.haveIt': "студентов имеют",
   'aw.init26': "Посвящение 2026 · Халык Арена",
   'aw.share': "Поделиться",
   'aw.shareText': "Моя награда в KBTU App: {name}",

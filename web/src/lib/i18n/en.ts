@@ -1338,8 +1338,6 @@ const en: Dict = {
   'aw.toLevel': "to level {tier}",
   'unlock.kicker': "New achievement",
   'aw.earned': "Earned {date}",
-  'aw.gotOn': "earned",
-  'aw.haveIt': "of students have it",
   'aw.init26': "Initiation 2026 · Halyk Arena",
   'aw.share': "Share",
   'aw.shareText': "My award on KBTU App: {name}",
