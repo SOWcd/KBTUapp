@@ -317,7 +317,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T." and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "sign", "mine"}                 # no author, no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "mine"}         # no author, no user id
     assert "Bob" not in json.dumps(feed) and "bob" not in json.dumps(feed)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]

@@ -78,7 +78,7 @@ def feed(con, v: Viewer) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     names = {p["id"]: short_name(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
-    return [{"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None,
+    return [{"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
              "sign": anon if p["anon"] else names.get(p["user_id"], "?"), "mine": p["user_id"] == v.id} for p in ps]
 
 

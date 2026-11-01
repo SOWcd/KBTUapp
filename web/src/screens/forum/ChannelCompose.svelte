@@ -37,7 +37,7 @@
   async function post() {
     if (!ready) return;
     const text = body.trim(), was = anon;
-    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, sign: was ? t('fc.anonSign') : sign, mine: true };
+    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, sign: was ? t('fc.anonSign') : sign, mine: true };
     channel.feed = [temp, ...(channel.feed ?? [])]; haptic.select(); close(overlay.id);
     try {
       const p = await api.newChannelPost(text, was);

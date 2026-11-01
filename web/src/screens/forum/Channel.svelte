@@ -9,6 +9,9 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash-2';
+  import VenetianMask from '@lucide/svelte/icons/venetian-mask';
+  import { initials } from '../../ui/OrgLogo.svelte';
+  import Card from '../../ui/Card.svelte';
   import { api, ApiErr, type ChannelMod, type ChannelFeedPost, type ChannelModPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
   import { channel, loadChannel } from '../../lib/state/channel.svelte';
@@ -42,6 +45,16 @@
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'neutral', key: 'fc.checking' } as const
     : p.status === 'held' ? { tone: 'warning', key: 'fc.held' } as const
     : p.status === 'hidden' ? { tone: 'neutral', key: 'fc.hidden' } as const : { tone: 'accent', key: 'fc.mine' } as const;
+
+  // a long post starts at four lines with a fade and a quiet "More" that opens it in place (its height glides to the
+  // full one); a short one shows whole. long/full: measured while clamped, per post
+  const long = $state<Record<number, boolean>>({}), open = $state<Record<number, boolean>>({}), full = $state<Record<number, number>>({});
+  function measure(el: HTMLElement, id: number) {
+    const check = () => { full[id] = el.scrollHeight; if (!open[id]) long[id] = el.scrollHeight > el.clientHeight + 2; };
+    const ro = new ResizeObserver(check);
+    ro.observe(el); check();
+    return { destroy: () => ro.disconnect() };
+  }
 
   // the channel takes posts from KBTU-confirmed students only (a typed-in ID could be anyone's): the rest sign in first
   function write() {
@@ -99,19 +112,25 @@
   {/if}
 
   {#if channel.feed?.length}
-    <Group>
+    <div class="feed">
       {#each channel.feed as p (p.id)}
         {@const m = p.mine ? mark(p) : null}
+        {#snippet post()}
+          <div class="who">
+            <span class="av" aria-hidden="true">{#if p.anon}<VenetianMask size={16} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
+            <span class="nm"><b class="ellipsis">{p.sign}</b><span class="when">{ago(p.at)}</span></span>
+            {#if m}<Tag tone={m.tone}>{t(m.key)}</Tag>{/if}
+            {#if p.mine && p.id > 0}<IconButton icon={Trash2} label={t('fc.delete')} kind="plain" size="s" onclick={() => drop(p)} />{/if}
+          </div>
+          <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
+          {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
+        {/snippet}
         <div class="post" class:off={p.status === 'hidden'}>
-          <button class="pb" onclick={() => { if (p.msg) { haptic.tap(); openLink(`${CHANNEL}/${p.msg}`); } }}>
-            <p class="tx">{p.body}</p>
-            <span class="meta"><b class="who ellipsis">{p.sign}</b><span class="when">{ago(p.at)}</span>
-              {#if m}<Tag tone={m.tone}>{t(m.key)}</Tag>{/if}</span>
-          </button>
-          {#if p.mine && p.id > 0}<span class="del"><IconButton icon={Trash2} label={t('fc.delete')} kind="plain" size="s" onclick={() => drop(p)} /></span>{/if}
+          {#if p.msg}<Card onclick={() => { haptic.tap(); openLink(`${CHANNEL}/${p.msg}`); }}>{@render post()}</Card>
+          {:else}<Card>{@render post()}</Card>{/if}
         </div>
       {/each}
-    </Group>
+    </div>
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
@@ -135,18 +154,26 @@
   .ic { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
     transition: transform 0.45s var(--ease-bounce); }
   .ic:active { transform: scale(0.9); transition-duration: 80ms; }
-  /* a post: its words (eight lines at most), then the signature, when, and my mark; my delete at the row's end */
-  .post { position: relative; display: flex; align-items: flex-start; animation: rise 360ms cubic-bezier(.2, .9, .25, 1.05) backwards; }
-  .post + .post::before, .mrow + .mrow::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
-  .pb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); text-align: left; color: inherit; }
-  .pb:active { opacity: 0.6; }
-  .del { padding: var(--s-2) var(--s-2) 0 0; }
-  .tx { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text); white-space: pre-line; overflow-wrap: break-word;
-    display: -webkit-box; -webkit-line-clamp: 8; line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+  /* the feed: a card per post, air between them */
+  .feed { display: flex; flex-direction: column; gap: var(--s-3); }
+  .post { animation: rise 360ms cubic-bezier(.2, .9, .25, 1.05) backwards; }
+  /* whose (initials, or the mask for an anonymous one), when, my mark and delete */
+  .who { display: flex; align-items: center; gap: var(--s-3); min-height: 36px; margin: calc(-1 * var(--s-1)) 0 var(--s-3); }
+  .av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
+    color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); letter-spacing: 0.02em; }
+  .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .nm b { font: 600 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
+  .when { font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .who :global(.ib) { margin-right: calc(-1 * var(--s-2)); }
+  .who :global(.ib button) { color: var(--text-3); } /* the delete stays quiet: the words are the card */
+  /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
+  .tx { font: 450 var(--fs-body)/1.45 var(--font-text); color: var(--text); white-space: pre-line; overflow-wrap: break-word;
+    max-height: 5.8em; overflow: hidden; transition: max-height 420ms var(--ease); }
+  .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
+  .tx.open { max-height: var(--h); }
   .post.off .tx { color: var(--text-3); }
-  .meta { display: flex; align-items: center; gap: var(--s-2); min-width: 0; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
-  .who { font-weight: 600; color: var(--text-2); min-width: 0; }
-  .when { flex: none; }
+  .more { margin-top: var(--s-1); padding: var(--s-1) 0; font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .mrow + .mrow::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   /* the moderators' rows: the words, whose and why, the answers */
   .mrow { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
