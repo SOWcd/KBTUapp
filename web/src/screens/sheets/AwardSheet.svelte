@@ -58,7 +58,7 @@
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
-  const EDGE = Array.from({ length: 14 }, (_, i) => i + 1); // 14 discs 1 px apart: the coin's thickness
+  const EDGE = Array.from({ length: 20 }, (_, i) => i + 1); // 20 discs 1 px apart: ~10% of the 196 px coin, a real coin's thickness
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
   const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
@@ -206,12 +206,14 @@
   .facts span { font: 560 var(--fs-cap)/1.25 var(--font-text); color: var(--text-2); }
   /* the coin only turns, it never slides (owner, Nov 1). No transition: glass.ts's lerp already smooths --gx/--gy */
   .big { position: relative; display: inline-flex; will-change: transform; transform-style: preserve-3d;
-    transform: rotateX(calc(var(--gy, 0) * -16deg)) rotateY(calc(var(--gx, 0) * 18deg)); }
-  /* the edge: plain discs of the metal stacked 1 px apart behind the face, lit from above; the rim shows on the side the
-     coin turns away from, as on a real coin. The face's own drop shadow would fall on its edge: off here */
+    transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg)); }
+  /* the edge: discs of the metal stacked 1 px apart behind the face (at 26 deg a step projects to under 0.5 px: no gaps);
+     the rim shows on the side the coin turns away from, as on a real coin. Darker than the face's rim, lit from above,
+     with fine radial ridges (a conic stripe on every disc lines up into the milled edge). The face's own drop shadow
+     would fall on its edge: off here */
   .edge { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; transform: translateZ(calc(var(--z) * -1px));
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(0, 0, 0, 0.45)), rgb(var(--edge)); }
-  .edge:nth-of-type(odd) { background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(0, 0, 0, 0.52)), rgb(var(--edge)); }
+    background: repeating-conic-gradient(rgba(0, 0, 0, 0.32) 0 0.9deg, rgba(255, 255, 255, 0.14) 0.9deg 1.8deg),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.55)), linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), rgb(var(--edge)); }
   .coin > :global(:not(.edge)), .coin :global(img) { box-shadow: none; filter: none; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
