@@ -55,9 +55,7 @@
   async function openClub(id: number) { await loadMe(); void loadAfisha(); close(overlay.id); sheets.club(id); }
 </script>
 
-<Sheet {overlay} headed icon={CirclePlus} full title={t('nc.title')}>
-  <h2 class="t-h2 hd">{t('nc.title')}</h2>
-
+<Sheet {overlay} icon={CirclePlus} full title={t('nc.title')}>
   {#if mine === undefined}
     <div class="wait" aria-hidden="true"><span></span><span></span></div>
   {:else if mine && mine.status !== 'rejected' && !again}
@@ -92,7 +90,6 @@
 
 <style>
   .ep { margin-bottom: 14px; }
-  .hd { margin: 4px 0 10px; }
   .lead { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r-m); background: var(--accent-soft); color: var(--accent-text); font: 550 14px/1.4 var(--font-text); }
   .pv { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .pv b { min-width: 0; font: 720 18px/1.2 var(--font-display); }

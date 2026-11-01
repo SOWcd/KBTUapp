@@ -30,8 +30,7 @@
   function addFriends() { close(overlay.id); sheets.addFriend(); }
 </script>
 
-<Sheet {overlay} headed icon={TelegramMark} title={t('inv.title')}>
-  <h2 class="t-h2 hd">{t('inv.title')}</h2>
+<Sheet {overlay} icon={TelegramMark} title={t('inv.title')}>
   <p class="t-foot sub">{t('inv.sub', { title, award: t('ach.soul.name') })}</p>
   {#if list === null}
     <div class="wait" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -57,7 +56,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
   .sub { margin-bottom: 14px; text-wrap: pretty; }
   .list { display: flex; flex-direction: column; gap: 2px; }
   .fr { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; }

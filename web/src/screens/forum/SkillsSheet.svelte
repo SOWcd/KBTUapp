@@ -20,13 +20,11 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={Wrench} tall title={t('fo.mySkills')}>
-  <h2 class="t-h2 hd">{t('fo.mySkills')}</h2>
+<Sheet {overlay} icon={Wrench} tall title={t('fo.mySkills')}>
   <p class="t-foot">{t('fo.mySkillsNote')}</p>
   <SkillPicker bind:chosen max={5} />
   {#snippet footer()}<Button kind="primary" size="l" full loading={busy} onclick={save}>{t('common.save')}</Button>{/snippet}
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
 </style>

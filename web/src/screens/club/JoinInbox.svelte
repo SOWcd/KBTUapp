@@ -57,8 +57,7 @@
   const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), schoolShort(r.school)].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} headed icon={Inbox} full title={t('cast.card')}>
-  <h2 class="t-h2 hd">{t('cast.card')}</h2>
+<Sheet {overlay} icon={Inbox} full title={t('cast.card')}>
   {#if o}
     <label class="switch">
       <span><b>{t('jr.open')}</b><i class="t-foot">{o.recruiting ? t('jr.openHint') : t('jr.closedHint')}</i></span>
@@ -99,7 +98,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 14px; }
   .list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
   .req { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: var(--r-l); background: var(--surface-2); }
   .top { display: flex; align-items: center; gap: 12px; }

@@ -71,8 +71,7 @@
     {#if c.sectionAi}<em class="aimark">{t('adm.chatAi')}</em>{/if}</span>
 {/snippet}
 
-<Sheet {overlay} headed icon={TelegramMark} full title={t('adm.chats')}>
-  <h2 class="t-h2 hd">{t('adm.chats')}</h2>
+<Sheet {overlay} icon={TelegramMark} full title={t('adm.chats')}>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
   {#if pending.length}
     <h3 class="t-cap gh">{t('adm.chatPending')} · {pending.length}</h3>
@@ -111,7 +110,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
   .lead { margin-bottom: 14px; }
   .new { display: flex; flex-direction: column; gap: 10px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

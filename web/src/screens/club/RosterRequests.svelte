@@ -24,8 +24,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={ListChecks} title={t('ro.reqTitle')}>
-  <h2 class="t-h2 hd">{t('ro.reqTitle')}</h2>
+<Sheet {overlay} icon={ListChecks} title={t('ro.reqTitle')}>
   <p class="t-foot sub">{t('ro.reqText')}</p>
   {#each list ?? [] as r (r.id)}
     <div class="rq surface">
@@ -41,7 +40,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
   .sub { margin-bottom: 14px; }
   .rq { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); margin-bottom: 10px; }
   .who { display: flex; align-items: center; gap: 12px; }

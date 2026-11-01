@@ -106,9 +106,7 @@
   // the textarea grows with the text
 </script>
 
-<Sheet {overlay} headed icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
-  <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
-
+<Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <!-- the club chosen in Studio, no picker -->
   {#if club}
     <p class="from"><OrgLogo org={club} size={22} /><b>{club.name}</b></p>
@@ -155,7 +153,6 @@
     color: var(--accent-text); font: 600 13.5px/1.3 var(--font-text); text-align: left; }
   .tip span { flex: 1; }
   .tip :global(svg) { flex: none; }
-  .hd { margin: 4px 0 12px; }
   .from { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font: 600 14px/1 var(--font-text); }
 
   .add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 112px; border-radius: 18px; color: var(--accent-text);

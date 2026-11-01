@@ -122,8 +122,7 @@
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
 </script>
 
-<Sheet {overlay} headed icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
-  <h2 class="t-h2 hd">{kind === 'event' ? t('cm.titleEvent') : t('cm.title')}</h2>
+<Sheet {overlay} icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
   <p class="t-foot sub ellipsis">{title}</p>
 
   {#if th?.canModerate}
@@ -185,7 +184,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
   .sub { margin-bottom: 14px; }
   .onoff { margin-bottom: 14px; }
   .empty { padding: 22px 12px; text-align: center; color: var(--text-2); font: 500 14.5px/1.45 var(--font-text); text-wrap: balance; }

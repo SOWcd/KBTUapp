@@ -57,7 +57,7 @@
   }
 </script>
 
-<Sheet {overlay} headed tall title={t('page.friends')} icon={UsersRound}>
+<Sheet {overlay} tall title={t('page.friends')} icon={UsersRound}>
 <div class="friends">
   {#if session.ready && !me?.student}
     <section class="hello">
@@ -83,7 +83,7 @@
       {/if}
 
       <header class="hd">
-        <span><h2 class="t-h2">{t('page.friends')}</h2><p class="t-foot">{tn('fr.count', f.friends.length)}</p></span>
+        <p class="t-foot">{tn('fr.count', f.friends.length)}</p>
         <button class="add" onclick={() => sheets.addFriend()}><UserPlus size={18} />{t('fr.add')}</button>
       </header>
 
@@ -145,8 +145,7 @@
 <style>
   .friends { display: flex; flex-direction: column; gap: 14px; }
   .friends > :global(*) { flex-shrink: 0; }
-  .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-  .hd p { margin-top: 4px; }
+  .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .add { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .add:active { transform: scale(0.95); }

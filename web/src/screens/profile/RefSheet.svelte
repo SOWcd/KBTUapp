@@ -28,8 +28,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={Link} title={t('ref.title')}>
-  <h2 class="t-h2 hd">{t('ref.title')}</h2>
+<Sheet {overlay} icon={Link} title={t('ref.title')}>
   <div class="pass">
     <div class="plate"><span class="code"><Qr text={link} tone={QR_TONE}>{#if me}<span class="face"><Avatar person={me} size={48} tappable={false} /></span>{/if}</Qr></span></div>
     <p class="cap">{t('ref.qr')}</p>
@@ -40,7 +39,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 14px; }
   /* the badge's material, as on AddFriend */
   .pass { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 18px 16px; border-radius: var(--r-xl); color: rgb(255, 255, 255);
     background: radial-gradient(110% 70% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(160deg, rgb(42, 79, 214), rgb(18, 26, 61) 70%);

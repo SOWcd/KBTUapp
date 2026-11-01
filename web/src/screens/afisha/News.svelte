@@ -174,10 +174,10 @@
   </article>
 {/snippet}
 
-<Sheet {overlay} headed tall title={t('page.news')} icon={Newspaper}>
+<Sheet {overlay} tall title={t('page.news')} icon={Newspaper}>
 <div class="news">
   <header class="hd">
-    <span><h2 class="t-h2">{t('page.news')}</h2><p class="t-foot">{t('news.sub')}</p></span>
+    <p class="t-foot">{t('news.sub')}</p>
   </header>
 
   {#if casts && posts}
@@ -208,7 +208,6 @@
   .news { display: flex; flex-direction: column; gap: 12px; }
   .news > :global(*) { flex-shrink: 0; }
   .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
-  .hd p { margin-top: 4px; }
   .sh { font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-top: 6px; }
   .list { display: flex; flex-direction: column; gap: 10px; }
   .in { animation: rise 440ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 60ms); }

@@ -84,8 +84,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
-  <h2 class="t-h2">{r0 ? t('cast.edit') : t('cast.open')}</h2>
+<Sheet {overlay} icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
   <p class="t-foot sub">{t('cast.openSub')}</p>
 
   <label class="field" class:bad={tried && err === 'title'}><span class="t-cap">{t('cast.name')}</span><input bind:value={title} maxlength="80" /></label>

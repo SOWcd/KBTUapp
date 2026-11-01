@@ -19,8 +19,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={MapPinX} full title={t('mf.title')}>
-  <h2 class="t-h2 hd">{t('mf.title')}</h2>
+<Sheet {overlay} icon={MapPinX} full title={t('mf.title')}>
   <p class="t-foot sub">{t('mf.sub')}</p>
   {#if list && !list.length}<p class="t-foot">{t('mf.none')}</p>{/if}
   {#each list ?? [] as f (f.id)}
@@ -32,7 +31,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
   .sub { margin-bottom: 12px; }
   .row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-l); margin-bottom: 8px; transition: opacity var(--t-base) var(--ease); }
   .row.done { opacity: 0.5; }

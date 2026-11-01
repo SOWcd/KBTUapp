@@ -195,7 +195,7 @@
   });
 </script>
 
-<Sheet {overlay} headed tall title={t('anthem.title')} icon={Music}>
+<Sheet {overlay} tall title={t('anthem.title')} icon={Music}>
   <div class="words" class:synced bind:this={words}>
     <!-- playing: the emblem shrinks into this chip, with the verse's language -->
     <div class="chiprow" aria-hidden="true"><span class="chip" class:shown={synced}><span class="mini"><KbtuMark size={13} /></span><b>{t('anthem.title')}</b>{#if lang}<i>{LANG_FULL[lang]}</i>{/if}</span></div>

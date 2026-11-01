@@ -19,8 +19,7 @@
   const online = ONLINE.map((d) => { const [a, b = a] = d.split('/'); return dayRange(a, b); }).join(', ');
 </script>
 
-<Sheet {overlay} headed icon={GraduationCap} tall title={t('acad.title')}>
-  <h2 class="t-h2 hd">{t('acad.title')}</h2>
+<Sheet {overlay} icon={GraduationCap} tall title={t('acad.title')}>
   <p class="t-foot sub">{t('acad.sub')}</p>
   {#if pastCount}
     <button class="pastq" onclick={() => (showPast = !showPast)}>{showPast ? t('acad.hidePast') : t('acad.showPast', { n: pastCount })}</button>
@@ -43,7 +42,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
   .sub { margin-bottom: 6px; }
   .gh { margin: 18px 4px 8px; }
   .gn { text-transform: none; letter-spacing: 0; font-weight: 500; }

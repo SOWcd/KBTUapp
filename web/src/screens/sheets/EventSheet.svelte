@@ -244,7 +244,7 @@
   }
 </script>
 
-<Sheet {overlay} headed={!preview} icon={CalendarHeart} title={preview ? t('ed.preview') : (e?.title ?? '')} tint={e?.tint}>
+<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : (e?.title ?? '')} tint={e?.tint}>
   {#if e}
     {#if preview}<p class="pv"><Eye size={15} />{t('event.preview')}</p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>

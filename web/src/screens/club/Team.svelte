@@ -140,11 +140,11 @@
 {/snippet}
 
 
-<Sheet {overlay} headed tall title={t('page.team')} icon={Users}>
+<Sheet {overlay} tall title={t('page.team')} icon={Users}>
 <div class="team">
   {#if m}
     <header class="hd">
-      <span class="org"><OrgLogo org={m.org} size={30} /><span><h1 class="t-h2 ellipsis">{t('page.team')}</h1><p class="t-foot ellipsis">{m.org.name}</p></span></span>
+      <span class="org"><OrgLogo org={m.org} size={30} /><b class="nm ellipsis">{m.org.name}</b></span>
       <!-- the list first; invite and roles are icons up here (the invite row was too big, the hint noise) -->
       <span class="icons">
         {#if vice}<button class="ic" onclick={() => shareInvite(m.org)} aria-label={t('team.inviteTitle')}><LinkIcon size={19} /></button>{/if}
@@ -281,7 +281,7 @@
   .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows */
   .hd { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .org > span { min-width: 0; }
+  .nm { min-width: 0; font: 650 var(--fs-body)/1.2 var(--font-text); }
 
   .asks { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-l); background: var(--danger-soft); }
   .asks h2 { color: var(--danger-text); }

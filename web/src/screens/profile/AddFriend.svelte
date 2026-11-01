@@ -78,9 +78,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={UserPlus} title={t('fr.addTitle')}>
-  <h2 class="t-h2 hd">{t('fr.addTitle')}</h2>
-
+<Sheet {overlay} icon={UserPlus} title={t('fr.addTitle')}>
   <div class="pass">
     <div class="plate">
       {#if joined}
@@ -117,7 +115,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 14px; }
 
   /* the badge's own material (MyQr), smaller: the code a friend scans across a table */
   .pass { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 18px 16px; border-radius: 26px; color: #fff;

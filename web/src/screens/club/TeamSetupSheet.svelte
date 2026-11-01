@@ -140,9 +140,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} headed icon={UserCog} full title={t('team.setup')}>
-  <h2 class="t-h2 hd">{t('team.setup')}</h2>
-
+<Sheet {overlay} icon={UserCog} full title={t('team.setup')}>
   <section>
     <h3 class="t-cap">{t('ts.roles')}</h3>
     <p class="t-foot hint">{t('ts.rolesHint')}</p>
@@ -205,7 +203,6 @@
   .rights .switch i { margin-top: 1px; }
   .rights .locked { opacity: 0.45; }
   .rn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; }
-  .hd { margin: 4px 0 8px; }
   section { margin-top: 14px; }
   .hint { margin: 4px 2px 10px; text-wrap: pretty; }
   .items { display: flex; flex-direction: column; gap: 6px; }

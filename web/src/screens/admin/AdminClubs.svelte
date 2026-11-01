@@ -141,8 +141,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={TAB_ICON.club} full title={t('adm.clubs')}>
-  <h2 class="t-h2 hd">{t('adm.clubs')}</h2>
+<Sheet {overlay} icon={TAB_ICON.club} full title={t('adm.clubs')}>
   <p class="t-foot lead">{t('adm.lead')}</p>
   {#if schools}
     <div class="seg" role="tablist">
@@ -243,7 +242,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
   .seg { margin: 14px 0; }
   .lead { margin-bottom: 14px; text-wrap: pretty; }
   .new { display: flex; flex-direction: column; gap: 10px; }

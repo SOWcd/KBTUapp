@@ -13,13 +13,11 @@
   $effect(() => { api.askPeople(ask).then((l) => (list = l)).catch(() => (list = [])); });
 </script>
 
-<Sheet {overlay} headed icon={UsersRound} tall title={t('fo.people')}>
-  <h2 class="t-h2 hd">{t('fo.people')}</h2>
+<Sheet {overlay} icon={UsersRound} tall title={t('fo.people')}>
   <p class="t-foot sub">{title}</p>
   <PersonCards cards={list ?? []} />
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
   .sub { margin-bottom: 12px; }
 </style>

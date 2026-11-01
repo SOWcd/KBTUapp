@@ -34,8 +34,7 @@
   const line = (x: VolunteerApp) => [x.course && t('person.course', { n: x.course }), schoolShort(x.school), relDay(x.at)].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} headed icon={HandHeart} full title={t('vol.list')}>
-  <h2 class="t-h2">{t('vol.list')}</h2>
+<Sheet {overlay} icon={HandHeart} full title={t('vol.list')}>
   <p class="t-foot sub">{t('vol.taken', { n: yes, of: need })}</p>
   {#if list}
     <div class="list">

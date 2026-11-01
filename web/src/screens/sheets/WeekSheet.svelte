@@ -32,8 +32,7 @@
   }
 </script>
 
-<Sheet {overlay} headed tall title={t('sched.weekTitle')} icon={CalendarDays}>
-  <h2 class="t-h2 hd">{t('sched.weekTitle')}</h2>
+<Sheet {overlay} tall title={t('sched.weekTitle')} icon={CalendarDays}>
   {#each days as d (d.wd)}
     <h3 class="t-cap cap">{dayName(d.wd)}</h3>
     <div class="list surface">
@@ -58,7 +57,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
   .cap { margin: 16px 4px 8px; }
   .list { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .row { display: flex; align-items: flex-start; gap: 14px; padding: 11px 14px; }

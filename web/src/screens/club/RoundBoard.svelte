@@ -147,7 +147,7 @@
 </script>
 
 <!-- one Back (AGENTS.md): Telegram's Back leaves an application for the list, then closes the board -->
-<Sheet {overlay} headed icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
+<Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
   {#if cur && r}
     {@const a = cur}
     <div class="who">
@@ -202,7 +202,6 @@
       <button class="nope" class:on={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</button>
     </div>
   {:else if r}
-    <h2 class="t-h2">{r.title}</h2>
     <p class="t-foot sub">{r.open ? t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) }) : t('cast.intakeClosed')} · {tn('cast.apps', apps.length)}</p>
     {#if apps.length}
       <!-- the funnel: applied, invited, came, taken -->

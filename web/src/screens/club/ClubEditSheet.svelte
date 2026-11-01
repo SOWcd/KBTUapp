@@ -91,8 +91,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
-  <h2 class="t-h2 hd">{t('ce.title')}</h2>
+<Sheet {overlay} icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
   <p class="t-foot sub">{t('ce.sub')}</p>
 
   {#if !o || !preview}
@@ -134,7 +133,6 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
   .sub { margin-bottom: 14px; }
   .pv { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .pv span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }

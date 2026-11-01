@@ -81,8 +81,7 @@
   const when = (ts: number) => `${relDay(ts)}, ${time(ts)}`;
 </script>
 
-<Sheet {overlay} headed icon={NotebookPen} full title={t('memo.title')}>
-  <h2 class="t-h2">{t('memo.title')}</h2>
+<Sheet {overlay} icon={NotebookPen} full title={t('memo.title')}>
   {#if draft}
     <p class="t-foot sub">{t('memo.week', { from: dayMonth(draft.from), to: dayMonth(draft.until - 1) })}</p>
     <p class="rules">{t('memo.rules')}</p>

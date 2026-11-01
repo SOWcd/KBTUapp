@@ -18,8 +18,7 @@
   const sub = (o: Org) => [o.members ? tn('club.members', o.members) : '', o.subscribers ? tn('clubs.subscribers', o.subscribers) : ''].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} headed icon={TAB_ICON.club} tall title={t('clubs.allTitle')}>
-  <h2 class="t-h2 hd">{t('clubs.allTitle')}<span>{all.length}</span></h2>
+<Sheet {overlay} icon={TAB_ICON.club} tall title={`${t('clubs.allTitle')} · ${all.length}`}>
   <SearchField legacy bind:value={q} placeholder={t('clubs.search')} />
   <p class="t-foot note">{t('clubs.allNote')}</p>
   <div class="list surface">
@@ -28,8 +27,6 @@
 </Sheet>
 
 <style>
-  .hd { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 12px; }
-  .hd span { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
   .note { margin: 10px 4px 10px; }
   .list { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .empty { padding: 20px 14px; }

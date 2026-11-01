@@ -66,8 +66,7 @@
   }
 </script>
 
-<Sheet {overlay} headed icon={ClipboardList} full title={t('studio.attendees')}>
-  <h2 class="t-h2">{t('studio.attendees')}</h2>
+<Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
   {#if list}
     <div class="bar"><p class="stats">{t('att.stats', { going, came })}</p>
