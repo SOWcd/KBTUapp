@@ -222,7 +222,7 @@ def apps(con, v: Viewer, rid: int) -> list[dict]:
     votes: dict[int, list] = {}
     for x in rows(con, f"""SELECT x.*, s.first_name, s.last_name FROM round_votes x JOIN students s ON s.user_id = x.user_id
             WHERE x.app_id IN ({_qs(ids)}) ORDER BY x.at""", *ids):
-        votes.setdefault(x["app_id"], []).append({"by": f"{x['first_name']} {x['last_name'][:1]}.".strip(), "mine": x["user_id"] == v.id,
+        votes.setdefault(x["app_id"], []).append({"by": f"{x['first_name']} {x['last_name'][:1]}".strip(), "mine": x["user_id"] == v.id,
                                                   "verdict": x["verdict"], "stars": x["stars"], "note": x["note"]})
     came = {x[0]: (x[1], x[2]) for x in rows(con, f"""SELECT g.user_id, COUNT(*), MAX(e.title) FROM registrations g JOIN events e ON e.id = g.event_id
         WHERE e.org_id = ? AND g.checked_in_at IS NOT NULL AND g.user_id IN ({_qs(uids)}) GROUP BY g.user_id""", oid, *uids)}

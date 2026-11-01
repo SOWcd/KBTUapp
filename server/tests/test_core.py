@@ -91,7 +91,7 @@ def test_core_loop(env):
     assert guest["student"] is None and guest["tg"]["firstName"] == "Ali"
 
     me = login(c, 10, "ali")
-    assert me["student"]["studentId"] == "24Bali" and me["name"] == "Ali T."
+    assert me["student"]["studentId"] == "24Bali" and me["name"] == "Ali T"
     assert c.get("/api/me/schedule", headers=tma(10)).json()[0]["subject"] == "Calculus"
     con = db.connect(cfg.db_path)
 
@@ -127,7 +127,7 @@ def test_core_loop(env):
     code = ticket["ticketCode"]
     assert re.fullmatch(r"[2-9A-HJKMNP-Z]{6}", code)  # short, nothing to mix up (no 0/O, 1/I/L)
     first = scan("KBTU" + code)  # what the ticket QR holds
-    assert first["result"] == "ok" and first["came"] == 1 and first["person"]["name"] == "Zhan T."
+    assert first["result"] == "ok" and first["came"] == 1 and first["person"]["name"] == "Zhan T"
     assert scan(f" {code[:3].lower()} - {code[3:]}")["result"] == "already"  # typed by hand
     assert scan("KBTU-" + code)["result"] == "already"  # the QR before Oct 5
     assert scan("KBTU-NOPE")["result"] == "not_found"
@@ -979,7 +979,7 @@ def test_invite_cards(env, monkeypatch):
     url = card["reply_markup"]["inline_keyboard"][0][0]["url"]
     token = c.post("/api/friends/link", headers=A).json()["token"]
     assert card["type"] == "article" and url.endswith(f"startapp=fr_{token}")          # the same live link as the QR
-    assert "http" not in card["input_message_content"]["message_text"] and "Ali T." in card["input_message_content"]["message_text"]
+    assert "http" not in card["input_message_content"]["message_text"] and "Ali T" in card["input_message_content"]["message_text"]
     assert c.post("/api/share", headers=A, json={"kind": "join", "id": 1}).status_code == 200
     assert "startapp=join_1_" in sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"]
     assert c.post("/api/share", headers=tma(62, "Mem"), json={"kind": "join", "id": 1}).status_code == 403
@@ -1006,7 +1006,7 @@ def test_checkin_by_name(env):
     M = tma(71, "Mem")
     assert c.get("/api/events/1/door", headers=tma(73, "Zhan")).status_code == 403             # the team only
     door = c.get("/api/events/1/door", headers=M).json()
-    assert [(d["person"]["name"], d["checkedInAt"]) for d in door] == [("Ali T.", None)]       # a short name
+    assert [(d["person"]["name"], d["checkedInAt"]) for d in door] == [("Ali T", None)]       # a short name
     r = c.post("/api/events/1/checkin", headers=M, json={"userId": ali["id"]}).json()
     assert (r["result"], r["person"]["id"], r["came"]) == ("ok", ali["id"], 1)
     assert c.post("/api/events/1/checkin", headers=M, json={"userId": zhan["id"]}).json()["result"] == "not_found"
@@ -1178,7 +1178,7 @@ def test_album_reports(env):
     raw = io.BytesIO()
     Image.new("RGB", (64, 48), (200, 90, 160)).save(raw, "JPEG")
     ph = c.post("/api/events/1/photos", headers=A, content=raw.getvalue()).json()["photos"][0]
-    assert ph["by"] == "Ali T." and ph["mine"] is True
+    assert ph["by"] == "Ali T" and ph["mine"] is True
     assert c.get("/api/events/1", headers=Z).json()["photos"][0]["mine"] is False
     rep = lambda h: c.post("/api/reports", headers=h, json={"target": "photo", "id": ph["id"], "reason": "insult"}).status_code  # noqa: E731
     assert rep(A) == 404                                                                    # not my own
@@ -1205,7 +1205,7 @@ def test_album_reports(env):
     on_disk = lambda: (Path(cfg.db_path).parent / "media" / f"{path}.webp").exists()  # noqa: E731
     assert on_disk() and [(x["target"], x["id"]) for x in c.get("/api/admin/taken-down", headers=B).json()] == [("photo", ph["id"])]
     assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 204
-    assert [(p["id"], p["by"]) for p in c.get("/api/events/1", headers=P).json()["photos"]] == [(ph["id"], "Ali T.")]
+    assert [(p["id"], p["by"]) for p in c.get("/api/events/1", headers=P).json()["photos"]] == [(ph["id"], "Ali T")]
     assert c.post("/api/reports", headers=P, json={"target": "photo", "id": ph["id"], "reason": "insult"}).status_code == 204
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     con.execute("UPDATE takedowns SET at = at - 29 * 86400")
@@ -2939,7 +2939,7 @@ def test_casting(env):
     assert c.post(f"/api/round-apps/{ann['id']}/vote", headers=tma(21), json={"verdict": "next", "stars": 4, "note": "Strong reels"}).json()["stage"] == "next"
     c.post(f"/api/round-apps/{bob['id']}/vote", headers=tma(20), json={"verdict": "no"})
     votes = {a["fullName"]: a for a in c.get(f"/api/rounds/{rid}/apps", headers=tma(20)).json()}["Testov Ann"]["votes"]
-    assert votes == [{"by": "Head T.", "mine": False, "verdict": "next", "stars": 4, "note": "Strong reels"}]
+    assert votes == [{"by": "Head T", "mine": False, "verdict": "next", "stars": 4, "note": "Strong reels"}]
     # interviews: slots, the shortlisted invited, a time booked (reminders queued), who came
     day = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 2 * 86400 + 5 * 3600))
     assert c.post(f"/api/rounds/{rid}/invite", headers=tma(21)).status_code == 409                          # no slots yet
@@ -4165,7 +4165,7 @@ def test_door_guests(env):
     assert add(1, "Ali").status_code == 400 and add(1, "Ali 123").status_code == 400   # a first and a last name
     assert add(3, "Ali Testov").json()["message"] == "paid"
     g = add(1, "Ali  Testov").json()
-    assert (g["name"], g["undo"]) == ("Ali T.", True)                                  # a Member: the short name
+    assert (g["name"], g["undo"]) == ("Ali T", True)                                  # a Member: the short name
     assert add(1, "testov ali").json()["message"] == "already"
     assert [x["name"] for x in c.get("/api/events/1/door/guests", headers=P).json()] == ["Ali Testov"]
     assert c.delete(f"/api/events/1/door/guests/{g['id']}", headers=P).status_code == 409   # the typist's

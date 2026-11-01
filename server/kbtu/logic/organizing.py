@@ -703,7 +703,7 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
                                  AND NOT EXISTS (SELECT 1 FROM reports k WHERE k.target = 'photo' AND k.target_id = r.target_id AND k.status = 'dismissed'))
                              OR SUM(r.reporter_id = ?) > 0)
         ORDER BY p.sort""", e["id"], v.id)
-    by = lambda f: f["nick"] or (f"{f['first_name']} {f['last_name'][:1]}." if f["first_name"] else None)  # noqa: E731
+    by = lambda f: f["nick"] or (f"{f['first_name']} {f['last_name'][:1]}" if f["first_name"] else None)  # noqa: E731
     return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": by(f), "mine": f["added_by"] == v.id} for f in ps],
             "canAddPhotos": _album_room(con, v, e) > 0, "albumOpen": bool(e["album_open"])}
 
@@ -854,7 +854,7 @@ def _norm_name(s: str) -> str:
 
 def _guest(g: sqlite3.Row, full: bool, me: int) -> dict:
     first, *rest = g["full_name"].split(" ")
-    return {"id": g["id"], "name": g["full_name"] if full else f"{first} {rest[-1][:1]}.", "at": g["created_at"],
+    return {"id": g["id"], "name": g["full_name"] if full else f"{first} {rest[-1][:1]}", "at": g["created_at"],
             "linked": g["user_id"] is not None, "undo": g["added_by"] == me and g["user_id"] is None and g["created_at"] > core.now() - UNDO}
 
 

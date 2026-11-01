@@ -59,7 +59,7 @@ def test_post_publish_and_limits(env, monkeypatch):
                   "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", "example\u3002com", "t\uff0eme/x", "\uff54\uff0e\uff4d\uff45/x","t.m\u200be/x", "https://x"):
         r = c.post("/api/forum-posts", headers=A, json={"body": linky})
         assert r.status_code == 400 and r.json()["message"] == "links", linky
-    r = c.post("/api/forum-posts", headers=A, json={"body": "I saw it all\n\u2014 Dana S."})              # posing as a named post
+    r = c.post("/api/forum-posts", headers=A, json={"body": "I saw it all\n\u2014 Dana S"})              # posing as a named post
     assert r.status_code == 400 and r.json()["message"] == "signature"
     assert not seen                                                                              # refused before the AI
     # invisible characters (tag letters, fillers) never reach the AI nor the channel; the years' dash and a dot without a space pass
@@ -72,7 +72,7 @@ def test_post_publish_and_limits(env, monkeypatch):
     tick(cfg, tg, con)
     sent = tg.of("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == CH and sent[0]["parse_mode"] == "HTML"
-    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n<i>— Ann T.</i>" and sent[0]["link_preview_options"] == {"is_disabled": True}
+    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n<i>— Ann T</i>" and sent[0]["link_preview_options"] == {"is_disabled": True}
     assert "reply_markup" not in sent[0]                                                         # a button would hide the Comments bar
     tick(cfg, tg, con)
     assert len(tg.of("sendMessage")) == 1                                                        # never twice
@@ -287,7 +287,7 @@ def test_post_republish(env, monkeypatch):
     tick(cfg, tg, con)
     assert tg.of("deleteMessage")[0] == {"chat_id": CH, "message_id": old} and not tg.of("editMessageText")
     new = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
-    assert new and new != old and tg.of("sendMessage")[n]["text"] == "Free pizza at the canteen\n\n<i>— Ann T.</i>"
+    assert new and new != old and tg.of("sendMessage")[n]["text"] == "Free pizza at the canteen\n\n<i>— Ann T</i>"
     assert p["id"] in [x["id"] for x in c.get("/api/forum-posts/feed", headers=A).json()]
     assert con.execute("SELECT comments, status FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == (0, "live")
     con.execute("INSERT INTO meta (key, value) VALUES (?, '78')", (f"fchcopy:{new}",))
@@ -333,7 +333,7 @@ def test_post_send_lost_and_takedown_kept(env, monkeypatch):
     assert con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("held", "lost", None)
     # its copy in the group shows it went out after all: found in every format the bot has sent (the signature under
     # the words, its italic gone; the bold first line of Nov 2), never by the words alone
-    for i, text in enumerate(("Free pizza at the canteen\n\n— Ann T.", "Ann T.\n\nFree pizza at the canteen", "Free pizza at the canteen")):
+    for i, text in enumerate(("Free pizza at the canteen\n\n— Ann T", "Ann T\n\nFree pizza at the canteen", "Free pizza at the canteen")):
         logic.fchannel.found(con, 600 + i, text)
         got = con.execute("SELECT status, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:]
         assert got == (("live", 600 + i) if i < 2 else ("held", None)), text
@@ -443,10 +443,10 @@ def test_post_feed(env, monkeypatch):
     assert [p["id"] for p in feed] == [held["id"], masked["id"], named["id"]]                   # newest first, my held one too
     assert feed[0]["status"] == "held" and feed[0]["mine"] and feed[0]["msg"] is None
     assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
-    assert feed[2]["sign"] == "Ann T." and not feed[2]["mine"]
+    assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
         assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread"}  # no user id
-    assert feed[2]["person"]["name"] == "Ann T." and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
+    assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
     for viewer in (C, A, tma(9)):
@@ -460,7 +460,7 @@ def test_post_feed(env, monkeypatch):
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
     assert c.delete(f"/api/forum-posts/{masked['id']}", headers=B).status_code == 204
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [named["id"]]
-    assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T."           # a guest reads the public channel
+    assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T"           # a guest reads the public channel
     # an author with a nick signs with it, in the channel and the tab, never with his real name beside it; the signature
     # stays as written when the nick changes later; a nick that reads as a link signs with the short name
     set_clock(monkeypatch, lambda: int(time.time()) + 3600)
@@ -473,7 +473,7 @@ def test_post_feed(env, monkeypatch):
     row = next(p for p in c.get("/api/forum-posts/feed", headers=A).json() if p["id"] == nk["id"])
     assert row["sign"] == "Night <Owl>" and row["person"]["id"] == 2 and "Bob" not in json.dumps(row)
     con.execute("UPDATE users SET nick = 'kbtu.kz' WHERE id = 2")
-    assert logic.fchannel.signature(logic.one(con, logic.PERSON + " WHERE u.id = 2")) == "Bob T."
+    assert logic.fchannel.signature(logic.one(con, logic.PERSON + " WHERE u.id = 2")) == "Bob T"
     con.close()
 
 
@@ -515,7 +515,7 @@ def test_post_first_comment(env, monkeypatch):
     monkeypatch.setattr(bot, "_custom", {"\U0001f91d": "111"})
     monkeypatch.setattr(bot, "_custom_re", re.compile("\U0001f91d️?"))
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == "a &lt; b &amp; c\n\n<i>— Ann T.</i>"
+    assert tg.of("sendMessage")[0]["text"] == "a &lt; b &amp; c\n\n<i>— Ann T</i>"
     r = rules()
     assert len(r) == 1 and r[0]["reply_parameters"] == {"message_id": 55} and r[0]["parse_mode"] == "HTML"
     assert r[0]["text"] == html.escape(texts.FORUM_RULES).replace("\U0001f91d", '<tg-emoji emoji-id="111">\U0001f91d</tg-emoji>') != texts.FORUM_RULES

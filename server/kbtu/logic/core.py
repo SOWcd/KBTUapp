@@ -186,9 +186,9 @@ def _roles(con, v: Viewer) -> dict[int, str]:
 
 
 def short_name(p: sqlite3.Row) -> str:
-    """"Alikhan S." for students (§3), the Telegram first name otherwise."""
+    """"Alikhan S" for students (§3; no dot, owner Nov 2), the Telegram first name otherwise."""
     if p["first_name"]:
-        return f"{p['first_name']} {p['last_name'][:1] + '.' if p['last_name'] else ''}".strip()
+        return f"{p['first_name']} {p['last_name'][:1] if p['last_name'] else ''}".strip()
     return p["tg_first_name"] or "?"
 
 

@@ -30,7 +30,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     ali = login(c, 21, "ali")
     con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
     from kbtu import checkin
-    s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T."}, {"email": "x@kbtu.kz", "name": "Ali Testov", "studentId": "24Bali"},
+    s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T"}, {"email": "x@kbtu.kz", "name": "Ali Testov", "studentId": "24Bali"},
                                    {"email": "y@kbtu.kz", "name": "Bek Omarov", "studentId": "24Bali"}, {"email": "dan@kbtu.kz", "name": "Dan"}])
     delete_now(c, cfg, tma(21, "Ali"))
     # by mail; by my ID only with my name (Bek's row with a typo of my ID is his)
@@ -65,7 +65,7 @@ def test_replaced_receipt(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Gala", "place": "Hall", "startsAt": int(time.time()) + 3600, "emoji": "laptop_3d",
-                                                              "color": "#3B6BFF", "seats": 5, "price": 2000, "payToName": "Arman A.",
+                                                              "color": "#3B6BFF", "seats": 5, "price": 2000, "payToName": "Arman A",
                                                               "payPhone": "87071234567"}).json()["id"]
     c.post(f"/api/events/{eid}/publish", headers=tma(20))
     root = Path(cfg.db_path).parent / "receipts"
@@ -217,7 +217,7 @@ def test_lost_send_found_by_its_copy(env):
     F = logic.fchannel
     pid = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'hello all', 0, 'held', 'lost', 0)",
                       (ann["id"],)).lastrowid
-    F.found(con, 77, "Ann T.\n\nhello all")
+    F.found(con, 77, "Ann T\n\nhello all")
     assert tuple(con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (pid,)).fetchone()) == ("live", None, 77)
     F.sent(con, pid, 77)                                                          # its answer, late
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
@@ -231,7 +231,7 @@ def test_lost_send_found_by_its_copy(env):
     lost = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", ann["id"])
     q("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'who goes tonight?', 0, 'live', 500, 0)", bob["id"])
     anon = texts.bot_message("ru", "fch_anon")[0]
-    F.found(con, 500, "Bob T.\n\nwho goes tonight?")
+    F.found(con, 500, "Bob T\n\nwho goes tonight?")
     F.found(con, 500, f"{anon}\n\nwho goes tonight?")
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] is None
     q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", bob["id"])
@@ -242,7 +242,7 @@ def test_lost_send_found_by_its_copy(env):
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] == 501
     # a send lost across the Nov 2 deploy went out in the old format (the words, then "- name"): still found
     old = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'old style', 0, 'held', 'lost', 0)", bob["id"])
-    F.found(con, 502, "old style\n\n— Bob T.")
+    F.found(con, 502, "old style\n\n— Bob T")
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (old,)).fetchone()[0] == 502
 
 
@@ -271,4 +271,4 @@ def test_signature_lookalikes_refused():
     """Small: a last line posing as the bot's signature with a minus sign or a fullwidth hyphen is refused too."""
     for dash in ("\u2212", "\uff0d", "\ufe58", "\u2011", "-"):
         with pytest.raises(logic.ApiError):
-            logic.fchannel._clean(f"I saw it all\n{dash} Dana S.")
+            logic.fchannel._clean(f"I saw it all\n{dash} Dana S")

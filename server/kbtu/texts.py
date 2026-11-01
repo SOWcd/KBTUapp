@@ -695,10 +695,11 @@ def channel_post(title: str, org: str, starts: int, place: str, price: int | Non
     return ("❌ <b>ОТМЕНЕНО</b>\n\n" if cancelled else "") + "\n".join(lines)
 
 
-CHANNEL_BUTTON = "Записаться"
+CHANNEL_BUTTON = "📝 Записаться · Тіркелу · Sign up"
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
-CHANNEL_RULES = ("💬 Здесь обсуждаем событие: вопросы организаторам, кто идёт, впечатления после.\n\n"
-                 "Правила: без оскорблений, спама и рекламы. Такие сообщения удаляются, авторы получают бан.")
+CHANNEL_RULES = ("🗓 Іс-шараны талқылайық: сұрақтар, кім барады, әсерлер — балағат, спам мен жарнамасыз.\n\n"
+                 "💬 Обсуждаем событие: вопросы, кто идёт, впечатления — без оскорблений, спама и рекламы.\n\n"
+                 "✌️ Talk about the event: questions, who's going, impressions — no insults, spam or ads.")
 # the bot's first comment under each forum channel post (tgc.post_tick), plain text: the rules in the channel's three
 # languages, and a button to that post in the app
 FORUM_RULES = ("🤝 Сыйластықпен сөйлесейік: балағат, спам мен жарнамасыз.\n\n"
