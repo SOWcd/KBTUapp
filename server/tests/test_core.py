@@ -3689,6 +3689,7 @@ def test_translations(env):
     busy = {k: httpx.Response(503) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Busy):
         call(busy)
+    assert call({})[1] == ["cf"]                                                         # all resting: the soonest is asked anyway
     llm._rest.clear()
     junk = {k: httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]}) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Failed):

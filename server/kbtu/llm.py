@@ -107,11 +107,11 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text); chain: a caller's own links instead of the shared chain. Busy: none answered; BadAnswers: none usable."""
     answered = False
-    for link in links(cfg, chain):
-        if only is not None and link.provider not in only:
-            continue
-        if _rest.get(link.name, 0) > time.time():
-            continue
+    pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
+    awake = [x for x in pool if _rest.get(x.name, 0) <= time.time()]
+    # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
+    # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often; it has only the EU links)
+    for link in awake or sorted(pool, key=lambda x: _rest.get(x.name, 0))[:1]:
         t0 = time.time()
         try:
             r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=timeout,
