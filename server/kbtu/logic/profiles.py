@@ -640,7 +640,10 @@ def link_card(con, v: Viewer, code: object) -> dict:
     name; the 50-bit code can't be walked."""
     p = _inviter(con, code)
     state = "self" if p["id"] == v.id else friendship(con, v.id, p["id"]) if v.student else "none"
-    return {"person": person_ref(p), "friendship": state}
+    ref = person_ref(p)
+    if not v.student:  # the real name behind a nick is for students (policy §4), not anyone holding the link
+        ref.pop("realName", None)
+    return {"person": ref, "friendship": state}
 
 
 def add_by_link(con, v: Viewer, code: object) -> dict:
