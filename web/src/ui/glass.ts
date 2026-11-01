@@ -7,13 +7,17 @@
 //     Android and Desktop). WebKit ignores url() there, so iOS keeps the rim light only.
 //  4. Jelly: squash-and-stretch of a sliding pill when it starts to move, leaning the way it goes.
 import { deviceOrientation, on, tg } from '../lib/tg';
+import { tiltFrom, upOf } from './tilt';
 
 /** Telegram Android appends the device performance class to the User-Agent; LOW turns power saving on (in Auto) */
 export const LOW = /;\s*LOW\)/.test(navigator.userAgent);
 
 const lit = new Set<HTMLElement>();
-const light = { x: 0, y: 0, tx: 0, ty: 0, base: null as number | null, raf: 0, started: false, shown: '' };
-const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+const light = { x: 0, y: 0, tx: 0, ty: 0, n: null as number[] | null, at: 0, raf: 0, started: false, shown: '' };
+const TAU = 3000; // ms: how fast neutral follows a new pose
+
+/** Take the pose right now as neutral (a view that opens: it starts face on, however the phone is held) */
+export function recenter(): void { light.n = null; light.tx = light.ty = light.x = light.y = 0; if (!light.raf && light.started) light.raf = requestAnimationFrame(paintLight); }
 
 function paintLight() {
   light.raf = 0;
@@ -36,13 +40,23 @@ function startTilt() {
   if (!d || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   // refresh_rate is in ms: 50 = 20 Hz; the lerp in paintLight makes it smooth at 60 fps anyway
   sensor.run = () => { if (sensor.allowed) { try { d.start({ refresh_rate: 50 }); } catch { /* no gyro here */ } } };
-  sensor.stop = () => { light.base = null; try { d.stop(); } catch { /* already off */ } };
+  sensor.stop = () => { light.n = null; try { d.stop(); } catch { /* already off */ } };
   on('deviceOrientationChanged', () => {
     if (d.beta == null || d.gamma == null) return; // radians
-    // the way the phone is held at first is "neutral"; drifts slowly so a new posture becomes neutral too
-    light.base = light.base == null ? d.beta : light.base + (d.beta - light.base) * 0.005;
-    light.tx = clamp(d.gamma * 2.2);
-    light.ty = clamp((d.beta - light.base) * 2.2);
+    const [x, y, z] = upOf(d.beta, d.gamma), now = performance.now();
+    // the way the phone is held is "neutral": taken when the sensor starts (or recenter()), then it follows the pose
+    // with a few seconds' lag, so a steady hold settles face on and only movement tilts (owner, Nov 1: lying on his
+    // side, a medal opened turned far away: gamma was read as absolute)
+    if (!light.n || now - light.at > 1000) light.n = [x, y, z];
+    else {
+      const k = 1 - Math.exp(-(now - light.at) / TAU), n = light.n;
+      n[0] += (x - n[0]) * k; n[1] += (y - n[1]) * k; n[2] += (z - n[2]) * k;
+      const l = Math.hypot(n[0], n[1], n[2]) || 1; n[0] /= l; n[1] /= l; n[2] /= l;
+    }
+    light.at = now;
+    // the turn from neutral to now (neutral × up: its axis, sin of its angle), on the screen's own axes: a pose
+    // that's rolled by gravity (on one's side, in landscape) reads as no tilt at all
+    [light.tx, light.ty] = tiltFrom(light.n, [x, y, z], screen.orientation?.angle ?? 0);
     if (!light.raf) light.raf = requestAnimationFrame(paintLight);
   });
   on('activated', () => sensor.run());

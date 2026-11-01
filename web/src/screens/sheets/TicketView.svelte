@@ -18,7 +18,7 @@
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Bell from '@lucide/svelte/icons/bell';
-  import { glass } from '../../ui/glass';
+  import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { nameOf } from '../../lib/short';
@@ -39,6 +39,7 @@
   let gone = false;
 
   onMount(() => {
+    recenter(); // the card opens face on, however the phone is held
     haptic.soft();
     wrap.animate([{ opacity: 0, transform: 'translate3d(0,70px,0) scale(0.92)' }, { opacity: 1, transform: 'none' }],
       { duration: 480, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
@@ -88,6 +89,7 @@
 
 <div class="scrim" bind:this={scrim} style="--tint:{e?.tint ?? '#3B6BFF'}" onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
+  <div class="page">
   {#if e}
     <div class="stage">
       <div class="pass glass" bind:this={pass} style="--tint:{e.tint}" use:glass role="group" aria-label={t('event.ticket')}
@@ -128,6 +130,7 @@
       {/if}
     </div>
   {/if}
+  </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>
 
@@ -143,12 +146,16 @@
   @supports not (background: color-mix(in srgb, red 50%, blue)) {
     .scrim { background: var(--dim); }
   }
-  .wrap {
-    position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 84px);
-  }
-  .wrap > :global(*) { pointer-events: auto; }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
+  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+     button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
+    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px;
+    -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
+  .page::-webkit-scrollbar { display: none; }
+  .page > :global(*) { pointer-events: auto; }
+  .page > :global(:first-child) { margin-top: auto; }
+  .page > :global(:last-child) { margin-bottom: auto; }
   .stage { perspective: 900px; }
 
   .pass {

@@ -57,6 +57,7 @@
 
 <div class="scrim" bind:this={scrim} style="--glow:{glow}" onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap} style="--glow:{glow}">
+  <div class="page">
   <p class="kicker up">{t('unlock.kicker')}</p>
   <span class="medal" bind:this={medal}><Medal {a} size={168} /><span class="shine"></span></span>
   <!-- the level first, under the medal it belongs to (owner, Nov 1) -->
@@ -67,6 +68,7 @@
   <div class="acts up">
     <button class="pill glass glass-pill main" use:glass disabled={sharing} onclick={share}>{t('aw.share')}</button>
   </div>
+  </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>
 
@@ -75,9 +77,16 @@
     background: radial-gradient(60% 40% at 50% 38%, color-mix(in srgb, var(--glow) 45%, transparent), transparent 70%), rgba(3, 4, 10, 0.86);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(60% 40% at 50% 38%, color-mix(in srgb, var(--glow) 45%, transparent), transparent 70%), rgba(3, 4, 10, 0.95); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 8px; padding: calc(var(--top) + 8px) 28px calc(var(--safe-bottom) + 84px); color: #fff; text-align: center; }
-  .wrap > * { pointer-events: auto; }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); color: #fff; text-align: center; }
+  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+     button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
+    gap: 8px; padding: calc(var(--top) + 8px) 28px 20px;
+    -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
+  .page::-webkit-scrollbar { display: none; }
+  .page > :global(*) { pointer-events: auto; }
+  .page > :global(:first-child) { margin-top: auto; }
+  .page > :global(:last-child) { margin-bottom: auto; }
   .kicker { font: 700 13px/1 var(--font-text); letter-spacing: 0.14em; text-transform: uppercase; color: color-mix(in srgb, var(--glow) 70%, #fff); }
   .medal { position: relative; display: inline-flex; margin: 14px 0 10px; border-radius: 50%;
     filter: drop-shadow(0 0 34px color-mix(in srgb, var(--glow) 70%, transparent)) drop-shadow(0 20px 30px rgba(0, 0, 0, 0.5)); }

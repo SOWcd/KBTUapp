@@ -16,7 +16,7 @@
   import { haptic, shareCard } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
-  import { glass } from '../../ui/glass';
+  import { glass, recenter } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
   import Award from '../../ui/Award.svelte';
   import { nameOf } from '../../lib/short';
@@ -137,6 +137,7 @@
   let medal: HTMLSpanElement, scrim: HTMLDivElement, wrap: HTMLDivElement;
   let gone = false;
   onMount(() => {
+    recenter(); // it opens face on, however the phone is held (owner, Nov 1: lying on his side it opened turned away)
     haptic.soft();
     scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: 'ease-out' });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -220,16 +221,17 @@
 <style>
   /* full screen: the profile dimmed and blurred, a faint wash of the medal's metal from above */
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet);
-    background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.22), transparent 70%), rgba(3, 4, 10, 0.88);
+    background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.88);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-  :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.22), transparent 70%), rgba(3, 4, 10, 0.96); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; }
+  :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; padding-bottom: var(--close-room); }
   .wrap > :global(*) { pointer-events: auto; }
-  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(var(--top) + 8px) 20px 12px; display: flex; flex-direction: column; }
+  /* the scroll ends above the × and fades out into it: Share never slides under it */
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(var(--top) + 8px) 20px 20px; display: flex; flex-direction: column;
+    -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
   .page::-webkit-scrollbar { display: none; }
   .page > :first-child { margin-top: auto; }
   .page > :last-child { margin-bottom: auto; }
-  .page { padding-bottom: calc(var(--safe-bottom) + 84px); }
   .acts { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
   .pill { position: relative; height: 46px; padding: 0 22px; display: inline-flex; align-items: center; gap: 8px; border-radius: var(--r-full);
     color: var(--text); font: 650 var(--fs-body)/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
@@ -241,16 +243,19 @@
   .lit { padding: 56px 0 44px; }
   .lit.hangs { padding-top: 140px; } /* the 3D medal's ribbon needs the room above, clear of the capsule */
   .spins { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
-  /* behind the coin, still: a soft wide light of its metal and hairline rays that fade out long before any edge
-     (owner, Nov 1: the old wide rays read childish; then: quieter, more premium) */
-  .halo, .rays { position: absolute; left: 50%; top: 50%; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%; }
-  .halo { width: 360px; background: radial-gradient(closest-side, rgba(var(--glow), 0.26), rgba(var(--glow), 0.07) 58%, transparent); }
-  .rays { width: 440px; background: repeating-conic-gradient(rgba(var(--glow), 0.09) 0 0.5deg, transparent 0.5deg 6deg);
-    -webkit-mask: radial-gradient(closest-side, transparent 40%, black 52%, transparent 82%); mask: radial-gradient(closest-side, transparent 40%, black 52%, transparent 82%); }
+  /* behind the coin, still, like a medal in a display case: a very faint wash of its metal round it and a soft, low
+     pool of light on the "shelf" under it (owner, Nov 1: the old wide rays read childish; then the halo and hairline
+     rays still read as a glow: quieter, more refined). Both sit on the medal's centre, whatever room the ribbon takes */
+  .lit { --below: 44px; } /* under the coin: its padding below; its centre is 110 px (SIZE / 2) above that */
+  .halo, .rays { position: absolute; left: 50%; bottom: calc(var(--below) + 110px); border-radius: 50%; pointer-events: none; translate: -50% 50%; }
+  .rays { width: 480px; aspect-ratio: 1; background: radial-gradient(closest-side, rgba(var(--glow), 0.07), rgba(var(--glow), 0.025) 55%, transparent); }
+  .halo { bottom: calc(var(--below) - 36px); translate: -50% 0; width: 300px; height: 64px;
+    background: radial-gradient(closest-side, rgba(var(--glow), 0.2), rgba(var(--glow), 0.06) 60%, transparent); }
   /* the halo, rays and shadow stay put: only the coin turns (owner, Nov 1: the glow moving with the coin looked strange) */
   .shade { position: absolute; left: 50%; top: 50%; width: 196px; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%;
     background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.22) 62%, transparent);
     transform: translateY(18px); }
+  .lit .shade { top: auto; bottom: calc(var(--below) + 110px); translate: -50% 50%; }
   .pop { position: relative; z-index: 1; display: inline-flex; perspective: 700px; }
   /* power saving stops the gyro (--gx would freeze off-centre): flat; reduced motion never starts it */
   :global(html.lowfx) .big { transform: none; }

@@ -11,7 +11,7 @@
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
-  import { glass } from '../../ui/glass';
+  import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Founder from '../../ui/Founder.svelte';
@@ -33,6 +33,7 @@
   let gone = false;
 
   onMount(() => {
+    recenter(); // the card opens face on, however the phone is held
     haptic.soft();
     wrap.animate([{ opacity: 0, transform: 'translate3d(0,70px,0) scale(0.92)' }, { opacity: 1, transform: 'none' }],
       { duration: 480, easing: 'cubic-bezier(.2,.9,.25,1.1)' });
@@ -67,6 +68,7 @@
 
 <div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
+  <div class="page">
   <div class="stage {look}">
     <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
@@ -91,6 +93,7 @@
     </div>
   </div>
   <p class="hint">{t('me.qrHint')}</p>
+  </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>
 
@@ -102,12 +105,16 @@
     -webkit-backdrop-filter: blur(18px) saturate(120%); backdrop-filter: blur(18px) saturate(120%);
   }
   :global(html.lowfx) .scrim { --dim: rgba(3, 4, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .wrap {
-    position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    padding: calc(var(--top) + 8px) 20px calc(var(--safe-bottom) + 84px);
-  }
-  .wrap > :global(*) { pointer-events: auto; }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
+  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+     button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
+    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px;
+    -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
+  .page::-webkit-scrollbar { display: none; }
+  .page > :global(*) { pointer-events: auto; }
+  .page > :global(:first-child) { margin-top: auto; }
+  .page > :global(:last-child) { margin-bottom: auto; }
   .stage { perspective: 900px; display: flex; flex-direction: column; align-items: center; padding-top: 46px; }
   /* the strap and clip as on the badge (Hero.svelte) */
   /* the strap tilts with the card too, out from under the capsule */

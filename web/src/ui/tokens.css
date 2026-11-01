@@ -71,6 +71,8 @@
   --page-top: calc(var(--head-bottom) + 14px);
   --nav-h: 64px;
   --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
+  /* a full-screen overlay's band for its round × (CloseX: 16 px up, 52 px tall, 12 px clear above it) */
+  --close-room: calc(var(--safe-bottom) + 80px);
 }
 
 :root,

@@ -6,8 +6,8 @@
 // edge). It all swings as one pendulum from the neck; the ribbon's lower part follows the swing and the turn, its top
 // stays put. RoomEnvironment lights the metal and the satin alike. Renders only while something moves.
 import {
-  ACESFilmicToneMapping, BoxGeometry, BufferAttribute, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group,
-  LinearMipmapLinearFilter, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, PerspectiveCamera, PMREMGenerator,
+  BoxGeometry, BufferAttribute, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group,
+  LinearMipmapLinearFilter, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, NeutralToneMapping, PerspectiveCamera, PMREMGenerator,
   RepeatWrapping, Scene, SRGBColorSpace, Texture, TorusGeometry, Vector3, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -18,6 +18,9 @@ const W = 1.55, UP = 1.42, DOWN = 0.62;
 // the chain in medal radii (the medal's centre at 0): lug, jump ring, the bar the ribbon loops under, the neck
 const LUG = 1.05, RING_R = 0.13, TUBE = 0.028, RING_Y = LUG + RING_R - 0.02, NECK = 2.38;
 const WID = 0.6, THICK = 0.016, GATHER = 0.2; // a strap's width, its thickness, its width where it loops the ring
+const PARALLAX = 0.014; // how deep the enamel sits under the gold, in face widths (~3 px on a 220 px medal)
+const EXPOSURE = 0.92;
+const ENAMEL = 0.7; // the enamel's albedo under the room's light: deeper, or the blue goes pale (tone mapping desaturates it)
 
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const canvas2d = (w: number, h: number) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')!] as const; };
@@ -28,7 +31,8 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   const w = Math.round(o.size * W), up = Math.round(o.size * UP), h = up + Math.round(o.size * DOWN);
   renderer.setSize(w, h);
-  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMapping = NeutralToneMapping; // ACES pushed the blue enamel toward lavender and the gold to cream
+  renderer.toneMappingExposure = EXPOSURE;
   renderer.outputColorSpace = SRGBColorSpace;
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
@@ -76,8 +80,55 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   backMap.center.set(0.5, 0.5); backMap.rotation = Math.PI; backMap.wrapS = RepeatWrapping; backMap.repeat.x = -1; // upright from behind
   const backBump = own(new CanvasTexture(bc)); backBump.center.set(0.5, 0.5); backBump.rotation = Math.PI; backBump.wrapS = RepeatWrapping; backBump.repeat.x = -1;
 
+  // the face's relief, read off the art's colours (owner, Nov 1: the gold should stand in front of the enamel): warm =
+  // struck gold, raised and metal; blue enamel and the white peaks sunk and glassy; the dark rim letters cut into the
+  // gold. A silver medal: whatever isn't blue is its metal. One texture: R height (softened: a bevel for the bump),
+  // G roughness, B metalness (three's ORM channels)
+  const cool = metal.b > metal.r;
+  const [hc, hg] = canvas2d(512, 512);
+  hg.drawImage(face, 0, 0, 512, 512);
+  const px = hg.getImageData(0, 0, 512, 512), d = px.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+    const gold = cool ? 1 - smooth(0.1, 0.28, b - r) : smooth(0.02, 0.2, r - b), lum = 0.3 * r + 0.59 * g + 0.11 * b;
+    d[i] = Math.round(255 * gold * (0.35 + 0.65 * smooth(0.1, 0.4, lum)));
+    d[i + 1] = Math.round(255 * (0.5 - 0.17 * gold)); // gold polished, enamel satin under the lacquer
+    d[i + 2] = Math.round(255 * (0.04 + 0.96 * gold));
+    d[i + 3] = 255;
+  }
+  hg.putImageData(px, 0, 0);
+  const [rc2, rg2] = canvas2d(512, 512);
+  rg2.filter = 'blur(1.5px)'; rg2.drawImage(hc, 0, 0); // no canvas filter (old Safari): a sharp bevel, still fine
+  const relief = own(new CanvasTexture(rc2));
+
   const rim = new MeshStandardMaterial({ color: metal.clone().multiplyScalar(0.72), metalness: 1, roughness: 0.3, normalMap: ridges });
-  const top = new MeshPhysicalMaterial({ map: front, metalness: 0.6, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.12 });
+  // a thin, wide-lobed lacquer: the room's lights glance off it without blanking the enamel (owner, Nov 1: at some
+  // tilts the blue went lavender and the gold cream)
+  const top = new MeshPhysicalMaterial({ map: front, metalnessMap: relief, roughnessMap: relief, bumpMap: relief, bumpScale: 3, metalness: 1, roughness: 1,
+    clearcoat: 0.1, clearcoatRoughness: 0.35, specularIntensity: 0.35, envMapIntensity: 0.7 });
+  // parallax: the sunk enamel is read a little behind the gold along the view, so the gold's side shows as the medal
+  // tilts (one extra height read per pixel; the bump above gives the bevel its light). Gradients from the unshifted
+  // uv: no mip seam where the shift jumps at an edge
+  top.onBeforeCompile = (sh) => {
+    sh.uniforms.relief = { value: relief };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('void main() {', 'uniform sampler2D relief;\nvoid main() {')
+      .replace('#include <map_fragment>', /* glsl */ `
+        vec2 pdx = dFdx(vMapUv), pdy = dFdy(vMapUv);
+        vec3 pq0 = dFdx(-vViewPosition), pq1 = dFdy(-vViewPosition), pN = normalize(vNormal);
+        vec3 pT = cross(pq1, pN) * pdx.x + cross(pN, pq0) * pdy.x, pB = cross(pq1, pN) * pdx.y + cross(pN, pq0) * pdy.y;
+        float pS = inversesqrt(max(max(dot(pT, pT), dot(pB, pB)), 1e-12));
+        vec3 pV = normalize(vViewPosition);
+        vec3 pVt = vec3(dot(pV, pT) * pS, dot(pV, pB) * pS, dot(pV, pN));
+        float pH = textureGrad(relief, vMapUv, pdx, pdy).r;
+        vec2 pUv = vMapUv - pVt.xy / max(pVt.z, 0.45) * (1.0 - pH) * ${PARALLAX.toFixed(4)};
+        float pWall = smoothstep(0.3, 0.7, textureGrad(relief, pUv, pdx, pdy).r) * (1.0 - smoothstep(0.3, 0.7, pH));
+        diffuseColor *= textureGrad(map, pUv, pdx, pdy);
+        diffuseColor.rgb *= 1.0 - 0.3 * pWall; // the gold's side, out of the light
+        diffuseColor.rgb *= mix(${ENAMEL.toFixed(2)}, 1.0, smoothstep(0.1, 0.5, pH)); // the art's enamel has its light painted in`)
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = roughness * textureGrad(roughnessMap, pUv, pdx, pdy).g;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = metalness * textureGrad(metalnessMap, pUv, pdx, pdy).b;');
+  };
   const bottom = new MeshStandardMaterial({ map: backMap, bumpMap: backBump, bumpScale: 2.5, color: metal, metalness: 1, roughness: 0.26 });
   const steel = new MeshStandardMaterial({ color: metal.clone().multiplyScalar(0.9), metalness: 1, roughness: 0.2 });
   const coinGeo = new CylinderGeometry(1, 1, 0.19, 192, 1);
@@ -202,7 +253,7 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
     medalPivot.rotation.set(s.y * 14 * deg, yaw * deg, 0, 'YXZ'); // the medal turns on the ring, showing its rim
     ringPivot.rotation.y = Math.max(-0.5, Math.min(0.5, Math.sin(yaw * deg) * 0.35)); // the ring and fold follow a little
     scene.environmentRotation.y = glint * 0.9; // the room's lights slide across the metal
-    renderer.toneMappingExposure = 1 + glint * 0.22;
+    renderer.toneMappingExposure = EXPOSURE + glint * 0.12;
     scene.updateMatrixWorld();
     for (const st of straps) bend(st, drop);
     renderer.render(scene, camera);
