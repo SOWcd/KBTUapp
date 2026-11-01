@@ -6015,7 +6015,7 @@ def test_student_forum_flag(env):
             assert me["consentNow"] == version and me["board"] is bob
             page = x.get("/privacy").text
             assert ("11. " in page and "12. " not in page) is (board == "all")                     # numbered on from 10
-            assert x.post("/api/reports", headers=tma(2), json={"target": "thread", "id": 1, "reason": "spam"}).status_code == 404
+            assert x.post("/api/reports", headers=tma(2), json={"target": "thread", "id": 1, "reason": "spam"}).status_code == 400  # no such target any more
     with TestClient(server.create(dataclasses.replace(cfg, board="all", forum=True))) as x:
         assert x.get("/api/me", headers=tma(2)).json()["consentNow"] == logic.CONSENT_BOTH and "12. " in x.get("/privacy").text
     con.close()

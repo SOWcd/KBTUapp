@@ -11,6 +11,7 @@ import re
 import secrets
 import unicodedata
 
+from .. import texts
 from ..db import tx
 
 from .core import ApiError, PERSON, Viewer, log_action, need_student, one, person_ref, rows, short_name
@@ -164,10 +165,20 @@ def lost(con) -> None:
 def found(con, msg_id: int, text: str) -> None:
     """The channel post's copy reached the discussion group (tgc.gate): a send whose answer never came (on its way, or
     held as lost since) is in the channel after all. Matched by its words (the text without the bot's signature), its
-    message id kept, so the author's delete and a take-down reach it; it was live when sent, so live again."""
-    body = text.rsplit("\n\n\u2014 ", 1)[0]
-    con.execute("""UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = (SELECT id FROM fchan_posts
-        WHERE body = ? AND (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost') ORDER BY id LIMIT 1)""", (msg_id, body))
+    message id kept, so the author's delete and a take-down reach it; it was live when sent, so live again. Matched by
+    the whole text as sent (the words and the signature, as to_send makes it), and only when exactly one post matches
+    and no post holds that message yet: another student's same words must never become this one's (review)."""
+    if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
+        return
+    anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
+    hits = []
+    for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
+            AND ? LIKE body || '%'""", text):
+        who = None if p["anon"] else one(con, PERSON + " WHERE u.id = ?", p["user_id"])
+        if f"{p['body']}\n\n\u2014 {short_name(who) if who else anon}" == text:
+            hits.append(p["id"])
+    if len(hits) == 1:
+        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (msg_id, hits[0]))
 
 
 def sweep(con) -> None:

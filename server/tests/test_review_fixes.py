@@ -10,7 +10,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from kbtu import bot, db, logic, tgc
+from kbtu import bot, db, logic, texts, tgc
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import COPY, Telegram, hear, msg, report, setup, student, tick
 
@@ -30,18 +30,22 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     ali = login(c, 21, "ali")
     con.execute("UPDATE students SET email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
     from kbtu import checkin
-    s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T."}, {"email": "x@kbtu.kz", "name": "X", "studentId": "24Bali"},
-                                   {"email": "dan@kbtu.kz", "name": "Dan"}])
+    s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T."}, {"email": "x@kbtu.kz", "name": "Ali Testov", "studentId": "24Bali"},
+                                   {"email": "y@kbtu.kz", "name": "Bek Omarov", "studentId": "24Bali"}, {"email": "dan@kbtu.kz", "name": "Dan"}])
     delete_now(c, cfg, tma(21, "Ali"))
-    assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ?", (s1,))] == ["dan@kbtu.kz"]
+    # by mail; by my ID only with my name (Bek's row with a typo of my ID is his)
+    assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ? ORDER BY email", (s1,))] == ["dan@kbtu.kz", "y@kbtu.kz"]
 
     s2 = checkin.new(con, "Old", [{"email": "dan@kbtu.kz", "name": "Dan"}])
     con.execute("UPDATE qr_sessions SET started_at = 1, ended_at = ? WHERE id = ?", (int(time.time()) - 31 * 86400, s2))
+    s3 = checkin.new(con, "Left running", [{"email": "dan@kbtu.kz", "name": "Dan"}])
+    con.execute("UPDATE qr_sessions SET started_at = 1, created_at = ? WHERE id = ?", (int(time.time()) - 91 * 86400, s3))
     night = int(time.time()) // 86400 * 86400 - 5 * 3600 + 3600  # 01:00 in Almaty: the nightly round's hour
     set_clock(monkeypatch, lambda: night)
     logic.stats_day(con)
     assert con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (s2,)).fetchone()[0] == 0  # ended a month ago
-    assert con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (s1,)).fetchone()[0] == 1  # never ran: kept
+    assert con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (s3,)).fetchone()[0] == 0  # never ended, 3 months
+    assert con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (s1,)).fetchone()[0] == 2  # new: kept
     assert con.execute("SELECT 1 FROM qr_sessions WHERE id = ?", (s2,)).fetchone()                       # the session stays
 
 
@@ -219,6 +223,44 @@ def test_lost_send_found_by_its_copy(env):
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
     F.delete(con, logic.Viewer(ann["id"], "user", True), pid)
     assert con.execute("SELECT msg_id FROM tg_unpost").fetchone()[0] == 77
+
+    # another student's same words never become hers: the signature must match, a held message id is never taken,
+    # and two equal anonymous texts are nobody's to guess
+    bob = login(c, 2, "bob")
+    q = lambda sql, *a: con.execute(sql, a).lastrowid  # noqa: E731
+    lost = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", ann["id"])
+    q("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'who goes tonight?', 0, 'live', 500, 0)", bob["id"])
+    anon = texts.bot_message("ru", "fch_anon")[0]
+    F.found(con, 500, "who goes tonight?\n\n\u2014 Bob T.")
+    F.found(con, 500, f"who goes tonight?\n\n\u2014 {anon}")
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] is None
+    q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", bob["id"])
+    F.found(con, 501, f"who goes tonight?\n\n\u2014 {anon}")
+    assert not con.execute("SELECT 1 FROM fchan_posts WHERE tg_msg = 501").fetchone()
+    con.execute("DELETE FROM fchan_posts WHERE user_id = ? AND anon = 1", (bob["id"],))
+    F.found(con, 501, f"who goes tonight?\n\n\u2014 {anon}")                 # hers alone now: found
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] == 501
+
+
+def test_no_self_checkin_by_typed_name(env):
+    """Review 2: a door member who typed their own name as a walk-in isn't checked in by it on a Microsoft sign-in;
+    whoever runs the event (events right) still is."""
+    c, cfg = env
+    pres, mem = login(c, 70, "pres"), login(c, 71, "mem")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0)", (pres["id"], mem["id"]))
+    start = int(time.time()) - 600
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at)
+        VALUES (1, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (start, start + 7200, pres["id"]))
+    assert c.post("/api/events/1/door/guests", headers=tma(71, "Mem"), json={"name": "Mem Testov"}).status_code == 200
+    assert c.post("/api/events/1/door/guests", headers=tma(70, "Pres"), json={"name": "Pres Testov"}).status_code == 200
+    ms = lambda uid: logic.ms_link(con, uid, {"oid": f"o{uid}", "email": f"u{uid}@kbtu.kz", "first": "", "last": "", "profile": {}})  # noqa: E731
+    came = lambda uid: con.execute("SELECT checked_in_at FROM registrations WHERE user_id = ? AND event_id = 1", (uid,)).fetchone()  # noqa: E731
+    ms(mem["id"])
+    assert came(mem["id"]) is None
+    ms(pres["id"])
+    assert came(pres["id"])[0] is not None
 
 
 def test_signature_lookalikes_refused():

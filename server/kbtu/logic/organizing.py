@@ -916,10 +916,13 @@ def link_door_guests(con, uid: int) -> None:
     if twins:
         return
     with tx(con):
-        for g in rows(con, """SELECT g.* FROM door_guests g JOIN events e ON e.id = g.event_id WHERE g.norm = ? AND g.user_id IS NULL
+        me = Viewer(uid, one(con, "SELECT role FROM users WHERE id = ?", uid)[0], True)
+        for g in rows(con, """SELECT g.*, e.org_id FROM door_guests g JOIN events e ON e.id = g.event_id WHERE g.norm = ? AND g.user_id IS NULL
                 AND g.created_at > ? AND e.status = 'published' AND e.price IS NULL AND e.visibility = 'public'
                 AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.org_id = e.org_id AND b.user_id = ?)
                 AND NOT EXISTS (SELECT 1 FROM door_guests y WHERE y.event_id = g.event_id AND y.user_id = ?)""", norm, core.now() - GUEST_DAYS, uid, uid):
+            if g["added_by"] == uid and not can(con, me, g["org_id"], "events"):
+                continue  # my own name typed at the door: no self check-in (as checkin_by_name), whoever runs the event may
             r = one(con, "SELECT id, status, checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", g["event_id"], uid)
             if r and (r["status"] != "going" or r["checked_in_at"]):
                 continue

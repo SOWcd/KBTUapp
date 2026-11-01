@@ -1104,8 +1104,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
-        if body.get("target") in ("thread", "reply"):  # the old in-app forum is off (the channel replaced it): nothing of it to report
-            raise ApiError("not_found")
         logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
         # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
         if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):

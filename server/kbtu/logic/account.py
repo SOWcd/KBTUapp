@@ -908,9 +908,13 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))""", (v.id, f"ms:{v.id}"))
         # the check-in screens' expected lists an organizer uploaded: my name, mail, phone (keyed by mail or ID, no foreign key)
         con.execute("""DELETE FROM qr_expected WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
-            UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))
-            OR student_id IN (SELECT student_id FROM students WHERE user_id = ?)""", (v.id, f"ms:{v.id}", v.id))
+            UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))""", (v.id, f"ms:{v.id}"))
         if s_ := one(con, "SELECT student_id, first_name, last_name FROM students WHERE user_id = ?", v.id):
+            from .. import roster  # imports logic: here, not at the top
+            # by my student ID only where the name is mine too (a typed ID may be a classmate's)
+            for r in rows(con, "SELECT session_id, email, full_name FROM qr_expected WHERE student_id = ?", s_["student_id"]):
+                if roster.same_person(r["full_name"], s_["first_name"] or "", s_["last_name"] or ""):
+                    con.execute("DELETE FROM qr_expected WHERE session_id = ? AND email = ?", (r["session_id"], r["email"]))
             # by my ID, or with neither a mail nor an ID (they match nothing), where the name is mine
             for r in rows(con, "SELECT * FROM prefill_rest WHERE student_id = ? OR (email IS NULL AND student_id IS NULL)", s_["student_id"]):
                 if prefill_mine(r, s_["first_name"], s_["last_name"]):
