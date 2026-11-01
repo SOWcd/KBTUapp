@@ -193,7 +193,7 @@ export interface Api {
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
   restore(target: TakenDown['target'], id: Id): Promise<void>;                       // admin: undo one
-  resolveReport(target: ReportItem['target'], id: Id, remove: boolean, abuse?: boolean): Promise<void>; // admin: take it down or leave it (a Telegram comment: and the reports were abuse)
+  resolveReport(target: ReportItem['target'], id: Id, remove: boolean, abuse?: boolean, rule?: ReportReason): Promise<void>; // admin: take it down or leave it (a Telegram comment: the rule it broke, or the reports were abuse)
   tgcClosed(): Promise<TgcClosed[]>;                                                 // admin: whose Telegram /report is closed
   tgcReopen(user: Id): Promise<void>;                                                // admin: give it back
   tgComment(): Promise<TgComment | null>;                                            // my own deleted Telegram comment, to me alone

@@ -646,13 +646,16 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             elif button:
                 body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
             try:
-                r = await _send(cfg, http, body)
+                r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
+                if r is None:
+                    r = await _send(cfg, http, body)
                 answer = r.json()
             except (httpx.HTTPError, ValueError) as exc:
                 log.warning("postman: %s", type(exc).__name__)
                 return  # the network is down: everything stays queued for the next round
             if answer.get("ok"):
                 mark(True)
+                tgc.sent(con, m, answer)
             elif r.status_code == 429:  # too fast: wait as told, this one goes again next round
                 await asyncio.sleep(float(answer.get("parameters", {}).get("retry_after", 5)))
                 return

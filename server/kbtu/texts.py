@@ -263,6 +263,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Жалоба принята, модераторы посмотрят комментарий. Кто пожаловался, никто не узнает.", None),
         "tgc_closed": ("Вы злоупотребляли жалобами — подача жалоб закрыта. Если это ошибка, напишите в поддержку: @Sowers.", None),
         "tgc_removed": ("🛡 Твой комментарий в обсуждении канала удалён после жалоб и сейчас на проверке у модератора. Вот его текст:", None),
+        "tgc_confirmed": ("🛡 Твой комментарий удалён: нарушение правила «{rule}». Вот его текст:", None),
         "tgc_back": ("↩️ Модератор проверил: твой комментарий удалили по ошибке. Можешь опубликовать его снова — вот текст:", None),
         "tgc_queue": ("🛡 Комментарии в Telegram ждут решения модератора: {n}. Дольше суток: {old}.", "Открыть"),
         "tgc_raid": ("⚠️ Набег на комментарии канала: больше 5 чужих аккаунтов за минуту. Бот молча удаляет их комментарии и банит, без предупреждений.", None),
@@ -385,6 +386,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Шағым қабылданды, модераторлар пікірді қарайды. Кім шағымданғанын ешкім білмейді.", None),
         "tgc_closed": ("Сіз шағымдарды теріс пайдаландыңыз — шағым беру жабылды. Қате болса, қолдауға жазыңыз: @Sowers.", None),
         "tgc_removed": ("🛡 Арна талқылауындағы пікірің шағымдардан кейін өшірілді және қазір модератордың тексеруінде. Мәтіні мынау:", None),
+        "tgc_confirmed": ("🛡 Пікірің өшірілді: «{rule}» ережесі бұзылды. Мәтіні мынау:", None),
         "tgc_back": ("↩️ Модератор тексерді: пікірің қателесіп өшірілген. Оны қайта жариялай аласың — мәтіні мынау:", None),
         "tgc_queue": ("🛡 Telegram-дағы пікірлер модератор шешімін күтуде: {n}. Бір тәуліктен ұзақ: {old}.", "Ашу"),
         "tgc_raid": ("⚠️ Арна пікірлеріне шабуыл: бір минутта 5-тен көп бөтен аккаунт. Бот олардың пікірлерін ескертусіз өшіріп, бұғаттайды.", None),
@@ -507,6 +509,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Report received, the moderators will look at the comment. Nobody will know who reported it.", None),
         "tgc_closed": ("You abused reports, so reporting is closed for you. If that's a mistake, write to support: @Sowers.", None),
         "tgc_removed": ("🛡 Your comment in the channel's discussion was removed after reports and is now under a moderator's review. Here is its text:", None),
+        "tgc_confirmed": ("🛡 Your comment was removed: it broke the rule “{rule}”. Here is its text:", None),
         "tgc_back": ("↩️ A moderator checked: your comment was deleted by mistake. You can post it again; here is the text:", None),
         "tgc_queue": ("🛡 Telegram comments waiting for a moderator: {n}. Over a day: {old}.", "Open"),
         "tgc_raid": ("⚠️ A raid on the channel's comments: over 5 strangers in a minute. The bot deletes their comments and bans them silently, without warnings.", None),
@@ -523,6 +526,17 @@ RECEIPT_WHY = {
            "amount_over": "сома бағаға сай емес", "recipient_mismatch": "алушы басқа", "too_early": "чек іс-шарадан ескі"},
     "en": {"duplicate": "this receipt was sent before", "unreadable": "it doesn't look like a Kaspi receipt", "amount_short": "the sum is less than the price",
            "amount_over": "the sum doesn't match the price", "recipient_mismatch": "another recipient", "too_early": "it's older than the event itself"},
+}
+
+
+# the rule a removed Telegram comment broke (tgcomments.RULES: the report reasons), in its author's verdict (tgc.render)
+TGC_RULES = {
+    "ru": {"spam": "без спама и рекламы", "insult": "без оскорблений и травли", "danger": "без угроз, опасного и чужих личных данных",
+           "other": "правила обсуждения"},
+    "kk": {"spam": "спам мен жарнамасыз", "insult": "қорлау мен қудалаусыз", "danger": "қорқытусыз, қауіпті нәрсесіз және бөтен жеке деректерсіз",
+           "other": "талқылау ережелері"},
+    "en": {"spam": "no spam or ads", "insult": "no insults or harassment", "danger": "no threats, danger or others' personal data",
+           "other": "the discussion's rules"},
 }
 
 

@@ -964,6 +964,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       decided_at INTEGER,
       review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores
       shown      INTEGER NOT NULL DEFAULT 0 CHECK (shown IN (0, 1)),   -- deleted, and its author (whom the bot can't write to) saw it in the app
+      rule       TEXT CHECK (rule IN ('spam', 'insult', 'danger', 'other')),  -- the rule it broke: the AI's guess, then the moderator's word
+      dm_id      INTEGER,                               -- the bot's message to its author: a verdict edits it in place
       UNIQUE (chat_id, msg_id)
     ) STRICT;
     CREATE TABLE tgc_reports (

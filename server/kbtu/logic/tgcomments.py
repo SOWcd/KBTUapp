@@ -60,13 +60,14 @@ def stranger(con, tg_id: int, body: str, link: str | None) -> tuple[str, bool]:
 
 # ---- the app's card: my own words, to me alone
 
-_REMOVED = """SELECT c.id, c.body FROM tgc_comments c JOIN users u ON u.id = c.author_id WHERE c.author_id = ? AND u.can_dm = 0
-    AND c.status IN ('deleting', 'deleted') AND c.shown = 0 ORDER BY c.id"""
+_REMOVED = """SELECT c.id, c.body, c.status, c.review, c.rule FROM tgc_comments c JOIN users u ON u.id = c.author_id WHERE c.author_id = ?
+    AND u.can_dm = 0 AND c.status IN ('deleting', 'deleted', 'restored') AND c.shown = 0 ORDER BY c.id"""
+RULES = ("spam", "insult", "danger", "other")  # the report reasons (moderation.report): the rule a removed comment broke
 
 
 def saved(con, v: Viewer) -> bool:
     """A card waits for this Telegram account (GET /api/me says so; the app then asks for it): a stranger's text under
-    the hour, or a comment of mine the reports removed while the bot may not write to me."""
+    the hour, or what became of a comment of mine the reports removed, while the bot may not write to me."""
     return one(con, "SELECT 1 FROM tgc_saved s JOIN users u ON u.tg_id = s.tg_id WHERE u.id = ? AND s.at > ?", v.id, now() - SAVE_FOR) is not None \
         or one(con, _REMOVED, v.id) is not None
 
@@ -75,7 +76,8 @@ def take_saved(con, v: Viewer) -> dict | None:
     """My own deleted comment, to me alone (the signed initData's Telegram id is the key, nothing in the link). A
     stranger's text under the hour: a student gets it once, with the way back to the thread; anyone else sees it
     without that way (it would walk him into the second-comment ban) until the hour runs out. Else a comment of mine
-    the reports removed, once ("removed": the bot couldn't tell me in DM)."""
+    the reports removed, once per news (the bot couldn't tell me in DM): "pending" under review, "confirmed" with the
+    rule it broke, "restored" (post it again)."""
     tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
     r = one(con, "SELECT body, link FROM tgc_saved WHERE tg_id = ? AND at > ?", tg, now() - SAVE_FOR)
     if r:
@@ -87,7 +89,9 @@ def take_saved(con, v: Viewer) -> dict | None:
     if not c:
         return None
     con.execute("UPDATE tgc_comments SET shown = 1 WHERE id = ?", (c["id"],))
-    return {"body": c["body"], "link": None, "student": True, "removed": True}
+    verdict = "restored" if c["status"] == "restored" else "pending" if c["review"] else "confirmed"
+    return {"body": c["body"], "link": None, "student": True, "removed": True, "verdict": verdict,
+            "rule": c["rule"] or "other" if verdict == "confirmed" else None}
 
 
 # ---- reports
@@ -121,8 +125,8 @@ def _hash(body: str) -> str:
     return hashlib.sha256(" ".join(body.split()).casefold().encode()).hexdigest()[:32]
 
 
-def judge(con, cid: int, verdict: bool | None) -> str | None:
-    """The AI's look at a reported comment (True clean, False a violation, None no answer), then the rule:
+def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str | None:
+    """The AI's look at a reported comment (True clean, False a violation of `rule`, None no answer), then the rule:
     'delete' with DELETE_AT reporters verified over two weeks ago and a violation (the bot deletes it, its author gets
     his words, a moderator confirms or restores); 'queue' with that many but no violation found (or no answer), or a
     violation with fewer; 'open' otherwise. Never 'delete' for a text a moderator cleared before (reposted), nor on
@@ -139,6 +143,8 @@ def judge(con, cid: int, verdict: bool | None) -> str | None:
         reports = one(con, "SELECT COUNT(*) FROM tgc_reports WHERE comment_id = ?", cid)[0]
         cleared = one(con, "SELECT 1 FROM meta WHERE key = ?", f"tgcok:{_hash(c['body'])}") is not None
         ai = {True: "ok", False: "flag", None: "none"}[verdict]
+        if verdict is False and rule in RULES:  # the AI's guess at the rule, the moderator's default
+            con.execute("UPDATE tgc_comments SET rule = ? WHERE id = ?", (rule, cid))
         if verdict is False and n >= DELETE_AT and not cleared:
             con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
@@ -203,7 +209,7 @@ def queue_items(con, v: Viewer) -> list[dict]:
             continue
         seen = {r["body"]: r["at"] for r in reps if r["body"] != c["body"]}
         out.append({"target": "tgc", "id": c["id"], "text": c["body"], "where": {"kind": "tgc", "id": c["id"], "link": c["link"]},
-                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "removed": bool(c["review"]),
+                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["rule"], "removed": bool(c["review"]),
                     "reporters": [{"right": r["ok"] or 0, "wrong": r["bad"] or 0,
                                    "days": (now() - r["verified_at"]) // 86400 if r["verified_at"] else None} for r in reps],
                     "notes": [{"reason": "other", "note": b, "at": a} for b, a in list(seen.items())[:5]], "at": reps[-1]["at"]})
@@ -211,12 +217,14 @@ def queue_items(con, v: Viewer) -> list[dict]:
     return removed + sorted((x for x in out if not x["removed"]), key=lambda x: -x["count"])
 
 
-def resolve(con, v: Viewer, cid: int, action: str) -> None:
-    """A moderator's verdict, audited: 'remove' (still up: the bot deletes it; removed: confirmed), 'keep' (still up:
-    the reports were wrong; removed: restored), 'abuse' (as keep, and the reports were abuse: each reporter with
-    CLOSE_AT wrong reports in KEEP loses /report; a person's call, never the AI's). Only now does accuracy change."""
+def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
+    """A moderator's verdict, audited: 'remove' (still up: the bot deletes it; removed: confirmed) with the rule it
+    broke (RULES; the AI's guess by default), 'keep' (still up: the reports were wrong; removed: restored), 'abuse'
+    (as keep, and the reports were abuse: each reporter with CLOSE_AT wrong reports in KEEP loses /report; a person's
+    call, never the AI's). Only now does accuracy change. Its author hears the verdict (the bot edits its first
+    message into it: tgc.edit_first)."""
     _mod(v)
-    if action not in ("remove", "keep", "abuse"):
+    if action not in ("remove", "keep", "abuse") or rule is not None and rule not in RULES:
         raise ApiError("bad_input")
     with tx(con):
         c = one(con, f"SELECT * FROM tgc_comments WHERE id = ? AND (status IN {LIVE} OR review = 1)", cid)
@@ -226,10 +234,10 @@ def resolve(con, v: Viewer, cid: int, action: str) -> None:
             raise ApiError("forbidden")
         if action == "remove":
             con.execute("""UPDATE tgc_comments SET status = CASE WHEN status = 'deleted' THEN 'deleted' ELSE 'deleting' END, review = 0,
-                decided_at = ? WHERE id = ?""", (now(), cid))
+                rule = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["rule"] or "other", now(), cid))
             con.execute("UPDATE tgc_reports SET outcome = 'confirmed' WHERE comment_id = ?", (cid,))
-            if not c["review"] and c["author_id"]:  # deleted now: its author gets his words, as on the reports' removal
-                notify(con, c["author_id"], "tgc_removed", f"tr:{cid}")
+            if c["author_id"]:  # the verdict, with his words: the "under review" message edited, or a new one
+                notify(con, c["author_id"], "tgc_confirmed", f"tc:{cid}")
             log_action(con, v.id, "tg_confirm", f"tgc:{cid}")
             for (uid,) in rows(con, "SELECT reporter_id FROM tgc_reports WHERE comment_id = ?", cid):
                 _good(con, uid)
@@ -257,7 +265,7 @@ def _restore(con, cid: int) -> None:
     """Telegram can't bring a message back: still there (not yet deleted), it simply stays; gone, its author hears it
     was a mistake and may post it again (his own words once more, in DM). Nothing in the thread (review 3)."""
     c = one(con, "SELECT * FROM tgc_comments WHERE id = ?", cid)
-    con.execute("UPDATE tgc_comments SET status = ?, review = 0, decided_at = ? WHERE id = ?",
+    con.execute("UPDATE tgc_comments SET status = ?, review = 0, shown = 0, decided_at = ? WHERE id = ?",
                 ("kept" if c["status"] == "deleting" else "restored", now(), cid))
     _clear(con, c["body"])
     if c["status"] == "deleted" and c["author_id"]:

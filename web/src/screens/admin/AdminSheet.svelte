@@ -82,7 +82,7 @@
   const reasons = (r: ReportItem) => (Object.entries(r.reasons) as [ReportReason, number][]).map(([k, n]) => t(`rep.${k}`) + (n > 1 ? ` ×${n}` : '')).join(', ');
   async function resolve(r: ReportItem, remove: boolean, abuse = false) {
     try {
-      await api.resolveReport(r.target, r.id, remove, abuse || undefined);
+      await api.resolveReport(r.target, r.id, remove, abuse || undefined, r.target === 'tgc' && remove ? ruleOf(r) : undefined);
       reports = (reports ?? []).filter((x) => !(x.target === r.target && x.id === r.id));
       if (remove) void loadDown();
       if (abuse) void loadClosed();
@@ -92,6 +92,10 @@
   }
   // a Telegram comment's line: the AI's word and each reporter as right / wrong and days since sign-in, never who
   const tgcLine = (r: ReportItem) => [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', ago(r.at)].filter(Boolean).join(' · ');
+  // the rule a removed Telegram comment broke, said to its author: the report reasons, the AI's guess picked first
+  const RULES: ReportReason[] = ['spam', 'insult', 'danger', 'other'];
+  let picked2 = $state<Record<number, ReportReason>>({});
+  const ruleOf = (r: ReportItem): ReportReason => picked2[r.id] ?? r.rule ?? 'other';
   const tgcWho = (r: ReportItem) => (r.reporters ?? []).map((x) => `${x.right}/${x.wrong}${x.days != null ? ` · ${x.days}` : ''}`).join(',  ');
   // ---- whose Telegram /report a moderator closed for abuse: the admin's switch gives it back ----
   let closedR = $state<TgcClosed[] | null>(null);
@@ -228,6 +232,11 @@
             <p class="rw">{t('adm.tgcWho')} {tgcWho(r)}</p>
             <!-- the text as a reporter saw it before an edit (never who) -->
             {#each r.notes ?? [] as n, i (i)}<p class="rn selectable">{n.note}</p>{/each}
+            <!-- the rule its author is told it broke, if it goes: the AI's guess first -->
+            <div class="rules" role="radiogroup" aria-label={t('adm.tgcRule')}>
+              <span>{t('adm.tgcRule')}</span>
+              {#each RULES as k (k)}<button role="radio" aria-checked={ruleOf(r) === k} class:on={ruleOf(r) === k} onclick={() => { haptic.select(); picked2[r.id] = k; }}>{t(`rep.${k}`)}</button>{/each}
+            </div>
             <div class="ra">
               <Button kind="danger" size="s" onclick={() => resolve(r, true)}>{r.removed ? t('adm.tgcConfirm') : t('adm.takeDown')}</Button>
               <Button kind="neutral" size="s" onclick={() => resolve(r, false)}>{r.removed ? t('adm.tgcRestore') : t('adm.keep')}</Button>
@@ -291,6 +300,10 @@
   .tag.gone { background: var(--danger); color: var(--on-accent); }
   .rw { margin: 6px 0 0; font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); }
   .tgc-closed { margin-top: 8px; }
+  .rules { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+  .rules span { font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .rules button { height: 30px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .rules button.on { background: var(--accent-soft); color: var(--accent-text); }
   .sh { display: flex; align-items: center; gap: 8px; margin: 20px 2px 8px; }
   .cnt { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font: 700 12px/20px var(--font-text); text-align: center; letter-spacing: 0; }
   .clear { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--text-2); font: 600 14.5px/1.3 var(--font-text); }

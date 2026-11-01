@@ -64,7 +64,8 @@ export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'o
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
 export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply' | 'tgc'; id: Id; text: string; at: Ts }
 /** My own comment the bot deleted in the forum channel's Telegram group (POST /api/me/tg-comment): to me alone. */
-export interface TgComment { body: string; link: string | null; student: boolean; removed?: boolean }
+export interface TgComment { body: string; link: string | null; student: boolean; removed?: boolean;
+  verdict?: 'pending' | 'confirmed' | 'restored'; rule?: ReportReason | null } // removed after reports: what became of it
 /** Someone whose /report in Telegram a moderator closed (the admin's switch reopens it). */
 export interface TgcClosed { person: PersonRef; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
@@ -91,7 +92,7 @@ export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'p
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name
-  removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; reporters?: { right: number; wrong: number; days: number | null }[] }
+  removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; rule?: ReportReason | null /* the AI's guess at the rule broken */; reporters?: { right: number; wrong: number; days: number | null }[] }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }

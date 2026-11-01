@@ -157,8 +157,8 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int) -> None:
     con = db.connect(cfg.db_path)
     try:
         body = (one(con, "SELECT body FROM tgc_comments WHERE id = ?", cid) or [""])[0]
-        verdict = await ai.screen_comment(cfg, http, body, con) if body.strip() else None  # a sticker: a moderator looks
-        rules.judge(con, cid, verdict)
+        verdict, rule = await ai.screen_comment(cfg, http, body, con) if body.strip() else (None, None)  # a sticker: a moderator looks
+        rules.judge(con, cid, verdict, rule)
     except Exception:  # noqa: BLE001 - one comment's look must not stop the next
         log.exception("tgc judge")
     finally:
@@ -183,6 +183,32 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         await _call(cfg, http, "unbanChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "only_if_banned": True})
 
 
+# the author's messages about one comment, each said only while it's still true: "under review" while a moderator hasn't
+# decided, then the verdict; the verdict edits the first message in place (owner, Nov 1), so the chat holds one
+AUTHOR = {"tgc_removed": "status IN ('deleting', 'deleted') AND review = 1",
+          "tgc_confirmed": "status IN ('deleting', 'deleted') AND review = 0",
+          "tgc_back": "status = 'restored'"}
+
+
+async def edit_first(cfg: Config, http: httpx.AsyncClient, con, m, body: dict) -> httpx.Response | None:
+    """A verdict on a comment: the "under review" message edited into it. None when there's none to edit or Telegram
+    won't (too old, deleted by him, blocked): the postman sends it new then (a block: the app's card, take_saved)."""
+    if m["kind"] not in ("tgc_confirmed", "tgc_back"):
+        return None
+    mid = (one(con, "SELECT dm_id FROM tgc_comments WHERE id = ?", int(m["ref"].split(":")[1])) or [None])[0]
+    if not mid:
+        return None
+    r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageText",
+                        json={k: x for k, x in body.items() if k != "link_preview_options"} | {"message_id": mid})
+    return r if r.status_code == 200 and r.json().get("ok") else None
+
+
+def sent(con, m, answer: dict) -> None:
+    """The message to the author went out: its id, for the verdict to edit; he knows, so the app's card doesn't repeat it."""
+    if m["kind"] in AUTHOR and isinstance(answer.get("result"), dict) and answer["result"].get("message_id"):
+        con.execute("UPDATE tgc_comments SET dm_id = ?, shown = 1 WHERE id = ?", (answer["result"]["message_id"], int(m["ref"].split(":")[1])))
+
+
 def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
     """The postman's text for this feature's messages (bot._render)."""
     kind, ref = m["kind"], m["ref"].split(":")
@@ -190,10 +216,10 @@ def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
         q = "SELECT COUNT(*) FROM tgc_comments WHERE (status = 'queued' OR review = 1)"
         n, old = one(con, q)[0], one(con, q + " AND decided_at < ?", now() - 86400)[0]
         return (*texts.bot_message(lang, kind, n=n, old=old), "capps") if n else None
-    if kind in ("tgc_removed", "tgc_back"):  # to the author: removed after reports / restored; his own words, to him alone
-        c = one(con, "SELECT body FROM tgc_comments WHERE id = ? AND status IN (?, ?)", int(ref[1]),
-                *(("deleting", "deleted") if kind == "tgc_removed" else ("restored", "restored")))
-        return (texts.bot_message(lang, kind)[0] + "\n\n" + html.escape(c["body"]), None, "") if c else None
+    if kind in AUTHOR:  # to the author: removed after reports (under review), then the verdict; his own words, to him alone
+        c = one(con, "SELECT body, rule FROM tgc_comments WHERE id = ? AND " + AUTHOR[kind], int(ref[1]))
+        rule = texts.pick(texts.TGC_RULES, lang).get(c["rule"] or "other") if c else ""
+        return (texts.bot_message(lang, kind, rule=rule)[0] + "\n\n" + html.escape(c["body"]), None, "") if c else None
     if kind == "tgc_good":  # to the owner: an accurate reporter, for him to decide about the moderator status
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=logic.short_name(p)), f"u_{p['id']}") if p else None

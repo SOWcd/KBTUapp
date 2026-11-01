@@ -1161,7 +1161,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/admin/reports/{target}/{tid}", status_code=204)
     def resolve_report(target: str, tid: int, con: Con, v: Me, body: dict = Body(...)):
         if target == "tgc":  # a comment in the channel's Telegram group: remove, keep, or keep and call the reports abuse
-            logic.tgcomments.resolve(con, v, tid, "remove" if body.get("remove") else "abuse" if body.get("abuse") else "keep")
+            logic.tgcomments.resolve(con, v, tid, "remove" if body.get("remove") else "abuse" if body.get("abuse") else "keep", body.get("rule"))
             return
         media.drop(photos, logic.resolve_report(con, v, target, tid, bool(body.get("remove"))))
 

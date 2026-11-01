@@ -29,8 +29,9 @@ class Telegram:
         method = request.url.path.rsplit("/", 1)[1]
         if method == "getUpdates":
             return httpx.Response(200, json={"ok": True, "result": self.batch})
-        self.calls.append((method, json.loads(request.content)))
-        return httpx.Response(200, json={"ok": True, "result": {"message_id": 900 + len(self.calls)}})
+        body = json.loads(request.content)
+        self.calls.append((method, body))  # an edit answers with the same message, as Telegram does
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": body.get("message_id") or 900 + len(self.calls)}})
 
     def of(self, method: str) -> list[dict]:
         return [b for m, b in self.calls if m == method]
@@ -76,7 +77,8 @@ def setup(env, monkeypatch, verdicts: dict | None = None):
 
     async def screen(cfg_, http, text, con=None):
         looked.append(text)
-        return (verdicts or {}).get(text)
+        v = (verdicts or {}).get(text)
+        return v, "insult" if v is False else None
     monkeypatch.setattr(tgc.ai, "screen_comment", screen)
     return c, cfg, db.connect(cfg.db_path), looked
 
@@ -304,3 +306,83 @@ def test_policy_section_and_consent_only_with_the_switch(env, monkeypatch):
     assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC
     page = c.get("/privacy?lang=en").text
     assert "11. Comments in the forum's Telegram channel" in page and "{{tgcn}}" not in page
+
+
+def postman(cfg, handler) -> None:
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+            await bot.send_due(cfg, http)
+    asyncio.run(go())
+
+
+class NoEdits(Telegram):
+    """Telegram refusing every edit (the message too old, or deleted by its reader)."""
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/editMessageText"):
+            self.calls.append(("editMessageText", json.loads(request.content)))
+            return httpx.Response(400, json={"ok": False, "error_code": 400, "description": "message to edit not found"})
+        return super().__call__(request)
+
+
+def test_verdict_edits_the_first_message(env, monkeypatch):
+    """Removed after reports: its author gets "under review" with his words; the moderator's verdict edits that same
+    message (the rule picked from the report reasons, the AI's guess by default), the undo list's restore edits it
+    again. Telegram refusing the edit: a new message. The bot blocked: the app's card says it instead."""
+    c, cfg, con, _ = setup(env, monkeypatch, {"bad words": False, "more bad": False, "bad words!": False})
+    student(c, con, 20, "ali")
+    student(c, con, 21, "bek")
+    student(c, con, 22, "dan")
+    mod = student(c, con, 24, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod,))
+    con.execute("UPDATE users SET can_dm = 1, lang = 'en'")
+    tg = Telegram()
+    hear(cfg, tg, COPY, report(60, 21, msg(50, 20, "bad words")), report(61, 22, msg(50, 20, "bad words")))
+    cid, rule = con.execute("SELECT id, rule FROM tgc_comments").fetchone()
+    assert rule == "insult"                                                      # the AI's guess, the moderator's default
+    tg.calls.clear()
+    postman(cfg, tg)
+    first = [b for b in tg.of("sendMessage") if b["chat_id"] == 20]
+    assert len(first) == 1 and "under a moderator's review" in first[0]["text"] and first[0]["text"].endswith("bad words")
+    dm = con.execute("SELECT dm_id FROM tgc_comments WHERE id = ?", (cid,)).fetchone()[0]
+    assert dm
+
+    q = c.get("/api/admin/reports", headers=tma(24)).json()
+    assert [x["rule"] for x in q if x["target"] == "tgc"] == ["insult"]
+    assert c.post(f"/api/admin/reports/tgc/{cid}", headers=tma(24), json={"remove": True, "rule": "nope"}).status_code == 400
+    assert c.post(f"/api/admin/reports/tgc/{cid}", headers=tma(24), json={"remove": True, "rule": "spam"}).status_code == 204
+    tg.calls.clear()
+    postman(cfg, tg)
+    ed = tg.of("editMessageText")
+    assert len(ed) == 1 and ed[0]["chat_id"] == 20 and ed[0]["message_id"] == dm
+    assert "no spam or ads" in ed[0]["text"] and ed[0]["text"].endswith("bad words")
+    assert not [b for b in tg.of("sendMessage") if b["chat_id"] == 20]          # edited, not a second message
+
+    assert c.post(f"/api/admin/taken-down/tgc/{cid}/restore", headers=tma(24)).status_code == 204  # the undo list
+    tg.calls.clear()
+    postman(cfg, tg)
+    ed = tg.of("editMessageText")
+    assert len(ed) == 1 and ed[0]["message_id"] == dm and "by mistake" in ed[0]["text"]
+
+    # Telegram refuses the edit (too old, deleted by him): the verdict goes as a new message
+    hear(cfg, tg, report(62, 21, msg(51, 20, "more bad")), report(63, 22, msg(51, 20, "more bad")))
+    postman(cfg, tg)
+    c2 = con.execute("SELECT id FROM tgc_comments WHERE msg_id = 51").fetchone()[0]
+    assert con.execute("SELECT dm_id FROM tgc_comments WHERE id = ?", (c2,)).fetchone()[0]
+    assert c.post(f"/api/admin/reports/tgc/{c2}", headers=tma(24), json={"remove": True}).status_code == 204
+    refuse = NoEdits()
+    postman(cfg, refuse)
+    assert len(refuse.of("editMessageText")) == 1
+    new = [b for b in refuse.of("sendMessage") if b["chat_id"] == 20]
+    assert len(new) == 1 and "no insults" in new[0]["text"] and new[0]["text"].endswith("more bad")
+
+    # the bot blocked: no message gets through; the app's card says what became of it
+    hear(cfg, tg, report(64, 21, msg(52, 20, "bad words!")), report(65, 22, msg(52, 20, "bad words!")))
+    c3 = con.execute("SELECT id FROM tgc_comments WHERE msg_id = 52").fetchone()[0]
+    con.execute("UPDATE users SET can_dm = 0 WHERE tg_id = 20")
+    assert c.get("/api/me", headers=tma(20)).json().get("tgComment") is True
+    assert c.post("/api/me/tg-comment", headers=tma(20)).json()["verdict"] == "pending"
+    assert c.post(f"/api/admin/reports/tgc/{c3}", headers=tma(24), json={"remove": True, "rule": "danger"}).status_code == 204
+    card = c.post("/api/me/tg-comment", headers=tma(20)).json()
+    assert card == {"body": "bad words!", "link": None, "student": True, "removed": True, "verdict": "confirmed", "rule": "danger"}
+    assert c.post("/api/me/tg-comment", headers=tma(20)).json() is None         # once per news

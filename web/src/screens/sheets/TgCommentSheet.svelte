@@ -29,8 +29,11 @@
   }
 </script>
 
-<Sheet {overlay} title={c.removed ? t('tgc.removedTitle') : t('tgc.title')} icon={c.removed ? ShieldAlert : MessageSquareText}>
-  <p class="t-callout hint">{c.removed ? t('tgc.removedText') : c.student ? t('tgc.text') : t('tgc.guest')}</p>
+<!-- removed after reports: under review, then the moderator's verdict (the rule it broke, or a mistake: post it again) -->
+<Sheet {overlay} title={c.verdict === 'restored' ? t('tgc.restoredTitle') : c.removed ? t('tgc.removedTitle') : t('tgc.title')}
+  icon={c.removed && c.verdict !== 'restored' ? ShieldAlert : MessageSquareText}>
+  <p class="t-callout hint">{c.verdict === 'confirmed' ? t('tgc.confirmedText', { rule: t(`tgc.rule.${c.rule ?? 'other'}`) })
+    : c.verdict === 'restored' ? t('tgc.restoredText') : c.removed ? t('tgc.removedText') : c.student ? t('tgc.text') : t('tgc.guest')}</p>
   <blockquote class="body surface selectable t-body">{c.body}</blockquote>
   {#snippet footer()}
     <div class="acts">
