@@ -170,7 +170,8 @@ export interface Api {
   deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
   channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live
   channelModDecide(id: Id, ok: boolean): Promise<void>;                                 // held: out or removed; live: only removed
-  channelModRestore(id: Id): Promise<void>;                                             // a moderator's take-down undone: published anew
+  channelModRepublish(id: Id): Promise<void>;                                           // a live post sent anew (its message lost in Telegram)
+  channelModRestore(id: Id): Promise<void>;                                            // a moderator's take-down undone: published anew
   revealChannelPost(id: Id): Promise<PersonRef>;                                        // the owner alone; audited
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin

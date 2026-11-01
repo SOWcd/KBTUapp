@@ -239,6 +239,7 @@ export const server: Api = {
   channelMod: () => call('GET', '/forum-posts/mod'),
   channelModDecide: (id, ok) => call('POST', `/forum-posts/${id}/mod`, { ok }),
   channelModRestore: (id) => call('POST', `/forum-posts/${id}/restore`),
+  channelModRepublish: (id) => call('POST', `/forum-posts/${id}/republish`),
   revealChannelPost: (id) => call('POST', `/forum-posts/${id}/reveal`),
   mapFlaw: (f) => call('POST', '/map/flaws', f),
   mapFlaws: () => call('GET', '/map/flaws'),

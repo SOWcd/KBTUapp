@@ -169,8 +169,8 @@ def to_send(con) -> list:
 
 
 def _sign(con, p) -> str:
-    """The post's first line in the channel: its signature, or the anonymous line (the channel speaks Russian). A post
-    from before signatures were kept: the short name, as it was signed then."""
+    """The post's signature in the channel (its last line, after the dash): the one fixed when written, or the anonymous
+    line (the channel speaks Russian). A post from before signatures were kept: the short name, as it was signed then."""
     if p["anon"]:
         return texts.bot_message("ru", "fch_anon")[0]
     if p["sign"]:
@@ -209,9 +209,10 @@ def lost(con) -> None:
 def found(con, msg_id: int, text: str) -> None:
     """The channel post's copy reached the discussion group (tgc.gate): a send whose answer never came (on its way, or
     held as lost since) is in the channel after all. Its message id kept, so the author's delete and a take-down reach
-    it; it was live when sent, so live again. Matched by the whole text as the copy shows it (the signature line, an
-    empty one, the words: tgc.post_tick's, its bold gone; or the words and "- name" under them, as sent before Nov 2,
-    for a send lost across that deploy), and only when exactly one post matches and no post holds that message yet:
+    it; it was live when sent, so live again. Matched by the whole text as the copy shows it, in any format the bot
+    used (a send lost across a deploy): the words, an empty line and "— name" (tgc.post_tick's, its italic gone; also
+    the plain one before Nov 2), or the signature line first, an empty one, the words (bold gone; Nov 2 for a day);
+    and only when exactly one post matches and no post holds that message yet:
     another student's same words must never become this one's (review)."""
     if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
         return
@@ -316,6 +317,7 @@ def copy_done(con, key: str, root: int | None) -> None:
 def unposted(con, msg_id: int) -> None:
     """Out of the channel: a taken-down post forgets its message (a Bring back is a new one)."""
     con.execute("DELETE FROM tg_unpost WHERE msg_id = ?", (msg_id,))
+    con.execute("DELETE FROM meta WHERE key = ?", (f"fchmoved:{msg_id}",))
     con.execute("UPDATE fchan_posts SET tg_msg = NULL, rules_msg = NULL, comments = 0 WHERE tg_msg = ? AND status = 'hidden'", (msg_id,))
 
 
@@ -380,6 +382,26 @@ def mod_restore(con, v: Viewer, pid: int) -> None:
         kept = bool(p["tg_msg"]) and con.execute("DELETE FROM tg_unpost WHERE msg_id = ? AND at > ?", (p["tg_msg"], _now())).rowcount > 0
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (p["tg_msg"] if kept else None, pid))
         log_action(con, v.id, "fchan_undo" if kept else "fchan_restore", f"fchan:{pid}")
+
+
+def mod_republish(con, v: Viewer, pid: int) -> None:
+    """A live post sent anew (its channel message deleted by hand: the Bot API never says): the old message goes in the
+    bot's round (already gone: fine; too old to delete: edited to say it moved), the post, same id, goes out as a new
+    message the normal way, the bot's first comment under it. Audited."""
+    _mod(v)
+    with tx(con):
+        p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid)
+        if not p:
+            raise ApiError("not_found")  # not out yet (or on its way): the round sends it anyway
+        _unpost(con, p, "moderator")
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')", (f"fchmoved:{p['tg_msg']}",))
+        con.execute("UPDATE fchan_posts SET tg_msg = NULL, rules_msg = NULL, comments = 0 WHERE id = ?", (pid,))
+        log_action(con, v.id, "fchan_republish", f"fchan:{pid}")
+
+
+def moved(con, msg_id: int) -> bool:
+    """This message's post went out anew (mod_republish): too old to delete, it says so, not "removed"."""
+    return one(con, "SELECT 1 FROM meta WHERE key = ?", f"fchmoved:{msg_id}") is not None
 
 
 def reveal(con, v: Viewer, pid: int) -> dict:

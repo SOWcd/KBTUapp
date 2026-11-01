@@ -272,6 +272,7 @@ BOT = {
         "fch_anon": ("Анонимный студент", "Написать пост"),
         "fch_gone": ("Автор удалил этот пост.", None),
         "fch_removed": ("Модератор снял этот пост.", None),
+        "fch_moved": ("Этот пост опубликован в канале заново.", None),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -398,6 +399,7 @@ BOT = {
         "fch_anon": ("Анонимді студент", "Пост жазу"),
         "fch_gone": ("Бұл постты авторы өшірді.", None),
         "fch_removed": ("Бұл постты модератор алып тастады.", None),
+        "fch_moved": ("Бұл пост арнада қайта жарияланды.", None),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -524,6 +526,7 @@ BOT = {
         "fch_anon": ("Anonymous student", "Write a post"),
         "fch_gone": ("The author deleted this post.", None),
         "fch_removed": ("A moderator removed this post.", None),
+        "fch_moved": ("This post was published in the channel again.", None),
     },
 }
 
@@ -698,9 +701,9 @@ CHANNEL_RULES = ("💬 Здесь обсуждаем событие: вопро�
                  "Правила: без оскорблений, спама и рекламы. Такие сообщения удаляются, авторы получают бан.")
 # the bot's first comment under each forum channel post (tgc.post_tick), plain text: the rules in the channel's three
 # languages, and a button to that post in the app
-FORUM_RULES = ("💬 Бір-бірімізді құрметтейік: балағат, спам және жарнамасыз. Мұндай пікірлер өшіріледі, ал авторлары бұғатталады.\n\n"
-               "Общаемся с уважением: без оскорблений, спама и рекламы. Такие комментарии удаляются, а авторы получают бан.\n\n"
-               "Let's keep it kind: no insults, spam or ads. Such comments are removed and their authors banned.")
+FORUM_RULES = ("🤝 Сыйластықпен сөйлесейік: балағат, спам мен жарнамасыз.\n\n"
+               "💬 Общаемся с уважением: без оскорблений, спама и рекламы.\n\n"
+               "✌️ Be kind: no insults, spam or ads.")  # owner, Nov 2: short, his words exactly; an emoji only at a line's start
 FORUM_BUTTON = "Открыть в приложении"
 # an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."

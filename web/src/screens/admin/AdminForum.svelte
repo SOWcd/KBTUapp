@@ -1,6 +1,7 @@
 <script lang="ts">
   // Admin → Forum posts (owner, Nov 1: staff tools live in Admin alone; the Forum tab looks the same for everyone).
-  // The channel's posts waiting for a moderator (Publish / Remove), this week's live ones (Take down), and this week's
+  // The channel's posts waiting for a moderator (Publish / Remove), this week's live ones (Take down; Publish again for
+  // one whose message someone deleted in Telegram by hand), and this week's
   // take-downs with Bring back (published anew); the owner alone reveals an anonymous author, each look audited.
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
@@ -46,6 +47,14 @@
     catch { mod = before; fail(); }
   }
 
+  // a live post whose channel message someone deleted in Telegram (the bot is never told): sent anew, same post
+  async function republish(p: ChannelModPost) {
+    if (!(await sheets.ask({ title: t('fc.republishAsk'), text: t('fc.republishText'), ok: t('fc.republish'), cancel: t('common.cancel') }))) return;
+    haptic.ok();
+    try { await api.channelModRepublish(p.id); say(t('fc.republishedSay'), 'raising_hands_3d_default'); setTimeout(loadChannel, 5000); }
+    catch { fail(); }
+  }
+
   async function reveal(p: ChannelModPost) {
     if (!(await sheets.ask({ title: t('fc.revealAsk'), text: t('fc.revealText'), ok: t('fc.reveal'), cancel: t('common.cancel') }))) return;
     try { const who = await api.revealChannelPost(p.id); say(t('fc.wrote', { name: who.name }), 'locked_3d'); } catch { fail(); }
@@ -60,6 +69,7 @@
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => decide(p, true, true)}>{t('fc.release')}</Button>{/if}
       {#if kind === 'removed'}<Button kind="tinted" size="s" onclick={() => restore(p)}>{t(p.undo ? 'fc.undo' : 'fc.restore')}</Button>
       {:else}<Button kind="gray" size="s" onclick={() => decide(p, false, kind === 'held')}>{t('fc.takeDown')}</Button>{/if}
+      {#if kind === 'live'}<Button kind="gray" size="s" onclick={() => republish(p)}>{t('fc.republish')}</Button>{/if}
       {#if owner && p.anon}<Button kind="plain" size="s" onclick={() => reveal(p)}>{t('fc.reveal')}</Button>{/if}
     </span>
   </div>

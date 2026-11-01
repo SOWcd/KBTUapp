@@ -1,7 +1,8 @@
 <script lang="ts">
-  // A new post to the forum channel (the Forum tab's plus): the words, the rules, Anonymous, and whose name it goes out
-  // under. Publish closes the sheet at once and the post stands at the top of the feed, "checking" while the AI looks;
-  // refused, the sheet comes back with the words.
+  // A new post to the forum channel (the Forum tab's composer row): whose name it goes out under (my face and signature,
+  // or the mask), the words, the rules, named or Anonymous and what that means, honestly. Publish closes the sheet at
+  // once and the post stands at the top of the feed, "checking" while the AI looks; refused, the sheet comes back with
+  // the words.
   import { untrack } from 'svelte';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
@@ -18,6 +19,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Card from '../../ui/Card.svelte';
   import Button from '../../ui/Button.svelte';
+  import Avatar from '../../ui/Avatar.svelte';
 
   let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean } } = $props();
   let body = $state(untrack(() => draft?.body ?? '')), anon = $state(untrack(() => draft?.anon ?? false));
@@ -52,30 +54,41 @@
   }
 </script>
 
-<Sheet {overlay} icon={SquarePen} heading={t('fc.new')}>
+<!-- the title is the capsule's, with the pen (a heading of its own said it twice) -->
+<Sheet {overlay} icon={SquarePen} title={t('fc.new')}>
   <Card>
-    <textarea class="text" bind:value={body} maxlength="1000" rows="4" placeholder={t('fc.ph')} aria-label={t('fc.ph')} use:grow={280}></textarea>
-    <p class="rules">{t('fc.rules')}</p>
+    <div class="write">
+      {#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
+      {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}
+      <div class="col">
+        <b class="ellipsis">{anon ? t('fc.anonSign') : sign}</b>
+        <textarea class="text" bind:value={body} maxlength="1000" rows="3" placeholder={t('fc.ph')} aria-label={t('fc.ph')} use:grow={280}></textarea>
+      </div>
+    </div>
   </Card>
-  <div class="gap"></div>
-  <!-- who signs it: two buttons, not a switch (owner, Nov 1) -->
+  <p class="note">{t('fc.rules')}</p>
+  <!-- who signs it: two buttons, not a switch (owner, Nov 1); under them what that means -->
   <div class="seg wide who" role="radiogroup" aria-label={t('fc.anon')}>
-    <button type="button" role="radio" aria-checked={!anon} class:on={!anon} onclick={() => { anon = false; haptic.select(); }}>{sign}</button>
+    <button type="button" role="radio" aria-checked={!anon} class:on={!anon} onclick={() => { anon = false; haptic.select(); }}>{t('fc.named')}</button>
     <button type="button" role="radio" aria-checked={anon} class:on={anon} onclick={() => { anon = true; haptic.select(); }}><VenetianMask size={15} />{t('fc.anon')}</button>
   </div>
-  <p class="as">{anon ? t('fc.asAnon') : t('fc.as', { name: sign })}</p>
+  <p class="note last">{anon ? t('fc.asAnon') : t('fc.as', { name: sign })}</p>
   {#snippet footer()}<Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>{/snippet}
 </Sheet>
 
 <style>
-  /* the words: no box of their own inside the card, the card is the field */
-  .text { display: block; width: 100%; min-height: 104px; padding: 0; border: 0; resize: none; background: none; color: var(--text);
+  /* my face (or the mask) and the name it goes out under, the words under the name (Threads) */
+  .write { display: flex; gap: var(--s-3); align-items: flex-start; }
+  .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .col b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); }
+  /* the words: no box of their own, the card is the field */
+  .text { display: block; width: 100%; min-height: 84px; padding: 0; border: 0; resize: none; background: none; color: var(--text);
     font: 450 var(--fs-row)/1.4 var(--font-text); letter-spacing: -0.012em; }
   .text::placeholder { color: var(--text-3); }
   .text:focus { outline: none; }
-  .rules { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 0.5px solid var(--separator); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
-  .gap { height: var(--s-4); }
+  .note { margin: var(--s-2) var(--s-2) var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .note.last { margin-bottom: 0; }
   .who { display: flex; width: 100%; }
   .who button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; font-size: var(--fs-body); }
-  .as { margin: var(--s-2) var(--s-2) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
 </style>

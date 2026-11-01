@@ -6,14 +6,16 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import html
 import json
+import re
 import time
 import types
 
 import httpx
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, db, logic, texts, tgc
+from kbtu import ai, app as server, bot, db, logic, texts, tgc
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import Telegram
 
@@ -70,7 +72,7 @@ def test_post_publish_and_limits(env, monkeypatch):
     tick(cfg, tg, con)
     sent = tg.of("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == CH and sent[0]["parse_mode"] == "HTML"
-    assert sent[0]["text"] == "<b>Ann T.</b>\n\nLost a black umbrella in the library" and sent[0]["link_preview_options"] == {"is_disabled": True}
+    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n<i>— Ann T.</i>" and sent[0]["link_preview_options"] == {"is_disabled": True}
     assert "reply_markup" not in sent[0]                                                         # a button would hide the Comments bar
     tick(cfg, tg, con)
     assert len(tg.of("sendMessage")) == 1                                                        # never twice
@@ -130,12 +132,15 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     assert c.get("/api/forum-posts/mod", headers=A).status_code == 403
     # only the owner reveals, and it's in the audit log
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=M).status_code == 403
+    login(c, 5, "adm")  # an admin who isn't the owner: no
+    con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 5")
+    assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=tma(5)).status_code == 403
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=X).json()["id"] == ann["id"]
     assert [r[0] for r in con.execute("SELECT target FROM audit_log WHERE action = 'reveal_anon'")] == [f"fchan:{p['id']}"]
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == f"<b>{texts.bot_message('ru', 'fch_anon')[0]}</b>\n\nSecret confession here"
+    assert tg.of("sendMessage")[0]["text"] == f"Secret confession here\n\n<i>— {texts.bot_message('ru', 'fch_anon')[0]}</i>"
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     # the author deletes it: the words go at once, the channel message (and its copy in the group) in the bot's round
     con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:77', f"KBTUappForum {mid}"), (f"fchcopy:{mid}", '77')])
@@ -237,11 +242,65 @@ def test_post_undo_and_restore_after_takedown(env, monkeypatch):
     assert c.get("/api/forum-posts/mod", headers=M).json()["removed"] == []
     tick(cfg, tg, con)
     new = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
-    assert new and new != old and tg.of("sendMessage")[-1]["text"].endswith("Free pizza at the canteen")
+    assert new and new != old and tg.of("sendMessage")[-1]["text"].startswith("Free pizza at the canteen\n")
     # a take-down older than a week leaves the list
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": False}).status_code == 204
     con.execute("UPDATE audit_log SET at = at - 8 * 86400 WHERE action = 'fchan_hide'")
     assert c.get("/api/forum-posts/mod", headers=M).json()["removed"] == []
+    con.close()
+
+
+def test_post_republish(env, monkeypatch):
+    """Admin's Publish again: a live post whose channel message someone deleted by hand goes out as a new message, same
+    post id, the old one deleted ("not found" is fine; too old: edited to say it moved), the bot's first comment under
+    the new one. A moderator only, audited."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    mod = login(c, 3, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    A, M = tma(1), tma(3)
+
+    class Gone(Telegram):
+        old = "Bad Request: message to delete not found"
+
+        def __call__(self, request):
+            if request.url.path.endswith("/deleteMessage"):
+                self.calls.append(("deleteMessage", json.loads(request.content)))
+                return httpx.Response(400, json={"ok": False, "error_code": 400, "description": self.old})
+            return super().__call__(request)
+    tg = Gone()
+    p = c.post("/api/forum-posts", headers=A, json={"body": "Free pizza at the canteen"}).json()
+    held = c.post("/api/forum-posts", headers=M, json={"body": "Not out yet"}).json()
+    tick(cfg, tg, con)
+    old = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    con.execute("INSERT INTO meta (key, value) VALUES (?, '77')", (f"fchcopy:{old}",))  # its copy reached the group
+    tick(cfg, tg, con)
+    assert [b["chat_id"] for b in tg.of("sendMessage")] == [CH, CH, G]
+    con.execute("UPDATE fchan_posts SET comments = 3 WHERE id = ?", (p["id"],))
+    assert c.post(f"/api/forum-posts/{p['id']}/republish", headers=A).status_code == 403            # a student
+    assert c.post("/api/forum-posts/999/republish", headers=M).status_code == 404
+    con.execute("UPDATE fchan_posts SET tg_msg = NULL WHERE id = ?", (held["id"],))
+    assert c.post(f"/api/forum-posts/{held['id']}/republish", headers=M).status_code == 404         # not out yet
+    assert c.post(f"/api/forum-posts/{p['id']}/republish", headers=M).status_code == 204
+    n = len(tg.of("sendMessage"))
+    tick(cfg, tg, con)
+    assert tg.of("deleteMessage")[0] == {"chat_id": CH, "message_id": old} and not tg.of("editMessageText")
+    new = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    assert new and new != old and tg.of("sendMessage")[n]["text"] == "Free pizza at the canteen\n\n<i>— Ann T.</i>"
+    assert p["id"] in [x["id"] for x in c.get("/api/forum-posts/feed", headers=A).json()]
+    assert con.execute("SELECT comments, status FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == (0, "live")
+    con.execute("INSERT INTO meta (key, value) VALUES (?, '78')", (f"fchcopy:{new}",))
+    tick(cfg, tg, con)
+    assert tg.of("sendMessage")[-1]["chat_id"] == G and tg.of("sendMessage")[-1]["reply_parameters"] == {"message_id": 78}
+    # too old to delete: its words edited to say it moved
+    tg.old = "Bad Request: message can't be deleted"
+    assert c.post(f"/api/forum-posts/{p['id']}/republish", headers=M).status_code == 204
+    tick(cfg, tg, con)
+    assert tg.of("editMessageText")[-1] == {"chat_id": CH, "message_id": new, "text": texts.bot_message("ru", "fch_moved")[0]}
+    assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'fchmoved:%'").fetchone()
+    acts = [r[0] for r in con.execute("SELECT action FROM audit_log WHERE target = ?", (f"fchan:{p['id']}",))]
+    assert acts == ["fchan_republish", "fchan_republish"]
     con.close()
 
 
@@ -272,6 +331,13 @@ def test_post_send_lost_and_takedown_kept(env, monkeypatch):
     assert con.execute("SELECT status, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("live", 0)
     tick(cfg, tg, con)                                                                           # not sent again
     assert con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("held", "lost", None)
+    # its copy in the group shows it went out after all: found in every format the bot has sent (the signature under
+    # the words, its italic gone; the bold first line of Nov 2), never by the words alone
+    for i, text in enumerate(("Free pizza at the canteen\n\n— Ann T.", "Ann T.\n\nFree pizza at the canteen", "Free pizza at the canteen")):
+        logic.fchannel.found(con, 600 + i, text)
+        got = con.execute("SELECT status, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:]
+        assert got == (("live", 600 + i) if i < 2 else ("held", None)), text
+        con.execute("UPDATE fchan_posts SET status = 'held', why = 'lost', tg_msg = NULL WHERE id = ?", (p["id"],))
     q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Who has a spare charger?"}).json()
     tg.mode = "refused"
     tick(cfg, tg, con)
@@ -402,7 +468,7 @@ def test_post_feed(env, monkeypatch):
     con.execute("UPDATE users SET nick = 'Night <Owl>' WHERE id = 2")
     nk = c.post("/api/forum-posts", headers=B, json={"body": "Library is open late"}).json()
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[-1]["text"] == "<b>Night &lt;Owl&gt;</b>\n\nLibrary is open late"
+    assert tg.of("sendMessage")[-1]["text"] == "Library is open late\n\n<i>— Night &lt;Owl&gt;</i>"
     con.execute("UPDATE users SET nick = 'Other' WHERE id = 2")
     row = next(p for p in c.get("/api/forum-posts/feed", headers=A).json() if p["id"] == nk["id"])
     assert row["sign"] == "Night <Owl>" and row["person"]["id"] == 2 and "Bob" not in json.dumps(row)
@@ -445,10 +511,14 @@ def test_post_first_comment(env, monkeypatch):
     p = c.post("/api/forum-posts", headers=tma(1), json={"body": "a < b & c"}).json()
     copy(55, 901)
     assert not rules()
+    # the bot's emoji packs (bot.load_pack): the first comment's emoji go out as theirs, HTML, like every bot message
+    monkeypatch.setattr(bot, "_custom", {"\U0001f91d": "111"})
+    monkeypatch.setattr(bot, "_custom_re", re.compile("\U0001f91d️?"))
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == "<b>Ann T.</b>\n\na &lt; b &amp; c"
+    assert tg.of("sendMessage")[0]["text"] == "a &lt; b &amp; c\n\n<i>— Ann T.</i>"
     r = rules()
-    assert len(r) == 1 and r[0]["text"] == texts.FORUM_RULES and r[0]["reply_parameters"] == {"message_id": 55} and "parse_mode" not in r[0]
+    assert len(r) == 1 and r[0]["reply_parameters"] == {"message_id": 55} and r[0]["parse_mode"] == "HTML"
+    assert r[0]["text"] == html.escape(texts.FORUM_RULES).replace("\U0001f91d", '<tg-emoji emoji-id="111">\U0001f91d</tg-emoji>') != texts.FORUM_RULES
     assert r[0]["reply_markup"]["inline_keyboard"][0][0] == {"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{p['id']}"}
     copy(55, 901)                                                                               # Telegram again, a restart
     tick(cfg, tg, con)

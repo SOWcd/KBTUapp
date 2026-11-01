@@ -221,6 +221,19 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         await _call(cfg, http, "unbanChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "only_if_banned": True})
 
 
+async def _premium_send(cfg: Config, http: httpx.AsyncClient, body: dict) -> dict:
+    """sendMessage through bot._send (bot.premium's emoji packs and its plain fallback), answered like _call."""
+    from . import bot  # here: bot imports this module
+    try:
+        r = (await bot._send(cfg, http, body)).json()
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("tgc sendMessage: %s", type(exc).__name__)
+        return {"ok": False}
+    if not r.get("ok"):
+        log.warning("tgc sendMessage: %s", str(r.get("description"))[:200])
+    return r
+
+
 def _gone(r: dict) -> bool:
     """Telegram says the message isn't there (deleted already): nothing left to take down."""
     return r.get("error_code") == 400 and "not found" in str(r.get("description")).lower()
@@ -229,8 +242,8 @@ def _gone(r: dict) -> bool:
 async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The forum channel's posts (logic/fchannel.py), in the bot's round: first what must leave (deleted by the author,
     taken down, a deleted account's), then their copies in the discussion group, then what the AI or a moderator let
-    out, then the bot's first comment under each. The words go escaped (only the signature is bold), no preview. The bot needs in the
-    channel: post, edit and delete others' messages."""
+    out, then the bot's first comment under each. The words go escaped (only the signature under them is italic), no
+    preview. The bot needs in the channel: post, edit and delete others' messages."""
     if not cfg.forum_channel:
         return
     F = logic.fchannel
@@ -240,7 +253,8 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         if r.get("ok") or _gone(r):
             F.copy_gone(con, u["msg_id"])  # its copy in the group goes next (below), whenever its mapping is known
         elif r.get("error_code") == 400:  # too old to delete (48 h), or rights lost: its words edited away (edits sync to the copy)
-            text = texts.bot_message("ru", "fch_gone" if u["why"] == "author" else "fch_removed")[0]
+            kind = "fch_moved" if F.moved(con, u["msg_id"]) else "fch_gone" if u["why"] == "author" else "fch_removed"
+            text = texts.bot_message("ru", kind)[0]
             e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
             if not (e.get("ok") or _gone(e) or "not modified" in str(e.get("description"))):
                 F.unpost_later(con, u["msg_id"])  # still public: tried again in 10 minutes (the warning is in the log)
@@ -260,9 +274,10 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         if not F.sending(con, pid):  # marked "sending" (tg_msg 0, committed) before it goes; deleted meanwhile: skipped
             continue
         # no buttons on the post: a channel post with an inline keyboard loses Telegram's "Comments" bar (the way back
-        # into the app is the bot's first comment, below). The signature first, bold; both escaped, never markup
+        # into the app is the bot's first comment, below). The words first, the signature under them like a quote's
+        # (owner, Nov 2: Telegram can't right-align; italic and the dash come closest); both escaped, never markup
         r = await _call(cfg, http, "sendMessage", {
-            "chat_id": cfg.forum_channel, "text": f"<b>{html.escape(sign)}</b>\n\n{html.escape(body)}", "parse_mode": "HTML",
+            "chat_id": cfg.forum_channel, "text": f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>", "parse_mode": "HTML",
             "link_preview_options": {"is_disabled": True}})
         if r.get("ok"):
             F.sent(con, pid, r["result"]["message_id"])
@@ -276,8 +291,9 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     for pid, root in F.rules_due(con):  # the first comment under each post's copy: the rules, and the way to it in the app
         if not F.rules_claim(con, pid):  # claimed (committed) before it goes: once per post, across restarts and workers
             continue
-        r = await _call(cfg, http, "sendMessage", {
-            "chat_id": cfg.tgc_chat, "text": texts.FORUM_RULES, "link_preview_options": {"is_disabled": True},
+        # HTML through the bot's own send: its emoji become the packs' animated ones, plain again if Telegram refuses
+        r = await _premium_send(cfg, http, {
+            "chat_id": cfg.tgc_chat, "text": html.escape(texts.FORUM_RULES), "parse_mode": "HTML", "link_preview_options": {"is_disabled": True},
             "reply_parameters": {"message_id": root},
             "reply_markup": {"inline_keyboard": [[{"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]}})
         if r.get("ok"):
