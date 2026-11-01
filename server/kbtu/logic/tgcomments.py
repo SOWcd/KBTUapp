@@ -62,9 +62,9 @@ def stranger(con, tg_id: int, body: str, link: str | None) -> tuple[str, bool]:
 
 # ---- the app's card: my own words, to me alone
 
-_REMOVED = """SELECT c.id, c.body, c.status, c.review, c.rule FROM tgc_comments c JOIN users u ON u.id = c.author_id WHERE c.author_id = ?
+_REMOVED = """SELECT c.id, c.body, c.status, c.review, c.clause FROM tgc_comments c JOIN users u ON u.id = c.author_id WHERE c.author_id = ?
     AND u.can_dm = 0 AND c.status IN ('deleting', 'deleted', 'restored') AND c.shown = 0 ORDER BY c.id"""
-RULES = ("spam", "insult", "danger", "other")  # the report reasons (moderation.report): the rule a removed comment broke
+RULES = ("abuse", "fake", "spam", "pdata", "disrupt", "other")  # the clause of the terms' section 3 a removed comment broke (ai.COMMENT_PROMPT)
 
 
 def saved(con, v: Viewer) -> bool:
@@ -93,7 +93,7 @@ def take_saved(con, v: Viewer) -> dict | None:
     con.execute("UPDATE tgc_comments SET shown = 1 WHERE id = ?", (c["id"],))
     verdict = "restored" if c["status"] == "restored" else "pending" if c["review"] else "confirmed"
     return {"body": c["body"], "link": None, "student": True, "removed": True, "verdict": verdict,
-            "rule": c["rule"] or "other" if verdict == "confirmed" else None}
+            "rule": c["clause"] or "other" if verdict == "confirmed" else None}
 
 
 # ---- reports
@@ -136,10 +136,10 @@ def fresh_look(con, reporter_tg: int) -> bool:
 
 def looked(con, cid: int) -> tuple[bool | None, str | None] | None:
     """The AI's verdict on this comment's text as it is now, if it looked at this very text before; else None."""
-    c = one(con, "SELECT body, ai, ai_hash, rule FROM tgc_comments WHERE id = ?", cid)
+    c = one(con, "SELECT body, ai, ai_hash, clause FROM tgc_comments WHERE id = ?", cid)
     if not c or c["ai"] not in ("ok", "flag") or c["ai_hash"] != _hash(c["body"]):
         return None
-    return (True, None) if c["ai"] == "ok" else (False, c["rule"])
+    return (True, None) if c["ai"] == "ok" else (False, c["clause"])
 
 
 def look(con, cid: int, body: str, verdict: bool | None) -> None:
@@ -173,7 +173,7 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
         cleared = one(con, "SELECT 1 FROM meta WHERE key = ?", f"tgcok:{_hash(c['body'])}") is not None
         ai = {True: "ok", False: "flag", None: "none"}[verdict]
         if verdict is False and rule in RULES:  # the AI's guess at the rule, the moderator's default
-            con.execute("UPDATE tgc_comments SET rule = ? WHERE id = ?", (rule, cid))
+            con.execute("UPDATE tgc_comments SET clause = ? WHERE id = ?", (rule, cid))
         if verdict is False and n >= DELETE_AT and not cleared:
             con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
@@ -238,7 +238,7 @@ def queue_items(con, v: Viewer) -> list[dict]:
             continue
         seen = {r["body"]: r["at"] for r in reps if r["body"] != c["body"]}
         out.append({"target": "tgc", "id": c["id"], "text": c["body"], "where": {"kind": "tgc", "id": c["id"], "link": c["link"]},
-                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["rule"], "removed": bool(c["review"]),
+                    "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["clause"], "removed": bool(c["review"]),
                     "reporters": [{"right": r["ok"] or 0, "wrong": r["bad"] or 0,
                                    "days": (now() - r["verified_at"]) // 86400 if r["verified_at"] else None} for r in reps],
                     "notes": [{"reason": "other", "note": b, "at": a} for b, a in list(seen.items())[:5]], "at": reps[-1]["at"]})
@@ -263,7 +263,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
             raise ApiError("forbidden")
         if action == "remove":
             con.execute("""UPDATE tgc_comments SET status = CASE WHEN status = 'deleted' THEN 'deleted' ELSE 'deleting' END, review = 0,
-                rule = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["rule"] or "other", now(), cid))
+                clause = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["clause"] or "other", now(), cid))
             con.execute("UPDATE tgc_reports SET outcome = 'confirmed' WHERE comment_id = ?", (cid,))
             if c["author_id"]:  # the verdict, with his words: the "under review" message edited, or a new one
                 notify(con, c["author_id"], "tgc_confirmed", f"tc:{cid}")

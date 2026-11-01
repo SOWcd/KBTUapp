@@ -17,7 +17,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
-  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown, type TgcClosed } from '../../lib/api';
+  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown, type TgcClosed, type TgcRule } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { openLink, haptic } from '../../lib/tg';
@@ -92,10 +92,10 @@
   }
   // a Telegram comment's line: the AI's word and each reporter as right / wrong and days since sign-in, never who
   const tgcLine = (r: ReportItem) => [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', ago(r.at)].filter(Boolean).join(' · ');
-  // the rule a removed Telegram comment broke, said to its author: the report reasons, the AI's guess picked first
-  const RULES: ReportReason[] = ['spam', 'insult', 'danger', 'other'];
-  let picked2 = $state<Record<number, ReportReason>>({});
-  const ruleOf = (r: ReportItem): ReportReason => picked2[r.id] ?? r.rule ?? 'other';
+  // the clause of the terms' section 3 a removed Telegram comment broke, said to its author: the AI's guess picked first
+  const RULES: TgcRule[] = ['abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other'];
+  let picked2 = $state<Record<number, TgcRule>>({});
+  const ruleOf = (r: ReportItem): TgcRule => picked2[r.id] ?? r.rule ?? 'other';
   const tgcWho = (r: ReportItem) => (r.reporters ?? []).map((x) => `${x.right}/${x.wrong}${x.days != null ? ` · ${x.days}` : ''}`).join(',  ');
   // ---- whose Telegram /report a moderator closed for abuse: the admin's switch gives it back ----
   let closedR = $state<TgcClosed[] | null>(null);
@@ -235,7 +235,7 @@
             <!-- the rule its author is told it broke, if it goes: the AI's guess first -->
             <div class="rules" role="radiogroup" aria-label={t('adm.tgcRule')}>
               <span>{t('adm.tgcRule')}</span>
-              {#each RULES as k (k)}<button role="radio" aria-checked={ruleOf(r) === k} class:on={ruleOf(r) === k} onclick={() => { haptic.select(); picked2[r.id] = k; }}>{t(`rep.${k}`)}</button>{/each}
+              {#each RULES as k (k)}<button role="radio" aria-checked={ruleOf(r) === k} class:on={ruleOf(r) === k} onclick={() => { haptic.select(); picked2[r.id] = k; }}>{t(`tgc.rule.${k}`)}</button>{/each}
             </div>
             <div class="ra">
               <Button kind="danger" size="s" onclick={() => resolve(r, true)}>{r.removed ? t('adm.tgcConfirm') : t('adm.takeDown')}</Button>

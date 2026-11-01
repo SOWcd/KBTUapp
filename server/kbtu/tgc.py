@@ -248,8 +248,8 @@ def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
         n, old = one(con, q)[0], one(con, q + " AND decided_at < ?", now() - 86400)[0]
         return (*texts.bot_message(lang, kind, n=n, old=old), "capps") if n else None
     if kind in AUTHOR:  # to the author: removed after reports (under review), then the verdict; his own words, to him alone
-        c = one(con, "SELECT body, rule FROM tgc_comments WHERE id = ? AND " + AUTHOR[kind], int(ref[1]))
-        rule = texts.pick(texts.TGC_RULES, lang).get(c["rule"] or "other") if c else ""
+        c = one(con, "SELECT body, clause FROM tgc_comments WHERE id = ? AND " + AUTHOR[kind], int(ref[1]))
+        rule = texts.pick(texts.TGC_RULES, lang).get(c["clause"] or "other") if c else ""
         return (texts.bot_message(lang, kind, rule=rule)[0] + "\n\n" + html.escape(c["body"]), None, "") if c else None
     if kind == "tgc_good":  # to the owner: an accurate reporter, for him to decide about the moderator status
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))

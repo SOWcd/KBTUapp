@@ -983,6 +983,9 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL,
       by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL
     ) STRICT;"""),
+    # the clause of the terms' section 3 a removed Telegram comment broke (tgcomments.RULES); rule stays for old rows
+    (101, """ALTER TABLE tgc_comments ADD COLUMN clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other'));
+    UPDATE tgc_comments SET clause = CASE rule WHEN 'spam' THEN 'spam' WHEN 'other' THEN 'other' ELSE 'abuse' END WHERE rule IS NOT NULL;"""),
 ]
 
 

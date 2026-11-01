@@ -263,7 +263,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Жалоба принята, модераторы посмотрят комментарий. Кто пожаловался, никто не узнает.", None),
         "tgc_closed": ("Вы злоупотребляли жалобами — подача жалоб закрыта. Если это ошибка, напишите в поддержку: @Sowers.", None),
         "tgc_removed": ("🛡 Твой комментарий в обсуждении канала удалён после жалоб и сейчас на проверке у модератора. Вот его текст:", None),
-        "tgc_confirmed": ("🛡 Твой комментарий удалён: нарушение правила «{rule}». Вот его текст:", None),
+        "tgc_confirmed": ("🛡 Твой комментарий удалён, нарушение: {rule}. Вот его текст:", None),
         "tgc_back": ("↩️ Модератор проверил: твой комментарий удалили по ошибке. Можешь опубликовать его снова — вот текст:", None),
         "tgc_queue": ("🛡 Комментарии в Telegram ждут решения модератора: {n}. Дольше суток: {old}.", "Открыть"),
         "tgc_raid": ("⚠️ Набег на комментарии канала: больше 5 чужих аккаунтов за минуту. Бот молча удаляет их комментарии и банит, без предупреждений.", None),
@@ -386,7 +386,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Шағым қабылданды, модераторлар пікірді қарайды. Кім шағымданғанын ешкім білмейді.", None),
         "tgc_closed": ("Сіз шағымдарды теріс пайдаландыңыз — шағым беру жабылды. Қате болса, қолдауға жазыңыз: @Sowers.", None),
         "tgc_removed": ("🛡 Арна талқылауындағы пікірің шағымдардан кейін өшірілді және қазір модератордың тексеруінде. Мәтіні мынау:", None),
-        "tgc_confirmed": ("🛡 Пікірің өшірілді: «{rule}» ережесі бұзылды. Мәтіні мынау:", None),
+        "tgc_confirmed": ("🛡 Пікірің өшірілді, бұзушылық: {rule}. Мәтіні мынау:", None),
         "tgc_back": ("↩️ Модератор тексерді: пікірің қателесіп өшірілген. Оны қайта жариялай аласың — мәтіні мынау:", None),
         "tgc_queue": ("🛡 Telegram-дағы пікірлер модератор шешімін күтуде: {n}. Бір тәуліктен ұзақ: {old}.", "Ашу"),
         "tgc_raid": ("⚠️ Арна пікірлеріне шабуыл: бір минутта 5-тен көп бөтен аккаунт. Бот олардың пікірлерін ескертусіз өшіріп, бұғаттайды.", None),
@@ -509,7 +509,7 @@ BOT = {
         "tgc_report_ok": ("🛡 Report received, the moderators will look at the comment. Nobody will know who reported it.", None),
         "tgc_closed": ("You abused reports, so reporting is closed for you. If that's a mistake, write to support: @Sowers.", None),
         "tgc_removed": ("🛡 Your comment in the channel's discussion was removed after reports and is now under a moderator's review. Here is its text:", None),
-        "tgc_confirmed": ("🛡 Your comment was removed: it broke the rule “{rule}”. Here is its text:", None),
+        "tgc_confirmed": ("🛡 Your comment was removed, it broke: {rule}. Here is its text:", None),
         "tgc_back": ("↩️ A moderator checked: your comment was deleted by mistake. You can post it again; here is the text:", None),
         "tgc_queue": ("🛡 Telegram comments waiting for a moderator: {n}. Over a day: {old}.", "Open"),
         "tgc_raid": ("⚠️ A raid on the channel's comments: over 5 strangers in a minute. The bot deletes their comments and bans them silently, without warnings.", None),
@@ -529,14 +529,17 @@ RECEIPT_WHY = {
 }
 
 
-# the rule a removed Telegram comment broke (tgcomments.RULES: the report reasons), in its author's verdict (tgc.render)
+# the clause of the terms' section 3 a removed Telegram comment broke (tgcomments.RULES), in its author's verdict (tgc.render)
 TGC_RULES = {
-    "ru": {"spam": "без спама и рекламы", "insult": "без оскорблений и травли", "danger": "без угроз, опасного и чужих личных данных",
-           "other": "правила обсуждения"},
-    "kk": {"spam": "спам мен жарнамасыз", "insult": "қорлау мен қудалаусыз", "danger": "қорқытусыз, қауіпті нәрсесіз және бөтен жеке деректерсіз",
-           "other": "талқылау ережелері"},
-    "en": {"spam": "no spam or ads", "insult": "no insults or harassment", "danger": "no threats, danger or others' personal data",
-           "other": "the discussion's rules"},
+    "ru": {"abuse": "оскорбления, угрозы, травля (п. 3 Правил)", "fake": "выдача себя за другого (п. 3 Правил)",
+           "spam": "спам, реклама, обман (п. 3 Правил)", "pdata": "чужие личные данные (п. 3 Правил)",
+           "disrupt": "помехи работе сервиса (п. 3 Правил)", "other": "правила обсуждения"},
+    "kk": {"abuse": "қорлау, қоқан-лоққы, қудалау (Ережелердің 3-т.)", "fake": "өзін басқа адам ретінде көрсету (Ережелердің 3-т.)",
+           "spam": "спам, жарнама, алдау (Ережелердің 3-т.)", "pdata": "бөтен жеке деректер (Ережелердің 3-т.)",
+           "disrupt": "сервис жұмысына кедергі (Ережелердің 3-т.)", "other": "талқылау ережелері"},
+    "en": {"abuse": "insults, threats, harassment (Rules, s. 3)", "fake": "pretending to be someone else (Rules, s. 3)",
+           "spam": "spam, ads, deceit (Rules, s. 3)", "pdata": "others' personal data (Rules, s. 3)",
+           "disrupt": "disrupting the service (Rules, s. 3)", "other": "the discussion's rules"},
 }
 
 

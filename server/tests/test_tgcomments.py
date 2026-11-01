@@ -82,7 +82,7 @@ def setup(env, monkeypatch, verdicts: dict | None = None):
     async def screen(cfg_, http, text, con=None):
         looked.append(text)
         v = (verdicts or {}).get(text)
-        return v, "insult" if v is False else None
+        return v, "abuse" if v is False else None
     monkeypatch.setattr(tgc.ai, "screen_comment", screen)
     return c, cfg, db.connect(cfg.db_path), looked
 
@@ -411,8 +411,8 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     con.execute("UPDATE users SET can_dm = 1, lang = 'en'")
     tg = Telegram()
     hear(cfg, tg, COPY, report(60, 21, msg(50, 20, "bad words")), report(61, 22, msg(50, 20, "bad words")))
-    cid, rule = con.execute("SELECT id, rule FROM tgc_comments").fetchone()
-    assert rule == "insult"                                                      # the AI's guess, the moderator's default
+    cid, rule = con.execute("SELECT id, clause FROM tgc_comments").fetchone()
+    assert rule == "abuse"                                                       # the AI's guess, the moderator's default
     tg.calls.clear()
     postman(cfg, tg)
     first = [b for b in tg.of("sendMessage") if b["chat_id"] == 20]
@@ -421,14 +421,14 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     assert dm
 
     q = c.get("/api/admin/reports", headers=tma(24)).json()
-    assert [x["rule"] for x in q if x["target"] == "tgc"] == ["insult"]
+    assert [x["rule"] for x in q if x["target"] == "tgc"] == ["abuse"]
     assert c.post(f"/api/admin/reports/tgc/{cid}", headers=tma(24), json={"remove": True, "rule": "nope"}).status_code == 400
     assert c.post(f"/api/admin/reports/tgc/{cid}", headers=tma(24), json={"remove": True, "rule": "spam"}).status_code == 204
     tg.calls.clear()
     postman(cfg, tg)
     ed = tg.of("editMessageText")
     assert len(ed) == 1 and ed[0]["chat_id"] == 20 and ed[0]["message_id"] == dm
-    assert "no spam or ads" in ed[0]["text"] and ed[0]["text"].endswith("bad words")
+    assert "spam, ads, deceit (Rules, s. 3)" in ed[0]["text"] and ed[0]["text"].endswith("bad words")
     assert not [b for b in tg.of("sendMessage") if b["chat_id"] == 20]          # edited, not a second message
 
     assert c.post(f"/api/admin/taken-down/tgc/{cid}/restore", headers=tma(24)).status_code == 204  # the undo list
@@ -447,7 +447,7 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     postman(cfg, refuse)
     assert len(refuse.of("editMessageText")) == 1
     new = [b for b in refuse.of("sendMessage") if b["chat_id"] == 20]
-    assert len(new) == 1 and "no insults" in new[0]["text"] and new[0]["text"].endswith("more bad")
+    assert len(new) == 1 and "insults, threats" in new[0]["text"] and new[0]["text"].endswith("more bad")
 
     # the bot blocked: no message gets through; the app's card says what became of it
     hear(cfg, tg, report(64, 21, msg(52, 20, "bad words!")), report(65, 22, msg(52, 20, "bad words!")))
@@ -455,7 +455,18 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     con.execute("UPDATE users SET can_dm = 0 WHERE tg_id = 20")
     assert c.get("/api/me", headers=tma(20)).json().get("tgComment") is True
     assert c.post("/api/me/tg-comment", headers=tma(20)).json()["verdict"] == "pending"
-    assert c.post(f"/api/admin/reports/tgc/{c3}", headers=tma(24), json={"remove": True, "rule": "danger"}).status_code == 204
+    assert c.post(f"/api/admin/reports/tgc/{c3}", headers=tma(24), json={"remove": True, "rule": "pdata"}).status_code == 204
     card = c.post("/api/me/tg-comment", headers=tma(20)).json()
-    assert card == {"body": "bad words!", "link": None, "student": True, "removed": True, "verdict": "confirmed", "rule": "danger"}
+    assert card == {"body": "bad words!", "link": None, "student": True, "removed": True, "verdict": "confirmed", "rule": "pdata"}
     assert c.post("/api/me/tg-comment", headers=tma(20)).json() is None         # once per news
+
+
+def test_rules_are_the_terms_clauses():
+    """The AI answers with a clause of the terms' section 3; rows from before (insult, danger) read as abuse."""
+    assert all(tgc.ai._comment_word(f"VIOLATION {r.upper()}") for r in logic.tgcomments.RULES)
+    assert not tgc.ai._comment_word("VIOLATION INSULT")
+    con = db.connect(":memory:")
+    con.executescript("CREATE TABLE tgc_comments (id INTEGER PRIMARY KEY, rule TEXT);"
+                      "INSERT INTO tgc_comments (rule) VALUES ('spam'), ('insult'), ('danger'), ('other'), (NULL);")
+    con.executescript(dict(db.MIGRATIONS)[101])
+    assert [r[0] for r in con.execute("SELECT clause FROM tgc_comments ORDER BY id")] == ["spam", "abuse", "abuse", "other", None]
