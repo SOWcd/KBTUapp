@@ -1,7 +1,7 @@
 <script lang="ts">
-  // My invite as a QR to show across a table (owner, Oct 31): one QR for everything (Nov 1), my profile's own (the
-  // lanyard's: u_<id>_<badge code>) with my photo in the middle; a newcomer who opens it and signs up counts for me
-  // (server refer). Sent as our bot's card it's r_<link code> instead: a chat never gets my badge's code.
+  // My invite as a QR (owner, Oct 31) with my photo in the middle (Nov 1). It is r_<link code>, never the lanyard's
+  // u_<id>_<badge code>: this QR is made to be posted and the badge code checks me in at the door (review, Nov 1).
+  // A newcomer who scans my lanyard in person still counts for me (server refer).
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -30,7 +30,7 @@
 <Sheet {overlay} icon={Link} title={t('ref.title')}>
   <h2 class="t-h2 hd">{t('ref.title')}</h2>
   <div class="pass">
-    <div class="plate"><span class="code"><Qr text={me?.qr ? `https://t.me/KBTUappBot?startapp=u_${me.qr}` : link} tone={QR_TONE}>{#if me}<span class="face"><Avatar person={me} size={48} tappable={false} /></span>{/if}</Qr></span></div>
+    <div class="plate"><span class="code"><Qr text={link} tone={QR_TONE}>{#if me}<span class="face"><Avatar person={me} size={48} tappable={false} /></span>{/if}</Qr></span></div>
     <p class="cap">{t('ref.qr')}</p>
   </div>
   <div class="acts">
