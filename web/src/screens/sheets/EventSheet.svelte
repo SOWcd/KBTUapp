@@ -35,6 +35,7 @@
   import { onMount } from 'svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
   import Sheet from '../../ui/Sheet.svelte';
+  import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
   import Tag from '../../ui/Tag.svelte';
@@ -242,7 +243,7 @@
   }
 </script>
 
-<Sheet {overlay} title={preview ? t('ed.preview') : (e?.title ?? '')} tint={e?.tint}>
+<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : (e?.title ?? '')} tint={e?.tint}>
   {#if e}
     {#if preview}<p class="pv"><Eye size={15} />{t('event.preview')}</p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>

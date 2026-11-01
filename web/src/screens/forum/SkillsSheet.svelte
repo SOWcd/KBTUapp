@@ -5,6 +5,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import Wrench from '@lucide/svelte/icons/wrench';
   import Button from '../../ui/Button.svelte';
   import SkillPicker from './SkillPicker.svelte';
 
@@ -19,7 +20,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('fo.mySkills')}>
+<Sheet {overlay} icon={Wrench} tall title={t('fo.mySkills')}>
   <h2 class="t-h2 hd">{t('fo.mySkills')}</h2>
   <p class="t-foot">{t('fo.mySkillsNote')}</p>
   <SkillPicker bind:chosen max={5} />

@@ -9,6 +9,7 @@
   import { nameOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import ListChecks from '@lucide/svelte/icons/list-checks';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
 
@@ -23,7 +24,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('ro.reqTitle')}>
+<Sheet {overlay} icon={ListChecks} title={t('ro.reqTitle')}>
   <h2 class="t-h2 hd">{t('ro.reqTitle')}</h2>
   <p class="t-foot sub">{t('ro.reqText')}</p>
   {#each list ?? [] as r (r.id)}

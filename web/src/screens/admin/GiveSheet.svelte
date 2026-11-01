@@ -12,6 +12,7 @@
   import { haptic, scanQr, shareCard } from '../../lib/tg';
   import { ago, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
+  import Gift from '@lucide/svelte/icons/gift';
   import Emoji from '../../ui/Emoji.svelte';
   import QrCam from '../../ui/QrCam.svelte';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -83,7 +84,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('give.title')}>
+<Sheet {overlay} icon={Gift} full title={t('give.title')}>
   <div class="tiles">
     {#each GIVE as g (g.code)}
       <button class="tile surface" class:on={scanning === g.code} onclick={() => (g.link ? send(g.code) : scan(g.code))}>

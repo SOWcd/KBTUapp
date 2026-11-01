@@ -10,6 +10,7 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
   import Eye from '@lucide/svelte/icons/eye';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Post } from '../../lib/api';
   import Poster from '../../ui/Poster.svelte';
@@ -55,7 +56,7 @@
     if (read.size) void api.readPosts([...read]).catch(() => {}).then(loadMe);
   }
   $effect(() => { if (overlay.closing) leave(); });
-  $effect(() => { overlay.title = g ? nameOf(g.org) : ''; overlay.theme = 'dark'; }); // the capsule names the club
+  $effect(() => { overlay.title = g ? nameOf(g.org) : ''; overlay.icon = Newspaper; overlay.theme = 'dark'; }); // the capsule names the club
 
   // read once on screen; sent in one go a moment later
   const read = new Set<number>();

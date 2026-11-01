@@ -11,6 +11,7 @@
   import { haptic } from '../../lib/tg';
   import { writeSupport } from '../../lib/feedback';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserRoundCheck from '@lucide/svelte/icons/user-round-check';
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
@@ -24,7 +25,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('ro.askTitle')}>
+<Sheet {overlay} icon={UserRoundCheck} title={t('ro.askTitle')}>
   <div class="top">
     <OrgLogo org={row.org} size={64} />
     <h2 class="t-h2">{t('ro.askTitle')}</h2>

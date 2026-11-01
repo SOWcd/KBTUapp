@@ -17,6 +17,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import { schoolShort } from '../../lib/short';
@@ -139,7 +140,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={club?.name ?? t('cast.title')} hold={changed} onhold={askLeave}>
+<Sheet {overlay} icon={ClipboardPen} tall title={club?.name ?? t('cast.title')} hold={changed} onhold={askLeave}>
   {#if gone}
     <p class="t-callout dim">{t('cast.closed')}</p>
   {:else if r}

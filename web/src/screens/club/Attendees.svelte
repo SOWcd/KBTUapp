@@ -15,6 +15,7 @@
   import { t, money } from '../../lib/i18n/index.svelte';
   import { time } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
+  import ClipboardList from '@lucide/svelte/icons/clipboard-list';
   import Avatar from '../../ui/Avatar.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Button from '../../ui/Button.svelte';
@@ -65,7 +66,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('studio.attendees')}>
+<Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   <h2 class="t-h2">{t('studio.attendees')}</h2>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
   {#if list}

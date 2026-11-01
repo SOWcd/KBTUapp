@@ -8,6 +8,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, title, questions, done }: { overlay: Overlay; title: string; questions: Question[]; done: (a: { q: string; a: string }[] | null) => void } = $props();
@@ -24,7 +25,7 @@
   onDestroy(() => { if (!sent) done(null); }); // closed some other way: not signed up
 </script>
 
-<Sheet {overlay} title={title}>
+<Sheet {overlay} icon={MessageCircleQuestion} title={title}>
   <h2 class="t-h2 hd">{t('qs.title')}</h2>
   <p class="t-foot sub">{t('qs.sub')}</p>
   {#each questions as q, i (i)}

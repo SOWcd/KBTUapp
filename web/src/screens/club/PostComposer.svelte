@@ -20,6 +20,7 @@
   import { haptic } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import SquarePen from '@lucide/svelte/icons/square-pen';
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { grow } from '../../ui/grow';
@@ -105,7 +106,7 @@
   // the textarea grows with the text
 </script>
 
-<Sheet {overlay} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
+<Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
 
   <!-- the club chosen in Studio, no picker -->

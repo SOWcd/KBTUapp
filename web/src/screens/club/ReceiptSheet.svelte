@@ -11,6 +11,7 @@
   import { ago, whenLine } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import Receipt from '@lucide/svelte/icons/receipt';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, receipt, name, ondone }: { overlay: Overlay; receipt: AttendeeReceipt; name: string; ondone?: () => void } = $props();
@@ -35,7 +36,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('rc.title')}>
+<Sheet {overlay} icon={Receipt} tall title={t('rc.title')}>
   <h2 class="t-h2 hd">{name}</h2>
   <p class="t-foot">{t('rc.title')} · {ago(receipt.at)}</p>
   {#if flagged}{#each receipt.flags as f (f)}<p class="flag"><TriangleAlert size={16} />{f === 'recipient_mismatch'

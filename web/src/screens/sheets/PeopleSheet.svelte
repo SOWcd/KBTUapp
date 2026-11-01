@@ -2,6 +2,7 @@
   // Everyone in a club or school (President and Vice on the club sheet, one button for the rest): names
   // and roles, highest first; a tap opens the person's card. A club may hide the list (ClubEditSheet): then a line.
   import Sheet from '../../ui/Sheet.svelte';
+  import UsersRound from '@lucide/svelte/icons/users-round';
   import Avatar from '../../ui/Avatar.svelte';
   import { api, type Id, type Member } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';
@@ -15,7 +16,7 @@
   $effect(() => { api.people(org).then((x) => (list = x)).catch(() => (shut = true)); });
 </script>
 
-<Sheet {overlay} {title}>
+<Sheet {overlay} icon={UsersRound} {title}>
   {#if shut}
     <p class="t-foot none">{t('club.listHidden')}</p>
   {:else if list}

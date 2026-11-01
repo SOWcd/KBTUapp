@@ -9,6 +9,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { downloadFile, haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import MonitorPlay from '@lucide/svelte/icons/monitor-play';
   import Button from '../../ui/Button.svelte';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Play from '@lucide/svelte/icons/play';
@@ -71,7 +72,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('scr.title')}>
+<Sheet {overlay} icon={MonitorPlay} title={t('scr.title')}>
   <h2 class="t-h2 hd">{pick ? t('scr.pick') : t('scr.title')}</h2>
   {#if note}
     <p class="t-foot sub">{note}</p>

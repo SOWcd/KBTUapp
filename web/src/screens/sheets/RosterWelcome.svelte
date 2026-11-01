@@ -14,6 +14,7 @@
   import { writeSupport } from '../../lib/feedback';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import Hand from '@lucide/svelte/icons/hand';
   import Button from '../../ui/Button.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -23,7 +24,7 @@
   function go() { haptic.tap(); close(overlay.id); sheets.login(); }
 </script>
 
-<Sheet {overlay} title={t('ro.hi')}>
+<Sheet {overlay} icon={Hand} title={t('ro.hi')}>
   <div class="hero">
     <span class="glow" aria-hidden="true"></span>
     <span class="em"><Emoji name="party_popper_3d" size={92} /></span>

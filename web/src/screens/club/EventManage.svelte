@@ -24,6 +24,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import { inner, may } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Poster from '../../ui/Poster.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -88,7 +89,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('mg.title')}>
+<Sheet {overlay} icon={SlidersHorizontal} full title={t('mg.title')}>
   {#if e}
     <button class="hd" onclick={() => sheets.event(id)}>
       <Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />

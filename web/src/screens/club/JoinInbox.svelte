@@ -14,6 +14,7 @@
   import { relDay } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import Inbox from '@lucide/svelte/icons/inbox';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -56,7 +57,7 @@
   const line = (r: JoinRequest) => [r.course && t('person.course', { n: r.course }), schoolShort(r.school)].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} full title={t('cast.card')}>
+<Sheet {overlay} icon={Inbox} full title={t('cast.card')}>
   <h2 class="t-h2 hd">{t('cast.card')}</h2>
   {#if o}
     <label class="switch">

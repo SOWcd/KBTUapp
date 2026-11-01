@@ -16,6 +16,7 @@
   import { haptic } from '../../lib/tg';
   import { shrink } from '../../lib/photo';
   import Sheet from '../../ui/Sheet.svelte';
+  import PencilLine from '@lucide/svelte/icons/pencil-line';
   import Button from '../../ui/Button.svelte';
   import OrgLogo, { COVERS } from '../../ui/OrgLogo.svelte';
   import ShortLinks from './ShortLinks.svelte';
@@ -90,7 +91,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('ce.title')} {hold} {onhold}>
+<Sheet {overlay} icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
   <h2 class="t-h2 hd">{t('ce.title')}</h2>
   <p class="t-foot sub">{t('ce.sub')}</p>
 

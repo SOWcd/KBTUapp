@@ -7,6 +7,7 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import Sheet from '../../ui/Sheet.svelte';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import Button from '../../ui/Button.svelte';
   import { api } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -43,7 +44,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('del.title')}>
+<Sheet {overlay} icon={Trash2} title={t('del.title')}>
   <div class="wrap">
     <span class="ic"><TriangleAlert size={26} /></span>
     <h2 class="t-h2">{t('del.title')}</h2>

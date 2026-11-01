@@ -13,6 +13,7 @@
   import { dayMonth } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserRoundSearch from '@lucide/svelte/icons/user-round-search';
   import Avatar from '../../ui/Avatar.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import PersonCards from './PersonCards.svelte';
@@ -60,7 +61,7 @@
   const standing = (a: Ask) => a.status === 'held' ? t('fo.held') : a.status === 'hidden' ? t('fo.hidden') : a.status === 'closed' ? t('fo.closed') : '';
 </script>
 
-<Sheet {overlay} full title={t('fo.title')}>
+<Sheet {overlay} icon={UserRoundSearch} full title={t('fo.title')}>
   <div class="seg top" role="tablist"><button class="on" role="tab" aria-selected="true">{t('fo.find')}</button></div>
   {#if staff}<ForumMod changed={load} {round} />{/if}
 

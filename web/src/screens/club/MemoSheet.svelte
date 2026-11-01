@@ -17,6 +17,7 @@
   import { dayMonth, nowTs, relDay, time } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import NotebookPen from '@lucide/svelte/icons/notebook-pen';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
@@ -80,7 +81,7 @@
   const when = (ts: number) => `${relDay(ts)}, ${time(ts)}`;
 </script>
 
-<Sheet {overlay} full title={t('memo.title')}>
+<Sheet {overlay} icon={NotebookPen} full title={t('memo.title')}>
   <h2 class="t-h2">{t('memo.title')}</h2>
   {#if draft}
     <p class="t-foot sub">{t('memo.week', { from: dayMonth(draft.from), to: dayMonth(draft.until - 1) })}</p>

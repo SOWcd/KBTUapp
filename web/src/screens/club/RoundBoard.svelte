@@ -24,6 +24,7 @@
   import { haptic, openLink, shareCard } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import Kanban from '@lucide/svelte/icons/kanban';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import { schoolShort } from '../../lib/short';
@@ -146,7 +147,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={r?.title ?? t('cast.board')}>
+<Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')}>
   {#if cur && r}
     {@const a = cur}
     <button class="back" onclick={() => { cur = null; walking = false; }}><ChevronLeft size={18} />{walking ? t('cast.stopReview') : t('cast.back')}</button>

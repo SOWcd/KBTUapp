@@ -16,6 +16,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import AiBadge from '../../ui/AiBadge.svelte';
   import Sheet from '../../ui/Sheet.svelte';
+  import { TAB_ICON } from '../../ui/icons';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import Button from '../../ui/Button.svelte';
@@ -70,7 +71,7 @@
 {#snippet bell()}{#if o?.subscribed}<BellCheck size={19} />{:else}<Bell size={19} />{/if}{/snippet}
 {#snippet send()}<TelegramMark size={18} />{/snippet}
 
-<Sheet {overlay} title={o?.name ?? ''}>
+<Sheet {overlay} icon={TAB_ICON.club} title={o?.name ?? ''}>
   {#if o}
     <div class="hero">
       {#if o.myRights?.includes('profile')}

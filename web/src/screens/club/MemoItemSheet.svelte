@@ -8,6 +8,7 @@
   import { dateInput, fromInputs } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import StickyNote from '@lucide/svelte/icons/sticky-note';
   import Button from '../../ui/Button.svelte';
   import MemoAsksForm from './MemoAsks.svelte';
 
@@ -28,7 +29,7 @@
   function insert() { if (!text) return; haptic.ok(); oninsert(text); close(overlay.id); }
 </script>
 
-<Sheet {overlay} tall title={t(`memo.${kind}`)}>
+<Sheet {overlay} icon={StickyNote} tall title={t(`memo.${kind}`)}>
   <h2 class="t-h2">{t(`memo.${kind}`)}</h2>
   {#if timed}
     <label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={f.date} min={dateInput(from)} /></label>

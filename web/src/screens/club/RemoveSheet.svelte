@@ -7,6 +7,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserMinus from '@lucide/svelte/icons/user-minus';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, org, user, name, request, ondone }: { overlay: Overlay; org: Id; user: Id; name: string; request: boolean; ondone?: (done: boolean) => void } = $props();
@@ -28,7 +29,7 @@
   }
 </script>
 
-<Sheet {overlay} title={request ? t('team.askRemove') : t('team.remove')}>
+<Sheet {overlay} icon={UserMinus} title={request ? t('team.askRemove') : t('team.remove')}>
   <h2 class="t-h2 hd">{request ? t('rm.askTitle', { name }) : t('rm.title', { name })}</h2>
   <p class="t-foot sub">{request ? t('rm.askText') : t('rm.text')}</p>
   <label class="switch"><span><b>{t('rm.ban')}</b><i class="t-foot">{t('rm.banHint')}</i></span><input type="checkbox" role="switch" bind:checked={ban} /></label>

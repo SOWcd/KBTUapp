@@ -16,6 +16,7 @@
   import { haptic } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import CirclePlus from '@lucide/svelte/icons/circle-plus';
   import Button from '../../ui/Button.svelte';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
   import { linkUrl, type LinkDraft } from '../../lib/social';
@@ -54,7 +55,7 @@
   async function openClub(id: number) { await loadMe(); void loadAfisha(); close(overlay.id); sheets.club(id); }
 </script>
 
-<Sheet {overlay} full title={t('nc.title')}>
+<Sheet {overlay} icon={CirclePlus} full title={t('nc.title')}>
   <h2 class="t-h2 hd">{t('nc.title')}</h2>
 
   {#if mine === undefined}

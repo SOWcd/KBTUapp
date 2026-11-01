@@ -8,6 +8,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import Sheet from '../../ui/Sheet.svelte';
+  import Send from '@lucide/svelte/icons/send';
   import ChatKind from '../../ui/ChatKind.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
 
@@ -30,7 +31,7 @@
   });
 </script>
 
-<Sheet {overlay} tall title={t('chats.sheet')}>
+<Sheet {overlay} icon={Send} tall title={t('chats.sheet')}>
   <h2 class="t-h2 hd">{t('chats.sheet')}</h2>
   <p class="t-foot sub">{t('chats.note')}</p>
   {#each groups as [g, items] (g)}

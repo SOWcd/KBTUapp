@@ -4,6 +4,7 @@
   import { roleName, titleOf } from '../../lib/perms';
   import { achName, tierName } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserRound from '@lucide/svelte/icons/user-round';
   import Hero from '../profile/Hero.svelte';
   import Medal from '../../ui/Medal.svelte';
   import Pin from '../../ui/Pin.svelte';
@@ -100,7 +101,7 @@
   }
 </script>
 
-<Sheet {overlay} title={shown?.name ?? ''}>
+<Sheet {overlay} icon={UserRound} title={shown?.name ?? ''}>
   {#if shown}
     <!-- no award shelf on the card here: the sheet lists every award below it, the showcase first (PLAN 89: "Awards"
          showed twice) -->

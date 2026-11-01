@@ -14,6 +14,7 @@
   import { QR_TONE } from '../../lib/awards';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
   import Button from '../../ui/Button.svelte';
   import Qr from '../../ui/Qr.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -74,7 +75,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('fr.addTitle')}>
+<Sheet {overlay} icon={UserPlus} title={t('fr.addTitle')}>
   <h2 class="t-h2 hd">{t('fr.addTitle')}</h2>
 
   <div class="pass">

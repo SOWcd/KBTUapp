@@ -24,6 +24,7 @@
   import { PICK_EMOJI } from '../../lib/emoji';
   import EmojiPick from '../../ui/EmojiPick.svelte';
   import Sheet from '../../ui/Sheet.svelte';
+  import { TAB_ICON } from '../../ui/icons';
   import Button from '../../ui/Button.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -140,7 +141,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('adm.clubs')}>
+<Sheet {overlay} icon={TAB_ICON.club} full title={t('adm.clubs')}>
   <h2 class="t-h2 hd">{t('adm.clubs')}</h2>
   <p class="t-foot lead">{t('adm.lead')}</p>
   {#if schools}

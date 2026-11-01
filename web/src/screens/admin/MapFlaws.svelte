@@ -8,6 +8,7 @@
   import { ago } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import MapPinX from '@lucide/svelte/icons/map-pin-x';
 
   let { overlay }: { overlay: Overlay } = $props();
   let list = $state<Awaited<ReturnType<typeof api.mapFlaws>> | null>(null);
@@ -18,7 +19,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('mf.title')}>
+<Sheet {overlay} icon={MapPinX} full title={t('mf.title')}>
   <h2 class="t-h2 hd">{t('mf.title')}</h2>
   <p class="t-foot sub">{t('mf.sub')}</p>
   {#if list && !list.length}<p class="t-foot">{t('mf.none')}</p>{/if}

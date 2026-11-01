@@ -10,6 +10,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import Send from '@lucide/svelte/icons/send';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
@@ -29,7 +30,7 @@
   function addFriends() { close(overlay.id); sheets.addFriend(); }
 </script>
 
-<Sheet {overlay} title={t('inv.title')}>
+<Sheet {overlay} icon={Send} title={t('inv.title')}>
   <h2 class="t-h2 hd">{t('inv.title')}</h2>
   <p class="t-foot sub">{t('inv.sub', { title, award: t('ach.soul.name') })}</p>
   {#if list === null}

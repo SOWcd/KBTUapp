@@ -17,6 +17,7 @@
   import { dayMonth } from '../../lib/time';
   import { ROLE_NAME, withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
+  import BookUser from '@lucide/svelte/icons/book-user';
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
@@ -55,7 +56,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={org.name}>
+<Sheet {overlay} icon={BookUser} full title={org.name}>
   <div class="hd"><OrgLogo {org} size={48} /><span><h2 class="t-h2">{org.name}{#if official}<span class="ok"><BadgeCheck size={20} /></span>{/if}</h2><p class="t-foot">{list ? tn('reg.people', list.length) + (quiet ? ' · ' + tn('reg.quietN', quiet) : '') : ' '}</p></span></div>
   {#if org.kind === 'club'}
     <label class="switch off"><span><b>{t('reg.official')}</b><i class="t-foot">{t('reg.officialNote')}</i></span><input type="checkbox" role="switch" checked={official} onchange={toggle} disabled={busy} /></label>

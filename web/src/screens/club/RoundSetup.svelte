@@ -15,6 +15,7 @@
   import { haptic } from '../../lib/tg';
   import { TEAM_COLORS } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, org, round = null, onsaved }: { overlay: Overlay; org: Id; round?: Round | null; onsaved?: () => void } = $props();
@@ -83,7 +84,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={r0 ? t('cast.edit') : t('cast.open')}>
+<Sheet {overlay} icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
   <h2 class="t-h2">{r0 ? t('cast.edit') : t('cast.open')}</h2>
   <p class="t-foot sub">{t('cast.openSub')}</p>
 

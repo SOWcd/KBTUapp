@@ -6,6 +6,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import SquarePen from '@lucide/svelte/icons/square-pen';
   import Button from '../../ui/Button.svelte';
   import SkillPicker from './SkillPicker.svelte';
 
@@ -25,7 +26,7 @@
   }
 </script>
 
-<Sheet {overlay} full title={t('fo.newAsk')}>
+<Sheet {overlay} icon={SquarePen} full title={t('fo.newAsk')}>
   <div class="seg kinds" role="tablist">
     {#each ['project', 'help'] as const as k (k)}<button class:on={kind === k} onclick={() => (kind = k)}>{t(`fo.kind.${k}`)}</button>{/each}
   </div>

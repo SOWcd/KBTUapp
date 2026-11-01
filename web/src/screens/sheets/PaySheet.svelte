@@ -20,6 +20,7 @@
   import { shrink } from '../../lib/photo';
   import { fmtPhone } from '../../lib/phone';
   import Sheet from '../../ui/Sheet.svelte';
+  import Wallet from '@lucide/svelte/icons/wallet';
   import Button from '../../ui/Button.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { burst } from '../../ui/burst';
@@ -81,7 +82,7 @@
   });
 </script>
 
-<Sheet {overlay} title={doubt.length ? t('pay.doubtTitle') : t('pay.title')}>
+<Sheet {overlay} icon={Wallet} title={doubt.length ? t('pay.doubtTitle') : t('pay.title')}>
   {#if e && doubt.length}
     <p class="t-callout lead">{t('pay.doubtLead')}</p>
     {#each doubt as f (f)}<p class="flag"><TriangleAlert size={16} />{f === 'recipient_mismatch' ? t('pay.flagTo', { name: detail?.payToName ?? '…' })

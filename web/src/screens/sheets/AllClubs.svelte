@@ -8,6 +8,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { byWeight, hit } from '../../lib/clubs';
   import Sheet from '../../ui/Sheet.svelte';
+  import { TAB_ICON } from '../../ui/icons';
   import ClubRow from '../../ui/ClubRow.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -17,7 +18,7 @@
   const sub = (o: Org) => [o.members ? tn('club.members', o.members) : '', o.subscribers ? tn('clubs.subscribers', o.subscribers) : ''].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} tall title={t('clubs.allTitle')}>
+<Sheet {overlay} icon={TAB_ICON.club} tall title={t('clubs.allTitle')}>
   <h2 class="t-h2 hd">{t('clubs.allTitle')}<span>{all.length}</span></h2>
   <SearchField legacy bind:value={q} placeholder={t('clubs.search')} />
   <p class="t-foot note">{t('clubs.allNote')}</p>

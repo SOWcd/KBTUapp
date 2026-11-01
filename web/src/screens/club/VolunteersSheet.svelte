@@ -11,6 +11,7 @@
   import { haptic, openLink } from '../../lib/tg';
   import { withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import { schoolShort } from '../../lib/short';
@@ -33,7 +34,7 @@
   const line = (x: VolunteerApp) => [x.course && t('person.course', { n: x.course }), schoolShort(x.school), relDay(x.at)].filter(Boolean).join(' · ');
 </script>
 
-<Sheet {overlay} full title={t('vol.list')}>
+<Sheet {overlay} icon={HandHeart} full title={t('vol.list')}>
   <h2 class="t-h2">{t('vol.list')}</h2>
   <p class="t-foot sub">{t('vol.taken', { n: yes, of: need })}</p>
   {#if list}

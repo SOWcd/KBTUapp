@@ -23,6 +23,7 @@
   import { PSYCHOLOGIST } from '../../lib/academic';
   import { grow } from '../../ui/grow';
   import Sheet from '../../ui/Sheet.svelte';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import Emoji from '../../ui/Emoji.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -69,7 +70,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('as.title')}>
+<Sheet {overlay} icon={Sparkles} tall title={t('as.title')}>
   <div class="list" bind:this={list}>
     {#if !chat.turns.length}
       <div class="hello">

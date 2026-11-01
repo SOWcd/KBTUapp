@@ -6,6 +6,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { QR_TONE } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
   import Button from '../../ui/Button.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import Qr from '../../ui/Qr.svelte';
@@ -14,7 +15,7 @@
   let { overlay, ok }: { overlay: Overlay; ok: () => void } = $props();
 </script>
 
-<Sheet {overlay} title={t('pc.title')}>
+<Sheet {overlay} icon={Smartphone} title={t('pc.title')}>
   <div class="pc">
     <Emoji name="laptop_3d" size={56} />
     <h2 class="t-h2">{t('pc.title')}</h2>

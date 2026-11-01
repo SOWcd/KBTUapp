@@ -6,6 +6,7 @@
   // or through the old portal: the same button confirms the row they have.
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Sheet from '../../ui/Sheet.svelte';
+  import LogIn from '@lucide/svelte/icons/log-in';
   import Emoji from '../../ui/Emoji.svelte';
   import Button from '../../ui/Button.svelte';
   import { api, ApiErr } from '../../lib/api';
@@ -83,7 +84,7 @@
   {#if away}<p class="t-foot dim center">{t('login.msAway')}</p>{/if}
 {/snippet}
 
-<Sheet {overlay} title={t('login.title')} full={lock} hold={lock ? () => !session.me?.student : undefined}>
+<Sheet {overlay} icon={LogIn} title={t('login.title')} full={lock} hold={lock ? () => !session.me?.student : undefined}>
   <form class="wrap" onsubmit={submit}>
     {#if st}
       <!-- confirmed through the old portal: only the Microsoft button, nothing to type -->

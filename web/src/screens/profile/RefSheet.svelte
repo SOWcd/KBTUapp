@@ -7,6 +7,7 @@
   import { haptic, shareCard } from '../../lib/tg';
   import { QR_TONE } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
+  import Link from '@lucide/svelte/icons/link';
   import Button from '../../ui/Button.svelte';
   import Qr from '../../ui/Qr.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
@@ -23,7 +24,7 @@
   }
 </script>
 
-<Sheet {overlay} title={t('ref.title')}>
+<Sheet {overlay} icon={Link} title={t('ref.title')}>
   <h2 class="t-h2 hd">{t('ref.title')}</h2>
   <div class="pass">
     <div class="plate"><span class="code"><Qr text={link} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></span></div>

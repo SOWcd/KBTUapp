@@ -16,6 +16,7 @@
   import { haptic } from '../../lib/tg';
   import { inLang, isAbove, may, RANK, RIGHTS, ROLE_NAME, TEAM_COLORS, withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
+  import UserCog from '@lucide/svelte/icons/user-cog';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
@@ -139,7 +140,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} full title={t('team.setup')}>
+<Sheet {overlay} icon={UserCog} full title={t('team.setup')}>
   <h2 class="t-h2 hd">{t('team.setup')}</h2>
 
   <section>

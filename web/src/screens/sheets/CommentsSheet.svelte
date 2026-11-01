@@ -18,6 +18,7 @@
   import { ago } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { nameOf } from '../../lib/short';
@@ -121,7 +122,7 @@
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
 </script>
 
-<Sheet {overlay} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
+<Sheet {overlay} icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
   <h2 class="t-h2 hd">{kind === 'event' ? t('cm.titleEvent') : t('cm.title')}</h2>
   <p class="t-foot sub ellipsis">{title}</p>
 

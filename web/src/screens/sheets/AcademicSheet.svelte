@@ -8,6 +8,7 @@
   import { TERMS, ONLINE, span, nameOf, whenOf } from '../../lib/academic';
   import { dateInput, dayRange, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
 
   let { overlay }: { overlay: Overlay } = $props();
   const today = dateInput(nowTs());
@@ -18,7 +19,7 @@
   const online = ONLINE.map((d) => { const [a, b = a] = d.split('/'); return dayRange(a, b); }).join(', ');
 </script>
 
-<Sheet {overlay} tall title={t('acad.title')}>
+<Sheet {overlay} icon={GraduationCap} tall title={t('acad.title')}>
   <h2 class="t-h2 hd">{t('acad.title')}</h2>
   <p class="t-foot sub">{t('acad.sub')}</p>
   {#if pastCount}
