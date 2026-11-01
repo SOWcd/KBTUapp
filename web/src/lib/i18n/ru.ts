@@ -2245,13 +2245,13 @@ const ru = {
   'anthem.repeat': "Повтор",
   'anthem.skipNote': "Награда — за гимн целиком, без перемотки",
 
-  // the event editor's redesign (stage 1 mocks)
+  // the event editor (Luma's create screen, Nov 2)
+  'ex.saveAnyway': "Сохранить как есть",
+  'ex.leadersFrom': "Кого из руководителей",
+  'ex.no': "Нет",
   'ex.name': "Название события",
   'ex.placeAdd': "Выбрать место",
   'ex.aboutAdd': "Добавить описание",
-  'ex.when': "Когда",
-  'ex.where': "Где",
-  'ex.entry': "Вход",
   'ex.tickets': "Билеты",
   'ex.price': "Цена",
   'ex.free': "Бесплатно",
@@ -2263,8 +2263,6 @@ const ru = {
   'ex.options': "Настройки",
   'ex.who': "Кто видит",
   'ex.more': "Ещё настройки",
-  'ex.extras': "Видео, вопросы, волонтёры, служебка",
-  'ex.check': "Проверить",
   'ex.checkTitle': "Перед публикацией",
   'ex.checkOk': "Всё сходится. Можно публиковать.",
   'ex.publishAnyway': "Опубликовать как есть",
@@ -2291,7 +2289,6 @@ const ru = {
   'ex.aiUse': "Заменить",
   'ex.aiKeep': "Оставить моё",
   'ex.done': "Готово",
-  'ex.later': "В макете ещё не подключено",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };

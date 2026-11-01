@@ -2226,13 +2226,13 @@ const kk: Dict = {
   'anthem.repeat': "Қайталау",
   'anthem.skipNote': "Марапат әнұранды өткізбей толық тыңдағанға беріледі",
 
-  // the event editor's redesign (stage 1 mocks)
+  // the event editor (Luma's create screen, Nov 2)
+  'ex.saveAnyway': "Осы күйінде сақтау",
+  'ex.leadersFrom': "Қай басшылар",
+  'ex.no': "Жоқ",
   'ex.name': "Іс-шара атауы",
   'ex.placeAdd': "Орынды таңдау",
   'ex.aboutAdd': "Сипаттама қосу",
-  'ex.when': "Қашан",
-  'ex.where': "Қайда",
-  'ex.entry': "Кіру",
   'ex.tickets': "Билеттер",
   'ex.price': "Бағасы",
   'ex.free': "Тегін",
@@ -2244,8 +2244,6 @@ const kk: Dict = {
   'ex.options': "Баптаулар",
   'ex.who': "Кім көреді",
   'ex.more': "Қосымша баптаулар",
-  'ex.extras': "Видео, сұрақтар, еріктілер, хат",
-  'ex.check': "Тексеру",
   'ex.checkTitle': "Жарияламас бұрын",
   'ex.checkOk': "Бәрі сәйкес. Жариялауға болады.",
   'ex.publishAnyway': "Осы күйінде жариялау",
@@ -2272,7 +2270,6 @@ const kk: Dict = {
   'ex.aiUse': "Ауыстыру",
   'ex.aiKeep': "Өзімдікі қалсын",
   'ex.done': "Дайын",
-  'ex.later': "Макетте әлі қосылмаған",
 };
 
 export default kk;

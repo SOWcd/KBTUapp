@@ -2226,13 +2226,13 @@ const en: Dict = {
   'anthem.repeat': "Repeat",
   'anthem.skipNote': "The award is for the whole anthem, no skipping",
 
-  // the event editor's redesign (stage 1 mocks)
+  // the event editor (Luma's create screen, Nov 2)
+  'ex.saveAnyway': "Save as it is",
+  'ex.leadersFrom': "Which leaders",
+  'ex.no': "None",
   'ex.name': "Event name",
   'ex.placeAdd': "Choose a place",
   'ex.aboutAdd': "Add a description",
-  'ex.when': "When",
-  'ex.where': "Where",
-  'ex.entry': "Entry",
   'ex.tickets': "Tickets",
   'ex.price': "Price",
   'ex.free': "Free",
@@ -2244,8 +2244,6 @@ const en: Dict = {
   'ex.options': "Options",
   'ex.who': "Who sees it",
   'ex.more': "More options",
-  'ex.extras': "Video, questions, volunteers, memo",
-  'ex.check': "Check",
   'ex.checkTitle': "Before publishing",
   'ex.checkOk': "Everything adds up. Ready to publish.",
   'ex.publishAnyway': "Publish as it is",
@@ -2272,7 +2270,6 @@ const en: Dict = {
   'ex.aiUse': "Replace",
   'ex.aiKeep': "Keep mine",
   'ex.done': "Done",
-  'ex.later': "Not wired in the mock yet",
 };
 
 export default en;

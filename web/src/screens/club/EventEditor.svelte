@@ -1,6 +1,9 @@
 <script lang="ts">
-  // Studio → a new event or an edit, full screen. One scrolling form with a live preview on top and the
-  // phone's own date and time pickers. A new event or a draft: "Publish" or "Save draft"; a published one:
+  // Studio → a new event or an edit, full screen, laid out like Luma's create screen (owner, Nov 2: the old one long
+  // form was "cluttered, strange"): tinted by the event, a big cover, a big name, Start/End in one card, then a few
+  // grouped rows; each row opens a focused panel at the bottom (Telegram's Back closes the panel first), rare things
+  // under "More". Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text
+  // asked 7500 tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Save draft"; a published one:
   // "Save" (the server tells registered people when the time or place moves). Leaving with changes asks.
   // The title sits where the capsule usually is, between Telegram's Back and ⋯ buttons. An official club's Vice+ can
   // make it paid (§4.3): the price and where to send it by Kaspi, fixed once someone has paid, and how many 1st-years
@@ -17,13 +20,35 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Eye from '@lucide/svelte/icons/eye';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import AlignLeft from '@lucide/svelte/icons/align-left';
+  import Ticket from '@lucide/svelte/icons/ticket';
+  import Users from '@lucide/svelte/icons/users';
+  import Clock from '@lucide/svelte/icons/clock';
+  import Globe from '@lucide/svelte/icons/globe';
+  import Crown from '@lucide/svelte/icons/crown';
+  import CalendarCheck from '@lucide/svelte/icons/calendar-check';
+  import Tag from '@lucide/svelte/icons/tag';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+  import Phone from '@lucide/svelte/icons/phone';
+  import Images from '@lucide/svelte/icons/images';
+  import ListChecks from '@lucide/svelte/icons/list-checks';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
+  import Handshake from '@lucide/svelte/icons/handshake';
+  import Mail from '@lucide/svelte/icons/mail';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import CircleCheck from '@lucide/svelte/icons/circle-check';
+  import Segmented from '../../ui/Segmented.svelte';
+  import { menu } from '../../ui/menu';
+  import { check, type Finding } from '../../lib/eventCheck';
   import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, studioChanged, phrase } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t } from '../../lib/i18n/index.svelte';
-  import { nowTs, time, relDay, dateInput, fromInputs } from '../../lib/time';
+  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort } from '../../lib/time';
   import { haptic, inTelegram } from '../../lib/tg';
   import { shrink } from '../../lib/photo';
   import { shade, coverColor } from '../../lib/color';
@@ -36,7 +61,6 @@
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
-  import EditorLook, { type Ed } from './EditorLook.svelte';
 
   let { overlay, org, id }: { overlay: Overlay; org: Id; id?: Id } = $props();
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
@@ -121,12 +145,10 @@
 
   // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
 
-  // Examples instead of "e.g. …": a real title and place from the events in the app, another one each time
+  // An example instead of "e.g. …": a real place from the events in the app, another one each time
   // the editor opens; built-in ones until the app has events of its own.
-  const pick = (xs: string[]) => xs[Math.floor(Math.random() * xs.length)];
-  const realTitles = data.events.map((e) => e.title).filter((x) => x.length <= 40);
   const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place.length <= 30).map((e) => e.place))];
-  const example = { title: realTitles.length ? pick(realTitles) : phrase('ed.titlePh'), place: realPlaces.length ? pick(realPlaces) : phrase('ed.placePh') };
+  const example = { place: realPlaces.length ? any(realPlaces) : phrase('ed.placePh') };
 
   // the place field takes a room or a pasted 2GIS share: the link becomes the route, the text stays the name
   function placeTyped() {
@@ -264,7 +286,7 @@
   let asking = false;
   $effect(() => {
     if (!overlay.closing) return;
-    if (panelOpen) { overlay.closing = false; panelOpen = ''; return; } // the redesign's open panel goes first (one Back)
+    if (pick) { overlay.closing = false; pick = ''; return; } // an open panel goes first (one Back)
     if (!dirty) { leave(); return; }
     overlay.closing = false;
     if (asking) return;
@@ -352,15 +374,81 @@
     } finally { filling = false; }
   }
 
-  // the redesign's mocks (stage 1): localStorage kb-ed-look = a | b, on a local server only; users never see them
-  // ponytail: delete with the old form once the owner picks a look
-  const look = (() => { try { return /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? localStorage.getItem('kb-ed-look') : null; } catch { return null; } })() as 'a' | 'b' | null;
-  let panelOpen = $state('');
-  const ed: Ed = {
-    get f() { return f; }, get err() { return err; }, get tried() { return tried; }, get live() { return live; }, get busy() { return busy; },
-    get startTs() { return startTs; }, get canPrice() { return canPrice; }, get saved() { return saved; }, get uploading() { return uploading; },
-    get org() { return org; }, get pick() { return panelOpen; }, set pick(v) { panelOpen = v; }, example, pickPhoto, placeTyped, submit, remove,
-  };
+  // the focused panel at the bottom: '' none, else which one
+  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'partner' | 'memo' | 'check';
+  let pick = $state<Panel>('');
+  const open = (p: Panel) => { haptic.tap(); pick = p; };
+  const PANEL: Record<Exclude<Panel, ''>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
+    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', partner: 'ed.partner', memo: 'studio.memoShort', check: 'ex.checkTitle' };
+
+  // the rows' values
+  const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
+  const tickets = $derived(!isMeeting && !f.partner);
+  const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
+  const regVal = $derived(f.deadline && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
+  const dayText = $derived(Number.isFinite(startTs) ? `${weekdayShort(startTs)}, ${dayMonthShort(startTs)}` : '—');
+  const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
+  const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;
+  const memoN = $derived(Object.keys(f.memo).length);
+  const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
+
+  // the pull-downs (2-4 choices) on a row's value
+  function whoMenu(el: Element) {
+    menu(el, [
+      { label: t('ed.whoAll'), checked: !f.teamOnly && !f.leaders, onselect: () => { f.teamOnly = false; f.leaders = false; } },
+      { label: t('ed.whoTeam'), checked: f.teamOnly, onselect: () => { f.teamOnly = true; f.leaders = false; } },
+      ...(oversee ? [{ label: t('ed.whoLeaders'), checked: f.leaders, onselect: () => { f.leaders = true; f.teamOnly = false; } }] : []),
+    ], 'end');
+  }
+  const leadMenu = (el: Element) => menu(el, (['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })), 'end');
+  const tagMenu = (el: Element) => menu(el, [
+    ...(deptOnly ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null, onselect: () => { f.meetingTag = null; } }]),
+    ...tags.filter((g) => !deptOnly || g.id === ownDept).map((g) => ({ label: g.name, checked: f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; } })),
+  ], 'end');
+  const valueOf = (e: MouseEvent) => (e.currentTarget as Element).querySelector('.v') ?? (e.currentTarget as Element);
+
+  // "Check my event": on the phone, at once, on every Publish/Save; a price or seats in a meeting's or a partner's
+  // text aren't this event's to fix; a live event's Save stops only for a contradiction, never for a missing cover
+  const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
+  const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba,
+    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: +f.seats || null })
+    .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
+  const fixable = (x: Finding) => canPrice || !['priceText', 'priceDiff'].includes(x.id);
+  const n = (x: number) => x.toLocaleString('ru-RU');
+  const noteText = (x: Finding) => ('n' in x ? t(`ex.f.${x.id}`, { n: n(x.n) }) : t(`ex.f.${x.id}`));
+  const fixLabel = (x: Finding) => x.id === 'priceText' ? t('ex.fix.paid', { n: n(x.n) }) : x.id === 'priceDiff' ? t('ex.fix.price', { n: n(x.n) })
+    : x.id === 'seatsText' ? t('ex.fix.seats', { n: x.n }) : t(`ex.fix.${({ past: 'time', noPlace: 'place', noCover: 'cover', noAbout: 'about', longTitle: 'title' } as const)[x.id]}`);
+  // a note's one-tap fix: it changes the form, or opens the one place that needs the person
+  function fix(x: Finding) {
+    haptic.tap(); touch();
+    if (x.id === 'priceText') { f.paid = true; f.price = String(x.n); pick = 'price'; }
+    else if (x.id === 'priceDiff') f.price = String(x.n);
+    else if (x.id === 'seatsText') f.seats = String(x.n);
+    else if (x.id === 'noPlace') { f.tba = false; pick = 'place'; }
+    else if (x.id === 'noAbout') pick = 'about';
+    else if (x.id === 'noCover') pick = 'cover';
+    else if (x.id === 'past') { pick = ''; try { panel.querySelector<HTMLInputElement>('.when input[type=date]')?.showPicker(); } catch { /* old webviews: the field is in sight */ } }
+    else if (x.id === 'longTitle') { pick = ''; panel.querySelector<HTMLElement>('.name')?.focus(); }
+  }
+  // Publish/Save: the check first; nothing found goes straight on
+  function publish() {
+    if (found.length) { open('check'); return; }
+    void submit(live ? 'save' : 'publish');
+  }
+
+  // the AI writes the description from a few words (the announcement fill, its description only): a card to take or leave
+  let writing = $state(false);
+  let suggestion = $state('');
+  async function aiWrite() {
+    haptic.tap(); writing = true;
+    try {
+      const x = await api.eventFill(org, `${f.title}. ${f.description}`.trim());
+      if (x.description) suggestion = x.description; else say(t('ed.fillNone'), 'thinking_face_3d');
+    } catch (e) {
+      const c = e instanceof ApiErr ? e.code : '';
+      say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'warning_3d');
+    } finally { writing = false; }
+  }
 
   async function remove() {
     if (!saved || busy) return;
@@ -378,253 +466,89 @@
 
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
-<div class="panel" bind:this={panel} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+{#snippet row(Icon: typeof Ticket, title: string, value: string, onclick: (e: MouseEvent) => void, bad = false, updown = false)}
+  <button class="r" class:bad {onclick}><Icon size={19} /><b>{title}</b><span class="v">{bad ? t('ed.need') : value}</span>
+    {#if updown}<ChevronsUpDown size={16} />{:else}<ChevronRight size={18} />{/if}</button>
+{/snippet}
+{#snippet toggle(Icon: typeof Ticket, title: string, get: () => boolean, set: (v: boolean) => void)}
+  <label class="r"><Icon size={19} /><b>{title}</b><span class="sw-on"><input type="checkbox" role="switch" checked={get()} onchange={(e) => set(e.currentTarget.checked)} /></span></label>
+{/snippet}
+
+<div class="panel" bind:this={panel} style:--tint={shade(f.color)} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+  <!-- the sheet tinted by the event (Luma): its colour, the cover blurred over it, the page's ground on top for contrast -->
+  <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
     {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
   </header>
 
-  {#if look}<EditorLook {look} {ed} />{:else}
   <div class="body scroll">
-    <button class="preview surface" onclick={showPreview} aria-label={t('ed.preview')}>
-      <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={68} radius={16} />
-      <span class="txt">
-        <b class="t-title clamp-2" class:ph={!f.title.trim()}>{f.title.trim() || example.title}</b>
-        <span class="t-foot">{Number.isFinite(startTs) ? relDay(startTs) + ', ' + f.start : ''}{f.place.trim() ? ' · ' + f.place.trim() : ''}</span>
-      </span>
-      <span class="eye"><Eye size={19} /></span>
+    <button class="art" class:busy={uploading} onclick={() => open('cover')} aria-label={t('ed.cover')}>
+      <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={196} radius={24} />
+      <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
     {#if !id && session.board}
-      <button class="fill surface" class:busy={filling} disabled={filling} onclick={fillFromText}>
-        <span class="spark"><Sparkles size={19} /></span>
-        <span class="txt"><b>{t('ed.fill')}</b><span class="t-foot">{filling ? t('as.thinking') + '…' : t('ed.fillSub')}</span></span>
-      </button>
+      <button class="fill" class:busy={filling} disabled={filling} onclick={fillFromText}><Sparkles size={16} />{filling ? t('as.thinking') + '…' : t('ed.fill')}</button>
     {/if}
 
-    <section class="cover">
-      <h2 class="t-cap">{t('ed.cover')}</h2>
-      <div class="photo">
-        <label class="pbtn" class:busy={uploading}><ImagePlus size={18} />{uploading ? t('ed.photoUp') : f.cover ? t('ed.photoChange') : t('ed.photo')}
-          <input type="file" accept="image/*" onchange={pickPhoto} disabled={uploading} /></label>
-        {#if f.cover}<button class="pdel" onclick={dropPhoto}><X size={16} />{t('ed.photoRemove')}</button>{/if}
-      </div>
-      {#if f.cover}
-        <CoverFocus cover={f.cover} onpick={(p) => { f.cover = { ...f.cover!, focus: p }; void readColor(false); }} />
-        <div class="slides">
-          {#each f.slides as p, k (p.id)}
-            <span class="sl"><img src={p.thumb} alt="" /><button onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
-          {/each}
-          {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
-          {#if f.slides.length + slidesUp < SLIDES}
-            <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple onchange={pickSlides} disabled={slidesUp > 0} /></label>
-          {/if}
-        </div>
-        <p class="hint">{t('ed.slidesHint')}</p>
-        <p class="hint tintnote">{t('ed.tint')}</p>
-      {:else}
-        <p class="hint">{t('ed.coverTip')}</p>
-        <LookPick bind:emoji={f.emoji} bind:color={f.color} colors={COLORS} />
-      {/if}
-      {#if f.cover}
-        <LookPick bind:color={f.color} colors={COLORS} lead={photoColor ? tintPhoto : undefined} />
-      {/if}
-    </section>
-
-    <section class="cover">
-      <h2 class="t-cap">{t('ed.video')}</h2>
-      <!-- two real tiles shaped like their videos (the old button looked like a thin line) -->
-      <div class="vslots">
-        {#each ['tall', 'wide'] as const as slot (slot)}
-          {@const x = vids[slot]}
-          <div class="vslot {slot}">
-            {#if x}
-              <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
-                <button class="vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
-              <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
-            {:else}
-              <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
-                {#if vUp[slot] >= 0}<i class="bar" style:width="{vUp[slot] * 100}%"></i>{/if}
-                <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
-              <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
-            {/if}
-            <i class="t-foot">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
-          </div>
-        {/each}
-      </div>
-    </section>
-
-    <label class="field" class:bad={tried && err.title}><span class="t-cap">{t('ed.title')}</span>
-      <input bind:value={f.title} maxlength="80" placeholder={example.title} enterkeyhint="next" /></label>
+    <textarea class="name" class:bad={tried && err.title} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} enterkeyhint="done"></textarea>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
 
-    <label class="field" class:bad={tried && err.when}><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={f.date} /></label>
-    <div class="two">
-      <label class="field" class:bad={tried && err.when}><span class="t-cap">{t('ed.start')}</span><input type="time" bind:value={f.start} /></label>
-      <label class="field"><span class="t-cap">{t('ed.end')}</span><input type="time" bind:value={f.end} /></label>
+    <div class="pill when" class:bad={tried && err.when}>
+      <i class="line" aria-hidden="true"></i>
+      <!-- one line of text ("Mon, 9 Nov  18:00"); the phone's own pickers sit under each part -->
+      <div class="wr"><span class="dot"></span><b>{t('ed.start')}</b>
+        <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={t('ed.date')} /></label>
+        <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={t('ed.start')} /></label></div>
+      <div class="wr"><span class="dot o"></span><b>{t('ed.end')}</b>
+        <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={t('ed.end')} /></label></div>
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
-    {#if !f.tba}
-    <label class="field" class:bad={tried && err.place}><span class="t-cap">{t('ed.place')}</span>
-      <input bind:value={f.place} oninput={placeTyped} maxlength="400" placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="next" /></label>
-    {/if}
-    {#if tried && err.place}<p class="err">{err.place}</p>{/if}
-    {#if !f.placeUrl}
-      <label class="switch">
-        <span><b>{t('ed.tba')}</b><i class="t-foot">{t('ed.tbaHint')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={f.tba} />
-      </label>
-    {/if}
-    {#if !f.placeUrl && !f.tba && addressGis(f.place)}
-      <!-- a typed street address: its 2GIS route offered, seen before saving -->
-      <button class="gisoffer" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
-        <MapPin size={16} />{t('ed.gisOffer')}</button>
-    {/if}
-    {#if f.placeUrl && !f.tba}
-      <!-- off campus: the route instead of a room -->
-      <div class="gis"><MapPin size={17} /><span class="ellipsis">{t('event.route')}</span>
-        <button onclick={() => (f.placeUrl = '')} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
-    {:else if !f.tba}
-      <p class="hint">{t('ed.placeHint')}</p>
-    {/if}
+    <button class="pill go" class:bad={tried && err.place} onclick={() => open('place')}><MapPin size={20} />
+      <span class="ellipsis" class:ph={!f.place.trim()}>{f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
+      {#if f.placeUrl && !f.tba}<span class="chip">{t('event.route')}</span>{/if}</button>
+    <button class="pill go" onclick={() => open('about')}><AlignLeft size={20} />
+      <span class="clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
-    <label class="field"><span class="t-cap">{t('ed.about')}</span>
-      <textarea bind:value={f.description} maxlength="2000" rows="4" placeholder={t('ed.aboutPh')}></textarea></label>
-    {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
-
-    {#if canPartner && !isMeeting}
-      <label class="switch">
-        <span><b>{t('ed.partner')}</b><i class="t-foot">{t('ed.partnerHint')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={f.partner} />
-      </label>
-      {#if f.partner}
-        <label class="field" class:bad={tried && err.host}><span class="t-cap">{t('ed.partnerHost')}</span>
-          <input bind:value={f.host} maxlength="60" placeholder={t('ed.partnerHostPh')} /></label>
-        {#if tried && err.host}<p class="err">{err.host}</p>{/if}
-        <label class="field" class:bad={tried && err.link}><span class="t-cap">{t('ed.partnerLink')}</span>
-          <input bind:value={f.link} type="url" inputmode="url" maxlength="500" placeholder="https://" /></label>
-        {#if tried && err.link}<p class="err">{err.link}</p>{/if}
-      {/if}
-    {/if}
-
-    {#if !isMeeting && !f.partner}
-    <label class="field" class:bad={tried && err.seats}><span class="t-cap">{t('ed.seats')}</span>
-      <input bind:value={f.seats} type="number" inputmode="numeric" min="1" placeholder={t('ed.seatsPh')} /></label>
-
-    <label class="switch">
-      <span><b>{t('ed.deadline')}</b><i class="t-foot">{t('ed.deadlineHint')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.deadline} onchange={deadlineOn} />
-    </label>
-    {#if f.deadline}
-      <div class="two">
-        <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
-        <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
+    {#if tickets}
+      <h3 class="cap">{t('ex.tickets')}</h3>
+      <div class="pill grp">
+        {#if canPrice}{@render row(Ticket, t('ex.price'), priceVal, () => open('price'), tried && priceBad)}
+        {:else}<div class="r still"><Ticket size={19} /><b>{t('ex.price')}</b><span class="v">{t('ex.free')}</span></div>{/if}
+        {@render row(Users, t('ed.seats'), +f.seats > 0 ? f.seats : t('ex.unlimited'), () => open('seats'), tried && !!err.seats)}
+        {@render row(Clock, t('ex.regUntil'), regVal, () => open('reg'), tried && !!err.reg)}
       </div>
-      {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
+      {#if !canPrice && !official && may(mine, 'money')}<p class="hint">{t('ed.paidOfficial')}</p>{/if}
     {/if}
 
-    {#if canPrice}
-      <label class="switch">
-        <span><b>{t('ed.paid')}</b><i class="t-foot">{t('ed.paidHint')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={f.paid} />
-      </label>
-      {#if f.paid}
-        <label class="field" class:bad={tried && err.price}><span class="t-cap">{t('ed.price')}</span>
-          <input bind:value={f.price} type="number" inputmode="numeric" min="1" placeholder="2000" /></label>
-        <label class="field" class:bad={tried && err.payTo}><span class="t-cap">{t('ed.payTo')}</span>
-          <input bind:value={f.payTo} maxlength="80" placeholder={t('ed.payToPh')} /></label>
-        <label class="field" class:bad={tried && err.payPhone}><span class="t-cap">{t('ed.payPhone')}</span>
-          <input bind:value={f.payPhone} oninput={() => (f.payPhone = fmtPhone(f.payPhone))} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" /></label>
-        {#if tried && err.payPhone}<p class="err">{err.payPhone}</p>{/if}
-        <p class="hint">{t('ed.payHint')}</p>
-        <label class="field" class:bad={tried && err.freeFirst}><span class="t-cap">{t('ed.freeFirst')}</span>
-          <input bind:value={f.freeFirst} type="number" inputmode="numeric" min="0" placeholder={t('ed.freeFirstPh')} /></label>
-        <p class="hint">{t('ed.freeFirstHint')}</p>
-      {/if}
-    {:else if !official && may(mine, 'money')}
-      <p class="hint">{t('ed.paidOfficial')}</p>
-    {/if}
-
-    <label class="switch">
-      <span><b>{t('ed.firstYear')}</b><i class="t-foot">{t('ed.firstYearHint')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.firstYear} />
-    </label>
-    <!-- PLAN 71: the phone is asked at the sign-up, only where the event needs it -->
-    <label class="switch">
-      <span><b>{t('ed.needsPhone')}</b><i class="t-foot">{t('ed.needsPhoneHint')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.needsPhone} />
-    </label>
-    <!-- the event's own questions at sign-up (Oct 30, an organizer's ask): up to five, text or a choice -->
-    {#if session.board}<!-- with the forum's policy section (it covers the answers) -->
-    <section class="qs">
-      <span class="t-cap">{t('ed.form')}</span>
-      {#each f.form as q, i (i)}
-        <div class="qc surface">
-          <div class="qrow"><input class="ql" bind:value={q.label} maxlength="80" placeholder={t('ed.formQ')} />
-            <button class="qx" onclick={() => (f.form = f.form.filter((_, k) => k !== i))} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
-          <div class="mtags"><button class:on={q.kind === 'text'} onclick={() => (q.kind = 'text')}>{t('ed.formText')}</button>
-            <button class:on={q.kind === 'choice'} onclick={() => (q.kind = 'choice')}>{t('ed.formChoice')}</button></div>
-          {#if q.kind === 'choice'}<input class="ql" bind:value={q.opts} maxlength="300" placeholder={t('ed.formOpts')} />{/if}
-          <label class="chk"><input type="checkbox" bind:checked={q.required} />{t('ed.formReq')}</label>
-        </div>
-      {/each}
-      {#if tried && err.form}<p class="err">{err.form}</p>{/if}
-      {#if f.form.length < 5}<button class="qadd" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>+ {t('ed.formAdd')}</button>{/if}
-      <p class="hint">{t('ed.formHint')}</p>
-    </section>
-    {/if}
-    <label class="switch">
-      <span><b>{t('ed.albumOpen')}</b><i class="t-foot">{t('ed.albumOpenHint')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.albumOpen} />
-    </label>
-    <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
-    <label class="switch">
-      <span><b>{t('ed.vol')}</b><i class="t-foot">{t('ed.volHint')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.vol} />
-    </label>
-    {#if f.vol}
-      <label class="field"><span class="t-cap">{t('ed.volN')}</span><input bind:value={f.volN} type="number" inputmode="numeric" min="1" max="500" /></label>
-      <label class="chk"><input type="checkbox" bind:checked={f.volSenior} />{t('ed.volSenior')}</label>
-    {/if}
-    {/if}
-
-    {#if f.partner}<!-- a partner's: public, no team or meeting -->
-    {:else if oversee}
-      <!-- DMP (§4.10): an event for everyone, its own team, or a meeting of every club's leaders -->
-      <div class="who">
-        <span class="t-cap">{t('ed.who')}</span>
-        <div class="seg wide"><button class:on={!f.teamOnly && !f.leaders} onclick={() => { f.teamOnly = false; f.leaders = false; }}>{t('ed.whoAll')}</button>
-          <button class:on={f.teamOnly} onclick={() => { f.teamOnly = true; f.leaders = false; }}>{t('ed.whoTeam')}</button>
-          <button class:on={f.leaders} onclick={() => { f.leaders = true; f.teamOnly = false; }}>{t('ed.whoLeaders')}</button></div>
-        {#if f.leaders}
-          <div class="seg wide"><button class:on={f.leadersFrom === 'president'} onclick={() => (f.leadersFrom = 'president')}>{t('ed.leadPres')}</button>
-            <button class:on={f.leadersFrom === 'vice'} onclick={() => (f.leadersFrom = 'vice')}>{t('ed.leadVice')}</button>
-            <button class:on={f.leadersFrom === 'head'} onclick={() => (f.leadersFrom = 'head')}>{t('ed.leadHead')}</button></div>
-          <p class="hint">{t('ed.leadersHint')}</p>
+    <h3 class="cap">{t('ex.options')}</h3>
+    <div class="pill grp">
+      {#if !f.partner}
+        {#if oversee}{@render row(Globe, t('ex.who'), whoVal, (e) => whoMenu(valueOf(e)), false, true)}
+        {:else}{@render toggle(Globe, t('ed.teamOnly'), () => f.teamOnly, (v) => (f.teamOnly = v))}{/if}
+        {#if f.leaders}{@render row(Crown, t('ex.leadersFrom'), t(LEAD[f.leadersFrom]), (e) => leadMenu(valueOf(e)), false, true)}{/if}
+        {#if f.teamOnly}{@render toggle(CalendarCheck, t('ed.meeting'), () => f.meeting, (v) => (f.meeting = v))}{/if}
+        {#if isMeeting && tags.length}
+          {@render row(Tag, t('ed.meetingWho'), tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll'), (e) => tagMenu(valueOf(e)), false, true)}
         {/if}
-      </div>
-    {:else}
-      <label class="switch">
-        <span><b>{t('ed.teamOnly')}</b><i class="t-foot">{t('ed.teamOnlyHint')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={f.teamOnly} />
-      </label>
-    {/if}
-    {#if f.teamOnly && !f.partner}
-      <label class="switch">
-        <span><b>{t('ed.meeting')}</b><i class="t-foot">{t('ed.meetingHint')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={f.meeting} />
-      </label>
-      {#if isMeeting && tags.length}
-        <div class="who">
-          <span class="t-cap">{t('ed.meetingWho')}</span>
-          <div class="mtags">{#if !deptOnly}<button class:on={f.meetingTag == null} onclick={() => (f.meetingTag = null)}>{t('ed.meetingAll')}</button>{/if}
-            {#each tags.filter((g) => !deptOnly || g.id === ownDept) as g (g.id)}<button class:on={f.meetingTag === g.id} style="--c:{g.color}" onclick={() => (f.meetingTag = g.id)}><i></i>{g.name}</button>{/each}</div>
-        </div>
       {/if}
-    {/if}
+      {#if tickets}
+        {@render toggle(GraduationCap, t('ed.firstYear'), () => f.firstYear, (v) => (f.firstYear = v))}
+        {@render toggle(Phone, t('ed.needsPhone'), () => f.needsPhone, (v) => (f.needsPhone = v))}
+      {/if}
+      {@render toggle(Images, t('ed.albumOpen'), () => f.albumOpen, (v) => (f.albumOpen = v))}
+    </div>
+    {#if f.leaders}<p class="hint">{t('ed.leadersHint')}</p>{/if}
 
-    {#if !f.placeUrl && !f.leaders}<MemoAsksForm bind:memo={f.memo} seats={f.seats} date={f.date} />{/if}
-
-    <Button kind="secondary" size="l" full onclick={showPreview}>{#snippet icon()}<Eye size={19} />{/snippet}{t('ed.preview')}</Button>
+    <h3 class="cap">{t('ex.more')}</h3>
+    <div class="pill grp">
+      {@render row(Clapperboard, t('ed.video'), [vids.tall, vids.wide].filter(Boolean).length ? String([vids.tall, vids.wide].filter(Boolean).length) : t('ex.no'), () => open('video'))}
+      {#if session.board && tickets}{@render row(ListChecks, t('ed.form'), f.form.length ? String(f.form.length) : t('ex.no'), () => open('form'), tried && !!err.form)}{/if}
+      {#if tickets}{@render row(HandHeart, t('ed.vol'), f.vol ? f.volN : t('ex.no'), () => open('vol'))}{/if}
+      {#if canPartner && !isMeeting}{@render row(Handshake, t('ed.partner'), f.partner ? f.host.trim() || t('ed.need') : t('ex.no'), () => open('partner'), tried && !!(err.host || err.link))}{/if}
+      {#if !f.placeUrl && !f.leaders}{@render row(Mail, t('studio.memoShort'), memoN ? String(memoN) : t('ex.no'), () => open('memo'))}{/if}
+      {@render row(Eye, t('ed.preview'), '', showPreview)}
+    </div>
 
     {#if saved?.status === 'draft'}
       <button class="del" onclick={remove}><Trash size={18} />{t('ed.delete')}</button>
@@ -632,111 +556,348 @@
     <div class="tail"></div>
   </div>
 
-  <footer class="foot btns glass glass-sheet">
+  <footer class="foot btns glass glass-sheet" class:hide={!!pick}>
     {#if live}
-      <Button kind="primary" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={() => submit('save')}>{t('common.save')}</Button>
+      <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
     {:else}
-      <Button kind="secondary" size="l" loading={busy === 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>
-      <Button kind="primary" size="l" full loading={busy === 'publish'} onclick={() => submit('publish')}>{t('ed.publish')}</Button>
+      <Button kind="gray" size="l" full loading={busy === 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>
+      <Button kind="filled" size="l" full loading={busy === 'publish'} onclick={publish}>{t('ed.publish')}</Button>
     {/if}
   </footer>
+
+  <!-- the focused panel: one thing at a time; Telegram's Back, the scrim or Done closes it -->
+  {#if pick}
+    <button class="scrim" onclick={() => (pick = '')} aria-label={t('common.close')}></button>
+    <div class="pk glass glass-sheet">
+      <header class="pkh"><b>{t(PANEL[pick] as 'ed.cover')}</b>
+        {#if pick !== 'check'}<Button kind="tinted" size="s" onclick={() => (pick = '')}>{t('ex.done')}</Button>{/if}</header>
+      <div class="pkb scroll">
+        {#if pick === 'cover'}
+          <div class="photo">
+            <label class="pbtn" class:busy={uploading}><ImagePlus size={18} />{uploading ? t('ed.photoUp') : f.cover ? t('ed.photoChange') : t('ed.photo')}
+              <input type="file" accept="image/*" onchange={pickPhoto} disabled={uploading} /></label>
+            {#if f.cover}<button class="pdel" onclick={dropPhoto}><X size={16} />{t('ed.photoRemove')}</button>{/if}
+          </div>
+          {#if f.cover}
+            <CoverFocus cover={f.cover} onpick={(p) => { f.cover = { ...f.cover!, focus: p }; void readColor(false); }} />
+            <div class="slides">
+              {#each f.slides as p, k (p.id)}
+                <span class="sl"><img src={p.thumb} alt="" /><button onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
+              {/each}
+              {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
+              {#if f.slides.length + slidesUp < SLIDES}
+                <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple onchange={pickSlides} disabled={slidesUp > 0} /></label>
+              {/if}
+            </div>
+            <p class="hint">{t('ed.slidesHint')}</p>
+            <LookPick bind:color={f.color} colors={COLORS} lead={photoColor ? tintPhoto : undefined} />
+            <p class="hint">{t('ed.tint')}</p>
+          {:else}
+            <p class="hint">{t('ed.coverTip')}</p>
+            <LookPick bind:emoji={f.emoji} bind:color={f.color} colors={COLORS} />
+          {/if}
+
+        {:else if pick === 'place'}
+          {#if !f.tba}
+            <label class="field" class:bad={tried && err.place}><span class="t-cap">{t('ed.place')}</span>
+              <input bind:value={f.place} oninput={placeTyped} maxlength="400" placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="done" /></label>
+          {/if}
+          {#if !f.placeUrl && !f.tba && addressGis(f.place)}
+            <!-- a typed street address: its 2GIS route offered, seen before saving -->
+            <button class="gisoffer" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
+              <MapPin size={16} />{t('ed.gisOffer')}</button>
+          {/if}
+          {#if f.placeUrl && !f.tba}
+            <div class="gis"><MapPin size={17} /><span class="ellipsis">{t('event.route')}</span>
+              <button onclick={() => (f.placeUrl = '')} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
+          {:else if !f.tba}
+            <p class="hint">{t('ed.placeHint')}</p>
+          {/if}
+          {#if !f.placeUrl}
+            <label class="switch"><span><b>{t('ed.tba')}</b><i class="t-foot">{t('ed.tbaHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.tba} /></label>
+          {/if}
+
+        {:else if pick === 'about'}
+          <label class="field"><textarea bind:value={f.description} maxlength="2000" rows="7" placeholder={t('ed.aboutPh')}></textarea></label>
+          {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
+          {#if session.board}
+            {#if suggestion}
+              <div class="sug">
+                <span class="t-cap"><Sparkles size={13} /> {t('ex.aiSuggest')}</span>
+                <p>{suggestion}</p>
+                <div class="sugb"><Button kind="gray" size="s" onclick={() => (suggestion = '')}>{t('ex.aiKeep')}</Button>
+                  <Button kind="tinted" size="s" onclick={() => { touch(); f.description = suggestion; suggestion = ''; haptic.ok(); }}>{t('ex.aiUse')}</Button></div>
+              </div>
+            {:else}
+              <button class="ai" disabled={writing} class:busy={writing} onclick={aiWrite}><Sparkles size={16} />{writing ? t('as.thinking') + '…' : t('ex.aiWrite')}</button>
+              {#if !f.description.trim()}<p class="hint">{t('ex.aiHint')}</p>{/if}
+            {/if}
+          {/if}
+
+        {:else if pick === 'price'}
+          <!-- Free or Paid as a choice in sight, never a switch further down -->
+          <Segmented items={[{ value: 'free', label: t('ex.free') }, { value: 'paid', label: t('ex.paidSeg') }]} value={f.paid ? 'paid' : 'free'} label={t('ex.price')}
+            onchange={(v) => { touch(); f.paid = v === 'paid'; }} />
+          {#if f.paid}
+            <label class="field" class:bad={tried && err.price}><span class="t-cap">{t('ed.price')}</span>
+              <input bind:value={f.price} type="number" inputmode="numeric" min="1" placeholder="2000" /></label>
+            <label class="field" class:bad={tried && err.payTo}><span class="t-cap">{t('ed.payTo')}</span>
+              <input bind:value={f.payTo} maxlength="80" placeholder={t('ed.payToPh')} /></label>
+            <label class="field" class:bad={tried && err.payPhone}><span class="t-cap">{t('ed.payPhone')}</span>
+              <input bind:value={f.payPhone} oninput={() => (f.payPhone = fmtPhone(f.payPhone))} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" /></label>
+            {#if tried && err.payPhone}<p class="err">{err.payPhone}</p>{/if}
+            <p class="hint">{t('ed.payHint')}</p>
+            <label class="field" class:bad={tried && err.freeFirst}><span class="t-cap">{t('ed.freeFirst')}</span>
+              <input bind:value={f.freeFirst} type="number" inputmode="numeric" min="0" placeholder={t('ed.freeFirstPh')} /></label>
+            <p class="hint">{t('ed.freeFirstHint')}</p>
+          {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}
+
+        {:else if pick === 'seats'}
+          <label class="field" class:bad={tried && err.seats}><span class="t-cap">{t('ed.seats')}</span>
+            <input bind:value={f.seats} type="number" inputmode="numeric" min="1" placeholder={t('ed.seatsPh')} /></label>
+
+        {:else if pick === 'reg'}
+          <label class="switch"><span><b>{t('ed.deadline')}</b><i class="t-foot">{t('ed.deadlineHint')}</i></span>
+            <input type="checkbox" role="switch" bind:checked={f.deadline} onchange={deadlineOn} /></label>
+          {#if f.deadline}
+            <div class="two">
+              <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
+              <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
+            </div>
+            {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
+          {/if}
+
+        {:else if pick === 'video'}
+          <!-- two real tiles shaped like their videos -->
+          <div class="vslots">
+            {#each ['tall', 'wide'] as const as slot (slot)}
+              {@const x = vids[slot]}
+              <div class="vslot {slot}">
+                {#if x}
+                  <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
+                    <button class="vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
+                  <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
+                {:else}
+                  <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
+                    {#if vUp[slot] >= 0}<i class="prog" style:width="{vUp[slot] * 100}%"></i>{/if}
+                    <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
+                  <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
+                {/if}
+                <i class="t-foot">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
+              </div>
+            {/each}
+          </div>
+
+        {:else if pick === 'form'}
+          <!-- the event's own questions at sign-up (Oct 30): up to five, text or a choice; with the forum's policy section -->
+          {#each f.form as q, i (i)}
+            <div class="qc">
+              <div class="qrow"><input class="ql" bind:value={q.label} maxlength="80" placeholder={t('ed.formQ')} />
+                <button class="qx" onclick={() => (f.form = f.form.filter((_, k) => k !== i))} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
+              <div class="mtags"><button class:on={q.kind === 'text'} onclick={() => (q.kind = 'text')}>{t('ed.formText')}</button>
+                <button class:on={q.kind === 'choice'} onclick={() => (q.kind = 'choice')}>{t('ed.formChoice')}</button></div>
+              {#if q.kind === 'choice'}<input class="ql" bind:value={q.opts} maxlength="300" placeholder={t('ed.formOpts')} />{/if}
+              <label class="chk"><input type="checkbox" bind:checked={q.required} />{t('ed.formReq')}</label>
+            </div>
+          {/each}
+          {#if tried && err.form}<p class="err">{err.form}</p>{/if}
+          {#if f.form.length < 5}<button class="qadd" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>+ {t('ed.formAdd')}</button>{/if}
+          <p class="hint">{t('ed.formHint')}</p>
+
+        {:else if pick === 'vol'}
+          <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
+          <label class="switch"><span><b>{t('ed.vol')}</b><i class="t-foot">{t('ed.volHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.vol} /></label>
+          {#if f.vol}
+            <label class="field"><span class="t-cap">{t('ed.volN')}</span><input bind:value={f.volN} type="number" inputmode="numeric" min="1" max="500" /></label>
+            <label class="chk"><input type="checkbox" bind:checked={f.volSenior} />{t('ed.volSenior')}</label>
+          {/if}
+
+        {:else if pick === 'partner'}
+          <label class="switch"><span><b>{t('ed.partner')}</b><i class="t-foot">{t('ed.partnerHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.partner} /></label>
+          {#if f.partner}
+            <label class="field" class:bad={tried && err.host}><span class="t-cap">{t('ed.partnerHost')}</span>
+              <input bind:value={f.host} maxlength="60" placeholder={t('ed.partnerHostPh')} /></label>
+            {#if tried && err.host}<p class="err">{err.host}</p>{/if}
+            <label class="field" class:bad={tried && err.link}><span class="t-cap">{t('ed.partnerLink')}</span>
+              <input bind:value={f.link} type="url" inputmode="url" maxlength="500" placeholder="https://" /></label>
+            {#if tried && err.link}<p class="err">{err.link}</p>{/if}
+          {/if}
+
+        {:else if pick === 'memo'}
+          <MemoAsksForm bind:memo={f.memo} seats={f.seats} date={f.date} flat />
+
+        {:else if pick === 'check'}
+          {#if found.length}
+            <p class="sum">{tn('ex.found', found.length)}</p>
+            {#each found as x (x.id)}
+              <div class="note" class:serious={SERIOUS.has(x.id)}>
+                <span class="ni">{#if SERIOUS.has(x.id)}<TriangleAlert size={17} />{:else}<Sparkles size={16} />{/if}</span>
+                <span class="nt">{noteText(x)}</span>
+                {#if fixable(x)}<button class="nfix" onclick={() => fix(x)}>{fixLabel(x)}</button>{/if}
+              </div>
+            {/each}
+          {:else}
+            <p class="okay"><CircleCheck size={20} />{t('ex.checkOk')}</p>
+          {/if}
+          <div class="pkfoot">
+            <Button kind="filled" size="l" full loading={busy === 'publish' || busy === 'save'} onclick={() => { pick = ''; void submit(live ? 'save' : 'publish'); }}>
+              {found.length ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : live ? t('common.save') : t('ed.publish')}</Button>
+          </div>
+        {/if}
+      </div>
+    </div>
   {/if}
 </div>
 
 <style>
-  .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px 12px; font: 550 15px/1.3 var(--font-text); }
-  .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
-  .who { display: flex; flex-direction: column; gap: 8px; }
-  .gisoffer { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; margin: -2px 0 2px; padding: 0 12px;
-    border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); animation: qin 260ms cubic-bezier(.2, .9, .25, 1); }
-  .qs { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
-  .qc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 2px; border-radius: 16px; animation: qin 260ms cubic-bezier(.2, .9, .25, 1); }
-  @keyframes qin { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
-  .qrow { display: flex; align-items: center; gap: 6px; }
-  .ql { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 12px; background: var(--surface-2); color: var(--text); font: 500 15px/1 var(--font-text); }
-  .qx { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); }
-  .qadd { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); }
-  .mtags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mtags button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2);
-    font: 600 14px/1 var(--font-text); color: var(--text-2); }
-  .mtags button.on { background: var(--text); color: var(--bg); }
-  .mtags i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
-  .who .seg.wide { display: flex; }
-  .who .seg.wide button { flex: 1; padding: 0 6px; }
-  .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; background: var(--glow), var(--bg); }
+  .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
+    --pill: var(--surface-2); }
+  :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }
+  .wash { position: absolute; inset: 0; background: var(--tint); overflow: hidden; pointer-events: none; }
+  .wash img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(48px) saturate(1.3); }
+  .wash i { position: absolute; inset: 0; background: var(--bg); opacity: 0.5; }
+  :global(:root[data-theme='light']) .wash i { opacity: 0.72; }
   .bar { position: absolute; left: 0; right: 0; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); height: 38px; z-index: 1;
     display: flex; align-items: center; justify-content: center; pointer-events: none; }
   .x { position: absolute; left: 12px; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: var(--surface); color: var(--text); pointer-events: auto; }
 
-  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; margin-top: max(48px, var(--top)); padding: 6px var(--gutter) 0; }
+  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); margin-top: max(48px, var(--top)); padding: var(--s-2) var(--gutter) 0; }
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
-  .fill { display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 6px; text-align: left; width: 100%; transition: opacity var(--t-base) var(--ease), transform var(--t-fast) var(--ease); }
-  .fill:active { transform: scale(0.98); }
-  .fill.busy { opacity: 0.6; }
-  .fill .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .spark { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: #fff;
-    background: linear-gradient(135deg, var(--accent), #AF52DE); }
-  .fill.busy .spark { animation: spin 1.4s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .preview { display: flex; gap: 12px; align-items: center; padding: 10px; margin-bottom: 6px; text-align: left; width: 100%; }
-  .preview:active { transform: scale(0.98); }
-  .preview .txt { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .eye { flex: none; width: 36px; height: 36px; margin-right: 2px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--accent-soft); color: var(--accent-text); }
+  .tail { height: calc(var(--safe-bottom) + 96px); }
   .ph { color: var(--text-3); }
+  .err { margin: -6px var(--s-4) 0; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
+  .hint { margin: 0 var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
 
-  .cover { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+  .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
+  .art:active { transform: scale(0.98); }
+  .art.busy { opacity: 0.6; }
+  .artbtn { position: absolute; right: -8px; bottom: -8px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text); }
+  .fill, .ai { align-self: center; display: inline-flex; align-items: center; gap: 6px; height: var(--btn-s); padding: 0 var(--s-3); margin-top: calc(-1 * var(--s-1));
+    border-radius: var(--r-full); background: var(--pill); color: var(--text); font: 650 var(--fs-sub)/1 var(--font-text); }
+  .ai { align-self: flex-start; margin: 0; background: var(--accent-soft); color: var(--accent-text); }
+  .fill.busy, .ai.busy { opacity: 0.6; }
+  .name { width: 100%; resize: none; field-sizing: content; min-height: 1.2em; padding: var(--s-3) var(--s-4); border-radius: var(--r-l); background: var(--pill);
+    color: var(--text); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; }
+  .name::placeholder { color: var(--text-3); }
+
+  .pill { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 54px; padding: 0 var(--s-4);
+    border-radius: var(--r-l); background: var(--pill); color: var(--text); text-align: left; font: 500 var(--fs-row)/1.3 var(--font-text); }
+  .pill > :global(svg) { flex: none; color: var(--text-2); }
+  .go { padding-block: var(--s-3); }
+  .go > span:not(.chip) { flex: 1; min-width: 0; }
+  .chip { flex: none; padding: 4px 8px; border-radius: var(--r-full); background: var(--success-soft); color: var(--success-text); font: 600 var(--fs-cap)/1 var(--font-text); }
+  .go:active, .r:active { opacity: 0.7; transform: none; }
+  .when { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+  .wr { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 54px; padding: 0 var(--s-3) 0 44px; }
+  .wr + .wr::before { content: ''; position: absolute; left: 44px; right: 0; top: 0; height: 0.5px; background: var(--separator); }
+  .wr b { flex: 1; min-width: 0; font-weight: 500; color: var(--text-2); }
+  .tv { position: relative; flex: none; padding: 7px 8px; border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); white-space: nowrap; }
+  .tv input { position: absolute; inset: 0; width: 100%; opacity: 0; }
+  .dot { position: absolute; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-2); }
+  .dot.o { background: none; box-shadow: inset 0 0 0 1.5px var(--text-2); }
+  .line { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }
+  .cap { margin: var(--s-3) var(--s-1) calc(-1 * var(--s-1)); font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text-2); }
+  .grp { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+  .r { position: relative; display: flex; align-items: center; gap: var(--s-3); min-height: 54px; padding: 0 var(--s-4); text-align: left; color: var(--text); }
+  .r + .r::before { content: ''; position: absolute; left: 47px; right: 0; top: 0; height: 0.5px; background: var(--separator); }
+  .r > :global(svg) { flex: none; color: var(--text-2); }
+  .r b { flex: 1 1 auto; min-width: 0; font-weight: 500; }
+  .r .v { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-weight: 500; }
+  .r.bad { box-shadow: none; }
+  .r.bad .v { color: var(--danger-text); }
+  .r > :global(svg:last-child) { color: var(--text-3); }
+  .r.still { cursor: default; }
+  .del { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; margin-top: var(--s-1); color: var(--danger-text); font: 620 var(--fs-body)/1 var(--font-text); }
+
+  .foot { position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px); display: flex; gap: var(--s-2); padding: var(--s-2); border-radius: var(--r-xl);
+    transition: opacity var(--t-fast) var(--ease); }
+  /* the publish keeps its label whole; the draft takes what's left (two lines at 320) */
+  .foot > :global(.btn:first-child:not(:last-child)) { flex: 0 1 auto; min-width: 0; }
+  .foot > :global(.btn:last-child:not(:first-child)) { flex: 1 0 auto; }
+  .foot.hide { opacity: 0; pointer-events: none; }
+
+  /* the panel */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
+  @keyframes fade { from { opacity: 0; } }
+  .pk { position: absolute; left: 8px; right: 8px; bottom: calc(var(--safe-bottom) + 8px); max-height: calc(100% - var(--top) - 24px); display: flex; flex-direction: column;
+    border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards; }
+  @keyframes rise { from { transform: translate3d(0, 100%, 0); } }
+  .pkh { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-2) var(--s-5); }
+  .pkh b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.015em; }
+  .pkb { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-2) var(--s-4) var(--s-4); }
+  .pkb > :global(*) { flex-shrink: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+  .sum { margin: 0 var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
+  .okay { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--success-text); }
+  .pkfoot { display: flex; margin-top: var(--s-1); }
+
+  /* the check's notes, the AI's card */
+  .note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-radius: var(--r-m);
+    background: var(--surface-2); animation: note-in 300ms var(--ease-spring) backwards; }
+  @keyframes note-in { from { opacity: 0; transform: translateY(-4px); } }
+  .note.serious { background: var(--warning-soft); }
+  .ni { flex: none; display: inline-flex; color: var(--text-3); }
+  .serious .ni { color: var(--warning-text); }
+  .nt { flex: 1 1 160px; min-width: 0; font: 550 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
+  .nfix { flex: none; margin-left: auto; height: var(--btn-s); padding: 0 var(--s-3); border-radius: var(--r-full);
+    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-sub)/1 var(--font-text); white-space: nowrap; }
+  .serious .nfix { background: var(--accent); color: var(--on-accent); }
+  .sug { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--r-m); background: var(--accent-soft);
+    animation: note-in 300ms var(--ease-spring) backwards; }
+  .sug .t-cap { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); }
+  .sug p { font: 450 var(--fs-body)/1.45 var(--font-text); color: var(--text); white-space: pre-line; }
+  .sugb { display: flex; gap: var(--s-2); justify-content: flex-end; }
+
+  /* the panels' own pieces (the old form's, kept) */
+  .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px 12px; font: 550 var(--fs-body)/1.3 var(--font-text); }
+  .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .gisoffer { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+    border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 var(--fs-sub)/1 var(--font-text); }
+  .gis { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 14px; border-radius: var(--r-m);
+    background: var(--success-soft); color: var(--success-text); font: 630 var(--fs-body)/1 var(--font-text); }
+  .gis span { flex: 1; min-width: 0; }
+  .gis button { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: inherit; }
+  .qc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 2px; border-radius: var(--r-m); background: var(--surface-2); animation: note-in 260ms var(--ease-spring) backwards; }
+  .qrow { display: flex; align-items: center; gap: 6px; }
+  .ql { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-s); background: var(--fill); color: var(--text); font: 500 var(--fs-body)/1 var(--font-text); }
+  .qx { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); }
+  .qadd { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
+  .mtags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mtags button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--fill);
+    font: 600 var(--fs-body)/1 var(--font-text); color: var(--text-2); }
+  .mtags button.on { background: var(--text); color: var(--bg); }
   .photo { display: flex; gap: 8px; }
   .pbtn, .pdel { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: var(--r-m);
-    font: 630 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
+    font: 630 var(--fs-body)/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .pbtn { flex: 1; background: var(--accent-soft); color: var(--accent-text); position: relative; overflow: hidden; }
-  .pbtn input { position: absolute; inset: 0; opacity: 0; }
+  .pbtn input, .sl.add input, .vframe input { position: absolute; inset: 0; opacity: 0; }
   .pbtn.busy { opacity: 0.6; }
-  .pdel { background: var(--surface-2); color: var(--text-2); }
-  .pbtn .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width 300ms linear; }
+  .pdel { background: var(--fill); color: var(--text-2); }
+  .pbtn:active, .pdel:active { transform: scale(0.97); }
+  .slides { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sl { position: relative; width: 58px; height: 58px; border-radius: var(--r-s); overflow: hidden; background: var(--fill); flex: none; }
+  .sl img { width: 100%; height: 100%; object-fit: cover; }
+  .sl button { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 22, 32, 0.6); color: var(--on-accent); }
+  .sl.add { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+  .sl.wait { animation: sl-wait 1.1s ease-in-out infinite; }
+  @keyframes sl-wait { 50% { opacity: 0.5; } }
+  .tp { display: flex; align-items: center; justify-content: center; color: var(--on-accent); animation: dot 420ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
+  @keyframes dot { from { transform: scale(0.3); opacity: 0; } }
   .vslots { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; align-items: end; }
   .vslot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .vslot b { font: 630 13.5px/1.2 var(--font-text); }
+  .vslot b { font: 630 var(--fs-sub)/1.2 var(--font-text); }
   .vslot .t-foot { font-style: normal; line-height: 1.3; }
-  .vframe { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: 14px;
+  .vframe { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: var(--r-m);
     background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
   .tall .vframe { aspect-ratio: 9 / 14; }
   .wide .vframe { aspect-ratio: 16 / 10; }
-  .vframe.add { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 35%, transparent); }
   .vframe.add:active { transform: scale(0.97); }
   .vframe.busy { opacity: 0.7; }
-  .vframe input { position: absolute; inset: 0; opacity: 0; }
   .vframe img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .vframe .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width 300ms linear; }
+  .prog { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width 300ms linear; }
   .vx { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: rgba(20, 22, 32, 0.55); color: #fff; }
-  .slides { display: flex; flex-wrap: wrap; gap: 8px; }
-  .sl { position: relative; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: var(--surface-2); flex: none; }
-  .sl img { width: 100%; height: 100%; object-fit: cover; }
-  .sl button { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: rgba(20, 22, 32, 0.6); color: #fff; }
-  .sl.add { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
-  .sl.add input { position: absolute; inset: 0; opacity: 0; }
-  .sl.wait { animation: sl-wait 1.1s ease-in-out infinite; }
-  @keyframes sl-wait { 50% { opacity: 0.5; } }
-  .pbtn:active, .pdel:active { transform: scale(0.97); }
-  .hint { margin: -4px 4px 0; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
-  .tintnote { margin-top: 6px; }
-  .gis { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 14px; border-radius: var(--r-m);
-    background: var(--success-soft); color: var(--success-text); font: 630 14px/1 var(--font-text); }
-  .gis span { flex: 1; min-width: 0; }
-  .gis button { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: inherit; }
-  .cover h2 { margin: 4px 2px 0; }
-  .tp { display: flex; align-items: center; justify-content: center; color: #fff; animation: dot 420ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
-  @keyframes dot { from { transform: scale(0.3); opacity: 0; } }
-
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .err { margin: -4px 4px 0; font: 600 12.5px/1.3 var(--font-text); color: var(--danger-text); }
-
-
-  .del { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; margin-top: 6px; color: var(--danger-text); font: 620 15px/1 var(--font-text); }
-  .tail { flex: none; height: calc(var(--safe-bottom) + 96px); }
-
-  .foot { position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px); display: flex; gap: 8px; padding: 8px; border-radius: 24px; }
+    background: rgba(20, 22, 32, 0.55); color: var(--on-accent); }
 </style>
