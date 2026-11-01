@@ -28,6 +28,7 @@ export const ui = $state({
   tryOn: null as { id: number; name: string } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
   gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
+  gate: false,             // the new policy's gate is up (App, ConsentGate): the app waits behind it
 });
 
 export function persistNav(): void {
@@ -78,9 +79,9 @@ export function hideChrome(): () => void {
   };
 }
 
-/** A moment nobody tapped for (the computer sheet, the consent, a roster sheet, an award): it opens only once nothing
- *  is open, 600 ms after the last one (lib/moments.ts). A tap or a deep link opens at once, never through here. */
-export const moment = queue(() => overlays.some((o) => !o.closing));
+/** A moment nobody tapped for (the computer sheet, a roster sheet, an award): it opens only once nothing is open and
+ *  the policy's gate is down, 600 ms after the last one (lib/moments.ts). A tap or a deep link opens at once. */
+export const moment = queue(() => ui.gate || overlays.some((o) => !o.closing));
 
 export function removeOverlay(id: number): void {
   const i = overlays.findIndex((x) => x.id === id);

@@ -77,14 +77,18 @@
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
-  // the policy changed since this student agreed: once more (staff and students added by hand have no consent of theirs)
-  // a launch moment: asked once the screen is free (a deep link's sheet up at the start used to skip it)
-  const consentSheet = () => import('./screens/sheets/ConsentSheet.svelte');
-  const askConsent = () => {
+  // the policy changed since this student agreed: the whole app waits behind the gate until they accept (owner, Nov 1:
+  // the sheet got swiped away unread). Staff and students added by hand have no consent of theirs; a deletion pending is
+  // exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
+  const consentGate = () => import('./screens/ConsentGate.svelte');
+  const gated = $derived.by(() => {
     const s = session.me?.student;
-    if (!s || session.me?.deleteAt || ['staff', 'admin', session.policy].includes(s.consent)) return;
-    return lazy(consentSheet, {});
-  };
+    return !!s && session.boardKnown && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent);
+  });
+  $effect(() => { ui.gate = gated; });
+  // while gated only the delete sheet shows (the gate's way out); the rest wait in the stack and show after "Accept"
+  const deleteSheet = () => import('./screens/profile/DeleteSheet.svelte');
+  const shown = (o: { component: unknown }) => !gated || o.component === loaded.get(deleteSheet)?.default;
   // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
@@ -117,8 +121,8 @@
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit });
-  sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
-  sheets.consent = () => lazy(consentSheet, {});
+  sheets.deleteAccount = (lost) => lazy(deleteSheet, { lost });
+  sheets.consent = () => void loadMe();
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
   sheets.clubEdit = (org, at) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org, at });
   sheets.people = (org, title) => lazy(() => import('./screens/sheets/PeopleSheet.svelte'), { org, title });
@@ -209,7 +213,7 @@
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
-  $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack)) backButton.show(); else backButton.hide(); });
+  $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack && shown(o))) backButton.show(); else backButton.hide(); });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
@@ -226,7 +230,7 @@
       const key = r.welcome?.length ? 'welcome' : r.ask?.length ? `ask:${r.ask[0].id}` : '';
       if (!key || rosterShown.has(key)) return;
       rosterShown.add(key);
-      // a launch moment: after whatever the start shows (the consent, ...), once nothing else is open
+      // a launch moment: after whatever the start shows (the computer hint, ...) and after the policy gate, once nothing else is open
       moment(() => (r.welcome?.length ? lazy(rosterWelcome, { spots: r.welcome }) : lazy(rosterAsk, { row: r.ask![0] })));
     });
   });
@@ -439,7 +443,7 @@
   onMount(() => {
     backButton.onClick(() => close());
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing)) close(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing && shown(o))) close(); };
     addEventListener('keydown', esc);
     for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
     // the last copy first (the instant re-open), the server's answer replaces it
@@ -452,10 +456,10 @@
     Promise.all([loadMe(), loadAfisha()]).then(() => {
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
-      if (!tg.startParam && !session.me?.msPending) greet();
+      if (!tg.startParam && !session.me?.msPending && !gated) greet(); // (not over the policy gate's button)
       deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
-      moment(computerHint); moment(askConsent); booted = true; setTimeout(() => moment(celebrate));
+      moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 
@@ -465,7 +469,7 @@
 
 <main class="app">
   {#each tabs as tab (tab)}
-    <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned}>
+    <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned || gated}>
       {#if tab === 'afisha'}
         {#if built.afisha}<ListPage />{/if}
       {:else if tab === 'forum'}
@@ -484,8 +488,9 @@
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
+  {#if gated}{#await consentGate() then m}<m.default />{/await}{/if}
   {#each overlays as o (o.id)}
-    <o.component {...o.props} overlay={o} />
+    {#if shown(o)}<o.component {...o.props} overlay={o} />{/if}
   {/each}
   <Toast />
   {#if session.banned}

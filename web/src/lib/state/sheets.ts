@@ -71,7 +71,7 @@ export const sheets = {
   map: (_place?: string, _exit?: boolean) => {}, // exit: "Help me get out" (the startapp=exit link); a place with a room ("Aud. 305", a class's "251"): its floor, the room circled
   /** delete account: what goes, then the KBTU password again */
   deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
-  /** a new privacy policy version: agree once more (lib/legal.ts) */
+  /** the server says the policy changed (a refused write): the fresh /api/me raises the gate (ConsentGate) */
   consent: () => {},
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
