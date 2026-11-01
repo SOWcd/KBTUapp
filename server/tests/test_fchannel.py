@@ -397,6 +397,9 @@ def test_old_board_cleaned_up(env):
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
     for col in ("rules_for", "rules_msg", "comments", "sign"):  # 105's, added again on the way up
         con.execute(f"ALTER TABLE fchan_posts DROP COLUMN {col}")
+    for col in ("section", "section_ai", "section_try"):  # 106's
+        con.execute(f"ALTER TABLE chats DROP COLUMN {col}")
+    con.execute("DROP TABLE chat_asks")
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)

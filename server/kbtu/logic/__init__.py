@@ -39,8 +39,9 @@ from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hid
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
     add_chat, add_org_chat, approve_chat, bot_added, bot_left, chat_card, chat_handle, chat_input, chat_link,
-    chat_opened, chat_orgs, chat_refreshed, chats, delete_chat, drop_org_chat, main_org_chat, may_chats,
-    mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check)  # noqa: F401
+    chat_opened, chat_refreshed, chats, delete_chat, drop_org_chat, main_org_chat, may_chats,
+    mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, SECTIONS, chat_links, known_chat,
+    set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (DMP_COLS, QUIET_FOR, STAFF_ROLES, _STAFF, _admin, _admin_org, _dmp_person, _mod, _month,
     _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_org_events, admin_orgs,
     admin_set_role, audit, ban_info, find_anyone, find_user, registry, registry_export, registry_memos,

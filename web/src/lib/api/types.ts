@@ -20,7 +20,9 @@ export interface ClubApplicationInput { name: string; short: string; description
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean;
-  org?: OrgRef | null /* whose chat it is (PLAN 86) */ }
+  org?: OrgRef | null /* whose chat it is (PLAN 86) */; section: ChatSection | null /* what it's for; null: not sorted yet */; sectionAi: boolean /* the AI's section, no one checked (Admin) */ }
+export type ChatSection = 'study' | 'reviews' | 'admission' | 'schools' | 'clubs' | 'fun';
+export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 'schools', 'clubs', 'fun'];
 /** A club's or school's own chat on its page (PLAN 86): `main` its one channel with the Subscribe button; a closed one
  *  (an invite link) shows without a way in, `url` null. */
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }

@@ -849,6 +849,7 @@ _DEL_GONE = {
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
+    ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("fchan_posts", "user_id"),  # my channel posts (their messages sent to be taken down first: fchannel.unpost_account)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }

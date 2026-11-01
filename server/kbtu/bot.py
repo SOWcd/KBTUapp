@@ -193,9 +193,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None
-    if kind == "chat_approved":  # ca:<chat>, to whoever suggested it, while it is still in the catalog
-        c = one(con, "SELECT title FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
-        return (*texts.bot_message(lang, kind, title=c["title"]), "clubs") if c else None
+    if kind == "chat_approved":  # ca:<chat>, to each who suggested it, while it is still in the catalog: the Chats screen
+        c = one(con, "SELECT title, kind, forum FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
+        return (*texts.chat_approved(lang, "forum" if c["forum"] else c["kind"], c["title"]), "chats") if c else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
@@ -710,62 +710,80 @@ def _chat_picker(con, cfg: Config, msg: dict) -> dict:
             "reply_markup": {"keyboard": [pick(1, channel), pick(2, group)], "resize_keyboard": True, "one_time_keyboard": True}}
 
 
-async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, url: str, tg_chat: int | None = None, channel: bool | None = None) -> tuple[str, str]:
-    """A chat suggested by a student (the bot's picker, a message to the bot, or the app's sheet): checked, looked up on
-    t.me (a person or a bot has no members line there), then waiting for the admins. (outcome, title): sent, waiting,
-    exists, org (a club's closed chat: on its page, never in the catalog), limit, later (Telegram didn't answer), slow
-    (within 10 s of the last), notchat."""
+async def _tg_chat(cfg: Config, http: httpx.AsyncClient | None, url: str) -> dict | None:
+    """A public chat as Telegram itself sees it (getChat by its @name): type, title, description, topics. None for an
+    invite link (Telegram won't say), a person or a typo, or no answer."""
+    if "/+" in url or http is None:
+        return None
+    try:
+        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": "@" + url.rsplit("/", 1)[1]})).json()
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+    c = r.get("result") if isinstance(r, dict) and r.get("ok") else None
+    return c if isinstance(c, dict) and c.get("type") in ("channel", "group", "supergroup") else None
+
+
+async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, url: str, tg_chat: int | None = None,
+                  channel: bool | None = None, gate: bool = True) -> tuple[str, str, str]:
+    """A chat suggested by a student (the bot's picker, a message to the bot, or the app's sheet): checked, looked up
+    (Telegram's getChat for a public one, its t.me page for the avatar and members; a person or a bot is neither), then
+    waiting for the admins. (outcome, title, kind): outcome sent, waiting, exists, org (a club's: on its page), limit,
+    later (Telegram didn't answer), slow (within 10 s of the last; gate=False: the caller checked), notchat; kind
+    channel, group, forum or invite (a closed chat), with the title, for sent and the known ones."""
     root, peek = Path(cfg.db_path).resolve().parent / "media", {}
     try:
         logic.suggest_check(con, uid, url, tg_chat)
-        if not logic._once(con, f"suggest_at:{uid}", str(now() // 10)):  # one look at t.me per 10 s per student
-            return "slow", ""
+        if gate and not logic._once(con, f"suggest_at:{uid}", str(now() // 10)):  # one look at t.me per 10 s per student
+            return "slow", "", ""
         peek = await media.chat_peek(http, url)
         if not peek["ok"]:
-            return "later", ""
-        if peek["members"] is None:
-            return "notchat", ""
+            return "later", "", ""
+        tg = await _tg_chat(cfg, http, url)
+        if peek["members"] is None and not tg:
+            return "notchat", "", ""
         await _avatar(peek, root)
-        kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
+        if tg:
+            peek |= {"title": tg.get("title") or peek.get("title"), "about": tg.get("description") or peek.get("about")}
+            kind = "channel" if tg["type"] == "channel" else "forum" if tg.get("is_forum") else "group"
+        else:
+            kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
         title = logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
         _drop_free(con, root, peek.get("photo"))  # a club's row took the suggestion: it keeps its own avatar
-        return "sent", title
+        return "sent", title, "invite" if "/+" in url else kind
     except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
         _drop_free(con, root, peek.get("photo"))
-        return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists") if exc.code == "conflict" else "limit"), ""
+        if exc.code != "conflict":
+            return "limit", "", ""
+        if exc.message == "pending":
+            logic.chat_asked_too(con, uid, url, tg_chat)  # told too when it's approved
+        c = logic.known_chat(con, url, tg_chat)
+        return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists"), c["title"] if c else "",
+                ("invite" if "/+" in c["url"] else "forum" if c["forum"] else c["kind"]) if c else "")
 
 
-def _picked_url(msg: dict) -> str | None:
-    """The chat a message names: picked in the picker (its @name), or sent as @name / a t.me link / an invite link."""
-    shared = msg.get("chat_shared") or {}
-    return f"https://t.me/{str(shared['username']).lower()}" if shared.get("username") else logic.chat_link(str(msg.get("text") or ""))
-
-
-async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict, ask: bool = True) -> dict | None:
-    """A chat picked in the picker (chat_shared) or sent as @name / a t.me link / an invite link: the answer to send.
-    A club's President or Vice is asked first whether it's their club's (the catalog and Studio's chats
-    were two doors nobody connected); ask=False: "No, just the catalog" was tapped (_tapped)."""
+async def _suggest(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
+    """The chats a private message names, straight into the moderation queue: picked in the picker (chat_shared), or
+    linked in a message typed or forwarded (logic.chat_links, 10 at most). One template answer naming each chat as
+    Telegram calls it, never the sender's own words. Nothing joins the catalog before staff approve it, whoever sent
+    it; a club's own channel is linked in Studio, not here."""
     chat = msg.get("chat") or {}
-    if chat.get("type") != "private" or ask and now() - int(msg.get("date") or 0) > FRESH:
+    if chat.get("type") != "private" or now() - int(msg.get("date") or 0) > FRESH:
         return None
     lang, shared = _lang(con, msg), msg.get("chat_shared") or {}
-    done = lambda kind, **f: {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML",  # noqa: E731
-                               "reply_markup": {"remove_keyboard": True}}
+    done = lambda text: {"chat_id": chat["id"], "text": text, "parse_mode": "HTML", "reply_markup": {"remove_keyboard": True}}  # noqa: E731
     u = _student(con, chat["id"])
     if not u:
         return _reply(chat["id"], *texts.bot_message(lang, "chat_signin"), "", cfg)
     if shared and not shared.get("username"):
-        return done("chat_invite")  # a closed chat from the picker: its invite link, please
-    url = _picked_url(msg)
-    if not url:
-        return done("chat_private")
-    if ask and (mine := logic.chat_orgs(con, logic.Viewer(u["id"], u["role"], True))):
-        # the buttons answer the pick's own message, so the tap finds the chat in reply_to_message (as receipts do)
-        text, no = texts.bot_message(lang, "chat_whose_one" if len(mine) == 1 else "chat_whose", club=mine[0]["name"])
-        keys = [[{"text": f"✅ {o['name'][:56]}", "callback_data": f"oc:{o['id']}"}] for o in mine[:8]] + [[{"text": no, "callback_data": "oc:0"}]]
-        return {**_reply(chat["id"], text, keys=keys), "reply_parameters": {"message_id": msg["message_id"]}}
-    out, title = await suggest(cfg, http, con, u["id"], url, shared.get("chat_id") if shared else None, shared.get("request_id") == 1 if shared else None)
-    return done(f"chat_{'later' if out == 'slow' else out}", title=title)
+        return done(texts.bot_message(lang, "chat_invite")[0])  # a closed chat from the picker: its invite link, please
+    urls = [f"https://t.me/{str(shared['username']).lower()}"] if shared else logic.chat_links(msg)
+    if not urls:
+        return done(texts.bot_message(lang, "chat_private")[0])
+    if not logic._once(con, f"suggest_at:{u['id']}", str(now() // 10)):  # one message's look at t.me per 10 s per student
+        return done(texts.bot_message(lang, "chat_later")[0])
+    got = [await suggest(cfg, http, con, u["id"], url, shared.get("chat_id") if shared else None,
+                         shared.get("request_id") == 1 if shared else None, gate=False) for url in urls]
+    return done(texts.chat_reply(lang, got))
 
 
 def _file(msg: dict) -> dict | None:
@@ -886,39 +904,9 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     return say("receipt_ok", f"tk_{eid}", title=title)
 
 
-async def _bound(cfg: Config, http: httpx.AsyncClient | None, con, orig: dict, oid: int) -> dict | None:
-    """The chat of the pick `orig` onto the club oid's page (logic.add_org_chat: the first public channel is its main
-    one), then a link into Studio for "show its posts in the feed"; oid 0: to the catalog as any suggestion."""
-    if not oid:
-        body = await _suggest(cfg, http, con, orig, ask=False)
-        return body and {**body, "reply_markup": {"inline_keyboard": []}}
-    chat = orig.get("chat") or {}
-    lang, url = _lang(con, orig), _picked_url(orig)
-    u = _student(con, chat.get("id"))
-    if not u or not url:
-        return None
-    def say(kind: str, keys: list | None = None, **f) -> dict:
-        return {"chat_id": chat["id"], "text": texts.bot_message(lang, kind, **f)[0], "parse_mode": "HTML", "reply_markup": {"inline_keyboard": keys or []}}
-    v, root = logic.Viewer(u["id"], u["role"], True), Path(cfg.db_path).resolve().parent / "media"
-    try:
-        o = logic.may_chats(con, v, oid)
-    except logic.ApiError:  # not the club's Vice+ (any more)
-        return say("chat_bind_no")
-    peek = await media.chat_peek(http, url)
-    await _avatar(peek, root)
-    try:
-        _, gone = logic.add_org_chat(con, v, oid, url, peek)
-    except logic.ApiError as exc:
-        _drop_free(con, root, peek.get("photo"))
-        return say({"taken": "chat_bind_taken", "catalog": "chat_bind_catalog", "limit": "chat_bind_limit", "notchat": "chat_notchat"}.get(exc.message, "chat_later"), club=o["name"])
-    media.drop(root, gone)
-    button = texts.bot_message(lang, "chat_bound", club=o["name"])[1]
-    return say("chat_bound", [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=ce_{oid}"}]], club=o["name"])
-
-
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
-    """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:), "whose channel" for a
-    chat (oc:); and on the forum's cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
+    """A tap on the bot's buttons under a message they answer: "which event" for a receipt (rc:); and on the forum's
+    cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?", data):  # the forum's cards: Accept/Decline an offer, stop the pings
@@ -935,13 +923,10 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
                                                  "text": texts.bot_message(u["lang"], said)[0], "reply_markup": {"inline_keyboard": []}})
         return
     orig = msg.get("reply_to_message") or {}
-    m = re.fullmatch(r"(rc|oc):(\d+)", data)
+    m = re.fullmatch(r"rc:(\d+)", data)
     if not m or (orig.get("from") or {}).get("id") != (cq.get("from") or {}).get("id"):
         return
-    if m[1] == "oc":
-        body = await _bound(cfg, http, con, orig, int(m[2]))
-    else:
-        body = await _receipt(cfg, http, con, orig, int(m[2])) if _file(orig) else None
+    body = await _receipt(cfg, http, con, orig, int(m[1])) if _file(orig) else None
     if body:
         await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
@@ -1083,7 +1068,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)
-                if msg.get("chat_shared") or logic.chat_handle(str(msg.get("text") or "")):
+                # chats a message links to (typed or forwarded; a photo or a file is a receipt unless forwarded)
+                if msg.get("chat_shared") or (msg.get("forward_origin") or not _file(msg)) and not _sched_file(msg) and logic.chat_links(msg):
                     try:
                         body = await _suggest(cfg, http, con, msg)
                     except Exception:  # a full disk, a broken picture: answer nothing, but never get stuck on this update
@@ -1173,7 +1159,9 @@ async def _translator(cfg: Config) -> None:
         while True:
             try:
                 job = logic.ai_next(con)
-                if job:
+                if not job:
+                    await sort_chat(cfg, http, con)  # nothing to translate: a directory chat into its section
+                else:
                     kind, rid, was = job
                     try:
                         src, tr = await ai.translate(cfg, http, was, logic.AI_LIMIT[kind], con)
@@ -1191,6 +1179,17 @@ async def _translator(cfg: Config) -> None:
             except Exception:  # noqa: BLE001 - the loop must outlive one bad answer
                 log.exception("translator")
                 await asyncio.sleep(30)
+
+
+async def sort_chat(cfg: Config, http: httpx.AsyncClient, con) -> bool:
+    """One directory chat into its section by the AI (ai.chat_section: its public title and description), applied at
+    once; no answer: it stays unsorted and is asked about again in an hour (logic.sort_next). False: none waiting."""
+    c = logic.sort_next(con)
+    if not c:
+        return False
+    if section := await ai.chat_section(cfg, http, c["title"], c["about"], con):
+        logic.sort_save(con, c["id"], section)
+    return True
 
 
 async def _userbot(cfg: Config) -> None:

@@ -201,15 +201,20 @@ BOT = {
         "chat_pick": ("💬 Выбери канал или группу, которые стоит добавить в каталог чатов КБТУ — кнопкой ниже. Или просто пришли сюда @username.", None),
         "chat_buttons": ("📢 Выбрать канал", "👥 Выбрать группу"),
         "chat_signin": ("Чтобы предложить чат, сначала войди в KBTU App.", "🚀 Открыть KBTU App"),
-        "chat_sent": ("✅ «{title}» отправлен на проверку. Как только его добавят в каталог — напишу.", None),
-        "chat_exists": ("👌 Этот чат уже есть в каталоге.", None),
-        "chat_org": ("👌 Этот чат уже есть в приложении — на странице своего клуба.", None),
-        "chat_waiting": ("⏳ Этот канал или группа уже на проверке — скоро посмотрим.", None),
+        "chat_sent": ("✅ Понял: {item}. Отправил на модерацию — скоро появится в приложении.", None),
+        "chat_exists": ("👌 Уже есть в приложении: {item}.", None),
+        "chat_waiting": ("⏳ Уже на модерации: {item}. Скоро появится в приложении.", None),
         "chat_limit": ("На сегодня хватит — завтра можно предложить ещё 🙂", None),
         "chat_private": ("Пришли @username чата или ссылку на него — подойдёт и приглашение t.me/+…", None),
         "chat_invite": ("🔒 Это закрытый чат — пришли сюда ссылку-приглашение на него (t.me/+…), и я передам его на проверку.", None),
         "chat_later": ("⏳ Telegram сейчас не ответил — попробуй через минуту.", None),
         "chat_notchat": ("🤔 Не нашёл такой канал или группу. Проверь @username.", None),
+        "chats_sent": ("✅ Понял, отправил на модерацию — скоро появятся в приложении:", None),
+        "chats_exists": ("👌 Уже есть в приложении:", None),
+        "chats_waiting": ("⏳ Уже на модерации:", None),
+        "chats_notchat": ("🤔 Не нашёл в Telegram: {n}. Проверь ссылки.", None),
+        "chats_limit": ("На сегодня хватит — остальные ({n}) можно прислать завтра 🙂", None),
+        "chats_later": ("⏳ Telegram не ответил про {n} — пришли их ещё раз через минуту.", None),
         "ask_match": ("🙋 Нужен человек со скиллом «{skill}». Запрос — в приложении.", "Открыть"),
         "ask_stop": ("🔕 Не присылать такие", None),
         "ask_stopped": ("🔕 Хорошо, такие запросы больше не пришлю. Включить снова можно в KBTU App.", None),
@@ -221,13 +226,6 @@ BOT = {
         "contact_no": ("Отклонено. Человек об этом не узнает.", None),
         "contact_gone": ("Этот запрос уже неактуален.", None),
         "ask_hidden": ("Твой запрос «{title}» скрыт: {why}.", "Открыть"),
-        "chat_whose_one": ("📢 Это канал или группа «{club}»? Тогда он появится на странице клуба.", "Нет, просто в каталог"),
-        "chat_whose": ("📢 Это канал или группа одного из твоих клубов? Тогда он появится на странице клуба.", "Нет, просто в каталог"),
-        "chat_bound": ("✅ Готово — чат теперь на странице «{club}». Чтобы посты канала шли и в ленту приложения, включи это в профиле клуба.", "⚙️ Открыть профиль клуба"),
-        "chat_bind_taken": ("🤔 Этот чат уже привязан к другому клубу. Если это ошибка — напиши в поддержку.", None),
-        "chat_bind_catalog": ("👌 Этот чат уже в каталоге КБТУ. Чтобы привязать его к «{club}», напиши в поддержку — команда приложения перенесёт.", None),
-        "chat_bind_limit": ("У «{club}» уже 12 чатов — больше на страницу не поместится.", None),
-        "chat_bind_no": ("Привязать чат к клубу могут только его президент и вице.", None),
         "sched_signin": ("Чтобы загрузить расписание, сначала войди в KBTU App через Microsoft.", "🚀 Открыть KBTU App"),
         "sched_ok": ("🗓 Готово — занятий в неделе: {n}. Проверь их в приложении.", "🗓 Проверить в приложении"),
         "sched_not": ("🤔 В этом файле нет расписания на неделю. Открой на портале «Расписание» и сохрани именно эту страницу.", None),
@@ -240,7 +238,7 @@ BOT = {
         "sched_nochange": ("В неделе ничего не изменилось.", None),
         "sched_changed": ("Неделя обновлена, изменений: {n}.", None),
         "chat_suggested": ("💬 Предложенные чаты ждут проверки: {n}", "Открыть"),
-        "chat_approved": ("🎉 Твой чат «{title}» теперь в каталоге КБТУ — спасибо!", "Открыть каталог"),
+        "chat_approved": ("✅ {item} теперь в приложении — спасибо!", "💬 Открыть чаты"),
         "backup_failed": ("⚠️ Вторую ночь подряд копия базы не ушла в облако (R2). Посмотри логи сервера: строки «offsite».", None),
         "backup_ok": ("✅ Копия базы снова дошла до облака (R2): резервное копирование работает.", None),
         "userbot_off": ("⚠️ Юзербот каналов молчит больше двух часов: посты из каналов клубов не копируются в новости. Посмотри логи сервера (строки «userbot»); если сессия слетела, войди заново: tools/userbot_login.py.", None),
@@ -331,15 +329,20 @@ BOT = {
         "chat_pick": ("💬 ҚБТУ чаттар каталогына қосуға тұрарлық арнаны не топты төмендегі батырмамен таңда. Немесе мұнда жай ғана @username жібер.", None),
         "chat_buttons": ("📢 Арнаны таңдау", "👥 Топты таңдау"),
         "chat_signin": ("Чат ұсыну үшін алдымен KBTU App-қа кір.", "🚀 KBTU App ашу"),
-        "chat_sent": ("✅ «{title}» тексеруге жіберілді. Каталогқа қосылғанда — жазамын.", None),
-        "chat_exists": ("👌 Бұл чат каталогта бар.", None),
-        "chat_org": ("👌 Бұл чат қосымшада бар — өз клубының бетінде.", None),
-        "chat_waiting": ("⏳ Бұл арна не топ қазір тексеруде — жақында қараймыз.", None),
+        "chat_sent": ("✅ Түсіндім: {item}. Модерацияға жібердім — жақында қосымшада шығады.", None),
+        "chat_exists": ("👌 Қосымшада бар: {item}.", None),
+        "chat_waiting": ("⏳ Модерацияда тұр: {item}. Жақында қосымшада шығады.", None),
         "chat_limit": ("Бүгінге жетеді — ертең тағы ұсына аласың 🙂", None),
         "chat_private": ("Чаттың @username-ін не сілтемесін жібер — t.me/+… шақыру сілтемесі де жарайды.", None),
         "chat_invite": ("🔒 Бұл жабық чат — оның шақыру сілтемесін (t.me/+…) осында жібер, мен оны тексеруге беремін.", None),
         "chat_later": ("⏳ Telegram қазір жауап бермеді — бір минуттан кейін қайтала.", None),
         "chat_notchat": ("🤔 Мұндай арна не топ табылмады. @username-ді тексер.", None),
+        "chats_sent": ("✅ Түсіндім, модерацияға жібердім — жақында қосымшада шығады:", None),
+        "chats_exists": ("👌 Қосымшада бар:", None),
+        "chats_waiting": ("⏳ Модерацияда тұр:", None),
+        "chats_notchat": ("🤔 Telegram-нан табылмады: {n}. Сілтемелерді тексер.", None),
+        "chats_limit": ("Бүгінге жетеді — қалғанын ({n}) ертең жібере аласың 🙂", None),
+        "chats_later": ("⏳ Telegram {n} чат туралы жауап бермеді — бір минуттан кейін қайта жібер.", None),
         "ask_match": ("🙋 «{skill}» дағдысы бар адам керек. Сұраныс — қосымшада.", "Ашу"),
         "ask_stop": ("🔕 Мұндайларды жібермеу", None),
         "ask_stopped": ("🔕 Жақсы, мұндай сұраулар енді келмейді. Қайта қосу — KBTU App-та.", None),
@@ -351,13 +354,6 @@ BOT = {
         "contact_no": ("Бас тартылды. Ол адам бұл туралы білмейді.", None),
         "contact_gone": ("Бұл сұрау енді өзекті емес.", None),
         "ask_hidden": ("«{title}» сұрауың жасырылды: {why}.", "Ашу"),
-        "chat_whose_one": ("📢 Бұл «{club}» арнасы не тобы ма? Онда ол клуб бетінде шығады.", "Жоқ, жай каталогқа"),
-        "chat_whose": ("📢 Бұл сенің клубтарыңның бірінің арнасы не тобы ма? Онда ол клуб бетінде шығады.", "Жоқ, жай каталогқа"),
-        "chat_bound": ("✅ Дайын — чат енді «{club}» бетінде. Арна посттары қосымшаның лентасында да шықсын десең, клуб профилінде қос.", "⚙️ Клуб профилін ашу"),
-        "chat_bind_taken": ("🤔 Бұл чат басқа клубқа байланған. Қате болса — қолдауға жаз.", None),
-        "chat_bind_catalog": ("👌 Бұл чат ҚБТУ каталогында бар. Оны «{club}» клубына байлау үшін қолдауға жаз — қосымша командасы ауыстырады.", None),
-        "chat_bind_limit": ("«{club}» клубында 12 чат бар — бетке бұдан көп сыймайды.", None),
-        "chat_bind_no": ("Чатты клубқа тек оның президенті мен вице-президенті байлай алады.", None),
         "sched_signin": ("Кестені жүктеу үшін алдымен KBTU App-қа Microsoft арқылы кір.", "🚀 KBTU App ашу"),
         "sched_ok": ("🗓 Дайын — аптадағы сабақтар: {n}. Қосымшада тексер.", "🗓 Қосымшада тексеру"),
         "sched_not": ("🤔 Бұл файлда апталық кесте жоқ. Порталда «Кестені» ашып, дәл сол бетті сақта.", None),
@@ -369,7 +365,7 @@ BOT = {
         "sched_nochange": ("Аптада ештеңе өзгерген жоқ.", None),
         "sched_changed": ("Апта жаңартылды, өзгерістер: {n}.", None),
         "chat_suggested": ("💬 Ұсынылған чаттар тексеруді күтуде: {n}", "Ашу"),
-        "chat_approved": ("🎉 Сенің «{title}» чатың енді ҚБТУ каталогында — рахмет!", "Каталогты ашу"),
+        "chat_approved": ("✅ {item} енді қосымшада — рахмет!", "💬 Чаттарды ашу"),
         "backup_failed": ("⚠️ Қатарынан екінші түн дерекқор көшірмесі бұлтқа (R2) жіберілмеді. Сервер логтарын қара: «offsite» жолдары.", None),
         "backup_ok": ("✅ Дерекқор көшірмесі қайтадан бұлтқа (R2) жетті: резервтік көшіру жұмыс істеп тұр.", None),
         "userbot_off": ("⚠️ Арналар юзерботы екі сағаттан астам үнсіз: клуб арналарының посттары жаңалықтарға көшірілмей тұр. Сервер логтарын қара («userbot» жолдары); сессия үзілсе, қайта кір: tools/userbot_login.py.", None),
@@ -458,15 +454,20 @@ BOT = {
         "chat_pick": ("💬 Pick a channel or group worth adding to KBTU's chats catalog with the buttons below. Or just send its @username here.", None),
         "chat_buttons": ("📢 Pick a channel", "👥 Pick a group"),
         "chat_signin": ("To suggest a chat, sign in to KBTU App first.", "🚀 Open KBTU App"),
-        "chat_sent": ("✅ “{title}” is sent for review. I'll write once it's in the catalog.", None),
-        "chat_exists": ("👌 This chat is already in the catalog.", None),
-        "chat_org": ("👌 This chat is already in the app, on its club's page.", None),
-        "chat_waiting": ("⏳ This channel or group is already waiting for review — we'll look soon.", None),
+        "chat_sent": ("✅ Got it: {item}. Sent for moderation — it'll show up in the app soon.", None),
+        "chat_exists": ("👌 Already in the app: {item}.", None),
+        "chat_waiting": ("⏳ Already in moderation: {item}. It'll show up in the app soon.", None),
         "chat_limit": ("That's enough for today — you can suggest more tomorrow 🙂", None),
         "chat_private": ("Send the chat's @username or a link to it — an invite link t.me/+… works too.", None),
         "chat_invite": ("🔒 That's a closed chat — send its invite link here (t.me/+…) and I'll pass it on for review.", None),
         "chat_later": ("⏳ Telegram didn't answer just now — try again in a minute.", None),
         "chat_notchat": ("🤔 Couldn't find such a channel or group. Check the @username.", None),
+        "chats_sent": ("✅ Got it, sent for moderation — they'll show up in the app soon:", None),
+        "chats_exists": ("👌 Already in the app:", None),
+        "chats_waiting": ("⏳ Already in moderation:", None),
+        "chats_notchat": ("🤔 Not found in Telegram: {n}. Check the links.", None),
+        "chats_limit": ("That's enough for today — send the rest ({n}) tomorrow 🙂", None),
+        "chats_later": ("⏳ Telegram didn't answer about {n} — send them again in a minute.", None),
         "ask_match": ("🙋 Someone needs {skill}. The request is in the app.", "Open"),
         "ask_stop": ("🔕 Don't send these", None),
         "ask_stopped": ("🔕 Got it, no more requests like this. You can turn them back on in KBTU App.", None),
@@ -478,13 +479,6 @@ BOT = {
         "contact_no": ("Declined. They won't be told.", None),
         "contact_gone": ("This one isn't open any more.", None),
         "ask_hidden": ("Your request “{title}” is hidden: {why}.", "Open"),
-        "chat_whose_one": ("📢 Is this {club}'s channel or group? Then it shows on the club's page.", "No, just the catalog"),
-        "chat_whose": ("📢 Is this one of your clubs' channels or groups? Then it shows on the club's page.", "No, just the catalog"),
-        "chat_bound": ("✅ Done: the chat is on {club}'s page now. To show the channel's posts in the app's feed too, turn it on in the club profile.", "⚙️ Open the club profile"),
-        "chat_bind_taken": ("🤔 This chat is already linked to another club. If that's a mistake, write to support.", None),
-        "chat_bind_catalog": ("👌 This chat is already in KBTU's catalog. To link it to {club}, write to support: the app's team moves it.", None),
-        "chat_bind_limit": ("{club} already has 12 chats: no more fit on its page.", None),
-        "chat_bind_no": ("Only a club's President and Vice can link a chat to it.", None),
         "sched_signin": ("To load your schedule, sign in to KBTU App with Microsoft first.", "🚀 Open KBTU App"),
         "sched_ok": ("🗓 Done: {n} classes in your week. Check them in the app.", "🗓 Check in the app"),
         "sched_not": ("🤔 There's no week's schedule in this file. Open Schedule on the portal and save that page.", None),
@@ -496,7 +490,7 @@ BOT = {
         "sched_nochange": ("Nothing changed in your week.", None),
         "sched_changed": ("Your week is updated, changes: {n}.", None),
         "chat_suggested": ("💬 Suggested chats waiting for review: {n}", "Open"),
-        "chat_approved": ("🎉 Your chat “{title}” is now in KBTU's catalog — thanks!", "Open the catalog"),
+        "chat_approved": ("✅ {item} is in the app now — thanks!", "💬 Open chats"),
         "backup_failed": ("⚠️ For the second night in a row the database copy didn't reach the cloud (R2). Check the server logs: the \"offsite\" lines.", None),
         "backup_ok": ("✅ The database copy reaches the cloud (R2) again: backups are working.", None),
         "userbot_off": ("⚠️ The channels' userbot has been quiet for over two hours: club channel posts aren't being copied into the news. Check the server logs (the \"userbot\" lines); if the session ended, sign in again: tools/userbot_login.py.", None),
@@ -572,6 +566,45 @@ def receipt_why(lang: str, flags: list[str]) -> str:
 def bot_message(lang: str, kind: str, **fields: object) -> tuple[str, str | None]:
     text, button = pick(BOT, lang)[kind]
     return text.format(**{k: html.escape(str(v)) for k, v in fields.items()}), button
+
+
+CHAT_KIND = {  # a chat as Telegram calls it, in the bot's answer to links (chat_reply); q: the quotes around its title
+    "ru": {"channel": "канал", "group": "группа", "forum": "группа с темами", "invite": "чат по ссылке-приглашению", "q": "«{}»"},
+    "kk": {"channel": "арна", "group": "топ", "forum": "тақырыптары бар топ", "invite": "шақыру сілтемесі бар чат", "q": "«{}»"},
+    "en": {"channel": "channel", "group": "group", "forum": "group with topics", "invite": "chat by invite link", "q": "“{}”"},
+}
+
+
+def chat_item(lang: str, kind: str, title: str, first: bool = False) -> str:
+    """'канал «Title»' (the title escaped for HTML); first: capitalised, to open a sentence."""
+    words = pick(CHAT_KIND, lang)
+    word = words.get(kind) or words["group"]
+    word = word[:1].upper() + word[1:] if first else word
+    return f"{word} {words['q'].format(html.escape(title))}" if title else word
+
+
+def chat_approved(lang: str, kind: str, title: str) -> tuple[str, str | None]:
+    """To each student who suggested a chat, once staff approved it: what it is and its title, and the Chats button."""
+    text, button = pick(BOT, lang)["chat_approved"]
+    return text.format(item=chat_item(lang, kind, title, True)), button
+
+
+def chat_reply(lang: str, got: list[tuple[str, str, str]]) -> str:
+    """The bot's one answer to the chats a message linked (bot.suggest's (outcome, title, kind) each): what each is and
+    its title from Telegram or the directory, never the sender's words; several: grouped by outcome, the rest counted."""
+    said = pick(BOT, lang)
+    item = lambda kind, title: chat_item(lang, kind, title)  # noqa: E731
+    if len(got) == 1:
+        out, title, kind = got[0]
+        return said[{"slow": "chat_later", "org": "chat_exists"}.get(out, f"chat_{out}")][0].format(item=item(kind, title))
+    parts = []
+    for out, key in (("sent", "chats_sent"), ("exists", "chats_exists"), ("waiting", "chats_waiting")):
+        if names := [item(k, t) for o, t, k in got if o == out or (out, o) == ("exists", "org")]:
+            parts.append(said[key][0] + "\n" + "\n".join(f"• {n}" for n in names))
+    for outs, key in ((("notchat",), "chats_notchat"), (("limit",), "chats_limit"), (("later", "slow"), "chats_later")):
+        if n := sum(o in outs for o, _, _ in got):
+            parts.append(said[key][0].format(n=n))
+    return "\n\n".join(parts)
 
 
 # The attendee list as a CSV (SPEC §6): headers and statuses in the organizer's language.

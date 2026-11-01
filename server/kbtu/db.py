@@ -1044,6 +1044,20 @@ MIGRATIONS: list[tuple[int, str]] = [
     -- now only the group's own channel's copies were mapped (tgcpost:), and that was the forum channel
     INSERT OR IGNORE INTO meta (key, value) SELECT 'fchcopy:' || substr(value, instr(value, ' ') + 1), substr(key, 9)
       FROM meta WHERE key LIKE 'tgcpost:%';"""),
+    # (Nov 2) the chats directory by what a chat is for (owner: study, reviews, admission, schools and courses, clubs,
+    # hobbies and fun); the AI sorts each chat by its public title and description (logic/chatlist.py sort_next), staff
+    # correct it in Admin. section NULL: not sorted yet; section_ai 1: the AI's, no one checked; section_try: the last
+    # time the AI was asked (a failed ask waits an hour)
+    (106, """ALTER TABLE chats ADD COLUMN section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun'));
+    ALTER TABLE chats ADD COLUMN section_ai INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE chats ADD COLUMN section_try INTEGER;
+    -- everyone who suggested a chat while it waited, each told once when staff approve it (chats.added_by: the first)
+    CREATE TABLE chat_asks (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (chat_id, user_id)
+    ) STRICT;
+    INSERT INTO chat_asks (chat_id, user_id) SELECT id, added_by FROM chats WHERE status = 'pending' AND added_by IS NOT NULL;"""),
 ]
 
 

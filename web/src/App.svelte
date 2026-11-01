@@ -311,6 +311,11 @@
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
     if (p === 'clubs') { ui.tab = 'club'; ui.allClubs = true; return; } // the bot's "other clubs recruit now"
+    if (p === 'chats') { // the bot's "your suggested chat is in the app": the chats directory
+      ui.tab = 'club'; ui.allClubs = true;
+      void api.chats().then((c) => { data.chats = c; sheets.chats(c.all); }).catch(() => {});
+      return;
+    }
     const mo = p.match(/^memo_(\d+)$/); // the bot's Wednesday "next week's memo is ready"
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const ref = p.match(/^ev_(\d+)_([A-Z2-7]{10})$/); // a club member's "My link": the sign-up goes to them

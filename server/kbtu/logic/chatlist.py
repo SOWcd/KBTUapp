@@ -18,7 +18,7 @@ def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
     """orgs: org id -> its ref, for the catalog's chip of whose chat it is (PLAN 86)."""
     return {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "url": c["url"], "members": c["members"],
             "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "school": c["school"], "course": c["course"], "opened": c["id"] in opened,
-            "org": (orgs or {}).get(c["org_id"])}
+            "org": (orgs or {}).get(c["org_id"]), "section": c["section"], "sectionAi": bool(c["section_ai"])}
 
 
 def chats(con, v: Viewer) -> dict:
@@ -131,6 +131,37 @@ def chat_link(text: str) -> str | None:
     return f"https://t.me/+{m.group(1)}" if m else None
 
 
+# t.me paths that are Telegram's own pages, never a chat
+TG_PAGES = {"addstickers", "addemoji", "addlist", "addtheme", "bg", "boost", "confirmphone", "contact", "iv", "joinchat",
+            "login", "proxy", "setlanguage", "share", "socks", "invoice", "giftcode", "c", "s"}
+ANY_LINK = re.compile(r"(?<![\w.-])(?:https?://)?(?:www\.)?(?:t|telegram)\.me/([^\s?#<>\"'«»()]+)", re.I)
+
+
+def chat_links(msg: dict, at_most: int = 10) -> list[str]:
+    """The chats a message (typed or forwarded) links to, in order, each once: their t.me addresses (chat_link). From
+    its text or caption and their hidden links (text_link); a whole message "@name" too. Not a post (t.me/name/123,
+    t.me/c/...), Telegram's own pages, or a bot (its name ends in "bot")."""
+    text = str(msg.get("text") or msg.get("caption") or "")
+    if (whole := chat_link(text)) and not whole.lower().endswith("bot"):
+        return [whole]
+    found = [text] + [str(e.get("url") or "") for e in (msg.get("entities") or msg.get("caption_entities") or []) if e.get("type") == "text_link"]
+    out: list[str] = []
+    for m in (m for x in found for m in ANY_LINK.finditer(x)):
+        parts = m.group(1).rstrip("/.,;:!").split("/")
+        if len(parts) == 2 and parts[0].lower() in ("s", "joinchat"):  # a channel's web view; an old invite link
+            parts = [parts[1] if parts[0].lower() == "s" else f"+{parts[1]}"]
+        if len(parts) != 1 or parts[0].lower() in TG_PAGES or parts[0].lower().endswith("bot"):
+            continue  # a post, a topic, Telegram's own page, a bot
+        if (url := chat_link(f"t.me/{parts[0]}")) and url not in out:
+            out.append(url)
+    return out[:at_most]
+
+
+def known_chat(con, url: str, tg_chat: int | None = None) -> sqlite3.Row | None:
+    """The directory's row for this chat, if it has one (live, waiting, or a club's own)."""
+    return one(con, f"SELECT * FROM chats WHERE {SAME_CHAT}", url, url, tg_chat)
+
+
 def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
     """Before the server looks the chat up on t.me: 10 suggestions a day (a club head with several chats
     mustn't hit it), nothing twice: "already in the catalog" or "already waiting"."""
@@ -145,22 +176,33 @@ def suggest_check(con, uid: int, url: str, tg_chat: int | None) -> None:
 
 
 def suggest_chat(con, uid: int, url: str, kind: str, tg_chat: int | None, peek: dict) -> str:
-    """The suggestion, waiting; the admins and moderators hear of it once a day at most. Its title."""
+    """The suggestion, waiting (kind: channel, group or forum); the admins and moderators hear of it once a day at most.
+    The AI sorts it into a section soon after (sort_next). Its title."""
     title = " ".join(str(peek.get("title") or "").split())[:80] or url.replace("https://t.me/", "@")
+    about = " ".join(str(peek.get("about") or "").split())[:300] or None
     with tx(con):
         suggest_check(con, uid, url, tg_chat)  # again inside the write: two taps at once
         if c := one(con, f"SELECT id FROM chats WHERE status = 'org' AND ({SAME_CHAT})", url, url, tg_chat):  # a club's own: it stays theirs
             con.execute("UPDATE chats SET status = 'pending', added_by = ?, created_at = ? WHERE id = ?", (uid, core.now(), c["id"]))
+            cid = c["id"]
         else:
-            con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, photo, members, added_by, created_at, status)
-                VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'pending')""", (title, kind, url, tg_chat, peek.get("photo"), peek.get("members"), uid, core.now()))
+            cid = con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, photo, members, about, added_by, created_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""", (title, "channel" if kind == "channel" else "group", int(kind == "forum"),
+                                                                       url, tg_chat, peek.get("photo"), peek.get("members"), about, uid, core.now())).lastrowid
+        con.execute("INSERT OR IGNORE INTO chat_asks (chat_id, user_id) VALUES (?, ?)", (cid, uid))
         for (aid,) in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')"):
             notify(con, aid, "chat_suggested", f"cs:{(core.now() + 5 * 3600) // 86400}")
     return title
 
 
+def chat_asked_too(con, uid: int, url: str, tg_chat: int | None) -> None:
+    """Another student suggested a chat already waiting: they hear too when it's approved (chat_asks)."""
+    if c := one(con, f"SELECT id FROM chats WHERE status = 'pending' AND ({SAME_CHAT})", url, url, tg_chat):
+        con.execute("INSERT OR IGNORE INTO chat_asks (chat_id, user_id) VALUES (?, ?)", (c["id"], uid))
+
+
 def approve_chat(con, v: Viewer, cid: int) -> dict:
-    """A suggested chat goes into the catalog; whoever suggested it hears so."""
+    """A suggested chat goes into the catalog; each who suggested it hears so once (if they let the bot write)."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
     with tx(con):
@@ -168,8 +210,46 @@ def approve_chat(con, v: Viewer, cid: int) -> dict:
         if not c:
             raise ApiError("not_found")
         con.execute("UPDATE chats SET status = 'live' WHERE id = ?", (cid,))
-        if c["added_by"]:
-            notify(con, c["added_by"], "chat_approved", f"ca:{cid}")
+        asked = {r[0] for r in rows(con, "SELECT user_id FROM chat_asks WHERE chat_id = ?", cid)} | ({c["added_by"]} if c["added_by"] else set())
+        for uid in asked:
+            notify(con, uid, "chat_approved", f"ca:{cid}")
+        con.execute("DELETE FROM chat_asks WHERE chat_id = ?", (cid,))
+    return _owned(con, cid)
+
+
+# ---------------------------------------------------------------- sections: what a chat is for (Nov 2)
+SECTIONS = ("study", "reviews", "admission", "schools", "clubs", "fun")
+SORT_AGAIN = 3600  # an AI that didn't answer is asked about the chat again an hour later
+
+
+def sort_next(con) -> sqlite3.Row | None:
+    """The next directory chat (live or waiting) with no section the AI wasn't asked about within the hour, the newest
+    suggestion first; marked as asked now (a failed ask waits, the next chat goes)."""
+    with tx(con):
+        c = one(con, """SELECT id, title, about FROM chats WHERE section IS NULL AND status IN ('live', 'pending')
+            AND COALESCE(section_try, 0) < ? ORDER BY status = 'pending' DESC, id DESC LIMIT 1""", core.now() - SORT_AGAIN)
+        if c:
+            con.execute("UPDATE chats SET section_try = ? WHERE id = ?", (core.now(), c["id"]))
+    return c
+
+
+def sort_save(con, cid: int, section: str) -> None:
+    """The AI's section, applied at once and marked unchecked; never over one staff chose meanwhile."""
+    if section in SECTIONS:
+        con.execute("UPDATE chats SET section = ?, section_ai = 1 WHERE id = ? AND section IS NULL", (section, cid))
+
+
+def set_chat_section(con, v: Viewer, cid: int, section: object) -> dict:
+    """Admin: a chat's section by staff, checked from now on (the AI's mark goes)."""
+    if v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+    if section not in SECTIONS:
+        raise ApiError("bad_input")
+    with tx(con):
+        if not one(con, "SELECT 1 FROM chats WHERE id = ?", cid):
+            raise ApiError("not_found")
+        con.execute("UPDATE chats SET section = ?, section_ai = 0 WHERE id = ?", (section, cid))
+        log_action(con, v.id, "chat_section", f"chat:{cid}", str(section))
     return _owned(con, cid)
 
 
@@ -178,6 +258,7 @@ def delete_chat(con, v: Viewer, cid: int) -> str | None:
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
     c = one(con, "SELECT photo, org_id FROM chats WHERE id = ?", cid)
+    con.execute("DELETE FROM chat_asks WHERE chat_id = ?", (cid,))  # declined: nobody is told (quietly)
     if c and c["org_id"]:  # a club's chat leaves the catalog, not the club's page
         con.execute("UPDATE chats SET status = 'org' WHERE id = ?", (cid,))
         return None
@@ -221,12 +302,6 @@ def may_chats(con, v: Viewer, oid: int) -> sqlite3.Row:
     if not can(con, v, oid, "profile") and v.role != "admin":
         raise ApiError("forbidden")
     return o
-
-
-def chat_orgs(con, v: Viewer) -> list[sqlite3.Row]:
-    """The orgs whose chats I link (may_chats: Vice+), for the bot's "is this your club's channel?"."""
-    return [o for o in rows(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ?
-        AND o.status != 'archived' ORDER BY o.name""", v.id) if can(con, v, o["id"], "profile")]
 
 
 def add_org_chat(con, v: Viewer, oid: int, url: str, peek: dict) -> tuple[list[dict], list[str]]:

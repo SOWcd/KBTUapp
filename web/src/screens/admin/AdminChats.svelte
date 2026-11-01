@@ -1,10 +1,11 @@
 <script lang="ts">
   // Admin → Chats (§4.11): the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
   // since the admin panel became a hub. The admin says whose a chat is (PLAN 86: then it shows on that
-  // club's or school's page too; t.me/kbtusite is SITE's).
+  // club's or school's page too; t.me/kbtusite is SITE's). Staff set what each chat is for (its section): the AI's
+  // section shows marked unchecked until someone picks one.
   import Plus from '@lucide/svelte/icons/plus';
   import X from '@lucide/svelte/icons/x';
-  import { api, ApiErr, type AdminOrg, type Chat } from '../../lib/api';
+  import { api, ApiErr, CHAT_SECTIONS, type AdminOrg, type Chat, type ChatSection } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
@@ -38,6 +39,12 @@
     try { const x = await api.setChatOrg(c.id, v ? Number(v) : null); chats = (chats ?? []).map((y) => (y.id === c.id ? x : y)); haptic.ok(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  async function setSection(c: Chat, ev: Event) {
+    const s = (ev.currentTarget as HTMLSelectElement).value as ChatSection;
+    const put = (x: Chat) => { chats = (chats ?? []).map((y) => (y.id === x.id ? x : y)); pending = pending.map((y) => (y.id === x.id ? { ...y, ...x } : y)); };
+    put({ ...c, section: s, sectionAi: false }); haptic.ok();
+    try { put(await api.setChatSection(c.id, s)); } catch { put(c); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   let chatForm = $state(false);
   let nch = $state({ title: '', url: '', kind: 'group' as Chat['kind'], school: '', course: 0 });
   async function addChat(ev: Event) {
@@ -57,6 +64,13 @@
 
 </script>
 
+{#snippet sec(c: Chat)}
+  <span class="secl"><select class="sec" aria-label={t('adm.chatSection')} value={c.section ?? ''} onchange={(ev) => setSection(c, ev)}>
+    {#if !c.section}<option value="">{t('chats.sec.other')}</option>{/if}
+    {#each CHAT_SECTIONS as s (s)}<option value={s}>{t(`chats.sec.${s}`)}</option>{/each}</select>
+    {#if c.sectionAi}<em class="aimark">{t('adm.chatAi')}</em>{/if}</span>
+{/snippet}
+
 <Sheet {overlay} icon={TelegramMark} full title={t('adm.chats')}>
   <h2 class="t-h2 hd">{t('adm.chats')}</h2>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
@@ -65,13 +79,13 @@
     <div class="chl surface">{#each pending as c (c.id)}<div class="chr">
       <span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span>
       <!-- the link itself, so a look tells a real chat from a stray one -->
-      <button class="pv ellipsis" onclick={() => openLink(c.url)}>{c.title}<i>{c.org ? `${t('oc.whose')}: ${shortOf(c.org)} · ` : ''}{c.url.includes('/+') ? t('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></button>
+      <span class="tx"><a class="pv ellipsis" href={c.url} onclick={(e) => { e.preventDefault(); openLink(c.url); }}>{c.title}<i>{c.org ? `${t('oc.whose')}: ${shortOf(c.org)} · ` : ''}{c.url.includes('/+') ? t('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></a>{@render sec(c)}</span>
       <Button kind="primary" size="s" onclick={() => approve(c)}>{t('adm.chatApprove')}</Button>
       <button onclick={() => decline(c)} aria-label={t('cm.delete')}><X size={16} /></button>
     </div>{/each}</div>
   {/if}
   {#if chats?.length}
-    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="ellipsis">{c.title}<i>{schoolShort(c.school)}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span>
+    <div class="chl surface">{#each chats as c (c.id)}<div class="chr"><span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span><span class="tx"><span class="ellipsis">{c.title}<i>{schoolShort(c.school)}{c.course ? ' ' + t('chats.course', { n: c.course }) : ''}</i></span>{@render sec(c)}</span>
       {#if admin}<select class="whose" aria-label={t('oc.whose')} value={c.org ? String(c.org.id) : ''} onchange={(ev) => whose(c, ev)}>
         <option value="">{t('oc.nobody')}</option>{#each orgs as o (o.id)}<option value={String(o.id)}>{o.abbr || o.name}</option>{/each}</select>{/if}
       <button onclick={() => dropChat(c)} aria-label={t('cm.delete')}><X size={16} /></button></div>{/each}</div>
@@ -117,6 +131,13 @@
   .whose { flex: none; width: auto; max-width: 96px; height: 30px; padding: 0 8px; border-radius: var(--r-full); background: var(--surface-2); font: 600 12.5px/1 var(--font-text); color: var(--text-2); }
   .addchat { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 44px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
   .gh { margin: 4px 2px 8px; }
+  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .tx > .ellipsis, .tx > .pv { flex: none; width: 100%; }
+  .tx > .pv { display: block; height: auto; }
+  /* the section: one tap opens the native picker; the AI's own choice is marked until staff pick */
+  .secl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: 100%; }
+  .sec { width: auto; max-width: 100%; height: 24px; padding: 0 10px; border: 0; appearance: none; text-overflow: ellipsis; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 var(--fs-cap)/1 var(--font-text); }
+  .aimark { flex: none; font: 600 var(--fs-micro)/1 var(--font-text); font-style: normal; color: var(--text-3); white-space: nowrap; }
   .pv { flex: 1; min-width: 0; text-align: left; font: 600 14.5px/1.3 var(--font-text); color: var(--text); }
-  .pv i { display: block; margin: 2px 0 0; }
+  .pv i { display: block; margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; }
 </style>

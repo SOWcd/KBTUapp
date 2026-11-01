@@ -285,6 +285,7 @@ export const server: Api = {
   chatOpened: (id) => call('POST', `/chats/${id}/opened`),
   addChat: (input) => call('POST', '/admin/chats', input),
   setChatOrg: (id, org) => call('PUT', `/admin/chats/${id}/org`, { orgId: org }),
+  setChatSection: (id, section) => call('PUT', `/admin/chats/${id}/section`, { section }),
   orgChats: (org) => call('GET', `/orgs/${org}/chats`),
   addOrgChat: (org, link) => call('POST', `/orgs/${org}/chats`, { link }),
   mainOrgChat: (org, chat) => call('PUT', `/orgs/${org}/chats/${chat}/main`),

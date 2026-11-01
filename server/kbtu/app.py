@@ -1327,7 +1327,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not url:
             return {"status": "bad", "title": ""}
         async with httpx.AsyncClient(timeout=10) as http:
-            status, title = await bot.suggest(cfg, http, con, v.id, url)
+            status, title, _ = await bot.suggest(cfg, http, con, v.id, url)
         return {"status": status, "title": title}
 
     @app.post("/api/chats/{cid}/opened", status_code=204)
@@ -1421,6 +1421,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/admin/chats/{cid}/org")
     def chat_org(cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_chat_org(con, v, cid, body.get("orgId"))
+
+    @app.put("/api/admin/chats/{cid}/section")
+    def chat_section(cid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.set_chat_section(con, v, cid, body.get("section"))
 
     @app.post("/api/admin/chats/{cid}/approve")
     def approve_chat(cid: int, con: Con, v: Me):
