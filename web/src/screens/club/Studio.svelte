@@ -46,6 +46,8 @@
   import { shareInvite } from '../../lib/invite';
   import { termJustStarted } from '../../lib/academic';
   import { nameOf } from '../../lib/short';
+  import { photosFirst } from '../../lib/faces';
+  import Avatar from '../../ui/Avatar.svelte';
 
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
@@ -75,6 +77,8 @@
   });
   const recruiting = $derived(data.orgs.find((x) => x.id === m?.org.id)?.recruiting ?? true);
   const members = $derived(data.orgs.find((x) => x.id === m?.org.id)?.members ?? 0);
+  // the Team row's faces, from the roster the app loads with it; a dozen is more than a 430 px row holds
+  const faces = $derived(photosFirst((m && data.team[m.org.id]) || []).slice(0, 12));
 
   // kept per club and loaded with the app (the club in view), so Studio opens full; a visit or a change refreshes it
   const events = $derived((m && data.studio[m.org.id]) || []);
@@ -167,7 +171,9 @@
     </header>
 
     <div class="todo surface">
-      <button onclick={() => { haptic.tap(); sheets.team(); }}><Users size={20} /><span class="tx"><b class="ellipsis">{t('page.team')}</b>{#if removals}<i class="t-foot ellipsis">{t('team.removals')}</i>{/if}</span>
+      <button onclick={() => { haptic.tap(); sheets.team(); }}><Users size={20} /><span class="tx team"><b class="ellipsis">{t('page.team')}</b>{#if removals}<i class="t-foot ellipsis">{t('team.removals')}</i>{/if}</span>
+        <!-- the faces fill the row: whole ones only (the line wraps the rest out of sight) -->
+        <span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
         <span class="num n">{data.team[m.org.id]?.length ?? members}</span>{#if removals}<b class="count warn">{removals}</b>{/if}<ChevronRight size={18} /></button>
     </div>
 
@@ -249,12 +255,12 @@
          whose posts the userbot copies into the news, or "Link" -->
     {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
       <div class="qa">
-        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Megaphone size={22} /><b>{t('studio.channelShort')}</b><small class="ell">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></button>{/if}
-        {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></button>{/if}
+        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Megaphone size={22} /><span class="tt"><b>{t('studio.channelShort')}</b><small class="clamp-2">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></span></button>{/if}
+        {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><span class="tt"><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></span></button>{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
-        {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></button>{/if}
-        {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
-        {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></button>{/if}
+        {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><span class="tt"><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></span></button>{/if}
+        {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><span class="tt"><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small></span>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
+        {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><span class="tt"><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></span></button>{/if}
       </div>
     {/if}
 
@@ -306,12 +312,19 @@
   .todo button > :global(svg:first-child) { flex: none; color: var(--accent-text); }
   .todo .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .todo .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
-  .qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; margin-top: 12px; }
-  .qt { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--accent-text); }
+  .tx.team { flex: none; max-width: 50%; }
+  .faces { flex: 1; min-width: 0; height: 32px; padding: 2px; display: flex; flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; overflow: hidden; }
+  .faces :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
+  .faces :global(.av + .av) { margin-left: -8px; }
+  /* two columns, every count even: an odd last tile takes the whole row, its icon beside the words */
+  .qa { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .qt { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--accent-text); }
+  .qt:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 12px; }
+  .qt > :global(svg) { flex: none; }
   .qt:active { transform: scale(0.97); }
-  .qt b { margin-top: 10px; font: 680 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
+  .tt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .qt b { font: 680 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
   .qt small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
-  .qt .ell { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .qd { position: absolute; top: 12px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); font-style: normal; text-align: center; }
   .sec { margin: 26px 4px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
   .seats { display: flex; flex-direction: column; gap: 6px; }

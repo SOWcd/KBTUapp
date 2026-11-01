@@ -1,9 +1,3 @@
-<script lang="ts" module>
-  // a fresh order each time the app opens, the same while it's open (the faces don't jump on every visit to the tab)
-  const SEED = Math.random() * 1e4;
-  const luck = (id: number) => { const x = Math.sin(id * 12.9898 + SEED) * 43758.5453; return x - Math.floor(x); };
-</script>
-
 <script lang="ts">
   // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), then two squares: my friends (the Friends sheet: requests,
@@ -30,6 +24,7 @@
   import { calm } from '../../ui/fold';
   import SettingsMode from './SettingsMode.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import { photosFirst } from '../../lib/faces';
   import { sheets } from '../../lib/state/sheets';
   import { api, type PersonCard } from '../../lib/api';
   import { nextUp, nameOf, whenOf, semester, PSYCHOLOGIST } from '../../lib/academic';
@@ -66,7 +61,7 @@
   // packed so seventeen faces fill the box without holes (owner, Nov 2: as many faces as fit, the whole tile above its name); fewer friends take the biggest
   const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
   // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
-  const faces = $derived([...friends].sort((a, b) => +!a.person.avatar - +!b.person.avatar || luck(a.person.id) - luck(b.person.id)));
+  const faces = $derived(photosFirst(friends));
   const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
 
   let page = $state<HTMLDivElement>();

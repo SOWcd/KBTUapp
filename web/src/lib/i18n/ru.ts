@@ -1416,7 +1416,7 @@ const ru = {
   'clubs.allTitle': "Все клубы",
   'clubs.allNote': "Сначала самые большие; клубы, где пока никого нет, в конце.",
   'studio.postShort': 'Новость',
-  'studio.postSub': 'написать в кружочки',
+  'studio.postSub': 'пост на Афишу',
   'studio.channelShort': 'Канал',
   'studio.channelLink': 'Подключить',
   'studio.channelOff': 'Не копируется',

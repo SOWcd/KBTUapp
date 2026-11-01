@@ -1397,7 +1397,7 @@ const kk: Dict = {
   'clubs.allTitle': "Барлық клубтар",
   'clubs.allNote': "Алдымен ең үлкендері; әзірге ешкім жоқ клубтар соңында.",
   'studio.postShort': 'Жаңалық',
-  'studio.postSub': 'шеңберлерге жазу',
+  'studio.postSub': 'Афишаға жазба',
   'studio.channelShort': 'Арна',
   'studio.channelLink': 'Қосу',
   'studio.channelOff': 'Көшірілмейді',
