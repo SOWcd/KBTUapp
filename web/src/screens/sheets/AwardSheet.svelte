@@ -58,7 +58,44 @@
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
-  const EDGE = Array.from({ length: 20 }, (_, i) => i + 1); // 20 discs 1 px apart: ~10% of the 196 px coin, a real coin's thickness
+  const EDGE = Array.from({ length: 22 }, (_, i) => i + 1); // 22 discs 1 px apart: ~10% of the 220 px coin, a real coin's thickness
+  const SIZE = 220;
+
+  // a finger turns the coin round its upright axis, a flick spins it past its back, then it settles face up (Apple's
+  // award view); on top of the tilt. --spin is written straight on .big: no re-render per frame
+  let big = $state<HTMLSpanElement>();
+  let spin = 0, vel = 0, raf = 0, drag: { x: number; a: number; t: number; id: number } | null = null;
+  const put = () => big?.style.setProperty('--spin', spin.toFixed(2) + 'deg');
+  function coast() {
+    if (Math.abs(vel) > 0.35) { spin += vel; vel *= 0.955; }
+    else {
+      const to = Math.round(spin / 360) * 360; // the nearest face-up
+      spin += (to - spin) * 0.14;
+      if (Math.abs(to - spin) < 0.2) { spin = 0; vel = 0; put(); raf = 0; return; }
+    }
+    put(); raf = requestAnimationFrame(coast);
+  }
+  function grab(e: PointerEvent) {
+    if (!edge || matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx')) return;
+    cancelAnimationFrame(raf); raf = 0;
+    drag = { x: e.clientX, a: spin, t: e.timeStamp, id: e.pointerId }; vel = 0;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function move(e: PointerEvent) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const was = spin;
+    spin = drag.a + (e.clientX - drag.x) * 0.9; // 0.9 deg a pixel: a swipe across the coin is about half a turn
+    const dt = Math.max(1, e.timeStamp - drag.t);
+    vel = ((spin - was) / dt) * 16.7; drag.t = e.timeStamp; // deg a frame
+    put();
+  }
+  function drop() {
+    if (!drag) return;
+    drag = null; vel = Math.max(-40, Math.min(40, vel));
+    if (Math.abs(vel) > 6) haptic.tap();
+    raf = requestAnimationFrame(coast);
+  }
+  onMount(() => () => cancelAnimationFrame(raf));
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
   const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
@@ -93,13 +130,13 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" class:lit={round && !!glow} style:--glow={glow} use:glass>
+  <div class="stage" class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge} style:--edge={edge || null}>{#if edge}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}{/if}<Award {it} size={round ? 196 : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge} style:--edge={edge || null} bind:this={big}>{#if edge}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face"><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span></span>
   </div>
-  {#if kicker}<p class="kick up" class:metal={!!glow} style:--k={glow}>{kicker}</p>{/if}
-  <h2 class="t-h1 name up">{it.name}</h2>
+  <h2 class="name up">{it.name}</h2>
+  {#if kicker}<p class="kick up">{kicker}</p>{/if}
 
   {#if a}
     {#if a.now}<p class="tier">{tn('ach.streakNow', a.now)}</p>{/if}
@@ -107,11 +144,8 @@
     {#if a.level && a.at && tiers}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
     {#if !hidden}
       {#if a.level && !tiers}
-        <!-- earned, one level: the day and how rare, side by side (once: no "Earned" above and below) -->
-        <div class="facts up">
-          <div><b>{a.at ? dayMonth(a.at) : t('aw.have')}</b>{#if a.at}<span>{t('aw.gotOn')}</span>{/if}</div>
-          <div><b>{share(Math.max(a.levels[0].rarity, 0.001))}%</b><span>{t('aw.haveIt')}</span></div>
-        </div>
+        <!-- earned, one level: the day and how rare, one quiet line (owner, Nov 1: the boxed card looked clunky) -->
+        <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}</p>
       {:else if next}
         <div class="prog up">
           <div class="row"><b>{t('ach.progress', { count: a.count, need: next.need })}</b>{#if tiers}<span>{t('aw.toLevel', { tier: tierOf(a.levels.indexOf(next)) })}</span>{/if}</div>
@@ -174,39 +208,41 @@
   .pill:active { transform: scale(0.96); }
   .pill:disabled { opacity: 0.6; }
   .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; }
-  .lit { padding: 40px 0 34px; }
-  /* behind the medal (full screen now, nothing cuts it): a soft halo of its metal and fine rays that fade out long
-     before any edge, turning slowly; thin lines, not wedges (owner, Nov 1: the old wide rays read childish) */
+  .lit { padding: 56px 0 44px; }
+  .spins { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+  /* behind the coin, still: a soft wide light of its metal and hairline rays that fade out long before any edge
+     (owner, Nov 1: the old wide rays read childish; then: quieter, more premium) */
   .halo, .rays { position: absolute; left: 50%; top: 50%; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%; }
-  .halo { width: 300px; background: radial-gradient(closest-side, rgba(var(--glow), 0.42), rgba(var(--glow), 0.12) 60%, transparent); }
-  .rays { width: 420px; background: repeating-conic-gradient(rgba(var(--glow), 0.16) 0 1.2deg, transparent 1.2deg 9deg);
-    -webkit-mask: radial-gradient(closest-side, transparent 30%, black 44%, transparent 86%); mask: radial-gradient(closest-side, transparent 30%, black 44%, transparent 86%);
-    animation: turn 120s linear infinite; }
+  .halo { width: 360px; background: radial-gradient(closest-side, rgba(var(--glow), 0.26), rgba(var(--glow), 0.07) 58%, transparent); }
+  .rays { width: 440px; background: repeating-conic-gradient(rgba(var(--glow), 0.09) 0 0.5deg, transparent 0.5deg 6deg);
+    -webkit-mask: radial-gradient(closest-side, transparent 40%, black 52%, transparent 82%); mask: radial-gradient(closest-side, transparent 40%, black 52%, transparent 82%); }
   /* the halo, rays and shadow stay put: only the coin turns (owner, Nov 1: the glow moving with the coin looked strange) */
-  .shade { position: absolute; left: 50%; top: 50%; width: 176px; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%;
+  .shade { position: absolute; left: 50%; top: 50%; width: 196px; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%;
     background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.22) 62%, transparent);
-    transform: translateY(16px); }
+    transform: translateY(18px); }
   .pop { position: relative; z-index: 1; display: inline-flex; perspective: 700px; }
-  :global(html.lowfx) .rays { animation: none; }
   /* power saving stops the gyro (--gx would freeze off-centre): flat; reduced motion never starts it */
   :global(html.lowfx) .big { transform: none; }
   :global(html.lowfx) .edge { display: none; }
-  @media (prefers-reduced-motion: reduce) { .rays, .sweep { animation: none; } .big { transform: none; } .edge { display: none; } }
-  @keyframes turn { to { rotate: 360deg; } }
+  @media (prefers-reduced-motion: reduce) { .sweep { animation: none; } .big { transform: none; } .edge { display: none; } }
   /* one narrow pass of light across the metal as it lands */
   .sweep { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay; background-size: 300% 100%;
     background-image: linear-gradient(115deg, transparent 46%, rgba(255, 255, 255, 0.55) 50%, transparent 54%); background-position: 130% 0;
     animation: sweep 1.4s 0.55s cubic-bezier(0.4, 0, 0.2, 1) both; }
   @keyframes sweep { to { background-position: -30% 0; } }
-  .kick { text-align: center; margin-top: 4px; font: 700 var(--fs-cap)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
-  .kick.metal { color: rgb(var(--k)); }
-    .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 18px; border-radius: var(--r-l); overflow: hidden; background: var(--line); }
-  .facts div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2); }
-  .facts b { font: 720 var(--fs-card)/1.2 var(--font-display); }
-  .facts span { font: 560 var(--fs-cap)/1.25 var(--font-text); color: var(--text-2); }
+  /* under the coin, Apple's award view: the name large, one quiet line, the words, a quiet meta line */
+  .kick { text-align: center; margin-top: 6px; font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
+  .meta { text-align: center; margin-top: 14px; font: 560 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   /* the coin only turns, it never slides (owner, Nov 1). No transition: glass.ts's lerp already smooths --gx/--gy */
   .big { position: relative; display: inline-flex; will-change: transform; transform-style: preserve-3d;
-    transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg)); }
+    transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg + var(--spin, 0deg))); }
+  /* the face hides when it turns away; the back is the same disc, mirrored, darker and flatter, like a struck reverse */
+  .face { position: relative; display: inline-flex; }
+  .coin .face { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+  .back { position: absolute; inset: 0; display: inline-flex; -webkit-backface-visibility: hidden; backface-visibility: hidden;
+    transform: translateZ(-23px) rotateY(180deg) scaleX(-1); }
+  .coin .back > :global(:first-child) { filter: grayscale(0.55) brightness(0.62) contrast(1.15); }
+  .back::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 -1px 2px rgba(255, 255, 255, 0.18); }
   /* the edge: discs of the metal stacked 1 px apart behind the face (at 26 deg a step projects to under 0.5 px: no gaps);
      the rim shows on the side the coin turns away from, as on a real coin. Darker than the face's rim, lit from above,
      with fine radial ridges (a conic stripe on every disc lines up into the milled edge). The face's own drop shadow
@@ -214,16 +250,16 @@
   .edge { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; transform: translateZ(calc(var(--z) * -1px));
     background: repeating-conic-gradient(rgba(0, 0, 0, 0.32) 0 0.9deg, rgba(255, 255, 255, 0.14) 0.9deg 1.8deg),
       linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.55)), linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), rgb(var(--edge)); }
-  .coin > :global(:not(.edge)), .coin :global(img) { box-shadow: none; filter: none; }
+  .coin .face > :global(:first-child), .coin :is(.face, .back) :global(img) { box-shadow: none; filter: none; }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
   /* a soft specular band that slides with the tilt, as on polished metal (owner, Nov 1: the white spot was so-so) */
   .round .shine { display: block; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: soft-light;
     background: linear-gradient(125deg, transparent calc(28% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), rgba(255, 255, 255, 0.5) calc(40% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), transparent calc(54% + var(--gx, 0) * 34% + var(--gy, 0) * 14%)); }
-  .name { text-align: center; margin-top: 8px; color: var(--text); }
+  .name { text-align: center; margin-top: 10px; color: var(--text); font: 750 var(--fs-title)/1.12 var(--font-display); letter-spacing: -0.02em; }
   .got { text-align: center; margin-top: 2px; }
   .tier { text-align: center; margin-top: 4px; font: 650 14px/1.3 var(--font-text); color: var(--accent-text); }
-  .how { text-align: center; margin: 10px 6px 0; color: var(--text-2); }
+  .how { text-align: center; margin: 14px 12px 0; color: var(--text-2); }
 
   .prog { margin-top: 16px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
   .prog .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
