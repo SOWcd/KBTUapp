@@ -154,7 +154,7 @@
         <li class:done={r.mine?.stage !== 'sent'}>{t('cast.stepReview')}</li>
         <li class:done={r.mine?.stage === 'yes' || r.mine?.stage === 'no'}>{r.resultsBy ? t('cast.stepResultsBy', { when: dayMonth(r.resultsBy) }) : t('cast.stepResults')}</li>
       </ol>
-      <p class="t-foot note">{t('cast.botTells')}</p>
+      {#if r.status === 'done' && r.declineText}<p class="t-callout decl">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
     {/if}
 
     {#if r.mine?.invited}
@@ -245,6 +245,7 @@
   .steps li { display: flex; align-items: center; gap: 8px; font: 600 14.5px/1.3 var(--font-text); color: var(--text-2); }
   .steps li.done { color: var(--text); }
   .note { margin: 6px 4px 0; }
+  .decl { margin: var(--s-3) 4px 0; white-space: pre-line; overflow-wrap: anywhere; }
   .iv { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding: 12px 14px; box-shadow: inset 0 0 0 2px var(--accent); }
   .ivmine { display: flex; flex-direction: column; gap: 2px; }
   .ivmine b { font: 750 20px/1.2 var(--font-display); }

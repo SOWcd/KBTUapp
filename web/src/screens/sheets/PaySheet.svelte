@@ -61,7 +61,7 @@
       else paid();
     } catch (x) {
       haptic.error();
-      say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'pleading_face_3d');
+      say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.code === 'rate_limited' ? t('pay.tooMany') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'pleading_face_3d');
     } finally { busy = false; }
   }
   function release() { toggleGoing(id); close(overlay.id); }

@@ -31,6 +31,10 @@
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
   const student = $derived(!!me?.student);
+  // the channel takes posts from KBTU-confirmed students only (a typed-in ID could be anyone's): the rest confirm first
+  const writer = $derived(student && !me?.student?.manual);
+  // the bot's signature, as the server makes it (core.short_name): the real first name and the last initial, never a nick
+  const sign = $derived(me?.student ? `${me.student.firstName} ${me.student.lastName ? [...me.student.lastName][0] + '.' : ''}`.trim() : '');
   const staff = $derived(me?.role === 'admin' || me?.role === 'moderator');
   const owner = $derived(me?.role === 'admin' && !!me?.founder);
   const here = $derived(ui.tab === 'forum');
@@ -104,12 +108,14 @@
 
   {#if !student}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.guestTitle')} text={t('fc.guestText')} action={{ label: t('fc.signIn'), onclick: () => asStudent(() => void loadChannel()) }} />
+  {:else if !writer}
+    <EmptyState icon={TAB_ICON.forum} title={t('fc.guestTitle')} text={t('fc.msText')} action={{ label: t('fc.confirm'), onclick: () => sheets.login() }} />
   {:else}
     <Card>
       <textarea class="text" bind:value={body} maxlength="1000" rows="3" placeholder={t('fc.ph')} aria-label={t('fc.ph')} use:grow={280}></textarea>
       <p class="rules">{t('fc.rules')}</p>
     </Card>
-    <Group footnote={anon ? t('fc.asAnon') : t('fc.as', { name: me?.name ?? '' })}>
+    <Group footnote={anon ? t('fc.asAnon') : t('fc.as', { name: sign })}>
       <Row title={t('fc.anon')} icon={VenetianMask} tile="gray" accessory="switch" checked={anon} onchange={(v) => { anon = v; haptic.select(); }} />
     </Group>
     <Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>
@@ -117,12 +123,15 @@
     <Group>
       <Row title={t('fc.open')} icon={Send} tile="blue" accessory="external" onclick={() => openLink(CHANNEL)} />
     </Group>
+  {/if}
 
-    {#if staff && mod && (mod.held.length || mod.live.length)}
-      {#if mod.held.length}<Group caption={t('fc.modTitle')}>{#each mod.held as p (p.id)}{@render modRow(p, true)}{/each}</Group>{/if}
-      {#if mod.live.length}<Group caption={t('fc.modLive')}>{#each mod.live as p (p.id)}{@render modRow(p, false)}{/each}</Group>{/if}
-    {/if}
+  <!-- a moderator's queue, a student profile or not -->
+  {#if staff && mod && (mod.held.length || mod.live.length)}
+    {#if mod.held.length}<Group caption={t('fc.modTitle')}>{#each mod.held as p (p.id)}{@render modRow(p, true)}{/each}</Group>{/if}
+    {#if mod.live.length}<Group caption={t('fc.modLive')}>{#each mod.live as p (p.id)}{@render modRow(p, false)}{/each}</Group>{/if}
+  {/if}
 
+  {#if writer}
     {#if channel.mine?.length}
       <Group caption={t('fc.mine')}>
         {#each channel.mine as p (p.id)}

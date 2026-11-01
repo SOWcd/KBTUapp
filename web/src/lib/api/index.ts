@@ -106,7 +106,6 @@ export interface Api {
   /** one memo item written from the sheet's small form (no event needed) */
   /** indoor routes' graph (PLAN item 22); the admin saves it from the version he edited (conflict: someone saved since) */
   mapGraph(): Promise<Graph>;
-  saveMapGraph(g: Graph): Promise<Graph>;
   memoItem(org: Id, item: { kind: string; fields: object; place: string; startsAt: Ts; endsAt: Ts | null }): Promise<string>;
   createEvent(org: Id, input: EventInput): Promise<EventFull>;   // a draft
   updateEvent(id: Id, input: EventInput): Promise<EventFull>;
@@ -145,7 +144,7 @@ export interface Api {
   addComment(kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread>; // 500 chars, 10 a minute
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
-  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
+  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
   reports(): Promise<ReportItem[]>;                                                  // admin
   // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
   forumMe(): Promise<ForumMe>;
@@ -197,7 +196,6 @@ export interface Api {
   clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
-  grant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'): Promise<PersonCard>; // the admin's manual achievements
   /** the owner's batch scanner: a badge QR is one grant; undo within a minute; what I gave */
   grantScan(qr: string, code: GrantItem['code']): Promise<GrantItem>;
   ungrant(id: Id): Promise<void>;

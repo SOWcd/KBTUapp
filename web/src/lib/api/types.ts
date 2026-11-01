@@ -61,7 +61,7 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[] }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
-export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply' | 'tgc'; id: Id; text: string; at: Ts }
+export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'tgc'; id: Id; text: string; at: Ts }
 /** My own comment the bot deleted in the forum channel's Telegram group (POST /api/me/tg-comment): to me alone. */
 export interface TgComment { body: string; link: string | null; student: boolean; removed?: boolean;
   verdict?: 'pending' | 'confirmed' | 'restored'; rule?: TgcRule | null } // removed after reports: what became of it
@@ -87,7 +87,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
 export interface AssistReply { text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply' | 'tgc'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'thread' | 'tgc'; id: Id; link?: string | null }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc'; id: Id; link?: string | null }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name
@@ -170,7 +170,6 @@ export interface Settings {
   nRemind: boolean;
   nNewEvents: boolean;
   nFriends: boolean;
-  nForum: boolean;              // the bot: someone answered or joined my forum thread
   showGoing: boolean;
   hideFirstYear: boolean;
 }
@@ -187,6 +186,7 @@ export interface StudentProfile {
   program: string | null;
   syncedAt: Ts;
   ms: boolean;     // signed in with the KBTU Microsoft account
+  manual: boolean; // the student ID typed in, not confirmed by KBTU (the forum channel won't take posts)
   consent: string; // the policy version agreed to (lib/legal.ts); 'staff' and 'admin': added by hand
   middleName: string | null;
   lastLat: string | null;   // the name in Latin (KBTU's directory, the freshmen list or typed here): the exports, the English UI
