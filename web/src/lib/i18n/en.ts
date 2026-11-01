@@ -516,6 +516,8 @@ const en: Dict = {
   'event.notKbtu': 'Not organized by KBTU',
 
   'list.title': 'Events',
+  'list.yours': 'Your events',
+  'list.yoursNone': 'No plans yet. Pick an event below.',
   'list.moreSoon': "More events are coming",
   'list.moreSoonText': "Clubs are only arriving in KBTU App. Follow yours: the bot writes as soon as there's something new.",
   'list.toClubs': "To clubs",

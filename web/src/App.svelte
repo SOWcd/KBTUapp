@@ -77,6 +77,8 @@
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
+  // ponytail: the Afisha redesign mocks (stage 1), only on this branch: localStorage kb-afisha-mock = a | b; gone once one is built
+  const afishaMock = (() => { try { const v = localStorage.getItem('kb-afisha-mock'); return v === 'a' ? import('./screens/afisha/mock/MockA.svelte') : v === 'b' ? import('./screens/afisha/mock/MockB.svelte') : null; } catch { return null; } })();
   // the policy changed since this student agreed: the whole app waits behind the gate until they accept (owner, Nov 1:
   // the sheet got swiped away unread). Staff and students added by hand have no consent of theirs; a deletion pending is
   // exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
@@ -480,7 +482,7 @@
   {#each tabs as tab (tab)}
     <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned || gated}>
       {#if tab === 'afisha'}
-        {#if built.afisha}<ListPage />{/if}
+        {#if built.afisha}{#if afishaMock}{#await afishaMock then m}<m.default />{/await}{:else}<ListPage />{/if}{/if}
       {:else if tab === 'forum'}
         {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
       {:else if tab === 'club'}
