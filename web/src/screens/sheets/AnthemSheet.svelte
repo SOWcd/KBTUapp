@@ -4,7 +4,8 @@
   // Apple Music's lyrics. One audio element, made on the first tap (iOS plays only from a tap; nothing loads before it),
   // paused as the sheet leaves.
   // Playing, the words follow the song (lib/lyrics.ts): the line being sung bright and a little larger, the rest dimmed,
-  // a pause as three dots filling before the next line; the page keeps that line in its upper third (a hand scrolling it
+  // and in it word by word, as Apple Music's karaoke: the words sung lit, the one being sung filling from the left, the
+  // rest of the line dim (the clock read each frame while it plays); a pause as three dots filling before the next line; the page keeps that line in its upper third (a hand scrolling it
   // wins for 3 s); a tap on any line plays from there.
   // The creator alone has an editor (the timer, from Admin): each line's time; a tap picks a line and plays it from a second before;
   // ±0.1 / ±0.5 s nudge it; "re-tap from this line" stamps it and the lines after it as they are sung; a line's end can
@@ -25,7 +26,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { t, LANG_FULL } from '../../lib/i18n/index.svelte';
   import { ANTHEM, SUNG, TIMED, TIMES } from '../../lib/i18n/anthem';
-  import { lineLen, lyricAt } from '../../lib/lyrics';
+  import { GAP, lineLen, lyricAt, wordAt } from '../../lib/lyrics';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
@@ -40,6 +41,15 @@
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // while it plays the clock is read each frame (timeupdate comes ~4 times a second: a word would fill in steps);
+  // reduced motion: words light whole, timeupdate is enough
+  let raf = 0;
+  function tick() {
+    if (!audio || audio.paused) { raf = 0; return; }
+    if (!held) cur = audio.currentTime;
+    raf = requestAnimationFrame(tick);
+  }
+
   function make(): HTMLAudioElement {
     const a = new Audio();
     a.preload = 'none';
@@ -47,7 +57,7 @@
     a.src = 'anthem/kbtu-anthem.m4a';
     const from = cur; // scrubbed or a line tapped before the first play: it starts there
     if (from) a.addEventListener('loadedmetadata', () => (a.currentTime = from), { once: true });
-    a.onplay = () => { on = true; if (ms) ms.playbackState = 'playing'; };
+    a.onplay = () => { on = true; if (ms) ms.playbackState = 'playing'; if (!raf && !still()) raf = requestAnimationFrame(tick); };
     a.onpause = () => { on = waiting = false; if (ms) ms.playbackState = 'paused'; };
     a.onwaiting = () => (waiting = true);
     a.onplaying = () => (waiting = false);
@@ -97,9 +107,9 @@
   let edit = $state(false), sel = $state(-1), cursor = $state(-1), raw = $state('');
   let past = $state.raw<(Times & { c: number })[]>([]);
 
-  // where the song is: the line lit, or a pause (dots before line `gapAt`, filled to `gapP`). timeupdate comes ~4 times
-  // a second and a tap lands a little after the voice, so the words run LEAD ahead of the clock
-  const LEAD = 0.25;
+  // where the song is: the line lit, or a pause (dots before line `gapAt`, filled to `gapP`). The times are the voice's
+  // own (aligned, lib/i18n/anthem.ts) and the clock is read each frame: the words run only LEAD ahead, as the eye reads
+  const LEAD = 0.1;
   const synced = $derived(TIMED && (cursor >= 0 || on || cur > 0));
   const len = $derived(lineLen(starts));
   const pos = $derived(synced && cursor < 0 ? lyricAt(starts, ends, cur + LEAD, dur, len) : null);
@@ -107,6 +117,13 @@
   // owner tap it when the NEXT began, every time a line late (Oct 30)
   const lit = $derived(cursor >= 0 ? cursor - 1 : (pos?.line ?? -1));
   const gapAt = $derived(pos?.next ?? -1), gapP = $derived(pos?.p ?? 0);
+  // in the lit line: the word being sung (wi; -1 while re-tapping: the whole line lit) and how far it has filled (wf)
+  const word = $derived.by(() => {
+    if (!pos || pos.line < 0) return { w: -1, f: 0 };
+    const i = pos.line, next = (starts[i + 1] ?? dur) - starts[i];
+    return wordAt(SUNG[i].o, cur + LEAD - starts[i], Math.min(ends[i] != null ? ends[i]! - starts[i] : next > GAP ? len : next, next));
+  });
+  const wi = $derived(word.w), wf = $derived(word.f);
   const dot = (k: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, gapP * 3 - k));
 
   // the line (or the dots before the next one) stays in the page's upper third while the song plays; a hand scrolling
@@ -184,7 +201,7 @@
     box.addEventListener('touchmove', hand, { passive: true });
     box.addEventListener('wheel', hand, { passive: true });
     return () => {
-      clearTimeout(back); box.removeEventListener('touchmove', hand); box.removeEventListener('wheel', hand);
+      clearTimeout(back); cancelAnimationFrame(raf); box.removeEventListener('touchmove', hand); box.removeEventListener('wheel', hand);
       if (!audio) return;
       audio.onerror = null;
       audio.pause(); audio.removeAttribute('src'); audio.load(); // its download stops too
@@ -206,8 +223,9 @@
           {#if line.i < 0}<i class="gap"></i>
           {:else}
             {#if line.i === gapAt}<span class="dots" class:up={j === 0} aria-hidden="true" transition:fade={{ duration: 300 }}><i style:opacity={dot(0)}></i><i style:opacity={dot(1)}></i><i style:opacity={dot(2)}></i></span>{/if}
-            <button class="ln" class:now={line.i === lit} class:sel={edit && line.i === sel} data-i={line.i} aria-current={line.i === lit || undefined}
-                    onclick={() => jump(line.i)}>{line.text}{#if edit}<span class="tm num">{fine(starts[line.i])}{#if ends[line.i] != null}<br />⇥ {fine(ends[line.i]!)}{/if}</span>{/if}</button>
+            <button class="ln" class:now={line.i === lit} class:by={line.i === lit && wi >= 0} class:sel={edit && line.i === sel} data-i={line.i}
+                    aria-current={line.i === lit || undefined} style:--f={line.i === lit && wi >= 0 ? wf : null} onclick={() => jump(line.i)}
+                    >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w" class:sung={k < wi} class:on={k === wi}>{w}</span>{/each}{#if edit}<span class="tm num">{fine(starts[line.i])}{#if ends[line.i] != null}<br />⇥ {fine(ends[line.i]!)}{/if}</span>{/if}</button>
           {/if}
         {/each}
       </section>
@@ -273,6 +291,13 @@
   .words.synced { padding-bottom: 40vh; }
   .synced .ln { opacity: 0.32; }
   .synced .ln.now { opacity: 1; transform: scale(1.04); }
+  /* word by word in the line being sung: the words to come dim, the sung ones lit, the one being sung filling from the
+     left with a soft edge (--f, 0..1, set each frame); its gradient reaches the lit colour exactly at 1, so it hands over
+     to .sung without a step */
+  .ln.by .w { color: var(--text-3); transition: color 250ms var(--ease); }
+  .ln.by .w.sung { color: var(--text); }
+  .ln.by .w.on { color: transparent; transition: none; -webkit-background-clip: text; background-clip: text;
+    background-image: linear-gradient(90deg, var(--text) calc(var(--f) * (100% + 0.5em) - 0.5em), var(--text-3) calc(var(--f) * (100% + 0.5em))); }
   .gap { display: block; height: 14px; }
   /* the chorus, the same words three times: set apart on a soft band the sheet's width (a card's padding broke its
      lines on a phone), its label in the accent */
@@ -285,7 +310,11 @@
   .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text); transition: opacity 250ms linear; animation: breathe 2.4s ease-in-out infinite; }
   @keyframes breathe { 50% { transform: scale(1.15); } }
   :global(html.lowfx) .dots i { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .synced .ln.now { transform: none; } .dots i { animation: none; } }
+  :global(html.lowfx) .ln.by .w.on { color: var(--text); background: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .synced .ln.now { transform: none; } .dots i { animation: none; }
+    .ln.by .w { transition: none; } .ln.by .w.on { color: var(--text); background: none; } /* a word lights whole */
+  }
 
   /* the creator's editor: each line's time at its end, the picked line on an accent wash */
   .edit .ln { padding-right: 76px; }

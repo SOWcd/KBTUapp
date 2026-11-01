@@ -24,3 +24,13 @@ export function lyricAt(starts: number[], ends: (number | null)[], now: number, 
   // after the last line nothing; a dark moment too short for the dots stays plain
   return n < starts.length && span >= 2 ? { line: -1, next: n, p: Math.min(1, (now - from) / span) } : { line: -1, next: -1, p: 0 };
 }
+
+/** within a lit line, `x` s after its start: the word being sung (its starts after the line's in `o`) and how far into
+ *  it (f, 0..1); the last word fills until `span` (the line's lit length), at most HOLD */
+export const HOLD = 1.2;
+export function wordAt(o: number[], x: number, span: number) {
+  let w = 0;
+  while (w + 1 < o.length && o[w + 1] <= x) w++;
+  const to = w + 1 < o.length ? o[w + 1] : Math.min(span, o[w] + HOLD);
+  return { w, f: Math.min(1, Math.max(0, (x - o[w]) / Math.max(0.05, to - o[w]))) };
+}
