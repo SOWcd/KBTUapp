@@ -119,7 +119,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={UserRound} title={shown?.name ?? ''}>
+<Sheet {overlay} icon={UserRound} title={t('cap.person')}>
   {#if shown}
     <!-- no award shelf on the card here: the sheet lists every award below it, the showcase first (PLAN 89: "Awards"
          showed twice) -->

@@ -569,6 +569,10 @@ const en: Dict = {
   'feed.endText': "New ones appear every day. Follow clubs: the bot tells you first.",
   'feed.empty': 'Events will show up here soon',
 
+  'cap.club': "Club",
+  'cap.event': "Event",
+  'cap.person': "Profile",
+  'cap.roster': "Roster",
   'cap.inMin': 'in {n} min',
   'cap.until': 'until {time}',
   'soon.now': "now",

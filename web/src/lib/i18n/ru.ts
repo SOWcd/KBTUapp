@@ -569,6 +569,11 @@ const ru = {
   'feed.endText': "Новые появляются каждый день. Подпишись на клубы — бот напишет первым.",
   'feed.empty': 'Скоро здесь появятся события',
 
+  // the capsule over a club, an event, a person, a roster: a plain word (the hero below names it)
+  'cap.club': "Клуб",
+  'cap.event': "Событие",
+  'cap.person': "Профиль",
+  'cap.roster': "Состав",
   'cap.inMin': 'через {n} мин',
   'cap.until': 'до {time}',
   'soon.now': "сейчас",
