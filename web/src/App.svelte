@@ -126,7 +126,7 @@
   sheets.composer = (org, post) => lazy(() => import('./screens/club/PostComposer.svelte'), { org, post });
   sheets.createClub = () => lazy(() => import('./screens/sheets/CreateClubSheet.svelte'), {});
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
-  sheets.anthem = (timing) => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), { timing });
+  sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});

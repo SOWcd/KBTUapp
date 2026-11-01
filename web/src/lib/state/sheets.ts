@@ -99,7 +99,7 @@ export const sheets = {
   /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
   academic: () => {},
   /** KBTU's anthem to listen to and learn: Afisha's card until the Oct 31 initiation, Profile's row, startapp=anthem */
-  anthem: (_timing?: boolean) => {},
+  anthem: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
   /** the creator's own awards (the admin panel): a QR scanner each, "Bug hunter" a one-time link */

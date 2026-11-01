@@ -57,9 +57,9 @@ const PARTS: (Omit<AnthemPart, 'lines'> & { lines: string[] })[] = [
 // chorus (4), verse 3 (8), the chorus (4), 36 in all; [start, end] for a line with its end marked (a pause after it).
 // Nov 2: forced alignment on the vocal stem (Demucs htdemucs; Meta's MMS aligner cross-checked with stable-ts/Whisper
 // small, the two within 0.15 s on about 3 words in 4): a line starts at its first word. The owner's taps of Oct 30 ran a
-// line late through the first two verses and choruses (the lit waiting line, see AnthemSheet); verse 3 and the last
-// chorus within 0.5 s, the last chorus's first line 0.9 s early. The creator still fine-tunes them in his editor.
-export const TIMES: (number | [number, number])[] = [
+// line late through the first two verses and choruses; verse 3 and the last chorus within 0.5 s, the last chorus's first
+// line 0.9 s early. These times are the one source: no tool in the app edits them.
+const TIMES: (number | [number, number])[] = [
   16.63, 20.5, 24.34, 28.17, 31.93, 35.96, 39.58, 43.41,
   48.78, 53.33, 56.75, [60.71, 64.7],
   79.3, 83.11, 86.96, 90.74, 95.09, 98.29, 102.15, 105.94,
@@ -67,8 +67,7 @@ export const TIMES: (number | [number, number])[] = [
   142.13, 146.43, 149.74, 154.13, 157.85, 161.68, 165.5, 171.23,
   178.27, 182.78, 186.26, [190.24, 196.3],
 ];
-// Each sung line's words after its first: when each starts, seconds after the line's start (the same alignment). Relative,
-// so the creator's nudges of a line carry its words along.
+// Each sung line's words after its first: when each starts, seconds after the line's start (the same alignment).
 const WORDS: number[][] = [
   [0.55, 1.49], [1.18, 2.46], [0.75, 2.3], [1.13, 2.39], [1.19, 2.43], [0.95, 2.24], [1.17, 2.4], [0.35, 1.12, 2.27, 3.76],
   [0.54, 1.36, 2.81, 3.32], [0.96, 1.91], [1.36, 2.55, 2.85], [0.7, 1, 1.95, 2.52],
@@ -85,6 +84,5 @@ let k = 0;
 const at = (x: number | [number, number] | undefined) => (x == null ? { t: null, end: null } : Array.isArray(x) ? { t: x[0], end: x[1] } : { t: x, end: null });
 const line = (text: string) => ({ text, ...at(TIMES[k]), w: words(text), o: [0, ...(WORDS[k] ?? [])], i: k++ });
 export const ANTHEM: AnthemPart[] = PARTS.map((p) => ({ ...p, lines: p.lines.map((text) => (text ? line(text) : { text, t: null, end: null, i: -1, w: [], o: [] })) }));
-/** the sung lines in order (a chorus once for each time it is sung): what the timer stamps and the highlight follows */
+/** the sung lines in order (a chorus once for each time it is sung): what the highlight follows */
 export const SUNG = ANTHEM.flatMap((p) => p.lines.filter((l) => l.i >= 0));
-export const TIMED = SUNG.every((l) => l.t != null);

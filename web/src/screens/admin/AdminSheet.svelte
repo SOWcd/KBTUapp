@@ -16,7 +16,6 @@
   import MapPinned from '@lucide/svelte/icons/map-pinned';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import Pin from '@lucide/svelte/icons/pin';
-  import Music from '@lucide/svelte/icons/music';
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
@@ -291,7 +290,6 @@
     <!-- the app's team: moderators, admins (the owner gives those), bans -->
     <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
-    {#if owner}<button class="r" onclick={() => sheets.anthem(true)}><span class="ic"><Music size={20} /></span><span class="lb">{t('anthem.timing')}<i>{t('anthem.title')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.mapFlaws()}><span class="ic"><MapPinned size={20} /></span><span class="lb">{t('mf.title')}<i>{t('mf.adminSub')}</i></span><ChevronRight size={18} /></button>
     <button class="r" aria-expanded={featOpen} onclick={openFeat}><span class="ic"><Pin size={20} /></span><span class="lb">{t('adm.feature')}<i>{t('adm.featureSub')}</i></span><span class="chev"><ChevronRight size={18} /></span></button>
     {#if featOpen}
