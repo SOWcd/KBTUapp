@@ -1,10 +1,10 @@
 <script lang="ts">
   // Afisha, one screen, in Luma's manner (owner, Nov 2: mock A with B's covers on top). The date and Today with a quiet
   // pill (the assistant, "In a row"), the news circles; "Your events": big covers swiped sideways, the next one peeking
-  // in (the events I'm going to this week, their Ticket and Route on the cover), the class on now or next among them
-  // as a card of its own; then "Events" over its grey count, the featured post, and the days ("Tomorrow / Tuesday"):
-  // rows with a square cover, the club, a bold title, time and place with thin icons, classes as slim rows in time
-  // order between them (one row per subject block, lib/classes.ts), hairlines inset to the text. No date strip
+  // in (the events I'm going to this week, their Ticket and Route on the cover); then "Events" over its grey count, the
+  // featured post, and the days ("Tomorrow / Tuesday"): rows with a square cover, the club, a bold title, time and place
+  // with thin icons, classes as slim rows in time order between them, the one on now live in place (the capsule above
+  // says it too), hairlines inset to the text. No date strip
   // (owner, Oct 24: people scroll); the headers don't stick (a slab mid-screen over the rows).
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
@@ -24,7 +24,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { ui } from '../../lib/state/ui.svelte';
   import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
-  import { shortSubject, lessonKind } from '../../lib/i18n/subjects';
+  import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput } from '../../lib/time';
   import { classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
@@ -69,14 +69,13 @@
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
-  // "Your events": the events I'm going to this week, and the class on now or next; the class goes first while it's on
-  // or within the hour, else after the nearest event (most students have no timetable yet: PLAN 49)
+  // "Your events": only the events I'm going to this week (owner, Nov 2: a class card there showed the class twice)
   const going = $derived(shown.filter((e) => e.my?.status === 'going' && endOf(e) > now && e.startsAt - now < 7 * 86400).sort((a, b) => a.startsAt - b.startsAt));
+  // the class on now comes alive in its own row (what's left, a thin progress line); the next one within the hour says
+  // how soon. Read once for all rows: the row only compares its key.
   const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
-  const cur = $derived(left[0]);
-  const onNow = $derived(!!cur && cur.b <= now);
-  const classAt = $derived(!cur ? -1 : onNow || cur.b - now <= 3600 || !going.length ? 0 : 1);
-  const cards = $derived.by<(EventCard | null)[]>(() => { const l: (EventCard | null)[] = [...going]; if (classAt >= 0) l.splice(classAt, 0, null); return l; });
+  const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
+  const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -126,52 +125,25 @@
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   <h2 class="sec">{t('list.yours')}</h2>
-  {#if cards.length}
-    <div class="heroes" class:one={cards.length === 1}>
-      {#each cards as e (e?.id ?? 'class')}
-        {#if e}
-          <!-- an event I'm going to: its cover, how soon, the way there and the ticket -->
-          <section class="hero" style="--c:{e.color ?? e.tint}">
-            <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-            <Poster item={e} big radius={0} />
-            <div class="shade"></div>
-            <div class="hero-tx">
-              <span class="when num">{soon(e.startsAt, now)} · {time(e.startsAt)}</span>
-              <b class="clamp-2">{e.title}</b>
-              <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}</span>
-              <!-- solid tinted, not glass: base.css keeps glass for what floats over the page (as the Feed's posters) -->
-              <span class="acts">
-                <button onclick={() => sheets.ticket(e.id)}><QrCode size={17} />{t('event.ticket')}</button>
-                {#if floorOf(e.place) != null}<button onclick={() => sheets.map(e.place)}><MapPin size={17} />{t('route.open')}</button>{/if}
-              </span>
-            </div>
-          </section>
-        {:else if cur}
-          {@const room = cur.c.room}
-          {@const lk = lessonKind(cur.c.kind)}
-          <!-- the class on now or next: its room big, what's left of it, the rest of today -->
-          <section class="hero now">
-            <button class="hit" onclick={() => sheets.week()} aria-label={t('sched.weekTitle')}></button>
-            <div class="now-m">
-              {#if room}{@const rl = atDorm(room) ? t('list.dorm') : atBldg2(room) ? bldg2Room(room) || room : room}<span class="rm"><small>{t('list.room')}</small><b class="num ellipsis" class:sm={rl.length > 4}>{rl}</b></span>{/if}
-              <span class="now-t"><small class:live={onNow}><i></i>{onNow ? t('list.nowUntil', { time: cur.c.ends }) : soon(cur.b, now)}</small>
-                <b class="clamp-2">{subjectOf(cur.c)}</b>
-                <span>{[lk ? t(`list.kind.${lk}Long`) : cur.c.kind, cur.c.teacher].filter(Boolean).join(' · ')}</span></span>
-            </div>
-            {#if onNow}
-              <div class="bar"><i style="width:{Math.min(100, ((now - cur.b) / Math.max(60, cur.e - cur.b)) * 100)}%"></i></div>
-              <div class="now-f num"><span>{t('list.minLeft', { n: Math.max(1, Math.ceil((cur.e - now) / 60)) })}</span><span>{cur.c.begins}–{cur.c.ends}</span></div>
-            {/if}
-            {#if left.length > 1}
-              <div class="ups">
-                {#each left.slice(1, 3) as x (classKey(today, x.c))}
-                  <div class="up"><time class="num">{x.c.begins}</time><span class="ellipsis">{subjectOf(x.c)}</span>{#if x.c.room}<em class="num ellipsis">{x.c.room}</em>{/if}</div>
-                {/each}
-              </div>
-            {/if}
-            {#if room && floorOf(room) != null}<span class="acts"><button class="soft" onclick={() => sheets.map(room)}><MapPin size={17} />{t('route.open')}</button></span>{/if}
-          </section>
-        {/if}
+  {#if going.length}
+    <div class="heroes" class:one={going.length === 1}>
+      {#each going as e (e.id)}
+        <!-- an event I'm going to: its cover, how soon, the way there and the ticket -->
+        <section class="hero" style="--c:{e.color ?? e.tint}">
+          <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+          <Poster item={e} big radius={0} />
+          <div class="shade"></div>
+          <div class="hero-tx">
+            <span class="when num">{soon(e.startsAt, now)} · {time(e.startsAt)}</span>
+            <b class="clamp-2">{e.title}</b>
+            <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}</span>
+            <!-- solid tinted, not glass: base.css keeps glass for what floats over the page (as the Feed's posters) -->
+            <span class="acts">
+              <button onclick={() => sheets.ticket(e.id)}><QrCode size={17} />{t('event.ticket')}</button>
+              {#if floorOf(e.place) != null}<button onclick={() => sheets.map(e.place)}><MapPin size={17} />{t('route.open')}</button>{/if}
+            </span>
+          </div>
+        </section>
       {/each}
     </div>
   {:else}
@@ -208,11 +180,16 @@
             {@const hours = Math.round((it.end - it.at) / 3600)}
             {@const k = lessonKind(it.c.kind)}
             <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
-            <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} role="button" tabindex="0"
+            {@const isLive = it.key === live?.key}
+            <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
                  onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
               <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
-              <span class="cl-s"><b class="ellipsis">{shortSubject(subjectOf(it.c))}</b>
-                <small class="ellipsis">{#if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num"> · ×{hours}</span>{/if}{#if skipped.has(it.key)} · {t('skip.tag')}{/if}</small></span>
+              <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
+              <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
+                <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
+                  {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
+                  {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
+              {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
               {#if floorOf(it.c.room) != null}<button class="cl-r on" onclick={() => sheets.map(it.c.room!)}><span class="ellipsis">{it.c.room}</span><MapIcon size={13} /></button>
               {:else if atBldg2(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(BLDG2_2GIS)}><span class="ellipsis">{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</span><TwoGisMark size={14} /></button>
               {:else if atDorm(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(DORM_2GIS)}>{t('list.dorm')}<TwoGisMark size={14} /></button>
@@ -276,7 +253,7 @@
   /* "Your events": covers side by side, the next one peeks in */
   .heroes { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); scroll-padding: 0 var(--gutter); scrollbar-width: none; }
   .heroes::-webkit-scrollbar { display: none; }
-  .hero { position: relative; flex: none; width: calc(100% - 28px); min-height: 300px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
+  .hero { position: relative; flex: none; width: calc(100% - 28px); height: 300px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
     box-shadow: inset 0 0 0 1px var(--line), 0 18px 36px -24px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   .heroes.one .hero { width: 100%; }
@@ -291,32 +268,7 @@
   .acts button { display: inline-flex; align-items: center; gap: 6px; height: var(--btn-m); padding: 0 16px; border-radius: var(--r-full); color: var(--on-accent);
     background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); font: 650 var(--fs-body)/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .acts button:active { transform: scale(0.95); }
-  .acts button.soft { background: var(--accent-soft); box-shadow: none; color: var(--accent-text); }
 
-  /* the class card: calm, the accent's glow in its corner */
-  .now { display: flex; flex-direction: column; gap: 12px; padding: 16px; background: radial-gradient(90% 80% at 0% 0%, var(--accent-soft), transparent 60%), var(--surface); }
-  .now > :not(.hit) { position: relative; pointer-events: none; }
-  .now > .acts { pointer-events: auto; margin-top: auto; }
-  .now-m { display: flex; gap: 14px; align-items: flex-start; }
-  .rm { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: var(--r-l); background: var(--text); color: var(--bg); }
-  .rm small { font: 600 var(--fs-micro)/1 var(--font-text); opacity: 0.6; }
-  .rm b { max-width: 64px; font: 800 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .rm b.sm { font-size: var(--fs-body); } /* the dorm, a long room: whole, not cut to one letter */
-  .now-t { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .now-t small { display: flex; align-items: center; gap: 6px; font: 650 var(--fs-cap)/1.2 var(--font-text); color: var(--accent-text); }
-  .now-t small i { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .now-t small.live i { display: block; }
-  .now-t b { font: 750 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.02em; }
-  .now-t span { font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-3); }
-  .bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-  .bar i { display: block; height: 100%; border-radius: inherit; background: var(--grad-accent); }
-  .now-f { display: flex; justify-content: space-between; margin-top: -6px; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-2); }
-  .ups { display: flex; flex-direction: column; }
-  .up { display: flex; align-items: center; gap: 12px; min-height: 36px; font: 600 var(--fs-body)/1.2 var(--font-text); }
-  .up + .up { border-top: 0.5px solid var(--separator); }
-  .up time { flex: none; width: 44px; font: 650 var(--fs-sub)/1 var(--font-text); color: var(--accent-text); }
-  .up span { flex: 1; min-width: 0; }
-  .up em { flex: none; max-width: 30%; font: 600 var(--fs-sub)/1 var(--font-text); font-style: normal; color: var(--text-3); }
 
   /* the featured post: its own card, the body folded to two lines */
   .pin { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 14px 16px; margin-bottom: 4px; border-radius: var(--r-l); background: var(--surface); text-align: left; }
@@ -352,6 +304,10 @@
   .cl { min-height: 56px; padding: 8px 0; cursor: pointer; }
   .cl.past, .cl.skip { opacity: 0.5; }
   .cl.skip .cl-s b { text-decoration: line-through; }
+  /* the class on now: its times in the accent, what's left, a thin line of how far it's gone under the text */
+  .cl.live .cl-t b { color: var(--accent-text); }
+  .soon { font-weight: 650; color: var(--accent-text); }
+  .prog { position: absolute; left: 90px; bottom: 0; height: 2px; border-radius: var(--r-full); background: var(--grad-accent); }
   .cl-t { flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .cl-t b { font: 680 var(--fs-body)/1 var(--font-text); color: var(--text); }
   .cl-s { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
