@@ -120,7 +120,7 @@
       <Group caption={'Group ' + (i + 1)}>
         <Row title={t('set.remind')} accessory="switch" checked={i % 2 === 0} />
         <Row title={t('set.newEvents')} accessory="chevron" onclick={() => {}} />
-        <Row title={t('set.forum')} value={t('set.on')} accessory="chevron" onclick={() => {}} />
+        <Row title={t('set.remind')} value={t('set.on')} accessory="chevron" onclick={() => {}} />
       </Group>
     {/each}
   </div>
@@ -130,7 +130,7 @@
     <Group footnote={t('set.always')}>
       <Row title={t('set.remind')} accessory="switch" checked={sw1} onchange={(v) => (sw1 = v)} />
       <Row title={t('set.newEvents')} accessory="switch" checked={sw2} onchange={(v) => (sw2 = v)} />
-      <Row title={t('set.forum')} accessory="switch" checked />
+      <Row title={t('set.newEvents')} accessory="switch" checked />
     </Group>
   </div>
 {/snippet}

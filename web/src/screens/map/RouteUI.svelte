@@ -1,14 +1,13 @@
 <script lang="ts" module>
   import type { Graph, Leg, MapNode, Route } from '../../lib/route';
-  /** What the map draws for routes (CampusMap owns it): the chosen route and its step, or the editor's graph and pick */
-  export type RouteView = { graph: Graph | null; route: Route | null; step: number; edit: boolean; sel: number | null; moving: boolean; ends?: [string, string] };
+  /** What the map draws for routes (CampusMap owns it): the graph, the chosen route and its step */
+  export type RouteView = { graph: Graph | null; route: Route | null; step: number; ends?: [string, string] };
 </script>
 
 <script lang="ts">
   // Indoor routes on the main map (PLAN item 22, mockup Oct 15): "How to get there" (from a room or an entrance to a
   // room: fastest by stairs, by lift, another staircase), "How do I get out?" (the exits open now, nearest first), the
-  // way step by step, floor by floor. And the owner's editor: tap to drop a point, tap a point to link it to the picked
-  // one (again to unlink), a point's kind, floors, name, rooms, hours below; saved a moment after each change.
+  // way step by step, floor by floor. (The graph's editor went with its save route: the graph is edited in the repo.)
   import { untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -18,11 +17,7 @@
   import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
   import Shuffle from '@lucide/svelte/icons/shuffle';
   import DoorOpen from '@lucide/svelte/icons/door-open';
-  import Undo from '@lucide/svelte/icons/undo-2';
-  import Move from '@lucide/svelte/icons/move';
-  import Trash from '@lucide/svelte/icons/trash';
   import Pencil from '@lucide/svelte/icons/pencil';
-  import { api } from '../../lib/api';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
@@ -31,9 +26,9 @@
   import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
 
-  let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose, onedit }: {
+  let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
-    go: (f: number, pts: { u: number; v: number }[]) => void; pick: (f: number) => void; onclose: () => void; onedit?: () => void;
+    go: (f: number, pts: { u: number; v: number }[]) => void; pick: (f: number) => void; onclose: () => void;
   } = $props();
 
   // ---- finding the way: where to comes from the room card, where from from the keypad (MapPad), then the ways ----
@@ -129,92 +124,9 @@
   }
   const p_isEnd = (name: string) => name === chosen?.exit?.name;
 
-  // ---- the owner's editor ----
-  const MAXG = () => Math.max(0, ...(rt.graph?.n ?? []).map((n) => n.g ?? 0));
-  const node = $derived(rt.graph?.n.find((n) => n.id === rt.sel) ?? null);
-  const floorsOf = $derived(node?.g != null ? new Set(rt.graph!.n.filter((n) => n.k === node.k && n.g === node.g).map((n) => n.f)) : new Set<number>());
-  let undo: string[] = [], saving = $state<'' | 'wait' | 'ok' | 'err'>(''), saveT = 0;
-  function change(fn: (g: Graph) => void) {
-    const g = rt.graph!;
-    undo.push(JSON.stringify(g)); if (undo.length > 60) undo.shift();
-    fn(g);
-    rt.graph = { ...g };
-    saving = 'wait'; clearTimeout(saveT); saveT = window.setTimeout(save, 1200);
-  }
-  async function save() {
-    try { const g = await api.saveMapGraph(rt.graph!); rt.graph = { ...rt.graph!, ver: g.ver }; saving = 'ok'; }
-    catch (e) { saving = 'err'; say((e as { code?: string }).code === 'conflict' ? t('route.conflict') : t('route.saveFailed'), 'pleading_face_3d'); }
-  }
-  function back() { const s = undo.pop(); if (!s) return; haptic.tap(); const ver = rt.graph!.ver; rt.graph = { ...JSON.parse(s), ver }; rt.sel = null; saving = 'wait'; clearTimeout(saveT); saveT = window.setTimeout(save, 1200); }
-  const nextId = () => Math.max(0, ...rt.graph!.n.map((n) => n.id)) + 1;
-  const linked = (g: Graph, a: number, b: number) => g.e.findIndex(([x, y]) => (x === a && y === b) || (x === b && y === a));
-  /** CampusMap's tap in edit mode: at (u, v) of the plan on floor `cur`, on point `hit` if one is under the finger */
-  export function tap(u: number, v: number, hit: number | null) {
-    if (!rt.graph) return;
-    haptic.tap();
-    if (rt.moving && node) { change(() => { node.u = u; node.v = v; }); rt.moving = false; return; }
-    if (hit == null) { // a new point, linked to the picked one on this floor
-      const id = nextId(), prev = node && node.f === cur ? node.id : null;
-      change((g) => { g.n.push({ id, f: cur, u: +u.toFixed(5), v: +v.toFixed(5) }); if (prev != null) g.e.push([prev, id]); });
-      rt.sel = id;
-    } else if (rt.sel == null || hit === rt.sel || node?.f !== cur) rt.sel = hit === rt.sel ? null : hit;
-    else { const a = rt.sel; change((g) => { const i = linked(g, a, hit); if (i >= 0) g.e.splice(i, 1); else g.e.push([a, hit]); }); rt.sel = hit; }
-  }
-  function kind(k: MapNode['k']) {
-    if (!node || node.k === k) return;
-    change(() => { node.k = k; if (k === 's' || k === 'l') node.g ??= MAXG() + 1; else delete node.g; if (k === 'x') node.h ??= ['07:00-22:00', '07:00-22:00', '']; else delete node.h; });
-  }
-  /** a staircase or lift on one more floor (a point at the same spot, linked to that floor's nearest point) or one less */
-  function toggleFloor(f: number) {
-    if (!node || node.g == null) return;
-    const n0 = node;
-    change((g) => {
-      const there = g.n.find((n) => n.k === n0.k && n.g === n0.g && n.f === f);
-      if (there) { if (there.id === n0.id) return; g.n = g.n.filter((n) => n !== there); g.e = g.e.filter(([a, b]) => a !== there.id && b !== there.id); return; }
-      const id = nextId(), near = g.n.filter((n) => n.f === f).sort((a, b) => Math.hypot(a.u - n0.u, a.v - n0.v) - Math.hypot(b.u - n0.u, b.v - n0.v))[0];
-      g.n.push({ id, f, u: n0.u, v: n0.v, k: n0.k, g: n0.g });
-      if (near) g.e.push([id, near.id]);
-    });
-  }
-  function field(fn: (n: MapNode) => void) { if (node) change(() => fn(node)); }
-  function remove() { if (!node) return; const id = node.id; change((g) => { g.n = g.n.filter((n) => n.id !== id); g.e = g.e.filter(([a, b]) => a !== id && b !== id); }); rt.sel = null; }
-  const DAYS = ['route.weekdays', 'route.sat', 'route.sun'] as const;
 </script>
 
-{#if rt.edit}
-  <div class="tools">
-    <button class="glass glass-pill" use:glass onclick={back} aria-label={t('route.undo')}><Undo size={18} /></button>
-    {#if node}<button class="glass glass-pill" class:on={rt.moving} use:glass onclick={() => { haptic.tap(); rt.moving = !rt.moving; }}><Move size={18} />{t('route.move')}</button>{/if}
-    <span class="state">{saving === 'wait' ? t('route.saving') : saving === 'ok' ? t('route.saved') : saving === 'err' ? t('route.notSaved') : t('route.editHint')}</span>
-    <button class="glass glass-pill" use:glass onclick={() => { rt.edit = false; rt.sel = null; rt.moving = false; }} aria-label={t('common.close')}><X size={18} /></button>
-  </div>
-  {#if node}
-    <div class="card glass glass-sheet" use:glass>
-      <div class="seg">
-        {#each [[undefined, 'route.kCorridor'], ['s', 'route.kStairs'], ['l', 'route.kLift'], ['x', 'route.kExit']] as const as [k, label] (label)}
-          <button class:on={node.k === k} onclick={() => kind(k)}>{t(label)}</button>
-        {/each}
-      </div>
-      {#if node.k === 's' || node.k === 'l'}
-        <p class="lbl">{t('route.floors')}</p>
-        <div class="fl">{#each [0, 1, 2, 3, 4, 5] as f (f)}<button class:on={floorsOf.has(f)} onclick={() => toggleFloor(f)}>{f}</button>{/each}</div>
-      {/if}
-      {#if node.k === 'x'}
-        <div class="hours">{#each DAYS as d, i (d)}<label><span class="lbl">{t(d)}</span>
-          <input value={node.h?.[i] ?? ''} placeholder="07:00-18:00" inputmode="numeric"
-                 onchange={(e) => { const v = e.currentTarget.value.trim(); if (/^(|\d\d:\d\d-\d\d:\d\d)$/.test(v)) field((n) => { n.h = [...(n.h ?? ['', '', ''])]; n.h[i] = v; }); else haptic.error(); }} /></label>{/each}</div>
-      {/if}
-      <div class="two">
-        <label><span class="lbl">{t('route.name')}</span><input value={node.name ?? ''} maxlength="40" onchange={(e) => field((n) => { const v = e.currentTarget.value.trim(); if (v) n.name = v; else delete n.name; })} /></label>
-        <label><span class="lbl">{t('route.rooms')}</span><input value={node.r?.join(', ') ?? ''} onchange={(e) => field((n) => { const r = e.currentTarget.value.split(/[\s,]+/).map((x) => roomOf(x)).filter((x): x is string => !!x); if (r.length) n.r = r; else delete n.r; })} /></label>
-      </div>
-      <div class="row">
-        <label class="sw"><input type="checkbox" checked={!!node.b} onchange={(e) => field((n) => { if (e.currentTarget.checked) n.b = true; else delete n.b; })} />{t('route.backup')}</label>
-        <button class="del" onclick={remove}><Trash size={16} />{t('route.delete')}</button>
-      </div>
-    </div>
-  {/if}
-{:else if chosen && rt.route}
+{#if chosen && rt.route}
   {@const n = rt.route.legs.length}
   <!-- the step on the way (Oct 24 mockup): glass over the plan, a bar per step; the floors are the rail's -->
   <div class="card step glass glass-sheet" data-cover use:glass={{ bloom: true }} use:refract>
@@ -244,7 +156,6 @@
   <div class="card ways" data-cover>
     <span class="grab" aria-hidden="true"></span>
     <div class="top"><b>{t('route.title')}</b>
-      {#if onedit}<button class="ed" onclick={() => { haptic.tap(); onedit(); }}><Pencil size={15} />{t('route.edit')}</button>{/if}
       <button onclick={onclose} aria-label={t('common.close')}><X size={18} /></button></div>
     <!-- the start: tap to change it (back to the keypad) -->
     <button class="end" onclick={() => { haptic.tap(); asked = false; }}><span class="dot a">{t('pad.a')}</span><b>{roomOf(from) ?? from}</b>{#if shut(from)}<small class="shut">{shut(from)}</small>{/if}<Pencil size={14} /></button>
@@ -270,7 +181,6 @@
   .card { position: absolute; z-index: 4; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 14px); padding: 12px 14px 14px; border-radius: 22px; color: var(--text); }
   .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 600 13px/1.3 var(--font-text); color: var(--text-3); margin-bottom: 4px; }
   .top b { font: 800 24px/1.15 var(--font-display); color: var(--text); letter-spacing: -0.01em; }
-  .top .ed { width: auto; margin-left: auto; gap: 5px; display: flex; font: 600 13px/1 var(--font-text); color: var(--accent-text); }
   .top button { width: 32px; height: 32px; display: grid; place-items: center; color: var(--text-2); }
   /* the ways: the keypad's panel, short */
   .scrim { position: absolute; inset: 0; z-index: 5; background: rgba(2, 3, 8, 0.45); animation: fade 0.4s ease; }
@@ -335,21 +245,4 @@
   :global(.theme-light) .bars i.on { background: var(--accent); }
   :global(.theme-light) .nav button:not(.p) { background: rgba(11, 20, 51, 0.07); }
   @media (prefers-reduced-motion: reduce) { .ways, .step, .opt, .txt { animation: none; } }
-  .tools { position: absolute; z-index: 4; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 62px); display: flex; align-items: center; gap: 8px; }
-  .tools button { height: 40px; min-width: 40px; padding: 0 12px; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 6px; font: 600 14px/1 var(--font-text); color: var(--text); }
-  .tools button.on { background: var(--accent); color: #fff; }
-  .state { flex: 1; text-align: center; font: 550 12px/1.2 var(--font-text); color: var(--text-2); }
-  .seg { display: flex; background: var(--surface); border-radius: 12px; padding: 3px; }
-  .seg button { flex: 1; padding: 8px 0; border-radius: 9px; font: 600 13px/1 var(--font-text); color: var(--text-2); }
-  .seg button.on { background: var(--accent); color: #fff; }
-  .lbl { display: block; font: 550 12px/1.3 var(--font-text); color: var(--text-3); margin: 10px 0 4px; }
-  .fl { display: flex; gap: 6px; }
-  .fl button { flex: 1; height: 34px; border-radius: 10px; background: var(--surface); font: 650 14px/1 var(--font-text); color: var(--text-3); }
-  .fl button.on { background: var(--accent-soft); color: var(--accent-text); outline: 1.5px solid var(--accent); }
-  .two, .hours { display: flex; gap: 8px; }
-  .two label, .hours label { flex: 1; min-width: 0; }
-  .two input, .hours input { width: 100%; height: 38px; border: 0; border-radius: 10px; background: var(--surface); color: var(--text); padding: 0 10px; font: 550 15px/1 var(--font-text); outline: none; }
-  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-  .sw { display: flex; align-items: center; gap: 8px; font: 550 14px/1.2 var(--font-text); }
-  .del { display: flex; align-items: center; gap: 6px; font: 600 14px/1 var(--font-text); color: var(--danger, #e5484d); }
 </style>

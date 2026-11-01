@@ -58,15 +58,15 @@
   const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); UNI-Q stays the default for now
   let ver = $state<Ver>('main');
   let menu = $state(false);
-  let rt = $state<RouteView>({ graph: null, route: null, step: 0, edit: false, sel: null, moving: false });
-  let routing = $state(false), ui = $state<RouteUI>();
+  let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
+  let routing = $state(false);
   let leaving = $state(untrack(() => exit)); // opened by the "help me get out" link: everyone gets that one (owner, Oct 15)
-  async function openRoute(edit = false) {
+  async function openRoute() {
     haptic.tap();
     if (ver !== 'main') setVer('main');
     if (!rt.graph) rt.graph = await api.mapGraph().catch(() => null);
     if (!rt.graph) { say(t('route.noGraph'), 'pleading_face_3d'); return; }
-    if (edit) rt.edit = true; else routing = true;
+    routing = true;
   }
   if (untrack(() => exit)) void openRoute();
   /** show a step: its floor, framed */
@@ -82,11 +82,6 @@
   function reframe() { if (!framed || !rt.route) return; glided = false; clearTimeout(glideT); frame(framed); }
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
   const routeFloors = $derived(new Set(rt.route?.legs.map((l) => l.f) ?? []));
-  const edgesHere = $derived.by(() => {
-    if (!rt.edit || !rt.graph) return [];
-    const by = new Map(rt.graph.n.map((n) => [n.id, n]));
-    return rt.graph.e.map(([a, b]) => [by.get(a), by.get(b)]).filter(([a, b]) => a && b && a.f === cur && b.f === cur) as [NonNullable<RouteView['graph']>['n'][0], NonNullable<RouteView['graph']>['n'][0]][];
-  });
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * AR}`).join(' ');
   const AR = $derived(ver === 'main' ? uniq.h / uniq.w : 1); // the plan's height to its width
   let svg = $state('');
@@ -148,7 +143,7 @@
   // one finger past where the plan may rest follows it less and less (a rubber band), and the plan springs back on the
   // let-go, its size kept: zoomed out it may rest only in the middle, zoomed in anywhere within bounds() (owner: "the
   // map doesn't listen": it stopped dead at an edge, then flew to the middle and zoomed by itself)
-  const out = () => !rt.edit && s < home()[0] * 1.05;
+  const out = () => s < home()[0] * 1.05;
   function rest(): [number, number, number, number] {
     if (!out()) return bounds(s);
     const [cx, cy] = centered(s);
@@ -237,7 +232,7 @@
     const [a, b] = [...pts.values()];
     return b ? { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 } : { d: 0, cx: a.x, cy: a.y };
   }
-  let press: { x: number; y: number; t: number } | null = null; // the editor's tap: a finger down and up in place
+  let press: { x: number; y: number; t: number } | null = null; // a finger down, for a tap or a hold in place
   // a long press in place: "something's wrong here" (owner, Oct 29: the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
   let holdT: ReturnType<typeof setTimeout> | undefined;
@@ -254,10 +249,10 @@
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
     clearTimeout(holdT);
-    if (press && !rt.edit && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
+    if (press && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
     stage.setPointerCapture(e.pointerId);
     if (pts.size) swipeEnd(true); // a second finger: a pinch, never a floor
-    else if (!rt.route && !rt.edit && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
+    else if (!rt.route && s <= home()[0] * 1.05) swipeStart(e.clientX, e.clientY); // zoomed out: a sideways swipe changes the floor
     pts.set(e.pointerId, local(e));
     from = mid();
     rx = x; ry = y;
@@ -286,21 +281,15 @@
     // zoomed out, the plan let go anywhere goes back to the middle; zoomed in, it stays where it was left (owner, Oct 15);
     // either way at the size the fingers left it, and only from the rubber band's stretch
     const tap = !!press && !!p && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 300;
-    if (!pts.size && !rt.edit && !tap) {
+    if (!pts.size && !tap) {
       const [x0, x1, y0, y1] = rest(), tx = Math.min(x1, Math.max(x0, x)), ty = Math.min(y1, Math.max(y0, y));
       if (Math.hypot(x - tx, y - ty) > 0.5) zoomTo(s, tx, ty, 380);
     }
     // a double tap: two taps, the second let go within 300 ms of the first and near it, zooms in (or back out)
-    if (tap && !pts.size && !rt.edit && p) {
+    if (tap && !pts.size && p) {
       if (lastTap && performance.now() - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, p.x, p.y), 380); lastTap = 0; }
       else { lastTap = performance.now(); tapAt = p; }
     } else if (!tap) lastTap = 0;
-    if (rt.edit && press && p && !pts.size && Math.hypot(p.x - press.x, p.y - press.y) < 8 && performance.now() - press.t < 400) {
-      const W = stage.clientWidth * s, u = (p.x - x) / W, v = (p.y - y) / (W * AR);
-      const hit = rt.graph?.n.filter((n) => n.f === cur).map((n) => ({ n, d: Math.hypot(x + n.u * W - p.x, y + n.v * W * AR - p.y) }))
-        .sort((a, b) => a.d - b.d)[0];
-      if (u >= 0 && u <= 1 && v >= 0 && v <= 1) ui?.tap(u, v, hit && hit.d < 22 ? hit.n.id : null);
-    }
     press = null;
   }
   function wheel(e: WheelEvent) { e.preventDefault(); halt(); const p = { x: e.clientX - stage.getBoundingClientRect().left, y: e.clientY - stage.getBoundingClientRect().top }; zoomAt(Math.exp(-e.deltaY * 0.002), p.x, p.y); settleSoon(200); }
@@ -480,7 +469,7 @@
   }
   const dest = $derived(room ?? at?.label ?? null);
   const cardTitle = $derived(at ? at.label : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
-  const card = $derived(!pad && !routing && !rt.edit && !!dest);
+  const card = $derived(!pad && !routing && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
   function fit() { halt(); framed = null; zoomTo(...home(), 420); }
@@ -724,9 +713,8 @@
         {#each spots as [u, v], i (i)}<span class="spot" style:left="{u * 100}%" style:top="{v * 100}%"></span>
           {#if i === 0 && card}<span class="pin flag" style:left="{u * 100}%" style:top="{v * 100}%">{cardTitle}</span>{/if}{/each}
         {#each near as [u, v], i (i)}<span class="spot near" style:left="{u * 100}%" style:top="{v * 100}%"></span>{/each}
-        {#if legsHere.length || edgesHere.length}
+        {#if legsHere.length}
           <svg class="way" viewBox="0 0 1000 {1000 * AR}" preserveAspectRatio="none" aria-hidden="true">
-            {#each edgesHere as [a, b] (a.id + '-' + b.id)}<line x1={a.u * 1000} y1={a.v * 1000 * AR} x2={b.u * 1000} y2={b.v * 1000 * AR} class="edge" />{/each}
             <!-- the way (owner, Oct 24: "chic"): a soft glow, the line, white dots running along the step on screen -->
             {#each legsHere as l (l.i)}
               {#if l.i === rt.step}<polyline class="glow" points={line(l.pts)} />{/if}
@@ -747,11 +735,6 @@
           {:else}<span class="pin end" style:left="{b.u * 100}%" style:top="{b.v * 100}%"></span>
             {#if rt.ends}<span class="pin flag" style:left="{b.u * 100}%" style:top="{b.v * 100}%">{rt.ends[1]}</span>{/if}{/if}
         {/each}
-        {#if rt.edit && rt.graph}
-          {#each rt.graph.n.filter((n) => n.f === cur) as n (n.id)}
-            <span class="node k{n.k ?? ''}" class:sel={n.id === rt.sel} class:b={n.b} style:left="{n.u * 100}%" style:top="{n.v * 100}%">{n.k === 's' ? 'S' : n.k === 'l' ? 'L' : ''}</span>
-          {/each}
-        {/if}
       {:else}
         {@html shown}
       {/if}
@@ -784,10 +767,10 @@
       {#if look === 'dark'}<Moon size={20} />{:else}<Sun size={20} />{/if}</button>
   </div>
   <!-- the credit, and the old plan for who wants it, under the map as before the redo -->
-  <p class="note" class:away={pad || card || routing || rt.edit}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
+  <p class="note" class:away={pad || card || routing}>{ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}</p>
   <!-- the bottom, under the thumb (owner's layout, Oct 26): the way out small on the left, the search, and on the right
        the app's own map button, lit: a tap there closes the map, as the button opened it -->
-  <div class="dock" class:away={pad || card || routing || rt.edit} inert={pad || card || routing || rt.edit}>
+  <div class="dock" class:away={pad || card || routing} inert={pad || card || routing}>
     <button class="exit glass glass-pill" use:glass onclick={() => { leaving = true; void openRoute(); }} aria-label={t('route.out')}><DoorOpen size={22} /></button>
     <button class="bar glass glass-pill" use:glass onclick={openPad}><Search size={20} /><span class="ellipsis">{t('map.find')}</span></button>
     <button class="shut glass glass-pill" use:glass onclick={() => close(overlay.id)} aria-label={t('common.close')}><MapIcon size={22} strokeWidth={1.9} /></button>
@@ -804,8 +787,8 @@
     </div>
   {/if}
   {#if pad}<MapPad title={t('pad.findTitle')} go={t('pad.find')} point="b" placeTab={t('pad.entranceOrPlace')} groups={[{ title: t('pad.entrances'), tiles: exitTiles(rt.graph) }, ...placeGroups()]} check={checkFind} onsubmit={found} onclose={() => (pad = false)} />{/if}
-  {#if routing || rt.edit}
-    <RouteUI bind:this={ui} {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
+  {#if routing}
+    <RouteUI {rt} {cur} {pick} ar={AR} rooms={ROOMS} to={dest} {go} out={leaving} onclose={() => { routing = false; leaving = false; rt.route = null; }} />
   {/if}
 </div>
 
@@ -873,7 +856,6 @@
   .way polyline.glow { stroke: var(--accent); stroke-opacity: 0.22; stroke-width: 20; }
   .way polyline.run { stroke: #fff; stroke-opacity: 1; stroke-width: 2.6; stroke-dasharray: 1 13; animation: run 0.9s linear infinite; }
   @keyframes run { to { stroke-dashoffset: -14; } }
-  .way .edge { stroke: var(--accent); stroke-opacity: 0.7; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
   .pin { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
   .pin.start { width: 14px; height: 14px; border-radius: 50%; background: var(--bg); border: 3px solid var(--accent); opacity: 0.5; }
   .pin.start.now { opacity: 1; }
@@ -891,12 +873,6 @@
     box-shadow: 0 6px 16px -4px rgba(245, 177, 61, 0.7); }
   :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before { animation: none; }
   @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag { animation: none; } }
-  .node { position: absolute; width: 12px; height: 12px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
-    background: var(--bg); border: 2.5px solid var(--accent-text); display: grid; place-items: center; font: 800 9px/1 var(--font-text); color: #fff; }
-  .node.ks, .node.kl { width: 16px; height: 16px; border-radius: 5px; background: var(--accent-2); border: 0; }
-  .node.kx { width: 16px; height: 16px; background: #34c77b; border: 0; }
-  .node.b { border-style: dashed; opacity: 0.7; }
-  .node.sel { outline: 3px solid var(--text); outline-offset: 2px; }
 
   /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }

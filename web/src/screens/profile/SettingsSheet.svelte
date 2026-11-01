@@ -29,7 +29,7 @@
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
   // a switch saves at once and puts itself back if the server says no
-  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint'], ['nForum', 'set.forum', 'set.forumHint']] as const;
+  const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
   async function set(k: (typeof SWITCHES)[number][0] | 'showGoing', on: boolean, quiet = false) {
     if (!me) return;

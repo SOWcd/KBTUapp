@@ -42,7 +42,7 @@
 
   const me = $derived(session.me);
   const s = $derived(me?.settings);
-  const bells = $derived(s ? [s.nRemind, s.nNewEvents, s.nForum].filter(Boolean).length : 0);
+  const bells = $derived(s ? [s.nRemind, s.nNewEvents].filter(Boolean).length : 0);
   const real = $derived(me?.student ? `${me.student.firstName} ${me.student.lastName.slice(0, 1)}.` : '');
 
   // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
