@@ -53,7 +53,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
     ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
-    ("first50", "n500", (1,), False),  # not an emoji: the medal strikes the number (web ui/Medal)
+    ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal (owner, Nov 1)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
