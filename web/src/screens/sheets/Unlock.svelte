@@ -59,8 +59,9 @@
 <div class="wrap" bind:this={wrap} style="--glow:{glow}">
   <p class="kicker up">{t('unlock.kicker')}</p>
   <span class="medal" bind:this={medal}><Medal {a} size={168} /><span class="shine"></span></span>
-  <h2 class="name up">{achName(a)}</h2>
+  <!-- the level first, under the medal it belongs to (owner, Nov 1) -->
   {#if tier}<p class="tier up">{t('aw.level', { tier })}</p>{/if}
+  <h2 class="name up">{achName(a)}</h2>
   <p class="how up">{t(`ach.${a.code}.how` as 'ach.regular.how')}</p>
   <p class="rare up">{t('person.rarity', { p: rare })}</p>
   <div class="acts up">
