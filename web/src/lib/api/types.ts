@@ -497,7 +497,6 @@ export interface Post {
   canDelete: boolean;           // the club's Head+ (or the admin) may take it down
   canEdit: boolean;             // the club's Head+: edit it, pin it
   editedAt: Ts | null;          // the text, label or photo changed after it went out
-  canFeature?: boolean;         // moderators and the admin: a public post on top of List for everyone
   /** a post of the club's Telegram channel (PLAN 86 part 2): Telegram's views and reactions instead of ours, comments
    *  there; `media`: a video plays in Telegram's post widget (News), a file is only linked to; a tap opens the post in Telegram */
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;

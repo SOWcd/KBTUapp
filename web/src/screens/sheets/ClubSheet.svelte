@@ -29,7 +29,6 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { inLang, roleName, titleOf } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
-  import { session } from '../../lib/state/session.svelte';
   import { social } from '../../lib/social';
   import { dayMonth, relDay } from '../../lib/time';
   import { openLink, haptic } from '../../lib/tg';
@@ -125,8 +124,8 @@
           {/if}
         </div>
       {/if}
-    {:else if fetched && (o.myRights?.includes('profile') || session.me?.role === 'admin')}
-      <!-- none yet: shown to who can link them (even the app's creator couldn't find how) -->
+    {:else if fetched && o.myRights?.includes('profile')}
+      <!-- none yet: shown to the club's own team, who can link them (the app's admin does it in Admin) -->
       <h3 class="t-cap sec">{t('oc.title')}</h3>
       <div class="nochat surface"><p class="t-foot">{t('oc.emptyHint')}</p>
         <Button kind="secondary" size="m" full onclick={() => sheets.clubEdit(o.id, 'chats')}>{t('oc.linkChat')}</Button></div>

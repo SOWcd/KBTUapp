@@ -406,7 +406,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
 
 
 def full(con, v: Viewer, e: sqlite3.Row) -> dict:
-    head = v.role == "admin" or can(con, v, e["org_id"], "events")
+    head = can(con, v, e["org_id"], "events")  # the club's team only: the app's admin sees the event as a student does
     c = card(con, v, e)
     # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all
     pay = head or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")

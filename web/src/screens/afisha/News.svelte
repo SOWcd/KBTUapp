@@ -19,7 +19,7 @@
   import { videoLinks } from '../../lib/social';
   import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -100,24 +100,13 @@
       haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // moderators and the admin: a public post on top of Events → List for everyone, for three days (§2)
+  // the ⋯ menu open on this post (featuring one on top of List is in Admin)
   let menu = $state<number | null>(null);
   // the club's Head+: one pinned post per club, on top of its news; the lists reload in the server's order
   async function pin(p: Post) {
     menu = null;
     try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadAll(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
-  async function feature(p: Post, days: number) {
-    menu = null;
-    try {
-      const fresh = await api.feature(p.id, days);
-      const put = (l: Post[]) => l.map((x) => (x.id === p.id ? fresh : days ? { ...x, featured: false } : x));
-      if (data.news) data.news = { casts: put(data.news.casts), posts: put(data.news.posts) };
-      data.posts = put(data.posts);
-      haptic.ok(); say(days ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d');
-      void loadAfisha(); // List's card follows
-    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news
   const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt));
@@ -132,7 +121,7 @@
       <span class="who"><b class="ellipsis">{nameOf(p.org)}</b><i><span class="when">{#if !cast}{why(p)}{/if}{ago(p.createdAt)}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</span>{#if p.pinned}<span class="pinned"><Pin size={12} />{t('news.pinned')}</span>{/if}</i></span>
       {#if cast && !p.read}<span class="new">{t('news.new')}</span>{/if}
       {#if p.tag}<Tag tone={p.tag === 'important' ? 'warning' : 'accent'}>{tagName(p.tag)}</Tag>{/if}
-      {#if p.canEdit || p.canDelete || p.canFeature || session.me?.student}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
+      {#if p.canEdit || p.canDelete || session.me?.student}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
     </header>
     {#if menu === p.id}
       <div class="pmenu">
@@ -140,7 +129,6 @@
           <button onclick={() => { menu = null; sheets.composer(p.org.id, p); }}>{t('news.edit')}</button>
           <button onclick={() => pin(p)}>{p.pinned ? t('news.unpin') : t('news.pin')}</button>
         {/if}
-        {#if p.canFeature}<button onclick={() => feature(p, p.featured ? 0 : 3)}>{p.featured ? t('news.unfeature') : t('news.feature')}</button>{/if}
         {#if p.canDelete}<button class="danger" onclick={() => { menu = null; void takeDown(p); }}>{t('news.hide')}</button>{/if}
         <!-- anyone but its own club's writers: the one report sheet -->
         {#if !p.canEdit && session.me?.student}<button onclick={() => { menu = null; sheets.report('post', p.id, p.title); }}>{t('cm.report')}</button>{/if}

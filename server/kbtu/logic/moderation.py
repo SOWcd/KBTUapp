@@ -37,8 +37,10 @@ def comments(con, v: Viewer, kind: str, tid: int) -> dict:
     (short names, §3); the club's Head+ answer as the club, take any down and turn the thread off; authors take theirs."""
     need_student(v)
     t = _thread(con, v, kind, tid)
-    head, org = _moderates(con, v, t["org_id"]), org_ref(con, _org(con, t["org_id"]))
-    lead = can(con, v, t["org_id"], "posts")
+    # the flags are the club's own (Head+ with posts): the app's staff see the thread as any student does; they act in
+    # Admin (the reports), where _moderates still lets them
+    org = org_ref(con, _org(con, t["org_id"]))
+    lead = head = can(con, v, t["org_id"], "posts")
     if lead and kind == "event":  # read: Studio's "questions waiting" go, for me
         con.execute("INSERT OR REPLACE INTO comment_reads (event_id, user_id, last_id) SELECT ?, ?, COALESCE(MAX(id), 0) FROM comments WHERE event_id = ?",
                     (tid, v.id, tid))
@@ -68,7 +70,7 @@ def add_comment(con, v: Viewer, kind: str, tid: int, body: object, as_org: objec
         raise ApiError("bad_input")
     if not t["comments_on"]:
         raise ApiError("closed")
-    lead = can(con, v, t["org_id"], "posts")
+    lead = head = can(con, v, t["org_id"], "posts")
     if as_org and not lead:
         raise ApiError("forbidden")
     if one(con, "SELECT COUNT(*) FROM comments WHERE user_id = ? AND created_at > ?", v.id, core.now() - 60)[0] >= COMMENTS_A_MINUTE:

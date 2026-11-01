@@ -17,7 +17,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadAfisha, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -108,12 +108,6 @@
     }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  async function feature(days: number) {
-    if (!p) return;
-    menu = false;
-    try { Object.assign(p, await api.feature(p.id, days)); haptic.ok(); say(days ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d'); void loadAfisha(); void loadNews(); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
   // a post taken down or reported leaves the stories at once
   function drop(q: Post) {
     g.items.splice(g.items.findIndex((s) => s.post === q), 1);
@@ -165,7 +159,7 @@
         <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} />
           <span><small>{ago(p.createdAt)}{#if p.tag}{' · ' + tagName(p.tag)}{/if}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</small></span></button>
         {#if p.pinned}<span class="pinned" aria-label={t('news.pinned')}><Pin size={15} /></span>{/if}
-        {#if p.canEdit || p.canDelete || p.canFeature || session.me?.student}<button class="ib" onclick={() => (menu = !menu)} aria-label={t('common.more')} aria-expanded={menu}><Ellipsis size={20} /></button>{/if}
+        {#if p.canEdit || p.canDelete || session.me?.student}<button class="ib" onclick={() => (menu = !menu)} aria-label={t('common.more')} aria-expanded={menu}><Ellipsis size={20} /></button>{/if}
         <button class="ib" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} /></button>
       </div>
       {#if menu}
@@ -174,8 +168,7 @@
             <button onclick={() => { menu = false; sheets.composer(p.org.id, p); }}>{t('news.edit')}</button>
             <button onclick={pin}>{p.pinned ? t('news.unpin') : t('news.pin')}</button>
           {/if}
-          {#if p.canFeature}<button onclick={() => feature(p.featured ? 0 : 3)}>{p.featured ? t('news.unfeature') : t('news.feature')}</button>{/if}
-          {#if p.canDelete}<button class="danger" onclick={takeDown}>{t('news.hide')}</button>{/if}
+            {#if p.canDelete}<button class="danger" onclick={takeDown}>{t('news.hide')}</button>{/if}
           {#if !p.canEdit && session.me?.student}<button onclick={report}>{t('cm.report')}</button>{/if}
         </div>
       {/if}

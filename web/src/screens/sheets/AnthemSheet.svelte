@@ -6,7 +6,7 @@
   // Playing, the words follow the song (lib/lyrics.ts): the line being sung bright and a little larger, the rest dimmed,
   // a pause as three dots filling before the next line; the page keeps that line in its upper third (a hand scrolling it
   // wins for 3 s); a tap on any line plays from there.
-  // The creator alone has an editor (the timer): each line's time; a tap picks a line and plays it from a second before;
+  // The creator alone has an editor (the timer, from Admin): each line's time; a tap picks a line and plays it from a second before;
   // ±0.1 / ±0.5 s nudge it; "re-tap from this line" stamps it and the lines after it as they are sung; a line's end can
   // be marked where a pause follows it; Undo; Copy (TIMES for lib/i18n/anthem.ts, as JSON). His fixes stay on his phone
   // (a draft over the shipped TIMES) until they ship; nothing goes to the server.
@@ -30,7 +30,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
-  let { overlay }: { overlay: Overlay } = $props();
+  // timing: opened from Admin (the creator's row): the editor; everywhere else the anthem is the same for everyone
+  let { overlay, timing = false }: { overlay: Overlay; timing?: boolean } = $props();
   let audio: HTMLAudioElement | null = null;
   let on = $state(false), waiting = $state(false), repeat = $state(false), held = $state(false);
   let cur = $state(0), dur = $state(211); // the file's length: the time left shows before it loads
@@ -84,7 +85,7 @@
   const playFrom = (s: number) => { seek(s); if (!audio || audio.paused) toggle(); };
 
   // the timings: the shipped ones, or the creator's draft of his fixes (while it was made from those same ones)
-  const N = SUNG.length, founder = !!session.me?.founder, DRAFT = 'kb-anthem-draft', BASE = JSON.stringify(TIMES);
+  const N = SUNG.length, founder = untrack(() => timing) && !!session.me?.founder, DRAFT = 'kb-anthem-draft', BASE = JSON.stringify(TIMES);
   type Times = { s: number[]; e: (number | null)[] };
   function load(): Times | null {
     try { const d = JSON.parse(localStorage.getItem(DRAFT) ?? 'null'); return d?.base === BASE && d.s?.length === N ? d : null; } catch { return null; }

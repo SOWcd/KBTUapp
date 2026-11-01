@@ -32,10 +32,10 @@ def post_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
         "id": p["id"], "org": org_ref(con, orgs[p["org_id"]], files), "audience": p["audience"], "title": p["title"], "body": p["body"],
         "tag": p["tag"], "photo": media_shape(files[p["photo_file_id"]]) if p["photo_file_id"] in files else None,
         "pinned": bool(p["pinned"]), "featured": bool(p["featured_until"] and p["featured_until"] > core.now()),
-        "canDelete": v.role in ("admin", "moderator") or "posts" in rights.get(p["org_id"], ()),
+        # the club's own writers; the app's staff take a post down and feature one in Admin, not in the feed
+        "canDelete": "posts" in rights.get(p["org_id"], ()),
         # a channel's post (mirror.py) is edited in Telegram, and its reactions and comments live there
         "canEdit": "posts" in rights.get(p["org_id"], ()) and not p["tg_url"], "editedAt": p["edited_at"], "tg": _tg_shape(p),
-        "canFeature": v.role == "admin" and p["audience"] == "public",
         "commentsOn": bool(p["comments_on"]),
         "comments": comments.get(p["id"], 0),
         "reactions": {k: reactions.get((p["id"], k), 0) for k in ("fire", "heart")}, "mine": {k: (p["id"], k) in mine for k in ("fire", "heart")},

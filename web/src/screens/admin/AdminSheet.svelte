@@ -15,10 +15,12 @@
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import Pin from '@lucide/svelte/icons/pin';
+  import Music from '@lucide/svelte/icons/music';
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
-  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown, type TgcClosed, type TgcRule } from '../../lib/api';
+  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown, type TgcClosed, type TgcRule, type Post } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { openLink, haptic } from '../../lib/tg';
@@ -31,7 +33,7 @@
   import { withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
-  import { schoolShort } from '../../lib/short';
+  import { nameOf, schoolShort } from '../../lib/short';
 
   let { overlay }: { overlay: Overlay } = $props();
   let busy = $state(false);
@@ -118,6 +120,20 @@
   async function undo(x: TakenDown) {
     try { await api.restore(x.target, x.id); down = (down ?? []).filter((y) => !(y.target === x.target && y.id === x.id)); haptic.ok(); say(t('adm.restored'), 'raising_hands_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  // ---- a club's public post on top of Events → List for everyone, 3 days (§2): here, not in the feed's menu ----
+  let pub = $state<Post[] | null>(null);
+  let featOpen = $state(false);
+  async function openFeat() {
+    featOpen = !featOpen; haptic.select();
+    if (featOpen && !pub) pub = await api.posts('all').then((l) => l.filter((p) => p.audience === 'public').slice(0, 12)).catch(() => []);
+  }
+  async function feature(p: Post) {
+    try {
+      const fresh = await api.feature(p.id, p.featured ? 0 : 3);
+      pub = (pub ?? []).map((x) => (x.id === p.id ? fresh : { ...x, featured: false }));
+      haptic.ok(); say(fresh.featured ? t('news.featured') : t('news.unfeatured'), 'sparkles_3d'); void loadAfisha();
+    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- clubs waiting for the check (§4.6): yes creates the club with its applicant as President; no needs a reason ----
   let apps = $state<ClubApplication[] | null>(null);
@@ -275,7 +291,12 @@
     <!-- the app's team: moderators, admins (the owner gives those), bans -->
     <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
+    {#if owner}<button class="r" onclick={() => sheets.anthem(true)}><span class="ic"><Music size={20} /></span><span class="lb">{t('anthem.timing')}<i>{t('anthem.title')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.mapFlaws()}><span class="ic"><MapPinned size={20} /></span><span class="lb">{t('mf.title')}<i>{t('mf.adminSub')}</i></span><ChevronRight size={18} /></button>
+    <button class="r" aria-expanded={featOpen} onclick={openFeat}><span class="ic"><Pin size={20} /></span><span class="lb">{t('adm.feature')}<i>{t('adm.featureSub')}</i></span><span class="chev"><ChevronRight size={18} /></span></button>
+    {#if featOpen}
+      <div class="chl inrow" transition:fold>{#each pub ?? [] as p (p.id)}<div class="chr"><span class="ellipsis">{p.title}<i>{nameOf(p.org)}</i></span><button class="undo" class:on={p.featured} onclick={() => feature(p)}>{t(p.featured ? 'adm.unpin' : 'adm.pin')}</button></div>{/each}</div>
+    {/if}
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
     {#if fcHeld != null || forum}<button class="r" onclick={() => sheets.adminForum()}><span class="ic"><MessagesSquare size={20} /></span><span class="lb">{t('fc.modAdmin')}<i>{fcHeld ? `${t('fc.modTitle')}: ${fcHeld}` : t('fc.modAdminSub')}</i></span><ChevronRight size={18} /></button>{/if}
@@ -402,4 +423,6 @@
   .th { flex: none; width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
   .chr i { margin-left: 6px; font-style: normal; font-weight: 500; color: var(--text-3); }
   .chr button.undo { flex: none; height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
+  .chr button.undo.on { background: var(--surface-2); color: var(--text-2); }
+  .inrow { margin: 0; box-shadow: inset 0 1px 0 var(--line); }
 </style>

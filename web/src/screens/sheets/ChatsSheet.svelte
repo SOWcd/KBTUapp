@@ -1,10 +1,8 @@
 <script lang="ts">
   // Every chat in the directory (SPEC §4.11), grouped: for everyone, then by school and course. A tap opens it in
-  // Telegram.
-  import { api, type AdminOrg, type Chat } from '../../lib/api';
-  import { session } from '../../lib/state/session.svelte';
-  import { haptic } from '../../lib/tg';
-  import { say, type Overlay } from '../../lib/state/ui.svelte';
+  // Telegram. The same for everyone: linking a chat to its club is Admin's (AdminChats).
+  import type { Chat } from '../../lib/api';
+  import type { Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import Sheet from '../../ui/Sheet.svelte';
@@ -12,17 +10,7 @@
   import ChatKind from '../../ui/ChatKind.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
 
-  let { overlay, chats: given }: { overlay: Overlay; chats: Chat[] } = $props();
-  let changed = $state<Record<number, Chat>>({});  // the admin's links made here
-  const chats = $derived(given.map((c) => changed[c.id] ?? c));
-  const admin = $derived(session.me?.role === 'admin');
-  let orgs = $state<AdminOrg[]>([]);
-  $effect(() => { if (admin) api.adminOrgs().then((l) => (orgs = l.sort((a, b) => a.name.localeCompare(b.name)))).catch(() => {}); });
-  async function whose(c: Chat, ev: Event) {
-    const v = (ev.currentTarget as HTMLSelectElement).value;
-    try { const x = await api.setChatOrg(c.id, v ? Number(v) : null); changed = { ...changed, [c.id]: x }; haptic.ok(); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
+  let { overlay, chats }: { overlay: Overlay; chats: Chat[] } = $props();
   const label = (c: Chat) => c.school && c.course ? `${schoolShort(c.school)} · ${t('chats.course', { n: c.course })}` : (c.school && schoolShort(c.school)) ?? (c.course ? t('chats.course', { n: c.course }) : t('chats.everyone'));
   const groups = $derived.by(() => {
     const m = new Map<string, Chat[]>();
@@ -43,9 +31,6 @@
             <span class="ci" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}<span class="kind"><ChatKind kind={c.kind} size={18} /></span></span>
             <span class="tx"><b class="ellipsis">{c.title}</b><i>{#if c.org}<em class="who">{shortOf(c.org)}</em>{/if}{t(`chats.${c.kind}`)}{c.members ? ' · ' + tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''}</i></span>
           </button>
-          <!-- the admin: whose chat this is (PLAN 86), here where the chats are, not only in Admin -->
-          {#if admin}<select class="whose" aria-label={t('oc.linkClub')} value={c.org ? String(c.org.id) : ''} onchange={(ev) => whose(c, ev)}>
-            <option value="">{t('oc.linkClub')}</option>{#each orgs as o (o.id)}<option value={String(o.id)}>{o.name}</option>{/each}</select>{/if}
         </div>
       {/each}
     </div>
@@ -60,7 +45,6 @@
   .list { display: flex; flex-direction: column; padding: 4px 0; }
   .row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; text-align: left; }
   .rw + .rw { border-top: 1px solid var(--line); }
-  .whose { display: block; margin: -4px 14px 10px 66px; max-width: calc(100% - 80px); height: 32px; padding: 0 10px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-2); font: 560 13px/1 var(--font-text); }
   .row:active { background: var(--surface-2); }
   .ci { position: relative; flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-2); }
   .kind { position: absolute; right: -3px; bottom: -3px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
