@@ -79,6 +79,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
 - `BOARD=1`: the privacy section 12 (the assistant, sign-up questions, the map's flaws) for every student, with a new
   consent version; `BOARD=staff`: admins and moderators only. Its old in-app forum is off for good.
+- `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
 - `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`),
   with its privacy section and a consent version suffix (`+fch1`). `FORUM_GROUP`: its discussion group.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

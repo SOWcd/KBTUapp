@@ -74,7 +74,7 @@ def load() -> Config:
         web_dist=env.get("WEB_DIST", str(ROOT / "web" / "dist")),
         domain=env.get("DOMAIN", "kbtu.sow.kz"),
         bot_username=env.get("BOT_USERNAME", "KBTUappBot"),
-        events_channel=env.get("EVENTS_CHANNEL", "@KBTUevents"),
+        events_channel=env.get("NEWS_CHANNEL") or env.get("EVENTS_CHANNEL") or "@KBTUevents",  # the old name still works
         admins=frozenset(int(x) for x in env.get("ADMIN_TG_IDS", "").replace(",", " ").split()),
         old_dir=env.get("OLD_DIR") or None,
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
