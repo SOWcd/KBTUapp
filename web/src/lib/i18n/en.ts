@@ -1960,8 +1960,6 @@ const en: Dict = {
   'fr.nowFriend': "is your friend now",
   'fr.tooMany': "Too many requests today — try tomorrow",
   // the Awards page (§4.11)
-  'awp.summary': "{n} of {total} achievements",
-  'awp.badges': { one: "{n} badge", other: "{n} badges" },
   'awp.showcase': "Showcase",
   'awp.next': "Almost there",
   'awp.left': "{n} more to level {tier}",
@@ -1977,6 +1975,11 @@ const en: Dict = {
   'awp.guestTitle': "Awards come after you sign in",
   'awp.guestText': "Come to events, bring friends, keep a streak — and collect medals almost nobody has.",
   'awp.empty': "empty",
+  'awp.statuses': "Statuses",
+  'awp.staff': "KBTU App team",
+  'awp.verified': "KBTU student",
+  'awp.verifiedSub': "Account confirmed",
+  'awp.statusesEmpty': "Statuses are roles in the app: the creator, the team, a confirmed student.",
   // News and the post composer (§4.10)
   'news.sub': "Everything happening at KBTU",
   'news.broadcasts': "From {dmp} and KBTU App",

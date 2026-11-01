@@ -1960,8 +1960,6 @@ const kk: Dict = {
   'fr.nowFriend': "енді сенің досың",
   'fr.tooMany': "Бір күнде тым көп өтінім — ертең қайталап көр",
   // the Awards page (§4.11)
-  'awp.summary': "{total} жетістіктің {n}",
-  'awp.badges': { one: "{n} белгі", other: "{n} белгі" },
   'awp.showcase': "Витрина",
   'awp.next': "Ең жақыны",
   'awp.left': "{tier} деңгейіне дейін тағы {n}",
@@ -1977,6 +1975,11 @@ const kk: Dict = {
   'awp.guestTitle': "Марапаттар — кіргеннен кейін",
   'awp.guestText': "Іс-шараларға кел, достарыңды шақыр, серияны үзбе — және ешкімде жоқ дерлік медальдарды жина.",
   'awp.empty': "бос",
+  'awp.statuses': "Мәртебелер",
+  'awp.staff': "KBTU App командасы",
+  'awp.verified': "ҚБТУ студенті",
+  'awp.verifiedSub': "Аккаунт расталған",
+  'awp.statusesEmpty': "Мәртебелер — қолданбадағы рөлдер: жасаушы, команда, расталған студент.",
   // News and the post composer (§4.10)
   'news.sub': "ҚБТУ-да болып жатқанның бәрі",
   'news.broadcasts': "{dmp} және KBTU App-тан",

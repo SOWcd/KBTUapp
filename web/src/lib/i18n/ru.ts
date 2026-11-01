@@ -1979,8 +1979,6 @@ const ru = {
   'fr.nowFriend': "теперь твой друг",
   'fr.tooMany': "Слишком много заявок за день — попробуй завтра",
   // the Awards page (§4.11)
-  'awp.summary': "{n} из {total} достижений",
-  'awp.badges': { one: "{n} значок", few: "{n} значка", many: "{n} значков", other: "{n} значка" },
   'awp.showcase': "Витрина",
   'awp.next': "Ближе всего",
   'awp.left': "Ещё {n} до уровня {tier}",
@@ -1996,6 +1994,11 @@ const ru = {
   'awp.guestTitle': "Награды — после входа",
   'awp.guestText': "Приходи на события, зови друзей, держи серию — и собирай медали, которых почти ни у кого нет.",
   'awp.empty': "пусто",
+  'awp.statuses': "Статусы",
+  'awp.staff': "Команда KBTU App",
+  'awp.verified': "Студент КБТУ",
+  'awp.verifiedSub': "Аккаунт подтверждён",
+  'awp.statusesEmpty': "Статусы — роли в приложении: создатель, команда, подтверждённый студент.",
   // News and the post composer (§4.10)
   'news.sub': "Всё, что происходит в КБТУ",
   'news.broadcasts': "От {dmp} и KBTU App",

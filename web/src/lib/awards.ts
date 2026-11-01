@@ -53,8 +53,10 @@ const hiddenAch = (a: Achievement) => a.secret && a.level === 0;
 const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
 const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
 /** The closest one to its next level (started ones first, else the nearest goal); secrets don't count. */
-/** awards nobody works toward: the creator gives the bug hunter by hand, the first 500 is a one-off */
-const GIVEN = ['bugs', 'first50'];
+/** one-off medals for an event (not levels): Awards shows them among the badges */
+export const MEDALS = ['first50', 'init26', 'init26f'];
+/** awards nobody works toward: the creator gives the bug hunter by hand, the medals are one-offs */
+const GIVEN = ['bugs', ...MEDALS];
 export function closest(ach: Achievement[]): Achievement | undefined {
   const open = ach.filter((a) => !hiddenAch(a) && !GIVEN.includes(a.code) && nextOf(a));
   return [...open].filter((a) => a.count > 0).sort((a, b) => ratio(b) - ratio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];

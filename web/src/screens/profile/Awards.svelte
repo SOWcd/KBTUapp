@@ -1,7 +1,8 @@
 <script lang="ts">
-  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection. On top, the one closest to its next level (the reason to go to
-  // one more event); then every achievement as a card — the medal in its tier's rim, the tier, the way to the next level,
-  // how rare it is — earned first; then the badges. "Showcase" turns the page into a picker: up to 6 achievements or
+  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection in three
+  // tabs. Achievements: on top, the one closest to its next level (the reason to go to one more event); then every
+  // achievement as a card — the medal in its tier's rim, the tier, the way to the next level, how rare it is — earned
+  // first. Badges: the one-off event medals, then the events' pins. Statuses: roles in the app. "Showcase" turns the page into a picker: up to 6 achievements or
   // badges for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Check from '@lucide/svelte/icons/check';
@@ -11,7 +12,9 @@
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { achItem, achName, badgeItem, closest as closestOf, hero, leftLine, nextOf, shelfItem, tierName, type ShelfItem } from '../../lib/awards';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import { achItem, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, nextOf, shelfItem, tierName, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -20,17 +23,35 @@
   import Button from '../../ui/Button.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import Recent from './Recent.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Founder from '../../ui/Founder.svelte';
 
   const me = $derived(session.me);
   const p = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { void me?.showcase; if (me?.student) void loadMyCard(); }); // opened: refreshed
 
-  const ach = $derived(p?.awards.achievements ?? []);
-  const earned = $derived(ach.filter((a) => a.level > 0));
+  // three tabs (owner, Nov 1): Achievements (levels, the way up), Badges (one-off medals for an event, then the events'
+  // pins), Statuses (roles in the app: Creator, idea author, the team, a confirmed student). All from the one card: no fetch
+  const all = $derived(p?.awards.achievements ?? []);
+  const ach = $derived(all.filter((a) => !MEDALS.includes(a.code)));
+  const medals = $derived(all.filter((a) => MEDALS.includes(a.code)).sort((a, b) => b.level - a.level));
   const hidden = (a: Achievement) => a.secret && a.level === 0;
   const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
   // earned first (higher tiers first), then the ones on their way, then the secrets
   const sorted = $derived([...ach].sort((a, b) => Number(hidden(a)) - Number(hidden(b)) || b.level - a.level || ratio(b) - ratio(a)));
+  const statuses = $derived(me ? [
+    me.founder && { key: 'founder', title: t('person.founder'), sub: t('seal.one'), open: founderItem() },
+    me.mark === 'idea' && { key: 'idea', title: t('person.idea'), sub: t('seal.one'), open: ideaItem() },
+    me.role !== 'user' && { key: 'staff', title: t(me.role === 'admin' ? 'staff.role.admin' : 'staff.role.moderator'), sub: t('awp.staff') },
+    me.student && !me.student.manual && { key: 'verified', title: t('awp.verified'), sub: t('awp.verifiedSub') },
+  ].filter((s) => !!s) : []);
+  let tab = $state<'ach' | 'badges' | 'status'>('ach');
+  const tabs = $derived([
+    ['ach', t('person.achievements'), ach.filter((a) => a.level > 0).length],
+    ['badges', t('person.badges'), medals.filter((a) => a.level > 0).length + (p?.awards.badges.length ?? 0)],
+    ['status', t('awp.statuses'), statuses.length],
+  ] as const);
   // the closest to its next level: the reason to go to one more event
   const closest = $derived(closestOf(ach));
   const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
@@ -80,7 +101,7 @@
   {:else}
     <header class="hd">
       <span><h1 class="t-h1">{t('page.awards')}</h1>
-        <p class="t-foot">{p ? [p.attended >= 0 ? `${p.attended} ${tn('person.eventsWord', p.attended)}` : '', t('awp.summary', { n: earned.length, total: ach.length }), tn('awp.badges', p.awards.badges.length)].filter(Boolean).join(' · ') : ' '}</p></span>
+        <p class="t-foot">{p && p.attended >= 0 ? `${p.attended} ${tn('person.eventsWord', p.attended)}` : ' '}</p></span>
       {#if p && !editing}<button class="pill" onclick={edit}><Sparkles size={17} />{t('awp.showcase')}</button>{/if}
     </header>
 
@@ -97,45 +118,55 @@
           </div>
           <Button kind="primary" size="m" full loading={saving} onclick={done}>{#snippet icon()}<Check size={18} />{/snippet}{t('awp.done')}</Button>
         </section>
-      {:else if closest}
-        {@const n = nextOf(closest)}
-        <button class="next" onclick={() => open(achItem(closest))}>
-          <Medal a={closest} size={60} />
-          <span class="nx">
-            <i class="t-cap">{t('awp.next')}</i>
-            <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + tierOf(closest.levels.indexOf(n)) : '')}</b>
-            <span class="bar"><span style="width:{pct(closest)}%"></span></span>
-            <em>{leftLine(closest)}</em>
-          </span>
-        </button>
       {/if}
 
-      {#if !editing}<Recent />{/if}
-
-      <h2 class="sh">{t('person.achievements')}</h2>
-      <div class="grid">
-        {#each sorted as a, i (a.code)}
-          {@const n = nextOf(a)}
-          {@const order = picked.indexOf(a.code)}
-          <button class="ach {tierClass(a)}" class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
-                  onclick={() => (editing ? toggle(a.code, a.level > 0) : open(achItem(a)))}>
-            <span class="md"><Medal {a} size={62} /></span>
-            <b class="nm">{achName(a)}</b>
-            <i class="tr">{a.level ? (a.levels.length > 1 ? t('aw.level', { tier: tierName(a) }) : t('aw.have')) : t('ach.locked')}</i>
-            {#if !hidden(a)}
-              {#if n}
-                <span class="prog"><span class="bar"><span style="width:{pct(a)}%"></span></span><span class="cnt num">{a.count}/{n.need}</span></span>
-              {:else if a.levels.length > 1}
-                <span class="prog max">{t('awp.max')} · {a.count}</span>
-              {/if}
-              <span class="rare">{t('awp.rarity', { p: share(a.level ? a.levels[a.level - 1].rarity : a.rarity) })}</span>
-            {/if}
-            {#if editing && order >= 0}<span class="ord num">{order + 1}</span>{/if}
-          </button>
+      <!-- the tabs: Studio's pill switcher (base.css .seg), each with its count; all three stay mounted, so a switch is
+           instant and fetches nothing (Recent loads once) -->
+      <div class="seg" role="tablist">
+        {#each tabs as [k, label, n] (k)}
+          <button role="tab" aria-selected={tab === k} class:on={tab === k} onclick={() => { if (tab !== k) { tab = k; haptic.select(); } }}>{label}{n ? ' · ' + n : ''}</button>
         {/each}
       </div>
 
-      <h2 class="sh">{t('person.badges')}</h2>
+      {#snippet card(a: Achievement, i: number)}
+        {@const n = nextOf(a)}
+        {@const order = picked.indexOf(a.code)}
+        <button class="ach {tierClass(a)}" class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
+                onclick={() => (editing ? toggle(a.code, a.level > 0) : open(achItem(a)))}>
+          <span class="md"><Medal {a} size={62} /></span>
+          <b class="nm">{achName(a)}</b>
+          <i class="tr">{a.level ? (a.levels.length > 1 ? t('aw.level', { tier: tierName(a) }) : t('aw.have')) : t('ach.locked')}</i>
+          {#if !hidden(a)}
+            {#if n && a.levels.length > 1}
+              <span class="prog"><span class="bar"><span style="width:{pct(a)}%"></span></span><span class="cnt num">{a.count}/{n.need}</span></span>
+            {:else if a.levels.length > 1}
+              <span class="prog max">{t('awp.max')} · {a.count}</span>
+            {/if}
+            <span class="rare">{t('awp.rarity', { p: share(a.level ? a.levels[a.level - 1].rarity : a.rarity) })}</span>
+          {/if}
+          {#if editing && order >= 0}<span class="ord num">{order + 1}</span>{/if}
+        </button>
+      {/snippet}
+
+      <div class="pane" class:gone={tab !== 'ach'}>
+        {#if closest && !editing}
+          {@const n = nextOf(closest)}
+          <button class="next" onclick={() => open(achItem(closest))}>
+            <Medal a={closest} size={60} />
+            <span class="nx">
+              <i class="t-cap">{t('awp.next')}</i>
+              <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + tierOf(closest.levels.indexOf(n)) : '')}</b>
+              <span class="bar"><span style="width:{pct(closest)}%"></span></span>
+              <em>{leftLine(closest)}</em>
+            </span>
+          </button>
+        {/if}
+        <div class="grid">{#each sorted as a, i (a.code)}{@render card(a, i)}{/each}</div>
+        {#if !editing}<Recent />{/if}
+      </div>
+
+      <div class="pane" class:gone={tab !== 'badges'}>
+        <div class="grid">{#each medals as a, i (a.code)}{@render card(a, i)}{/each}</div>
       {#if p.awards.badges.length}
         <div class="pins">
           {#each p.awards.badges as b, i (b.eventId)}
@@ -151,6 +182,24 @@
       {:else}
         <div class="nopins"><span class="ghost"><Pin emoji="sparkles_3d" color="#7C4DFF" size={54} /></span><p class="t-foot">{t('awp.badgesEmpty')}</p></div>
       {/if}
+      </div>
+
+      <div class="pane" class:gone={tab !== 'status'}>
+        {#if statuses.length}
+          <Group>
+            {#each statuses as s (s.key)}
+              {#if s.open}
+                {@const it = s.open}
+                <Row title={s.title} subtitle={s.sub} accessory="chevron" onclick={() => open(it)}>{#snippet lead()}<Founder size={30} idea={!!it.idea} />{/snippet}</Row>
+              {:else}
+                <Row title={s.title} subtitle={s.sub} icon={s.key === 'staff' ? ShieldCheck : BadgeCheck} tile={s.key === 'staff' ? 'indigo' : 'blue'} />
+              {/if}
+            {/each}
+          </Group>
+        {:else}
+          <div class="nopins"><span class="ghost"><BadgeCheck size={40} /></span><p class="t-foot">{t('awp.statusesEmpty')}</p></div>
+        {/if}
+      </div>
     {:else}
       <div class="skel"><span class="s1"></span><div class="sg"><span></span><span></span><span></span><span></span></div></div>
     {/if}
@@ -166,7 +215,10 @@
   .pill { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .pill:active { transform: scale(0.95); }
-  .sh { font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-top: 6px; }
+  .seg { align-self: flex-start; max-width: 100%; }
+  @media (max-width: 359px) { .seg button { padding: 0 6px; font-size: 12px; } } /* three labels with counts on a 320-px phone */
+  .pane { display: flex; flex-direction: column; gap: 14px; }
+  .pane.gone { display: none; }
 
   /* the closest one: medal, how far, a bar in the brand gradient */
   .next { display: flex; align-items: center; gap: 14px; padding: 14px 16px 14px 14px; border-radius: var(--r-xl); text-align: left;
