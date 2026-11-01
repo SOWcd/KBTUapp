@@ -441,6 +441,8 @@ def test_videos(env, tmp_path):
     assert wmeta == ["video"]                                                                            # no sound track
     con.execute("UPDATE videos SET created_at = 0")
     assert sorted(i for i, _ in logic.stale_videos(con)) == [vid] and not con.execute("SELECT 1 FROM videos WHERE id = ?", (vid,)).fetchone()
+    assert c.post("/api/videos", headers=P, json={"size": 5}).status_code == 200                       # `bad` still working: a second
+    assert c.post("/api/videos", headers=P, json={"size": 5}).status_code == 429                       # a third unfinished: no
 
 
 def test_join_requests(env):

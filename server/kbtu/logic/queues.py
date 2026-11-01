@@ -118,6 +118,9 @@ def new_video(con, v: Viewer, size, wide: object = False) -> dict:
         raise ApiError("forbidden")
     if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= video.MAX_BYTES:
         raise ApiError("bad_input", "too_big")
+    # unfinished ones wait for the daily sweep: without a cap, uploads could fill the disk the database lives on
+    if one(con, "SELECT COUNT(*) FROM videos WHERE owner_id = ? AND status IN ('uploading', 'queued', 'working')", v.id)[0] >= 2:
+        raise ApiError("rate_limited")
     vid = con.execute("INSERT INTO videos (owner_id, status, size, created_at, wide) VALUES (?, 'uploading', ?, ?, ?)", (v.id, size, core.now(), int(wide is True))).lastrowid
     return {"id": vid, "at": 0}
 
