@@ -58,7 +58,7 @@
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
   const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
   // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
-  const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '26, 32, 104', VIOLET = '76, 44, 162', ROYAL = '30, 64, 196', WHITE = '238, 240, 246';
+  const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246';
   const RIBBON: Record<string, string[]> = {
     medal_first500: [GOLD, VIOLET, VIOLET, NAVY, NAVY, GOLD, NAVY, NAVY, VIOLET, VIOLET, GOLD],
     medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
@@ -160,7 +160,7 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" bind:this={stage} class:dim={!landed} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
+  <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
     <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if edge && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
@@ -239,6 +239,7 @@
   .pill:disabled { opacity: 0.6; }
   .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; }
   .lit { padding: 56px 0 44px; }
+  .lit.hangs { padding-top: 140px; } /* the 3D medal's ribbon needs the room above, clear of the capsule */
   .spins { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
   /* behind the coin, still: a soft wide light of its metal and hairline rays that fade out long before any edge
      (owner, Nov 1: the old wide rays read childish; then: quieter, more premium) */
