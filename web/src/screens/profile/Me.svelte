@@ -1,3 +1,9 @@
+<script lang="ts" module>
+  // a fresh order each time the app opens, the same while it's open (the faces don't jump on every visit to the tab)
+  const SEED = Math.random() * 1e4;
+  const luck = (id: number) => { const x = Math.sin(id * 12.9898 + SEED) * 43758.5453; return x - Math.floor(x); };
+</script>
+
 <script lang="ts">
   // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
   // Student: my badge (the same hero as everyone else sees), then two squares: my friends (the Friends sheet: requests,
@@ -55,8 +61,11 @@
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
   const friends = $derived(data.friends?.friends ?? []);
   const asked = $derived(me?.counters.friendRequests ?? 0);
-  // the faces' cluster: [width, left, top] in % of its box (132 × 84; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
-  const SPOTS = [[38, 0, 18], [30, 33, 0], [27, 35, 52], [23, 61, 26], [19, 81, 2], [18, 80, 64]];
+  // the faces' cluster: [width, left, top] in % of its box (132 × 104; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
+  // packed so seventeen faces fill the box without holes (owner, Nov 2: as many faces as fit, the whole tile above its name); fewer friends take the biggest
+  const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
+  // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
+  const faces = $derived([...friends].sort((a, b) => +!a.person.avatar - +!b.person.avatar || luck(a.person.id) - luck(b.person.id)));
   const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
 
   let page = $state<HTMLDivElement>();
@@ -198,7 +207,7 @@
     <div class="duo" data-away>
       <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
         {#if friends.length}
-          <span class="cluster" aria-hidden="true">{#each friends.slice(0, SPOTS.length) as r, i (r.person.id)}
+          <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
             {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
         {:else}<span class="hi"><Emoji name="waving_hand_3d_default" size={56} /></span>{/if}
         {#if asked}<b class="req num">{asked}</b>{/if}
@@ -298,8 +307,8 @@
   .sq { position: relative; overflow: hidden; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; border-radius: var(--r-l); text-align: left; }
   .sq:active { transform: scale(0.97); }
   .fr { background: radial-gradient(90% 70% at 15% 0%, var(--accent-soft), transparent 70%), var(--surface); }
-  .cluster { position: relative; display: block; width: 100%; aspect-ratio: 132 / 84; }
-  .spot { position: absolute; aspect-ratio: 1; display: flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--surface-solid), 0 6px 14px -8px rgba(0, 0, 0, 0.45);
+  .cluster { position: relative; display: block; width: 100%; aspect-ratio: 132 / 104; }
+  .spot { position: absolute; aspect-ratio: 1; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-solid), 0 6px 14px -8px rgba(0, 0, 0, 0.45);
     z-index: calc(10 - var(--i)); animation: pop 520ms cubic-bezier(.2, .9, .25, 1.2) backwards; animation-delay: calc(120ms + var(--i) * 55ms); }
   .spot :global(.av) { width: 100% !important; height: 100% !important; }
   .spot :global(.seal) { display: none; }

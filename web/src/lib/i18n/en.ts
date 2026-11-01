@@ -1345,6 +1345,7 @@ const en: Dict = {
   'ach.bugs.how': "Find a bug and tell support — each confirmed bug counts.",
   'ref.title': "Invite friends",
   'ref.count': {one: "{n} brought", other: "{n} brought"},
+  'ref.came': {one: "joined", other: "joined"},
   'ref.next': "Recruiter at {n}",
   'ref.invite': "Invite",
   'ref.qr': "Let a friend point their camera here to open KBTU App",
