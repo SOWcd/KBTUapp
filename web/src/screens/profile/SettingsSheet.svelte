@@ -12,7 +12,7 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
-  import { data, phrase, loadMyCard } from '../../lib/state/data.svelte';
+  import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
@@ -87,6 +87,10 @@
     try { await api.resetCalendar(); haptic.ok(); say(t('set.calResetDone'), 'sparkles_3d'); }
     catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
+  // my week off the server, here too and not only in the Week sheet (owner, Nov 1)
+  async function dropWeek() {
+    if (await sheets.ask({ title: t('sched.delAsk'), text: t('sched.delText'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true })) void dropSchedule();
+  }
   // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
     const a = data.myCard?.awards;
@@ -146,7 +150,7 @@
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </div>
     {#if me?.student && !me.deleteAt}
-      <div class="set-group plain gap">{@render act(t('set.calReset'), resetCal, true)}</div>
+      <div class="set-group plain gap">{@render act(t('set.calReset'), resetCal, true)}{#if data.schedule.length}{@render act(t('sched.del'), dropWeek, true)}{/if}</div>
       <div class="set-group plain gap">{@render act(t('me.deleteData'), deleteData, true)}</div>
     {/if}
   {:else if kind === 'phone'}
