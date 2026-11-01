@@ -363,8 +363,6 @@ const en: Dict = {
   'cast.reviewGo': "Review one by one · {n}",
   'cast.allSeen': "No new applications left",
   'cast.none': "Nobody here yet",
-  'cast.back': "To all",
-  'cast.stopReview': "Enough for now",
   'cast.write': "Write on Telegram",
   'cast.came': { one: "came to {n} club event", other: "came to {n} club events" },
   'cast.cameNone': "Hasn't come to the club's events yet",

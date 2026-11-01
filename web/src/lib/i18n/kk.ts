@@ -363,8 +363,6 @@ const kk: Dict = {
   'cast.reviewGo': "Бір-бірден қарау · {n}",
   'cast.allSeen': "Жаңа өтінімдер қалмады",
   'cast.none': "Осы жерде әзірге ешкім жоқ",
-  'cast.back': "Барлығына",
-  'cast.stopReview': "Қазірге жетеді",
   'cast.write': "Telegram-да жазу",
   'cast.came': { one: "клубтың {n} іс-шарасында болды", other: "клубтың {n} іс-шарасында болды" },
   'cast.cameNone': "Клуб іс-шараларында әлі болмаған",

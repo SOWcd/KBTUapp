@@ -5,7 +5,6 @@
   // the profile, the picks in order, the answers, what only the app knows (the club's events they came to, friends in
   // the club, an earlier try, in the app since), the team's votes with who; my verdict with stars and a note; the
   // decision: into a department, or no. The results go out in one tap; "Share" passes the round on as our bot's card.
-  import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import Star from '@lucide/svelte/icons/star';
   import Share from '@lucide/svelte/icons/share';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -147,10 +146,10 @@
   }
 </script>
 
-<Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')}>
+<!-- one Back (AGENTS.md): Telegram's Back leaves an application for the list, then closes the board -->
+<Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
   {#if cur && r}
     {@const a = cur}
-    <button class="back" onclick={() => { cur = null; walking = false; }}><ChevronLeft size={18} />{walking ? t('cast.stopReview') : t('cast.back')}</button>
     <div class="who">
       <Avatar person={a.person} size={56} />
       <span class="tx"><b>{a.fullName}</b>
@@ -305,7 +304,6 @@
   .tx i { font: 500 13px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
   .n { font: 650 13px/1 var(--font-text); color: var(--text-3); }
   .empty { padding: 14px 4px; }
-  .back { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 10px -4px; padding: 6px 4px; font: 620 14px/1 var(--font-text); color: var(--accent-text); }
   .who { display: flex; align-items: center; gap: 12px; }
   .tg { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
   .picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
