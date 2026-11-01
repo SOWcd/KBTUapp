@@ -144,7 +144,6 @@
     else if (r.target === 'photo') sheets.event(r.where.id); // the album's event (the thumb is in the row)
     else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]); // no post screen: the row has its words, the thread its talk
     else if (r.target === 'ask') sheets.forum(r.id);
-    else if (r.target === 'thread' || r.target === 'reply') sheets.thread(r.where.id); // the student forum: the thread it's in
     else if (r.target === 'tgc' && r.where.link) openLink(r.where.link); // the channel's comments in Telegram
   }
 </script>

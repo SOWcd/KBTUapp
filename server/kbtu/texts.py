@@ -268,6 +268,10 @@ BOT = {
         "tgc_queue": ("🛡 Комментарии в Telegram ждут решения модератора: {n}. Дольше суток: {old}.", "Открыть"),
         "tgc_raid": ("⚠️ Набег на комментарии канала: больше 5 чужих аккаунтов за минуту. Бот молча удаляет их комментарии и банит, без предупреждений.", None),
         "tgc_good": ("🏅 {name} часто жалуется на комментарии в Telegram, и модераторы каждый раз соглашались. Можно предложить статус модератора — решать тебе.", "Профиль"),
+        # the forum channel (tgc.post_tick): an anonymous post's signature and every post's button; a taken-down post's words
+        "fch_anon": ("Анонимный студент", "Написать пост"),
+        "fch_gone": ("Автор удалил этот пост.", None),
+        "fch_removed": ("Модератор снял этот пост.", None),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -391,6 +395,9 @@ BOT = {
         "tgc_queue": ("🛡 Telegram-дағы пікірлер модератор шешімін күтуде: {n}. Бір тәуліктен ұзақ: {old}.", "Ашу"),
         "tgc_raid": ("⚠️ Арна пікірлеріне шабуыл: бір минутта 5-тен көп бөтен аккаунт. Бот олардың пікірлерін ескертусіз өшіріп, бұғаттайды.", None),
         "tgc_good": ("🏅 {name} Telegram-дағы пікірлерге жиі шағымданады, модераторлар әр жолы келісті. Модератор мәртебесін ұсынуға болады — шешім сенде.", "Профиль"),
+        "fch_anon": ("Анонимді студент", "Пост жазу"),
+        "fch_gone": ("Бұл постты авторы өшірді.", None),
+        "fch_removed": ("Бұл постты модератор алып тастады.", None),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -514,6 +521,9 @@ BOT = {
         "tgc_queue": ("🛡 Telegram comments waiting for a moderator: {n}. Over a day: {old}.", "Open"),
         "tgc_raid": ("⚠️ A raid on the channel's comments: over 5 strangers in a minute. The bot deletes their comments and bans them silently, without warnings.", None),
         "tgc_good": ("🏅 {name} often reports comments in Telegram, and the moderators agreed every time. You could offer them the moderator status: your call.", "Profile"),
+        "fch_anon": ("Anonymous student", "Write a post"),
+        "fch_gone": ("The author deleted this post.", None),
+        "fch_removed": ("A moderator removed this post.", None),
     },
 }
 

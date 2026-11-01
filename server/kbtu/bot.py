@@ -616,6 +616,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
+        await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages

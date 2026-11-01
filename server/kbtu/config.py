@@ -32,6 +32,9 @@ class Config:
     # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too. Never the events
     # channel's discussion group: the bot would take its post copies as this group's and never comment under them
     tgc_chat: int = 0
+    # the forum channel itself (@KBTUappForum's chat id, -100...): students post from the app, the bot publishes after
+    # the AI's or a moderator's yes (logic/fchannel.py); 0: off, the policy's section and its consent version too
+    forum_channel: int = 0
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
@@ -81,6 +84,7 @@ def load() -> Config:
         forum_founder=env.get("FORUM", "0") == "founder",
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
         tgc_chat=int(env.get("TG_COMMENTS_CHAT", "").strip() or 0),
+        forum_channel=int(env.get("FORUM_CHANNEL", "").strip() or 0),
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),

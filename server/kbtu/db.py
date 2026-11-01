@@ -986,6 +986,31 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the clause of the terms' section 3 a removed Telegram comment broke (tgcomments.RULES); rule stays for old rows
     (101, """ALTER TABLE tgc_comments ADD COLUMN clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other'));
     UPDATE tgc_comments SET clause = CASE rule WHEN 'spam' THEN 'spam' WHEN 'other' THEN 'other' ELSE 'abuse' END WHERE rule IS NOT NULL;"""),
+    # the forum channel (FORUM_CHANNEL, logic/fchannel.py, Nov 1): a student's post, published by the bot after the AI's
+    # or a moderator's yes; the author kept for the owner's audited reveal while the post exists. tg_unpost: channel
+    # messages to take down, no foreign key and nothing personal, so a deleted account's posts still leave the channel
+    (102, """CREATE TABLE fchan_posts (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('held', 'live', 'hidden', 'gone')),  -- gone: the author deleted it (words wiped; still counts toward the day)
+      why        TEXT,                                  -- held: 'check' (no AI answer yet), 'ai', 'person', 'busy'; hidden: 'moderator'
+      tg_msg     INTEGER,                               -- the channel message, once sent
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX fchan_posts_by_user ON fchan_posts(user_id, created_at);
+    CREATE INDEX fchan_posts_by_status ON fchan_posts(status, id);
+    CREATE TABLE tg_unpost (
+      msg_id INTEGER PRIMARY KEY,
+      why    TEXT NOT NULL CHECK (why IN ('author', 'moderator')),
+      at     INTEGER NOT NULL
+    ) STRICT;"""),
+    # the old student forum (threads.py) is replaced by the channel (owner, Nov 1: clean it up): its threads, replies,
+    # "I'm in" marks, reports and the bot's unsent notes about them go
+    (103, """DELETE FROM thread_joins; DELETE FROM thread_replies; DELETE FROM threads;
+    DELETE FROM reports WHERE target IN ('thread', 'reply');
+    DELETE FROM bot_outbox WHERE kind = 'thread_reply';"""),
 ]
 
 

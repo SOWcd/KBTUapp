@@ -166,17 +166,12 @@ export interface Api {
   hideAsk(id: Id): Promise<void>;
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
-  threads(topic?: import('./types').Topic | null, before?: Ts, bid?: Id): Promise<import('./types').Thread[]>; // the student forum's feed; a page after (bumpedAt, id)
-  thread(id: Id): Promise<import('./types').ThreadFull>;
-  newThread(input: { topic: import('./types').Topic; body: string; anon: boolean }): Promise<import('./types').ThreadFull>;
-  deleteThread(id: Id): Promise<void>;
-  replyThread(id: Id, body: string, anon: boolean): Promise<import('./types').ThreadFull>;
-  deleteReply(id: Id): Promise<void>;
-  joinThread(id: Id, on: boolean): Promise<import('./types').Thread>;                    // "I'm in" on go / vol
-  threadJoiners(id: Id): Promise<import('./types').Joiner[]>;                            // the author: who's in, how to write
-  threadMod(): Promise<import('./types').ThreadMod>;                                     // moderators: what the AI held
-  threadModDecide(kind: 'thread' | 'reply', id: Id, ok: boolean): Promise<void>;
-  revealAnon(kind: 'thread' | 'reply', id: Id): Promise<PersonRef>;                      // the admin alone; audited
+  channelPosts(): Promise<import('./types').ChannelPost[]>;                               // the forum channel: my posts, newest first
+  newChannelPost(body: string, anon: boolean): Promise<import('./types').ChannelPost>;   // one a day; the AI first, live: the bot posts it
+  deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
+  channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live
+  channelModDecide(id: Id, ok: boolean): Promise<void>;                                 // held: out or removed; live: only removed
+  revealChannelPost(id: Id): Promise<PersonRef>;                                        // the owner alone; audited
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
   mapFlawDone(id: Id, done: boolean): Promise<void>;

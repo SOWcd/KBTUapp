@@ -6,3 +6,5 @@ export const CONSENT_VERSION = '2026-10-v3';
 export const CONSENT_BOARD = '2026-10-v7', CONSENT_BOTH = '2026-10-v8'; // v5, v6 until Oct 31 (the assistant's feedback)
 // with the channel's comments on (TG_COMMENTS_CHAT) the server adds this to whichever version is in force
 export const CONSENT_TGC = '+tgc1';
+// with the forum channel on (FORUM_CHANNEL) the server adds this after that: the section on posts in the channel
+export const CONSENT_FCH = '+fch1';

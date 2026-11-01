@@ -702,6 +702,7 @@ CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in forc
 CONSENT_BOARD = "2026-10-v7"  # with BOARD=1 alone: the student forum's section (11 then); v5 until Oct 31, the assistant's feedback
 CONSENT_BOTH = "2026-10-v8"   # (v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with TG_COMMENTS_CHAT: added to whichever of the above (app.py), the channel comments' section
+CONSENT_FCH = "+fch1"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
@@ -822,6 +823,7 @@ _DEL_GONE = {
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
+    ("fchan_posts", "user_id"),  # my channel posts (their messages sent to be taken down first: fchannel.unpost_account)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -914,6 +916,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         for t in ("tgc_saved", "tgc_strangers"):
             con.execute(f"DELETE FROM {t} WHERE tg_id = ?", (tg,))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
+        fchannel.unpost_account(con, v.id)  # before the rows go: their channel message ids would go with them
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))
@@ -1075,7 +1078,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, profiles  # noqa: E402
+from . import chatlist, core, fchannel, profiles  # noqa: E402
 from .clubs import TRANSLIT, orgs  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402

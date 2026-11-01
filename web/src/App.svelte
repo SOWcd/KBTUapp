@@ -7,7 +7,7 @@
   import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
-  import { loadBoard } from './lib/state/board.svelte';
+  import { loadChannel } from './lib/state/channel.svelte';
   import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
@@ -76,7 +76,7 @@
   const newsPage = () => import('./screens/afisha/News.svelte');
   const friendsPage = () => import('./screens/profile/Friends.svelte');
   const settingsList = () => import('./screens/profile/SettingsList.svelte'); // the settings under my lanyard (Me)
-  const boardPage = () => import('./screens/forum/Board.svelte'); // the student forum, its own tab (Oct 30)
+  const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // the policy changed since this student agreed: the whole app waits behind the gate until they accept (owner, Nov 1:
   // the sheet got swiped away unread). Staff and students added by hand have no consent of theirs; a deletion pending is
   // exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
@@ -93,13 +93,11 @@
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
   const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList].forEach(warm); if (!session.me?.memberships.length) return; void studioPage(); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmBoard = () => { if (!session.board) return; void boardPage(); if (session.me?.student) void loadBoard(); };
+  const warmChannel = () => { if (!session.channel) return; void channelPage(); if (session.me?.student) void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
   sheets.scanner = (id, names) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names });
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = () => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), {}));
-  sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
-  sheets.newThread = (onmade, topic) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade, topic });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
@@ -162,9 +160,9 @@
 
   // ---- the Clubs tab: a member's has My club and All clubs (a switch on top of the content, tap only) ----
   const member = $derived((session.me?.memberships.length ?? 0) > 0);
-  // the bar's tabs: the forum only where the server opened it (BOARD; its policy section in force)
-  const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.board));
-  $effect(() => { if (session.boardKnown && !session.board && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
+  // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
+  const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
+  $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
   // a role changes a tab's content, never its name
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
   const TAB_DOT: Record<Tab, () => boolean> = {
@@ -290,8 +288,7 @@
     if (/^ci_\d+_\d+_[0-9a-f]{16}$/.test(p)) { void checkIn(p); return; } // the big screen's QR (server checkin.py)
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
-    const th = p.match(/^th_(\d+)$/); // the bot's "someone answered your thread"
-    if (th) { if (session.board) { ui.tab = 'forum'; sheets.thread(Number(th[1])); } return; }
+    if (p === 'fp') { if (session.channel) ui.tab = 'forum'; return; } // the channel post's "Write a post" button
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
     const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
@@ -457,7 +454,7 @@
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
-      session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; // the last launch's word until the server's
+      session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
       localize(data); localize(session.me); // cached in another language, maybe
     }
@@ -465,7 +462,7 @@
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800);
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
@@ -481,7 +478,7 @@
       {#if tab === 'afisha'}
         {#if built.afisha}<ListPage />{/if}
       {:else if tab === 'forum'}
-        {#if built.forum}{#await boardPage() then m}<m.default />{/await}{/if}
+        {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
       {:else if tab === 'club'}
         <!-- My club and All clubs both stay alive once shown: the switch answers in the tap's frame, each keeps its scroll -->
         {#if built['club:all']}<div class="view" class:off={clubView !== 'all'}><Clubs /></div>{/if}

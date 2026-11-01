@@ -149,7 +149,9 @@ Forum = Annotated[Viewer, Depends(forum_viewer)]
 
 
 def board_on(cfg, v: Viewer) -> bool:
-    """The student forum is open to this person: BOARD=1 everyone, BOARD=staff the admins and moderators."""
+    """The policy's section 12 is in force for this person (BOARD=1 everyone, BOARD=staff the admins and moderators):
+    the assistant, an event's sign-up questions, the map's flaws. Its old in-app forum (threads.py) is off for good:
+    the forum channel replaced it (Nov 1), migration 103 deleted its threads."""
     return cfg.board == "all" or cfg.board == "staff" and v.role in ("admin", "moderator")
 
 
@@ -172,6 +174,31 @@ def board_writer(request: Request, v: Board, con: Con) -> Viewer:
 
 
 BoardWrite = Annotated[Viewer, Depends(board_writer)]
+
+
+def fchan_viewer(request: Request, v: Me) -> Viewer:
+    """The forum channel (FORUM_CHANNEL): off, none of it is here."""
+    if not request.app.state.cfg.forum_channel:
+        raise ApiError("not_found")
+    return v
+
+
+FChan = Annotated[Viewer, Depends(fchan_viewer)]
+
+
+def fchan_writer(request: Request, v: FChan, con: Con) -> Viewer:
+    """Posting to the channel: a student Microsoft confirmed (a typed-in ID could be anyone's), on the policy in force
+    (its section on the channel: public posts, the AI's cross-border look)."""
+    logic.need_student(v)
+    s = logic.one(con, "SELECT manual, consent_version FROM students WHERE user_id = ?", v.id)
+    if not s or s["manual"]:
+        raise ApiError("need_student")
+    if s["consent_version"] not in (request.app.state.policy, "admin"):
+        raise ApiError("forbidden", "consent")
+    return v
+
+
+FChanWrite = Annotated[Viewer, Depends(fchan_writer)]
 
 
 def create(cfg: config.Config | None = None) -> FastAPI:
@@ -226,11 +253,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
               (True, True): logic.CONSENT_BOTH}[(cfg.forum, cfg.board == "all")]
     # the channel's comments (TG_COMMENTS_CHAT) add their section: whatever the version, everyone agrees once more
     policy += logic.CONSENT_TGC if cfg.tgc_chat else ""
+    policy += logic.CONSENT_FCH if cfg.forum_channel else ""  # posts in the forum channel: the same, after it
     app.state.policy = policy
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
         return logic.me(con, v) | {"consentNow": policy, "board": board_on(app.state.cfg, v),
+                                   **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {})}
 
     @app.patch("/api/me")
@@ -1067,7 +1096,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
-        if body.get("target") in ("thread", "reply") and not board_on(app.state.cfg, v):  # no forum here: nothing of it to report
+        if body.get("target") in ("thread", "reply"):  # the old in-app forum is off (the channel replaced it): nothing of it to report
             raise ApiError("not_found")
         logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
         # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
@@ -1538,54 +1567,35 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await screen(f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
         return logic.create_ask(con, v, body, verdict)
 
-    # ------------------------------------------------------------ the student forum (logic/threads.py): every student
-    T = logic.threads
+    # ------------------------------------------------------------ the forum channel (logic/fchannel.py): posts from the app
+    F = logic.fchannel
 
-    @app.get("/api/threads")
-    def threads_feed(con: Con, v: Board, topic: str | None = None, before: int | None = None, bid: int | None = None):
-        return T.threads(con, v, topic, before, bid)
+    @app.get("/api/forum-posts")
+    def fchan_mine(con: Con, v: FChan):
+        return F.mine(con, v)
 
-    @app.post("/api/threads")
-    async def threads_new(con: Con, v: BoardWrite, body: dict = Body(...)):
-        tid = T.reserve_thread(con, v, body)  # held, inside the allowance, before the AI is asked
-        return T.settle_thread(con, v, tid, await screen(str(body["body"])))
+    @app.post("/api/forum-posts")
+    async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
+        pid = F.reserve(con, v, body)  # held, inside the day's one, before the AI is asked
+        async with httpx.AsyncClient() as http:
+            verdict = await ai.screen_post(cfg, http, logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
+        return F.settle(con, v, pid, verdict)  # live: the bot's round publishes it within seconds
 
-    @app.get("/api/threads/mod")
-    def threads_mod(con: Con, v: Board):
-        return T.mod_queue(con, v)
+    @app.delete("/api/forum-posts/{pid}", status_code=204)
+    def fchan_drop(pid: int, con: Con, v: FChan):
+        F.delete(con, v, pid)
 
-    @app.post("/api/threads/mod/{kind}/{xid}", status_code=204)
-    def threads_mod_decide(kind: str, xid: int, con: Con, v: Board, body: dict = Body(...)):
-        T.mod_decide(con, v, kind, xid, body.get("ok"))
+    @app.get("/api/forum-posts/mod")
+    def fchan_mod(con: Con, v: FChan):
+        return F.mod_queue(con, v)
 
-    @app.post("/api/threads/reveal/{kind}/{xid}")
-    def threads_reveal(kind: str, xid: int, con: Con, v: Board):
-        return T.reveal(con, v, kind, xid)
+    @app.post("/api/forum-posts/{pid}/mod", status_code=204)
+    def fchan_mod_decide(pid: int, con: Con, v: FChan, body: dict = Body(...)):
+        F.mod_decide(con, v, pid, body.get("ok"))
 
-    @app.delete("/api/threads/replies/{rid}", status_code=204)
-    def threads_drop_reply(rid: int, con: Con, v: Board):
-        T.delete_reply(con, v, rid)
-
-    @app.get("/api/threads/{tid}")
-    def threads_one(tid: int, con: Con, v: Board):
-        return T.thread(con, v, tid)
-
-    @app.delete("/api/threads/{tid}", status_code=204)
-    def threads_drop(tid: int, con: Con, v: Board):
-        T.delete_thread(con, v, tid)
-
-    @app.post("/api/threads/{tid}/replies")
-    async def threads_reply(tid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
-        rid = T.reserve_reply(con, v, tid, body)  # the thread open to me, held, inside the allowance, before the AI
-        return T.settle_reply(con, v, rid, await screen(str(body["body"])))
-
-    @app.put("/api/threads/{tid}/join")
-    def threads_join(tid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
-        return T.join(con, v, tid, body.get("on"))
-
-    @app.get("/api/threads/{tid}/joiners")
-    def threads_joiners(tid: int, con: Con, v: Board):
-        return T.joiners(con, v, tid)
+    @app.post("/api/forum-posts/{pid}/reveal")
+    def fchan_reveal(pid: int, con: Con, v: FChan):
+        return F.reveal(con, v, pid)
 
     @app.post("/api/forum/asks/{aid}/close")
     def forum_close_ask(aid: int, con: Con, v: Forum, body: dict = Body(default={})):
@@ -1667,8 +1677,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
         # each forum's part (and the version line that names it) only with that forum on for everyone
         # the channel's comments section comes last: its number follows the forums' (11 with neither)
-        body = body.replace("{{tgcn}}", str(11 + cfg.forum + (cfg.board == "all")))
-        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat))):
+        tgcn = 11 + cfg.forum + (cfg.board == "all")
+        body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(tgcn + bool(cfg.tgc_chat)))  # the channel's posts: after it
+        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel))):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))

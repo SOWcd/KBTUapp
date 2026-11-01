@@ -59,7 +59,10 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
-- **The bot** sends templates with a button into the app, never a user's words.
+- **The bot** sends templates with a button into the app, never a user's words. One exception: a student's own post
+  to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
+  links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
+  take it down, and only the creator can reveal an anonymous author (audit log).
 - **One Back**: Telegram's BackButton is the only Back. No "‹ Back" links, arrows or close buttons of our own that
   duplicate it (a full-screen overlay's bottom x is the one exception: ui/CloseX.svelte).
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
@@ -72,6 +75,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 ## Feature switches (server env)
 
 - `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
-- `BOARD=1`: the student forum for every student, with its privacy section and a new consent version;
-  `BOARD=staff`: admins and moderators only, to try it.
+- `BOARD=1`: the privacy section 12 (the assistant, sign-up questions, the map's flaws) for every student, with a new
+  consent version; `BOARD=staff`: admins and moderators only. Its old in-app forum is off for good.
+- `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`),
+  with its privacy section and a consent version suffix (`+fch1`). `TG_COMMENTS_CHAT`: its discussion group.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

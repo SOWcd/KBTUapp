@@ -51,16 +51,13 @@ export type TgcRule = 'abuse' | 'fake' | 'spam' | 'pdata' | 'disrupt' | 'other';
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
-/** The student forum (server logic/threads.py): a thread's topic decides how long it stays and whether "I'm in" counts
- *  people (go, vol). An anonymous one has no author for anyone (the admin's reveal is separate and audited). */
-export type Topic = 'thing' | 'go' | 'help' | 'vol' | 'talk';
-export interface Thread { id: Id; topic: Topic; body: string; anon: boolean; mine: boolean; author: PersonRef | null; createdAt: Ts; bumpedAt: Ts; expiresAt: Ts;
-  replies: number; joins?: number; joined?: boolean; joiners?: PersonRef[]; status?: 'live' | 'held' | 'hidden'; why?: string | null }
-/** A reply: a named writer's person (op: the thread's author), an anonymous one's number in this thread, or op for the anonymous author. */
-export interface ThreadReply { id: Id; body: string; anon: boolean; mine: boolean; at: Ts; person?: PersonRef | null; op?: boolean; n?: number; status?: 'live' | 'held' | 'hidden'; why?: string | null }
-export interface ThreadFull extends Thread { thread: ThreadReply[] }
-export interface ThreadMod { threads: Thread[]; replies: { id: Id; body: string; anon: boolean; why: string | null; at: Ts; thread: Id; threadBody: string }[] }
-export type Joiner = PersonRef & { telegram: string | null };
+/** A post of mine in the forum channel (server logic/fchannel.py): live (in the channel, or seconds from it), held for
+ *  a moderator, hidden (a moderator removed it). */
+export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'live' | 'held' | 'hidden'; at: Ts }
+/** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
+ *  post's author is null for everyone; the owner's reveal is separate and audited. */
+export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null };
+export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[] }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
@@ -214,7 +211,8 @@ export interface Me {
   student: StudentProfile | null; // null = guest
   msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
-  board?: boolean;     // GET /api/me only: the student forum is open to me (the server's BOARD switch)
+  board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
+  forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
   tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
