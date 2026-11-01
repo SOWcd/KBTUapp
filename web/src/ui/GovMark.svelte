@@ -1,13 +1,13 @@
 <script lang="ts">
-  // The Student Government's mark: a name, not a right; wherever the club shows
-  import Landmark from '@lucide/svelte/icons/landmark';
+  // The Student Government's seal beside its name, like the verified tick (owner: the Russian "Student Government"
+  // chip under the club named "Student Government" said it twice); the words stay as its label and tooltip
+  import Vote from '@lucide/svelte/icons/vote';
   import { t } from '../lib/i18n/index.svelte';
+  let { size = 15 }: { size?: number } = $props();
 </script>
 
-<span class="gov"><Landmark size={11} strokeWidth={2.4} />{t('clubs.gov')}</span>
+<span class="gov" title={t('clubs.gov')} role="img" aria-label={t('clubs.gov')}><Vote {size} strokeWidth={2.2} /></span>
 
 <style>
-  .gov { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--r-full); background: var(--accent-soft);
-    color: var(--accent-text); font: 680 11px/1.35 var(--font-text); }
-  .gov :global(svg) { flex: none; }
+  .gov { display: inline-flex; flex: none; color: var(--accent-text); }
 </style>

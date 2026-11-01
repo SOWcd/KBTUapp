@@ -117,8 +117,7 @@
         {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
       <OrgLogo org={o} size={52} />
       <span class="txt">
-        <span class="nm"><b class="clamp-2">{o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={15} /></span>{/if}</span>
-        {#if o.gov}<GovMark />{/if}
+        <span class="nm"><b class="clamp-2">{o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={15} /></span>{/if}{#if o.gov}<GovMark size={15} />{/if}</span>
         <small>{o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers)}</small>
         {#if nx}<em class="cnx"><i></i><span>{nx}</span></em>{/if}
       </span>
