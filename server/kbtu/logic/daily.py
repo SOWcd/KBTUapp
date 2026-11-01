@@ -235,6 +235,11 @@ def admin_stats(con, v: Viewer) -> dict:
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
+            # Microsoft-confirmed students by the month their account was made (counts only; "" unknown): whether the
+            # dates split by intake before MS_AGE_CUTOFF is turned on (core.first_year_free)
+            "msMonths": {r[0]: r[1] for r in rows(con, """SELECT COALESCE(substr(json_extract(ms_profile, '$.createdDateTime'), 1, 7), ''), COUNT(*)
+                FROM students WHERE manual = 0 AND ms_oid IS NOT NULL AND consent_version != 'staff' GROUP BY 1 ORDER BY 1""")},
+            "msCutoff": core.MS_AGE_CUTOFF,
             "ai": ai_state(con), "today": one(con, "SELECT COUNT(*) FROM visits WHERE day = ?", day_of(t))[0],
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}
                      for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}

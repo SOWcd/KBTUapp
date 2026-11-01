@@ -284,10 +284,28 @@ def course_day(con) -> None:
             con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (min(max(course_cap(r["student_id"]), r["course"]), r["course"] + ay - since), ay, r["user_id"]))
 
 
+# MS_AGE_CUTOFF (env, "MM-DD", e.g. "06-01"; app.py sets it): a free 1st-year seat also needs a KBTU Microsoft
+# account made on or after that day of the academic year's first calendar year (audit finding 2): KBTU makes the
+# intake's accounts the summer before year one, so a senior who types a 1st-year's ID is years older. None (unset,
+# the default): recorded only, never refused, until Admin's "accounts by month" (daily.admin_stats) shows the real
+# dates split by intake (a bulk migration could give every account one date). Graph's createdDateTime is UTC ISO
+# ("2025-07-14T09:30:00Z"): compared as text; Almaty's 5 hours at midnight don't matter. Unknown (no Microsoft
+# sign-in, one before Graph gave it, or Graph left it out): the course alone, as before; ms_link stores the whole
+# profile again at every sign-in, so the date arrives with the next one.
+MS_AGE_CUTOFF: str | None = None
+
+
+def first_year_free(con, uid: int) -> bool:
+    """Whether this person may take a paid event's free 1st-year seat: a 1st-year bachelor (a B after the year in the
+    ID; masters have no such seats) whose Microsoft account isn't older than this year's intake (MS_AGE_CUTOFF)."""
+    cut = f"{academic_year()}-{MS_AGE_CUTOFF}" if MS_AGE_CUTOFF else None  # None: `>= NULL` is NULL, COALESCE lets in
+    return bool(one(con, """SELECT 1 FROM students WHERE user_id = ? AND course = 1 AND student_id GLOB '[0-9][0-9]B*'
+                            AND COALESCE(json_extract(ms_profile, '$.createdDateTime') >= ?, 1)""", uid, cut))
+
+
 def _free_seat(con, e: sqlite3.Row, uid: int) -> bool:
-    """Whether this person gets one of the event's free seats: a 1st-year bachelor (a B after the year in the ID; masters have no such seats) while some are left."""
-    return bool(e["price"] and e["free_first"] and free_taken(con, e["id"]) < e["free_first"]
-                and one(con, "SELECT 1 FROM students WHERE user_id = ? AND course = 1 AND student_id GLOB '[0-9][0-9]B*'", uid))
+    """Whether this person gets one of the event's free seats: first_year_free, while some are left."""
+    return bool(e["price"] and e["free_first"] and free_taken(con, e["id"]) < e["free_first"] and first_year_free(con, uid))
 
 
 def friend_ids(con, uid: int) -> list[int]:

@@ -91,7 +91,7 @@
   const started = $derived(!!e && e.startsAt <= nowTs());
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
-  const freeMe = $derived(!!e?.price && !!e.freeLeft && session.me?.student?.course === 1);
+  const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
   // the student's classes around the event that day: the last one before, any that overlap, the first one

@@ -75,7 +75,9 @@ export interface AdminStats { online: number; day: number; week: number; month: 
   days: { day: number; active: number; new: number; students: number }[];
   /** the translator (PLAN 9): Cloudflare's keys set, translated today (UTC), the last error */
   ai?: { on: boolean; today: number; error: string | null };
-  today?: number /* opened the app today so far (the visits log) */ }
+  today?: number /* opened the app today so far (the visits log) */;
+  /** Microsoft-confirmed students by the month their account was made ('YYYY-MM'; '' unknown), counts only; msCutoff the MS_AGE_CUTOFF in force (MM-DD) or null */
+  msMonths?: Record<string, number>; msCutoff?: string | null }
 /** One day of the admin's chart: who opened the app; people null for a day before the visits were kept. */
 export interface AdminDay { day: number; active: number; new: number; people: { id: Id; name: string; username: string | null; new: boolean; student: boolean; profile: boolean }[] | null }
 /** The AI page in Admin: the translator's state and work. */
@@ -195,6 +197,7 @@ export interface StudentProfile {
   lastLat: string | null;   // the name in Latin (KBTU's directory, the freshmen list or typed here): the exports, the English UI
   firstLat: string | null;
   middleLat: string | null;
+  freeFirst: boolean; // a paid event's free 1st-year seat is mine to take (the server's rule: year, ID, account age)
   fixable: Fixable[]; // what Settings → My data still lets me correct myself (once each; then support)
 }
 

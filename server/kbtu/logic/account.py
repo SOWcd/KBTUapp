@@ -403,6 +403,7 @@ def me(con, v: Viewer) -> dict:
                     "lastLat": s["last_lat"], "firstLat": s["first_lat"], "middleLat": s["middle_lat"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
+                    "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity): nothing for staff
                     "fixable": [k for k, c in FIXABLE.items() if c not in s["fixed"].split(",") and s["consent_version"] != "staff"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names

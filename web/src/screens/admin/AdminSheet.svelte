@@ -168,6 +168,13 @@
           aria-label={`${dayName(d.day)}: ${d.n ?? 0}`}><span style="height:{d.n == null ? 4 : Math.max(6, (d.n / peak) * 100)}%"></span></button>{/each}
       </div>
       <div class="foot"><i>{t('st.chart')}</i><i>{t('st.peak', { n: peak })}</i></div>
+      {#if stats.msMonths}
+        <details class="msm">
+          <summary>{t('st.msMonths')}</summary>
+          <p>{stats.msCutoff ? t('st.msOn', { d: stats.msCutoff }) : t('st.msOff')}</p>
+          {#each Object.entries(stats.msMonths) as [m, n] (m)}<p><span class="num">{m || t('st.msUnknown')}</span><b class="num">{n}</b></p>{/each}
+        </details>
+      {/if}
       {#if pickedDay != null}
         <div class="dayv" transition:fold>
           <p class="dh"><b>{dayName(pickedDay)}</b>{#if picked}<span class="num">{tn('st.dayCame', picked.active)}{picked.new ? ' · ' + tn('st.dayNew', picked.new) : ''}</span>{/if}</p>
@@ -342,6 +349,10 @@
   .who em { flex: none; padding: 3px 8px; border-radius: var(--r-full); background: var(--success-soft); color: var(--success-text); font: 650 var(--fs-micro)/1 var(--font-text); font-style: normal; }
   .foot { display: flex; justify-content: space-between; gap: 8px; margin-top: -6px; }
   .foot i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .msm { border-top: 1px solid var(--line); padding-top: 8px; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .msm summary { cursor: pointer; }
+  .msm p { display: flex; justify-content: space-between; gap: 8px; margin: 6px 0 0; }
+  .msm b { color: var(--text); }
 
   .todo { display: flex; flex-direction: column; gap: 8px; }
   .capp { display: flex; flex-direction: column; overflow: hidden; }

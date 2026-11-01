@@ -2416,6 +2416,42 @@ def test_deadline_and_free_first(env):
     assert (late["error"], late["message"]) == ("closed", "deadline")
 
 
+def test_free_first_needs_a_new_ms_account(env):
+    """Audit finding 2: with MS_AGE_CUTOFF=06-01 a free 1st-year seat also needs the Microsoft account made on or after
+    June 1 of the academic year (KBTU makes the intake's accounts that summer); an older one pays like anyone, keeping
+    everything else; an unknown date (no ms_profile, or none in it) keeps the course alone. Unset (the default): the
+    date is only recorded, nobody is refused. The event sheet's "Go free" says the same; Admin's stats count the
+    confirmed students by account month (counts only), to check the dates before turning it on."""
+    c, cfg = env
+    for uid, name in ((20, "pres"), (10, "old"), (11, "new"), (12, "unk"), (13, "nodate")):
+        login(c, uid, name)
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
+    con.execute("UPDATE students SET course = 1, student_id = printf('%02dB%07d', ?, user_id) WHERE user_id IN (SELECT id FROM users WHERE tg_id IN (10, 11, 12, 13))",
+                (INTAKE % 100,))
+    for tg, prof in ((10, {"id": "x", "createdDateTime": f"{INTAKE}-05-31T23:59:59Z"}),   # a day before the intake's summer
+                     (11, {"id": "x", "createdDateTime": f"{INTAKE}-06-01T00:00:00Z"}),   # the cutoff itself
+                     (12, None), (13, {"id": "x"})):                                       # never signed in / no date
+        con.execute("UPDATE students SET manual = 0, ms_oid = ?, ms_profile = ? WHERE user_id = (SELECT id FROM users WHERE tg_id = ?)",
+                    (f"oid{tg}", prof and json.dumps(prof), tg))
+    me = lambda: [c.get("/api/me", headers=tma(t)).json()["student"]["freeFirst"] for t in (10, 11, 12, 13)]  # noqa: E731
+    assert me() == [True] * 4                                                              # off: recorded only
+    with pytest.raises(SystemExit):
+        config._month_day("6-1")
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}), ms_age_cutoff=config._month_day("06-01"))))
+    st = c.get("/api/admin/stats", headers=tma(20)).json()
+    assert (st["msCutoff"], st["msMonths"][f"{INTAKE}-05"], st["msMonths"][f"{INTAKE}-06"], st["msMonths"][""] >= 2) == ("06-01", 1, 1, True)
+    assert me() == [False, True, True, True]
+    start = int(time.time()) + 7200
+    eid = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Gala", "place": "Hall", "startsAt": start, "emoji": "laptop_3d",
+                 "color": "#3B6BFF", "seats": 10, "price": 2000, "payToName": "Alikhan S.", "payPhone": "87071234567", "freeFirst": 5}).json()["id"]
+    c.post(f"/api/events/{eid}/publish", headers=tma(20))
+    got = [c.post(f"/api/events/{eid}/registration", headers=tma(t), json={}).json()["my"] for t in (10, 11, 12, 13)]
+    assert [(m["status"], m["free"]) for m in got] == [("hold", False), ("going", True), ("going", True), ("going", True)]
+    logic.core.MS_AGE_CUTOFF = None  # a module global (app.py sets it): not into the next test
+
+
 def test_departments(env):
     """Departments (PLAN item 47): a tag marked department, one per person or none. A Vice+ puts anyone anywhere; a
     Head moves those below them into or out of their own department only, never themselves; plain tags leave the

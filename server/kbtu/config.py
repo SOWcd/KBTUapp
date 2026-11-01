@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +36,9 @@ class Config:
     # the forum channel itself (@KBTUappForum's chat id, -100...): students post from the app, the bot publishes after
     # the AI's or a moderator's yes (logic/fchannel.py); 0: off, the policy's section and its consent version too
     forum_channel: int = 0
+    # MS_AGE_CUTOFF=MM-DD (e.g. 06-01): free 1st-year seats only for a Microsoft account made on or after that day of
+    # the academic year's first calendar year (logic/core.py first_year_free); empty: the date is only recorded
+    ms_age_cutoff: str = ""
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
@@ -55,6 +59,17 @@ def _dotenv() -> dict[str, str]:
         return {}
     pairs = (line.strip().split("=", 1) for line in path.read_text().splitlines() if "=" in line and not line.lstrip().startswith("#"))
     return {k.strip(): v.strip() for k, v in pairs}
+
+
+def _month_day(s: str) -> str:
+    """MS_AGE_CUTOFF: empty, or a real MM-DD (a typo would silently refuse or let in everyone's free seat)"""
+    try:
+        ok = not s or len(s) == 5 and bool(time.strptime("2024-" + s, "%Y-%m-%d"))  # a leap year: 02-29 is a day
+    except ValueError:
+        ok = False
+    if not ok:
+        raise SystemExit("MS_AGE_CUTOFF must be MM-DD, e.g. 06-01")
+    return s
 
 
 def load() -> Config:
@@ -85,6 +100,7 @@ def load() -> Config:
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
         tgc_chat=int((env.get("FORUM_GROUP") or env.get("TG_COMMENTS_CHAT") or "").strip() or 0),  # the old name still works
         forum_channel=int(env.get("FORUM_CHANNEL", "").strip() or 0),
+        ms_age_cutoff=_month_day(env.get("MS_AGE_CUTOFF", "").strip()),
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),
