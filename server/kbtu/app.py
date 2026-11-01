@@ -31,7 +31,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, llm, logic, media, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
 
 log = logging.getLogger("kbtu.app")
@@ -588,6 +588,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if scope.startswith("org:") and not scope[4:].isdigit():
             raise ApiError("bad_input")
         return logic.posts(con, v, scope)
+
+    @app.get("/api/posts/{pid}/video")
+    async def post_video(pid: int, con: Con, v: Me):
+        """A mirrored channel post's video file for the app's own player (mirror.video); not_found: the app frames
+        Telegram's widget instead."""
+        async with httpx.AsyncClient(timeout=6) as http:
+            return await mirror.video(con, v.id, pid, http)
 
     @app.post("/api/orgs/{oid}/posts")
     def create_post(oid: int, con: Con, v: Me, body: dict = Body(...)):

@@ -138,6 +138,7 @@ export const server: Api = {
   updatePost: (id, patch) => call('PATCH', `/posts/${id}`, patch),
   hidePost: (id) => call('DELETE', `/posts/${id}`),
   readPosts: (ids) => call('POST', '/posts/read', { ids }),
+  postVideo: (id) => call('GET', `/posts/${id}/video`),
 
   person: (id) => call('GET', `/users/${id}`),
 

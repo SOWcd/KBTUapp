@@ -9,13 +9,17 @@ it down and wipes its text and photo; Telegram's views and reaction counts show 
 of a mirrored post. Nothing but the channel's own posts is kept."""
 from __future__ import annotations
 
+import html
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import httpx
+
 from . import ai, media
-from .logic import now, one, photo_free, rows, tx, wipe_post
+from .logic import ApiError, now, one, photo_free, rows, tx, wipe_post
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
 FIRST_DAYS = 30           # ... of the last 30 days
@@ -325,3 +329,74 @@ def shape(p) -> dict | None:
 def i18n(p) -> dict | None:
     """A post's other languages for the app (api/client.ts localize: title and body), official or our AI's."""
     return {k: {"title": x.get("title", ""), "body": x.get("body", "")} for k, x in json.loads(p["i18n"]).items()} if p["i18n"] else None
+
+
+# A video post plays in the app's own <video> (PLAN 86): on a tap the server reads the post's public embed page
+# (t.me/<channel>/<id>?embed=1) for its file on Telegram's CDN. The address is built from our own row, never the
+# client's; what comes back must be a CDN file, or it's not_found and the app frames Telegram's widget instead (a long
+# video's embed has no file either). The file's token expires: resolved on a tap, kept a few minutes, never stored.
+_POST = re.compile(r"https://t\.me/([A-Za-z0-9_]{4,32})/(\d{1,12})")
+_CDN = re.compile(r"https://[a-z0-9-]+\.(?:telesco\.pe|cdn-telegram\.org)/file/[^\s\"'<>()\\]+")
+_SRC = re.compile(r"<video\b[^>]*?\bsrc=\"([^\"]+)\"")
+_THUMB = re.compile(r"tgme_widget_message_video_thumb\"[^>]*?background-image:url\('([^']+)'\)")
+VIDEO_TTL, VIDEO_PER_MIN, PAGE_MAX = 300, 20, 256 * 1024
+# ponytail: per-worker memory (each uvicorn worker resolves on its own, a per-user limit is per worker); fine at our
+# size, a shared table if it ever matters
+_videos: dict[int, tuple[float, dict]] = {}
+_asks: dict[int, list[float]] = {}
+
+
+def video_page(tg_url: str | None) -> str | None:
+    """The embed page of a mirrored post's own t.me address; None for anything else."""
+    m = _POST.fullmatch(tg_url or "")
+    return m and f"https://t.me/{m[1]}/{m[2]}?embed=1"
+
+
+def parse_video(page: str) -> dict | None:
+    """The first video's file and its poster on an embed page; None when it has no CDN file."""
+    m = _SRC.search(page)
+    src = html.unescape(m[1]) if m else ""
+    if not _CDN.fullmatch(src):
+        return None
+    t = _THUMB.search(page)
+    poster = html.unescape(t[1]) if t else None
+    return {"src": src, "poster": poster if poster and _CDN.fullmatch(poster) else None}
+
+
+def _asked(uid: int, t: float) -> None:
+    if len(_asks) > 5000:
+        for k in [k for k, x in _asks.items() if x[-1] <= t - 60]:
+            del _asks[k]
+    recent = [x for x in _asks.get(uid, ()) if x > t - 60]
+    if len(recent) >= VIDEO_PER_MIN:
+        raise ApiError("rate_limited")
+    _asks[uid] = [*recent, t]
+
+
+async def video(con, uid: int, pid: int, http: httpx.AsyncClient) -> dict:
+    """A mirrored video post's playable file: {src, poster}. not_found: no such video post, or Telegram didn't give one."""
+    p = one(con, "SELECT tg_url, tg_media FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
+    url = video_page(p["tg_url"]) if p and p["tg_media"] == "video" else None
+    if not url:
+        raise ApiError("not_found")
+    t = time.monotonic()
+    if (hit := _videos.get(pid)) and hit[0] > t:
+        return hit[1]
+    _asked(uid, t)
+    try:
+        async with http.stream("GET", url, follow_redirects=False) as r:
+            page = b""
+            async for chunk in r.aiter_bytes():
+                page += chunk
+                if len(page) > PAGE_MAX:
+                    break
+            ok = r.status_code == 200
+    except httpx.HTTPError:
+        ok = False
+    found = parse_video(page.decode("utf-8", "replace")) if ok else None
+    if not found:
+        raise ApiError("not_found")
+    if len(_videos) > 500:
+        _videos.clear()  # stale tokens only; the next taps fetch again
+    _videos[pid] = (t + VIDEO_TTL, found)
+    return found

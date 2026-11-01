@@ -4438,6 +4438,52 @@ def test_channel_mirror(env, tmp_path):
     assert mirror.to_join(con) == ["mic_live"]
 
 
+def test_channel_video_own_player(env, monkeypatch):
+    """A mirrored video post plays in the app's own player: the server reads ONLY the post's own t.me embed page (from
+    our row, never the client's URL), gives back the CDN file and poster, keeps it a few minutes, limits a user's
+    taps; anything else (not a video post, a page without a CDN file, Telegram down) is 404 and the app frames the
+    widget. Telegram is mocked."""
+    import httpx
+    from kbtu import mirror
+    c, cfg = env
+    login(c, 90, "vid")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    for pid, url, kind in [(1, "https://t.me/mic_news/442", "video"), (2, "https://t.me/mic_news/443", "file"),
+                           (3, "https://evil.example/x/1", "video"), (4, "https://t.me/mic_news/444", "video"),
+                           (5, "https://t.me/mic_news/445", "video")]:
+        con.execute("""INSERT INTO posts (id, org_id, audience, title, body, comments_on, created_at, tg_url, tg_media)
+            VALUES (?, 1, 'public', 't', '', 0, 0, ?, ?)""", (pid, url, kind))
+    page = ('<div class="tgme_widget_message_video_thumb" style="background-image:url(\'https://cdn4.telesco.pe/file/p.jpg?a=1\')"></div>'
+            '<video src="https://cdn1.telesco.pe/file/v.mp4?token=a&amp;b=2" class="tgme_widget_message_video" width="100%">')
+    asked = []
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        asked.append(str(request.url))
+        if request.url.path == "/mic_news/444":
+            return httpx.Response(200, text='<video src="https://evil.example/file/v.mp4">')  # not Telegram's CDN
+        if request.url.path == "/mic_news/445":
+            raise httpx.ConnectTimeout("down")
+        return httpx.Response(200, text=page)
+    real = httpx.AsyncClient
+    monkeypatch.setattr(server.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(telegram)))
+    monkeypatch.setattr(mirror, "_videos", {})
+    monkeypatch.setattr(mirror, "_asks", {})
+    H = tma(90, "Vid")
+    assert c.get("/api/posts/1/video", headers=H).json() == {"src": "https://cdn1.telesco.pe/file/v.mp4?token=a&b=2",
+                                                             "poster": "https://cdn4.telesco.pe/file/p.jpg?a=1"}
+    assert c.get("/api/posts/1/video", headers=H).status_code == 200 and asked == ["https://t.me/mic_news/442?embed=1"]  # cached
+    for pid in (2, 3, 99):                                                                  # a file, not t.me, no such post
+        assert c.get(f"/api/posts/{pid}/video", headers=H).status_code == 404
+    assert c.get("/api/posts/4/video", headers=H).status_code == 404 and len(asked) == 2      # only a CDN file plays
+    assert c.get("/api/posts/5/video", headers=H).status_code == 404                          # Telegram down
+    assert c.get("/api/posts/1/video").status_code == 403                                     # signed in only
+    assert mirror.video_page("https://t.me/mic_news/442/../x") is None and mirror.video_page("https://t.me.evil.io/abcd/1") is None
+    assert mirror.parse_video("<p>Telegram changed the page</p>") is None
+    monkeypatch.setattr(mirror, "VIDEO_PER_MIN", 3)
+    assert c.get("/api/posts/4/video", headers=H).status_code == 429                         # a user's taps, a minute
+
+
 def test_userbot_reads_telethon_messages(env):
     """userbot.Mirror with Telethon-shaped messages (a fake client): a photo is downloaded once and copied, a video and
     a file are named, Telegram's reactions read (a custom emoji as a star), service messages and anything from a chat

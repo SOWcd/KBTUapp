@@ -59,9 +59,18 @@
   $effect(() => () => { clearTimeout(timer); send(); });
 
   let open = $state<Set<number>>(new Set()); // posts unfolded
-  // a channel post's video plays in Telegram's own post widget (t.me/<channel>/<id>?embed=1), framed only on a tap:
-  // nothing loads before, and the sound starts only from its own play button. The widget says its height by postMessage.
-  let playing = $state<Set<number>>(new Set());
+  // a channel post's video plays in our own player on a tap: the server finds its file on Telegram's CDN (the address
+  // expires, so only now; mirror.video); nothing loads before the tap. No file (a long video, Telegram changed its page,
+  // the file won't play): Telegram's own post widget (t.me/<channel>/<id>?embed=1), which says its height by postMessage.
+  let playing = $state<Map<number, { src: string; poster: string | null } | 'wait' | 'widget'>>(new Map());
+  const play = (id: number, v: { src: string; poster: string | null } | 'wait' | 'widget') => (playing = new Map(playing).set(id, v));
+  async function watch(id: number) {
+    haptic.tap();
+    play(id, 'wait');
+    play(id, await api.postVideo(id).catch(() => 'widget' as const));
+  }
+  // the tap on "watch" was the user's play: start it, with sound; a browser that refuses waits for its own play button
+  const start = (el: HTMLVideoElement) => { el.play().catch(() => {}); };
   const embed = (url: string) => `${url}?embed=1&userpic=false${theme.current === 'dark' ? '&dark=1' : ''}`;
   function fit(el: HTMLIFrameElement) {
     const on = (e: MessageEvent) => {
@@ -149,10 +158,16 @@
     {#if p.tg}
       <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
       {@const tg = p.tg}
-      {#if tg.media === 'video' && playing.has(p.id)}
+      {@const v = playing.get(p.id)}
+      {#if tg.media === 'video' && v === 'wait'}<div class="tgv-wait" aria-busy="true"></div>
+      {:else if tg.media === 'video' && typeof v === 'object'}
+        <!-- svelte-ignore a11y_media_has_caption (a channel's video comes without captions) -->
+        <video class="tgplay" src={v.src} poster={v.poster ?? undefined} controls playsinline preload="metadata"
+          use:start onerror={() => play(p.id, 'widget')}></video>
+      {:else if tg.media === 'video' && v}
         <iframe class="tgw" src={embed(tg.url)} title={p.title} use:fit allow="fullscreen; picture-in-picture" referrerpolicy="no-referrer"
           sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation"></iframe>
-      {:else if tg.media === 'video'}<button class="tgm" onclick={() => { haptic.tap(); playing = new Set([...playing, p.id]); }}><Play size={16} />{t('tg.video')}</button>
+      {:else if tg.media === 'video'}<button class="tgm" onclick={() => watch(p.id)}><Play size={16} />{t('tg.video')}</button>
       {:else if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t('tg.file')}</button>{/if}
       <footer class="re tgf">
         {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}
@@ -249,6 +264,9 @@
   .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 13px/1 var(--font-text); color: var(--text-3); }
   /* the widget draws the channel's card around the video: its own height (fit), our corners */
   .tgw { display: block; width: 100%; height: 360px; margin: 2px 0 6px; border: 0; border-radius: var(--r-m); background: var(--surface-2); color-scheme: normal; }
+  /* our own player: the card's width, the video's own shape (a tall one stops at most of the screen), our corners */
+  .tgplay { display: block; width: 100%; max-height: 70vh; margin: 2px 0 6px; border-radius: var(--r-m); background: var(--surface-2); object-fit: contain; }
+  .tgv-wait { aspect-ratio: 16 / 9; margin: 2px 0 6px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
   .vl { display: flex; gap: 8px; } .vl:empty { display: none; }
   .tgm { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; height: 34px; margin: 2px 0 8px; padding: 0 13px 0 10px; border-radius: var(--r-full);
     background: var(--surface-2); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }

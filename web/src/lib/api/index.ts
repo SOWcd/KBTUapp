@@ -60,6 +60,7 @@ export interface Api {
   updatePost(id: Id, patch: PostPatch): Promise<Post>;          // the club's Head+: text, label, photo ("edited"), the pin
   hidePost(id: Id): Promise<void>;                               // the club's Head+ or the admin
   readPosts(ids: Id[]): Promise<void>;                           // seen in News: unread marks go
+  postVideo(id: Id): Promise<{ src: string; poster: string | null }>; // a channel's video: its CDN file (expires); 404 → the widget
 
   person(id: Id): Promise<PersonCard>;
 
