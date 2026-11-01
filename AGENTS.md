@@ -65,6 +65,10 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   take it down, and only the creator can reveal an anonymous author (audit log). And a user's own text going back to
   them alone: a channel comment a moderator restored (`tgc_back`, to post it again), the title of my own find-people
   request (`contact_ask`, `ask_hidden`).
+- **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
+  an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
+  and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own
+  people managing their club in Studio is not staff. Destructive staff actions confirm first and can be undone.
 - **One Back**: Telegram's BackButton is the only Back. No "‹ Back" links, arrows or close buttons of our own that
   duplicate it (a full-screen overlay's bottom x is the one exception: ui/CloseX.svelte).
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
