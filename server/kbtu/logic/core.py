@@ -193,18 +193,20 @@ def short_name(p: sqlite3.Row) -> str:
 
 
 def shown_name(p: sqlite3.Row) -> str:
-    """The name everyone sees: the nickname when there is one. Organizers get the real one too: the
-    `fullName` of their lists, the door's `realName`."""
+    """The name lists, cards and feeds show: the nickname when there is one. A nick is a display name, not a mask (owner,
+    Nov 2): the profile shows the real short name too (person_ref's `realName`)."""
     return p["nick"] or short_name(p)
 
 
 def name_i18n(p) -> dict:
     """The short name in the English UI: the Latin one where KBTU's directory, the freshmen list or the student gave it
-    (the client's localize() swaps it in); a nick, or no Latin name: as in every language. ponytail: never a generated
-    transliteration (latin-names-review.md: a spelling is personal); a display-only one needs its own title-cased table."""
-    if p["nick"] or "first_lat" not in p.keys() or not p["first_lat"]:
+    (the client's localize() swaps it in, `name` unless a nick stands there, and `realName`); no Latin name: as in every
+    language. ponytail: never a generated transliteration (latin-names-review.md: a spelling is personal); a display-only
+    one needs its own title-cased table."""
+    if "first_lat" not in p.keys() or not p["first_lat"]:
         return {}
-    return {"i18n": {"en": {"name": f"{p['first_lat']} {p['last_lat'][:1] + '.' if p['last_lat'] else ''}".strip()}}}
+    lat = f"{p['first_lat']} {p['last_lat'][:1] if p['last_lat'] else ''}".strip()
+    return {"i18n": {"en": {"realName": lat} if p["nick"] else {"name": lat, "realName": lat}}}
 
 
 def avatar_of(p: sqlite3.Row) -> str | None:
@@ -217,11 +219,12 @@ def avatar_of(p: sqlite3.Row) -> str | None:
 def person_ref(p: sqlite3.Row) -> dict:
     # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
-    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff, **name_i18n(p)}
+    return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff,
+            **({"realName": short_name(p)} if p["nick"] else {}), **name_i18n(p)}  # a nick never hides the name (§4)
 
 
 def _door_ref(p: sqlite3.Row) -> dict:
-    """The door checks the real name beside a nick, the short one a Member may see (§3)."""
+    """The door checks the real short name beside a nick, and without one."""
     return {**person_ref(p), "realName": short_name(p)}
 
 

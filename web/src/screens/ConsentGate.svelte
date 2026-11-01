@@ -4,7 +4,7 @@
   // close it. App renders it over the tabs and holds every other overlay until it's accepted. One button (owner, Nov 1:
   // no "Delete account" here); the way out is Telegram's own close, the policy one tap away.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import Archive from '@lucide/svelte/icons/archive';
+  import AtSign from '@lucide/svelte/icons/at-sign';
   import Users from '@lucide/svelte/icons/users';
   import TelegramMark from '../ui/TelegramMark.svelte';
   import Cpu from '@lucide/svelte/icons/cpu';
@@ -24,11 +24,11 @@
   import { CONSENT_AI, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FCH, CONSENT_TGC, CONSENT_VERSION } from '../lib/legal';
 
   let busy = $state(false), done = $state(false), seal: HTMLElement;
-  // what's new in the version asked, one short line each with its mark: v3 alone, the find-people forum (v4), the
-  // student forum (v7), both (v8); a text's lines and its icons go in the same order (ru, kk, en alike)
+  // what's new in the version asked, one short line each with its mark: the nick rule (v9-v12, Nov 2: every version), the find-people forum,
+  // (v10), the student forum (v11), both (v12); a text's lines and its icons go in the same order (ru, kk, en alike)
   type Tone = 'accent' | 'success' | 'warning' | 'danger';
   const PARTS: [Key, [Component<any>, Tone][]][] = [
-    ['consent.text', [[Archive, 'accent']]],
+    ['consent.textNick', [[AtSign, 'accent']]],
     ['consent.textForum', [[Users, 'accent'], [TelegramMark, 'success'], [Cpu, 'warning']]],
     ['consent.textBoard', [[EyeOff, 'accent'], [Cpu, 'warning'], [Clock, 'success'], [ThumbsUp, 'danger']]],
     ['consent.textTgc', [[TelegramMark, 'accent'], [Cpu, 'warning']]],
@@ -43,7 +43,7 @@
   const q = $derived(fch ? noAi.slice(0, -CONSENT_FCH.length) : noAi);
   const tgc = $derived(q.endsWith(CONSENT_TGC));
   const p = $derived(tgc ? q.slice(0, -CONSENT_TGC.length) : q);
-  const asked = (k: Key) => k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.text' ? p === CONSENT_VERSION
+  const asked = (k: Key) => k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.textNick' ? true
     : k === 'consent.textForum' ? p !== CONSENT_VERSION && p !== CONSENT_BOARD : p === CONSENT_BOARD || p === CONSENT_BOTH;
   // one card per section asked (owner, Nov 1: the lines read as one list, not by section)
   const groups = $derived(PARTS.filter(([k]) => asked(k)).map(([k, marks]) =>

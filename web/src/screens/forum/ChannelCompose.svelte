@@ -24,10 +24,10 @@
   let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean } } = $props();
   let body = $state(untrack(() => draft?.body ?? '')), anon = $state(untrack(() => draft?.anon ?? false));
   const ready = $derived(body.trim().length >= 2);
-  // the bot's signature, as the server makes it (fchannel.signature): my nick if I have one, else the real first name
-  // and the last initial (ponytail: a nick the server reads as a link signs with the name there; clean_nick refuses most)
+  // the bot's signature, as the server makes it (fchannel.signature): the real first name and the last initial, a nick or
+  // not (owner, Nov 2: the nick rule; the app's feed shows the nick)
   const s = $derived(session.me?.student);
-  const sign = $derived(session.me?.nick || (s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] + '.' : ''}`.trim() : ''));
+  const sign = $derived(s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] : ''}`.trim() : session.me?.name ?? '');
 
   function fail(e: unknown) {
     haptic.error();

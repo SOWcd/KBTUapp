@@ -464,19 +464,18 @@ def test_post_feed(env, monkeypatch):
     assert c.delete(f"/api/forum-posts/{masked['id']}", headers=B).status_code == 204
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [named["id"]]
     assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T"           # a guest reads the public channel
-    # an author with a nick signs with it, in the channel and the tab, never with his real name beside it; the signature
-    # stays as written when the nick changes later; a nick that reads as a link signs with the short name
+    # the nick rule (Nov 2): the channel signs with the real short name, a nick or not; the app's feed shows the author
+    # as everywhere (the nick, the short name beside it for the profile); a post signed with a nick before keeps it
     set_clock(monkeypatch, lambda: int(time.time()) + 3600)
     said["word"] = "ok"
     con.execute("UPDATE users SET nick = 'Night <Owl>' WHERE id = 2")
     nk = c.post("/api/forum-posts", headers=B, json={"body": "Library is open late"}).json()
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[-1]["text"] == "Library is open late\n\n<i>— Night &lt;Owl&gt;</i>"
-    con.execute("UPDATE users SET nick = 'Other' WHERE id = 2")
+    assert tg.of("sendMessage")[-1]["text"] == "Library is open late\n\n<i>— Bob T</i>"
     row = next(p for p in c.get("/api/forum-posts/feed", headers=A).json() if p["id"] == nk["id"])
-    assert row["sign"] == "Night <Owl>" and row["person"]["id"] == 2 and "Bob" not in json.dumps(row)
-    con.execute("UPDATE users SET nick = 'kbtu.kz' WHERE id = 2")
-    assert logic.fchannel.signature(logic.one(con, logic.PERSON + " WHERE u.id = 2")) == "Bob T"
+    assert (row["sign"], row["person"]["name"], row["person"]["realName"]) == ("Bob T", "Night <Owl>", "Bob T")
+    con.execute("UPDATE fchan_posts SET sign = 'Old Nick' WHERE id = ?", (nk["id"],))  # signed with a nick before the rule
+    assert logic.fchannel._sign(con, logic.one(con, "SELECT * FROM fchan_posts WHERE id = ?", nk["id"])) == "Old Nick"
     con.close()
 
 

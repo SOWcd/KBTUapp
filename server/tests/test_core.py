@@ -697,11 +697,13 @@ def test_consent_again(env):
     A = tma(21, "Ali")
     assert c.get("/api/me", headers=A).json()["student"]["consent"] == "1"
     assert c.post("/api/me/consent", headers=A, json={"version": ""}).status_code == 400
-    assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).json()["student"]["consent"] == "2026-10-v3"
-    assert c.post("/api/me/consent", headers=tma(22, "Guest"), json={"version": "2026-10-v3"}).status_code == 401
+    assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).status_code == 400  # before the nick rule (v9): agree again
+    assert c.post("/api/me/consent", headers=A, json={"version": logic.CONSENT}).json()["student"]["consent"] == logic.CONSENT == "2026-11-v9"
+    assert "Section 4 changed on 2 November 2026: a nickname no longer hides your name" in c.get("/privacy?lang=en").text
+    assert c.post("/api/me/consent", headers=tma(22, "Guest"), json={"version": logic.CONSENT}).status_code == 401
     con = db.connect(cfg.db_path)
     con.execute("UPDATE students SET consent_version = 'staff'")
-    assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).json()["student"]["consent"] == "staff"
+    assert c.post("/api/me/consent", headers=A, json={"version": logic.CONSENT}).json()["student"]["consent"] == "staff"
 
 
 def test_legal_pages(env):
@@ -1399,7 +1401,7 @@ def test_question_badges(env):
 
 
 def test_nick_and_photo(env):
-    """A nickname and my own photo: everyone sees the nick, organizers the real name beside it; my photo
+    """A nickname and my own photo: lists show the nick, and anyone the short name beside it (the nick rule); my photo
     turns "Photo from Telegram" off, on again is Telegram's; a report takes the nick, photo and "about me" down."""
     import dataclasses
     import io
@@ -1424,7 +1426,11 @@ def test_nick_and_photo(env):
     me = c.patch("/api/me", headers=A, json={"nick": "  Ali \u200b the   Great "}).json()
     assert (me["nick"], me["name"], me["avatar"], me["photo"]["telegram"]) == ("Ali the Great", "Ali the Great", "https://t.me/i/userpic/320/ali.jpg", True)
     c.post("/api/events/1/comments", headers=A, json={"body": "Hi"})
-    assert c.get("/api/events/1/comments", headers=P).json()["items"][0]["person"]["name"] == "Ali the Great"  # everyone: the nick
+    who = c.get("/api/events/1/comments", headers=P).json()["items"][0]["person"]
+    assert (who["name"], who["realName"]) == ("Ali the Great", real)  # everyone: the nick first, the short name beside it
+    login(c, 95, "zed")
+    stranger = c.get(f"/api/users/{ali['id']}", headers=tma(95, "Zed")).json()  # the nick rule: the lanyard shows the name to anyone
+    assert (stranger["name"], stranger["nick"], stranger["realName"]) == ("Ali the Great", "Ali the Great", real)
     att = c.get("/api/events/1/attendees", headers=P).json()[0]
     assert att["person"]["nick"] == "Ali the Great" and "Ali" in att["fullName"] and "Great" not in att["fullName"]  # organizers: both
     assert c.get("/api/events/1/door", headers=P).json()[0]["person"]["realName"] == real
@@ -6923,9 +6929,9 @@ def test_latin_names(env, monkeypatch, capsys):
     assert st["lastLat"] == "Serikbaiev" and "lastLat" not in st["fixable"]
     assert fix(lastLat="Serikbayev").json()["message"] == "fixed"
     ref = lambda: logic.person_ref(con.execute(logic.PERSON + " WHERE u.id = ?", (uid,)).fetchone())  # noqa: E731
-    assert ref()["i18n"] == {"en": {"name": "Aidos S."}} and c.get("/api/me", headers=tma(10)).json()["i18n"]["en"]["name"] == "Aidos S."
+    assert ref()["i18n"] == {"en": {"name": "Aidos S", "realName": "Aidos S"}} and c.get("/api/me", headers=tma(10)).json()["i18n"]["en"]["name"] == "Aidos S"
     con.execute("UPDATE users SET nick = 'Ace' WHERE id = ?", (uid,))
-    assert "i18n" not in ref()                                           # a nick is the same in every language
+    assert ref()["i18n"] == {"en": {"realName": "Aidos S"}} and ref()["name"] == "Ace"  # a nick is the same in every language
     # the probe: counts only; --apply fills the empty columns of those linked before, once
     con.execute("UPDATE students SET ms_profile = ? WHERE user_id = ?", (json.dumps(pr("Aidos Serikbayev")), bek))
     capsys.readouterr()

@@ -164,12 +164,13 @@ export interface Org extends OrgRef {
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
 export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
 
-/** A person as other students see them (§3): the nick if they have one, else the short name; their photo (their own or
- *  Telegram's); the founder mark. Organizers get the real name too: lists' `fullName`, the door's `realName`. */
+/** A person as other students see them (§4): the nick if they have one, else the short name, and with a nick the short
+ *  name too (`realName`: a nick is a display name, not a mask); their photo (their own or Telegram's); the founder
+ *  mark. Organizers get the full name too: lists' `fullName`. */
 /** Someone in a club as anyone sees them: name and role, never the @username (api.team is the club's own) */
 export interface Member { person: PersonRef; role: OrgRole; title: string | null; titleKk?: string | null; titleEn?: string | null }
 
-export interface PersonRef { id: Id; name: string; nick?: string | null; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
+export interface PersonRef { id: Id; name: string; nick?: string | null; realName?: string /* with a nick: the short name, the lanyard shows it first */; avatar: string | null; founder: boolean; mark?: 'idea' | null; staff?: 'admin' | 'moderator' | null }  // mark: the idea author's blue seal
 /** at the door (Member+): the real short name beside a nick */
 export type DoorRef = PersonRef & { realName: string };
 

@@ -44,7 +44,8 @@ export function shelfItem(p: PersonCard, key: string): ShelfItem | null {
 
 export interface HeroData {
   person: { id: Id; name: string; avatar: string | null; founder: boolean };
-  name: string;
+  name: string;           // the real short name (a nick never hides it on the lanyard, owner Nov 2)
+  nick: string | null;     // under it
   status: string | null;   // the one mark by the name (Creator for now; DMP comes with the status field)
   title: string;           // the lanyard line: the status, else the top club title, else "Student"
   line: string;            // course · school · city
@@ -84,7 +85,8 @@ export function hero(p: PersonCard): HeroData {
   const close = closest(p.awards.achievements);
   return {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
-    name: p.name,
+    name: p.realName ?? p.name,
+    nick: p.realName && p.nick ? p.nick : null,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
     title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, titleOf(top))} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
     line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95

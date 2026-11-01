@@ -701,10 +701,10 @@ def delete_info(con, v: Viewer) -> dict:
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
-CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
-CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
-CONSENT_BOARD = "2026-10-v7"  # with BOARD=1 alone: the student forum's section (11 then); v5 until Oct 31, the assistant's feedback
-CONSENT_BOTH = "2026-10-v8"   # (v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
+CONSENT = "2026-11-v9"  # web/src/lib/legal.ts says the same; v9-v12 (Nov 2): the nick rule (section 4), everyone agrees again
+CONSENT_FORUM = "2026-11-v10" # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
+CONSENT_BOARD = "2026-11-v11"  # with BOARD=1 alone: the student forum's section (11 then); v7 until Nov 2, v5 until Oct 31
+CONSENT_BOTH = "2026-11-v12"  # (v8 until Nov 2, v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
 CONSENT_FCH = "+fch1"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)

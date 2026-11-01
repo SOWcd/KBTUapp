@@ -43,7 +43,6 @@
   const me = $derived(session.me);
   const s = $derived(me?.settings);
   const bells = $derived(s ? [s.nRemind, s.nNewEvents].filter(Boolean).length : 0);
-  const real = $derived(me?.student ? `${me.student.firstName} ${me.student.lastName.slice(0, 1)}.` : '');
 
   // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
   // Oct 31: a club's lanyard is its members' alone; the server holds it too, `_skin_ok`), KBTU's last; SOWER first for the founder
@@ -97,7 +96,7 @@
     ], align);
   }
 
-  // ---- the nick: everyone sees it, organizers see my real name beside it ----
+  // ---- the nick: lists and feeds show it instead of my name, my profile shows both (the nick rule, Nov 2) ----
   async function editNick() {
     const v = await sheets.askText({ title: t('look.nick'), placeholder: t('look.nickPh'), max: 24, line: true, value: me?.nick ?? '', ok: t('common.save'), cancel: t('common.cancel') });
     if (v != null && v !== (me?.nick ?? '')) setNick(v);
@@ -193,7 +192,7 @@
         {#if me.nick}{@render row(AtSign, t('look.nick'), me.nick, 'menu', (r) => nickMenu(at(r)), 'nick')}
         {:else}{@render row(AtSign, t('look.nick'), t('look.noNick'), 'in', () => void editNick())}{/if}
       </div>
-      <p class="set-foot">{t('look.nickFoot', { name: real })}</p>
+      <p class="set-foot">{t('look.nickFoot')}</p>
     </div>
   {:else}
     <div class="spacer"></div>

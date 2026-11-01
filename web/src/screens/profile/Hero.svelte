@@ -131,6 +131,7 @@
         {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /></span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
+          {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
           <span class="role">{h.title}</span>
           <span class="meta">{h.line}</span>
         </span>
@@ -208,6 +209,7 @@
   .seal:active { transform: scale(0.88); }
   .role { font: 760 11px/1.25 var(--font-text); letter-spacing: 0.13em; text-transform: uppercase; }
   .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
+  .meta.nick { margin-top: -2px; font-weight: 650; }
 
   /* below the band, each look's own body and role colour; the strap's colours (the band and the strip: LanyardBand,
      LanyardHolo) */

@@ -75,8 +75,8 @@ def feed(con, v: Viewer) -> list[dict]:
     """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
     anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
     is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
-    one carries its author (person: the app's avatar and profile), read once for all rows; its signature is the one it
-    went out with (a nick then, if he had one: never his real name beside it)."""
+    one carries its author (person: the app's avatar, name with the nick first, and profile), read once for all rows; its
+    signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here)."""
     ps = rows(con, """SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone'
                       ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
@@ -111,11 +111,10 @@ def reserve(con, v: Viewer, body: dict) -> int:
 
 
 def signature(p) -> str:
-    """A signed post's name, fixed as it's written (owner, Nov 2): the nick when the author has one (the real name never
-    beside it), else the first name and last initial. A nick passed clean_nick (no @handle, no link); one the channel's
-    stricter check would still read as a link (a domain) signs with the short name instead. Escaped when sent."""
-    nick = p["nick"] if p else None
-    return nick if nick and not LINKY.search(unicodedata.normalize("NFKC", nick).translate(DOTS)) else short_name(p)
+    """A signed post's name in the channel, fixed as it's written: the first name and last initial, a nick or not (the
+    nick rule, owner Nov 2: the app's feed shows the nick, the channel the name; posts signed with a nick before it keep
+    theirs). Escaped when sent."""
+    return short_name(p)
 
 
 def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
