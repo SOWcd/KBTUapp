@@ -268,7 +268,7 @@ BOT = {
         "tgc_queue": ("🛡 Комментарии в Telegram ждут решения модератора: {n}. Дольше суток: {old}.", "Открыть"),
         "tgc_raid": ("⚠️ Набег на комментарии канала: больше 5 чужих аккаунтов за минуту. Бот молча удаляет их комментарии и банит, без предупреждений.", None),
         "tgc_good": ("🏅 {name} часто жалуется на комментарии в Telegram, и модераторы каждый раз соглашались. Можно предложить статус модератора — решать тебе.", "Профиль"),
-        # the forum channel (tgc.post_tick): an anonymous post's signature and every post's button; a taken-down post's words
+        # the forum channel (tgc.post_tick): an anonymous post's signature (the button is unused since Nov 2); a taken-down post's words
         "fch_anon": ("Анонимный студент", "Написать пост"),
         "fch_gone": ("Автор удалил этот пост.", None),
         "fch_removed": ("Модератор снял этот пост.", None),
@@ -696,6 +696,12 @@ CHANNEL_BUTTON = "Записаться"
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
 CHANNEL_RULES = ("💬 Здесь обсуждаем событие: вопросы организаторам, кто идёт, впечатления после.\n\n"
                  "Правила: без оскорблений, спама и рекламы. Такие сообщения удаляются, авторы получают бан.")
+# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the rules in the channel's three
+# languages, and a button to that post in the app
+FORUM_RULES = ("💬 Бір-бірімізді құрметтейік: балағат, спам және жарнамасыз. Мұндай пікірлер өшіріледі, ал авторлары бұғатталады.\n\n"
+               "Общаемся с уважением: без оскорблений, спама и рекламы. Такие комментарии удаляются, а авторы получают бан.\n\n"
+               "Let's keep it kind: no insults, spam or ads. Such comments are removed and their authors banned.")
+FORUM_BUTTON = "Открыть в приложении"
 # an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."

@@ -129,6 +129,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             _report(cfg, http, con, msg)
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
+        elif not edit and root and (p := rules.post_of(con, root)):  # the Forum tab's count (the bot's own never comes here)
+            logic.fchannel.commented(con, p[1])
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
@@ -226,7 +228,7 @@ def _gone(r: dict) -> bool:
 async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The forum channel's posts (logic/fchannel.py), in the bot's round: first what must leave (deleted by the author,
     taken down, a deleted account's), then their copies in the discussion group, then what the AI or a moderator let
-    out. Plain text, no parse_mode, no preview: the words go as they are, never as markup. The bot needs in the
+    out, then the bot's first comment under each. The words go escaped (only the signature is bold), no preview. The bot needs in the
     channel: post, edit and delete others' messages."""
     if not cfg.forum_channel:
         return
@@ -253,19 +255,34 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             if not (r.get("ok") or _gone(r)):
                 break
         F.copy_done(con, key, root)
-    anon, button = texts.bot_message("ru", "fch_anon")  # the channel speaks Russian, as the events' one does
-    for pid, body, name in F.to_send(con):
+    for pid, body, sign in F.to_send(con):
         if not F.sending(con, pid):  # marked "sending" (tg_msg 0, committed) before it goes; deleted meanwhile: skipped
             continue
+        # no buttons on the post: a channel post with an inline keyboard loses Telegram's "Comments" bar (the way back
+        # into the app is the bot's first comment, below). The signature first, bold; both escaped, never markup
         r = await _call(cfg, http, "sendMessage", {
-            "chat_id": cfg.forum_channel, "text": f"{body}\n\n— {name or anon}", "link_preview_options": {"is_disabled": True},
-            "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp"}]]}})
+            "chat_id": cfg.forum_channel, "text": f"<b>{html.escape(sign)}</b>\n\n{html.escape(body)}", "parse_mode": "HTML",
+            "link_preview_options": {"is_disabled": True}})
         if r.get("ok"):
             F.sent(con, pid, r["result"]["message_id"])
         elif r.get("error_code"):  # Telegram said no: it isn't in the channel, the next round tries again
             F.unsend(con, pid)
             break
         else:  # no answer: it may be in the channel or not; F.lost hands it to a moderator next round
+            break
+    if not cfg.tgc_chat:
+        return
+    for pid, root in F.rules_due(con):  # the first comment under each post's copy: the rules, and the way to it in the app
+        if not F.rules_claim(con, pid):  # claimed (committed) before it goes: once per post, across restarts and workers
+            continue
+        r = await _call(cfg, http, "sendMessage", {
+            "chat_id": cfg.tgc_chat, "text": texts.FORUM_RULES, "link_preview_options": {"is_disabled": True},
+            "reply_parameters": {"message_id": root},
+            "reply_markup": {"inline_keyboard": [[{"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]}})
+        if r.get("ok"):
+            F.rules_sent(con, pid, r["result"]["message_id"])
+        elif r.get("error_code") not in (None, 400):  # a flood wait, a server error: next round
+            F.rules_unclaim(con, pid)  # (a 400, the copy gone; no answer, it may be there: neither is tried again)
             break
 
 

@@ -217,7 +217,7 @@ def test_lost_send_found_by_its_copy(env):
     F = logic.fchannel
     pid = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'hello all', 0, 'held', 'lost', 0)",
                       (ann["id"],)).lastrowid
-    F.found(con, 77, "hello all\n\n\u2014 Ann T.")
+    F.found(con, 77, "Ann T.\n\nhello all")
     assert tuple(con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (pid,)).fetchone()) == ("live", None, 77)
     F.sent(con, pid, 77)                                                          # its answer, late
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
@@ -231,14 +231,14 @@ def test_lost_send_found_by_its_copy(env):
     lost = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", ann["id"])
     q("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'who goes tonight?', 0, 'live', 500, 0)", bob["id"])
     anon = texts.bot_message("ru", "fch_anon")[0]
-    F.found(con, 500, "who goes tonight?\n\n\u2014 Bob T.")
-    F.found(con, 500, f"who goes tonight?\n\n\u2014 {anon}")
+    F.found(con, 500, "Bob T.\n\nwho goes tonight?")
+    F.found(con, 500, f"{anon}\n\nwho goes tonight?")
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] is None
     q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", bob["id"])
-    F.found(con, 501, f"who goes tonight?\n\n\u2014 {anon}")
+    F.found(con, 501, f"{anon}\n\nwho goes tonight?")
     assert not con.execute("SELECT 1 FROM fchan_posts WHERE tg_msg = 501").fetchone()
     con.execute("DELETE FROM fchan_posts WHERE user_id = ? AND anon = 1", (bob["id"],))
-    F.found(con, 501, f"who goes tonight?\n\n\u2014 {anon}")                 # hers alone now: found
+    F.found(con, 501, f"{anon}\n\nwho goes tonight?")                 # hers alone now: found
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] == 501
 
 

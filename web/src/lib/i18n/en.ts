@@ -52,6 +52,8 @@ const en: Dict = {
   'fc.open': "Open the channel",
   'fc.mine': "Mine",
   'fc.new': "New post",
+  'fc.share': "Share with KBTU…",
+  'fc.comments': "Comments",
   'fc.emptyTitle': "Quiet so far",
   'fc.emptyText': "Students' posts will show up here.",
   'fc.checking': "Checking…",

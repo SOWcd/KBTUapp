@@ -1,15 +1,17 @@
 <script lang="ts">
   // The Forum tab (Nov 1: the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
-  // newest first, signed as there; a tap opens the post in Telegram, where the comments are. My own posts are marked
-  // (on their way, under review, removed) and can be deleted. Writing is a separate screen behind the plus by the
-  // title (ChannelCompose), the way Studio puts its pencil. Every tap answers at once (a new post stands at the top
-  // "checking"; a delete leaves the list before the server says so). It looks the same for every viewer, staff too:
-  // the channel's moderation lives in Admin (AdminForum) alone.
-  import { untrack } from 'svelte';
-  import Plus from '@lucide/svelte/icons/plus';
+  // newest first, signed as there; a tap opens the post in Telegram, its Comments row the comments. My own posts are
+  // marked (on their way, under review, removed) and can be deleted. No large title (the capsule names the tab, Nov 2):
+  // the feed starts with a Threads-like "Share with KBTU…" row that opens the new post screen (ChannelCompose). A signed
+  // post shows its author's avatar (his profile on a tap); an anonymous one a mask, nobody behind it (the API sends no
+  // one). Every tap answers at once (a new post stands at the top "checking"; a delete leaves the list before the
+  // server says so). It looks the same for every viewer, staff too: the channel's moderation lives in Admin alone.
+  import { tick, untrack } from 'svelte';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
-  import { initials } from '../../ui/OrgLogo.svelte';
+  import Avatar from '../../ui/Avatar.svelte';
   import Card from '../../ui/Card.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
@@ -19,8 +21,6 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
-  import { glass } from '../../ui/glass';
-  import { fitTitle, largeTitle } from '../../ui/title';
   import { TAB_ICON } from '../../ui/icons';
   import Tag from '../../ui/Tag.svelte';
   import IconButton from '../../ui/IconButton.svelte';
@@ -29,7 +29,26 @@
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
   const here = $derived(ui.tab === 'forum');
-  $effect(() => { if (here) untrack(() => void loadChannel()); });
+  $effect(() => { if (here) untrack(() => void loadChannel().then(seek)); });
+
+  // the bot's "Open in the app" (startapp=fp_<id>): once the feed is fresh, that post opened in full, scrolled to the
+  // middle and lit for a moment; one not in the feed (deleted, taken down): just the tab
+  let lit = $state<number | null>(null);
+  async function seek() {
+    const id = channel.focus;
+    if (id == null) return;
+    channel.focus = null;
+    if (!channel.feed?.some((p) => p.id === id)) return;
+    open[id] = true;
+    await tick();
+    document.querySelector(`[data-post="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    lit = id;
+    setTimeout(() => { if (lit === id) lit = null; }, 1800);
+  }
+
+  // the comments in Telegram: opened at the bot's first comment (?comment=, Telegram's link into a post's comments);
+  // an older post without one: the post itself, its Comments bar under it
+  const comments = (p: ChannelFeedPost) => `${CHANNEL}/${p.msg}${p.thread ? `?comment=${p.thread}` : ''}`;
 
   // my own row's mark: on its way (the AI looking), under review, removed, else simply "mine"
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'neutral', key: 'fc.checking' } as const
@@ -68,10 +87,13 @@
 </script>
 
 <div class="page scroll">
-  <header class="hd">
-    <h1 class="fs-title ttl" use:fitTitle use:largeTitle={'forum'}>{t('page.forum')}</h1>
-    <button class="ic glass glass-pill" use:glass onclick={write} aria-label={t('fc.new')}><Plus size={22} strokeWidth={2.4} /></button>
-  </header>
+  <!-- the way to write: my face and a quiet prompt, the whole row a tap (Threads' composer) -->
+  <Card onclick={write}>
+    <div class="who compose">
+      {#if me}<Avatar person={me} size={32} tappable={false} />{:else}<span class="av" aria-hidden="true"><SquarePen size={16} strokeWidth={2} /></span>{/if}
+      <span class="prompt">{t('fc.share')}</span>
+    </div>
+  </Card>
 
   {#if channel.feed?.length}
     <div class="feed">
@@ -79,15 +101,25 @@
         {@const m = p.mine ? mark(p) : null}
         {#snippet post()}
           <div class="who">
-            <span class="av" aria-hidden="true">{#if p.anon}<VenetianMask size={16} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
-            <span class="nm"><b class="ellipsis">{p.sign}</b><span class="when">{ago(p.at)}</span></span>
+            {#if p.person}
+              <Avatar person={p.person} size={32} />
+              <span class="nm"><button class="name" onclick={() => { haptic.tap(); sheets.person(p.person!.id); }}><b class="ellipsis">{p.sign}</b></button><span class="when">{ago(p.at)}</span></span>
+            {:else}
+              <span class="av" aria-hidden="true">{#if p.anon}<VenetianMask size={16} strokeWidth={2} />{/if}</span>
+              <span class="nm"><b class="ellipsis">{p.sign}</b><span class="when">{ago(p.at)}</span></span>
+            {/if}
             {#if m}<Tag tone={m.tone}>{t(m.key)}</Tag>{/if}
             {#if p.mine && p.id > 0}<IconButton icon={Trash2} label={t('fc.delete')} kind="plain" size="s" onclick={() => drop(p)} />{/if}
           </div>
           <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
           {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
+          {#if p.msg && p.status === 'live'}
+            <button class="cm" onclick={() => { haptic.tap(); openLink(comments(p)); }}>
+              <MessageCircle size={18} strokeWidth={2} /><span>{t('fc.comments')}</span>{#if p.comments}<span class="n">{p.comments}</span>{/if}
+            </button>
+          {/if}
         {/snippet}
-        <div class="post" class:off={p.status === 'hidden'}>
+        <div class="post" class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
           {#if p.msg}<Card onclick={() => { haptic.tap(); openLink(`${CHANNEL}/${p.msg}`); }}>{@render post()}</Card>
           {:else}<Card>{@render post()}</Card>{/if}
         </div>
@@ -103,15 +135,16 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: var(--s-4); }
   .page > :global(*) { flex-shrink: 0; }
-  .hd { display: flex; align-items: center; gap: var(--s-3); margin: 0 var(--s-1); }
-  .ttl { flex: 1; min-width: 0; }
-  /* the plus: Studio's round glass action by the title */
-  .ic { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
-    transition: transform 0.45s var(--ease-bounce); }
-  .ic:active { transform: scale(0.9); transition-duration: 80ms; }
+  /* the composer row: a post's header line, the words a quiet prompt */
+  .who.compose { margin: calc(-1 * var(--s-1)) 0; }
+  .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.2 var(--font-text); color: var(--text-3); }
   /* the feed: a card per post, air between them */
   .feed { display: flex; flex-direction: column; gap: var(--s-3); }
   .post { animation: rise 360ms cubic-bezier(.2, .9, .25, 1.05) backwards; }
+  /* the post the bot's button pointed at: an accent ring that fades */
+  .post.lit :global(.card) { animation: lit 1.8s var(--ease); }
+  @keyframes lit { 0%, 45% { box-shadow: 0 0 0 2px var(--accent), var(--shadow-card); } }
+  .name { display: flex; min-width: 0; padding: 0; text-align: left; }
   /* whose (initials, or the mask for an anonymous one), when, my mark and delete */
   .who { display: flex; align-items: center; gap: var(--s-3); min-height: 36px; margin: calc(-1 * var(--s-1)) 0 var(--s-3); }
   .av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
@@ -128,6 +161,11 @@
   .tx.open { max-height: var(--h); }
   .post.off .tx { color: var(--text-3); }
   .more { margin-top: var(--s-1); padding: var(--s-1) 0; font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  /* the way to the comments: a full-width row under the words, a hairline above it */
+  .cm { display: flex; align-items: center; gap: var(--s-2); width: 100%; min-height: 44px; margin: var(--s-3) 0 calc(-1 * var(--s-2));
+    padding: var(--s-2) 0 0; border-top: 0.5px solid var(--separator); font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .cm:active { opacity: 0.6; }
+  .cm .n { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .tail { height: calc(var(--bottom) + var(--s-8)); }
 </style>

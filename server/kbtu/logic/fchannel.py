@@ -34,7 +34,7 @@ LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_]
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
 FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
 ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
-SIGNED = re.compile("^[\u2010-\u2015\u2212-]")  # a last line like the bot's "- Name L." signature (read NFKC: fullwidth, small dashes fold)
+SIGNED = re.compile("^[\u2010-\u2015\u2212-]")  # a last line like a "- Name L." signature (the bot signed so until Nov 2; still reads as one) (read NFKC: fullwidth, small dashes fold)
 
 
 def _visible(c: str) -> bool:
@@ -74,14 +74,21 @@ FEED_MAX = 50  # ponytail: the newest 50, no paging; a cursor when the channel o
 def feed(con, v: Viewer) -> list[dict]:
     """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
     anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
-    is: no user id at all, and `mine` true on my own rows alone."""
+    is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
+    one carries its author (person: the app's avatar and profile), read once for all rows."""
     ps = rows(con, """SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone'
                       ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
-    names = {p["id"]: short_name(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
+    who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
-    return [{"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
-             "sign": anon if p["anon"] else names.get(p["user_id"], "?"), "mine": p["user_id"] == v.id} for p in ps]
+    out = []
+    for p in ps:
+        a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
+        out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
+             "sign": anon if p["anon"] else short_name(a) if a else "?", "person": person_ref(a) if a else None, "mine": p["user_id"] == v.id,
+             # the comments: the students' count, and the bot's first comment (the link opens the thread there)
+             "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None})
+    return out
 
 
 def reserve(con, v: Viewer, body: dict) -> int:
@@ -146,12 +153,14 @@ def unpost_account(con, uid: int) -> None:
 
 def to_send(con) -> list:
     """Live posts not in the channel yet, oldest first, with their signature: the name (first name, last initial,
-    never a nick or @username) or nothing for an anonymous one."""
-    out = []
-    for p in rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5"):
-        who = None if p["anon"] else one(con, PERSON + " WHERE u.id = ?", p["user_id"])
-        out.append((p["id"], p["body"], short_name(who) if who else None))
-    return out
+    never a nick or @username) or the anonymous line."""
+    return [(p["id"], p["body"], _sign(con, p)) for p in rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")]
+
+
+def _sign(con, p) -> str:
+    """The post's first line in the channel: the author's name, or the anonymous line (the channel speaks Russian)."""
+    who = None if p["anon"] else one(con, PERSON + " WHERE u.id = ?", p["user_id"])
+    return short_name(who) if who else texts.bot_message("ru", "fch_anon")[0]
 
 
 def sending(con, pid: int) -> bool:
@@ -183,21 +192,48 @@ def lost(con) -> None:
 
 def found(con, msg_id: int, text: str) -> None:
     """The channel post's copy reached the discussion group (tgc.gate): a send whose answer never came (on its way, or
-    held as lost since) is in the channel after all. Matched by its words (the text without the bot's signature), its
-    message id kept, so the author's delete and a take-down reach it; it was live when sent, so live again. Matched by
-    the whole text as sent (the words and the signature, as to_send makes it), and only when exactly one post matches
-    and no post holds that message yet: another student's same words must never become this one's (review)."""
+    held as lost since) is in the channel after all. Its message id kept, so the author's delete and a take-down reach
+    it; it was live when sent, so live again. Matched by the whole text as the copy shows it (the signature line, an
+    empty one, the words: tgc.post_tick's, its bold gone), and only when exactly one post matches and no post holds
+    that message yet: another student's same words must never become this one's (review)."""
     if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
         return
-    anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
-    hits = []
-    for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
-            AND ? LIKE body || '%'""", text):
-        who = None if p["anon"] else one(con, PERSON + " WHERE u.id = ?", p["user_id"])
-        if f"{p['body']}\n\n\u2014 {short_name(who) if who else anon}" == text:
-            hits.append(p["id"])
+    hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
+            AND ? LIKE '%' || body""", text) if f"{_sign(con, p)}\n\n{p['body']}" == text]
     if len(hits) == 1:
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (msg_id, hits[0]))
+
+
+RULES_LATE = 7 * 86400  # a post older than this gets no first comment (its copy never came: no group linked, updates lost)
+
+
+def rules_due(con) -> list[tuple[int, int]]:
+    """Live posts in the channel whose copy reached the group (tgc.gate maps it, tgcpost:<copy>) and that have no first
+    comment of the bot's yet: (post, the copy's id in the group). Whichever comes first, the copy or the send's
+    answer, the round after both finds it. rules_for is the channel message it was written under: a post brought
+    back (a new message) gets one again. ponytail: a LIKE over meta per due post, a few a day; a mapping table if it grows"""
+    return [(p[0], int(p[1].split(":")[1])) for p in rows(con, """SELECT p.id, m.key FROM fchan_posts p
+        JOIN meta m ON m.key LIKE 'tgcpost:%' AND m.value LIKE '% ' || p.tg_msg
+        WHERE p.status = 'live' AND p.tg_msg > 0 AND p.rules_for IS NOT p.tg_msg AND p.created_at > ? ORDER BY p.id LIMIT 5""", _now() - RULES_LATE)]
+
+
+def rules_claim(con, pid: int) -> bool:
+    return con.execute("UPDATE fchan_posts SET rules_for = tg_msg WHERE id = ? AND tg_msg > 0 AND rules_for IS NOT tg_msg", (pid,)).rowcount > 0
+
+
+def rules_unclaim(con, pid: int) -> None:
+    con.execute("UPDATE fchan_posts SET rules_for = NULL WHERE id = ?", (pid,))
+
+
+def rules_sent(con, pid: int, msg_id: int) -> None:
+    """The first comment's id in the group: the Forum tab's link opens the comments there (?comment=)."""
+    con.execute("UPDATE fchan_posts SET rules_msg = ? WHERE id = ?", (msg_id, pid))
+
+
+def commented(con, msg_id: int) -> None:
+    """A student's comment under this channel message (tgc.gate). ponytail: counts what was written; a comment its
+    author deletes in Telegram stays counted (the Bot API never says), the bot's own deletions too; fine for a hint"""
+    con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE tg_msg = ? AND tg_msg > 0", (msg_id,))
 
 
 def sweep(con) -> None:
@@ -241,7 +277,7 @@ def copy_done(con, key: str, root: int | None) -> None:
 def unposted(con, msg_id: int) -> None:
     """Out of the channel: a taken-down post forgets its message (a Bring back is a new one)."""
     con.execute("DELETE FROM tg_unpost WHERE msg_id = ?", (msg_id,))
-    con.execute("UPDATE fchan_posts SET tg_msg = NULL WHERE tg_msg = ? AND status = 'hidden'", (msg_id,))
+    con.execute("UPDATE fchan_posts SET tg_msg = NULL, rules_msg = NULL, comments = 0 WHERE tg_msg = ? AND status = 'hidden'", (msg_id,))
 
 
 # ---- moderators: held posts, recent live ones; the owner's reveal

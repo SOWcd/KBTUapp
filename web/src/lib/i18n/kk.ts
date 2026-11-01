@@ -52,6 +52,8 @@ const kk: Dict = {
   'fc.open': "Арнаны ашу",
   'fc.mine': "Менікі",
   'fc.new': "Жаңа пост",
+  'fc.share': "ҚБТУ-мен бөлісу…",
+  'fc.comments': "Пікірлер",
   'fc.emptyTitle': "Әзірге тыныш",
   'fc.emptyText': "Мұнда студенттердің посттары шығады.",
   'fc.checking': "Тексерілуде…",

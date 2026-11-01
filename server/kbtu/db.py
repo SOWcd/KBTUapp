@@ -1029,6 +1029,14 @@ MIGRATIONS: list[tuple[int, str]] = [
       at      INTEGER NOT NULL,
       PRIMARY KEY (chat_id, msg_id)
     ) STRICT;"""),
+    # (Nov 2) the bot's first comment under a forum channel post (the rules, a button to the post in the app): the
+    # channel message it was written under, once per message (the posts already out had their button: none for them),
+    # and its id in the group, the Forum tab's link into the comments. comments: the students' comments the bot saw
+    # under the post (Telegram's Bot API has no count), for the tab's Comments row
+    (105, """ALTER TABLE fchan_posts ADD COLUMN rules_for INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN rules_msg INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN comments INTEGER NOT NULL DEFAULT 0;
+    UPDATE fchan_posts SET rules_for = tg_msg WHERE tg_msg > 0;"""),
 ]
 
 

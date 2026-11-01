@@ -69,9 +69,9 @@ def test_post_publish_and_limits(env, monkeypatch):
     assert r.status_code == 429 or r.json()["error"] == "rate_limited"                          # ten minutes between posts
     tick(cfg, tg, con)
     sent = tg.of("sendMessage")
-    assert len(sent) == 1 and sent[0]["chat_id"] == CH and "parse_mode" not in sent[0]
-    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n\u2014 Ann T." and sent[0]["link_preview_options"] == {"is_disabled": True}
-    assert sent[0]["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp=fp")
+    assert len(sent) == 1 and sent[0]["chat_id"] == CH and sent[0]["parse_mode"] == "HTML"
+    assert sent[0]["text"] == "<b>Ann T.</b>\n\nLost a black umbrella in the library" and sent[0]["link_preview_options"] == {"is_disabled": True}
+    assert "reply_markup" not in sent[0]                                                         # a button would hide the Comments bar
     tick(cfg, tg, con)
     assert len(tg.of("sendMessage")) == 1                                                        # never twice
     assert c.get("/api/forum-posts", headers=A).json()[0]["status"] == "live"
@@ -135,7 +135,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == "Secret confession here\n\n\u2014 " + texts.bot_message("ru", "fch_anon")[0]
+    assert tg.of("sendMessage")[0]["text"] == f"<b>{texts.bot_message('ru', 'fch_anon')[0]}</b>\n\nSecret confession here"
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     # the author deletes it: the words go at once, the channel message (and its copy in the group) in the bot's round
     con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:77', ?)", (f"KBTUappForum {mid}",))
@@ -217,7 +217,7 @@ def test_post_undo_and_restore_after_takedown(env, monkeypatch):
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
     con.execute("UPDATE tg_unpost SET at = 0")
     tick(cfg, tg, con)
-    assert not tg.of("deleteMessage") and len(tg.of("sendMessage")) == 2
+    assert not tg.of("deleteMessage") and [b["chat_id"] for b in tg.of("sendMessage")] == [CH, CH, G]  # and the first comment
     assert con.execute("SELECT 1 FROM meta WHERE key = 'tgcpost:77'").fetchone()
     assert [x["id"] for x in c.get("/api/forum-posts/feed", headers=A).json()] == [own["id"], p["id"]]
     # taken down again and the minute passes: deleted with its group copy, the row forgets the message
@@ -237,7 +237,7 @@ def test_post_undo_and_restore_after_takedown(env, monkeypatch):
     assert c.get("/api/forum-posts/mod", headers=M).json()["removed"] == []
     tick(cfg, tg, con)
     new = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
-    assert new and new != old and tg.of("sendMessage")[-1]["text"].startswith("Free pizza at the canteen")
+    assert new and new != old and tg.of("sendMessage")[-1]["text"].endswith("Free pizza at the canteen")
     # a take-down older than a week leaves the list
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": False}).status_code == 204
     con.execute("UPDATE audit_log SET at = at - 8 * 86400 WHERE action = 'fchan_hide'")
@@ -329,6 +329,8 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    for col in ("rules_for", "rules_msg", "comments"):  # 105's, added again on the way up
+        con.execute(f"ALTER TABLE fchan_posts DROP COLUMN {col}")
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
@@ -377,11 +379,79 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T." and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "mine"}         # no author, no user id
-    assert "Bob" not in json.dumps(feed) and "bob" not in json.dumps(feed)
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread"}  # no user id
+    assert feed[2]["person"]["name"] == "Ann T." and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
+    # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
+    con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
+    for viewer in (C, A, tma(9)):
+        f = c.get("/api/forum-posts/feed", headers=viewer).json()
+        row = next(p for p in f if p["id"] == masked["id"])
+        assert row["person"] is None and row["anon"] and not row["mine"]
+        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread")} == {
+            "body": "A quiet confession", "status": "live", "anon": True, "sign": texts.bot_message("ru", "fch_anon")[0], "person": None, "mine": False}
+        assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
     assert c.delete(f"/api/forum-posts/{masked['id']}", headers=B).status_code == 204
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [named["id"]]
     assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T."           # a guest reads the public channel
+    con.close()
+
+
+def test_post_first_comment(env, monkeypatch):
+    """The bot's first comment under each post's copy in the group: the rules in three languages and a button to that
+    post in the app; once per post, whichever comes first (the copy or the send's answer), never again on a second copy
+    or the next round. The words go escaped."""
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob")
+    con = db.connect(cfg.db_path)
+    tg = Telegram()
+
+    def copy(mid: int, post: int) -> None:
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
+                await tgc.gate(cfg, http, con, [{"message": {
+                    "message_id": mid, "chat": {"id": G, "type": "supergroup"}, "is_automatic_forward": True, "date": 0,
+                    "sender_chat": {"id": CH, "type": "channel", "username": "KBTUappForum"},
+                    "forward_origin": {"type": "channel", "message_id": post}, "text": "x"}}])
+        asyncio.run(go())
+
+    rules = lambda: [b for b in tg.of("sendMessage") if b["chat_id"] == G]  # noqa: E731
+    # the copy before the send's answer was stored (the mock's first answer is message 901)
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "a < b & c"}).json()
+    copy(55, 901)
+    assert not rules()
+    tick(cfg, tg, con)
+    assert tg.of("sendMessage")[0]["text"] == "<b>Ann T.</b>\n\na &lt; b &amp; c"
+    r = rules()
+    assert len(r) == 1 and r[0]["text"] == texts.FORUM_RULES and r[0]["reply_parameters"] == {"message_id": 55} and "parse_mode" not in r[0]
+    assert r[0]["reply_markup"]["inline_keyboard"][0][0] == {"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{p['id']}"}
+    copy(55, 901)                                                                               # Telegram again, a restart
+    tick(cfg, tg, con)
+    assert len(rules()) == 1
+    # the usual order: sent, then its copy
+    q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Who has a spare charger?"}).json()
+    tick(cfg, tg, con)
+    assert len(rules()) == 1
+    mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (q["id"],)).fetchone()[0]
+    copy(56, mid)
+    tick(cfg, tg, con)
+    tick(cfg, tg, con)
+    assert [(b["reply_parameters"]["message_id"], b["reply_markup"]["inline_keyboard"][0][0]["url"].rsplit("=", 1)[1]) for b in rules()] \
+        == [(55, f"fp_{p['id']}"), (56, f"fp_{q['id']}")]
+    # the Forum tab's Comments row: a student's comment counts once (not its edit), a stranger's never; the link opens
+    # the thread at the bot's first comment
+    def say(upd: dict) -> None:
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
+                await tgc.gate(cfg, http, con, [upd])
+        asyncio.run(go())
+    note = {"chat": {"id": G, "type": "supergroup"}, "date": 0, "text": "me too", "message_thread_id": 55,
+            "reply_to_message": {"message_id": 55, "is_automatic_forward": True}}
+    say({"message": {"message_id": 60, "from": {"id": 1}, **note}})
+    say({"edited_message": {"message_id": 60, "from": {"id": 1}, **note}})
+    say({"message": {"message_id": 61, "from": {"id": 99}, **note}})
+    feed = {x["id"]: x for x in c.get("/api/forum-posts/feed", headers=tma(1)).json()}
+    assert (feed[p["id"]]["comments"], feed[q["id"]]["comments"]) == (1, 0)
+    assert feed[p["id"]]["thread"] == con.execute("SELECT rules_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0] > 900
     con.close()

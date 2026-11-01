@@ -52,6 +52,8 @@ const ru = {
   'fc.open': "Открыть канал",
   'fc.mine': "Мой",
   'fc.new': "Новый пост",
+  'fc.share': "Поделиться с КБТУ…",
+  'fc.comments': "Комментарии",
   'fc.emptyTitle': "Пока тихо",
   'fc.emptyText': "Здесь появятся посты студентов.",
   'fc.checking': "Проверка…",
