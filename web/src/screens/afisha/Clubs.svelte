@@ -1,12 +1,11 @@
 <script lang="ts">
   import Plus from '@lucide/svelte/icons/plus';
-  // Clubs → All clubs, the catalogue for everyone (a member's tab opens on My club; the switch on top) (owner, Oct 24: it moved here from Events; the Join page folded in as
+  // Clubs → All clubs, the catalogue for everyone; no large title (the capsule names the tab, Nov 2) (a member's tab opens on My club; the switch on top) (owner, Oct 24: it moved here from Events; the Join page folded in as
   // "Recruiting now" up top). Mockup v24, owner Oct 21: subscribe to a club to hear about its new events (the bell; the Feed
   // and List show everything anyway). All / mine up top, search (a catalog of 50–100 clubs is unusable by scrolling),
   // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
   // as a list. Categories wait for the server (orgs have no category yet).
   import SearchField from '../../ui/SearchField.svelte';
-  import { fitTitle, largeTitle } from '../../ui/title';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
@@ -73,10 +72,6 @@
 
 <div class="page scroll stagger">
   {#if session.me?.memberships.length}<ClubSwitch />{/if}
-  <header class="hd">
-    <h1 class="t-h1" use:fitTitle use:largeTitle={'club'}>{t('clubs.title')}</h1>
-  </header>
-
   <SearchField bind:value={q} placeholder={t('clubs.search')} raised />
 
   {#if q.trim()}
@@ -175,7 +170,6 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
-  .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
   .sec { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 12px; }
   .sec h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
   .sec > span, .sec .all { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }

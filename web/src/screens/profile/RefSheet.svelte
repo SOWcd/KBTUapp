@@ -28,7 +28,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={Link} title={t('ref.title')}>
+<Sheet {overlay} headed icon={Link} title={t('ref.title')}>
   <h2 class="t-h2 hd">{t('ref.title')}</h2>
   <div class="pass">
     <div class="plate"><span class="code"><Qr text={link} tone={QR_TONE}>{#if me}<span class="face"><Avatar person={me} size={48} tappable={false} /></span>{/if}</Qr></span></div>

@@ -13,36 +13,39 @@
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let pill = $state<HTMLElement>();
-  let from = 0;
-  const at = new WeakMap<Element, [number, number]>();
+  let from = [0, 0];
+  const at = new WeakMap<Element, [number, number, number]>();
   let top = $state(false);
   let fresh = $state(true); // nothing on screen yet: the entrance, not a morph
   $effect.pre(() => {
     void toast.id;
     fresh = !pill;
     if (fresh) top = atTop();
-    from = pill?.offsetWidth ?? 0;
+    from = [pill?.offsetWidth ?? 0, pill?.offsetHeight ?? 0];
     // where the leaving line and emoji stand, read before either leaves: the emoji going out of the flow first moved
     // the line onto it, and a theme switch froze that in its snapshot
-    for (const c of pill?.children ?? []) at.set(c, [(c as HTMLElement).offsetLeft, (c as HTMLElement).offsetTop]);
+    for (const c of pill?.children ?? []) { const e = c as HTMLElement; at.set(c, [e.offsetLeft, e.offsetTop, e.offsetWidth]); }
   });
   $effect(() => {
     void toast.id;
     const el = pill;
-    if (!el || !from || still()) return;
-    const to = el.offsetWidth;
-    if (Math.abs(to - from) < 2) return;
-    // one line while the width moves (owner's video, Oct 24: the narrow start wrapped the new line, the pill grew a
-    // line taller and jumped up); the final width is that line's own, so nothing wraps at the end either
-    el.classList.add('morph');
-    el.animate({ width: [`${from}px`, `${to}px`] }, { duration: 420, easing: 'cubic-bezier(.32, 1.25, .4, 1)' }).finished
-      .catch(() => {}).finally(() => el.classList.remove('morph'));
+    if (!el || !from[0] || still()) return;
+    const to = [el.offsetWidth, el.offsetHeight];
+    if (Math.abs(to[0] - from[0]) < 2 && Math.abs(to[1] - from[1]) < 2) return;
+    // the new line is laid out at its final width while the pill springs to it (owner's video, Oct 24: the narrow start
+    // wrapped the new line, the pill grew a line taller and jumped up); the pill's edge uncovers it, the height (one
+    // line or two) moves with the width, nothing reflows and nothing is cut at the end
+    const tx = [...el.querySelectorAll<HTMLElement>('.tx')].find((n) => !n.style.position);
+    if (tx) tx.style.flex = `0 0 ${tx.offsetWidth}px`;
+    el.animate({ width: [`${from[0]}px`, `${to[0]}px`], height: [`${from[1]}px`, `${to[1]}px`] }, { duration: 420, easing: 'cubic-bezier(.32, 1.25, .4, 1)' }).finished
+      .catch(() => {}).finally(() => tx?.style.removeProperty('flex'));
   });
 
-  // the old line leaves where it stood: out of the flow at once, so the pill measures the new one
+  // the old line leaves where it stood, as it stood (its width, so its lines don't reflow): out of the flow at once,
+  // so the pill measures the new one
   function leave(node: HTMLElement) {
-    const [l, t] = at.get(node) ?? [node.offsetLeft, node.offsetTop];
-    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;white-space:nowrap;`;
+    const [l, t, w] = at.get(node) ?? [node.offsetLeft, node.offsetTop, node.offsetWidth];
+    node.style.cssText += `position:absolute;left:${l}px;top:${t}px;width:${w}px;`;
     return { duration: still() ? 0 : 160, css: (k: number) => `opacity:${k};filter:blur(${(1 - k) * 4}px)` };
   }
   function come(_node: HTMLElement, { first }: { first: boolean }) {
@@ -88,8 +91,8 @@
   .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop; }
   :global(html[data-map]) .toast.top { top: calc(max(48px, var(--top)) + 70px); } /* under the map's floor row */
   .em { display: flex; flex: none; }
-  .tx { min-width: 0; }
-  .toast:global(.morph) .tx { white-space: nowrap; }
+  /* a long line wraps between words, two lines at most (a name never cut in the middle; a third line ends in …) */
+  .tx { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .bounce { display: flex; animation: bounce 560ms cubic-bezier(.3, 1.6, .5, 1) 60ms both; }
   @keyframes pop { from { transform: translate(-50%, 14px) scale(0.92); } }
   @keyframes drop { from { transform: translate(-50%, -14px) scale(0.92); } }

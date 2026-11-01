@@ -24,7 +24,7 @@
   function go() { haptic.tap(); close(overlay.id); sheets.login(); }
 </script>
 
-<Sheet {overlay} icon={Hand} title={t('ro.hi')}>
+<Sheet {overlay} headed icon={Hand} title={t('ro.hi')}>
   <div class="hero">
     <span class="glow" aria-hidden="true"></span>
     <span class="em"><Emoji name="party_popper_3d" size={92} /></span>

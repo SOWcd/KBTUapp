@@ -57,7 +57,7 @@
   }
 </script>
 
-<Sheet {overlay} tall title={t('page.friends')} icon={UsersRound}>
+<Sheet {overlay} headed tall title={t('page.friends')} icon={UsersRound}>
 <div class="friends">
   {#if session.ready && !me?.student}
     <section class="hello">

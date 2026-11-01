@@ -340,6 +340,8 @@
   .when { font-weight: 620; }
   .when.now { color: var(--success-text); }
   .acts { display: flex; gap: 8px; }
+  /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */
+  @media (max-width: 359px) { .acts :global(.btn.full) { flex-basis: auto; padding-inline: var(--s-3); gap: 6px; } }
   .move { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 6px; font: 620 14px/1 var(--font-text); color: var(--accent-text); }
   .moving { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
   .moving .field { flex: 1; min-width: 0; }

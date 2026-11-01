@@ -19,7 +19,7 @@
   const online = ONLINE.map((d) => { const [a, b = a] = d.split('/'); return dayRange(a, b); }).join(', ');
 </script>
 
-<Sheet {overlay} icon={GraduationCap} tall title={t('acad.title')}>
+<Sheet {overlay} headed icon={GraduationCap} tall title={t('acad.title')}>
   <h2 class="t-h2 hd">{t('acad.title')}</h2>
   <p class="t-foot sub">{t('acad.sub')}</p>
   {#if pastCount}

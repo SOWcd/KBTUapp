@@ -91,7 +91,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
+<Sheet {overlay} headed icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
   <h2 class="t-h2 hd">{t('ce.title')}</h2>
   <p class="t-foot sub">{t('ce.sub')}</p>
 

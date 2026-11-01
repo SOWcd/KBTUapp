@@ -33,7 +33,8 @@
   const wideClose = phone && !/^(en|kk)\b/i.test(tg.user?.language_code ?? 'en');
 
   let now = $state(Date.now() / 1000);
-  const mode = $derived(title ? 'title' : live ? 'live' : mark && icon ? 'mark' : 'none');
+  // a sheet's mark outranks the live status, as its title does: the sheet on top is what the capsule names
+  const mode = $derived(title ? 'title' : mark && icon ? 'mark' : live ? 'live' : 'none');
 
   onMount(() => {
     const tick = setInterval(() => { if (live) now = Date.now() / 1000; }, 1000);

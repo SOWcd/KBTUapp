@@ -78,7 +78,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={UserPlus} title={t('fr.addTitle')}>
+<Sheet {overlay} headed icon={UserPlus} title={t('fr.addTitle')}>
   <h2 class="t-h2 hd">{t('fr.addTitle')}</h2>
 
   <div class="pass">

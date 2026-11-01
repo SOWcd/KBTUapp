@@ -1359,7 +1359,6 @@ const kk: Dict = {
   'oc.whose': "Кімнің чаты",
   'oc.nobody': "Ешкімдікі емес",
   'adm.chatInvite': "🔒 жабық, шақыру арқылы — сілтемені барлық студент көреді",
-  'clubs.title': "Клубтар",
   'clubs.subscribe': "Жазылу",
   'clubs.subscribed': "Жазылдыңыз",
   'clubs.subscribers': { one: "{n} жазылушы", other: "{n} жазылушы" },

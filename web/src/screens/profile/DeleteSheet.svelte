@@ -44,7 +44,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={Trash2} title={t('del.title')}>
+<Sheet {overlay} headed icon={Trash2} title={t('del.title')}>
   <div class="wrap">
     <span class="ic"><TriangleAlert size={26} /></span>
     <h2 class="t-h2">{t('del.title')}</h2>

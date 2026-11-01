@@ -29,7 +29,7 @@
   function insert() { if (!text) return; haptic.ok(); oninsert(text); close(overlay.id); }
 </script>
 
-<Sheet {overlay} icon={StickyNote} tall title={t(`memo.${kind}`)}>
+<Sheet {overlay} headed icon={StickyNote} tall title={t(`memo.${kind}`)}>
   <h2 class="t-h2">{t(`memo.${kind}`)}</h2>
   {#if timed}
     <label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={f.date} min={dateInput(from)} /></label>

@@ -14,7 +14,8 @@
 
   // heading: the sheet's title in its own header row, at the top, wrapping, never cut (the design system: 50 of 56 Russian
   // titles didn't fit the capsule at 320 px); the capsule then shows the sheet's icon alone. actions: that row's
-  // buttons on the right (a Toolbar, a ⋯).
+  // buttons on the right (a Toolbar, a ⋯). headed: the content shows the title itself (its own heading, a hero, a
+  // lanyard): the capsule shows the icon alone too, never the same words twice (Nov 2: Clubs said its name twice).
   // title: the old way, what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it
   // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
   // Without one, text typed here and not sent asks before a hand closes it (a pull lost a club's application).
@@ -23,10 +24,10 @@
   // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
-  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
+  type Props = { overlay: Overlay; title?: string; heading?: string; headed?: boolean; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean;
     children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
-  $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
+  let { overlay, title = '', heading, headed = false, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
+  $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null || headed; });
 
   let panel: HTMLDivElement;
   let scrim: HTMLDivElement;

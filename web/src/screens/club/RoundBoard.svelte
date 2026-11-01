@@ -147,7 +147,7 @@
 </script>
 
 <!-- one Back (AGENTS.md): Telegram's Back leaves an application for the list, then closes the board -->
-<Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
+<Sheet {overlay} headed icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
   {#if cur && r}
     {@const a = cur}
     <div class="who">

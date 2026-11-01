@@ -1378,7 +1378,6 @@ const ru = {
   'oc.whose': "Чей чат",
   'oc.nobody': "Ничей",
   'adm.chatInvite': "🔒 закрытый, по приглашению — ссылку увидят все студенты",
-  'clubs.title': "Клубы",
   'clubs.subscribe': "Подписаться",
   'clubs.subscribed': "Вы подписаны",
   'clubs.subscribers': { one: "{n} подписчик", few: "{n} подписчика", many: "{n} подписчиков", other: "{n} подписчика" },

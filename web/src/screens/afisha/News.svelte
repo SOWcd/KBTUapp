@@ -174,7 +174,7 @@
   </article>
 {/snippet}
 
-<Sheet {overlay} tall title={t('page.news')} icon={Newspaper}>
+<Sheet {overlay} headed tall title={t('page.news')} icon={Newspaper}>
 <div class="news">
   <header class="hd">
     <span><h2 class="t-h2">{t('page.news')}</h2><p class="t-foot">{t('news.sub')}</p></span>

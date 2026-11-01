@@ -84,7 +84,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
+<Sheet {overlay} headed icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
   <h2 class="t-h2">{r0 ? t('cast.edit') : t('cast.open')}</h2>
   <p class="t-foot sub">{t('cast.openSub')}</p>
 

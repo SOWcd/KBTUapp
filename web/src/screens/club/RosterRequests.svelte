@@ -24,7 +24,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={ListChecks} title={t('ro.reqTitle')}>
+<Sheet {overlay} headed icon={ListChecks} title={t('ro.reqTitle')}>
   <h2 class="t-h2 hd">{t('ro.reqTitle')}</h2>
   <p class="t-foot sub">{t('ro.reqText')}</p>
   {#each list ?? [] as r (r.id)}

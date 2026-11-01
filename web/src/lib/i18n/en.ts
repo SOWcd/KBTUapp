@@ -1359,7 +1359,6 @@ const en: Dict = {
   'oc.whose': "Whose chat",
   'oc.nobody': "Nobody's",
   'adm.chatInvite': "🔒 closed, by invite — every student will see the link",
-  'clubs.title': "Clubs",
   'clubs.subscribe': "Follow",
   'clubs.subscribed': "Following",
   'clubs.subscribers': { one: "{n} follower", other: "{n} followers" },

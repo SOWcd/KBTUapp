@@ -19,7 +19,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={MapPinX} full title={t('mf.title')}>
+<Sheet {overlay} headed icon={MapPinX} full title={t('mf.title')}>
   <h2 class="t-h2 hd">{t('mf.title')}</h2>
   <p class="t-foot sub">{t('mf.sub')}</p>
   {#if list && !list.length}<p class="t-foot">{t('mf.none')}</p>{/if}

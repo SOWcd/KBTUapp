@@ -25,7 +25,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={UserRoundCheck} title={t('ro.askTitle')}>
+<Sheet {overlay} headed icon={UserRoundCheck} title={t('ro.askTitle')}>
   <div class="top">
     <OrgLogo org={row.org} size={64} />
     <h2 class="t-h2">{t('ro.askTitle')}</h2>

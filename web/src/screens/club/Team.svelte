@@ -140,7 +140,7 @@
 {/snippet}
 
 
-<Sheet {overlay} tall title={t('page.team')} icon={Users}>
+<Sheet {overlay} headed tall title={t('page.team')} icon={Users}>
 <div class="team">
   {#if m}
     <header class="hd">

@@ -20,7 +20,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={Wrench} tall title={t('fo.mySkills')}>
+<Sheet {overlay} headed icon={Wrench} tall title={t('fo.mySkills')}>
   <h2 class="t-h2 hd">{t('fo.mySkills')}</h2>
   <p class="t-foot">{t('fo.mySkillsNote')}</p>
   <SkillPicker bind:chosen max={5} />

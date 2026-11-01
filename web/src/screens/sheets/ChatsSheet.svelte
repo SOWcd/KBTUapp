@@ -17,7 +17,7 @@
   const groups = $derived([...CHAT_SECTIONS, null].map((s) => [s ?? 'other', chats.filter((c) => (c.section ?? null) === s)] as const).filter(([, l]) => l.length));
 </script>
 
-<Sheet {overlay} icon={TelegramMark} tall title={t('chats.sheet')}>
+<Sheet {overlay} headed icon={TelegramMark} tall title={t('chats.sheet')}>
   <h2 class="t-h2 hd">{t('chats.sheet')}</h2>
   <p class="t-foot sub">{t('chats.note')}</p>
   {#each groups as [g, items] (g)}

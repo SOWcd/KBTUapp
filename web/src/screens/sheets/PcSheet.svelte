@@ -15,7 +15,7 @@
   let { overlay, ok }: { overlay: Overlay; ok: () => void } = $props();
 </script>
 
-<Sheet {overlay} icon={Smartphone} title={t('pc.title')}>
+<Sheet {overlay} headed icon={Smartphone} title={t('pc.title')}>
   <div class="pc">
     <Emoji name="laptop_3d" size={56} />
     <h2 class="t-h2">{t('pc.title')}</h2>

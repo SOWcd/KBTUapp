@@ -106,7 +106,7 @@
   // the textarea grows with the text
 </script>
 
-<Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
+<Sheet {overlay} headed icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
   <h2 class="t-h2 hd">{was ? t('post.edit') : t('post.new')}</h2>
 
   <!-- the club chosen in Studio, no picker -->

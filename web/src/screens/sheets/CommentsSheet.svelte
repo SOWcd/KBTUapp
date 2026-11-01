@@ -122,7 +122,7 @@
   const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
 </script>
 
-<Sheet {overlay} icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
+<Sheet {overlay} headed icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
   <h2 class="t-h2 hd">{kind === 'event' ? t('cm.titleEvent') : t('cm.title')}</h2>
   <p class="t-foot sub ellipsis">{title}</p>
 

@@ -71,7 +71,7 @@
     {#if c.sectionAi}<em class="aimark">{t('adm.chatAi')}</em>{/if}</span>
 {/snippet}
 
-<Sheet {overlay} icon={TelegramMark} full title={t('adm.chats')}>
+<Sheet {overlay} headed icon={TelegramMark} full title={t('adm.chats')}>
   <h2 class="t-h2 hd">{t('adm.chats')}</h2>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
   {#if pending.length}

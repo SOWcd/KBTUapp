@@ -140,7 +140,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} icon={UserCog} full title={t('team.setup')}>
+<Sheet {overlay} headed icon={UserCog} full title={t('team.setup')}>
   <h2 class="t-h2 hd">{t('team.setup')}</h2>
 
   <section>

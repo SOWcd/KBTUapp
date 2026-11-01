@@ -55,7 +55,7 @@
   async function openClub(id: number) { await loadMe(); void loadAfisha(); close(overlay.id); sheets.club(id); }
 </script>
 
-<Sheet {overlay} icon={CirclePlus} full title={t('nc.title')}>
+<Sheet {overlay} headed icon={CirclePlus} full title={t('nc.title')}>
   <h2 class="t-h2 hd">{t('nc.title')}</h2>
 
   {#if mine === undefined}

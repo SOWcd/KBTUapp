@@ -65,7 +65,7 @@
   }
 </script>
 
-<Sheet {overlay} icon={MonitorPlay} title={t('scr.title')}>
+<Sheet {overlay} headed icon={MonitorPlay} title={t('scr.title')}>
   <h2 class="t-h2 hd">{pick ? t('scr.pick') : t('scr.title')}</h2>
   {#if note}
     <p class="t-foot sub">{note}</p>
