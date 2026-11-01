@@ -6,7 +6,9 @@
   // Playing, the words follow the song (lib/lyrics.ts, the times in lib/i18n/anthem.ts), as Apple Music's lyrics: the
   // emblem goes, the line being sung stays in the middle of the screen, bright and a little larger, its words lit one by
   // one (the one being sung filling from the left; the clock read each frame while it plays); the lines around it
-  // dimmer and blurred the further they are. A hand scrolling the page wins for 3 s; a tap on any line plays from there.
+  // dimmer and softer the further they are; the page glides to each new line (one spring, the lines below a beat later);
+  // while only the music plays, three breathing dots where the next line comes. The big emblem gives way to a small chip
+  // at the top with the verse's language. A hand scrolling the page wins for 3 s; a tap on any line plays from there.
   import { onMount, untrack } from 'svelte';
   import Music from '@lucide/svelte/icons/music';
   import Play from '@lucide/svelte/icons/play';
@@ -112,6 +114,7 @@
   const LEAD = 0.1;
   const starts = SUNG.map((l) => l.t ?? 0), ends = SUNG.map((l) => l.end), len = lineLen(starts);
   const synced = $derived(on || cur > 0);
+  const langOf = ANTHEM.flatMap((p) => p.lines.filter((l) => l.i >= 0).map(() => p.lang));
   // the line being sung and, in a pause, the next one: states, so they change only when the song moves on to another
   let lit = $state(-1), gapAt = $state(-1);
 
@@ -122,6 +125,7 @@
   function sync(t = cur) {
     const p = synced ? lyricAt(starts, ends, t + LEAD, dur, len) : { line: -1, next: -1, p: 0 };
     lit = p.line; gapAt = p.next;
+    if (p.next >= 0) words?.querySelector<HTMLElement>('.dots')?.style.setProperty('--g', String(p.p));
     let w = -1, f = 0;
     if (p.line >= 0) {
       const i = p.line, next = (starts[i + 1] ?? dur) - starts[i];
@@ -139,15 +143,32 @@
   $effect(() => { void [synced, dur]; untrack(() => sync(audio ? audio.currentTime : cur)); });
 
   // the line being sung (or, in a pause, the next one) stays in the middle of the page while the song plays; a hand
-  // scrolling the page wins for 3 s, then it comes back
+  // scrolling the page wins for 3 s, then it comes back.
+  // The glide (FLIP): the page jumps to its new place at once and every line in sight starts back where it was, then
+  // slides home with one CSS transition of `translate` (the compositor's, one per line, the lines after the sung one a
+  // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone (Nov 2)
   let userAt = 0, back = 0;
   const focus = $derived(lit >= 0 ? lit : gapAt);
+  const lang = $derived(focus >= 0 ? langOf[focus] : null);
   function follow(i: number) {
     const el = words.querySelector(`[data-i="${i}"]`), box = words.parentElement;
     if (!el || !box || performance.now() - userAt < 3000) return;
-    const r = el.getBoundingClientRect();
-    const top = box.scrollTop + r.top - box.getBoundingClientRect().top - (box.clientHeight - r.height) * 0.45;
-    box.scrollTo({ top: Math.max(0, top), behavior: still() ? 'auto' : 'smooth' });
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect(), was = box.scrollTop;
+    const top = Math.max(0, was + r.top - b.top - (box.clientHeight - r.height) * 0.45);
+    if (Math.abs(top - was) < 1) return;
+    if (still() || Math.abs(top - was) > box.clientHeight) { box.scrollTop = top; return; } // far (a jump back): no glide
+    const near = [...words.querySelectorAll<HTMLElement>('.fl')].filter((x) => { const q = x.getBoundingClientRect(); return q.bottom > b.top - 40 && q.top < b.bottom + 40; });
+    box.scrollTop = top;
+    const d = box.scrollTop - was;
+    words.classList.add('snap');
+    for (const x of near) {
+      const k = Number(x.dataset.i ?? -1) - i;
+      x.style.setProperty('--lag', `${Math.min(4, Math.max(0, k)) * 32}ms`);
+      x.style.translate = `0 ${d}px`;
+    }
+    void words.offsetHeight; // the start is laid down, then it slides
+    words.classList.remove('snap');
+    for (const x of near) x.style.translate = '';
   }
   $effect(() => { const f = focus; if (f >= 0 && on) untrack(() => follow(f)); });
 
@@ -175,19 +196,23 @@
 </script>
 
 <Sheet {overlay} tall title={t('anthem.title')} icon={Music}>
-  <header class="hd" class:gone={synced}>
-    <span class="art"><KbtuMark size={52} /></span>
-    <h2 class="t-h2">{t('anthem.title')}</h2>
-    <p class="sub">{LANG_FULL.kk} · {LANG_FULL.en} · {LANG_FULL.ru}</p>
-  </header>
   <div class="words" class:synced bind:this={words}>
+    <!-- playing: the emblem shrinks into this chip, with the verse's language -->
+    <div class="chiprow" aria-hidden="true"><span class="chip" class:shown={synced}><span class="mini"><KbtuMark size={13} /></span><b>{t('anthem.title')}</b>{#if lang}<i>{LANG_FULL[lang]}</i>{/if}</span></div>
+    <header class="hd fl" class:gone={synced}>
+      <span class="art"><KbtuMark size={52} /></span>
+      <h2 class="t-h2">{t('anthem.title')}</h2>
+      <p class="sub">{LANG_FULL.kk} · {LANG_FULL.en} · {LANG_FULL.ru}</p>
+    </header>
     {#each ANTHEM as part, i (i)}
       <div class="part" lang={part.lang}>
         {#each part.lines as line (line)}
           {#if line.i >= 0}
-            <button class="ln" class:now={line.i === lit} class:by={line.i === lit} data-i={line.i} aria-current={line.i === lit || undefined}
-                    style:--d={focus >= 0 ? Math.min(4, Math.abs(line.i - focus)) : null} onclick={() => jump(line.i)}
-                    >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w">{w}<span class="lit" aria-hidden="true"><span>{w}</span></span></span>{/each}</button>
+            {#if line.i === gapAt}<span class="dots fl" data-i={line.i} aria-hidden="true"><i style:--k={0}></i><i style:--k={1}></i><i style:--k={2}></i></span>{/if}
+            {@const d = focus >= 0 ? Math.min(4, Math.abs(line.i - focus)) : 1}
+            <button class="ln fl" class:now={line.i === lit} class:by={line.i === lit} class:far={synced && d >= 2} data-i={line.i} aria-current={line.i === lit || undefined}
+                    style:--d={d} onclick={() => jump(line.i)}
+                    >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w">{w}<span class="lit" aria-hidden="true">{w}</span></span>{/each}</button>
           {/if}
         {/each}
       </div>
@@ -195,7 +220,7 @@
   </div>
   {#snippet footer()}
     <!-- in the footer, not the words: the page's scroll fade (a mask) would clip it to the words' box -->
-    <div class="aura" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="aura" class:en={lang === 'en'} class:ru={lang === 'ru'} style:--prog={cur / dur} aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <!-- the scrubber across, then repeat · play, the play in the middle -->
     <div class="player">
       <div class="seek" class:held role="slider" tabindex="0" aria-label={t('anthem.title')} aria-valuemin={0} aria-valuemax={Math.floor(dur)}
@@ -203,7 +228,7 @@
            onpointerdown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); held = true; scrub(e); }}
            onpointermove={(e) => { if (held) scrub(e); }} onpointerup={letGo} onpointercancel={letGo}
            onkeydown={(e) => { const d = STEP[e.key]; if (d) { e.preventDefault(); seek(cur + d); } }}>
-        <span class="track" bind:this={track}><i bind:this={fill} style:--p={cur / dur}></i></span>
+        <span class="bar"><span class="track" bind:this={track}><i bind:this={fill} style:--p={cur / dur}></i></span>{#if held}<b class="knob" style:left="{(cur / dur) * 100}%"></b>{/if}</span>
         <span class="times num"><span>{clock(cur)}</span><span>−{clock(Math.floor(dur) - Math.floor(cur))}</span></span>
       </div>
       <div class="ctl">
@@ -219,27 +244,51 @@
 
 <style>
   /* the background: slow soft light in the app's colours behind the whole sheet (it doesn't scroll: the sheet's transform
-     holds the fixed layer), three lights drifting. Soft by their own gradients (a blur filter cost a frame in three:
-     measured), only moved by transforms on composited layers; lowfx and reduced motion: still */
+     holds the fixed layer), three lights drifting; the warm one grows as the song goes on (--prog), a cool one comes up
+     in the English verse, the pink one in the Russian; a fine grain over it all, as on a print. Soft by their own
+     gradients (a blur filter cost a frame in three: measured), only moved by transforms and faded by opacity, both the
+     compositor's; lowfx and reduced motion: still */
   /* the light is opaque: the sheet's own glass blur of the page behind would only be redone every frame for nothing
      (it took 4 frames in 10 to 2 in 10 under a 4x slower CPU: measured) */
   :global(.sheet:has(.aura)) { -webkit-backdrop-filter: none; backdrop-filter: none; }
   .aura { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
   .aura i { position: absolute; width: 130vw; height: 130vw; max-width: 720px; max-height: 720px; border-radius: 50%; opacity: 0.55; will-change: transform;
-    background: radial-gradient(closest-side, var(--c), transparent); animation: drift 26s ease-in-out infinite alternate; }
+    background: radial-gradient(closest-side, var(--c), transparent); animation: drift 26s ease-in-out infinite alternate; transition: opacity 2.4s var(--ease); }
   .aura i:nth-child(1) { left: -55%; top: -25%; --c: var(--accent); }
   .aura i:nth-child(2) { right: -60%; top: 10%; --c: var(--accent-2); animation-duration: 31s; animation-delay: -9s; }
-  .aura i:nth-child(3) { left: -35%; bottom: -45%; --c: var(--tile-pink); opacity: 0.3; animation-duration: 37s; animation-delay: -17s; }
+  .aura i:nth-child(3) { left: -35%; bottom: -45%; --c: var(--tile-pink); opacity: calc(0.14 + 0.3 * var(--prog, 0)); animation-duration: 37s; animation-delay: -17s; }
+  .aura i:nth-child(4) { right: -45%; bottom: -30%; --c: var(--tile-teal); opacity: 0; animation-duration: 29s; animation-delay: -5s; }
+  .aura.en i:nth-child(4) { opacity: 0.32; }
+  .aura.ru i:nth-child(3) { opacity: 0.5; }
+  .aura::after { content: ''; position: absolute; inset: 0; opacity: 0.07;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
   @keyframes drift { 33% { transform: translate(18vw, 10vh) scale(1.15); } 66% { transform: translate(-8vw, 22vh) scale(0.9); } 100% { transform: translate(10vw, -6vh) scale(1.05); } }
   /* light: the lights a little stronger than in the dark (white swallows them: 0.3 read as plain white, owner) */
   :global(html[data-theme='light']) .aura i { opacity: 0.6; }
-  :global(html[data-theme='light']) .aura i:nth-child(3) { opacity: 0.34; }
+  :global(html[data-theme='light']) .aura i:nth-child(3) { opacity: calc(0.18 + 0.3 * var(--prog, 0)); }
+  :global(html[data-theme='light']) .aura i:nth-child(4) { opacity: 0; }
+  :global(html[data-theme='light']) .aura.en i:nth-child(4) { opacity: 0.4; }
+  :global(html[data-theme='light']) .aura::after { opacity: 0.05; }
   :global(html.lowfx) .aura i { animation: none; }
   @media (prefers-reduced-motion: reduce) { .aura i { animation: none; } }
 
-  /* the emblem, the title, the languages; playing, it fades and the page glides past it to the words */
-  .hd { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 18px 0 30px; text-align: center; transition: opacity 500ms var(--ease), transform 500ms var(--ease); }
-  .hd.gone { opacity: 0; transform: scale(0.94); }
+  /* the glide (follow): `translate` slides home, the lines after the sung one a beat later (--lag); .snap lays the start
+     down without it. The scale and the fade run on their own (`transform`, `opacity`) */
+  .fl { transition: opacity 450ms var(--ease), transform 550ms var(--ease), translate 600ms cubic-bezier(.2, .9, .25, 1) var(--lag, 0ms); }
+  .words:global(.snap) .fl { transition-property: opacity, transform; }
+
+  /* the chip: where the emblem goes while it plays; at the top of the page, over the words */
+  .chiprow { position: sticky; top: 10px; z-index: 2; height: 0; display: flex; justify-content: center; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 4px; border-radius: var(--r-full); background: var(--glass-pill-bg);
+    box-shadow: 0 6px 18px -8px var(--accent); opacity: 0; transform: translateY(-8px) scale(0.86); transition: opacity 450ms var(--ease), transform 550ms var(--ease); }
+  .chip.shown { opacity: 1; transform: none; }
+  .mini { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--grad-accent); color: var(--on-accent); }
+  .chip b { font: 700 var(--fs-sub)/1 var(--font-text); }
+  .chip i { font: 600 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
+
+  /* the emblem, the title, the languages; playing, it shrinks up towards the chip and fades */
+  .hd { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 18px 0 30px; text-align: center; transform-origin: 50% 0; }
+  .hd.gone { opacity: 0; transform: translateY(-24px) scale(0.5); }
   .art { display: grid; place-items: center; width: 116px; height: 116px; margin-bottom: 10px; border-radius: var(--r-xl); background: var(--grad-accent); color: var(--on-accent);
     box-shadow: 0 18px 40px -16px var(--accent); }
   .sub { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
@@ -247,30 +296,36 @@
   /* the words, centred, one flow; a part (a verse, a chorus) a little apart from the next */
   .part { margin-bottom: 22px; }
   .ln { position: relative; display: block; width: 100%; padding: 3px 0; text-align: center; text-wrap: balance;
-    font: 700 calc(var(--fs-card) * 1.3)/1.32 var(--font-text); letter-spacing: -0.016em;
-    transform-origin: 50% 50%; transition: opacity 400ms var(--ease), transform 400ms var(--ease), filter 400ms var(--ease); }
-  /* playing: the line being sung bright and a little larger; the lines around it fade and blur the further they are
-     (--d, 0..4 lines away; set once a line), a few read and the rest is a soft hint. Room below, so the last line too
-     comes to the middle */
+    font: 700 calc(var(--fs-card) * 1.3)/1.32 var(--font-text); letter-spacing: -0.016em; transform-origin: 50% 50%; }
+  /* playing: the line being sung bright and a little larger; the lines around it dimmer the further they are (--d, 0..4
+     lines away), and from two away soft: their glyphs drawn as their own shadow (a filter: blur left hairlines at its
+     edges on iPhone, Nov 2). Room below, so the last line too comes to the middle */
   .words.synced { padding-bottom: 46vh; }
-  .synced .ln { opacity: calc(0.42 - 0.075 * var(--d, 1)); filter: blur(calc(max(0, var(--d, 1) - 1) * 0.8px)); }
-  .synced .ln.now { opacity: 1; filter: none; transform: scale(1.05); will-change: transform; } /* its own layer: its words change, the blurred lines aren't repainted */
-  /* word by word in the line being sung: the words to come dim, the sung ones lit, the one being sung filling from the
-     left with a soft edge. The fill is two transforms (a clipping box slid in by --f, the lit copy slid back by as much):
-     each frame moves only composited layers, nothing is laid out or repainted; a fill painted per frame
-     (background-clip: text) stuttered and blinked on iPhone (Nov 2). At --f 1 the copy covers the word exactly, so it
-     hands over to .sung without a step (no colour transitions on words: one faded a sung word in again) */
-  .w { position: relative; display: inline-block; text-indent: 0; white-space: nowrap; }
+  .synced .ln { opacity: calc(0.46 - 0.08 * var(--d)); }
+  .synced .ln.far { color: transparent; text-shadow: 0 0 calc((var(--d) - 1) * 1.6px) var(--text); }
+  /* the sung line on a layer of its own: its word repainted each frame redraws that line alone, not the soft lines
+     around it sharing its tile (they are dear to draw) */
+  .synced .ln.now { opacity: 1; transform: scale(1.04); will-change: transform; } /* 1.06 touched the edges at 320 px */
+  /* word by word in the line being sung: the words to come dim, the sung ones lit, the one being sung lit from the left
+     by a lit copy over it, clipped (--f, 0..1): only glyphs ever show, no box, mask or layer of its own (a masked,
+     composited copy left violet seams at its edges on iPhone, Nov 2). At --f 1 the copy covers the word, so it hands
+     over to .sung without a step */
+  .w { position: relative; display: inline-block; white-space: nowrap; }
   .lit { display: none; }
   .ln.by .w { color: var(--text-3); }
   .ln.by .w:global(.sung) { color: var(--text); }
-  .ln.by .w:global(.on) .lit { display: block; position: absolute; inset: 0 -0.4em 0 0; overflow: hidden; pointer-events: none;
-    transform: translateX(calc((var(--f, 0) - 1) * 100%)); will-change: transform;
-    -webkit-mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); }
-  .lit > span { display: block; text-align: left; color: var(--text); transform: translateX(calc((1 - var(--f, 0)) * 100%)); will-change: transform; }
-  :global(html.lowfx) .synced .ln { filter: none; }
+  .ln.by .w:global(.on) .lit { display: block; position: absolute; inset: 0; color: var(--text); text-align: left; pointer-events: none;
+    -webkit-clip-path: inset(-0.3em calc((1 - var(--f, 0)) * 100%) -0.3em -0.3em); clip-path: inset(-0.3em calc((1 - var(--f, 0)) * 100%) -0.3em -0.3em); }
+  /* while only the music plays: three dots where the next line comes, one lighting after another as the pause goes
+     (--g, set by sync), breathing; no height of their own, nothing moves */
+  .dots { position: relative; display: flex; justify-content: center; gap: 8px; height: 0; top: -14px; }
+  .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--text); animation: breathe 2.4s ease-in-out infinite;
+    opacity: calc(0.25 + 0.75 * clamp(0, var(--g, 0) * 3 - var(--k), 1)); transition: opacity 250ms linear; }
+  .dots i:nth-child(2) { animation-delay: 0.2s; } .dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes breathe { 50% { transform: scale(1.22); } }
+  :global(html.lowfx) .dots i { animation: none; }
   @media (prefers-reduced-motion: reduce) {
-    .synced .ln { filter: none; } .synced .ln.now, .hd.gone { transform: none; }
+    .synced .ln.now, .hd.gone, .chip { transform: none; } .dots i { animation: none; }
     .ln.by .w:global(.on) { color: var(--text); } .ln.by .w:global(.on) .lit { display: none; } /* a word lights whole */
   }
 
@@ -287,8 +342,11 @@
   @media (prefers-reduced-motion: reduce) { .play.busy::after { animation: none; } }
 
   .seek { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 0 4px; touch-action: none; cursor: pointer; outline: none; }
-  .track { position: relative; height: 5px; border-radius: var(--r-full); background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease); }
-  .held .track { transform: scaleY(1.6); }
+  /* the scrubber: held, thicker, with a glow and a knob where the finger is */
+  .bar { position: relative; display: block; }
+  .track { position: relative; display: block; height: 5px; border-radius: var(--r-full); background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease), box-shadow var(--t-base); }
+  .held .track { transform: scaleY(1.8); box-shadow: 0 0 16px -2px var(--accent); }
+  .knob { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 5px var(--accent-soft), 0 2px 8px -2px var(--accent); }
   .seek:focus-visible .track { box-shadow: 0 0 0 3px var(--accent-soft); }
   .track i { position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); will-change: transform; } /* a transform: set each frame, never laid out */
   .times { display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
