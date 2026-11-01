@@ -240,6 +240,10 @@ def test_lost_send_found_by_its_copy(env):
     con.execute("DELETE FROM fchan_posts WHERE user_id = ? AND anon = 1", (bob["id"],))
     F.found(con, 501, f"{anon}\n\nwho goes tonight?")                 # hers alone now: found
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] == 501
+    # a send lost across the Nov 2 deploy went out in the old format (the words, then "- name"): still found
+    old = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'old style', 0, 'held', 'lost', 0)", bob["id"])
+    F.found(con, 502, "old style\n\n— Bob T.")
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (old,)).fetchone()[0] == 502
 
 
 def test_no_self_checkin_by_typed_name(env):

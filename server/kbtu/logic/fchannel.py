@@ -75,7 +75,8 @@ def feed(con, v: Viewer) -> list[dict]:
     """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
     anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
     is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
-    one carries its author (person: the app's avatar and profile), read once for all rows."""
+    one carries its author (person: the app's avatar and profile), read once for all rows; its signature is the one it
+    went out with (a nick then, if he had one: never his real name beside it)."""
     ps = rows(con, """SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone'
                       ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
@@ -85,7 +86,8 @@ def feed(con, v: Viewer) -> list[dict]:
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
-             "sign": anon if p["anon"] else short_name(a) if a else "?", "person": person_ref(a) if a else None, "mine": p["user_id"] == v.id,
+             "sign": anon if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
+             "mine": p["user_id"] == v.id,
              # the comments: the students' count, and the bot's first comment (the link opens the thread there)
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None})
     return out
@@ -103,8 +105,17 @@ def reserve(con, v: Viewer, body: dict) -> int:
         n, last = one(con, "SELECT COUNT(*), MAX(created_at) FROM fchan_posts WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)
         if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
             raise ApiError("rate_limited", "posts")
-        return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)",
-                           (v.id, text, int(anon), _now())).lastrowid
+        sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
+        return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign) VALUES (?, ?, ?, 'held', 'check', ?, ?)",
+                           (v.id, text, int(anon), _now(), sign)).lastrowid
+
+
+def signature(p) -> str:
+    """A signed post's name, fixed as it's written (owner, Nov 2): the nick when the author has one (the real name never
+    beside it), else the first name and last initial. A nick passed clean_nick (no @handle, no link); one the channel's
+    stricter check would still read as a link (a domain) signs with the short name instead. Escaped when sent."""
+    nick = p["nick"] if p else None
+    return nick if nick and not LINKY.search(unicodedata.normalize("NFKC", nick).translate(DOTS)) else short_name(p)
 
 
 def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
@@ -137,7 +148,7 @@ def delete(con, v: Viewer, pid: int) -> None:
         if not p:
             raise ApiError("not_found")
         _unpost(con, p, "author")
-        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
+        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
 
 
 def unpost_account(con, uid: int) -> None:
@@ -152,15 +163,20 @@ def unpost_account(con, uid: int) -> None:
 # ---- the bot's side (tgc.py): what to send, what was sent, what to take down
 
 def to_send(con) -> list:
-    """Live posts not in the channel yet, oldest first, with their signature: the name (first name, last initial,
-    never a nick or @username) or the anonymous line."""
+    """Live posts not in the channel yet, oldest first, with their signature: the one fixed when written (signature(),
+    never a @username) or the anonymous line."""
     return [(p["id"], p["body"], _sign(con, p)) for p in rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")]
 
 
 def _sign(con, p) -> str:
-    """The post's first line in the channel: the author's name, or the anonymous line (the channel speaks Russian)."""
-    who = None if p["anon"] else one(con, PERSON + " WHERE u.id = ?", p["user_id"])
-    return short_name(who) if who else texts.bot_message("ru", "fch_anon")[0]
+    """The post's first line in the channel: its signature, or the anonymous line (the channel speaks Russian). A post
+    from before signatures were kept: the short name, as it was signed then."""
+    if p["anon"]:
+        return texts.bot_message("ru", "fch_anon")[0]
+    if p["sign"]:
+        return p["sign"]
+    who = one(con, PERSON + " WHERE u.id = ?", p["user_id"])
+    return short_name(who) if who else "?"
 
 
 def sending(con, pid: int) -> bool:
@@ -194,12 +210,13 @@ def found(con, msg_id: int, text: str) -> None:
     """The channel post's copy reached the discussion group (tgc.gate): a send whose answer never came (on its way, or
     held as lost since) is in the channel after all. Its message id kept, so the author's delete and a take-down reach
     it; it was live when sent, so live again. Matched by the whole text as the copy shows it (the signature line, an
-    empty one, the words: tgc.post_tick's, its bold gone), and only when exactly one post matches and no post holds
-    that message yet: another student's same words must never become this one's (review)."""
+    empty one, the words: tgc.post_tick's, its bold gone; or the words and "- name" under them, as sent before Nov 2,
+    for a send lost across that deploy), and only when exactly one post matches and no post holds that message yet:
+    another student's same words must never become this one's (review)."""
     if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
         return
     hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
-            AND ? LIKE '%' || body""", text) if f"{_sign(con, p)}\n\n{p['body']}" == text]
+            AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{p['body']}", f"{p['body']}\n\n— {_sign(con, p)}")]
     if len(hits) == 1:
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (msg_id, hits[0]))
 
@@ -208,13 +225,32 @@ RULES_LATE = 7 * 86400  # a post older than this gets no first comment (its copy
 
 
 def rules_due(con) -> list[tuple[int, int]]:
-    """Live posts in the channel whose copy reached the group (tgc.gate maps it, tgcpost:<copy>) and that have no first
-    comment of the bot's yet: (post, the copy's id in the group). Whichever comes first, the copy or the send's
-    answer, the round after both finds it. rules_for is the channel message it was written under: a post brought
-    back (a new message) gets one again. ponytail: a LIKE over meta per due post, a few a day; a mapping table if it grows"""
-    return [(p[0], int(p[1].split(":")[1])) for p in rows(con, """SELECT p.id, m.key FROM fchan_posts p
-        JOIN meta m ON m.key LIKE 'tgcpost:%' AND m.value LIKE '% ' || p.tg_msg
+    """Live posts in the channel whose copy reached the group (tgc.gate maps it, fchcopy:<channel message>, the forum
+    channel's alone) and that have no first comment of the bot's yet: (post, the copy's id in the group). Whichever
+    comes first, the copy or the send's answer, the round after both finds it. rules_for is the channel message it was
+    written under: a post brought back (a new message) gets one again."""
+    return [(p[0], int(p[1])) for p in rows(con, """SELECT p.id, m.value FROM fchan_posts p JOIN meta m ON m.key = 'fchcopy:' || p.tg_msg
         WHERE p.status = 'live' AND p.tg_msg > 0 AND p.rules_for IS NOT p.tg_msg AND p.created_at > ? ORDER BY p.id LIMIT 5""", _now() - RULES_LATE)]
+
+
+def copied(con, msg_id: int, copy: int) -> None:
+    """A forum channel message's copy in the group (tgc.gate, the sender checked): never another channel's same number."""
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"fchcopy:{msg_id}", str(copy)))
+
+
+RULES_TRIES = 3  # a 400 that isn't "the copy is gone" (rights, a setup slip): tried again, this often, within a day
+
+
+def rules_retry(con, pid: int) -> bool:
+    """One more failed try of a post's first comment: True to try again next round (released), False to give up."""
+    key = f"fchrules:{pid}"
+    n, first = map(int, ((one(con, "SELECT value FROM meta WHERE key = ?", key) or ["0 " + str(_now())])[0]).split())
+    if n + 1 < RULES_TRIES and first > _now() - 86400:
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, f"{n + 1} {first}"))
+        rules_unclaim(con, pid)
+        return True
+    con.execute("DELETE FROM meta WHERE key = ?", (key,))
+    return False
 
 
 def rules_claim(con, pid: int) -> bool:
@@ -228,12 +264,15 @@ def rules_unclaim(con, pid: int) -> None:
 def rules_sent(con, pid: int, msg_id: int) -> None:
     """The first comment's id in the group: the Forum tab's link opens the comments there (?comment=)."""
     con.execute("UPDATE fchan_posts SET rules_msg = ? WHERE id = ?", (msg_id, pid))
+    con.execute("DELETE FROM meta WHERE key = ?", (f"fchrules:{pid}",))
 
 
-def commented(con, msg_id: int) -> None:
-    """A student's comment under this channel message (tgc.gate). ponytail: counts what was written; a comment its
-    author deletes in Telegram stays counted (the Bot API never says), the bot's own deletions too; fine for a hint"""
-    con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE tg_msg = ? AND tg_msg > 0", (msg_id,))
+def commented(con, root: int) -> None:
+    """A student's comment in the thread under this group copy (tgc.gate): counted on the forum post it copies, if it
+    is one. ponytail: counts what was written; a comment its author deletes in Telegram stays counted (the Bot API
+    never says), the bot's own deletions too; fine for a hint. A LIKE over meta per comment; an index if it grows"""
+    con.execute("""UPDATE fchan_posts SET comments = comments + 1 WHERE tg_msg > 0 AND tg_msg =
+        (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key LIKE 'fchcopy:%' AND value = ?)""", (str(root),))
 
 
 def sweep(con) -> None:
@@ -262,16 +301,16 @@ def copies(con) -> list[tuple[str, int | None]]:
     """Group copies to delete: (key, the copy's id); None once a week passed with no mapping (no group linked)."""
     out = []
     for key, at in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'fchgone:%'"):
-        root = one(con, "SELECT key FROM meta WHERE key LIKE 'tgcpost:%' AND value LIKE ?", f"% {key.split(':')[1]}")
+        root = one(con, "SELECT value FROM meta WHERE key = ?", f"fchcopy:{key.split(':')[1]}")  # the forum channel's copy alone
         if root:
-            out.append((key, int(root[0].split(":")[1])))
+            out.append((key, int(root[0])))
         elif int(at) < _now() - 7 * 86400:
             out.append((key, None))
     return out
 
 
 def copy_done(con, key: str, root: int | None) -> None:
-    con.execute("DELETE FROM meta WHERE key = ? OR key = ?", (key, f"tgcpost:{root}"))
+    con.execute("DELETE FROM meta WHERE key IN (?, ?, ?)", (key, f"tgcpost:{root}", f"fchcopy:{key.split(':')[1]}"))
 
 
 def unposted(con, msg_id: int) -> None:

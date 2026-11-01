@@ -106,8 +106,9 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
     if msg.get("is_automatic_forward"):  # the channel's post, copied in: the root of its comments
         if sender.get("username") and (post := (msg.get("forward_origin") or {}).get("message_id")):
             rules.post_of(con, msg["message_id"], sender["username"], int(post))
-            if sender.get("id") == cfg.forum_channel:  # one of ours whose send's answer was lost: found
-                logic.fchannel.found(con, int(post), _text(msg))
+            if sender.get("id") == cfg.forum_channel:  # ours: its copy kept apart from any other channel's same number;
+                logic.fchannel.copied(con, int(post), msg["message_id"])
+                logic.fchannel.found(con, int(post), _text(msg))  # one whose send's answer was lost: found
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('tgc_channel', ?)", (str(sender["id"]),))
         return
     if not any(k in msg for k in CONTENT):
@@ -129,8 +130,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             _report(cfg, http, con, msg)
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
-        elif not edit and root and (p := rules.post_of(con, root)):  # the Forum tab's count (the bot's own never comes here)
-            logic.fchannel.commented(con, p[1])
+        elif not edit and root:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
+            logic.fchannel.commented(con, root)
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
@@ -281,8 +282,11 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             "reply_markup": {"inline_keyboard": [[{"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]}})
         if r.get("ok"):
             F.rules_sent(con, pid, r["result"]["message_id"])
-        elif r.get("error_code") not in (None, 400):  # a flood wait, a server error: next round
-            F.rules_unclaim(con, pid)  # (a 400, the copy gone; no answer, it may be there: neither is tried again)
+        elif r.get("error_code") == 400:  # the copy gone: never; else (rights, a setup slip) a few more rounds, then not
+            if "replied not found" not in str(r.get("description")).lower():
+                F.rules_retry(con, pid)
+        elif r.get("error_code"):  # a flood wait, a server error: next round (no answer: it may be there, not again)
+            F.rules_unclaim(con, pid)
             break
 
 

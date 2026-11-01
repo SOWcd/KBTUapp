@@ -138,7 +138,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     assert tg.of("sendMessage")[0]["text"] == f"<b>{texts.bot_message('ru', 'fch_anon')[0]}</b>\n\nSecret confession here"
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     # the author deletes it: the words go at once, the channel message (and its copy in the group) in the bot's round
-    con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:77', ?)", (f"KBTUappForum {mid}",))
+    con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:77', f"KBTUappForum {mid}"), (f"fchcopy:{mid}", '77')])
     assert c.delete(f"/api/forum-posts/{p['id']}", headers=M).status_code == 404                  # not theirs
     assert c.delete(f"/api/forum-posts/{p['id']}", headers=A).status_code == 204
     assert con.execute("SELECT body, status FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("", "gone")
@@ -202,7 +202,7 @@ def test_post_undo_and_restore_after_takedown(env, monkeypatch):
     own = c.post("/api/forum-posts", headers=M, json={"body": "A moderator writes too"}).json()
     tick(cfg, tg, con)
     old = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
-    con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:77', ?)", (f"KBTUappForum {old}",))  # its copy in the group
+    con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:77', f"KBTUappForum {old}"), (f"fchcopy:{old}", '77')])  # its copy in the group
     assert c.post(f"/api/forum-posts/{p['id']}/restore", headers=M).status_code == 404            # live: nothing to undo
     assert c.post(f"/api/forum-posts/{own['id']}/mod", headers=M, json={"ok": False}).status_code == 403
     # the take-down: the message stays a minute; the bot's round deletes nothing meanwhile
@@ -288,7 +288,7 @@ def test_post_send_lost_and_takedown_kept(env, monkeypatch):
     con.execute("UPDATE tg_unpost SET at = 0")
     tick(cfg, tg, con)                                                                           # deleted; the copy's mapping isn't known yet
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone() and con.execute("SELECT 1 FROM meta WHERE key = ?", (f"fchgone:{mid}",)).fetchone()
-    con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:88', ?)", (f"KBTUappForum {mid}",))
+    con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:88', f"KBTUappForum {mid}"), (f"fchcopy:{mid}", '88')])
     tick(cfg, tg, con)
     assert (G, 88) in {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
     assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'fchgone:%' OR key = 'tgcpost:88'").fetchone()
@@ -329,7 +329,7 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
-    for col in ("rules_for", "rules_msg", "comments"):  # 105's, added again on the way up
+    for col in ("rules_for", "rules_msg", "comments", "sign"):  # 105's, added again on the way up
         con.execute(f"ALTER TABLE fchan_posts DROP COLUMN {col}")
     con.execute("PRAGMA user_version = 102")
     con.close()
@@ -395,24 +395,48 @@ def test_post_feed(env, monkeypatch):
     assert c.delete(f"/api/forum-posts/{masked['id']}", headers=B).status_code == 204
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [named["id"]]
     assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T."           # a guest reads the public channel
+    # an author with a nick signs with it, in the channel and the tab, never with his real name beside it; the signature
+    # stays as written when the nick changes later; a nick that reads as a link signs with the short name
+    set_clock(monkeypatch, lambda: int(time.time()) + 3600)
+    said["word"] = "ok"
+    con.execute("UPDATE users SET nick = 'Night <Owl>' WHERE id = 2")
+    nk = c.post("/api/forum-posts", headers=B, json={"body": "Library is open late"}).json()
+    tick(cfg, tg, con)
+    assert tg.of("sendMessage")[-1]["text"] == "<b>Night &lt;Owl&gt;</b>\n\nLibrary is open late"
+    con.execute("UPDATE users SET nick = 'Other' WHERE id = 2")
+    row = next(p for p in c.get("/api/forum-posts/feed", headers=A).json() if p["id"] == nk["id"])
+    assert row["sign"] == "Night <Owl>" and row["person"]["id"] == 2 and "Bob" not in json.dumps(row)
+    con.execute("UPDATE users SET nick = 'kbtu.kz' WHERE id = 2")
+    assert logic.fchannel.signature(logic.one(con, logic.PERSON + " WHERE u.id = 2")) == "Bob T."
     con.close()
 
 
 def test_post_first_comment(env, monkeypatch):
     """The bot's first comment under each post's copy in the group: the rules in three languages and a button to that
     post in the app; once per post, whichever comes first (the copy or the send's answer), never again on a second copy
-    or the next round. The words go escaped."""
+    or the next round; never under another channel's post of the same number. A 400 is tried again three times,
+    unless the copy is gone. The words go escaped."""
     c, cfg, _, _ = setup(env, monkeypatch)
-    login(c, 1, "ann"), login(c, 2, "bob")
+    login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "cat")
     con = db.connect(cfg.db_path)
-    tg = Telegram()
 
-    def copy(mid: int, post: int) -> None:
+    class Tg(Telegram):
+        refuse = ""  # Telegram's 400 for the group's sends
+
+        def __call__(self, request):
+            body = json.loads(request.content)
+            if self.refuse and request.url.path.endswith("/sendMessage") and body["chat_id"] == G:
+                self.calls.append(("sendMessage", body))
+                return httpx.Response(400, json={"ok": False, "error_code": 400, "description": self.refuse})
+            return super().__call__(request)
+    tg = Tg()
+
+    def copy(mid: int, post: int, chan: int = CH, name: str = "KBTUappForum") -> None:
         async def go():
             async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
                 await tgc.gate(cfg, http, con, [{"message": {
                     "message_id": mid, "chat": {"id": G, "type": "supergroup"}, "is_automatic_forward": True, "date": 0,
-                    "sender_chat": {"id": CH, "type": "channel", "username": "KBTUappForum"},
+                    "sender_chat": {"id": chan, "type": "channel", "username": name},
                     "forward_origin": {"type": "channel", "message_id": post}, "text": "x"}}])
         asyncio.run(go())
 
@@ -434,6 +458,9 @@ def test_post_first_comment(env, monkeypatch):
     tick(cfg, tg, con)
     assert len(rules()) == 1
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (q["id"],)).fetchone()[0]
+    copy(70, mid, -100999, "OtherChannel")                                                     # another channel's post, same number
+    tick(cfg, tg, con)
+    assert len(rules()) == 1
     copy(56, mid)
     tick(cfg, tg, con)
     tick(cfg, tg, con)
@@ -451,7 +478,24 @@ def test_post_first_comment(env, monkeypatch):
     say({"message": {"message_id": 60, "from": {"id": 1}, **note}})
     say({"edited_message": {"message_id": 60, "from": {"id": 1}, **note}})
     say({"message": {"message_id": 61, "from": {"id": 99}, **note}})
+    say({"message": {"message_id": 62, "from": {"id": 1}, **note, "message_thread_id": 70}})   # under the other channel's copy
     feed = {x["id"]: x for x in c.get("/api/forum-posts/feed", headers=tma(1)).json()}
     assert (feed[p["id"]]["comments"], feed[q["id"]]["comments"]) == (1, 0)
     assert feed[p["id"]]["thread"] == con.execute("SELECT rules_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0] > 900
+    # Telegram refuses (rights lost, say): three tries, one a round, then no more; "the copy is gone": one
+    sent = lambda: len(rules())  # noqa: E731
+    tg.refuse = "Bad Request: not enough rights to send text messages to the chat"
+    w = c.post("/api/forum-posts", headers=tma(3), json={"body": "Rights test"}).json()
+    tick(cfg, tg, con)
+    copy(57, con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (w["id"],)).fetchone()[0])
+    before = sent()
+    for _ in range(5):
+        tick(cfg, tg, con)
+    assert sent() - before == 3
+    con.execute("UPDATE fchan_posts SET rules_for = NULL WHERE id = ?", (w["id"],))
+    tg.refuse = "Bad Request: message to be replied not found"
+    before = sent()
+    for _ in range(3):
+        tick(cfg, tg, con)
+    assert sent() - before == 1
     con.close()

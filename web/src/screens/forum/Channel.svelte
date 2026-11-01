@@ -3,8 +3,8 @@
   // newest first, signed as there; a tap opens the post in Telegram, its Comments row the comments. My own posts are
   // marked (on their way, under review, removed) and can be deleted. No large title (the capsule names the tab, Nov 2):
   // the feed starts with a Threads-like "Share with KBTU…" row that opens the new post screen (ChannelCompose). A signed
-  // post shows its author's avatar (his profile on a tap); an anonymous one a mask, nobody behind it (the API sends no
-  // one). Every tap answers at once (a new post stands at the top "checking"; a delete leaves the list before the
+  // post shows its author's avatar (his profile on a tap), signed with his nick if he has one (never the real name
+  // beside it); an anonymous one a mask, nobody behind it (the API sends no one). Every tap answers at once (a new post stands at the top "checking"; a delete leaves the list before the
   // server says so). It looks the same for every viewer, staff too: the channel's moderation lives in Admin alone.
   import { tick, untrack } from 'svelte';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
@@ -12,6 +12,7 @@
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Avatar from '../../ui/Avatar.svelte';
+  import { initials } from '../../ui/OrgLogo.svelte';
   import Card from '../../ui/Card.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
@@ -105,7 +106,8 @@
               <Avatar person={p.person} size={32} />
               <span class="nm"><button class="name" onclick={() => { haptic.tap(); sheets.person(p.person!.id); }}><b class="ellipsis">{p.sign}</b></button><span class="when">{ago(p.at)}</span></span>
             {:else}
-              <span class="av" aria-hidden="true">{#if p.anon}<VenetianMask size={16} strokeWidth={2} />{/if}</span>
+              <!-- anonymous: the mask; an author no longer here (a deleted account): the signature's initials -->
+              <span class="av" aria-hidden="true">{#if p.anon}<VenetianMask size={16} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
               <span class="nm"><b class="ellipsis">{p.sign}</b><span class="when">{ago(p.at)}</span></span>
             {/if}
             {#if m}<Tag tone={m.tone}>{t(m.key)}</Tag>{/if}

@@ -1036,7 +1036,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     (105, """ALTER TABLE fchan_posts ADD COLUMN rules_for INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN rules_msg INTEGER;
     ALTER TABLE fchan_posts ADD COLUMN comments INTEGER NOT NULL DEFAULT 0;
-    UPDATE fchan_posts SET rules_for = tg_msg WHERE tg_msg > 0;"""),
+    -- a signed post's signature as written (the nick if the author had one, else the short name); NULL: anonymous, or
+    -- older than this (signed with the short name)
+    ALTER TABLE fchan_posts ADD COLUMN sign TEXT;
+    UPDATE fchan_posts SET rules_for = tg_msg WHERE tg_msg > 0;
+    -- fchcopy:<channel message> = its copy in the group, the forum channel's alone (tgc.gate checks the sender); until
+    -- now only the group's own channel's copies were mapped (tgcpost:), and that was the forum channel
+    INSERT OR IGNORE INTO meta (key, value) SELECT 'fchcopy:' || substr(value, instr(value, ' ') + 1), substr(key, 9)
+      FROM meta WHERE key LIKE 'tgcpost:%';"""),
 ]
 
 
