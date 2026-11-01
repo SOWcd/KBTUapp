@@ -185,7 +185,7 @@ export interface Api {
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
   screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving
-  screenGrant(id: Id, code: 'init26'): Promise<{ granted: number }>;  // the owner: a badge to everyone counted
+  screenGrant(id: Id, code: string): Promise<{ granted: number }>;  // the owner: a badge variant to everyone counted (Admin → Badges)
   eventScreen(event: Id): Promise<import('./types').ScreenSession>;                   // an event's own session, made on first use (organizers)
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
@@ -203,7 +203,11 @@ export interface Api {
   grantScan(qr: string, code: GrantItem['code']): Promise<GrantItem>;
   ungrant(id: Id): Promise<void>;
   /** a manual award back off a profile, at any time (a mistake): every grant of it */
-  takeBackGrant(userId: Id, code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'): Promise<PersonCard>;
+  takeBackGrant(userId: Id, code: GrantItem['code']): Promise<PersonCard>;
+  /** Admin → Badges: find a student, give or take a badge variant (giving twice is a no-op); the owner's check-in sessions */
+  badgePeople(q: string): Promise<import('./types').BadgeHolder[]>;
+  badgeSet(userId: Id, code: string, on: boolean): Promise<import('./types').BadgeHolder>;
+  badgeSessions(): Promise<import('./types').BadgeSession[]>;
   useGrantLink(token: string): Promise<{ code: string }>;
   myGrants(): Promise<GrantItem[]>;
   staff(): Promise<Staff>;                                // admin: the app's team and the banned

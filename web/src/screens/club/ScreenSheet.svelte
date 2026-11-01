@@ -18,7 +18,6 @@
   import Unplug from '@lucide/svelte/icons/unplug';
   import LogOut from '@lucide/svelte/icons/log-out';
   import LogIn from '@lucide/svelte/icons/log-in';
-  import { session } from '../../lib/state/session.svelte';
 
   let { overlay, code, event }: { overlay: Overlay; code?: string; event?: Id } = $props();
   let list = $state<ScreenSession[] | null>(null);
@@ -49,13 +48,7 @@
     return () => clearInterval(id);
   });
 
-  // the owner: the initiation's badge to everyone counted (once each)
-  const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
-  async function grant(s: ScreenSession) {
-    if (!(await sheets.ask({ title: t('scr.grantAsk'), text: t('scr.grantText', { n: s.done }), ok: t('scr.grant'), cancel: t('scr.keep') }))) return;
-    try { const r = await api.screenGrant(s.session, 'init26'); haptic.ok(); say(t('scr.granted', { n: r.granted }), 'party_popper_3d'); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-  }
+  // the badge to everyone counted lives in Admin → Badges (staff controls only there)
   async function act(s: ScreenSession, a: 'start' | 'finish' | 'unpair' | 'out' | 'in') {
     if (busy) return;
     if (a === 'finish' && !(await sheets.ask({ title: t('scr.finishAsk'), text: t('scr.finishText'), ok: t('scr.finish'), cancel: t('scr.keep') }))) return;
@@ -96,7 +89,6 @@
           {#if s.started && !s.ended}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
           {#if s.started && !s.ended}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
           {#if s.started}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
-          {#if owner && s.done}<Button kind="secondary" size="m" full onclick={() => grant(s)}>{#snippet icon()}<span class="pp">🎉</span>{/snippet}{t('scr.grant')}</Button>{/if}
           {#if s.screens}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
         {/if}
       </div>
@@ -119,7 +111,6 @@
   .num i { font-style: normal; }
   .out { display: flex; align-items: center; gap: 6px; margin: 0; }
   .out.on { color: var(--warning-text, #E8A33D); font-weight: 650; }
-  .pp { font-size: 16px; line-height: 1; }
   .scr { display: flex; align-items: center; gap: 6px; margin: 0; }
   .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .acts :global(.btn.full) { flex: 1 1 140px; width: auto; min-width: 0; }

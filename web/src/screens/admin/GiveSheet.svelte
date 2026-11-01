@@ -12,6 +12,7 @@
   import { haptic, scanQr, shareCard } from '../../lib/tg';
   import { ago, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
+  import { variantName } from '../../lib/awards';
   import Gift from '@lucide/svelte/icons/gift';
   import Emoji from '../../ui/Emoji.svelte';
   import QrCam from '../../ui/QrCam.svelte';
@@ -25,7 +26,8 @@
     { code: 'bugs', emoji: 'lady_beetle_3d', link: true },
     { code: 'init26', emoji: 'party_popper_3d', link: true }, // the initiation's volunteers (a whole check-in session: its sheet)
   ] as const;
-  const name = (code: string) => t(`ach.${code}.name` as 'ach.bugs.name');
+  // a badge's variant by its badge and variant ("Initiation 2026 · Volunteer")
+  const name = (code: string) => code.startsWith('init26') ? `${t('ach.init26.name')} · ${variantName('init26', code)}` : t(`ach.${code}.name` as 'ach.bugs.name');
 
   let gave = $state<GrantItem[] | null>(null);
   let showGave = $state(false);

@@ -9,7 +9,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { achName, tierName } from '../../lib/awards';
+  import { achHow, achName, tierName, variantName } from '../../lib/awards';
   import { haptic, shareCard } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import { glass } from '../../ui/glass';
@@ -63,7 +63,8 @@
   <!-- the level first, under the medal it belongs to (owner, Nov 1) -->
   {#if tier}<p class="tier up">{t('aw.level', { tier })}</p>{/if}
   <h2 class="name up">{achName(a)}</h2>
-  <p class="how up">{t(`ach.${a.code}.how` as 'ach.regular.how')}</p>
+  {#if a.variant}<p class="tier up">{variantName(a.code, a.variant)}</p>{/if}
+  <p class="how up">{achHow(a)}</p>
   <p class="rare up">{t('person.rarity', { p: rare })}</p>
   <div class="acts up">
     <button class="pill glass glass-pill main" use:glass disabled={sharing} onclick={share}>{t('aw.share')}</button>

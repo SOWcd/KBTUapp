@@ -1386,6 +1386,23 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def ungrant(gid: int, con: Con, v: Me):
         logic.ungrant(con, v, gid)
 
+    # Admin → Badges: a badge's variant to one student, or to everyone counted in a check-in session (the owner)
+    @app.get("/api/admin/badges/people")
+    def badge_people(con: Con, v: Me, q: str = ""):
+        return logic.badge_people(con, v, q)
+
+    @app.put("/api/admin/badges/{uid}/{code}")
+    def badge_give(uid: int, code: str, con: Con, v: Me):
+        return logic.badge_set(con, v, uid, code, True)
+
+    @app.delete("/api/admin/badges/{uid}/{code}")
+    def badge_take(uid: int, code: str, con: Con, v: Me):
+        return logic.badge_set(con, v, uid, code, False)
+
+    @app.get("/api/admin/badges/sessions")
+    def badge_sessions(con: Con, v: Me):
+        return logic.badge_sessions(con, v)
+
     @app.get("/api/admin/stats/{day}")
     def admin_day(day: int, con: Con, v: Me):
         return logic.admin_day(con, v, day)
@@ -1521,7 +1538,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student else None
             if not a:
                 raise ApiError("bad_input")
-            title, text, button = texts.share_award(lang, code, a["level"], len(a["levels"]), a["levels"][a["level"] - 1]["rarity"])
+            title, text, button = texts.share_award(lang, a.get("variant") or code, a["level"], len(a["levels"]), a["levels"][a["level"] - 1]["rarity"])
             result = {"type": "article", "id": f"aw-{code}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=aw_{code}"}]]}}

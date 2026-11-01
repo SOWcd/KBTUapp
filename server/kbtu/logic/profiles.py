@@ -59,6 +59,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
+    ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
     ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
 ]
 
@@ -78,7 +79,7 @@ def _counts(con, uid: int) -> dict[str, int]:
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
-            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "anthem": grants.get("anthem", 0)}
+            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0)}
 
 
 def brought(con, uid: int) -> int:
@@ -131,7 +132,12 @@ def sync_levels(con) -> None:
         con.execute("INSERT INTO meta (key, value) VALUES ('achievements', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (mark,))
 
 
-GRANTABLE = ("bugs", "creator_laugh", "creator_found", "init26")  # the manual ones (§4.11); "First 500" is given at verification
+# A badge with variants (owner, Nov 2): one award on the profile and in the count, the medal of my variant; each variant
+# is its own grant code underneath (levels, the bot's card, take-back stay per variant). The highest variant first.
+BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
+BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
+
+GRANTABLE = ("bugs", "creator_laugh", "creator_found", "init26", "init26f", "init26p")  # the manual ones (§4.11); "First 500" is given at verification
 
 
 def grant(con, v: Viewer, uid: object, code: object) -> dict:
@@ -259,6 +265,58 @@ def my_grants(con, v: Viewer) -> list[dict]:
                 ORDER BY g.created_at DESC, g.id DESC LIMIT 300""", v.id, *GRANTABLE)]
 
 
+# ---------------------------------------------------------------- Admin → Badges: a badge variant by hand
+
+def _badge_row(con, p) -> dict:
+    has = sorted((r[0] for r in rows(con, f"SELECT DISTINCT code FROM achievement_grants WHERE user_id = ? AND code IN ({','.join('?' * len(BADGE_OF))})", p["id"], *BADGE_OF)), key=list(BADGE_OF).index)  # the highest variant first
+    return {"person": person_ref(p), "username": p["tg_username"], "has": has}
+
+
+def badge_people(con, v: Viewer, q: object) -> list[dict]:
+    """Students by name, @username, student ID or app id (the admin's search), each with the badge variants they hold.
+    The student ID only matches, it is never sent back."""
+    _admin(v)
+    q = str(q or "").strip().lstrip("@")
+    if not (2 <= len(q) or q.isdigit()) or len(q) > 64:  # an app id may be one digit
+        raise ApiError("bad_input")
+    like = "%" + re.sub(r"([\\%_])", r"\\\1", q) + "%"
+    # ponytail: SQLite's LIKE folds ASCII case only: a lower-case Cyrillic name misses its capitalized row (the Latin spelling still finds it); a lower() column if it bites
+    found = rows(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + r""" WHERE s.user_id IS NOT NULL AND (
+            lower(u.tg_username) = lower(?) OR upper(s.student_id) = upper(?) OR u.id = ?
+            OR s.first_name || ' ' || s.last_name LIKE ? ESCAPE '\' OR s.last_name || ' ' || s.first_name LIKE ? ESCAPE '\'
+            OR coalesce(s.first_lat, '') || ' ' || coalesce(s.last_lat, '') LIKE ? ESCAPE '\'
+            OR coalesce(s.last_lat, '') || ' ' || coalesce(s.first_lat, '') LIKE ? ESCAPE '\' OR u.nick LIKE ? ESCAPE '\')
+        ORDER BY s.last_name, s.first_name LIMIT 20""", q, q, int(q) if q.isdigit() else -1, *[like] * 5)
+    return [_badge_row(con, p) for p in found]
+
+
+def badge_set(con, v: Viewer, uid: int, code: str, on: bool) -> dict:
+    """Give a badge variant (idempotent: held already, nothing more) or take it back (every grant of it). Both audited
+    and celebrated or undone as any manual award; the variants' undo is the other call."""
+    _admin(v)
+    if code not in BADGE_OF:
+        raise ApiError("bad_input")
+    p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + " WHERE u.id = ? AND s.user_id IS NOT NULL", uid)
+    if not p:
+        raise ApiError("not_found")
+    with tx(con):
+        held = rows(con, "SELECT * FROM achievement_grants WHERE user_id = ? AND code = ? ORDER BY id DESC", uid, code)
+        if on and not held:
+            _grant(con, v.id, uid, code)
+        for g in held if not on else ():
+            _drop_grant(con, v, g)
+    return _badge_row(con, p)
+
+
+def badge_sessions(con, v: Viewer) -> list[dict]:
+    """The owner's batch grant (it was on /show's sheet): check-in sessions, newest first, with how many were counted."""
+    if not _owner(con, v):
+        raise ApiError("forbidden")
+    return [{"id": r["id"], "title": r["title"], "at": r["started_at"] or r["created_at"], "done": r["done"]} for r in rows(con, """
+        SELECT q.*, (SELECT COUNT(*) FROM qr_marks m WHERE m.session_id = q.id AND m.done_at IS NOT NULL) AS done
+        FROM qr_sessions q ORDER BY q.id DESC LIMIT 20""")]
+
+
 FIRST_N = 500  # cards 1-500; the code stays "first50": it was 50 until launch day, a pilot club alone could have taken them all
 
 
@@ -307,7 +365,7 @@ def unlocked(con, v: Viewer) -> list[dict]:
     """Levels reached that the app hasn't celebrated yet (the unlock moment, §4.11), oldest first."""
     if not v.student:
         return []
-    return [{"code": r["code"], "level": r["level"]} for r in
+    return [{"code": BADGE_OF.get(r["code"], r["code"]), "level": r["level"]} for r in
             rows(con, "SELECT code, level FROM achievement_levels WHERE user_id = ? AND level > seen ORDER BY reached_at", v.id)]
 
 
@@ -315,7 +373,8 @@ def seen_unlock(con, v: Viewer, code: object, level: object) -> None:
     need_student(v)
     if not isinstance(code, str) or not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 10:
         raise ApiError("bad_input")
-    con.execute("UPDATE achievement_levels SET seen = MAX(seen, ?) WHERE user_id = ? AND code = ?", (level, v.id, code))
+    for c in BADGES.get(code, (code,)):  # a badge's moment shows once for all its variants
+        con.execute("UPDATE achievement_levels SET seen = MAX(seen, ?) WHERE user_id = ? AND code = ?", (level, v.id, c))
 
 
 def achievements(con, uid: int) -> list[dict]:
@@ -335,7 +394,22 @@ def achievements(con, uid: int) -> list[dict]:
                     "levels": [{"need": n, "reached": mine[code] >= n, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                     "at": reached[code]["reached_at"] if code in reached else None,
                     **({"now": mine["streak_now"]} if code == "streak" else {})})
-    return out
+    return _fold(con, out, total)
+
+
+def _fold(con, out: list[dict], total: int) -> list[dict]:
+    """A badge's variants as one entry at the badge's place: mine is the highest I have (`variant`), its medal shown;
+    `variants` all of them, held or not, for the detail view. How rare: students with any of them."""
+    by = {a["code"]: a for a in out}
+    for b, vs in BADGES.items():
+        held = [by[c] for c in vs if by[c]["level"]]
+        top = held[0] if held else by[vs[-1]]
+        rarity = one(con, f"""SELECT COUNT(DISTINCT l.user_id) FROM achievement_levels l JOIN students s ON s.user_id = l.user_id
+            WHERE s.consent_version != 'staff' AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total
+        by[b] = {**top, "code": b, "count": len(held), "level": 1 if held else 0, "rarity": rarity, "variant": held[0]["code"] if held else None,
+                 "levels": [{"need": 1, "reached": bool(held), "rarity": rarity}], "at": min((a["at"] for a in held if a["at"]), default=None),
+                 "variants": [{"code": c, "emoji": by[c]["emoji"], "have": bool(by[c]["level"]), "rarity": by[c]["rarity"]} for c in vs]}
+    return [by[a["code"]] for a in out if a["code"] not in BADGE_OF or a["code"] in BADGES]
 
 
 PROFILES_A_DAY = 200  # strangers' profiles a day (audit M2): browsing needs a few dozen, a scrape needs thousands
@@ -374,6 +448,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid)]
+    picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # an old "init26f" is the badge now
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
         roles = _roles(con, v)
@@ -399,9 +474,9 @@ def person(con, v: Viewer, uid: int) -> dict:
             FROM org_history h JOIN orgs o ON o.id = h.org_id
             WHERE h.user_id = ? AND h.until IS NOT NULL AND h.until - h.since >= 86400 AND o.status = 'active'
             ORDER BY h.until DESC LIMIT 20""", v.id, uid) if close],
-        "showcase": [a for c in u["showcase"].split(",") for a in ach if a["code"] == c and a["level"] > 0],
+        "showcase": [a for c in picked for a in ach if a["code"] == c and a["level"] > 0],
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
-        "shelf": [k for k in u["showcase"].split(",") if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
+        "shelf": [k for k in picked if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
         "awards": {"achievements": ach, "badges": badges},
         "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going,
         "username": u["tg_username"] if team else None,
@@ -628,6 +703,6 @@ from . import core  # noqa: E402
 from .account import _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402
-from .oversight import _admin  # noqa: E402
+from .oversight import _admin, _owner  # noqa: E402
 from .seats import _visible, notify  # noqa: E402
 from .teams import team  # noqa: E402

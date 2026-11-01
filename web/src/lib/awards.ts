@@ -7,6 +7,15 @@ import { dayMonth } from './time';
 import { data } from './state/data.svelte';
 import { nameOf, schoolShort, shortOf } from './short';
 
+/** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
+export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
+export const variantHow = (badge: string, code: string): string => t(`ach.${badge}.h.${code}` as 'ach.init26.h.init26');
+/** the badges with variants, as the server's BADGES (logic/profiles.py), the highest variant first, with their medals */
+export const BADGES: { code: string; variants: { code: string; emoji: string }[] }[] = [
+  { code: 'init26', variants: [{ code: 'init26p', emoji: 'medal_init26p_2' }, { code: 'init26', emoji: 'medal_init26_2' }, { code: 'init26f', emoji: 'medal_init26f_2' }] },
+];
+/** what it took: a badge's own variant says what I did there */
+export const achHow = (a: Achievement): string => (a.variant ? variantHow(a.code, a.variant) : t(`ach.${a.code}.how` as 'ach.regular.how'));
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
 export function tierName(a: Achievement): string {
@@ -54,7 +63,7 @@ const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.
 const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
 /** The closest one to its next level (started ones first, else the nearest goal); secrets don't count. */
 /** one-off medals for an event (not levels): Awards shows them among the badges */
-export const MEDALS = ['first50', 'init26', 'init26f'];
+export const MEDALS = ['first50', 'init26'];
 /** awards nobody works toward: the creator gives the bug hunter by hand, the medals are one-offs */
 const GIVEN = ['bugs', ...MEDALS];
 export function closest(ach: Achievement[]): Achievement | undefined {

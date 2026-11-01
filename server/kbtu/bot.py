@@ -216,7 +216,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not a:
             return None
         tier = f" · {texts.pick(texts.TIERS, lang)[level - 1]}" if len(a[2]) > 1 else ""
-        return (*texts.bot_message(lang, kind, name=texts.pick(texts.ACH_NAMES, lang)[code], tier=tier), f"aw_{code}")
+        return (*texts.bot_message(lang, kind, name=texts.pick(texts.ACH_NAMES, lang)[code], tier=tier), f"aw_{logic.BADGE_OF.get(code, code)}")  # a variant opens its badge
     if kind == "photo_report":  # ph:<event>, to those who came, once: the guests' album filled up
         e = one(con, "SELECT id, title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
         n = one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", int(ref[1]))[0]

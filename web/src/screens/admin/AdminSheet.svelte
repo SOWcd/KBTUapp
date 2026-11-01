@@ -7,6 +7,7 @@
   import Flag from '@lucide/svelte/icons/flag';
   import BookUser from '@lucide/svelte/icons/book-user';
   import Medal from '@lucide/svelte/icons/medal';
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Building from '@lucide/svelte/icons/building-2';
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -295,6 +296,7 @@
     {#if featOpen}
       <div class="chl inrow" transition:fold>{#each pub ?? [] as p (p.id)}<div class="chr"><span class="ellipsis">{p.title}<i>{nameOf(p.org)}</i></span><button class="undo" class:on={p.featured} onclick={() => feature(p)}>{t(p.featured ? 'adm.unpin' : 'adm.pin')}</button></div>{/each}</div>
     {/if}
+    <button class="r" onclick={() => sheets.badges()}><span class="ic"><BadgeCheck size={20} /></span><span class="lb">{t('bdg.title')}<i>{t('bdg.sub')}</i></span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
     {#if fcHeld != null || forum}<button class="r" onclick={() => sheets.adminForum()}><span class="ic"><MessagesSquare size={20} /></span><span class="lb">{t('fc.modAdmin')}<i>{fcHeld ? `${t('fc.modTitle')}: ${fcHeld}` : t('fc.modAdminSub')}</i></span><ChevronRight size={18} /></button>{/if}

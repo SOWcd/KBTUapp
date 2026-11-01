@@ -105,6 +105,8 @@ export const sheets = {
   awards: () => {},
   /** the creator's own awards (the admin panel): a QR scanner each, "Bug hunter" a one-time link */
   give: () => {},
+  /** Admin → Badges: a badge's variant (the initiation's guest, volunteer, performer) to a student, or to a check-in's people */
+  badges: () => {},
   adminClubs: () => {},
   adminChats: () => {},
   /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */

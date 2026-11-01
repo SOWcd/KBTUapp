@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import type { ShelfItem } from '../../lib/awards';
+  import { achHow, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -48,6 +48,7 @@
     finally { inviting = false; }
   }
   const a = $derived(it.ach), b = $derived(it.badge);
+  let seen = $state<string | null>(null); // a variant tapped to read what it means (null: mine)
   const hidden = $derived(!!a && a.secret && a.level === 0);
   const tiers = $derived(!!a && a.levels.length > 1);
   const next = $derived(a?.levels.find((l) => !l.reached));
@@ -57,10 +58,12 @@
   // the stage's light: the metal's own colour (one-level accent, bronze, silver, gold, legend; a drawn medal its metal);
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
-  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
+  const ROSE = '226, 152, 124'; // the performer's rose gold
+  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
   // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
-  const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246';
+  const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246', AMETHYST = '88, 34, 150';
   const RIBBON: Record<string, string[]> = {
+    medal_init26p_2: [ROSE, AMETHYST, AMETHYST, WHITE, AMETHYST, AMETHYST, ROSE, AMETHYST, AMETHYST, WHITE, AMETHYST, AMETHYST, ROSE],
     medal_first500: [GOLD, VIOLET, VIOLET, NAVY, NAVY, GOLD, NAVY, NAVY, VIOLET, VIOLET, GOLD],
     medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
@@ -127,7 +130,7 @@
     return () => { dead = true; cancelAnimationFrame(raf); off?.(); };
   });
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
-  const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
+  const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
   $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
@@ -172,7 +175,18 @@
 
   {#if a}
     {#if a.now}<p class="tier">{tn('ach.streakNow', a.now)}</p>{/if}
-    <p class="t-callout how up">{t(`ach.${a.code}.how` as 'ach.regular.how')}</p>
+    <p class="t-callout how up">{seen ? variantHow(a.code, seen) : achHow(a)}</p>
+    {#if a.variants}
+      <!-- one badge, its variants side by side: mine lit, the others dim; a tap tells what each one means -->
+      <div class="vars up">
+        {#each a.variants as x (x.code)}
+          <button class="var" class:have={x.have} class:mine={x.code === a.variant} class:on={x.code === (seen ?? a.variant)} onclick={() => { haptic.select(); seen = x.code === a.variant ? null : x.code; }}>
+            <img src={`emoji/${x.emoji}.webp`} alt="" draggable="false" />
+            <span>{variantName(a.code, x.code)}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
     {#if a.level && a.at && tiers}<p class="t-foot got">{t('aw.earned', { date: dayMonth(a.at) })}</p>{/if}
     {#if !hidden}
       {#if a.level && !tiers}
@@ -303,6 +317,16 @@
   .tier { text-align: center; margin-top: 4px; font: 650 14px/1.3 var(--font-text); color: var(--accent-text); }
   .how { text-align: center; margin: 14px 12px 0; color: var(--text-2); }
 
+  .vars { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+  .var { flex: 0 1 104px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px; border-radius: var(--r-m);
+    font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); transition: background-color .2s; }
+  .var img { width: 56px; height: 56px; object-fit: contain; filter: grayscale(1) brightness(0.7); opacity: 0.4; transition: filter .2s, opacity .2s; }
+  .var span { max-width: 100%; text-align: center; }
+  .var.have img { filter: grayscale(0.6) brightness(0.85); opacity: 0.7; }
+  .var.mine img { filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5)); opacity: 1; }
+  .var.mine { color: var(--text); }
+  .var.on { background: rgba(255, 255, 255, 0.08); }
+  .var:active { transform: scale(0.96); }
   .prog { margin-top: 16px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
   .prog .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .prog b { font: 720 17px/1.2 var(--font-display); }

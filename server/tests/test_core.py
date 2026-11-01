@@ -66,6 +66,12 @@ def set_clock(monkeypatch, fake) -> None:
 INTAKE = time.gmtime(time.time() + 5 * 3600).tm_year - (time.gmtime(time.time() + 5 * 3600).tm_mon < 9)  # this academic year's first-years entered then (Almaty)
 
 
+def _ach_codes(person: dict) -> dict:
+    """A profile's achievements by code, level; a badge's variants by their own code, 1 if held."""
+    a = person["awards"]["achievements"]
+    return {x["code"]: x["level"] for x in a} | {v["code"]: int(v["have"]) for x in a for v in x.get("variants", [])}
+
+
 def login(c, uid: int, name: str):
     """A confirmed KBTU student "<name>": student ID 24B<name>, <Name> Testov, year 2, SITE, a Monday Calculus class.
     Written into the database as the KBTU sign-in did (the portal-password one is gone since Oct 19)."""
@@ -1738,6 +1744,61 @@ def test_grant_scanner(env):
     assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'bugs'", (ali["id"],)).fetchone()[0] == 1  # one bug left
     con.execute("UPDATE achievement_grants SET created_at = created_at - 120")
     assert c.delete(f"/api/admin/grants/{gave[1]['id']}", headers=B).status_code == 404       # too late to undo
+
+
+def test_badge_variants(env):
+    """Admin → Badges (owner, Nov 2): the initiation badge is one award with three variants (guest, volunteer,
+    performer); the admin finds a student and gives or takes a variant: admins only, giving twice is a no-op, each
+    change audited; the profile shows one entry with my highest variant, counted once; its moment once for all."""
+    import dataclasses
+    c, cfg = env
+    c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
+    login(c, 60, "boss"); ali = login(c, 61, "ali"); login(c, 62, "bea")
+    B, A = tma(60, "Boss"), tma(61, "Ali")
+    put = lambda code, h=B: c.put(f"/api/admin/badges/{ali['id']}/{code}", headers=h)        # noqa: E731
+    drop = lambda code, h=B: c.delete(f"/api/admin/badges/{ali['id']}/{code}", headers=h)    # noqa: E731
+    # not staff: no search, no grant, no take-back, no sessions
+    assert c.get("/api/admin/badges/people?q=ali", headers=A).status_code == 403
+    assert put("init26p", A).status_code == 403 and drop("init26p", A).status_code == 403
+    assert c.get("/api/admin/badges/sessions", headers=A).status_code == 403
+    # found by @username, student ID, app id or name; the student ID is never sent back
+    for q in ("@ali", "24bali", str(ali["id"]), "Ali Test", "testov ali"):
+        hits = c.get("/api/admin/badges/people", params={"q": q}, headers=B).json()
+        assert [h["person"]["id"] for h in hits] == [ali["id"]], q
+        assert "24Bali" not in str(hits)
+    assert c.get("/api/admin/badges/people?q=a", headers=B).status_code == 400
+    assert put("bugs").status_code == 400 and put("first50").status_code == 400                 # badge variants only
+    assert c.put(f"/api/admin/badges/999999/init26p", headers=B).status_code == 404
+    # give: idempotent, audited once, celebrated once
+    assert put("init26p").json()["has"] == ["init26p"]
+    assert put("init26p").json()["has"] == ["init26p"]
+    con = db.connect(cfg.db_path)
+    log = lambda a: con.execute("SELECT COUNT(*) FROM audit_log WHERE action = ? AND target = ?", (a, f"user:{ali['id']}")).fetchone()[0]  # noqa: E731
+    assert log("grant") == 1 and con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'init26p'", (ali["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26p:1'", (ali["id"],)).fetchone()
+    # one entry, my highest variant's medal, counted once
+    assert put("init26f").status_code == 200
+    me = c.get(f"/api/users/{ali['id']}", headers=A).json()
+    ini = [a for a in me["awards"]["achievements"] if a["code"].startswith("init26")]
+    assert len(ini) == 1 and ini[0]["code"] == "init26" and ini[0]["variant"] == "init26p" and ini[0]["emoji"] == "medal_init26p_2"
+    assert [(v["code"], v["have"]) for v in ini[0]["variants"]] == [("init26p", True), ("init26", False), ("init26f", True)]
+    assert ini[0]["level"] == 1 and ini[0]["count"] == 2 and ini[0]["rarity"] == 1 / 3
+    assert c.get("/api/me", headers=A).json()["unlocked"] == [{"code": "init26", "level": 1}] * 2
+    assert c.post("/api/me/unlocked", headers=A, json={"code": "init26", "level": 1}).json()["unlocked"] == []
+    # take back: audited, the medal falls to the next variant; again: nothing to take
+    assert drop("init26p").json()["has"] == ["init26f"] and log("ungrant") == 1
+    assert drop("init26p").json()["has"] == ["init26f"] and log("ungrant") == 1
+    ini = next(a for a in c.get(f"/api/users/{ali['id']}", headers=A).json()["awards"]["achievements"] if a["code"] == "init26")
+    assert ini["variant"] == "init26f" and ini["emoji"] == "medal_init26f_2"
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26p:1' AND sent_at IS NULL", (ali["id"],)).fetchone()
+    # an old showcase pick of a variant is the badge
+    con.execute("UPDATE users SET showcase = 'init26f' WHERE id = ?", (ali["id"],))
+    assert c.get(f"/api/users/{ali['id']}", headers=A).json()["shelf"] == ["init26"]
+    # the batch grant's sessions: the owner's alone, not any admin's
+    assert c.get("/api/admin/badges/sessions", headers=B).status_code == 403
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
+    assert c.get("/api/admin/badges/sessions", headers=B).json() == []
+    con.close()
 
 
 def test_course_day(env, monkeypatch):
@@ -6696,7 +6757,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert [tuple(r) for r in con.execute("SELECT email, student_id, phone, came FROM prefill ORDER BY email")] == [
         ("a_one@kbtu.kz", "25B010001", "+77010000001", 1), ("b_two@kbtu.kz", "25B010002", "+77010000002", 1),
         ("j_ten@kbtu.kz", "26B010010", None, 0)]
-    ach = lambda uid: {a["code"]: a["level"] for a in c.get(f"/api/users/{uid}", headers=tma(1)).json()["awards"]["achievements"]}  # noqa: E731
+    ach = lambda uid: _ach_codes(c.get(f"/api/users/{uid}", headers=tma(1)).json())  # noqa: E731
     assert ach(came["id"])["init26f"] == 1
     with pytest.raises(SystemExit) as e:
         run("\n".join(lines) + "\n", "init26")                                             # each list once
@@ -6912,7 +6973,7 @@ def test_prefill_rest(env, monkeypatch, capsys):
     assert "kbtu.kz" not in out and "25B" not in out and "Dana" not in out                # counts only
     with pytest.raises(SystemExit):
         run("prefill-rest", "init26")                                                     # each list once
-    ach = lambda uid: {a["code"]: a["level"] for a in c.get(f"/api/users/{uid}", headers=tma(1)).json()["awards"]["achievements"]}  # noqa: E731
+    ach = lambda uid: _ach_codes(c.get(f"/api/users/{uid}", headers=tma(1)).json())  # noqa: E731
     assert ach(came["id"])["init26f"] == 1 and ach(held["id"])["init26f"] == 1
     assert [tuple(r) for r in con.execute("SELECT email, student_id, raw_id FROM prefill_rest ORDER BY raw_id")] == [
         (None, "25B010007", "25B010007"), (None, None, "25B010008"), (None, None, "hello")]

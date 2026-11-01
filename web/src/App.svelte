@@ -129,6 +129,7 @@
   sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
+  sheets.badges = () => lazy(() => import('./screens/admin/BadgesSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
@@ -282,7 +283,8 @@
       ui.tab = 'profile';
       asStudent(async () => {
         sheets.awards();
-        const a = (await api.person(session.me!.id)).awards.achievements.find((x) => x.code === aw[1]);
+        // an older card may name a badge's variant (aw_init26f): its badge
+        const a = (await api.person(session.me!.id)).awards.achievements.find((x) => x.code === aw[1] || x.variants?.some((v) => v.code === aw[1]));
         if (a) sheets.award(achItem(a), a.level > 0);
       });
       return;
