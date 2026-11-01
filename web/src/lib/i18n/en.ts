@@ -1273,7 +1273,7 @@ const en: Dict = {
   'oc.why.taken': "This chat is linked to another organization. Write to the KBTU App team and we'll sort it out.",
   'oc.why.limit': "No more than 12 chats.",
   'tg.open': "Open in Telegram",
-  'tg.video': "Video in Telegram",
+  'tg.video': "Play video",
   'tg.file': "File in Telegram",
   'oc.mirror': "Show channel posts in the feed",
   'oc.mirrorNote': "New posts, edits and deletions show in the club's news. Comments and reactions stay in Telegram.",

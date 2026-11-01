@@ -32,6 +32,7 @@
   import Tag from '../../ui/Tag.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
+  import { theme } from '../../lib/state/theme.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const me = $derived(session.me);
@@ -58,6 +59,20 @@
   $effect(() => () => { clearTimeout(timer); send(); });
 
   let open = $state<Set<number>>(new Set()); // posts unfolded
+  // a channel post's video plays in Telegram's own post widget (t.me/<channel>/<id>?embed=1), framed only on a tap:
+  // nothing loads before, and the sound starts only from its own play button. The widget says its height by postMessage.
+  let playing = $state<Set<number>>(new Set());
+  const embed = (url: string) => `${url}?embed=1&userpic=false${theme.current === 'dark' ? '&dark=1' : ''}`;
+  function fit(el: HTMLIFrameElement) {
+    const on = (e: MessageEvent) => {
+      if (e.source !== el.contentWindow || e.origin !== 'https://t.me') return;
+      let d: { event?: string; height?: number | null };
+      try { d = JSON.parse(e.data); } catch { return; }
+      if (d.event === 'resize' && (d.height ?? 0) > 0) el.style.height = Math.ceil(d.height!) + 'px'; // null before its layout
+    };
+    addEventListener('message', on);
+    return { destroy: () => removeEventListener('message', on) };
+  }
   const long = (p: Post) => p.body.length > 220 || p.body.split('\n').length > 4;
 
   async function react(p: Post, kind: 'fire' | 'heart') {
@@ -132,9 +147,12 @@
     {/if}
     <div class="vl">{#each videoLinks(p.body) as l (l.url)}<button class="tgm" onclick={() => openLink(l.url)}><SocialIcon kind={l.kind} size={16} />{l.label}</button>{/each}</div>
     {#if p.tg}
-      <!-- the club's Telegram channel post: its counts, its comments and its video live there (PLAN 86) -->
+      <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
       {@const tg = p.tg}
-      {#if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t(tg.media === 'video' ? 'tg.video' : 'tg.file')}</button>{/if}
+      {#if tg.media === 'video' && playing.has(p.id)}
+        <iframe class="tgw" src={embed(tg.url)} title={p.title} use:fit allow="fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+      {:else if tg.media === 'video'}<button class="tgm" onclick={() => { haptic.tap(); playing = new Set([...playing, p.id]); }}><Play size={16} />{t('tg.video')}</button>
+      {:else if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t('tg.file')}</button>{/if}
       <footer class="re tgf">
         {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}
         {#if tg.views}<span class="tgv"><Eye size={15} />{compact(tg.views)}</span>{/if}
@@ -228,6 +246,8 @@
   .tgf .cm b { white-space: nowrap; }
   .tge { font-size: 17px; line-height: 1; }
   .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 13px/1 var(--font-text); color: var(--text-3); }
+  /* the widget draws the channel's card around the video: its own height (fit), our corners */
+  .tgw { display: block; width: 100%; height: 360px; margin: 2px 0 6px; border: 0; border-radius: var(--r-m); background: var(--surface-2); color-scheme: normal; }
   .vl { display: flex; gap: 8px; } .vl:empty { display: none; }
   .tgm { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; height: 34px; margin: 2px 0 8px; padding: 0 13px 0 10px; border-radius: var(--r-full);
     background: var(--surface-2); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
