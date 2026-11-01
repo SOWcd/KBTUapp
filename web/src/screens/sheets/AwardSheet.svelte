@@ -16,7 +16,6 @@
   import { haptic, shareCard } from '../../lib/tg';
   import { say } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
-  import Button from '../../ui/Button.svelte';
   import { glass } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
   import Award from '../../ui/Award.svelte';
@@ -133,15 +132,16 @@
     <p class="t-callout how">{t('seal.one')}</p>
   {/if}
 
-  </div>
+  <!-- small glass pills in the medal's metal, right under it (owner, Nov 1: the wide blue button at the bottom was ugly) -->
   {#if ref || (mine && a && a.level > 0)}
-    <div class="acts up">
-      {#if ref}<Button kind="primary" size="l" full loading={inviting} onclick={invite}>{#snippet icon()}<Megaphone size={18} />{/snippet}{t('ref.invite')}</Button>{/if}
+    <div class="acts up" style:--glow={glow || GLOW[0]}>
+      {#if ref}<button class="pill glass glass-pill main" use:glass disabled={inviting} onclick={invite}><Megaphone size={17} />{t('ref.invite')}</button>{/if}
       {#if mine && a && a.level > 0}
-        <Button kind={ref ? 'secondary' : 'primary'} size="l" full loading={sharing} onclick={shareIt}>{#snippet icon()}<Share size={18} />{/snippet}{t('aw.share')}</Button>
+        <button class="pill glass glass-pill" class:main={!ref} use:glass disabled={sharing} onclick={shareIt}><Share size={17} />{t('aw.share')}</button>
       {/if}
     </div>
   {/if}
+  </div>
   <CloseX onclick={() => leave()} />
 </div>
 
@@ -157,7 +157,14 @@
   .page::-webkit-scrollbar { display: none; }
   .page > :first-child { margin-top: auto; }
   .page > :last-child { margin-bottom: auto; }
-  .acts { display: flex; flex-direction: column; gap: 8px; padding: 8px 20px calc(var(--safe-bottom) + 84px); }
+  .page { padding-bottom: calc(var(--safe-bottom) + 84px); }
+  .acts { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  .pill { position: relative; height: 46px; padding: 0 22px; display: inline-flex; align-items: center; gap: 8px; border-radius: var(--r-full);
+    color: var(--text); font: 650 var(--fs-body)/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
+  .pill.main { background-color: rgba(var(--glow), 0.32); }
+  .pill > :global(svg) { position: relative; }
+  .pill:active { transform: scale(0.96); }
+  .pill:disabled { opacity: 0.6; }
   .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
   .lit { padding: 40px 0 34px; }
   /* behind the medal (full screen now, nothing cuts it): a soft halo of its metal and fine rays that fade out long
