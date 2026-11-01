@@ -46,7 +46,7 @@ const en: Dict = {
   'bd.topics': "Topics",
   'bd.all': "All",
   'bd.topic.help': "Question",
-  'bd.topic.thing': "Idea",
+  'bd.topic.thing': "Offer",
   'bd.topic.go': "Invite",
   'bd.topic.talk': "Discussion",
   'bd.do.help': "Ask",

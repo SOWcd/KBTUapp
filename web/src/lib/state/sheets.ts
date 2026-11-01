@@ -3,6 +3,7 @@
 import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
 import type { ShelfItem } from '../awards';
 import type { StoryGroup } from '../posts';
+import type { Offered } from '../forum';
 
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean };
 
@@ -41,7 +42,7 @@ export const sheets = {
   thread: (_id: Id) => {},              // the student forum: a thread and its replies
   assistant: () => {},                   // the students' assistant (with the forum's switch)
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
-  newThread: (_onmade?: () => void) => {},
+  newThread: (_onmade?: (topic: Offered) => void, _topic?: Offered) => {}, // the forum's composer; a filtered feed starts on its topic
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id) => {},

@@ -45,7 +45,8 @@
   const me = $derived(session.me);
 
   const load = () => api.thread(id).then((x) => {
-    if (!th) anon = x.mine && x.anon; // once: an anonymous author stays anonymous in their replies; a pick by hand stays
+    // once: an anonymous author, or one whose last reply here was masked, stays masked; a pick by hand stays
+    if (!th) anon = x.mine ? x.anon : !!x.thread.filter((r) => r.mine).at(-1)?.anon;
     th = x;
     if (x.mine && gathers(x.topic) && x.joins) api.threadJoiners(id).then((l) => (joiners = l)).catch(() => {});
   }).catch(() => (gone = true));
@@ -133,11 +134,10 @@
             <div class="r" class:held={r.status === 'held'}>
               {#if r.person && !r.anon}<Avatar person={r.person} size={32} />{:else}<Mask size={32} />{/if}
               <div class="rb">
-                <span class="rh"><b class="ellipsis">{replyName(r)}</b>{#if r.op}<i class="op">{t('bd.authorTag')}</i>{/if}<i>{ago(r.at)}</i>
+                <span class="rh"><b class="ellipsis">{replyName(r)}</b>{#if r.op}<i class="op">{t('bd.authorTag')}</i>{/if}{#if r.status === 'held'}<i class="hold">{t('bd.held')}</i>{:else}<i>{ago(r.at)}</i>{/if}
                   <span class="rm"><IconButton kind="plain" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, 'reply', r, () => void removeReply(r))} /></span></span>
                 {#if revealed[`reply${r.id}`]}<span class="who-was"><Tag tone="danger">{t('bd.wrote', { name: revealed[`reply${r.id}`].name })}</Tag></span>{/if}
                 <p class="selectable">{r.body}</p>
-                {#if r.status === 'held'}<span class="note">{t('bd.replyHeld')}</span>{/if}
               </div>
             </div>
           {/each}
@@ -175,8 +175,8 @@
   .rh b { min-width: 0; font-weight: inherit; }
   .rh i { flex: none; font: 450 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-3); }
   .rh .op { font-weight: 600; color: var(--accent-text); }
+  .rh .hold { color: var(--warning-text); } /* held: in place of when, the toast said the rest */
   /* ⋯ draws a glyph in grey but takes the finger's 44 px around it, without making the line taller */
   .rm { margin: -12px -12px -12px auto; --plain-ink: var(--text-3); }
   .rb p { margin-top: 2px; font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: break-word; }
-  .note { display: block; margin-top: var(--s-1); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
 </style>

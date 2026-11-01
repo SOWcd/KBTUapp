@@ -47,7 +47,7 @@ const ru = {
   'bd.all': "Все",
   'bd.topic.help': "Вопрос",
   'bd.topic.thing': "Предложение",
-  'bd.topic.go': "Зову",
+  'bd.topic.go': "Встреча",
   'bd.topic.talk': "Обсуждение",
   'bd.do.help': "Спросить",
   'bd.do.thing': "Предложить",

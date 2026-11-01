@@ -99,7 +99,7 @@
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
   sheets.assistant = () => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), {}));
   sheets.thread = (id) => asStudent(() => lazy(() => import('./screens/forum/ThreadSheet.svelte'), { id }));
-  sheets.newThread = (onmade) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade });
+  sheets.newThread = (onmade, topic) => lazy(() => import('./screens/forum/NewThread.svelte'), { onmade, topic });
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });

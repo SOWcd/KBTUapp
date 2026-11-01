@@ -1,8 +1,9 @@
 <script lang="ts">
   // A new forum thread: what it's for first, as a verb (ask, offer, invite, discuss: it decides how long the thread
-  // stays and whether people can say "I'm in"; Discuss until another is picked), the words, and "anonymously" with
+  // stays and whether people can say "I'm in"; Discuss, or the topic the feed was filtered by), the words, and "anonymously" with
   // what it means in one line: nobody sees the name, the app's creator can, for a broken rule. The AI reads it first:
   // a held one says it waits for a look. Leaving with words typed asks first.
+  import { untrack } from 'svelte';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import { api, ApiErr } from '../../lib/api';
@@ -19,8 +20,8 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
 
-  let { overlay, onmade }: { overlay: Overlay; onmade?: () => void } = $props();
-  let topic = $state<Offered>('talk'), body = $state(''), anon = $state(false), busy = $state(false), done = false;
+  let { overlay, onmade, topic: first = 'talk' }: { overlay: Overlay; onmade?: (topic: Offered) => void; topic?: Offered } = $props();
+  let topic = $state<Offered>(untrack(() => first)), body = $state(''), anon = $state(false), busy = $state(false), done = false;
   const ready = $derived(body.trim().length >= 2);
   let field = $state<HTMLTextAreaElement>();
 
@@ -33,7 +34,7 @@
       done = true; haptic.ok();
       if (th.status === 'held') say(t('bd.heldSay'), 'thinking_face_3d');
       else { burst(); say(t('bd.postedSay'), 'party_popper_3d'); }
-      onmade?.(); close(overlay.id);
+      onmade?.(topic); close(overlay.id);
     } catch (e) {
       haptic.error();
       say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'bd.slowPosts' : 'common.error'), 'pleading_face_3d');
@@ -52,7 +53,6 @@
   <div class="topics" role="group" aria-label={t('bd.topics')}>
     {#each TOPICS as k (k)}<Chip full selected={topic === k} icon={TOPIC_ICON[k]} onclick={() => pick(k)}>{t(`bd.do.${k}`)}</Chip>{/each}
   </div>
-  <p class="foot">{t(`bd.hint.${topic}`)}</p>
   <textarea class="text" bind:this={field} bind:value={body} maxlength="1000" rows="4" placeholder={t(`bd.ph.${topic}`)} aria-label={t('bd.newTitle')}
     use:grow={320}></textarea>
   <div class="anon">

@@ -45,7 +45,8 @@
     board.topic = topic; board.list = kept?.length ? kept : null;
     void loadBoard();
   }
-  function write() { asStudent(() => sheets.newThread(() => { board.topic = null; void loadBoard(); })); }
+  // from a topic's feed the composer starts on that topic; a thread of another topic shows All, so it's seen
+  function write() { asStudent(() => sheets.newThread((k) => { if (board.topic !== k) board.topic = null; void loadBoard(); }, board.topic ? shown(board.topic) : undefined)); }
 
   async function decide(kind: 'thread' | 'reply', id: number, ok: boolean) {
     try { await api.threadModDecide(kind, id, ok); haptic.ok(); void loadMod(); void loadBoard(); } catch (e) { fail(e); }
