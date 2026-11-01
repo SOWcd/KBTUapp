@@ -54,6 +54,9 @@ export interface AuditRow { id: Id; actor: PersonRef | null; action: string; tar
 /** A post of mine in the forum channel (server logic/fchannel.py): live (in the channel, or seconds from it), held for
  *  a moderator, hidden (a moderator removed it). */
 export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'live' | 'held' | 'hidden'; at: Ts }
+/** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
+ *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
+export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; msg: number | null; sign: string; mine: boolean }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null };

@@ -295,3 +295,33 @@ def test_post_off_and_gate(env, monkeypatch):
     c.app.state.policy = "new"
     assert c.post("/api/forum-posts", headers=tma(1), json={"body": "hello all"}).json()["message"] == "consent"
     con.close()
+
+
+def test_post_feed(env, monkeypatch):
+    """The Forum tab's feed: what the channel shows, newest first, signed as there; an anonymous post carries no author
+    to anyone (no user id, `mine` only for its author); my own held one shows to me alone; deleted ones leave."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "cat")
+    con = db.connect(cfg.db_path)
+    tg = Telegram()
+    A, B, C = tma(1), tma(2), tma(3)
+    named = c.post("/api/forum-posts", headers=A, json={"body": "Lost a black umbrella"}).json()
+    masked = c.post("/api/forum-posts", headers=B, json={"body": "A quiet confession", "anon": True}).json()
+    assert c.get("/api/forum-posts/feed", headers=C).json() == []                                # live, not sent yet
+    tick(cfg, tg, con)
+    said["word"] = "flag"
+    held = c.post("/api/forum-posts", headers=C, json={"body": "Something odd"}).json()
+    feed = c.get("/api/forum-posts/feed", headers=C).json()
+    assert [p["id"] for p in feed] == [held["id"], masked["id"], named["id"]]                   # newest first, my held one too
+    assert feed[0]["status"] == "held" and feed[0]["mine"] and feed[0]["msg"] is None
+    assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
+    assert feed[2]["sign"] == "Ann T." and not feed[2]["mine"]
+    for p in feed:
+        assert set(p) == {"id", "body", "status", "at", "msg", "sign", "mine"}                 # no author, no user id
+    assert "Bob" not in json.dumps(feed) and "bob" not in json.dumps(feed)
+    assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
+    assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
+    assert c.delete(f"/api/forum-posts/{masked['id']}", headers=B).status_code == 204
+    assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [named["id"]]
+    assert c.get("/api/forum-posts/feed", headers=tma(9)).json()[0]["sign"] == "Ann T."           # a guest reads the public channel
+    con.close()

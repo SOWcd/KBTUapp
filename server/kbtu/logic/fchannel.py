@@ -66,6 +66,22 @@ def mine(con, v: Viewer) -> list[dict]:
     return [_shape(p) for p in rows(con, "SELECT * FROM fchan_posts WHERE user_id = ? AND status != 'gone' ORDER BY id DESC LIMIT 30", v.id)]
 
 
+FEED_MAX = 50  # ponytail: the newest 50, no paging; a cursor when the channel outgrows a scroll
+
+
+def feed(con, v: Viewer) -> list[dict]:
+    """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
+    anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
+    is: no user id at all, and `mine` true on my own rows alone."""
+    ps = rows(con, """SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone'
+                      ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
+    ids = {p["user_id"] for p in ps if not p["anon"]}
+    names = {p["id"]: short_name(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
+    anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
+    return [{"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None,
+             "sign": anon if p["anon"] else names.get(p["user_id"], "?"), "mine": p["user_id"] == v.id} for p in ps]
+
+
 def reserve(con, v: Viewer, body: dict) -> int:
     """A new post, held ('check') before the AI is asked, the day's allowance counted in the same transaction (posts
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""

@@ -1580,6 +1580,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_mine(con: Con, v: FChan):
         return F.mine(con, v)
 
+    @app.get("/api/forum-posts/feed")
+    def fchan_feed(con: Con, v: FChan):
+        return F.feed(con, v)
+
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
         pid = F.reserve(con, v, body)  # held, inside the day's one, before the AI is asked
