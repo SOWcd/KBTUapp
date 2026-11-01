@@ -386,11 +386,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/ms/verifier")
     def ms_verifier(state: str, con: Con):
-        """The PKCE verifier. No "link to <name>?" question (minimum steps)"""
+        """The PKCE verifier and whose Telegram the link is for: ms.html asks "link to <name>?" first, so a sign-in link
+        forwarded to someone else can't tie their KBTU account to the sender's Telegram unseen"""
         uid = msauth.state_uid(cfg.token_key, state)
-        if not uid or not logic.one(con, "SELECT 1 FROM users WHERE id = ?", uid):
+        u = logic.one(con, "SELECT tg_first_name, tg_last_name, tg_username FROM users WHERE id = ?", uid) if uid else None
+        if not u:
             raise ApiError("not_found")  # a stale link: ms.html says "expired"
-        return {"verifier": msauth.verifier(cfg.token_key, state)}
+        name = f"{u['tg_first_name']} {u['tg_last_name']}".strip()
+        if u["tg_username"]:
+            name = f"{name} (@{u['tg_username']})".strip()
+        return {"verifier": msauth.verifier(cfg.token_key, state), "name": name}
 
     @app.post("/api/ms/finish")
     async def ms_finish(body: dict = Body(...)):
@@ -409,7 +414,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         with pool.conn() as con, db.tx(con):
             if not con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"ms_used:{state[-16:]}", str(logic.now()))).rowcount:
                 raise ApiError("forbidden", "ms")  # each link once
-            # linked at once, no code back from the app: a forwarded sign-in link is caught by hand and unlinked
+            # ms.html asked "link to <this Telegram>?" before getting here
             logic.ms_apply(con, uid, who)
             return {"ok": True}
 
@@ -1765,7 +1770,7 @@ small{display:block;margin-top:12px;font-size:13px;color:rgba(255,255,255,.6)}
 </style></head><body><main class="card">
 <div class="icon"><img src="/apple-touch-icon.png" alt=""><span class="badge" id="badge" hidden></span></div>
 <h1 id="h"></h1><p id="t"></p><div class="spin" id="w"></div>
-<a class="btn main" id="open" hidden href="tg://"></a></main><script>
+<button class="btn main" id="yes" hidden></button><a class="btn main" id="open" hidden href="tg://"></a></main><script>
 const T = __T__, L = T[(navigator.language || "ru").slice(0, 2)] || T.ru, q = new URLSearchParams(location.hash.slice(1));
 const $ = (id) => document.getElementById(id);
 history.replaceState(null, "", "/ms.html");  // the code leaves the address bar at once
@@ -1783,6 +1788,11 @@ show(L.wait);
   const v = await fetch("/api/ms/verifier?state=" + encodeURIComponent(state)).then((r) => r.ok ? r.json() : r.status === 404 ? 404 : null);
   if (v === 404) return end("expired", "bad");  // the link is older than 15 minutes (or not ours)
   if (!v) return end("fail", "bad");
+  // whose Telegram this link is for: someone the link was forwarded to sees a stranger's name and stops here
+  show([L.ask[0].replace("{name}", () => v.name), L.ask[1]], "");
+  $("yes").textContent = L.yes; $("yes").hidden = false;
+  await new Promise((go) => { $("yes").onclick = go; });
+  $("yes").hidden = true; show(L.wait);
   const tok = await fetch("https://login.microsoftonline.com/__TENANT__/oauth2/v2.0/token", { method: "POST", body: new URLSearchParams({
     client_id: "__CLIENT__", grant_type: "authorization_code", code, redirect_uri: location.origin + "/ms.html", code_verifier: v.verifier,
     scope: "openid profile email User.Read" }) }).then((r) => r.json()).catch(() => ({}));

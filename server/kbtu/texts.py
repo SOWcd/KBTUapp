@@ -883,6 +883,8 @@ def place_or_tba(place: str, lang: str) -> str:
 # Each state: a title and a line.
 MS_PAGE = {
     "ru": {"wait": ("Секунду…", "Проверяем аккаунт КБТУ"),
+           "ask": ("Привязать к Telegram {name}?", "Если это не твой Telegram, закрой страницу: кто-то прислал тебе свою ссылку."),
+           "yes": "Привязать",
            "ok": ("Готово!", "Возвращаем в Telegram…"),
            "nope": ("Ничего не привязали", "Можешь просто закрыть эту страницу."),
            "fail": ("Не получилось", "Закрой страницу и попробуй ещё раз из приложения."),
@@ -892,6 +894,8 @@ MS_PAGE = {
            "expired": ("Ссылка устарела", "Ссылка для входа живёт 15 минут. Вернись в приложение и нажми кнопку ещё раз."),
            "open": "Вернуться в Telegram"},
     "kk": {"wait": ("Бір сәт…", "ҚБТУ аккаунты тексерілуде"),
+           "ask": ("Telegram {name} аккаунтына байлайық па?", "Бұл сенің Telegram-ың болмаса, бетті жап: біреу саған өз сілтемесін жіберген."),
+           "yes": "Байлау",
            "ok": ("Дайын!", "Telegram-ға қайтарамыз…"),
            "nope": ("Ештеңе байланбады", "Бұл бетті жаба бер."),
            "fail": ("Болмады", "Бетті жауып, қосымшадан қайта көр."),
@@ -901,6 +905,8 @@ MS_PAGE = {
            "expired": ("Сілтеменің мерзімі өтті", "Кіру сілтемесі 15 минут жарамды. Қосымшаға оралып, батырманы қайта бас."),
            "open": "Telegram-ға оралу"},
     "en": {"wait": ("One moment…", "Checking your KBTU account"),
+           "ask": ("Link to Telegram {name}?", "If this isn't your Telegram, close this page: someone sent you their own link."),
+           "yes": "Link",
            "ok": ("Done!", "Taking you back to Telegram…"),
            "nope": ("Nothing linked", "You can just close this page."),
            "fail": ("Didn't work", "Close this page and try again from the app."),
