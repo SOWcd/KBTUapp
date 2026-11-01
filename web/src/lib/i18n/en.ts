@@ -1970,7 +1970,7 @@ const en: Dict = {
   'fr.addTitle': "Add a friend",
   'fr.qrCaption': "Let a friend point their camera here — you're friends at once",
   'fr.qrNote': "One-time link: a fresh one appears after a friend uses it",
-  'fr.send': "Invite on Telegram",
+  'fr.send': "Invite via Telegram",
   'fr.shareText': "Let's be friends on KBTU App — we'll see where each other is going 👀",
   'fr.orUsername': "or by @username",
   'fr.find': "Find",

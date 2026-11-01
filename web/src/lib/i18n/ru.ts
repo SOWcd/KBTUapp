@@ -1989,7 +1989,7 @@ const ru = {
   'fr.addTitle': "Добавить друга",
   'fr.qrCaption': "Пусть друг наведёт камеру — и вы сразу друзья",
   'fr.qrNote': "Ссылка одноразовая: после друга появится новая",
-  'fr.send': "Пригласить в Telegram",
+  'fr.send': "Пригласить через Telegram",
   'fr.shareText': "Добавляйся в друзья в KBTU App — увидим, кто куда идёт 👀",
   'fr.orUsername': "или по @username",
   'fr.find': "Найти",

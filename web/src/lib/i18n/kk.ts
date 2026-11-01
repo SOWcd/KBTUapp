@@ -1970,7 +1970,7 @@ const kk: Dict = {
   'fr.addTitle': "Дос қосу",
   'fr.qrCaption': "Досың камерасын бағыттасын — бірден дос боласыңдар",
   'fr.qrNote': "Сілтеме бір реттік: досың қолданғаннан кейін жаңасы шығады",
-  'fr.send': "Telegram-да шақыру",
+  'fr.send': "Telegram арқылы шақыру",
   'fr.shareText': "KBTU App-та дос бол — кім қайда баратынын көреміз 👀",
   'fr.orUsername': "немесе @username арқылы",
   'fr.find': "Табу",
