@@ -20,7 +20,7 @@ def check_init_data(init_data: str, bot_token: str, now: float | None = None) ->
     check = "\n".join(f"{k}={v}" for k, v in sorted(pairs.items()))
     secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     want = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-    if not got or not hmac.compare_digest(want, got):
+    if not got or not hmac.compare_digest(want.encode(), got.encode()):  # bytes: a non-ASCII str raises (a 500)
         return None
     try:
         if (now or time.time()) - int(pairs.get("auth_date", "0")) > MAX_AGE:

@@ -495,7 +495,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/events/{eid}/ics")
     def event_ics(eid: int, con: Con, k: str = ""):
         # no session: Telegram hands the link to the phone's browser, which gives the file to the calendar
-        if not hmac.compare_digest(k, logic.ics_sig(eid)):
+        if not hmac.compare_digest(k.encode(), logic.ics_sig(eid).encode()):
             raise ApiError("not_found")
         return Response(logic.event_ics(con, eid, f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}"), media_type="text/calendar; charset=utf-8",
                         headers={"Content-Disposition": f'inline; filename="kbtu-event-{eid}.ics"', "Cache-Control": "no-store"})

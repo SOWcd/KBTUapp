@@ -1101,6 +1101,8 @@ def test_calendar_file(env):
     assert time.strftime("DTEND:%Y%m%dT%H%M%SZ", time.gmtime(start + 3 * 3600)) in r.text  # no end: three hours
     assert c.get(link.replace("events/1/", "events/2/")).status_code == 404               # the signature is per event
     assert c.get("/api/events/1/ics").status_code == 404
+    assert c.get("/api/events/1/ics?k=%C3%A9").status_code == 404                             # non-ASCII: refused, not a 500
+    assert c.get("/api/me", headers={"Authorization": "tma auth_date=1&hash=%C3%A9"}).status_code == 403
 
 
 def test_album(env):
