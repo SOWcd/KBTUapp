@@ -18,6 +18,7 @@ import time
 
 from . import logic
 from .logic import ApiError, Viewer, can, log_action, now, one, rows, tx
+from .texts import _cell
 
 SLOT = 10           # the QR on the screen changes this often (s)
 SCAN_OK = 90        # a scan is taken this long after its QR was shown: 5 min let a photo relay too long, 60 s was tight for
@@ -204,12 +205,6 @@ def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:
     log_action(con, v.id, "checkin_csv", f"qr:{sid}")  # names, mails, phones: who took the list is on record
     e = now() + CSV_TTL
     return {"url": f"/api/screen/{sid}/csv?e={e}&k={_sig(key, f'csv.{sid}.{e}')}", "name": f"checkin-{sid}.csv"}
-
-
-def _cell(v) -> str:
-    """No formulas in Excel: a cell starting = + - @ or a tab/CR gets a ' (phones "+7 ..." show it; harmless)"""
-    v = "" if v is None else str(v)
-    return "'" + v if v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
 
 
 def export(con, key: bytes, sid: int, e: int, k: str) -> str:

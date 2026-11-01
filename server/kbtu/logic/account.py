@@ -342,7 +342,6 @@ def ms_apply(con, uid: int, who: dict) -> bool:
 
 def ms_sweep(con) -> None:
     """Each bot round: Microsoft sign-ins never finished (they hold the Graph profile) and the used-link marks"""
-    con.execute("DELETE FROM meta WHERE key LIKE 'mscode:%'")  # the return-link codes, dropped Oct 24
     con.execute("DELETE FROM meta WHERE key LIKE 'ms:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
     con.execute("DELETE FROM meta WHERE key LIKE 'ms_used:%' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
 
@@ -925,7 +924,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
                 raise RuntimeError(f"deleting account {v.id}: {t}.{c} is in no list")  # the transaction rolls back
         con.execute("UPDATE map_graph SET updated_by = NULL WHERE updated_by = ?", (v.id,))  # no foreign key there
         con.execute("DELETE FROM profile_views WHERE viewer_id = ? OR user_id = ?", (v.id, v.id))  # no foreign keys either
-        con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{v.id}", f"mscode:{v.id}"))  # an unfinished Microsoft sign-in: its profile too
+        con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
         con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
