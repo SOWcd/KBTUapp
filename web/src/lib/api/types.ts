@@ -59,8 +59,9 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'liv
 export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; msg: number | null; anon: boolean; sign: string; mine: boolean }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
-export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null };
-export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[] }
+export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null; undo?: boolean };
+/** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
+export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[] }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */

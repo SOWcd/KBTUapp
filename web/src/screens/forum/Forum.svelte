@@ -1,8 +1,8 @@
 <script lang="ts">
   // The forum (PLAN F1 + the adversarial review): for now one segment, Find people. Offers to answer, my skills and
   // switches, requests (mine first), and people by a skill. Contact is always an offer the other side accepts in the
-  // bot; their Telegram shows only then. The app's staff only, behind the server's flag, while it's tried out.
-  import { untrack } from 'svelte';
+  // bot; their Telegram shows only then. The app's staff only, behind the server's flag, while it's tried out. Its
+  // moderation (held requests, the skills catalog) lives in Admin → Forum posts: this sheet is the same for everyone.
   import Plus from '@lucide/svelte/icons/plus';
   import Flag from '@lucide/svelte/icons/flag';
   import Ban from '@lucide/svelte/icons/ban';
@@ -17,15 +17,11 @@
   import Avatar from '../../ui/Avatar.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import PersonCards from './PersonCards.svelte';
-  import ForumMod from './ForumMod.svelte';
-  import { session } from '../../lib/state/session.svelte';
 
   let { overlay, ask: focus }: { overlay: Overlay; ask?: Id } = $props();
   let me = $state<ForumMe | null>(null), list = $state<Ask[]>([]), offers = $state<Contact[]>([]);
   let skill = $state<Id | null>(null), q = $state(''), found = $state<ForumCard[] | null>(null), closing = $state<Id | null>(null);
-  let round = $state(0); // each reload: the moderators' block reloads with it (a request just posted may be held)
   const load = () => {
-    untrack(() => round++); // not a dependency of the effect that calls load
     api.forumMe().then((m) => (me = m)).catch(() => {});
     api.asks(skill).then((l) => (list = l)).catch(() => {});
     api.contacts().then((l) => (offers = l)).catch(() => {});
@@ -57,13 +53,11 @@
   async function block(id: Id) {
     try { await api.block(id); haptic.ok(); say(t('fo.blockedSay'), 'waving_hand_3d_default'); load(); } catch (e) { fail(e); }
   }
-  const staff = $derived(session.me?.role === 'admin' || session.me?.role === 'moderator');
   const standing = (a: Ask) => a.status === 'held' ? t('fo.held') : a.status === 'hidden' ? t('fo.hidden') : a.status === 'closed' ? t('fo.closed') : '';
 </script>
 
 <Sheet {overlay} icon={UserRoundSearch} full title={t('fo.title')}>
   <div class="seg top" role="tablist"><button class="on" role="tab" aria-selected="true">{t('fo.find')}</button></div>
-  {#if staff}<ForumMod changed={load} {round} />{/if}
 
   {#if offers.length}
     <h3 class="t-cap cap">{t('fo.offers')}</h3>

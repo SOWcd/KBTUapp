@@ -14,6 +14,7 @@
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
@@ -44,6 +45,9 @@
   $effect(() => { api.forumMe().then(() => (forum = true)).catch(() => {}); });
   let schoolsN = $state(0);
   $effect(() => { if (admin) api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
+  // the forum channel's posts (moderators): here when the server has the channel on; the number is what waits
+  let fcHeld = $state<number | null>(null);
+  $effect(() => { api.channelMod().then((m) => (fcHeld = m.held.length)).catch(() => {}); });
   let chatsN = $state<number | null>(null);
   let chatsP = $state(0); // suggested, waiting for a look
   $effect(() => { api.chats().then((c) => { chatsN = c.all.length; chatsP = c.pending?.length ?? 0; }).catch(() => {}); });
@@ -274,6 +278,7 @@
     <button class="r" onclick={() => sheets.mapFlaws()}><span class="ic"><MapPinned size={20} /></span><span class="lb">{t('mf.title')}<i>{t('mf.adminSub')}</i></span><ChevronRight size={18} /></button>
     <button class="r" onclick={() => sheets.give()}><span class="ic"><Medal size={20} /></span><span class="lb">{t('give.title')}<i>{t('adm.giveSub')}</i></span><ChevronRight size={18} /></button>
     {/if}
+    {#if fcHeld != null || forum}<button class="r" onclick={() => sheets.adminForum()}><span class="ic"><MessagesSquare size={20} /></span><span class="lb">{t('fc.modAdmin')}<i>{fcHeld ? `${t('fc.modTitle')}: ${fcHeld}` : t('fc.modAdminSub')}</i></span><ChevronRight size={18} /></button>{/if}
     {#if forum}<button class="r" onclick={() => sheets.forum()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('fo.title')}<i>{t('fo.adminSub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.adminChats()}><span class="ic"><TelegramMark size={20} /></span><span class="lb">{t('adm.chats')}{#if chatsN != null}<i>{tn('adm.chatsSub', chatsN)}{chatsP ? ` · ${t('adm.chatPending')}: ${chatsP}` : ''}</i>{/if}</span><ChevronRight size={18} /></button>
     {#if admin}

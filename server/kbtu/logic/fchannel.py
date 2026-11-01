@@ -21,6 +21,7 @@ POSTS_A_DAY = 1
 UNPOST_SPREAD = 72 * 3600  # a deleted account's anonymous posts leave within it, each at its own moment
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
+UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: Undo inside keeps the message and its comments
 # what Telegram turns into a link or a ping even in plain text, looked for in the text NFKC-normalised (fullwidth
 # letters and dots fold to ASCII; the ideographic dots count as dots): a scheme, www., a domain (Latin or IDN labels,
 # a Latin TLD or a Cyrillic one Telegram links), an e-mail, @handle, a phone or a card number (+..., a Kazakh 8/7 7xx
@@ -113,10 +114,10 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
     return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
 
 
-def _unpost(con, p, why: str) -> None:
+def _unpost(con, p, why: str, delay: int = 0) -> None:
     """Its channel message (if it went out) to the bot's round: deleted there, or edited to a template."""
     if p["tg_msg"]:
-        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (p["tg_msg"], why, _now()))
+        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (p["tg_msg"], why, _now() + delay))
 
 
 def delete(con, v: Viewer, pid: int) -> None:
@@ -236,7 +237,9 @@ def copy_done(con, key: str, root: int | None) -> None:
 
 
 def unposted(con, msg_id: int) -> None:
+    """Out of the channel: a taken-down post forgets its message (a Bring back is a new one)."""
     con.execute("DELETE FROM tg_unpost WHERE msg_id = ?", (msg_id,))
+    con.execute("UPDATE fchan_posts SET tg_msg = NULL WHERE tg_msg = ? AND status = 'hidden'", (msg_id,))
 
 
 # ---- moderators: held posts, recent live ones; the owner's reveal
@@ -248,10 +251,16 @@ def mod_queue(con, v: Viewer) -> dict:
     # 'check' is also the AI's look under way (seconds): shown once it's clearly over (no answer, or the server restarted)
     held = rows(con, "SELECT * FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?) ORDER BY id", _now() - 60)
     live = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND created_at > ? ORDER BY id DESC LIMIT 50", _now() - MOD_RECENT)
-    ids = {p["user_id"] for p in held + live if not p["anon"]}
+    # removed by a moderator this week (by the take-down's audit line, newest first): the way back for a wrong call
+    removed = rows(con, """SELECT p.*, MAX(a.at) AS gone_at FROM fchan_posts p
+                           JOIN audit_log a ON a.target = 'fchan:' || p.id AND a.action = 'fchan_hide'
+                           WHERE p.status = 'hidden' AND p.why = 'moderator' GROUP BY p.id HAVING gone_at > ?
+                           ORDER BY gone_at DESC LIMIT 50""", _now() - MOD_RECENT)
+    ids = {p["user_id"] for p in held + live + removed if not p["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     shape = lambda p: _shape(p) | {"why": p["why"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
-    return {"held": [shape(p) for p in held], "live": [shape(p) for p in live]}
+    return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
+            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed]}
 
 
 def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
@@ -268,9 +277,32 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
         if ok:
             con.execute("UPDATE fchan_posts SET status = 'live', why = NULL WHERE id = ?", (pid,))
         else:
-            _unpost(con, p, "moderator")
-            con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULL WHERE id = ?", (pid,))
+            # its message stays a minute (UNDO_WINDOW), kept on the row: Undo puts it back as it was, comments and all
+            _unpost(con, p, "moderator", UNDO_WINDOW)
+            con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
         log_action(con, v.id, "fchan_release" if ok else "fchan_hide", f"fchan:{pid}")
+
+
+def _pending(con, msg_id) -> bool:
+    """Its message is still in the channel, its delete not due yet (the undo minute, or a retry after a failed one)."""
+    return bool(msg_id) and one(con, "SELECT 1 FROM tg_unpost WHERE msg_id = ? AND at > ?", msg_id, _now()) is not None
+
+
+def mod_restore(con, v: Viewer, pid: int) -> None:
+    """A moderator's take-down undone. Inside the minute (its message still up): Undo, the pending delete dropped and the
+    message kept, comments and all. Later: live with no message, the bot's round publishes it anew (the old one was
+    deleted, or edited to the template). Same rules as mod_decide: not their own, audited."""
+    _mod(v)
+    with tx(con):
+        p = one(con, "SELECT user_id, tg_msg FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why = 'moderator'", pid)
+        if not p:
+            raise ApiError("not_found")
+        if p["user_id"] == v.id:
+            raise ApiError("forbidden")
+        # only a delete not yet due is dropped: one the bot already took is under way, so the post goes out anew
+        kept = bool(p["tg_msg"]) and con.execute("DELETE FROM tg_unpost WHERE msg_id = ? AND at > ?", (p["tg_msg"], _now())).rowcount > 0
+        con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = ?", (p["tg_msg"] if kept else None, pid))
+        log_action(con, v.id, "fchan_undo" if kept else "fchan_restore", f"fchan:{pid}")
 
 
 def reveal(con, v: Viewer, pid: int) -> dict:

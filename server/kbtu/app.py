@@ -1604,6 +1604,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_mod_decide(pid: int, con: Con, v: FChan, body: dict = Body(...)):
         F.mod_decide(con, v, pid, body.get("ok"))
 
+    @app.post("/api/forum-posts/{pid}/restore", status_code=204)
+    def fchan_mod_restore(pid: int, con: Con, v: FChan):
+        F.mod_restore(con, v, pid)
+
     @app.post("/api/forum-posts/{pid}/reveal")
     def fchan_reveal(pid: int, con: Con, v: FChan):
         return F.reveal(con, v, pid)

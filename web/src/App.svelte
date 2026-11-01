@@ -131,6 +131,7 @@
   sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
+  sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
   sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
   sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
   sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});

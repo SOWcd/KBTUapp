@@ -103,6 +103,8 @@ export const sheets = {
   give: () => {},
   adminClubs: () => {},
   adminChats: () => {},
+  /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */
+  adminForum: () => {},
   /** every club, the biggest first (the Clubs tab's "All clubs · N") */
   allClubs: () => {},
   /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */

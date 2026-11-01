@@ -171,6 +171,7 @@ def test_post_take_down_old_and_race(env, monkeypatch):
     tick(cfg, tg, con)
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=tma(3), json={"ok": False}).status_code == 204
+    con.execute("UPDATE tg_unpost SET at = 0")                                                   # the undo minute passed
     tick(cfg, tg, con)
     edit = tg.of("editMessageText")
     assert edit == [{"chat_id": CH, "message_id": mid, "text": texts.bot_message("ru", "fch_removed")[0]}]
@@ -182,6 +183,64 @@ def test_post_take_down_old_and_race(env, monkeypatch):
     con.execute("UPDATE fchan_posts SET status = 'hidden', tg_msg = NULL WHERE id = ?", (q["id"],))
     logic.fchannel.sent(con, q["id"], 555)
     assert con.execute("SELECT msg_id, why FROM tg_unpost").fetchall()[0][:] == (555, "moderator")
+    con.close()
+
+
+def test_post_undo_and_restore_after_takedown(env, monkeypatch):
+    """A wrong take-down undone in Admin. Inside the minute: Undo, the channel message (and its comments, its group
+    copy) never leave, the pending delete is dropped. After it: Bring back, published anew as a new message. A
+    moderator only, not their own post, audited; past a week the take-down leaves the list."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    mod = login(c, 3, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    A, M = tma(1), tma(3)
+    tg = Telegram()
+    p = c.post("/api/forum-posts", headers=A, json={"body": "Free pizza at the canteen"}).json()
+    own = c.post("/api/forum-posts", headers=M, json={"body": "A moderator writes too"}).json()
+    tick(cfg, tg, con)
+    old = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:77', ?)", (f"KBTUappForum {old}",))  # its copy in the group
+    assert c.post(f"/api/forum-posts/{p['id']}/restore", headers=M).status_code == 404            # live: nothing to undo
+    assert c.post(f"/api/forum-posts/{own['id']}/mod", headers=M, json={"ok": False}).status_code == 403
+    # the take-down: the message stays a minute; the bot's round deletes nothing meanwhile
+    assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": False}).status_code == 204
+    tick(cfg, tg, con)
+    assert not tg.of("deleteMessage")
+    assert [(x["id"], x["undo"]) for x in c.get("/api/forum-posts/mod", headers=M).json()["removed"]] == [(p["id"], True)]
+    assert c.post(f"/api/forum-posts/{p['id']}/restore", headers=A).status_code == 403            # a student
+    # Undo: live with the same message, the pending delete gone; nothing sent again, nothing deleted
+    assert c.post(f"/api/forum-posts/{p['id']}/restore", headers=M).status_code == 204
+    assert con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("live", None, old)
+    assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
+    con.execute("UPDATE tg_unpost SET at = 0")
+    tick(cfg, tg, con)
+    assert not tg.of("deleteMessage") and len(tg.of("sendMessage")) == 2
+    assert con.execute("SELECT 1 FROM meta WHERE key = 'tgcpost:77'").fetchone()
+    assert [x["id"] for x in c.get("/api/forum-posts/feed", headers=A).json()] == [own["id"], p["id"]]
+    # taken down again and the minute passes: deleted with its group copy, the row forgets the message
+    assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": False}).status_code == 204
+    con.execute("UPDATE tg_unpost SET at = 0")
+    tick(cfg, tg, con)
+    assert {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")} == {(CH, old), (G, 77)}
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0] is None
+    assert [(x["id"], x["undo"]) for x in c.get("/api/forum-posts/mod", headers=M).json()["removed"]] == [(p["id"], False)]
+    con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULL WHERE id = ?", (own["id"],))
+    assert c.post(f"/api/forum-posts/{own['id']}/restore", headers=M).status_code == 403          # their own
+    # Bring back: live with no message, the bot publishes it anew
+    assert c.post(f"/api/forum-posts/{p['id']}/restore", headers=M).status_code == 204
+    assert con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("live", None, None)
+    acts = [r[0] for r in con.execute("SELECT action FROM audit_log WHERE target = ? ORDER BY id", (f"fchan:{p['id']}",))]
+    assert acts == ["fchan_hide", "fchan_undo", "fchan_hide", "fchan_restore"]
+    assert c.get("/api/forum-posts/mod", headers=M).json()["removed"] == []
+    tick(cfg, tg, con)
+    new = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    assert new and new != old and tg.of("sendMessage")[-1]["text"].startswith("Free pizza at the canteen")
+    # a take-down older than a week leaves the list
+    assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": False}).status_code == 204
+    con.execute("UPDATE audit_log SET at = at - 8 * 86400 WHERE action = 'fchan_hide'")
+    assert c.get("/api/forum-posts/mod", headers=M).json()["removed"] == []
     con.close()
 
 

@@ -3,8 +3,8 @@
   // newest first, signed as there; a tap opens the post in Telegram, where the comments are. My own posts are marked
   // (on their way, under review, removed) and can be deleted. Writing is a separate screen behind the plus by the
   // title (ChannelCompose), the way Studio puts its pencil. Every tap answers at once (a new post stands at the top
-  // "checking"; a delete leaves the list before the server says so). Moderators see what waits, and this week's posts
-  // to take one down; the owner alone can reveal a mask.
+  // "checking"; a delete leaves the list before the server says so). It looks the same for every viewer, staff too:
+  // the channel's moderation lives in Admin (AdminForum) alone.
   import { untrack } from 'svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Plus from '@lucide/svelte/icons/plus';
@@ -12,18 +12,17 @@
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import { initials } from '../../ui/OrgLogo.svelte';
   import Card from '../../ui/Card.svelte';
-  import { api, ApiErr, type ChannelMod, type ChannelFeedPost, type ChannelModPost } from '../../lib/api';
+  import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
   import { channel, loadChannel } from '../../lib/state/channel.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t, type Key } from '../../lib/i18n/index.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import { glass } from '../../ui/glass';
   import { fitTitle, largeTitle } from '../../ui/title';
   import { TAB_ICON } from '../../ui/icons';
-  import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
@@ -32,15 +31,9 @@
 
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
-  const staff = $derived(me?.role === 'admin' || me?.role === 'moderator');
-  const owner = $derived(me?.role === 'admin' && !!me?.founder);
   const here = $derived(ui.tab === 'forum');
   $effect(() => { if (here) untrack(() => void loadChannel()); });
-  let mod = $state<ChannelMod | null>(null);
-  const loadMod = () => api.channelMod().then((m) => (mod = m)).catch(() => {});
-  $effect(() => { if (here && staff) untrack(loadMod); });
 
-  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost' };
   // my own row's mark: on its way (the AI looking), under review, removed, else simply "mine"
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'neutral', key: 'fc.checking' } as const
     : p.status === 'held' ? { tone: 'warning', key: 'fc.held' } as const
@@ -75,41 +68,13 @@
     channel.feed = (channel.feed ?? []).filter((x) => x.id !== p.id); haptic.ok();
     try { await api.deleteChannelPost(p.id); } catch (e) { channel.feed = before; fail(e); }
   }
-
-  async function decide(p: ChannelModPost, ok: boolean) {
-    const before = mod;
-    if (mod) mod = { held: mod.held.filter((x) => x.id !== p.id), live: ok ? [p, ...mod.live] : mod.live.filter((x) => x.id !== p.id) };
-    haptic.ok();
-    try { await api.channelModDecide(p.id, ok); void loadMod(); if (!ok) void loadChannel(); } catch (e) { mod = before; fail(e); }
-  }
-
-  async function reveal(p: ChannelModPost) {
-    if (!(await sheets.ask({ title: t('fc.revealAsk'), text: t('fc.revealText'), ok: t('fc.reveal'), cancel: t('common.cancel') }))) return;
-    try { const who = await api.revealChannelPost(p.id); say(t('fc.wrote', { name: who.name }), 'locked_3d'); } catch (e) { fail(e); }
-  }
 </script>
-
-{#snippet modRow(p: ChannelModPost, held: boolean)}
-  <div class="mrow">
-    <p class="mt">{p.body}</p>
-    <span class="mm">{p.anon ? t('fc.anon') : p.author?.name ?? ''} · {ago(p.at)}{held && p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</span>
-    <span class="mb">
-      {#if held}<Button kind="tinted" size="s" onclick={() => decide(p, true)}>{t('fc.release')}</Button>{/if}
-      <Button kind="gray" size="s" onclick={() => decide(p, false)}>{t('fc.takeDown')}</Button>
-      {#if owner && p.anon}<Button kind="plain" size="s" onclick={() => reveal(p)}>{t('fc.reveal')}</Button>{/if}
-    </span>
-  </div>
-{/snippet}
 
 <div class="page scroll">
   <header class="hd">
     <h1 class="fs-title ttl" use:fitTitle use:largeTitle={'forum'}>{t('page.forum')}</h1>
     <button class="ic glass glass-pill" use:glass onclick={write} aria-label={t('fc.new')}><Plus size={22} strokeWidth={2.4} /></button>
   </header>
-
-  {#if staff && mod?.held.length}
-    <Group caption={t('fc.modTitle')}>{#each mod.held as p (p.id)}{@render modRow(p, true)}{/each}</Group>
-  {/if}
 
   {#if channel.feed?.length}
     <div class="feed">
@@ -138,10 +103,6 @@
   <Group>
     <Row title={t('fc.open')} icon={TelegramMark} tile="blue" accessory="external" onclick={() => openLink(CHANNEL)} />
   </Group>
-
-  {#if staff && mod?.live.length}
-    <Group caption={t('fc.modLive')}>{#each mod.live as p (p.id)}{@render modRow(p, false)}{/each}</Group>
-  {/if}
   <div class="tail"></div>
 </div>
 
@@ -173,12 +134,6 @@
   .tx.open { max-height: var(--h); }
   .post.off .tx { color: var(--text-3); }
   .more { margin-top: var(--s-1); padding: var(--s-1) 0; font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
-  .mrow + .mrow::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
-  /* the moderators' rows: the words, whose and why, the answers */
-  .mrow { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
-  .mt { font: 450 var(--fs-body)/1.4 var(--font-text); white-space: pre-line; overflow-wrap: break-word; }
-  .mm { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
-  .mb { display: flex; flex-wrap: wrap; gap: var(--s-2); }
   .tail { height: calc(var(--bottom) + var(--s-8)); }
 </style>
