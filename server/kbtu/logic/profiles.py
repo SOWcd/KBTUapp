@@ -471,9 +471,14 @@ def find_student(con, v: Viewer, username: str) -> dict:
         raise ApiError("bad_input")
     u = one(con, "SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE lower(u.tg_username) = lower(?)", name)
     p = _student(con, u["id"] if u else None)
+    me = p["id"] == v.id
+    state = "none" if me else friendship(con, v.id, p["id"])
+    # a stranger's real name counts as a profile opened, as in person(): @usernames from the chats can't be mapped to names in bulk
+    if not me and state != "friends" and v.role not in ("admin", "moderator") and not one(
+            con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?", v.id, p["id"]):
+        _stranger_view(con, v, p["id"])
     s = one(con, "SELECT course, school FROM students WHERE user_id = ?", p["id"])
-    return {"person": person_ref(p), "course": s["course"], "school": s["school"],
-            "friendship": "none" if p["id"] == v.id else friendship(con, v.id, p["id"]), "me": p["id"] == v.id}
+    return {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
 
 
 def ask_friend(con, v: Viewer, uid: int) -> dict:

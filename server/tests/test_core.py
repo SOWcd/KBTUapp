@@ -849,6 +849,7 @@ def test_friends(env):
     con.execute("UPDATE users SET tg_username = 'zhan_k' WHERE tg_id = 32")
     found = c.get("/api/friends/find?username=@ZHAN_K", headers=A).json()                 # @username, any case
     assert found["person"]["id"] == zhan["id"] and found["friendship"] == "none"
+    assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(ali["id"], zhan["id"])]  # a stranger's name: counted
     assert c.get("/api/friends/find?username=nobody_here", headers=A).status_code == 404
     assert c.post("/api/friends/requests", headers=A, json={"userId": zhan["id"]}).json()["friendship"] == "requested"
     assert c.get(f"/api/users/{ali['id']}", headers=Z).json()["friendship"] == "incoming"
