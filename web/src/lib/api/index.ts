@@ -238,6 +238,7 @@ export interface Api {
   registrySearch(q: string): Promise<RegistryHit[]>;      // a club member by name or student ID
   registryExport(): Promise<void>;                        // every roster as a CSV into my chat with the bot
   markUnlocked(code: string, level: number): Promise<{ unlocked: Me['unlocked'] }>; // the unlock moment was shown
+  anthemHeard(): Promise<{ unlocked: Me['unlocked'] }>; // the anthem heard start to finish without skipping: its award (once)
   calendarFeed(): Promise<{ page: string; feed: string }>;     // my events in the phone's calendar (a kept secret address)
   resetCalendar(): Promise<void>;                              // the old address stops; the next calendarFeed() makes a new one
   eventInvites(id: Id): Promise<FriendInvite[]>;               // "Bring a friend": my friends and where they stand

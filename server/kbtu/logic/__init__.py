@@ -50,7 +50,7 @@ from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN
     set_comments_on, taken_down)  # noqa: F401
 from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, GRANT_LINK_TTL, LINK_TTL, PROFILES_A_DAY,
     REASK_AFTER, _befriend, _came, _celebrate, _counts, _drop_grant, _friend_row, _grant, _levels, _season_start,
-    _stranger_view, _streak, _student, _week, achievements, answer_friend, ask_friend, attended, brought, card_no,
+    _stranger_view, _streak, _student, _week, achievements, anthem_heard, answer_friend, ask_friend, attended, brought, card_no,
     find_student, first_fifty, friend_link, friend_link_used, friends, friendship, grant, grant_link, grant_scan,
     my_grants, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_friend_link, use_grant_link)  # noqa: F401

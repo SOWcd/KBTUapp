@@ -301,6 +301,7 @@ export const server: Api = {
   registrySearch: (q) => call('GET', `/registry/search?q=${encodeURIComponent(q)}`),
   registryExport: () => call('POST', '/registry/export'),
   markUnlocked: (code, level) => call('POST', '/me/unlocked', { code, level }),
+  anthemHeard: () => call('POST', '/me/anthem'),
   calendarFeed: () => call('POST', '/me/calendar'),
   resetCalendar: () => call('DELETE', '/me/calendar'),
   eventInvites: (id) => call('GET', `/events/${id}/invites`),

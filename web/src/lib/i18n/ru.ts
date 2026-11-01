@@ -160,6 +160,8 @@ const ru = {
   'ach.init26.how': "Был волонтёром на посвящении первокурсников КБТУ 2026.",
   'ach.init26f.name': "Посвящение 2026",
   'ach.init26f.how': "Был на посвящении первокурсников КБТУ 2026.",
+  'ach.anthem.name': "Гимн от и до",
+  'ach.anthem.how': "Прослушал гимн КБТУ от начала до конца без перемотки.",
   'page.news': 'Новости',
   'page.team': 'Команда',
   'team.remove': "Убрать",
@@ -2210,6 +2212,7 @@ const ru = {
   'anthem.endHere': "Конец строки здесь",
   'anthem.endClear': "Убрать конец строки",
   'anthem.stop': "Готово",
+  'anthem.skipNote': "Награда — за гимн целиком, без перемотки",
 } as const;
 
 export type Plural = { one: string; few?: string; many?: string; other: string };

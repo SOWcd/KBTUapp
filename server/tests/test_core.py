@@ -1635,6 +1635,23 @@ def test_first_fifty(env, monkeypatch):
     assert [c.get("/api/me", headers=tma(t)).json()["no"] for t in (72, 70)] == [6, 7]
 
 
+def test_anthem_award(env):
+    """The anthem heard start to finish (the sheet tracks skips): one grant per student, again a no-op; the app's unlock
+    moment, no bot message; a guest can't have it."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    s = login(c, 80, "an")
+    assert c.post("/api/me/anthem", headers=tma(80, "An")).json()["unlocked"] == [{"code": "anthem", "level": 1}]
+    assert c.post("/api/me/anthem", headers=tma(80, "An")).json()["unlocked"] == [{"code": "anthem", "level": 1}]  # idempotent
+    assert con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'anthem'", (s["id"],)).fetchone()[0] == 1
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'ach:anthem:1'").fetchone()
+    assert c.post("/api/me/unlocked", headers=tma(80, "An"), json={"code": "anthem", "level": 1}).json()["unlocked"] == []
+    assert c.post("/api/me/anthem", headers=tma(80, "An")).json()["unlocked"] == []                   # seen stays seen
+    ach = next(a for a in logic.achievements(con, s["id"]) if a["code"] == "anthem")
+    assert ach["level"] == 1 and ach["emoji"] == "headphone_3d"
+    assert c.post("/api/me/anthem", headers=tma(81, "Guest")).status_code == 401
+
+
 def test_chats_directory(env, monkeypatch):
     """The chats directory (§4.11): the admin adds t.me links; "for you" = aimed at my school and course, then those for
     everyone; a tick once opened; a bad link is refused. The avatar, members and (if left empty) the title come from the

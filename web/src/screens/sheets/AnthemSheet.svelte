@@ -23,6 +23,8 @@
   import Check from '@lucide/svelte/icons/check';
   import ArrowRightToLine from '@lucide/svelte/icons/arrow-right-to-line';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
+  import { sheets } from '../../lib/state/sheets';
+  import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { t, LANG_FULL } from '../../lib/i18n/index.svelte';
   import { ANTHEM, SUNG, TIMED, TIMES } from '../../lib/i18n/anthem';
@@ -62,10 +64,10 @@
     a.onpause = () => { on = waiting = false; if (ms) ms.playbackState = 'paused'; };
     a.onwaiting = () => (waiting = true);
     a.onplaying = () => (waiting = false);
-    a.ontimeupdate = () => { if (!held) { cur = a.currentTime; if (!raf || a.paused) sync(cur); } };
-    a.onseeked = () => { if (!held) sync(a.currentTime); };
+    a.ontimeupdate = () => { heard(a); if (!held) { cur = a.currentTime; if (!raf || a.paused) sync(cur); } };
+    a.onseeked = () => { heard(a); if (!held) sync(a.currentTime); };
     a.ondurationchange = () => { if (isFinite(a.duration)) dur = a.duration; };
-    a.onended = () => { a.currentTime = cur = 0; }; // repeat off (on, `loop` starts it over by itself)
+    a.onended = () => { if (run >= dur - 3) award(); run = -1; a.currentTime = cur = 0; }; // repeat off (on, `loop` starts it over by itself)
     a.onerror = () => { on = waiting = false; say(t('common.offline'), 'pleading_face_3d'); };
     if (ms) {
       try { // the lock screen and the headphones' buttons
@@ -75,6 +77,26 @@
       } catch { /* an old WebView without it */ }
     }
     return a;
+  }
+
+  // the award for the whole anthem without skipping (owner, Nov 2): a play is followed from its first 2 s; a jump forward
+  // past what was heard (the scrubber, the arrows, a line tapped ahead) loses it, once with a word why; back and pause
+  // are fine. At the end (or as `loop` wraps it round) the server gives it, once a student, and its moment shows here
+  let run = -1, runAt = 0, told = false, sent = false; // run: how far the followed play has got (s), -1: none; runAt: when (ms)
+  function heard(a: HTMLAudioElement) {
+    // a locked phone sends timeupdate rarely: the time played since the last one counts (paused: none; at most 5 s)
+    const at = a.currentTime, gone = a.paused ? 0 : Math.min(5, (performance.now() - runAt) / 1000);
+    runAt = performance.now();
+    if (run < 0) { if (at < 2 && !a.paused) run = at; return; }
+    if (a.loop && at < 1 && run >= dur - 3) { award(); run = at; return; }
+    if (at <= run + 2 + gone) { run = Math.max(run, at); return; }
+    run = -1;
+    if (!told && !sent && session.me?.student) { told = true; say(t('anthem.skipNote'), 'headphone_3d'); }
+  }
+  function award() {
+    if (sent || !session.me?.student) return;
+    sent = true;
+    api.anthemHeard().then((r) => { if (session.me) session.me = { ...session.me, unlocked: r.unlocked }; sheets.celebrate(); }).catch(() => (sent = false));
   }
 
   function toggle() {

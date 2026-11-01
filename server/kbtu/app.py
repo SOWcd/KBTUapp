@@ -494,6 +494,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.seen_unlock(con, v, body.get("code"), body.get("level"))
         return {"unlocked": logic.unlocked(con, v)}
 
+    @app.post("/api/me/anthem")  # heard start to finish without skipping (the anthem sheet): the award, once
+    def anthem_heard(con: Con, v: Me):
+        return {"unlocked": logic.anthem_heard(con, v)}
+
     @app.post("/api/referral", status_code=204)
     def refer(con: Con, v: Me, body: dict = Body(...)):
         logic.refer(con, v, body.get("code"))

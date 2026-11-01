@@ -59,6 +59,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
+    ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
 ]
 
 
@@ -77,7 +78,7 @@ def _counts(con, uid: int) -> dict[str, int]:
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
-            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0)}
+            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "anthem": grants.get("anthem", 0)}
 
 
 def brought(con, uid: int) -> int:
@@ -287,6 +288,19 @@ def first_fifty(con, uid: int) -> None:
         ON CONFLICT (user_id, code) DO UPDATE SET level = MAX(level, 1), reached_at = excluded.reached_at""", (uid, core.now()))
     # no bot push: the app shows it the same minute (the lanyard's drop on the first Profile open), a DM on top of the
     # first run was one window too many (onboarding plan, Oct 31)
+
+
+def anthem_heard(con, v: Viewer) -> list[dict]:
+    """The anthem heard start to finish without skipping: the app knows (the sheet tracks skips) and says so at the song's
+    end; once per student, again is a no-op. Celebrated in the app only (it is open right then), no bot message."""
+    # ponytail: the app's word is trusted (owner, Nov 2: an award for fun, kept light); a server-side play token if it is ever farmed
+    need_student(v)
+    with tx(con):
+        if not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'anthem'", v.id):
+            con.execute("INSERT INTO achievement_grants (user_id, code, note, created_at) VALUES (?, 'anthem', 'listened', ?)", (v.id, core.now()))
+            con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'anthem', 1, ?)
+                ON CONFLICT (user_id, code) DO UPDATE SET level = MAX(level, 1)""", (v.id, core.now()))
+    return unlocked(con, v)
 
 
 def unlocked(con, v: Viewer) -> list[dict]:

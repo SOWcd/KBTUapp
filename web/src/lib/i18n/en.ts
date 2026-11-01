@@ -160,6 +160,8 @@ const en: Dict = {
   'ach.init26.how': "Volunteered at KBTU's 2026 freshmen initiation.",
   'ach.init26f.name': "Initiation 2026",
   'ach.init26f.how': "Was at KBTU's 2026 freshmen initiation.",
+  'ach.anthem.name': "Anthem, start to finish",
+  'ach.anthem.how': "Listened to KBTU's anthem start to finish without skipping.",
   'page.news': 'News',
   'page.team': 'Team',
   'team.remove': "Remove",
@@ -2191,6 +2193,7 @@ const en: Dict = {
   'anthem.endHere': "The line ends here",
   'anthem.endClear': "Clear the line's end",
   'anthem.stop': "Done",
+  'anthem.skipNote': "The award is for the whole anthem, no skipping",
 };
 
 export default en;
