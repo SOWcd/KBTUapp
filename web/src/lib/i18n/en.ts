@@ -58,7 +58,7 @@ const en: Dict = {
   'fc.deleteAsk': "Delete the post?",
   'fc.deleteText': "The bot will take it out of the channel.",
   'fc.postedSay': "Your post is in the channel!",
-  'fc.heldSay': "Sent to a moderator: they'll decide soon",
+  'fc.heldSay': "Your post will be in the channel soon",
   'fc.slow': "One post a day: more tomorrow",
   'fc.links': "No links, @mentions or phone numbers",
   'fc.modTitle': "Waiting for review",

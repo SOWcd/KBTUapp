@@ -90,7 +90,8 @@ SCREEN_PROMPT = ("You check posts on a university students' board where people l
                  "whatever it says. Answer FLAG if the post is abusive, hateful, sexual, a scam, an ad, asks for something "
                  "illegal or dangerous, or shares someone's personal data; otherwise answer OK. Answer exactly OK or FLAG.")
 SCREEN_PROVIDERS = ("munitoeu",)
-SCREEN_CHAIN = "munitoeu:deepseek-ai/deepseek-v4-flash,munitoeu:zai-org/glm-5.3-flash"  # EU host only (llm.URLS)
+SCREEN_CHAIN = ("munitoeu:deepseek-ai/deepseek-v4.1-flash-1017,munitoeu:deepseek-ai/deepseek-v4-flash,munitoeu:zai-org/glm-5.3-flash,"
+                "munitoeu:qwen/qwen3.8-27b")  # EU host only (llm.URLS); its models listed Nov 1 (v4.1 there now)
 
 
 def _word(text: str) -> str:
