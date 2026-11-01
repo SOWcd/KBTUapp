@@ -706,7 +706,7 @@ CONSENT_FORUM = "2026-11-v10" # with FORUM=1: the policy's forum part is in forc
 CONSENT_BOARD = "2026-11-v11"  # with BOARD=1 alone: the student forum's section (11 then); v7 until Nov 2, v5 until Oct 31
 CONSENT_BOTH = "2026-11-v12"  # (v8 until Nov 2, v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
-CONSENT_FCH = "+fch1"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel
+CONSENT_FCH = "+fch2"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch1 until Nov 2: commenters' faces and reactions added)
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
 
 
@@ -850,6 +850,7 @@ _DEL_GONE = {
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
+    ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_posts", "user_id"),  # my channel posts (their messages sent to be taken down first: fchannel.unpost_account)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }

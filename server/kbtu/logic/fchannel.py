@@ -7,6 +7,7 @@ through it). The author deletes, a moderator takes down, a deleted account's pos
 which keeps only the channel's message id. Only the owner reveals an anonymous author, each look in the audit log."""
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import unicodedata
@@ -14,7 +15,7 @@ import unicodedata
 from .. import texts
 from ..db import tx
 
-from .core import ApiError, PERSON, Viewer, log_action, need_student, one, person_ref, rows, short_name
+from .core import ApiError, PERSON, PERSON_COLS, Viewer, avatar_of, log_action, need_student, one, person_ref, rows, short_name, shown_name
 
 BODY_MAX = 1000
 POSTS_A_DAY = 5           # owner, Nov 1: one a day was too strict; a pace, not a ration
@@ -82,6 +83,7 @@ def feed(con, v: Viewer) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
+    faces = _faces(con, [p["id"] for p in ps if p["comments"]])
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
@@ -89,8 +91,36 @@ def feed(con, v: Viewer) -> list[dict]:
              "sign": anon if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id,
              # the comments: the students' count, and the bot's first comment (the link opens the thread there)
-             "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None})
+             "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
+             # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
+             "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"])})
     return out
+
+
+FACES = 3  # the newest commenters a card shows
+
+
+def _faces(con, ids: list[int]) -> dict[int, list[dict]]:
+    """The newest FACES distinct commenters of each post, one query for all of them: students of the app alone (a
+    stranger's comment never gets here), not banned, comments still in Telegram; a deleted account's rows went with
+    it. A face is an avatar and nothing more (no name: the card shows who is there, not a list)."""
+    if not ids:
+        return {}
+    got = rows(con, f"""SELECT f.post_id, {PERSON_COLS} FROM (SELECT post_id, user_id, ROW_NUMBER() OVER
+        (PARTITION BY post_id ORDER BY MAX(at) DESC, user_id) AS n FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(ids))})
+        AND user_id NOT IN (SELECT id FROM users WHERE banned_at IS NOT NULL) GROUP BY post_id, user_id) f
+        JOIN users u ON u.id = f.user_id LEFT JOIN students s ON s.user_id = u.id WHERE f.n <= ? ORDER BY f.post_id, f.n""", *ids, FACES)
+    out: dict[int, list[dict]] = {}
+    for r in got:
+        # name: one letter, the avatar's fallback without a photo (the name the app shows, its first letter)
+        out.setdefault(r["post_id"], []).append({"id": r["id"], "avatar": avatar_of(r), "name": (shown_name(r) or "?")[:1].upper()})
+    return out
+
+
+def _top(raw: str | None) -> list[dict]:
+    """The three biggest reactions, as Telegram shows them first."""
+    got = json.loads(raw) if raw else {}
+    return [{"emoji": k, "n": n} for k, n in sorted(got.items(), key=lambda kv: -kv[1])[:3]]
 
 
 def reserve(con, v: Viewer, body: dict) -> int:
@@ -267,12 +297,31 @@ def rules_sent(con, pid: int, msg_id: int) -> None:
     con.execute("DELETE FROM meta WHERE key = ?", (f"fchrules:{pid}",))
 
 
-def commented(con, root: int) -> None:
-    """A student's comment in the thread under this group copy (tgc.gate): counted on the forum post it copies, if it
-    is one. ponytail: counts what was written; a comment its author deletes in Telegram stays counted (the Bot API
-    never says), the bot's own deletions too; fine for a hint. A LIKE over meta per comment; an index if it grows"""
-    con.execute("""UPDATE fchan_posts SET comments = comments + 1 WHERE tg_msg > 0 AND tg_msg =
-        (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key LIKE 'fchcopy:%' AND value = ?)""", (str(root),))
+def commented(con, root: int, msg_id: int, tg: int) -> None:
+    """A student's comment (msg_id in the group) in the thread under this group copy (tgc.gate): counted on the forum
+    post it copies, if it is one, once per message (a batch replayed after a restart counts nothing twice), his face
+    kept for the card. ponytail: a comment its author deletes in Telegram stays counted (the Bot API never says); a
+    report's deletion leaves (migration 107's trigger); fine for a hint. A LIKE over meta per comment; an index if it grows"""
+    with tx(con):
+        p = one(con, """SELECT id FROM fchan_posts WHERE tg_msg > 0 AND tg_msg =
+            (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key LIKE 'fchcopy:%' AND value = ?)""", str(root))
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", tg)
+        if p and u and con.execute("INSERT OR IGNORE INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)",
+                                   (msg_id, p["id"], u["id"], _now())).rowcount:
+            con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE id = ?", (p["id"],))
+
+
+def reacted(con, upd: dict) -> None:
+    """Telegram's message_reaction_count on a channel post (the bot is the channel's admin): the post's reactions now,
+    {"👍": 3, "custom:<id>": 1, "paid": 2}, replacing the last ones (Telegram sends totals, a few minutes apart)."""
+    out = {}
+    for r in upd.get("reactions") or []:
+        ty = r.get("type") or {}
+        key = ty.get("emoji") if ty.get("type") == "emoji" else f"custom:{ty.get('custom_emoji_id')}" if ty.get("type") == "custom_emoji" else ty.get("type")
+        if key and isinstance(r.get("total_count"), int) and r["total_count"] > 0:
+            out[str(key)[:64]] = r["total_count"]
+    con.execute("UPDATE fchan_posts SET reactions = ? WHERE tg_msg = ? AND tg_msg > 0",
+                (json.dumps(out, ensure_ascii=False) if out else None, int(upd.get("message_id") or 0)))
 
 
 def sweep(con) -> None:

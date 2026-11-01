@@ -1058,6 +1058,28 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (chat_id, user_id)
     ) STRICT;
     INSERT INTO chat_asks (chat_id, user_id) SELECT id, added_by FROM chats WHERE status = 'pending' AND added_by IS NOT NULL;"""),
+    # (Nov 2) a forum post's card mirrors Telegram: the faces of the app's students who commented (one row per comment
+    # the bot saw, by its id in the discussion group: a comment seen twice counts once) and the channel post's
+    # reactions (Telegram's message_reaction_count, as {"👍": 3, "custom:<id>": 1}). A comment taken out of Telegram
+    # (a report's deletion) leaves the count and the faces, and comes back with a moderator's "keep": the trigger
+    # follows tgc_comments' status, so every path that changes it is covered (its 30-day sweep deletes, never updates)
+    (107, """ALTER TABLE fchan_posts ADD COLUMN reactions TEXT;
+    CREATE TABLE fchan_comments (
+      msg_id  INTEGER PRIMARY KEY,
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      gone    INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+    CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
+    CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
+    CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
+      WHEN (NEW.status IN ('deleting', 'deleted', 'restored')) != (OLD.status IN ('deleting', 'deleted', 'restored'))
+    BEGIN
+      UPDATE fchan_posts SET comments = MAX(0, comments + CASE WHEN NEW.status IN ('deleting', 'deleted', 'restored') THEN -1 ELSE 1 END)
+        WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
+      UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
+    END;"""),
 ]
 
 

@@ -131,7 +131,7 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
         elif not edit and root:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
-            logic.fchannel.commented(con, root)
+            logic.fchannel.commented(con, root, msg["message_id"], tg)
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes

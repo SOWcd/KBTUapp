@@ -1023,7 +1023,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
                            params={"offset": offset, "timeout": WAIT, "allowed_updates": json.dumps(
-                               ["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member"])}, timeout=WAIT + 10)
+                               ["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member",
+                                # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
+                                *(["message_reaction_count"] if cfg.forum_channel else [])])}, timeout=WAIT + 10)
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
@@ -1046,6 +1048,10 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
             try:  # all of it: a locked database even in the ban check replayed the whole batch
                 offset = upd["update_id"] + 1
                 if "edited_message" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group (above)
+                    continue
+                if rc := upd.get("message_reaction_count"):
+                    if (rc.get("chat") or {}).get("id") == cfg.forum_channel:
+                        logic.fchannel.reacted(con, rc)
                     continue
                 msg = upd.get("message") or {}
                 sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")

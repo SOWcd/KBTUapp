@@ -6,6 +6,7 @@
   // post shows its author as the app does (his nick if he has one, else the short name; his profile on a tap), while the
   // channel signs it with the short name; an anonymous one a mask, nobody behind it (the API sends no one). Every tap answers at once (a new post stands at the top "checking"; a delete leaves the list before the
   // server says so). It looks the same for every viewer, staff too: the channel's moderation lives in Admin alone.
+  // A card mirrors Telegram, read-only: the post's top reactions and its newest commenters' faces (Nov 2).
   import { tick, untrack } from 'svelte';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import SquarePen from '@lucide/svelte/icons/square-pen';
@@ -50,6 +51,8 @@
   // the comments in Telegram: opened at the bot's first comment (?comment=, Telegram's link into a post's comments);
   // an older post without one: the post itself, its Comments bar under it
   const comments = (p: ChannelFeedPost) => `${CHANNEL}/${p.msg}${p.thread ? `?comment=${p.thread}` : ''}`;
+  // a reaction as plain text: a custom emoji (only its id comes) and a paid star as their nearest plain ones
+  const glyph = (e: string) => e.startsWith('custom:') ? '✨' : e === 'paid' ? '⭐' : e;
 
   // my own row's mark: on its way (the AI looking), under review, removed, else simply "mine"
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'neutral', key: 'fc.checking' } as const
@@ -116,8 +119,15 @@
           <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
           {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
           {#if p.msg && p.status === 'live'}
+            <!-- Telegram's reactions, read-only (the whole card opens the post, where they are left) -->
+            {#if p.reactions.length}
+              <div class="rx">{#each p.reactions as r (r.emoji)}<span class="chip"><span class="e">{glyph(r.emoji)}</span>{r.n}</span>{/each}</div>
+            {/if}
             <button class="cm" onclick={() => { haptic.tap(); openLink(comments(p)); }}>
-              <MessageCircle size={18} strokeWidth={2} /><span>{t('fc.comments')}</span>{#if p.comments}<span class="n">{p.comments}</span>{/if}
+              <MessageCircle size={18} strokeWidth={2} /><span>{t('fc.comments')}</span>
+              <!-- who is talking there: the newest commenters' faces (app students only), then the count -->
+              {#if p.faces.length}<span class="faces">{#each p.faces as f (f.id)}<Avatar person={f} size={20} tappable={false} />{/each}</span>{/if}
+              {#if p.comments}<span class="n" class:after={p.faces.length}>{p.comments}</span>{/if}
             </button>
           {/if}
         {/snippet}
@@ -168,6 +178,16 @@
     padding: var(--s-2) 0 0; border-top: 0.5px solid var(--separator); font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
   .cm:active { opacity: 0.6; }
   .cm .n { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .cm .n.after { margin-left: 0; }
+  /* the faces: overlapping, each cut out of the card by a ring of its colour */
+  .faces { margin-left: auto; display: flex; }
+  .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface); }
+  .faces :global(.av + .av) { margin-left: -6px; }
+  /* reactions: small quiet pills under the words, as Telegram shows them */
+  .rx { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-top: var(--s-3); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 var(--s-2); border-radius: var(--r-full); background: var(--surface-2);
+    font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .chip .e { font-size: var(--fs-sub); line-height: 1; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .tail { height: calc(var(--bottom) + var(--s-8)); }
 </style>

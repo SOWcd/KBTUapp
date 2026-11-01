@@ -395,6 +395,9 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("DROP TRIGGER fchan_comment_gone")  # 107's
+    con.execute("DROP TABLE fchan_comments")
+    con.execute("ALTER TABLE fchan_posts DROP COLUMN reactions")
     for col in ("rules_for", "rules_msg", "comments", "sign"):  # 105's, added again on the way up
         con.execute(f"ALTER TABLE fchan_posts DROP COLUMN {col}")
     for col in ("section", "section_ai", "section_try"):  # 106's
@@ -448,7 +451,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread"}  # no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions"}  # no user id
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -457,7 +460,8 @@ def test_post_feed(env, monkeypatch):
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread")} == {
-            "body": "A quiet confession", "status": "live", "anon": True, "sign": texts.bot_message("ru", "fch_anon")[0], "person": None, "mine": False}
+            "body": "A quiet confession", "status": "live", "anon": True, "sign": texts.bot_message("ru", "fch_anon")[0], "person": None, "mine": False,
+            "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]
@@ -570,4 +574,93 @@ def test_post_first_comment(env, monkeypatch):
     for _ in range(3):
         tick(cfg, tg, con)
     assert sent() - before == 1
+    con.close()
+
+
+def test_post_faces_and_reactions(env, monkeypatch):
+    """A card mirrors Telegram: the newest three commenters' faces (app students alone, a face and one letter, no name),
+    each comment counted once; a comment a report took out leaves the count and the faces, a moderator's keep brings it
+    back; a banned student's face hides, a deleted account's goes. One query for every card. Reactions: Telegram's
+    totals stored per post, the top three shown, a custom emoji by its id."""
+    c, cfg, _, _ = setup(env, monkeypatch)
+    for i, n in enumerate(("ann", "bob", "cat", "dan", "eve"), 1):
+        login(c, i, n)
+    con = db.connect(cfg.db_path)
+    tg = Telegram()
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Who is going to the hackathon?", "anon": True}).json()
+    q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Quiet post"}).json()
+    tick(cfg, tg, con)
+    mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+
+    def gate(*upds: dict) -> None:
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
+                await tgc.gate(cfg, http, con, list(upds))
+        asyncio.run(go())
+    gate({"message": {"message_id": 55, "chat": {"id": G, "type": "supergroup"}, "is_automatic_forward": True, "date": 0, "text": "x",
+                      "sender_chat": {"id": CH, "type": "channel", "username": "KBTUappForum"}, "forward_origin": {"type": "channel", "message_id": mid}}})
+    clock = [int(time.time())]
+    set_clock(monkeypatch, lambda: clock[0])
+
+    def comment(msg: int, tg_id: int) -> dict:
+        clock[0] += 10
+        return {"message": {"message_id": msg, "from": {"id": tg_id}, "chat": {"id": G, "type": "supergroup"}, "date": 0, "text": "me too",
+                            "message_thread_id": 55, "reply_to_message": {"message_id": 55, "is_automatic_forward": True}}}
+    for msg, who in ((60, 2), (61, 3), (62, 99), (63, 4), (64, 5), (65, 2)):                    # 99: no app account
+        gate(comment(msg, who))
+    gate(comment(65, 2))                                                                        # the same message again (a replay)
+
+    def card(pid: int = p["id"]) -> dict:
+        return next(x for x in c.get("/api/forum-posts/feed", headers=tma(3)).json() if x["id"] == pid)
+    k = card()
+    assert k["comments"] == 5 and [f["id"] for f in k["faces"]] == [2, 5, 4]                  # newest first, distinct, the stranger's never
+    assert k["faces"][0] == {"id": 2, "avatar": None, "name": "B"} and "Bob" not in json.dumps(k["faces"])
+    assert card(q["id"])["faces"] == [] and card(q["id"])["comments"] == 0
+    # a report's deletion: out of the count and the faces; a moderator keeps it: back
+    cid = con.execute("""INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, created_at)
+        VALUES (?, 64, 5, 5, 'me too', 0)""", (G,)).lastrowid
+    con.execute("UPDATE tgc_comments SET status = 'deleting' WHERE id = ?", (cid,))
+    k = card()
+    assert k["comments"] == 4 and [f["id"] for f in k["faces"]] == [2, 4, 3]
+    con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ?", (cid,))
+    assert card()["comments"] == 4
+    con.execute("UPDATE tgc_comments SET status = 'kept' WHERE id = ?", (cid,))  # (the trigger is its status, any path)
+    assert card()["comments"] == 5
+    # banned: hidden; a deleted account: gone (its rows with it)
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = 2")
+    assert [f["id"] for f in card()["faces"]] == [5, 4, 3]
+    con.execute("UPDATE users SET banned_at = NULL WHERE id = 2")
+    delete_now(c, cfg, tma(5))
+    assert [f["id"] for f in card()["faces"]] == [2, 4, 3]
+    assert con.execute("SELECT COUNT(*) FROM fchan_comments WHERE user_id = 5").fetchone()[0] == 0
+    # one query for every card's faces, however many posts
+    seen: list[str] = []
+    con2 = db.connect(cfg.db_path)
+    con2.set_trace_callback(seen.append)
+    logic.fchannel.feed(con2, logic.Viewer(id=3, role="user", student=True))
+    assert sum("fchan_comments" in s for s in seen) == 1
+    con2.close()
+    # reactions: Telegram's totals on the channel post (the bot asks for them), the top three on the card
+    asked: list[str] = []
+
+    def ears(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/getUpdates"):
+            asked.append(request.url.params["allowed_updates"])
+        return tg(request)
+    tg.batch = [{"update_id": 1, "message_reaction_count": {"chat": {"id": CH, "type": "channel"}, "message_id": mid, "date": 0, "reactions": [
+        {"type": {"type": "emoji", "emoji": "\U0001f44d"}, "total_count": 3}, {"type": {"type": "emoji", "emoji": "\U0001f525"}, "total_count": 7},
+        {"type": {"type": "custom_emoji", "custom_emoji_id": "5368"}, "total_count": 1}, {"type": {"type": "emoji", "emoji": "\U0001f602"}, "total_count": 2}]}},
+        {"update_id": 2, "message_reaction_count": {"chat": {"id": -1009, "type": "channel"}, "message_id": mid, "date": 0, "reactions": [
+            {"type": {"type": "emoji", "emoji": "\U0001f4a9"}, "total_count": 9}]}}]                # another channel's same number: not ours
+
+    async def poll():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(ears)) as http:
+            await bot.hear(cfg, http, 0)
+    asyncio.run(poll())
+    assert "message_reaction_count" in json.loads(asked[0])
+    assert card()["reactions"] == [{"emoji": "\U0001f525", "n": 7}, {"emoji": "\U0001f44d", "n": 3}, {"emoji": "\U0001f602", "n": 2}]
+    logic.fchannel.reacted(con, {"message_id": mid, "reactions": [{"type": {"type": "custom_emoji", "custom_emoji_id": "5368"}, "total_count": 4}]})
+    assert card()["reactions"] == [{"emoji": "custom:5368", "n": 4}]
+    logic.fchannel.reacted(con, {"message_id": mid, "reactions": []})
+    assert card()["reactions"] == []
     con.close()
