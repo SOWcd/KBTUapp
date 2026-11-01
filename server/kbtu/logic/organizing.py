@@ -799,6 +799,8 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
     as the scanner; marked "by hand" for the organizer and the CSV."""
     with tx(con):
         e = _staff_event(con, v, eid, "door")
+        if uid == v.id and not can(con, v, e["org_id"], "events"):
+            raise ApiError("forbidden")  # the door is every member's: marking myself as came is for whoever runs the event
         t = core.now()
         if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             return {"result": "closed"}

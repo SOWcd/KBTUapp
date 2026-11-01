@@ -1010,6 +1010,7 @@ def test_checkin_by_name(env):
     r = c.post("/api/events/1/checkin", headers=M, json={"userId": ali["id"]}).json()
     assert (r["result"], r["person"]["id"], r["came"]) == ("ok", ali["id"], 1)
     assert c.post("/api/events/1/checkin", headers=M, json={"userId": zhan["id"]}).json()["result"] == "not_found"
+    assert c.post("/api/events/1/checkin", headers=M, json={"userId": mem["id"]}).status_code == 403  # not myself at the door
     assert [a["manual"] for a in c.get("/api/events/1/attendees", headers=tma(70, "Pres")).json()] == [True]
     assert c.delete(f"/api/events/1/checkin/{ali['id']}", headers=M).status_code == 204       # a wrong tap
     assert c.get("/api/events/1/door", headers=M).json()[0]["checkedInAt"] is None
