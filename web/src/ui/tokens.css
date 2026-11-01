@@ -92,10 +92,12 @@
   --fill: rgba(235, 238, 255, 0.12);
   --fill-2: rgba(235, 238, 255, 0.2);
   --thumb: rgba(235, 238, 255, 0.24);
-  /* the tab bar (owner's pick, Oct 31: Opal's): a smoky body, the active tab on a darker pill, its icon in --text */
+  /* the tab bar (owner's pick, Oct 31: Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
+     icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 30, 38, 0.45);
-  --lens: rgba(0, 0, 0, 0.38);
-  --dock-ink: rgba(244, 246, 255, 0.55);
+  --lens: rgba(235, 238, 255, 0.16);
+  --lens-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.28), 0 2px 8px rgba(0, 0, 0, 0.32);
+  --dock-ink: rgba(244, 246, 255, 0.5);
   --menu-bg: rgba(30, 34, 52, 0.9); /* a Menu: thick glass, what is under it must not read through */
   --text: #F4F6FF;
   --text-2: rgba(240, 243, 255, 0.68);
@@ -139,8 +141,9 @@
   --fill-2: rgba(11, 20, 51, 0.13);
   --thumb: #FFFFFF;
   --dock: rgba(250, 251, 255, 0.62);
-  --lens: rgba(11, 20, 51, 0.09);
-  --dock-ink: rgba(11, 20, 51, 0.5);
+  --lens: rgba(255, 255, 255, 0.92);
+  --lens-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.06), 0 2px 8px rgba(11, 20, 51, 0.14);
+  --dock-ink: rgba(11, 20, 51, 0.45);
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0B1433;
   --text-2: rgba(11, 20, 51, 0.70);

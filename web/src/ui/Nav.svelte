@@ -1,6 +1,6 @@
 <script lang="ts">
   // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (owner, Oct 31: a label under
-  // each icon only repeated it); the active one in full ink on a darker pill that slides to it with a jelly squash. Equal tabs
+  // each icon only repeated it); the active one in the accent on a raised lighter pill that slides to it with a jelly squash. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
   // switches on release. Always the slim size (owner, Oct 31: it used to shrink only while scrolling down); hides under a sheet (and the Feed). The map: its own round glass
   // button beside it.
@@ -108,10 +108,11 @@
       rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base, .mapb > .tone-base { background: var(--dock); }
-  /* the lens: a soft rounded rect behind the active tab (--text at 8 %: seen on the near-white light bar too), moved by
-     `translate` so the jelly's `transform` squashes it on the way */
+  /* the lens: a raised glass pill behind the active tab (lighter than the bar in both themes, a soft shadow under it),
+     moved by `translate` so the jelly's `transform` squashes it on the way */
   .lens {
     position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full); background: var(--lens);
+    box-shadow: var(--lens-shadow);
     transition: translate 380ms var(--ease-spring);
   }
   .tab {
@@ -120,7 +121,7 @@
     transition: color var(--t-base) var(--ease), transform 350ms cubic-bezier(.3, 1.6, .5, 1);
   }
   .tab:active { transform: scale(0.94); transition-duration: var(--t-base), 80ms; }
-  .tab.on { color: var(--text); }
+  .tab.on { color: var(--accent-text); }
   .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
   .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 </style>
