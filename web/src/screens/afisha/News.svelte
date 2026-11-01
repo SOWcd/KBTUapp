@@ -150,7 +150,8 @@
       <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
       {@const tg = p.tg}
       {#if tg.media === 'video' && playing.has(p.id)}
-        <iframe class="tgw" src={embed(tg.url)} title={p.title} use:fit allow="fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+        <iframe class="tgw" src={embed(tg.url)} title={p.title} use:fit allow="fullscreen; picture-in-picture" referrerpolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation"></iframe>
       {:else if tg.media === 'video'}<button class="tgm" onclick={() => { haptic.tap(); playing = new Set([...playing, p.id]); }}><Play size={16} />{t('tg.video')}</button>
       {:else if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t('tg.file')}</button>{/if}
       <footer class="re tgf">
