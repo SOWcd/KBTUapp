@@ -22,6 +22,10 @@
   import { nameOf } from '../../lib/short';
   import { session } from '../../lib/state/session.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import Medal from '@lucide/svelte/icons/medal';
+  import Crown from '@lucide/svelte/icons/crown';
+  import Lightbulb from '@lucide/svelte/icons/lightbulb';
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
 
   let { overlay, it, mine = false }: { overlay: Overlay; it: ShelfItem; mine?: boolean } = $props();
   let sharing = $state(false);
@@ -125,7 +129,8 @@
   const kicker = $derived(a?.code === 'init26' || a?.code === 'init26f' ? t('aw.init26') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
-  $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge'); });
+  $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
+    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
   // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
