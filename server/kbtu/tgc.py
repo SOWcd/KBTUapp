@@ -214,44 +214,57 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         await _call(cfg, http, "unbanChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "only_if_banned": True})
 
 
+def _gone(r: dict) -> bool:
+    """Telegram says the message isn't there (deleted already): nothing left to take down."""
+    return r.get("error_code") == 400 and "not found" in str(r.get("description")).lower()
+
+
 async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The forum channel's posts (logic/fchannel.py), in the bot's round: first what must leave (deleted by the author,
-    taken down, a deleted account's), then what the AI or a moderator let out. Plain text, no parse_mode, no preview:
-    the words go as they are, never as markup. The bot needs in the channel: post, edit and delete others' messages."""
+    taken down, a deleted account's), then their copies in the discussion group, then what the AI or a moderator let
+    out. Plain text, no parse_mode, no preview: the words go as they are, never as markup. The bot needs in the
+    channel: post, edit and delete others' messages."""
     if not cfg.forum_channel:
         return
     F = logic.fchannel
     F.sweep(con)
+    F.lost(con)  # a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
     for u in F.unposts(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"]})
-        if r.get("ok"):
-            await _drop_copy(cfg, http, con, u["msg_id"])
-        elif r.get("error_code") == 400:  # too old to delete (48 h) or gone already: its words edited away (edits sync to the copy)
+        if r.get("ok") or _gone(r):
+            F.copy_gone(con, u["msg_id"])  # its copy in the group goes next (below), whenever its mapping is known
+        elif r.get("error_code") == 400:  # too old to delete (48 h), or rights lost: its words edited away (edits sync to the copy)
             text = texts.bot_message("ru", "fch_gone" if u["why"] == "author" else "fch_removed")[0]
-            r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
-            if not r.get("ok") and r.get("error_code") != 400:
-                break
+            e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
+            if not (e.get("ok") or _gone(e) or "not modified" in str(e.get("description"))):
+                F.unpost_later(con, u["msg_id"])  # still public: tried again in 10 minutes (the warning is in the log)
+                continue
         else:
-            break  # the network, a flood wait, lost rights: next round
+            break  # the network, a flood wait: next round
         F.unposted(con, u["msg_id"])
+    for key, root in F.copies(con):
+        if not cfg.tgc_chat:
+            break
+        if root is not None:
+            r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.tgc_chat, "message_id": root})
+            if not (r.get("ok") or _gone(r)):
+                break
+        F.copy_done(con, key, root)
     anon, button = texts.bot_message("ru", "fch_anon")  # the channel speaks Russian, as the events' one does
     for pid, body, name in F.to_send(con):
-        # ponytail: a send that reached Telegram but timed out here is sent again next round (a rare double); a
-        # sendMessage idempotency key doesn't exist, a moderator deletes the copy
+        if not F.sending(con, pid):  # marked "sending" (tg_msg 0, committed) before it goes; deleted meanwhile: skipped
+            continue
         r = await _call(cfg, http, "sendMessage", {
             "chat_id": cfg.forum_channel, "text": f"{body}\n\n— {name or anon}", "link_preview_options": {"is_disabled": True},
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp"}]]}})
-        if not r.get("ok"):
+        if r.get("ok"):
+            F.sent(con, pid, r["result"]["message_id"])
+        elif r.get("error_code"):  # Telegram said no: it isn't in the channel, the next round tries again
+            F.unsend(con, pid)
             break
-        F.sent(con, pid, r["result"]["message_id"])
+        else:  # no answer: it may be in the channel or not; F.lost hands it to a moderator next round
+            break
 
-
-async def _drop_copy(cfg: Config, http: httpx.AsyncClient, con, msg_id: int) -> None:
-    """A deleted channel post's copy in the discussion group (the root of its comments) goes too: it holds the words."""
-    root = one(con, "SELECT key FROM meta WHERE key LIKE 'tgcpost:%' AND value LIKE ?", f"% {msg_id}")
-    if root and cfg.tgc_chat:
-        await _call(cfg, http, "deleteMessage", {"chat_id": cfg.tgc_chat, "message_id": int(root[0].split(":")[1])})
-        con.execute("DELETE FROM meta WHERE key = ?", (root[0],))
 
 
 # the author's messages about one comment, each said only while it's still true: "under review" while a moderator hasn't

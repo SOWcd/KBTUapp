@@ -254,6 +254,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the channel's comments (TG_COMMENTS_CHAT) add their section: whatever the version, everyone agrees once more
     policy += logic.CONSENT_TGC if cfg.tgc_chat else ""
     policy += logic.CONSENT_FCH if cfg.forum_channel else ""  # posts in the forum channel: the same, after it
+    if cfg.forum_channel and not cfg.tgc_chat:  # a deleted post's copy in its discussion group would stay with the words
+        log.warning("FORUM_CHANNEL is set without TG_COMMENTS_CHAT: deleted posts' copies in its discussion group stay")
     app.state.policy = policy
 
     @app.get("/api/me")

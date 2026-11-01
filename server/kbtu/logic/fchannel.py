@@ -8,6 +8,8 @@ which keeps only the channel's message id. Only the owner reveals an anonymous a
 from __future__ import annotations
 
 import re
+import secrets
+import unicodedata
 
 from ..db import tx
 
@@ -15,25 +17,41 @@ from .core import ApiError, PERSON, Viewer, log_action, need_student, one, perso
 
 BODY_MAX = 1000
 POSTS_A_DAY = 1
+UNPOST_SPREAD = 72 * 3600  # a deleted account's anonymous posts leave within it, each at its own moment
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
-# what Telegram turns into a link or a ping even in plain text: a scheme, www., a domain, an e-mail, @handle, a phone
-# (+..., a Kazakh 8/7 7xx number in any spacing, ten digits in a row). ponytail: any "word.letters" counts as a domain
-# ("node.js" too), since Telegram knows every TLD; a TLD list if students trip on it
-LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}\b|@\w{3,}|\+\d[\d\s().-]{7,}\d"
-                   r"|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b|\b\d{10,}\b)")
-INVISIBLE = re.compile("[­؜᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]")  # zero-width and direction marks
+# what Telegram turns into a link or a ping even in plain text, looked for in the text NFKC-normalised (fullwidth
+# letters and dots fold to ASCII; the ideographic dots count as dots): a scheme, www., a domain (Latin or IDN labels,
+# a Latin TLD or a Cyrillic one Telegram links), an e-mail, @handle, a phone or a card number (+..., a Kazakh 8/7 7xx
+# number, ten digits or more in any spacing). ponytail: any "word.letters" counts as a domain ("node.js" too), since
+# Telegram knows every Latin TLD; a TLD list if students trip on it
+_CYR_TLD = "\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d|\u0441\u0430\u0439\u0442|\u043e\u0440\u0433|\u043a\u043e\u043c|\u043c\u043e\u0441\u043a\u0432\u0430|\u049b\u0430\u0437|\u0431\u0435\u043b|\u0443\u043a\u0440|\u0441\u0440\u0431|\u0434\u0435\u0442\u0438"
+LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_][\w-]*)*\.(?:[a-z]{2,}|" + _CYR_TLD + r")\b|@\w{3,}"
+                   r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b|\d(?:[\s-]?\d){9,})")
+DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
+FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
+ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
+SIGNED = re.compile("^[\u2014\u2013\u2012\u2015-]")  # a last line like the bot's "- Name L." signature
+
+
+def _visible(c: str) -> bool:
+    """Not a format, private-use or unassigned character (tag letters, zero-width and direction marks), not a filler
+    letter, not an ideographic variation selector: what can hide words from the check and the moderators."""
+    return c == ZWJ or (unicodedata.category(c) not in ("Cf", "Co", "Cn") and c not in FILLERS and not "\U000e0100" <= c <= "\U000e01ef")
 
 
 def _clean(raw: object) -> str:
-    """The words as published: invisible characters out (they'd hide a link from the check), lines trimmed."""
-    s = INVISIBLE.sub("", str(raw or ""))
+    """The words as published and as the AI reads them: invisible characters out, lines trimmed; refused with a link,
+    a mention, a phone or a signature-like last line (an anonymous post posing as a named one)."""
+    s = "".join(c for c in str(raw or "") if _visible(c) or c == "\n")
     s = "\n".join(line.rstrip() for line in s.strip().splitlines())
     s = re.sub(r"\n{3,}", "\n\n", s)
     if not 2 <= len(s) <= BODY_MAX:
         raise ApiError("bad_input")
-    if LINKY.search(s):
+    if LINKY.search(unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)):
         raise ApiError("bad_input", "links")
+    if "\n" in s and SIGNED.match(s.rsplit("\n", 1)[1].lstrip()):
+        raise ApiError("bad_input", "signature")
     return s
 
 
@@ -63,12 +81,13 @@ def reserve(con, v: Viewer, body: dict) -> int:
 
 
 def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
-    """The AI's word on a reserved post (untouched meanwhile): 'ok' goes live (the bot's round sends it), as does a named
-    'person'; an anonymous 'person', a 'flag' or no answer wait for a moderator, and so does anything past the hour's cap."""
+    """The AI's word on a reserved post (untouched meanwhile): only 'ok' goes live (the bot's round sends it); 'person'
+    (named or not: an accusation goes out under the bot's name), a 'flag' or no answer wait for a moderator, and so does
+    anything past the hour's cap."""
     with tx(con):
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'held' AND why = 'check'", pid)
         if p:
-            if verdict == "ok" or verdict == "person" and not p["anon"]:
+            if verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", _now() - 3600)[0] >= CHANNEL_AN_HOUR
                 status, why = ("held", "busy") if busy else ("live", None)
             else:
@@ -95,9 +114,12 @@ def delete(con, v: Viewer, pid: int) -> None:
 
 
 def unpost_account(con, uid: int) -> None:
-    """A deleted account's published posts leave the channel (account.delete_me, before the rows cascade away)."""
-    con.execute("""INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) SELECT tg_msg, 'author', ? FROM fchan_posts
-        WHERE user_id = ? AND tg_msg IS NOT NULL""", (_now(), uid))
+    """A deleted account's published posts leave the channel (account.delete_me, before the rows cascade away). The
+    anonymous ones each at a random moment within 3 days (the privacy policy says so): gone all in one second together
+    with a named one, they'd tell the channel whose they were, and that they share an author."""
+    for p in rows(con, "SELECT tg_msg, anon FROM fchan_posts WHERE user_id = ? AND tg_msg > 0", uid):
+        at = _now() + (secrets.randbelow(UNPOST_SPREAD) if p["anon"] else 0)
+        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, 'author', ?)", (p["tg_msg"], at))
 
 
 # ---- the bot's side (tgc.py): what to send, what was sent, what to take down
@@ -112,10 +134,31 @@ def to_send(con) -> list:
     return out
 
 
+def sending(con, pid: int) -> bool:
+    """Marked as on its way (tg_msg 0) before the bot sends it: a send cut off can't go twice by itself (lost())."""
+    return con.execute("UPDATE fchan_posts SET tg_msg = 0 WHERE id = ? AND status = 'live' AND tg_msg IS NULL", (pid,)).rowcount > 0
+
+
 def sent(con, pid: int, msg_id: int) -> None:
-    """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out."""
-    if not con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IS NULL", (msg_id, pid)).rowcount:
-        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, 'author', ?)", (msg_id, _now()))
+    """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
+    right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
+    if not con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg = 0", (msg_id, pid)).rowcount:
+        p = one(con, "SELECT status FROM fchan_posts WHERE id = ?", pid)
+        why = "moderator" if p and p["status"] == "hidden" else "author"
+        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (msg_id, why, _now()))
+
+
+def unsend(con, pid: int) -> None:
+    """Telegram refused it (it isn't in the channel): the next round tries again."""
+    con.execute("UPDATE fchan_posts SET tg_msg = NULL WHERE id = ? AND tg_msg = 0", (pid,))
+
+
+def lost(con) -> None:
+    """Sends with no answer (a timeout, a crash between the send and sent()): the post may be in the channel or not, and
+    a second send would leave a copy nobody can take down. A moderator looks at the channel and decides. ponytail: one
+    deleted or taken down while its send was lost stays untracked if it did go out; the bot's one process makes that a
+    crash in a two-second window"""
+    con.execute("UPDATE fchan_posts SET status = 'held', why = 'lost', tg_msg = NULL WHERE status = 'live' AND tg_msg = 0")
 
 
 def sweep(con) -> None:
@@ -125,7 +168,35 @@ def sweep(con) -> None:
 
 
 def unposts(con) -> list:
-    return rows(con, "SELECT msg_id, why FROM tg_unpost ORDER BY at LIMIT 20")
+    """Channel messages due to leave now, oldest first."""
+    return rows(con, "SELECT msg_id, why FROM tg_unpost WHERE at <= ? ORDER BY at LIMIT 20", _now())
+
+
+def unpost_later(con, msg_id: int) -> None:
+    """Neither deleted nor edited (rights lost?): still public, so tried again in 10 minutes, never dropped."""
+    con.execute("UPDATE tg_unpost SET at = ? WHERE msg_id = ?", (_now() + 600, msg_id))
+
+
+def copy_gone(con, msg_id: int) -> None:
+    """A channel post left: its copy in the discussion group (the words again, the comments' root) is to go too, now or
+    once the copy's mapping arrives (tgc.gate writes it when Telegram forwards the post into the group)."""
+    con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"fchgone:{msg_id}", str(_now())))
+
+
+def copies(con) -> list[tuple[str, int | None]]:
+    """Group copies to delete: (key, the copy's id); None once a week passed with no mapping (no group linked)."""
+    out = []
+    for key, at in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'fchgone:%'"):
+        root = one(con, "SELECT key FROM meta WHERE key LIKE 'tgcpost:%' AND value LIKE ?", f"% {key.split(':')[1]}")
+        if root:
+            out.append((key, int(root[0].split(":")[1])))
+        elif int(at) < _now() - 7 * 86400:
+            out.append((key, None))
+    return out
+
+
+def copy_done(con, key: str, root: int | None) -> None:
+    con.execute("DELETE FROM meta WHERE key = ? OR key = ?", (key, f"tgcpost:{root}"))
 
 
 def unposted(con, msg_id: int) -> None:

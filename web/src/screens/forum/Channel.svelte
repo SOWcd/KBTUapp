@@ -42,11 +42,11 @@
   let body = $state(''), anon = $state(false), busy = $state(false);
   const ready = $derived(body.trim().length >= 2 && !busy);
   const TAG = { live: 'success', held: 'warning', hidden: 'neutral' } as const;
-  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy' };
+  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost' };
 
   function fail(e: unknown, fallback: Key = 'common.error') {
     haptic.error();
-    const why = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : fallback) : fallback;
+    const why = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : fallback) : fallback;
     say(t(why), 'pleading_face_3d');
   }
 

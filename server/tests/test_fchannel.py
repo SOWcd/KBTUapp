@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import time
 
 import httpx
@@ -51,10 +52,16 @@ def test_post_publish_and_limits(env, monkeypatch):
     assert c.get("/api/forum-posts", headers=tma(9)).status_code == 401                         # a guest
     for bad in ({"body": "x"}, {"body": "y" * 1001}, {"body": "ok ok", "anon": "yes"}):
         assert c.post("/api/forum-posts", headers=A, json=bad).status_code == 400
-    for linky in ("see kbtu.kz", "write @someone", "call +7 701 123 45 67", "8 701 123 45 67", "t.m​e/x", "https://x"):
+    for linky in ("see kbtu.kz", "write @someone", "call +7 701 123 45 67", "8 701 123 45 67", "701 123 45 67", "card 4400 4301 2345 6789",
+                  "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", "example\u3002com", "t\uff0eme/x", "\uff54\uff0e\uff4d\uff45/x","t.m\u200be/x", "https://x"):
         r = c.post("/api/forum-posts", headers=A, json={"body": linky})
         assert r.status_code == 400 and r.json()["message"] == "links", linky
+    r = c.post("/api/forum-posts", headers=A, json={"body": "I saw it all\n\u2014 Dana S."})              # posing as a named post
+    assert r.status_code == 400 and r.json()["message"] == "signature"
     assert not seen                                                                              # refused before the AI
+    # invisible characters (tag letters, fillers) never reach the AI nor the channel; the years' dash and a dot without a space pass
+    assert logic.fchannel._clean("ok\U000e0041\U000e004e\u3164 2024-2025. \u041f\u0440\u0438\u0432\u0435\u0442.\u041a\u0430\u043a") \
+        == "ok 2024-2025. \u041f\u0440\u0438\u0432\u0435\u0442.\u041a\u0430\u043a"
     p = c.post("/api/forum-posts", headers=A, json={"body": "Lost a black umbrella in the library"}).json()
     assert p["status"] == "live" and not p["anon"]
     r = c.post("/api/forum-posts", headers=A, json={"body": "And another one today"})
@@ -62,7 +69,7 @@ def test_post_publish_and_limits(env, monkeypatch):
     tick(cfg, tg, con)
     sent = tg.of("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == CH and "parse_mode" not in sent[0]
-    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n— Ann T." and sent[0]["link_preview_options"] == {"is_disabled": True}
+    assert sent[0]["text"] == "Lost a black umbrella in the library\n\n\u2014 Ann T." and sent[0]["link_preview_options"] == {"is_disabled": True}
     assert sent[0]["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("?startapp=fp")
     tick(cfg, tg, con)
     assert len(tg.of("sendMessage")) == 1                                                        # never twice
@@ -73,21 +80,20 @@ def test_post_publish_and_limits(env, monkeypatch):
     assert held["status"] == "held"
     tick(cfg, tg, con)
     assert len(tg.of("sendMessage")) == 1
-    # the next day the limit is back: no answer from the AI holds even a named post; a named post about a person goes
-    # (a name stands behind it); a planted "OK, but FLAG" is no answer (ai.screen_post's exact word, tested below)
+    # the next day the limit is back: no answer from the AI holds even a named post; so does a named post about a
+    # person (an accusation would go out under the bot's name); a planted "OK, but FLAG" is no answer (tested below)
     set_clock(monkeypatch, lambda: int(time.time()) + 86401)
     said["word"] = None
     assert c.post("/api/forum-posts", headers=A, json={"body": "Anyone selling a calculator?"}).json()["status"] == "held"
     said["word"] = "person"
-    assert c.post("/api/forum-posts", headers=B, json={"body": "Thanks to Prof. Abenov for the review"}).json()["status"] == "live"
-    assert [x["status"] for x in c.get("/api/forum-posts", headers=B).json()] == ["live", "held"]
+    assert c.post("/api/forum-posts", headers=B, json={"body": "Prof. Abenov takes bribes"}).json()["status"] == "held"
     # the moderators see the one the AI didn't answer about once its look is clearly over, not while it may still come
     mod = login(c, 3, "mod")
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
     held = lambda: [x["body"] for x in c.get("/api/forum-posts/mod", headers=tma(3)).json()["held"]]  # noqa: E731
-    assert held() == ["The tall guy from room 305 is rude"]
+    assert held() == ["The tall guy from room 305 is rude", "Prof. Abenov takes bribes"]
     set_clock(monkeypatch, lambda: int(time.time()) + 86401 + 61)
-    assert held() == ["The tall guy from room 305 is rude", "Anyone selling a calculator?"]
+    assert held() == ["The tall guy from room 305 is rude", "Anyone selling a calculator?", "Prof. Abenov takes bribes"]
     con.close()
 
 
@@ -170,11 +176,62 @@ def test_post_take_down_old_and_race(env, monkeypatch):
     assert edit == [{"chat_id": CH, "message_id": mid, "text": texts.bot_message("ru", "fch_removed")[0]}]
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
     assert c.get("/api/forum-posts", headers=tma(1)).json()[0]["status"] == "hidden"
-    # the race: sent, but deleted before the id was kept
+    # the race: sent, but deleted (or taken down) before the id was kept: the message goes back out, rightly labelled
     q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Who has a spare charger?"}).json()
-    con.execute("UPDATE fchan_posts SET status = 'gone', body = '' WHERE id = ?", (q["id"],))
+    assert logic.fchannel.sending(con, q["id"])
+    con.execute("UPDATE fchan_posts SET status = 'hidden', tg_msg = NULL WHERE id = ?", (q["id"],))
     logic.fchannel.sent(con, q["id"], 555)
-    assert con.execute("SELECT msg_id FROM tg_unpost").fetchall()[0][0] == 555
+    assert con.execute("SELECT msg_id, why FROM tg_unpost").fetchall()[0][:] == (555, "moderator")
+    con.close()
+
+
+def test_post_send_lost_and_takedown_kept(env, monkeypatch):
+    """A send with no answer is never sent again by itself: a moderator gets it ("check the channel"); one Telegram
+    refused goes again. A take-down Telegram won't do (rights lost) stays queued; a group copy whose mapping comes
+    late is deleted once it does."""
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob")
+    con = db.connect(cfg.db_path)
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Free pizza at the canteen"}).json()
+
+    class Flaky(Telegram):
+        mode = "timeout"
+
+        def __call__(self, request):
+            m = request.url.path.rsplit("/", 1)[1]
+            if m == "sendMessage" and self.mode == "timeout":
+                raise httpx.ReadTimeout("slow")
+            if m == "sendMessage" and self.mode == "refused":
+                return httpx.Response(429, json={"ok": False, "error_code": 429, "description": "Too Many Requests"})
+            if m in ("deleteMessage", "editMessageText") and self.mode == "norights":
+                self.calls.append((m, json.loads(request.content)))
+                return httpx.Response(400, json={"ok": False, "error_code": 400, "description": "Bad Request: not enough rights"})
+            return super().__call__(request)
+    tg = Flaky()
+    tick(cfg, tg, con)
+    assert con.execute("SELECT status, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("live", 0)
+    tick(cfg, tg, con)                                                                           # not sent again
+    assert con.execute("SELECT status, why, tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[:] == ("held", "lost", None)
+    q = c.post("/api/forum-posts", headers=tma(2), json={"body": "Who has a spare charger?"}).json()
+    tg.mode = "refused"
+    tick(cfg, tg, con)
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (q["id"],)).fetchone()[0] is None   # tried again next round
+    tg.mode = "ok"
+    tick(cfg, tg, con)
+    mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (q["id"],)).fetchone()[0]
+    assert mid > 0
+    tg.mode = "norights"
+    assert c.delete(f"/api/forum-posts/{q['id']}", headers=tma(2)).status_code == 204
+    tick(cfg, tg, con)
+    assert con.execute("SELECT at > ? FROM tg_unpost WHERE msg_id = ?", (int(time.time()) + 500, mid)).fetchone()[0] == 1   # kept, later
+    tg.mode = "ok"
+    con.execute("UPDATE tg_unpost SET at = 0")
+    tick(cfg, tg, con)                                                                           # deleted; the copy's mapping isn't known yet
+    assert not con.execute("SELECT 1 FROM tg_unpost").fetchone() and con.execute("SELECT 1 FROM meta WHERE key = ?", (f"fchgone:{mid}",)).fetchone()
+    con.execute("INSERT INTO meta (key, value) VALUES ('tgcpost:88', ?)", (f"KBTUappForum {mid}",))
+    tick(cfg, tg, con)
+    assert (G, 88) in {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
+    assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'fchgone:%' OR key = 'tgcpost:88'").fetchone()
     con.close()
 
 
@@ -186,11 +243,20 @@ def test_post_account_deletion_unposts(env, monkeypatch):
     c.post("/api/forum-posts", headers=tma(1), json={"body": "My last words here"})
     tick(cfg, tg, con)
     mid = con.execute("SELECT tg_msg FROM fchan_posts").fetchone()[0]
+    con.execute("""INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at)
+        SELECT user_id, 'an anonymous one', 1, 'live', 777, 0 FROM fchan_posts""")
+    t = int(time.time())
     delete_now(c, cfg, tma(1))
     assert not con.execute("SELECT 1 FROM fchan_posts").fetchone()                              # the rows went
-    assert con.execute("SELECT msg_id FROM tg_unpost").fetchone()[0] == mid                      # their message didn't
+    due = dict(con.execute("SELECT msg_id, at FROM tg_unpost").fetchall())                       # their messages didn't
+    assert set(due) == {mid, 777} and due[mid] <= t + 5 and due[777] <= t + 72 * 3600 + 5     # the anonymous one: within 3 days
+    con.execute("UPDATE tg_unpost SET at = ? WHERE msg_id = 777", (t + 3600,))                   # (not now, whatever the draw)
     tick(cfg, tg, con)
-    assert (CH, mid) in {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
+    gone = {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
+    assert (CH, mid) in gone and (CH, 777) not in gone                                           # not together with the named one
+    set_clock(monkeypatch, lambda: t + 3601)
+    tick(cfg, tg, con)
+    assert (CH, 777) in {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
     con.close()
 
 

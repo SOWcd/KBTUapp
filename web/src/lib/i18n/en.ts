@@ -67,6 +67,8 @@ const en: Dict = {
   'fc.whyPerson': "Anonymous, about a person",
   'fc.whyCheck': "The AI didn't answer",
   'fc.whyBusy': "Many posts this hour",
+  'fc.whyLost': "May be in the channel already: check there",
+  'fc.signature': "The last line can't start with a dash",
   'fc.release': "Publish",
   'fc.takeDown': "Remove",
   'fc.reveal': "Who wrote it?",
