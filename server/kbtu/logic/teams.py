@@ -452,7 +452,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
 
 
 # ---- indoor routes (PLAN item 22): the graph the owner edits on the map; the app finds the ways over it ----
-MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # Claude's graph from UNI-Q's plans, the only one (owner, Oct 16: the
+MAP_DRAFT = Path(__file__).parent.with_name("map_graph.json")  # Claude's graph from Uni-Q's plans, the only one (owner, Oct 16: the
 # editor is off, his saves were by accident; the old map_graph table's row is ignored)
 
 
