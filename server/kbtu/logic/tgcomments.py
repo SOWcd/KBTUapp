@@ -1,4 +1,4 @@
-"""The forum channel's comments in Telegram (TG_COMMENTS_CHAT; owner, Nov 1; .claude/reports/tg-comments-review.md,
+"""The forum channel's comments in Telegram (FORUM_GROUP; owner, Nov 1; .claude/reports/tg-comments-review.md,
 tg-comments-final-review.md, tg-comments-mod-review.md). The channel is public and its discussion group open:
 "Comments" goes straight into the field. Only students confirmed by Microsoft write there; the bot (tgc.py) deletes
 anyone else's comment, says so once as a reply in the thread (gone after a minute) with a button into the app, and

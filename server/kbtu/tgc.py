@@ -1,4 +1,4 @@
-"""The forum channel's discussion group (TG_COMMENTS_CHAT), the bot's side of logic/tgcomments.py: who may comment,
+"""The forum channel's discussion group (FORUM_GROUP), the bot's side of logic/tgcomments.py: who may comment,
 /report, edits, and the bot round's deletions. The bot is the group's admin with "delete messages" and "ban users"
 only. Each batch's comments here are handled before anything else the batch holds (bot.hear), and the slow parts
 (the AI's look) run as tasks beside the ears, so a stranger's comment never waits behind a receipt's OCR."""

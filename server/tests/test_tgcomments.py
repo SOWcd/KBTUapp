@@ -1,4 +1,4 @@
-"""The forum channel's comments in Telegram (TG_COMMENTS_CHAT; logic/tgcomments.py, tgc.py): strangers deleted, warned
+"""The forum channel's comments in Telegram (FORUM_GROUP; logic/tgcomments.py, tgc.py): strangers deleted, warned
 once and banned the second time; the stranger's text shown in the app to that Telegram account alone; /report with
 the AI gate and the moderators' last word; edits judged again; abusers' /report closed; account deletion. Telegram and
 the AI are mocked; each test drives the bot's ears (bot.hear) and round (tgc.tick) as production does."""
@@ -362,7 +362,7 @@ def test_review_fixes(env, monkeypatch):
 
 
 def test_switched_off_changes_nothing(env):
-    """Without TG_COMMENTS_CHAT: no edits asked of Telegram, the round does nothing of this feature."""
+    """Without FORUM_GROUP: no edits asked of Telegram, the round does nothing of this feature."""
     _, cfg = env
     asked = []
 

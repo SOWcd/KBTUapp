@@ -83,7 +83,7 @@ def load() -> Config:
         forum=env.get("FORUM", "0") == "1",
         forum_founder=env.get("FORUM", "0") == "founder",
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
-        tgc_chat=int(env.get("TG_COMMENTS_CHAT", "").strip() or 0),
+        tgc_chat=int((env.get("FORUM_GROUP") or env.get("TG_COMMENTS_CHAT") or "").strip() or 0),  # the old name still works
         forum_channel=int(env.get("FORUM_CHANNEL", "").strip() or 0),
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),

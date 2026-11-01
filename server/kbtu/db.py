@@ -934,7 +934,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);"""),
     # an award link many may open until it expires, one award each (admin claim new: the volunteers' badge in their chat)
     (99, "ALTER TABLE grant_links ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
-    # the forum channel's comments (TG_COMMENTS_CHAT, logic/tgcomments.py): a stranger's deleted comment kept for him alone
+    # the forum channel's comments (FORUM_GROUP, logic/tgcomments.py): a stranger's deleted comment kept for him alone
     # an hour; strangers warned once, then banned (90 days); reported comments with each reporter's snapshot (30 days);
     # those whose /report a moderator closed for abuse (until an admin reopens it or the account goes)
     (100, """CREATE TABLE tgc_saved (
