@@ -96,7 +96,13 @@
      icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 30, 38, 0.45);
   --lens: rgba(235, 238, 255, 0.16);
-  --lens-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.28), 0 2px 8px rgba(0, 0, 0, 0.32);
+  --lens-top: rgba(255, 255, 255, 0.08);
+  --lens-rim: rgba(255, 255, 255, 0.62);
+  --lens-rim-low: rgba(255, 255, 255, 0.2);
+  --lens-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.32);
+  /* held (Nav .lift): clearer, lit from inside, a deeper shadow */
+  --lens-lift: rgba(235, 238, 255, 0.09);
+  --lens-lift-shadow: inset 0 0 10px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.42);
   --dock-ink: rgba(244, 246, 255, 0.5);
   --menu-bg: rgba(30, 34, 52, 0.9); /* a Menu: thick glass, what is under it must not read through */
   --text: #F4F6FF;
@@ -142,7 +148,12 @@
   --thumb: #FFFFFF;
   --dock: rgba(250, 251, 255, 0.62);
   --lens: rgba(255, 255, 255, 0.92);
-  --lens-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.06), 0 2px 8px rgba(11, 20, 51, 0.14);
+  --lens-top: rgba(255, 255, 255, 0);
+  --lens-rim: rgba(255, 255, 255, 1);
+  --lens-rim-low: rgba(11, 20, 51, 0.12);
+  --lens-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.06), inset 0 -1.5px 2px rgba(11, 20, 51, 0.05), 0 2px 8px rgba(11, 20, 51, 0.14);
+  --lens-lift: rgba(255, 255, 255, 0.5);
+  --lens-lift-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.08), inset 0 0 10px rgba(255, 255, 255, 0.85), 0 8px 20px rgba(11, 20, 51, 0.2);
   --dock-ink: rgba(11, 20, 51, 0.45);
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0B1433;

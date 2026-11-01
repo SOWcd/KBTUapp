@@ -21,18 +21,23 @@
 
   let bar: HTMLElement;
   let lens: HTMLSpanElement;
-  $effect(() => { void shown; jelly(lens); });
+  // the squash leans the way the pill travels and grows with the distance; none on the first paint
+  let was = -1;
+  $effect(() => { const i = shown; if (was >= 0 && i !== was) jelly(lens, i - was); was = i; });
+  // lifted: the pill grows into a clear drop while a finger holds it (the active tab pressed, or a drag along the bar),
+  // as iOS 26's selection does; it settles back flat on release
+  let lift = $state(false);
   let drag: null | { x: number; on: boolean; id: number } = null;
   const idxAt = (x: number) => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(N - 1, Math.floor(((x - r.left) / r.width) * N))); };
-  function down(e: PointerEvent) { drag = { x: e.clientX, on: false, id: e.pointerId }; }
+  function down(e: PointerEvent) { drag = { x: e.clientX, on: false, id: e.pointerId }; lift = idxAt(e.clientX) === shown; }
   function moveP(e: PointerEvent) {
     if (!drag) return;
-    if (!drag.on) { if (Math.abs(e.clientX - drag.x) < 8) return; drag.on = true; bar.setPointerCapture(drag.id); }
+    if (!drag.on) { if (Math.abs(e.clientX - drag.x) < 8) return; drag.on = true; lift = true; bar.setPointerCapture(drag.id); }
     const i = idxAt(e.clientX);
     if (i !== preview) { preview = i; haptic.select(); }
   }
   function up() {
-    const d = drag; drag = null;
+    const d = drag; drag = null; lift = false;
     if (d?.on && preview != null) { const i = preview; preview = null; goTab(tabs[i]); }
     else preview = null;
   }
@@ -50,7 +55,7 @@
 </script>
 
 <div class="dock">
-<nav class="nav glass glass-pill" bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
+<nav class="nav glass glass-pill" class:lift bind:this={bar} aria-label={t('nav.label')} use:glass={{ bloom: true }} use:refract
      onpointerdown={down} onpointermove={moveP} onpointerup={up} onpointercancel={up} style:--n={N}>
   <span class="tone-base" aria-hidden="true"></span>
   <span class="lens" bind:this={lens} style:translate="{shown * 100}% 0" aria-hidden="true"></span>
@@ -66,7 +71,7 @@
 </nav>
 <!-- the map beside the tabs, under the thumb on every screen (the button at the top of Today was hard
      to find); a round glass button of its own, like iOS 26's search, so the tabs keep their width -->
-<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }}
+<button class="mapb glass glass-pill" aria-label={t('map.open')} use:glass={{ bloom: true }} use:refract
         onpointerdown={warm} onclick={openMap}>
   <span class="tone-base" aria-hidden="true"></span>
   <MapIcon size={24} strokeWidth={2} />
@@ -111,10 +116,26 @@
   /* the lens: a raised glass pill behind the active tab (lighter than the bar in both themes, a soft shadow under it),
      moved by `translate` so the jelly's `transform` squashes it on the way */
   .lens {
-    position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full); background: var(--lens);
+    position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full);
+    /* a convex body: lighter at the top, like the bar itself */
+    background: linear-gradient(var(--lens-top), transparent 70%), var(--lens);
     box-shadow: var(--lens-shadow);
-    transition: translate 380ms var(--ease-spring);
+    transition: translate 380ms var(--ease-spring), scale 420ms var(--ease-bounce), background-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
   }
+  /* its own rim, lit from the same side as the bar's (the bar's --hx/--ox follow the tilt) */
+  .lens::after {
+    content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 150% at var(--hx) 0%, var(--lens-rim), transparent 72%),
+      radial-gradient(ellipse 50% 140% at var(--ox) 100%, var(--lens-rim-low), transparent 72%);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+  /* held: a clear drop that rises off the bar; the icon under it magnified */
+  .nav.lift .lens { scale: 1.07 1.1; background-color: var(--lens-lift); box-shadow: var(--lens-lift-shadow); transition-duration: 380ms, 260ms, var(--t-base), var(--t-base); }
+  .nav.lift .tab.on .ic { scale: 1.12; }
   .tab {
     position: relative; flex: 1 1 0; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     color: var(--dock-ink); border-radius: var(--r-full);
@@ -122,6 +143,6 @@
   }
   .tab:active { transform: scale(0.94); transition-duration: var(--t-base), 80ms; }
   .tab.on { color: var(--accent-text); }
-  .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring); }
+  .ic { position: relative; display: inline-flex; flex: none; transition: transform 380ms var(--ease-spring), scale 420ms var(--ease-bounce); }
   .dot { position: absolute; top: -1px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 </style>

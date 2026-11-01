@@ -99,13 +99,17 @@ img { max-width: 100%; }
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
+/* a pill's thickness: a bright band just inside the lit edge and its faint reflection on the far one, both sliding
+   round with the tilt (box-shadow offsets in px from --gx: WebKit can't bend the backdrop at the edge, the light can) */
 .glass-pill {
+  --pill-edge: inset calc(var(--gx, 0) * -1.5px) 1.5px 1.5px -0.5px rgba(255, 255, 255, 0.3),
+    inset calc(var(--gx, 0) * 1.5px) -1px 1.5px -0.5px rgba(255, 255, 255, 0.1);
   background-color: var(--glass-pill-bg);
   -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
   backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
   box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
 }
-.glass-pill::before { box-shadow: inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06); }
+.glass-pill::before { box-shadow: var(--pill-edge), inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06); }
 .glass-sheet::before { background: none; box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.6); }
 /* Light theme (owner, Oct 5 and again Oct 6: "in the light theme there's no glass at all"): white rims vanish on a
    white page and a milky body over white cards reads as plastic, so here the glass is clearer (what scrolls under it
@@ -123,8 +127,8 @@ img { max-width: 100%; }
 }
 :root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before {
   box-shadow:
-    inset 0 1.5px 1px #fff,
-    inset 0 -1px 1.5px rgba(11, 20, 51, 0.16),
+    inset calc(var(--gx, 0) * -2px) 1.5px 1px #fff,
+    inset calc(var(--gx, 0) * 1.5px) -1px 1.5px rgba(11, 20, 51, 0.16),
     inset 3px 0 3px -1px rgba(255, 110, 190, 0.6),
     inset -3px 0 3px -1px rgba(70, 170, 255, 0.65),
     inset 0 -12px 18px -10px rgba(11, 20, 51, 0.22);
@@ -147,7 +151,7 @@ img { max-width: 100%; }
     radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.42), transparent 70%),
     rgba(255, 255, 255, 0.07);
 }
-:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06);
+:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: var(--pill-edge), inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06);
   background:
     radial-gradient(ellipse 34% 26% at var(--hx) 0%, rgba(255, 255, 255, 0.28), transparent 70%),
     radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%); }

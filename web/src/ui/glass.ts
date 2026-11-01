@@ -5,7 +5,7 @@
 //  2. A bloom from the touch point: a throwaway layer animated with opacity + transform (compositor only).
 //  3. Real edge refraction where the engine supports SVG filters in backdrop-filter (Chromium: Telegram
 //     Android and Desktop). WebKit ignores url() there, so iOS keeps the rim light only.
-//  4. Jelly: squash-and-stretch of a sliding pill when it starts to move.
+//  4. Jelly: squash-and-stretch of a sliding pill when it starts to move, leaning the way it goes.
 import { deviceOrientation, on, tg } from '../lib/tg';
 
 /** Telegram Android appends the device performance class to the User-Agent; LOW turns power saving on (in Auto) */
@@ -137,12 +137,17 @@ export function refract(node: HTMLElement) {
 }
 
 /** Squash-and-stretch on a pill as it starts to slide. Uses transform, so put it on an element that
- *  isn't moved by transform itself. */
-export function jelly(el: HTMLElement | undefined): void {
-  el?.animate?.([
-    { transform: 'scale(1, 1)' },
-    { transform: 'scale(1.16, 0.9)', offset: 0.35 },
-    { transform: 'scale(0.97, 1.03)', offset: 0.7 },
-    { transform: 'scale(1, 1)' },
-  ], { duration: 480, easing: 'ease-out' });
+ *  isn't moved by transform itself. `d`: tabs travelled (signed): the stretch grows with the distance and leans the
+ *  way the pill goes (anchored at its trailing edge, so the leading edge runs ahead like a drop), then settles from the
+ *  middle; 0 squashes in place. None under reduced motion. */
+export function jelly(el: HTMLElement | undefined, d = 0): void {
+  if (!el?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const a = Math.min(Math.abs(d), 3), k = d ? 0.08 + 0.04 * a : 0.16;
+  const o = d > 0 ? '0% 50%' : d < 0 ? '100% 50%' : '50% 50%';
+  el.animate([
+    { transform: 'scale(1, 1)', transformOrigin: o },
+    { transform: `scale(${1 + k}, ${1 - k * 0.6})`, transformOrigin: o, offset: 0.32 },
+    { transform: `scale(${1 - k * 0.18}, ${1 + k * 0.18})`, transformOrigin: '50% 50%', offset: 0.68 },
+    { transform: 'scale(1, 1)', transformOrigin: '50% 50%' },
+  ], { duration: 440 + a * 40, easing: 'cubic-bezier(.3, .7, .4, 1)' });
 }
