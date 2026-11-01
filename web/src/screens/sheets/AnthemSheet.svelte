@@ -36,17 +36,18 @@
   let audio: HTMLAudioElement | null = null;
   let on = $state(false), waiting = $state(false), repeat = $state(false), held = $state(false);
   let cur = $state(0), dur = $state(211); // the file's length: the time left shows before it loads
-  let track: HTMLSpanElement, words: HTMLDivElement;
+  let track: HTMLSpanElement, fill: HTMLElement, words: HTMLDivElement;
   const ms = 'mediaSession' in navigator ? navigator.mediaSession : null;
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // while it plays the clock is read each frame (timeupdate comes ~4 times a second: a word would fill in steps);
-  // reduced motion: words light whole, timeupdate is enough
+  // while it plays the clock is read each frame (timeupdate comes ~4 times a second: a word would fill in steps), and
+  // the frame touches no state: sync() writes CSS variables and a word's class straight to the page (a Svelte state
+  // per frame re-ran the whole sheet's template every frame, Nov 2); reduced motion: words light whole, timeupdate is enough
   let raf = 0;
   function tick() {
     if (!audio || audio.paused) { raf = 0; return; }
-    if (!held) cur = audio.currentTime;
+    if (!held) { const t = audio.currentTime; sync(t); fill.style.setProperty('--p', String(t / dur)); }
     raf = requestAnimationFrame(tick);
   }
 
@@ -61,7 +62,8 @@
     a.onpause = () => { on = waiting = false; if (ms) ms.playbackState = 'paused'; };
     a.onwaiting = () => (waiting = true);
     a.onplaying = () => (waiting = false);
-    a.ontimeupdate = () => { if (!held) cur = a.currentTime; };
+    a.ontimeupdate = () => { if (!held) { cur = a.currentTime; if (!raf || a.paused) sync(cur); } };
+    a.onseeked = () => { if (!held) sync(a.currentTime); };
     a.ondurationchange = () => { if (isFinite(a.duration)) dur = a.duration; };
     a.onended = () => { a.currentTime = cur = 0; }; // repeat off (on, `loop` starts it over by itself)
     a.onerror = () => { on = waiting = false; say(t('common.offline'), 'pleading_face_3d'); };
@@ -88,8 +90,9 @@
   function scrub(e: PointerEvent) {
     const r = track.getBoundingClientRect();
     cur = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * dur;
+    sync(cur);
   }
-  function seek(s: number) { cur = Math.min(dur, Math.max(0, s)); if (audio) audio.currentTime = cur; }
+  function seek(s: number) { cur = Math.min(dur, Math.max(0, s)); if (audio) audio.currentTime = cur; sync(cur); }
   const letGo = () => { if (held) { held = false; seek(cur); } };
   const STEP: Record<string, number> = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 };
   const playFrom = (s: number) => { seek(s); if (!audio || audio.paused) toggle(); };
@@ -107,24 +110,40 @@
   let edit = $state(false), sel = $state(-1), cursor = $state(-1), raw = $state('');
   let past = $state.raw<(Times & { c: number })[]>([]);
 
-  // where the song is: the line lit, or a pause (dots before line `gapAt`, filled to `gapP`). The times are the voice's
+  // where the song is: the line lit, or a pause (dots before line `gapAt`). The times are the voice's
   // own (aligned, lib/i18n/anthem.ts) and the clock is read each frame: the words run only LEAD ahead, as the eye reads
   const LEAD = 0.1;
   const synced = $derived(TIMED && (cursor >= 0 || on || cur > 0));
   const len = $derived(lineLen(starts));
-  const pos = $derived(synced && cursor < 0 ? lyricAt(starts, ends, cur + LEAD, dur, len) : null);
+  // the line being sung and the pause's next line: states, so they change only when the song moves on to another
+  let lineNow = $state(-1), gapAt = $state(-1);
   // re-tapping lights the line just stamped (the one being sung), not the one waiting: a lit waiting line made the
   // owner tap it when the NEXT began, every time a line late (Oct 30)
-  const lit = $derived(cursor >= 0 ? cursor - 1 : (pos?.line ?? -1));
-  const gapAt = $derived(pos?.next ?? -1), gapP = $derived(pos?.p ?? 0);
-  // in the lit line: the word being sung (wi; -1 while re-tapping: the whole line lit) and how far it has filled (wf)
-  const word = $derived.by(() => {
-    if (!pos || pos.line < 0) return { w: -1, f: 0 };
-    const i = pos.line, next = (starts[i + 1] ?? dur) - starts[i];
-    return wordAt(SUNG[i].o, cur + LEAD - starts[i], Math.min(ends[i] != null ? ends[i]! - starts[i] : next > GAP ? len : next, next));
-  });
-  const wi = $derived(word.w), wf = $derived(word.f);
-  const dot = (k: number) => 0.25 + 0.75 * Math.min(1, Math.max(0, gapP * 3 - k));
+  const lit = $derived(cursor >= 0 ? cursor - 1 : lineNow);
+
+  // where the song is at t: the line lit, or a pause (the dots before line `gapAt`, --g their fill); in the lit line the
+  // word being sung (.on, --f its fill) and the ones before it (.sung). Each frame while it plays, so: no state but the
+  // two lines (they change once a line), the words' classes and fills written straight to the page
+  let shown: HTMLElement[] = [], shownLine = -1, shownWord = -1;
+  function sync(t = cur) {
+    const p = synced && cursor < 0 ? lyricAt(starts, ends, t + LEAD, dur, len) : { line: -1, next: -1, p: 0 };
+    lineNow = p.line; gapAt = p.next;
+    if (p.next >= 0) words?.querySelector<HTMLElement>('.dots')?.style.setProperty('--g', String(p.p));
+    let w = -1, f = 0;
+    if (p.line >= 0) {
+      const i = p.line, next = (starts[i + 1] ?? dur) - starts[i];
+      ({ w, f } = wordAt(SUNG[i].o, t + LEAD - starts[i], Math.min(ends[i] != null ? ends[i]! - starts[i] : next > GAP ? len : next, next)));
+    }
+    if (p.line !== shownLine || w !== shownWord) {
+      for (const el of shown) el.classList.remove('sung', 'on');
+      shown = p.line >= 0 ? [...(words?.querySelectorAll<HTMLElement>(`[data-i="${p.line}"] .w`) ?? [])] : [];
+      shown.forEach((el, k) => { if (k < w) el.classList.add('sung'); else if (k === w) el.classList.add('on'); });
+      shownLine = p.line; shownWord = w;
+    }
+    shown[w]?.style.setProperty('--f', f.toFixed(3));
+  }
+  // the timings edited, the editor's re-tapping, a stop: the words catch up at once (not only on the next frame)
+  $effect(() => { void [synced, cursor, len, dur, ...starts, ...ends]; untrack(() => sync(audio ? audio.currentTime : cur)); });
 
   // the line (or the dots before the next one) stays in the page's upper third while the song plays; a hand scrolling
   // the page wins for 3 s, then it comes back
@@ -222,10 +241,10 @@
         {#each part.lines as line, j (j)}
           {#if line.i < 0}<i class="gap"></i>
           {:else}
-            {#if line.i === gapAt}<span class="dots" class:up={j === 0} aria-hidden="true" transition:fade={{ duration: 300 }}><i style:opacity={dot(0)}></i><i style:opacity={dot(1)}></i><i style:opacity={dot(2)}></i></span>{/if}
-            <button class="ln" class:now={line.i === lit} class:by={line.i === lit && wi >= 0} class:sel={edit && line.i === sel} data-i={line.i}
-                    aria-current={line.i === lit || undefined} style:--f={line.i === lit && wi >= 0 ? wf : null} onclick={() => jump(line.i)}
-                    >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w" class:sung={k < wi} class:on={k === wi}>{w}</span>{/each}{#if edit}<span class="tm num">{fine(starts[line.i])}{#if ends[line.i] != null}<br />⇥ {fine(ends[line.i]!)}{/if}</span>{/if}</button>
+            {#if line.i === gapAt}<span class="dots" class:up={j === 0} aria-hidden="true" transition:fade={{ duration: 300 }}><i style:--k={0}></i><i style:--k={1}></i><i style:--k={2}></i></span>{/if}
+            <button class="ln" class:now={line.i === lit} class:by={line.i === lit && cursor < 0} class:sel={edit && line.i === sel} data-i={line.i}
+                    aria-current={line.i === lit || undefined} style:--d={focus >= 0 ? Math.min(4, Math.abs(line.i - focus)) : null} onclick={() => jump(line.i)}
+                    >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w">{w}<span class="lit" aria-hidden="true"><span>{w}</span></span></span>{/each}{#if edit}<span class="tm num">{fine(starts[line.i])}{#if ends[line.i] != null}<br />⇥ {fine(ends[line.i]!)}{/if}</span>{/if}</button>
           {/if}
         {/each}
       </section>
@@ -241,7 +260,7 @@
            onpointerdown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); held = true; scrub(e); }}
            onpointermove={(e) => { if (held) scrub(e); }} onpointerup={letGo} onpointercancel={letGo}
            onkeydown={(e) => { const d = STEP[e.key]; if (d) { e.preventDefault(); seek(cur + d); } }}>
-        <span class="track" bind:this={track}><i style="width:{(cur / dur) * 100}%"></i></span>
+        <span class="track" bind:this={track}><i bind:this={fill} style:--p={cur / dur}></i></span>
         <span class="times num"><span>{clock(cur)}</span><span>−{clock(Math.floor(dur) - Math.floor(cur))}</span></span>
       </div>
       <button class="rnd" class:on={repeat} onclick={loop} aria-pressed={repeat} aria-label={t('anthem.repeat')}><Repeat size={20} /></button>
@@ -285,19 +304,27 @@
      itself, indented, the two halves even. Each line is a button: a tap plays from it */
   .ln { position: relative; display: block; width: 100%; padding-left: 0.8em; text-indent: -0.8em; text-align: left;
     font: 650 clamp(var(--fs-card), 5vw, calc(var(--fs-card) * 1.18))/1.4 var(--font-text); letter-spacing: -0.012em; text-wrap: balance;
-    transform-origin: 0 50%; transition: opacity 400ms var(--ease), transform 400ms var(--ease); }
-  /* playing, as Apple Music: the line being sung bright and a little larger, the rest dimmed (opacity and transform only);
-     room below the last chorus, so its lines too can come up to the page's upper third */
+    transform-origin: 0 50%; transition: opacity 400ms var(--ease), transform 400ms var(--ease), filter 400ms var(--ease); }
+  /* playing, as Apple Music: the line being sung bright and a little larger; the lines around it fade and blur the
+     further they are (--d, 0..4, lines away; set once a line), so a few lines read and the rest is a soft hint; the page
+     glides to keep the sung line in its upper third (follow). Room below the last chorus, so its lines too come up */
   .words.synced { padding-bottom: 40vh; }
-  .synced .ln { opacity: 0.32; }
-  .synced .ln.now { opacity: 1; transform: scale(1.04); }
+  .synced .ln { opacity: calc(0.4 - 0.07 * var(--d, 1)); filter: blur(calc(max(0, var(--d, 1) - 1) * 0.7px)); }
+  .synced .ln.now { opacity: 1; filter: none; transform: scale(1.04); }
+  .synced.edit .ln:not(.now) { opacity: 0.32; filter: none; } /* the creator reads every line */
   /* word by word in the line being sung: the words to come dim, the sung ones lit, the one being sung filling from the
-     left with a soft edge (--f, 0..1, set each frame); its gradient reaches the lit colour exactly at 1, so it hands over
-     to .sung without a step */
-  .ln.by .w { color: var(--text-3); transition: color 250ms var(--ease); }
-  .ln.by .w.sung { color: var(--text); }
-  .ln.by .w.on { color: transparent; transition: none; -webkit-background-clip: text; background-clip: text;
-    background-image: linear-gradient(90deg, var(--text) calc(var(--f) * (100% + 0.5em) - 0.5em), var(--text-3) calc(var(--f) * (100% + 0.5em))); }
+     left with a soft edge. The fill is two transforms (a clipping box slid in by --f, the lit copy slid back by as much):
+     each frame moves only composited layers, nothing is laid out or repainted; a fill painted per frame
+     (background-clip: text) stuttered and blinked on iPhone (Nov 2). At --f 1 the copy covers the word exactly, so it
+     hands over to .sung without a step (no colour transitions on words: one faded a sung word in again) */
+  .w { position: relative; display: inline-block; text-indent: 0; white-space: nowrap; }
+  .lit { display: none; }
+  .ln.by .w { color: var(--text-3); }
+  .ln.by .w:global(.sung) { color: var(--text); }
+  .ln.by .w:global(.on) .lit { display: block; position: absolute; inset: 0 -0.4em 0 0; overflow: hidden; pointer-events: none;
+    transform: translateX(calc((var(--f, 0) - 1) * 100%)); will-change: transform;
+    -webkit-mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); }
+  .lit > span { display: block; color: var(--text); transform: translateX(calc((1 - var(--f, 0)) * 100%)); will-change: transform; }
   .gap { display: block; height: 14px; }
   /* the chorus, the same words three times: set apart on a soft band the sheet's width (a card's padding broke its
      lines on a phone), its label in the accent */
@@ -307,13 +334,14 @@
      another as it goes, breathing; no height of their own, nothing below moves */
   .dots { position: relative; top: 0; display: flex; align-items: flex-end; gap: 7px; height: 0; padding-left: 2px; }
   .dots.up { top: -12px; } /* a section's first line: on its label's row */
-  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text); transition: opacity 250ms linear; animation: breathe 2.4s ease-in-out infinite; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text); transition: opacity 250ms linear; animation: breathe 2.4s ease-in-out infinite;
+    opacity: calc(0.25 + 0.75 * clamp(0, var(--g, 0) * 3 - var(--k), 1)); } /* --g: how far into the pause, set by sync() */
   @keyframes breathe { 50% { transform: scale(1.15); } }
   :global(html.lowfx) .dots i { animation: none; }
-  :global(html.lowfx) .ln.by .w.on { color: var(--text); background: none; }
+  :global(html.lowfx) .synced .ln { filter: none; }
   @media (prefers-reduced-motion: reduce) {
-    .synced .ln.now { transform: none; } .dots i { animation: none; }
-    .ln.by .w { transition: none; } .ln.by .w.on { color: var(--text); background: none; } /* a word lights whole */
+    .synced .ln { filter: none; } .synced .ln.now { transform: none; } .dots i { animation: none; }
+    .ln.by .w:global(.on) { color: var(--text); } .ln.by .w:global(.on) .lit { display: none; } /* a word lights whole */
   }
 
   /* the creator's editor: each line's time at its end, the picked line on an accent wash */
@@ -336,7 +364,7 @@
   .track { position: relative; height: 5px; border-radius: var(--r-full); background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease); }
   .held .track { transform: scaleY(1.6); }
   .seek:focus-visible .track { box-shadow: 0 0 0 3px var(--accent-soft); }
-  .track i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--text); }
+  .track i { position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); } /* a transform: set each frame, never laid out */
   .times { display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
 
   /* a round icon button: repeat, the creator's timer, Undo, Copy, the line's end, done */
