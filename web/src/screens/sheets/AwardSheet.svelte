@@ -53,6 +53,13 @@
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
   const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
+  // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
+  const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '26, 32, 104', VIOLET = '76, 44, 162', ROYAL = '30, 64, 196', WHITE = '238, 240, 246';
+  const RIBBON: Record<string, string[]> = {
+    medal_first500: [GOLD, VIOLET, VIOLET, NAVY, NAVY, GOLD, NAVY, NAVY, VIOLET, VIOLET, GOLD],
+    medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
+    medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
+  };
   const round = $derived(!!a || !!it.founder || !!it.idea);
   const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[Math.min(a.level, 4)] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
@@ -100,16 +107,17 @@
   // motion. ponytail: the tier medals and seals keep the CSS coin; a canvas-painted face for them is the upgrade
   const art = $derived(a && a.level && a.emoji.startsWith('medal_') ? a.emoji : '');
   let gl = $state<'' | 'wait' | 'on'>('');
+  let landed = $state(true); // the 3D entrance: the light behind fades up as the medal arrives
   let host: HTMLSpanElement, stage: HTMLDivElement;
   const tiltOf = (k: string) => parseFloat(stage?.style.getPropertyValue(k)) || 0; // glass.ts writes --gx/--gy here
   onMount(() => {
     let off: (() => void) | undefined, dead = false;
     if (art && edge && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.documentElement.classList.contains('lowfx')) {
-      gl = 'wait';
+      gl = 'wait'; landed = false;
       import('../../ui/coin3d')
-        .then((m) => m.mountCoin(host, { src: `emoji/${art}.webp`, tint: edge, size: SIZE, state: () => ({ x: tiltOf('--gx'), y: tiltOf('--gy'), spin }) }))
+        .then((m) => m.mountCoin(host, { src: `emoji/${art}.webp`, tint: edge, ribbon: RIBBON[art] ?? [edge, NAVY, NAVY, edge, NAVY, NAVY, edge], size: SIZE, state: () => ({ x: tiltOf('--gx'), y: tiltOf('--gy'), spin }), onLand: () => { landed = true; haptic.soft(); } }))
         .then((f) => { if (dead) f(); else { off = f; gl = 'on'; } })
-        .catch(() => { gl = ''; }); // no WebGL: the flat medal
+        .catch(() => { gl = ''; landed = true; }); // no WebGL: the flat medal
     }
     return () => { dead = true; cancelAnimationFrame(raf); off?.(); };
   });
@@ -127,7 +135,7 @@
     haptic.soft();
     scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: 'ease-out' });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      medal.animate([{ transform: 'scale(0.55) rotate(-14deg)', opacity: 0 }, { transform: 'scale(1.06) rotate(3deg)', opacity: 1, offset: 0.62 }, { transform: 'none' }],
+      if (!gl) medal.animate([{ transform: 'scale(0.55) rotate(-14deg)', opacity: 0 }, { transform: 'scale(1.06) rotate(3deg)', opacity: 1, offset: 0.62 }, { transform: 'none' }],
         { duration: 620, easing: 'cubic-bezier(.2,.9,.25,1)' });
       wrap.querySelector('.shade')?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 620, easing: 'ease-out' });
       for (const [i, el] of [...wrap.querySelectorAll('.up')].entries())
@@ -147,10 +155,10 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" bind:this={stage} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
+  <div class="stage" bind:this={stage} class:dim={!landed} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if edge && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={gl === 'on'}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if edge && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -255,6 +263,8 @@
     transform: rotateX(calc(var(--gy, 0) * -22deg)) rotateY(calc(var(--gx, 0) * 26deg + var(--spin, 0deg))); }
   .big.flat { transform: none; }
   .hid { visibility: hidden; }
+  .halo, .rays, .shade { transition: opacity 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .dim :is(.halo, .rays, .shade) { opacity: 0; }
   .gl { position: absolute; inset: 0; pointer-events: none; }
   /* the face hides when it turns away; the back is the same disc, mirrored, darker and flatter, like a struck reverse */
   .face { position: relative; display: inline-flex; }
