@@ -1,11 +1,12 @@
 <script lang="ts">
-  // My invite as a QR (owner, Oct 31) with my photo in the middle (Nov 1). It is r_<link code>, never the lanyard's
-  // u_<id>_<badge code>: this QR is made to be posted and the badge code checks me in at the door (review, Nov 1).
+  // My invite as a QR (owner, Oct 31) with my photo in the middle (Nov 1); the one link that also adds friends (Nov 2).
+  // It is r_<link code>, never the lanyard's u_<id>_<badge code>: this QR is made to be posted and the badge code checks me in at the door (review, Nov 1).
   // A newcomer who scans my lanyard in person still counts for me (server refer).
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { say } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, shareCard } from '../../lib/tg';
+  import { haptic } from '../../lib/tg';
+  import { inviteUrl, shareInvite } from '../../lib/friends';
   import { QR_TONE } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
   import Link from '@lucide/svelte/icons/link';
@@ -16,12 +17,12 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
 
   let { overlay, code }: { overlay: Overlay; code: string } = $props();
-  const link = $derived(`https://t.me/KBTUappBot?startapp=r_${code}`);
+  const link = $derived(inviteUrl(code));
   const me = $derived(session.me);
   let busy = $state(false);
   async function send() {
     haptic.tap(); busy = true;
-    try { await shareCard({ kind: 'rf', id: '0' }, link, t('ref.text'), () => (busy = false)); }
+    try { await shareInvite(code, () => (busy = false)); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }

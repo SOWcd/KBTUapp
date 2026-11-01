@@ -56,7 +56,7 @@
   sheets.event = (id, from) => lazy(eventSheet, { id, from });
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
-  sheets.person = (id) => lazy(personSheet, { id });
+  sheets.person = (id, invite) => lazy(personSheet, { id, invite });
   sheets.club = (id) => lazy(clubSheet, { id });
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
@@ -295,8 +295,13 @@
     if (fp) { channel.focus = fp[1] ? Number(fp[1]) : null; if (session.channel) ui.tab = 'forum'; return; }
     const fa = p.match(/^fa_(\d+)$/); // the bot's ping or "your request is hidden": the forum, that request in sight
     if (fa) { asStudent(() => sheets.forum(Number(fa[1]))); return; }
-    const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link: noted for them, nothing to open
-    if (rf) { void api.refer(rf[1]).catch(() => {}); return; }
+    const rf = p.match(/^r_([A-Z2-7]{10})$/); // someone's invite link (Nov 2: the one link): noted for them as a referral,
+    if (rf) {                                 // and their card with "Add as a friend" (opening adds nobody); my own: nothing
+      void api.refer(rf[1]).catch(() => {});
+      api.linkCard(rf[1]).then((card) => { if (card.friendship !== 'self') sheets.person(card.person.id, { code: rf[1], card }); })
+        .catch(() => say(t('fr.linkDead'), 'pleading_face_3d'));
+      return;
+    }
     if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"

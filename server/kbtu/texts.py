@@ -25,15 +25,10 @@ SHARE_EVENT = {
 
 
 # Invites shared from the app (no bare links in chats — a line of text and our bot's button under it)
-SHARE_FRIEND = {
-    "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья в KBTU App — увидите, кто куда идёт.", "🤝 Добавиться в друзья"),
-    "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер.", "🤝 Досқа қосылу"),
-    "en": ("Be my friend", "👋 <b>{name}</b> invites you to be friends on KBTU App — you'll see where each other is going.", "🤝 Add as a friend"),
-}
-SHARE_REFER = {  # my invite link (referrals): it counts once they sign in with KBTU
-    "ru": ("Залетай в KBTU App", "📣 <b>{name}</b> зовёт тебя в KBTU App: все события, клубы и друзья КБТУ в одном месте.", "🚀 Открыть KBTU App"),
-    "kk": ("KBTU App-қа кел", "📣 <b>{name}</b> сені KBTU App-қа шақырады: ҚБТУ-дің барлық іс-шаралары, клубтары мен достары бір жерде.", "🚀 KBTU App ашу"),
-    "en": ("Join KBTU App", "📣 <b>{name}</b> invites you to KBTU App: KBTU's events, clubs and friends in one place.", "🚀 Open KBTU App"),
+SHARE_REFER = {  # my one invite link (Nov 2): a tap on its landing makes us friends; a newcomer counts for me once signed in
+    "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья в KBTU App — увидите, кто куда идёт. Все события, клубы и друзья КБТУ в одном месте.", "🤝 Добавить в друзья в KBTU App"),
+    "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер. ҚБТУ-дің барлық іс-шаралары, клубтары мен достары бір жерде.", "🤝 KBTU App-та досқа қосу"),
+    "en": ("Be my friend", "👋 <b>{name}</b> invites you to be friends on KBTU App — you'll see where each other is going. KBTU's events, clubs and friends in one place.", "🤝 Add as a friend on KBTU App"),
 }
 SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 Тебя назначают президентом <b>{club}</b> в KBTU App. Открой и войди через KBTU — ссылка одноразовая, работает 7 дней.", "Стать президентом"),
@@ -121,8 +116,8 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
-    """(title, HTML text, button) for a friend ('fr'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"fr": SHARE_FRIEND, "rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_FRIEND else "ru"]
+    """(title, HTML text, button) for my invite ('rf'), a club ('join') or a President ('pres') invite card."""
+    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT}[kind][lang if lang in SHARE_REFER else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 

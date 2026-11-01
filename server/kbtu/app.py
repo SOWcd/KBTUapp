@@ -702,15 +702,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def unfriend(uid: int, con: Con, v: Me):
         logic.unfriend(con, v, uid)
 
-    @app.post("/api/friends/link")
-    def friend_link(con: Con, v: Me):
-        return logic.friend_link(con, v)
+    @app.get("/api/friends/joined")  # my invite QR on screen: who has just become my friend
+    def friend_joined(con: Con, v: Me, since: int = 0):
+        return logic.friend_joined(con, v, since)
 
-    @app.get("/api/friends/link/{token}")
-    def friend_link_used(token: str, con: Con, v: Me):
-        return logic.friend_link_used(con, v, token)
+    @app.get("/api/invite/{code}")  # my one invite link r_<link code> opened: whose it is (adds nobody)
+    def link_card(code: str, con: Con, v: Me):
+        return logic.link_card(con, v, code)
 
-    @app.post("/api/friends/link/{token}")
+    @app.post("/api/invite/{code}")  # its "Add as a friend": friends at once
+    def add_by_link(code: str, con: Con, v: Me):
+        return logic.add_by_link(con, v, code)
+
+    @app.post("/api/friends/link/{token}")  # ponytail: the old fr_ links (logic.use_friend_link), remove after 2026-11-10
     def use_friend_link(token: str, con: Con, v: Me):
         return logic.use_friend_link(con, v, token)
 
@@ -1493,13 +1497,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
-            elif kind == "rf":  # my invite link (referrals): my link code, never my ID nor my badge's secret
+            elif kind in ("rf", "fr"):  # my one invite link (referral and friends, Nov 2; "fr" an older app's): my link code, never my ID nor my badge's secret
                 if not v.student:
                     raise ApiError("need_student")
-                start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
-                fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
-            elif kind == "fr":  # my live one-time link (§4.7), the same one the QR on screen holds
-                start = f"fr_{logic.friend_link(con, v)['token']}"
+                kind, start = "rf", f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
             elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link
                 start = f"join_{ref}_{logic.invite(con, v, ref)['token']}"

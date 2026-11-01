@@ -11,13 +11,13 @@
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { api, ApiErr, type Id, type PersonCard } from '../../lib/api';
+  import { api, ApiErr, type Id, type LinkCard, type PersonCard } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase, personCard, keepPerson } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
   import { burst } from '../../ui/burst';
   import { sheets } from '../../lib/state/sheets';
-  import { session } from '../../lib/state/session.svelte';
+  import { asStudent, session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, monthYear } from '../../lib/time';
   import { ROLE_NAME } from '../../lib/perms';
@@ -25,7 +25,9 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { nameOf } from '../../lib/short';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  // invite: opened by their invite link (r_<code>, the one link, Nov 2): the landing. A big "Add as a friend" makes
+  // friends in one tap, no request (sharing the link was their yes); guests see the card too and sign in at the tap
+  let { overlay, id, invite }: { overlay: Overlay; id: Id; invite?: { code: string; card: LinkCard } } = $props();
 
   // svelte-ignore state_referenced_locally
   const pre = personCard(id); // a sheet is one person for its life
@@ -34,7 +36,7 @@
   let failed = $state<string | null>(null);  // the error's text: the day's limit of strangers' profiles (audit M2) says so
   $effect(() => { pre.p.then((x) => (p = x)).catch((e) => {
     const limit = e instanceof ApiErr && e.code === 'rate_limited';
-    if (limit && p) asStranger(); else failed = t(limit ? 'person.tooMany' : 'common.error'); // the server refuses it now
+    if (limit && p) asStranger(); else if (!invite || session.me?.student) failed = t(limit ? 'person.tooMany' : 'common.error'); // the server refuses it now
   }); });
   // the plain card from what we know waits a moment: the real one usually lands first, and the plain one jumped into it
   let late = $state(false);
@@ -44,6 +46,8 @@
     if (session.me?.id === id && data.myCard) return data.myCard;
     const f = data.friends;
     const row = f && ([...f.friends, ...f.incoming, ...f.outgoing].find((r) => r.person.id === id));
+    if ((!f || !row) && invite) return { ...invite.card.person, no: null, course: null, school: null, bio: '', attended: -1, clubs: [], past: [], showcase: [], shelf: [],
+      awards: { achievements: [], badges: [] }, friendship: invite.card.friendship === 'self' ? 'none' : invite.card.friendship, friendsSince: null, going: [] };
     if (!f || !row) return null;
     const friendship = f.friends.includes(row) ? 'friends' : f.incoming.includes(row) ? 'incoming' : 'requested';
     return { ...row.person, no: null, course: row.course, school: row.school, bio: '', attended: -1, clubs: [], past: [], showcase: [], shelf: [],
@@ -92,6 +96,20 @@
     } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
     finally { acting = false; }
   }
+  // the invite's tap: a guest signs in first (a Microsoft round trip comes back to this landing: `again`)
+  function addByLink() {
+    if (!invite) return;
+    const { code } = invite;
+    asStudent(async () => {
+      acting = true;
+      try {
+        const r = await api.addByLink(code);
+        if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
+        friendsChanged(); await reload();
+      } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
+      finally { acting = false; }
+    }, 'r_' + code);
+  }
   const accept = () => act(() => api.answerFriend(id, true), welcome);
   const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }, true);
   const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }, true);
@@ -107,7 +125,12 @@
          showed twice) -->
     <Hero p={shown} shelf={false} />
 
-    {#if !me && session.me?.student}
+    {#if invite && !me && !session.me?.student}<!-- a guest on the landing: the button signs in, then adds -->
+      <div class="act">
+        <p class="t-foot friends">{t('fr.invitesYou')}</p>
+        <Button kind="primary" size="l" full loading={acting} onclick={addByLink}>{t('person.addFriend')}</Button>
+      </div>
+    {:else if !me && session.me?.student}
       <div class="act">
         {#if shown.friendship === 'friends'}
           <p class="t-foot friends">{t('person.friendsSince', { date: shown.friendsSince ? dayMonth(shown.friendsSince) : '' })}</p>
@@ -118,7 +141,10 @@
         {:else if shown.username}<!-- a teammate: straight to their Telegram chat -->
           <Button kind="secondary" size="l" full onclick={() => openLink(`https://t.me/${encodeURIComponent(shown!.username!)}`)}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('person.write')}</Button>
         {/if}
-        {#if shown.friendship === 'requested'}
+        {#if invite && shown.friendship !== 'friends' && shown.friendship !== 'incoming'}<!-- the landing: one tap, friends (my waiting request too) -->
+          <p class="t-foot friends">{t('fr.invitesYou')}</p>
+          <Button kind="primary" size="l" full loading={acting} onclick={addByLink}>{t('person.addFriend')}</Button>
+        {:else if shown.friendship === 'requested'}
           <Button kind="neutral" size="l" full disabled>{t('person.requestSent')}</Button>
           <button class="quiet" disabled={acting} onclick={takeBack}>{t('fr.takeBackReq')}</button>
         {:else if shown.friendship === 'incoming'}

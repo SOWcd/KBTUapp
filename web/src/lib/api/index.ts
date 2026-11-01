@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -64,16 +64,17 @@ export interface Api {
 
   person(id: Id): Promise<PersonCard>;
 
-  // friends (§4.7): a request the other one answers, or my one-time link that makes friends at once
+  // friends (§4.7): a request the other one answers, or my one invite link (r_<code>) whose landing makes friends in one tap
   friends(): Promise<Friends>;
   findFriend(username: string): Promise<FoundStudent>;           // not_found: no student with that @username
   askFriend(user: Id): Promise<{ person: PersonRef; friendship: Friendship }>; // 'friends' when they had asked me
   answerFriend(user: Id, accept: boolean): Promise<Friends>;
   takeBackRequest(user: Id): Promise<void>;
   unfriend(user: Id): Promise<void>;
-  friendLink(): Promise<{ token: string; expiresAt: Ts }>;       // the same until somebody uses it
-  friendLinkUsed(token: string): Promise<{ usedBy: PersonRef | null }>;
-  useFriendLink(token: string): Promise<FriendLinkUse>;
+  linkCard(code: string): Promise<LinkCard>;                     // whose invite link it is (adds nobody; guests too)
+  addByLink(code: string): Promise<{ person: PersonRef; friendship: Friendship }>; // friends at once ('requested': they quietly declined me)
+  friendJoined(since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }>; // my invite QR on screen: the newest friend since
+  useFriendLink(token: string): Promise<FriendLinkUse>;          // ponytail: the old fr_ links, remove after 2026-11-10
 
   // Studio (own org, SPEC §6): Member+ reads and scans, Head+ creates, edits and sees attendees
   orgEvents(org: Id): Promise<EventCard[]>;

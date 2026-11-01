@@ -867,15 +867,13 @@ def test_friends(env):
     # asking someone who already asked me is the answer
     c.post("/api/friends/requests", headers=Z, json={"userId": dana["id"]})
     assert c.post("/api/friends/requests", headers=D, json={"userId": zhan["id"]}).json()["friendship"] == "friends"
-    # the one-time link: the same until used, the first one wins, the owner sees who it was, then a fresh one
-    link = c.post("/api/friends/link", headers=D).json()["token"]
-    assert re.fullmatch(r"[0-9a-f]{24}", link) and c.post("/api/friends/link", headers=D).json()["token"] == link
-    assert c.post(f"/api/friends/link/{link}", headers=D).json()["result"] == "self"
-    assert c.post(f"/api/friends/link/{link}", headers=A).json()["result"] == "friends"
-    assert c.get(f"/api/friends/link/{link}", headers=D).json()["usedBy"]["id"] == ali["id"]
+    # an old one-time link sent before Nov 2 (no longer issued): still the first one wins, then "used"
+    con.execute("INSERT INTO friend_links (token, user_id, created_at, expires_at) VALUES (?, ?, 0, ?)", ("ab" * 12, dana["id"], int(time.time()) + 3600))
+    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=D).json()["result"] == "self"
+    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=A).json()["result"] == "friends"
     login(c, 34, "eve")
-    assert c.post(f"/api/friends/link/{link}", headers=tma(34, "Eve")).json()["result"] == "used"
-    assert c.post("/api/friends/link", headers=D).json()["token"] != link
+    assert c.post(f"/api/friends/link/{'ab' * 12}", headers=tma(34, "Eve")).json()["result"] == "used"
+    assert c.post("/api/friends/link", headers=D).status_code == 405                      # no new ones
     # where friends go: only those who let friends see it
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
@@ -977,8 +975,9 @@ def test_invite_cards(env, monkeypatch):
     assert c.post("/api/share", headers=A, json={"kind": "fr"}).json() == {"id": "prep1"}
     card = sent[-1]["result"]
     url = card["reply_markup"]["inline_keyboard"][0][0]["url"]
-    token = c.post("/api/friends/link", headers=A).json()["token"]
-    assert card["type"] == "article" and url.endswith(f"startapp=fr_{token}")          # the same live link as the QR
+    code = c.get("/api/me", headers=A).json()["referrals"]["code"]
+    assert card["type"] == "article" and url.endswith(f"startapp=r_{code}")            # an older app's "fr": the one invite link
+    assert card["reply_markup"]["inline_keyboard"][0][0]["text"] == "\U0001f91d \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 \u0434\u0440\u0443\u0437\u044c\u044f \u0432 KBTU App"
     assert "http" not in card["input_message_content"]["message_text"] and "Ali T" in card["input_message_content"]["message_text"]
     assert c.post("/api/share", headers=A, json={"kind": "join", "id": 1}).status_code == 200
     assert "startapp=join_1_" in sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"]
@@ -1832,7 +1831,7 @@ def test_bot_texts_match_across_languages():
     fail only for the people reading it."""
     import string
     fields = lambda tpl: {f for _, f, _, _ in string.Formatter().parse(tpl or "") if f}
-    for table in (texts.BOT, texts.SHARE_FRIEND, texts.SHARE_JOIN, texts.SHARE_PRES, texts.SHARE_AWARD):
+    for table in (texts.BOT, texts.SHARE_REFER, texts.SHARE_JOIN, texts.SHARE_PRES, texts.SHARE_AWARD):
         for key in (table["ru"] if table is texts.BOT else [None]):
             ru = table["ru"][key] if key else table["ru"]
             for lang in ("kk", "en"):
@@ -3461,7 +3460,7 @@ def test_manual_sign_in(env, monkeypatch):
         synced_at, manual) VALUES (?, '24B031234', 'Squat', 'Ter', 2, '1', 0, 0, 0, 1)""", (ids[23],))  # typed in before Oct 20
     me = c.get("/api/me", headers=tma(23)).json()
     assert me["student"] is None and me["relink"] and me["msPending"] is None              # signed out until Microsoft
-    assert c.post("/api/friends/link", headers=tma(23)).json()["error"] == "need_student"
+    assert c.get("/api/friends/joined", headers=tma(23)).json()["error"] == "need_student"
     who = lambda n: {"oid": f"oid-{n}", "email": f"s_{n}@kbtu.kz", "first": "Maga", "last": f"N{n}", "employeeId": "", "profile": {}}  # noqa: E731
     for tg in (21, 22, 24):
         logic.ms_remember(con, ids[tg], who(tg))
@@ -5767,6 +5766,50 @@ def test_referrals(env):
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
     delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+
+
+def test_invite_link_adds_friend(env):
+    """One invite link (Nov 2): r_<link code> opens the inviter's card; opening adds nobody, one tap on its button
+    makes friends at once (no request); my own link, friends already, a quiet decline and the day's limit; a newcomer
+    still counts as the inviter's referral."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, bob = login(c, 200, "ann"), login(c, 201, "bob")
+    A, B = tma(200, "Ann"), tma(201, "Bob")
+    code = ann["referrals"]["code"]
+    card = c.get(f"/api/invite/{code}", headers=B).json()
+    assert card["person"]["id"] == ann["id"] and card["friendship"] == "none"
+    c.post("/api/referral", headers=B, json={"code": code})
+    assert c.get(f"/api/users/{ann['id']}", headers=B).json()["friendship"] == "none"          # opening adds nobody
+    assert c.get(f"/api/invite/{code}", headers=A).json()["friendship"] == "self"
+    assert c.post(f"/api/invite/{code}", headers=A).status_code == 400                         # my own link
+    assert c.get("/api/invite/AAAAAAAAAA", headers=B).status_code == 404
+    since = int(time.time()) - 5
+    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # one tap
+    assert c.get(f"/api/users/{bob['id']}", headers=A).json()["friendship"] == "friends"
+    assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == "friend_new"
+    assert c.get(f"/api/friends/joined?since={since}", headers=A).json()["usedBy"]["id"] == bob["id"]  # her QR sheet celebrates
+    assert c.get(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"
+    assert c.post(f"/api/invite/{code}", headers=B).json()["friendship"] == "friends"         # already: nothing new
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = ?", (ann["id"],)).fetchone()[0] == 1
+    # a guest sees whose link it is; the tap needs the KBTU sign-in; their referral is noted as before
+    assert c.get(f"/api/invite/{code}", headers=tma(202)).json()["friendship"] == "none"
+    assert c.post(f"/api/invite/{code}", headers=tma(202)).json()["error"] == "need_student"
+    assert c.post("/api/referral", headers=tma(202), json={"code": code}).status_code == 204
+    assert con.execute("SELECT referred_by FROM users WHERE tg_id = 202").fetchone()[0] == ann["id"]
+    # a request Ann quietly declined holds: her link doesn't get around it
+    cat = login(c, 203, "cat")
+    C = tma(203, "Cat")
+    c.post("/api/friends/requests", headers=C, json={"userId": ann["id"]})
+    c.post(f"/api/friends/requests/{cat['id']}/decline", headers=A)
+    assert c.post(f"/api/invite/{code}", headers=C).json()["friendship"] == "requested"
+    assert c.get(f"/api/users/{ann['id']}", headers=C).json()["friendship"] == "requested"
+    # the day's limit: a stranger can't collect posted links for friends' full names
+    now = int(time.time())
+    con.executemany("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", [(900 + i,) for i in range(logic.FRIEND_ASKS_A_DAY)])
+    con.execute("INSERT INTO friendships (a, b, created_at) SELECT ?, id, ? FROM users WHERE tg_id >= 900", (bob["id"], now))
+    dan = login(c, 204, "dan")["referrals"]["code"]
+    assert c.post(f"/api/invite/{dan}", headers=B).json()["error"] == "rate_limited"
 
 
 def test_referral_by_profile_qr(env):

@@ -1,8 +1,8 @@
 <script lang="ts">
-  // Add a friend (SPEC §4.7). My one-time QR on the badge's material: a friend points the camera and you're friends at
-  // once. While the sheet is open it watches the link, shows who just joined, celebrates and turns over to the next
-  // code. The same invite goes out as our bot's card (a line and a button; no bare links). Or: look
-  // someone up by @username and send a request they answer.
+  // Add a friend (SPEC §4.7). My invite QR on the badge's material, the one link (Nov 2, lib/friends): a friend points
+  // the camera, taps "Add as a friend" on my card and we're friends. While the sheet is open it watches for a new friend,
+  // shows them and celebrates. The same invite goes out as our bot's card (a line and a button; no bare links). Or:
+  // look someone up by @username and send a request they answer.
   import { onDestroy } from 'svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type FoundStudent, type PersonRef } from '../../lib/api';
@@ -10,7 +10,8 @@
   import { friendsChanged } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
-  import { friendUrl, shareFriendLink } from '../../lib/friends';
+  import { inviteUrl, shareInvite } from '../../lib/friends';
+  import { session } from '../../lib/state/session.svelte';
   import { QR_TONE } from '../../lib/awards';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
@@ -23,27 +24,29 @@
 
   let { overlay, share = false }: { overlay: Overlay; share?: boolean } = $props();
 
-  let token = $state<string | null>(null);
-  let joined = $state<PersonRef | null>(null); // who has just used the code: on the plate for a few seconds
-  const fresh = () => api.friendLink().then((l) => { token = l.token; }).catch(() => say(t('common.error'), 'warning_3d'));
-  void fresh().then(() => { if (share) void send(); });
+  const code = $derived(session.me?.referrals?.code ?? null);
+  let joined = $state<PersonRef | null>(null); // who has just become my friend: on the plate for a few seconds
+  // svelte-ignore state_referenced_locally
+  if (share) void send(); // opened to share at once (the Friends sheet's invite)
 
+  let since: number | null = null; // the server's clock: the first round only notes my newest friend so far
   let quiet: ReturnType<typeof setTimeout> | undefined;
   const watch = setInterval(async () => {
-    if (!token || joined || document.hidden) return;
+    if (joined || document.hidden) return;
     try {
-      const { usedBy } = await api.friendLinkUsed(token);
-      if (!usedBy) return;
-      joined = usedBy;
-      haptic.ok(); burst(); say(t('fr.accepted', { name: usedBy.name }), 'partying_face_3d');
+      const r = await api.friendJoined(since ?? 0), first = since === null;
+      since = r.at;
+      if (!r.usedBy || first) return;
+      joined = r.usedBy;
+      haptic.ok(); burst(); say(t('fr.accepted', { name: r.usedBy.name }), 'partying_face_3d');
       friendsChanged();
-      quiet = setTimeout(() => { joined = null; void fresh(); }, 3200);
+      quiet = setTimeout(() => { joined = null; }, 3200);
     } catch { /* offline for a moment: the next round asks again */ }
   }, 2500);
   onDestroy(() => { clearInterval(watch); clearTimeout(quiet); });
 
   async function send() {
-    try { await shareFriendLink(); } catch { say(t('common.error'), 'warning_3d'); }
+    try { if (code) await shareInvite(code); } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   // ---- by @username ----
@@ -82,14 +85,13 @@
     <div class="plate">
       {#if joined}
         <span class="joined"><Avatar person={joined} size={72} tappable={false} /><b>{joined.name}</b><i>{t('fr.nowFriend')}</i></span>
-      {:else if token}
-        {#key token}<span class="code"><Qr text={friendUrl(token)} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></span>{/key}
+      {:else if code}
+        <span class="code"><Qr text={inviteUrl(code)} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></span>
       {:else}
         <span class="wait" aria-hidden="true"></span>
       {/if}
     </div>
-    <p class="cap">{t('fr.qrCaption')}</p>
-    <p class="note">{t('fr.qrNote')}</p>
+    <p class="cap">{t('ref.qr')}</p>
   </div>
 
   <div class="acts">
@@ -132,7 +134,6 @@
   @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
   @keyframes pulse { 50% { opacity: 0.55; } }
   .cap { margin-top: 8px; font: 650 15px/1.3 var(--font-text); text-align: center; text-wrap: balance; }
-  .note { font: 500 12.5px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.7); text-align: center; }
 
   .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .acts :global(.btn.full) { flex: 1 1 140px; width: auto; min-width: 0; } /* side by side, stacked on a 320-px phone */

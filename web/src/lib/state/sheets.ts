@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, LinkCard, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
 import type { ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
@@ -21,7 +21,8 @@ export function copyCap(): CapCopy | null {
 export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null } = { at: null, cap: null };
 
 export const sheets = {
-  person: (_id: Id) => {},
+  /** invite: opened by their invite link r_<code> (its landing: "Add as a friend", one tap) */
+  person: (_id: Id, _invite?: { code: string; card: LinkCard }) => {},
   /** my QR full screen (the corner of my badge) */
   myQr: (_link: string, _p: PersonCard) => {},
   club: (_id: Id) => {},

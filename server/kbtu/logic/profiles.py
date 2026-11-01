@@ -550,27 +550,56 @@ def unfriend(con, v: Viewer, uid: int) -> None:
     con.execute("DELETE FROM friendships WHERE a = ? AND b = ?", (min(uid, v.id), max(uid, v.id)))
 
 
-def friend_link(con, v: Viewer) -> dict:
-    """My live one-time link (§4.7): the same one until somebody uses it or it expires, then a fresh one (96 random bits)."""
-    need_student(v)
-    r = one(con, "SELECT token, expires_at FROM friend_links WHERE user_id = ? AND used_by IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1",
-            v.id, core.now() + 3600)  # never hand out one that dies within the hour
-    if r:
-        return {"token": r["token"], "expiresAt": r["expires_at"]}
-    token, until = secrets.token_hex(12), core.now() + LINK_TTL
-    con.execute("INSERT INTO friend_links (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)", (token, v.id, core.now(), until))
-    return {"token": token, "expiresAt": until}
-
-
-def friend_link_used(con, v: Viewer, token: str) -> dict:
-    """While my QR is on screen: who has just used it (the sheet celebrates and shows the next one)."""
-    need_student(v)
-    r = one(con, "SELECT used_by FROM friend_links WHERE token = ? AND user_id = ?", token, v.id)
-    if not r:
+def _inviter(con, code: object) -> sqlite3.Row:
+    """Whose invite link r_<link code> this is (a student's; the code, never a user ID)."""
+    p = one(con, PERSON + " WHERE u.link_code = ? AND s.user_id IS NOT NULL", code) \
+        if isinstance(code, str) and re.fullmatch(r"[A-Z2-7]{10}", code) else None
+    if not p:
         raise ApiError("not_found")
-    return {"usedBy": person_ref(_student(con, r["used_by"])) if r["used_by"] else None}
+    return p
 
 
+def link_card(con, v: Viewer, code: object) -> dict:
+    """My one invite link opened (owner, Nov 2: the referral link and the friend link are one): whose it is and where we
+    stand ('self' on my own). Adds nobody. Guests too: the inviter posted it, and the bot's card already shows their
+    name; the 50-bit code can't be walked."""
+    p = _inviter(con, code)
+    state = "self" if p["id"] == v.id else friendship(con, v.id, p["id"]) if v.student else "none"
+    return {"person": person_ref(p), "friendship": state}
+
+
+def add_by_link(con, v: Viewer, code: object) -> dict:
+    """The landing's one tap: friends at once, no request (sharing the link was the inviter's yes). My request they
+    quietly declined still holds for its 30 days (it stays 'requested', as everywhere)."""
+    need_student(v)
+    p = _inviter(con, code)
+    if p["id"] == v.id:
+        raise ApiError("bad_input")
+    out = {"person": person_ref(p)}
+    if one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND decided_at > ?",
+           v.id, p["id"], core.now() - REASK_AFTER):
+        return {**out, "friendship": "requested"}
+    if friendship(con, v.id, p["id"]) == "friends":
+        return {**out, "friendship": "friends"}
+    # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
+    if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
+        raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans
+    with tx(con):
+        _befriend(con, v.id, p["id"])
+        notify(con, p["id"], "friend_new", f"fn:{v.id}:{core.now() // 86400}")
+    return {**out, "friendship": "friends"}
+
+
+def friend_joined(con, v: Viewer, since: int) -> dict:
+    """While my invite QR is on screen (AddFriend): the newest friend since then, to celebrate."""
+    need_student(v)
+    r = one(con, """SELECT CASE WHEN a = ? THEN b ELSE a END AS uid, created_at FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?
+        ORDER BY created_at DESC LIMIT 1""", v.id, v.id, v.id, since)
+    return {"usedBy": person_ref(_student(con, r["uid"])) if r else None, "at": r["created_at"] if r else since}
+
+
+# ponytail: the old one-time fr_<token> links, no longer issued (Nov 2: one link, r_); the last ones die 7 days
+# after that deploy (LINK_TTL): remove this, its route, LINK_TTL and the friend_links table after 2026-11-10.
 def use_friend_link(con, v: Viewer, token: str) -> dict:
     """Someone opened my link: the first student becomes my friend at once; after that it's 'used' and they may ask
     the usual way. Results: friends | already | used | self."""

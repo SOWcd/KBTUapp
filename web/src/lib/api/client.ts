@@ -148,8 +148,9 @@ export const server: Api = {
   answerFriend: (user, accept) => call('POST', `/friends/requests/${user}/${accept ? 'accept' : 'decline'}`),
   takeBackRequest: (user) => call('DELETE', `/friends/requests/${user}`),
   unfriend: (user) => call('DELETE', `/friends/${user}`),
-  friendLink: () => call('POST', '/friends/link'),
-  friendLinkUsed: (token) => call('GET', `/friends/link/${token}`),
+  linkCard: (code) => call('GET', `/invite/${code}`),
+  addByLink: (code) => call('POST', `/invite/${code}`),
+  friendJoined: (since) => call('GET', `/friends/joined?since=${since}`),
   useFriendLink: (token) => call('POST', `/friends/link/${token}`),
 
   orgEvents: (org) => call('GET', `/orgs/${org}/events`),

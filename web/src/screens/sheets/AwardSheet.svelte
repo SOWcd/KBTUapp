@@ -14,6 +14,7 @@
   import { dayMonth } from '../../lib/time';
   import Share from '@lucide/svelte/icons/share';
   import { haptic, shareCard } from '../../lib/tg';
+  import { shareInvite } from '../../lib/friends';
   import { say } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { glass, recenter } from '../../ui/glass';
@@ -42,7 +43,7 @@
   async function invite() {
     if (!ref) return;
     inviting = true; haptic.tap();
-    try { await shareCard({ kind: 'rf', id: '0' }, `https://t.me/KBTUappBot?startapp=r_${ref.code}`, t('ref.text'), () => (inviting = false)); }
+    try { await shareInvite(ref.code, () => (inviting = false)); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { inviting = false; }
   }

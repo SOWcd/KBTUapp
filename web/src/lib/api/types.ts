@@ -566,6 +566,8 @@ export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean }
 /** Opening someone's one-time friend link: friends at once, or why not. */
+/** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
+export interface LinkCard { person: PersonRef; friendship: Friendship | 'self' }
 export interface FriendLinkUse { result: 'friends' | 'already' | 'used' | 'self'; person: PersonRef }
 
 
