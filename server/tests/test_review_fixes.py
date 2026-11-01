@@ -37,9 +37,9 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ? ORDER BY email", (s1,))] == ["dan@kbtu.kz", "y@kbtu.kz"]
 
     s2 = checkin.new(con, "Old", [{"email": "dan@kbtu.kz", "name": "Dan"}])
-    con.execute("UPDATE qr_sessions SET started_at = 1, ended_at = ? WHERE id = ?", (int(time.time()) - 31 * 86400, s2))
+    con.execute("UPDATE qr_sessions SET started_at = 1, ended_at = ? WHERE id = ?", (int(time.time()) - 32 * 86400, s2))  # 32: "night" can be a day back (19:00-24:00 UTC)
     s3 = checkin.new(con, "Left running", [{"email": "dan@kbtu.kz", "name": "Dan"}])
-    con.execute("UPDATE qr_sessions SET started_at = 1, created_at = ? WHERE id = ?", (int(time.time()) - 91 * 86400, s3))
+    con.execute("UPDATE qr_sessions SET started_at = 1, created_at = ? WHERE id = ?", (int(time.time()) - 92 * 86400, s3))
     night = int(time.time()) // 86400 * 86400 - 5 * 3600 + 3600  # 01:00 in Almaty: the nightly round's hour
     set_clock(monkeypatch, lambda: night)
     logic.stats_day(con)
