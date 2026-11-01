@@ -86,9 +86,8 @@
     return !!s && session.boardKnown && !session.me?.deleteAt && !['staff', 'admin', session.policy].includes(s.consent);
   });
   $effect(() => { ui.gate = gated; });
-  // while gated only the delete sheet shows (the gate's way out); the rest wait in the stack and show after "Accept"
-  const deleteSheet = () => import('./screens/profile/DeleteSheet.svelte');
-  const shown = (o: { component: unknown }) => !gated || o.component === loaded.get(deleteSheet)?.default;
+  // while gated no overlay shows: they wait in the stack and show after "Accept" (a deep link isn't lost)
+  const shown = (_o: unknown) => !gated;
   // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
@@ -121,7 +120,7 @@
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit });
-  sheets.deleteAccount = (lost) => lazy(deleteSheet, { lost });
+  sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => void loadMe();
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
   sheets.clubEdit = (org, at) => lazy(() => import('./screens/club/ClubEditSheet.svelte'), { id: org, at });
