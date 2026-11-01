@@ -6991,3 +6991,9 @@ def test_claim_link(env, monkeypatch, capsys):
     assert c.post(f"/api/grant-links/{one_time}", headers=tma(61)).json() == {"code": "creator_laugh"}
     assert c.post(f"/api/grant-links/{one_time}", headers=tma(62)).json()["error"] == "closed"
     con.close()
+
+
+def test_config_repr_hides_secrets():
+    """A logged or dumped Config never carries a secret."""
+    cfg = config.Config(bot_token="BOT-SECRET", token_key=b"KEY-SECRET", db_path=":memory:", web_dist=".", cf_ai_token="CF-SECRET")
+    assert "SECRET" not in repr(cfg)

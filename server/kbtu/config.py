@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]  # the repository: server/kbtu/config
 
 @dataclass(frozen=True)
 class Config:
-    bot_token: str
-    token_key: bytes            # the app's secret (32 bytes): signs the "To calendar" links
+    bot_token: str = field(repr=False)
+    token_key: bytes = field(repr=False)  # the app's secret (32 bytes): signs the "To calendar" links
     db_path: str
     web_dist: str               # the built frontend
     domain: str = "kbtu.sow.kz"
@@ -22,7 +22,7 @@ class Config:
     old_dir: str | None = None  # the old prototype at /old/, kept for the pitch (dev: tmp-serve/)
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
-    cf_ai_token: str = ""
+    cf_ai_token: str = field(default="", repr=False)
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
     # the student forum (logic/threads.py): BOARD=1 every student (the policy's section 12 in force, everyone agrees
