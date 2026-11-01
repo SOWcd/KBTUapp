@@ -61,6 +61,8 @@
 
   $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge'); });
 
+  // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
+  // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
   let medal: HTMLSpanElement, scrim: HTMLDivElement, wrap: HTMLDivElement;
   let gone = false;
   onMount(() => {
@@ -69,6 +71,7 @@
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
       medal.animate([{ transform: 'scale(0.55) rotate(-14deg)', opacity: 0 }, { transform: 'scale(1.06) rotate(3deg)', opacity: 1, offset: 0.62 }, { transform: 'none' }],
         { duration: 620, easing: 'cubic-bezier(.2,.9,.25,1)' });
+      wrap.querySelector('.shade')?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 620, easing: 'ease-out' });
       for (const [i, el] of [...wrap.querySelectorAll('.up')].entries())
         el.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 400, delay: 260 + i * 60, easing: 'cubic-bezier(.2,.9,.25,1)', fill: 'backwards' });
     }
@@ -88,7 +91,8 @@
   <div class="page">
   <div class="stage" class:lit={round && !!glow} style:--glow={glow} use:glass>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
-    <span class="big" class:round bind:this={medal}><Award {it} size={round ? 196 : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span>
+    {#if round}<span class="shade" aria-hidden="true"></span>{/if}
+    <span class="pop" bind:this={medal}><span class="big" class:round><Award {it} size={round ? 196 : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span>
   </div>
   {#if kicker}<p class="kick up" class:metal={!!glow} style:--k={glow}>{kicker}</p>{/if}
   <h2 class="t-h1 name up">{it.name}</h2>
@@ -153,7 +157,7 @@
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.22), transparent 70%), rgba(3, 4, 10, 0.96); }
   .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; }
   .wrap > :global(*) { pointer-events: auto; }
-  .page { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: calc(var(--top) + 8px) 20px 12px; display: flex; flex-direction: column; }
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(var(--top) + 8px) 20px 12px; display: flex; flex-direction: column; }
   .page::-webkit-scrollbar { display: none; }
   .page > :first-child { margin-top: auto; }
   .page > :last-child { margin-bottom: auto; }
@@ -165,7 +169,7 @@
   .pill > :global(svg) { position: relative; }
   .pill:active { transform: scale(0.96); }
   .pill:disabled { opacity: 0.6; }
-  .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; perspective: 700px; }
+  .stage { position: relative; display: flex; justify-content: center; padding: 10px 0 6px; }
   .lit { padding: 40px 0 34px; }
   /* behind the medal (full screen now, nothing cuts it): a soft halo of its metal and fine rays that fade out long
      before any edge, turning slowly; thin lines, not wedges (owner, Nov 1: the old wide rays read childish) */
@@ -174,8 +178,19 @@
   .rays { width: 420px; background: repeating-conic-gradient(rgba(var(--glow), 0.16) 0 1.2deg, transparent 1.2deg 9deg);
     -webkit-mask: radial-gradient(closest-side, transparent 30%, black 44%, transparent 86%); mask: radial-gradient(closest-side, transparent 30%, black 44%, transparent 86%);
     animation: turn 120s linear infinite; }
+  /* depth: the medal floats near (shifts against the tilt), the halo and rays sit far behind (with it, the rays farthest),
+     its shadow falls on the back plane; the same grammar as the lanyards' .z in base.css. No transition anywhere: the
+     shared lerp in glass.ts already smooths --gx/--gy, a second easing on top was a lag */
+  .halo { transform: translate(calc(var(--gx, 0) * 7px), calc(var(--gy, 0) * 5px)); }
+  .rays { transform: translate(calc(var(--gx, 0) * 13px), calc(var(--gy, 0) * 9px)); }
+  .shade { position: absolute; left: 50%; top: 50%; width: 176px; aspect-ratio: 1; border-radius: 50%; pointer-events: none; translate: -50% -50%;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.22) 62%, transparent);
+    transform: translate(calc(var(--gx, 0) * 12px), calc(16px + var(--gy, 0) * 10px)); }
+  .pop { position: relative; z-index: 1; display: inline-flex; perspective: 700px; }
   :global(html.lowfx) .rays { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .rays, .sweep { animation: none; } }
+  /* power saving stops the gyro (--gx would freeze off-centre): flat; reduced motion never starts it */
+  :global(html.lowfx) :is(.halo, .rays, .shade, .big) { transform: none; }
+  @media (prefers-reduced-motion: reduce) { .rays, .sweep { animation: none; } .halo, .rays, .shade, .big { transform: none; } }
   @keyframes turn { to { rotate: 360deg; } }
   /* one narrow pass of light across the metal as it lands */
   .sweep { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay; background-size: 300% 100%;
@@ -188,12 +203,13 @@
   .facts div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2); }
   .facts b { font: 720 var(--fs-card)/1.2 var(--font-display); }
   .facts span { font: 560 var(--fs-cap)/1.25 var(--font-text); color: var(--text-2); }
-  .big { position: relative; z-index: 1; display: inline-flex; transform: rotateX(calc(var(--gy, 0) * -14deg)) rotateY(calc(var(--gx, 0) * 16deg)); transition: transform 160ms ease-out; }
+  .big { position: relative; display: inline-flex; will-change: transform;
+    transform: translate(calc(var(--gx, 0) * -6px), calc(var(--gy, 0) * -4px)) rotateX(calc(var(--gy, 0) * -16deg)) rotateY(calc(var(--gx, 0) * 18deg)); }
   /* the light slides over the metal with the tilt (round medals only: a pin's corners stay clean) */
   .shine { display: none; }
   /* a soft specular band that slides with the tilt, as on polished metal (owner, Nov 1: the white spot was so-so) */
   .round .shine { display: block; position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: soft-light;
-    background: linear-gradient(125deg, transparent calc(28% + var(--gx, 0) * 24%), rgba(255, 255, 255, 0.5) calc(40% + var(--gx, 0) * 24%), transparent calc(54% + var(--gx, 0) * 24%)); }
+    background: linear-gradient(125deg, transparent calc(28% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), rgba(255, 255, 255, 0.5) calc(40% + var(--gx, 0) * 34% + var(--gy, 0) * 14%), transparent calc(54% + var(--gx, 0) * 34% + var(--gy, 0) * 14%)); }
   .name { text-align: center; margin-top: 8px; color: var(--text); }
   .got { text-align: center; margin-top: 2px; }
   .tier { text-align: center; margin-top: 4px; font: 650 14px/1.3 var(--font-text); color: var(--accent-text); }
