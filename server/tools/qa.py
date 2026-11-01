@@ -84,6 +84,15 @@ def seed(path: str) -> None:
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, seats, memo, created_by, created_at, updated_at)
         VALUES (4, 1, 'draft', 'Stand-up workshop', 'Room 412', ?, 'microphone_3d', '#2B4C9A', '#1E3770', 40, ?, 1, ?, ?)""",
                 (logic._next_week() + 86400 + 13 * 3600, json.dumps(memo), now, now))
+    # the event editor's check (Nov 2): a trip left free while its text asks 7500 tenge and names 40 seats, no cover
+    con.execute("""INSERT INTO events (id, org_id, status, title, description, place, starts_at, emoji, color, tint, created_by, created_at, updated_at)
+        VALUES (5, 1, 'draft', ?, ?, 'Shymbulak', ?, 'camping_3d', '#2F7D6B', '#235E50', 1, ?, ?)""",
+                ("\u041f\u043e\u0435\u0437\u0434\u043a\u0430 \u043d\u0430 \u0428\u044b\u043c\u0431\u0443\u043b\u0430\u043a",
+                 "\u0415\u0434\u0435\u043c \u043d\u0430 \u0428\u044b\u043c\u0431\u0443\u043b\u0430\u043a \u0432\u0441\u0435\u043c \u043a\u043b\u0443\u0431\u043e\u043c! "
+                 "\u0410\u0432\u0442\u043e\u0431\u0443\u0441 \u043e\u0442 \u0433\u043b\u0430\u0432\u043d\u043e\u0433\u043e \u043a\u043e\u0440\u043f\u0443\u0441\u0430 \u0432 9:00, "
+                 "\u0432 \u0430\u0432\u0442\u043e\u0431\u0443\u0441\u0435 40 \u043c\u0435\u0441\u0442. \u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c 7 500 \u20b8: "
+                 "\u0434\u043e\u0440\u043e\u0433\u0430 \u0438 \u043f\u043e\u0434\u044a\u0451\u043c\u043d\u0438\u043a.",
+                 now + 9 * day + 4 * 3600, now, now))
     con.close()
 
 
@@ -94,6 +103,12 @@ def link(port: int, tg: int, first: str) -> str:
                                                                    "tgWebAppThemeParams": theme})
 
 
+ABOUT = ("\u0412\u0435\u0447\u0435\u0440 \u0441\u0442\u0435\u043d\u0434\u0430\u043f\u0430 \u0438 \u0436\u0438\u0432\u043e\u0439 \u043c\u0443\u0437\u044b\u043a\u0438 \u0432 \u0410\u0442\u0440\u0438\u0443\u043c\u0435. "
+         "\u041f\u044f\u0442\u044c \u043c\u0438\u043d\u0443\u0442 \u043d\u0430 \u0441\u0446\u0435\u043d\u0435 \u0434\u043b\u044f \u043a\u0430\u0436\u0434\u043e\u0433\u043e, \u043a\u0442\u043e \u0437\u0430\u043f\u0438\u0448\u0435\u0442\u0441\u044f, "
+         "\u0438 \u0442\u0451\u043f\u043b\u044b\u0439 \u0437\u0430\u043b \u0434\u043b\u044f \u0442\u0435\u0445, \u043a\u0442\u043e \u043f\u0440\u0438\u0448\u0451\u043b \u043f\u043e\u0441\u043b\u0443\u0448\u0430\u0442\u044c. "
+         "\u041d\u0430\u0447\u0438\u043d\u0430\u0435\u043c \u0440\u043e\u0432\u043d\u043e \u0432 18:30.")
+
+
 def fake_ai_app():
     """The app with a made-up assistant model (--fake-ai, no AI key here): it doesn't know, with a topic to vote on; a
     question the keyword backstop would catch comes back with the care flag, to see the help card."""
@@ -102,6 +117,8 @@ def fake_ai_app():
 
     async def chat(cfg, http, msgs, **kw):
         q = msgs[-1]["content"]
+        if "announcement" in msgs[0]["content"]:  # the event editor's fill: a made-up description (Russian, as the seed's people)
+            return json.dumps({"description": ABOUT}), "qa"
         care = assistant.distress(q)
         return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
                            "actions": [], "known": False, "topic": "qa made up topic", "care": care}), "qa"

@@ -36,6 +36,7 @@
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
   import { addressGis } from '../../lib/map';
+  import EditorLook, { type Ed } from './EditorLook.svelte';
 
   let { overlay, org, id }: { overlay: Overlay; org: Id; id?: Id } = $props();
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
@@ -263,6 +264,7 @@
   let asking = false;
   $effect(() => {
     if (!overlay.closing) return;
+    if (panelOpen) { overlay.closing = false; panelOpen = ''; return; } // the redesign's open panel goes first (one Back)
     if (!dirty) { leave(); return; }
     overlay.closing = false;
     if (asking) return;
@@ -350,6 +352,16 @@
     } finally { filling = false; }
   }
 
+  // the redesign's mocks (stage 1): localStorage kb-ed-look = a | b, on a local server only; users never see them
+  // ponytail: delete with the old form once the owner picks a look
+  const look = (() => { try { return /^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? localStorage.getItem('kb-ed-look') : null; } catch { return null; } })() as 'a' | 'b' | null;
+  let panelOpen = $state('');
+  const ed: Ed = {
+    get f() { return f; }, get err() { return err; }, get tried() { return tried; }, get live() { return live; }, get busy() { return busy; },
+    get startTs() { return startTs; }, get canPrice() { return canPrice; }, get saved() { return saved; }, get uploading() { return uploading; },
+    get org() { return org; }, get pick() { return panelOpen; }, set pick(v) { panelOpen = v; }, example, pickPhoto, placeTyped, submit, remove,
+  };
+
   async function remove() {
     if (!saved || busy) return;
     if (!(await sheets.ask({ title: t('ed.deleteAsk'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
@@ -371,6 +383,7 @@
     {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
   </header>
 
+  {#if look}<EditorLook {look} {ed} />{:else}
   <div class="body scroll">
     <button class="preview surface" onclick={showPreview} aria-label={t('ed.preview')}>
       <Poster item={{ cover: f.cover, emoji: f.emoji, color: f.color }} size={68} radius={16} />
@@ -627,6 +640,7 @@
       <Button kind="primary" size="l" full loading={busy === 'publish'} onclick={() => submit('publish')}>{t('ed.publish')}</Button>
     {/if}
   </footer>
+  {/if}
 </div>
 
 <style>
