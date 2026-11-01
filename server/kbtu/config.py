@@ -88,7 +88,7 @@ def load() -> Config:
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),
-        munito_keys=tuple(k for k in (env.get("MUNITO_API_KEY", "").strip(), env.get("MUNITO_API_KEY2", "").strip()) if k),
+        munito_keys=tuple(k for k in (env.get(f"MUNITO_API_KEY{n}", "").strip() for n in ("", *map(str, range(2, 10)))) if k),  # KEY, KEY2..KEY9
         openrouter_key=env.get("OPENROUTER_API_KEY", "").strip(),
         groq_key=env.get("GROQ_API_KEY", "").strip(),
         apinex_key=env.get("APINEX_API_KEY", "").strip(),
