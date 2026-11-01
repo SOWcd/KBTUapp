@@ -72,10 +72,10 @@
   "mix": 0
  },
  "screens/afisha/List.svelte": {
-  "font": 12,
-  "radius": 6,
-  "hex": 14,
-  "mix": 3
+  "font": 0,
+  "radius": 1,
+  "hex": 0,
+  "mix": 0
  },
  "screens/afisha/News.svelte": {
   "font": 12,
