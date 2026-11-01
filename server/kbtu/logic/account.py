@@ -19,7 +19,7 @@ from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON,
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
-            "nFriends": "n_friends", "nForum": "n_forum", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
+            "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
 
 
 def ms_link(con, uid: int, who: dict) -> None:
@@ -399,7 +399,7 @@ def me(con, v: Viewer) -> dict:
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "middleName": s["middle_name"], "email": s["email"],
                     "lastLat": s["last_lat"], "firstLat": s["first_lat"], "middleLat": s["middle_lat"],
                     "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
-                    "ms": s["ms_oid"] is not None, "consent": s["consent_version"],
+                    "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     # what My data still lets me correct myself (fix_identity): nothing for staff
                     "fixable": [k for k, c in FIXABLE.items() if c not in s["fixed"].split(",") and s["consent_version"] != "staff"]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
@@ -862,6 +862,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
             WHERE r.user_id = ?""", v.id)]
         con.execute("DELETE FROM receipts WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
+        con.execute("DELETE FROM receipt_replaced WHERE registration_id IN (SELECT id FROM registrations WHERE user_id = ?)", (v.id,))
         receipts = [p for f in paid + [r[0] for r in rows(con, "SELECT id FROM files WHERE owner_id = ? AND kind = 'receipt'", v.id)]
                     for p in _drop_unused(con, f)]
         # future seats first, so the waitlist moves: directly, an event he can no longer see (hidden, members-only) too
@@ -905,6 +906,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # the list's rest: by those mails, and by my student ID only where the name is mine (the ID may be a typo for mine)
         con.execute("""DELETE FROM prefill_rest WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
             UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))""", (v.id, f"ms:{v.id}"))
+        # the check-in screens' expected lists an organizer uploaded: my name, mail, phone (keyed by mail or ID, no foreign key)
+        con.execute("""DELETE FROM qr_expected WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
+            UNION SELECT lower(json_extract(value, '$.email')) FROM meta WHERE key = ? AND json_valid(value))
+            OR student_id IN (SELECT student_id FROM students WHERE user_id = ?)""", (v.id, f"ms:{v.id}", v.id))
         if s_ := one(con, "SELECT student_id, first_name, last_name FROM students WHERE user_id = ?", v.id):
             # by my ID, or with neither a mail nor an ID (they match nothing), where the name is mine
             for r in rows(con, "SELECT * FROM prefill_rest WHERE student_id = ? OR (email IS NULL AND student_id IS NULL)", s_["student_id"]):
@@ -915,7 +920,11 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
         for t in ("tgc_saved", "tgc_strangers"):
             con.execute(f"DELETE FROM {t} WHERE tg_id = ?", (tg,))
+        # one still to come out of the group (deleting, or in the moderators' queue) still does: its ids, nothing more
+        con.execute("""INSERT OR IGNORE INTO tgc_undel (chat_id, msg_id, at) SELECT chat_id, msg_id, ? FROM tgc_comments
+            WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
         fchannel.unpost_account(con, v.id)  # before the rows go: their channel message ids would go with them
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):

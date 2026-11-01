@@ -437,6 +437,9 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
     return card(con, v, e)
 
 
+RECEIPT_TRIES = 3  # another file in place of a receipt nobody looked at yet: this many times (cloud review)
+
+
 def receipt_open(con, v: Viewer, eid: int) -> None:
     """Checked before a receipt's image is processed: the person holds a seat on this event, or has a receipt on it
     nobody looked at yet (§4.3)."""
@@ -456,22 +459,29 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
         old = one(con, "SELECT * FROM receipts WHERE registration_id = ? AND status = 'accepted' AND reviewed_at IS NULL ORDER BY id DESC", r["id"])
         if not old or (e["ends_at"] or e["starts_at"] + 3 * 3600) < core.now():
             r = None
+        elif one(con, "SELECT COUNT(*) FROM receipt_replaced WHERE registration_id = ?", r["id"])[0] >= RECEIPT_TRIES:
+            raise ApiError("rate_limited", "receipt")  # enough: the organizer looks at the last one
     if not r:
         raise ApiError("closed")
     return r, e, old
 
 
-def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None, via: str = "app") -> dict:
+def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None, via: str = "app") -> tuple[dict, list[str]]:
     """The receipt is in (§4.3), from the app or the bot: the seat becomes a ticket at once. What OCR read off it
     (receipt.py; None = OCR didn't run) only raises flags (what isn't a receipt at all never gets here) the organizer sees first, and the
-    student too (my.receiptFlags), who may then send another file in its place (_receipt_slot)."""
+    student too (my.receiptFlags), who may then send another file in its place (_receipt_slot, RECEIPT_TRIES times).
+    Returns the card and the replaced picture's path, for the caller to drop from disk once this is committed."""
     with tx(con):
         r, e, old = _receipt_slot(con, v, eid)
-        if old:  # ponytail: the replaced picture stays on disk, unreachable (no row points at it); sweep if it ever matters
+        f = None
+        if old:  # its fingerprint stays (the duplicate check, the cap); its row and picture go
+            f = one(con, "SELECT sha256, path FROM files WHERE id = ?", old["file_id"])
+            con.execute("INSERT INTO receipt_replaced (registration_id, sha256, receipt_no, at) VALUES (?, ?, ?, ?)",
+                        (r["id"], f["sha256"], old["receipt_no"], core.now()))
             con.execute("DELETE FROM receipts WHERE id = ?", (old["id"],))
             con.execute("DELETE FROM files WHERE id = ? AND NOT EXISTS (SELECT 1 FROM receipts WHERE file_id = ?)", (old["file_id"], old["file_id"]))
         got = read or {}
-        flags = _receipt_flags(con, e, saved["sha256"], read)
+        flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
         con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, paid_at, flags, created_at)
@@ -480,17 +490,22 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         if not old:
             con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE id = ?", (core.now(), r["id"]))
             _remind(con, v.id, e)
-    return card(con, v, e)
+        # files are named by their content: the picture stays while any row (this new one too) has the same path
+        gone = [f["path"]] if f and not one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else []
+    return card(con, v, e), gone
 
 
-def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None) -> str:
+def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 0) -> str:
     """The checks (§4.3), the owner's list after the Oct 11 review: the same file or receipt number came before, a
     smaller sum or a bigger one that isn't a whole number of tickets (his test: a 1 090 receipt for 164 passed), another recipient, a receipt older than the event itself (an old one reused), (nothing readable,
     not a Kaspi receipt, is refused before: receipt.NotReceipt). No sender check: parents and friends pay, the organizer just sees the name."""
     got = read or {}
     out = []
+    # a receipt someone else replaced counts too, or replacing it would wash a reused one clean
     if one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
-            got.get("no") and one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"]):
+            one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
+            got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
+                               or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)):
         out.append("duplicate")
     if got.get("amount") and e["price"] and got["amount"] < e["price"]:
         out.append("amount_short")

@@ -18,7 +18,7 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | What | Where |
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
-| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `threads` the student forum; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` nightly jobs) |
+| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` nightly jobs) |
 | Schema | `server/kbtu/schema.sql` + append-only `MIGRATIONS` in `server/kbtu/db.py` |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
@@ -59,10 +59,12 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
-- **The bot** sends templates with a button into the app, never a user's words. One exception: a student's own post
+- **The bot** sends templates with a button into the app, never a user's words. Two exceptions: a student's own post
   to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
   links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
-  take it down, and only the creator can reveal an anonymous author (audit log).
+  take it down, and only the creator can reveal an anonymous author (audit log). And a user's own text going back to
+  them alone: a channel comment a moderator restored (`tgc_back`, to post it again), the title of my own find-people
+  request (`contact_ask`, `ask_hidden`).
 - **One Back**: Telegram's BackButton is the only Back. No "‹ Back" links, arrows or close buttons of our own that
   duplicate it (a full-screen overlay's bottom x is the one exception: ui/CloseX.svelte).
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and

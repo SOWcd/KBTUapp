@@ -44,7 +44,10 @@ def view(con, v: Viewer, oid: int) -> dict | None:
     """The club's live round: what a student needs to apply (and their own application), plus the counts for the team."""
     r = _live(con, oid)
     team = can(con, v, oid, "casting")
-    if not r or not (team or _accepting(r)):
+    if not r and not team and v.student:  # the results went out: my "no" with the club's own words, here (the bot never quotes them)
+        r = one(con, """SELECT r.* FROM rounds r JOIN round_apps a ON a.round_id = r.id AND a.user_id = ? WHERE r.org_id = ? AND r.status = 'done'
+            AND a.stage = 'no' AND r.decline_text != '' AND r.sent_at > ? ORDER BY r.sent_at DESC""", v.id, oid, now() - 60 * DAY)
+    if not r or not (team or _accepting(r) or r["status"] == "done"):
         return None
     deps = rows(con, """SELECT d.tag_id, d.about, d.places, t.name, t.color FROM round_departments d JOIN org_tags t ON t.id = d.tag_id
         WHERE d.round_id = ? ORDER BY d.pos""", r["id"])
@@ -58,6 +61,8 @@ def view(con, v: Viewer, oid: int) -> dict | None:
            "mine": {"departments": json.loads(mine["departments"]), "answers": json.loads(mine["answers"]), "stage": _seen(mine["stage"], r),
                     "invited": bool(mine["invited_at"]), "slot": _slot(con, mine["slot_id"])}
            if mine and mine["stage"] != "withdrawn" else None}
+    if r["status"] == "done":
+        out["declineText"] = r["decline_text"]
     if team:
         counts = dict(rows(con, "SELECT stage, COUNT(*) FROM round_apps WHERE round_id = ? GROUP BY stage", r["id"]))
         out |= {"counts": counts, "declineText": r["decline_text"], "team": True}

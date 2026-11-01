@@ -31,7 +31,7 @@ LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_]
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
 FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
 ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
-SIGNED = re.compile("^[\u2014\u2013\u2012\u2015-]")  # a last line like the bot's "- Name L." signature
+SIGNED = re.compile("^[\u2010-\u2015\u2212-]")  # a last line like the bot's "- Name L." signature (read NFKC: fullwidth, small dashes fold)
 
 
 def _visible(c: str) -> bool:
@@ -50,7 +50,7 @@ def _clean(raw: object) -> str:
         raise ApiError("bad_input")
     if LINKY.search(unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)):
         raise ApiError("bad_input", "links")
-    if "\n" in s and SIGNED.match(s.rsplit("\n", 1)[1].lstrip()):
+    if "\n" in s and SIGNED.match(unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1]).lstrip()):
         raise ApiError("bad_input", "signature")
     return s
 
@@ -142,7 +142,7 @@ def sending(con, pid: int) -> bool:
 def sent(con, pid: int, msg_id: int) -> None:
     """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
     right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
-    if not con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg = 0", (msg_id, pid)).rowcount:
+    if not con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
         p = one(con, "SELECT status FROM fchan_posts WHERE id = ?", pid)
         why = "moderator" if p and p["status"] == "hidden" else "author"
         con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (msg_id, why, _now()))
@@ -159,6 +159,15 @@ def lost(con) -> None:
     deleted or taken down while its send was lost stays untracked if it did go out; the bot's one process makes that a
     crash in a two-second window"""
     con.execute("UPDATE fchan_posts SET status = 'held', why = 'lost', tg_msg = NULL WHERE status = 'live' AND tg_msg = 0")
+
+
+def found(con, msg_id: int, text: str) -> None:
+    """The channel post's copy reached the discussion group (tgc.gate): a send whose answer never came (on its way, or
+    held as lost since) is in the channel after all. Matched by its words (the text without the bot's signature), its
+    message id kept, so the author's delete and a take-down reach it; it was live when sent, so live again."""
+    body = text.rsplit("\n\n\u2014 ", 1)[0]
+    con.execute("""UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ? WHERE id = (SELECT id FROM fchan_posts
+        WHERE body = ? AND (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost') ORDER BY id LIMIT 1)""", (msg_id, body))
 
 
 def sweep(con) -> None:

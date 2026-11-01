@@ -106,6 +106,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
     if msg.get("is_automatic_forward"):  # the channel's post, copied in: the root of its comments
         if sender.get("username") and (post := (msg.get("forward_origin") or {}).get("message_id")):
             rules.post_of(con, msg["message_id"], sender["username"], int(post))
+            if sender.get("id") == cfg.forum_channel:  # one of ours whose send's answer was lost: found
+                logic.fchannel.found(con, int(post), _text(msg))
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('tgc_channel', ?)", (str(sender["id"]),))
         return
     if not any(k in msg for k in CONTENT):
@@ -126,7 +128,7 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             doomed.append(msg["message_id"])
             _report(cfg, http, con, msg)
         elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
-            spawn(_judge(cfg, http, cid))
+            spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
@@ -196,18 +198,16 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = T
 
 
 async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
-    """The bot's round: the hour's texts and the old records wiped (logic), then, with the group set: the bot's
-    warnings past their minute, comments a moderator or the reports deleted, and new students unbanned. Off without the
-    group: nothing at all."""
+    """The bot's round, with the group set: the bot's warnings past their minute, comments a moderator or the reports
+    deleted, and new students unbanned. The old records are wiped by send_due (rules.sweep), on or off."""
     if not cfg.tgc_chat:
         return
-    rules.sweep(con)
     if gone := rules.due_deletes(con):
         await _call(cfg, http, "deleteMessages", {"chat_id": cfg.tgc_chat, "message_ids": gone})
     for cid, chat, mid in rules.to_delete(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
         if r.get("ok") or r.get("error_code") == 400:  # gone, or never to be (its author deleted it first; too old)
-            rules.deleted(con, cid)
+            rules.deleted(con, cid, chat, mid)
         else:
             break  # the network, a flood wait, lost rights: next round (the unbans below still go)
     for tg in rules.unban_due(con):
@@ -227,7 +227,6 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     if not cfg.forum_channel:
         return
     F = logic.fchannel
-    F.sweep(con)
     F.lost(con)  # a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
     for u in F.unposts(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"]})
@@ -300,10 +299,12 @@ def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
         q = "SELECT COUNT(*) FROM tgc_comments WHERE (status = 'queued' OR review = 1)"
         n, old = one(con, q)[0], one(con, q + " AND decided_at < ?", now() - 86400)[0]
         return (*texts.bot_message(lang, kind, n=n, old=old), "capps") if n else None
-    if kind in AUTHOR:  # to the author: removed after reports (under review), then the verdict; his own words, to him alone
+    if kind in AUTHOR:  # to the author: removed after reports (under review), then the verdict; his own words only with
+        # "restored" (to post them again), to him alone (AGENTS.md's one exception for a user's own text)
         c = one(con, "SELECT body, clause FROM tgc_comments WHERE id = ? AND " + AUTHOR[kind], int(ref[1]))
         rule = texts.pick(texts.TGC_RULES, lang).get(c["clause"] or "other") if c else ""
-        return (texts.bot_message(lang, kind, rule=rule)[0] + "\n\n" + html.escape(c["body"]), None, "") if c else None
+        words = "\n\n" + html.escape(c["body"]) if c and kind == "tgc_back" else ""
+        return (texts.bot_message(lang, kind, rule=rule)[0] + words, None, "") if c else None
     if kind == "tgc_good":  # to the owner: an accurate reporter, for him to decide about the moderator status
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=logic.short_name(p)), f"u_{p['id']}") if p else None

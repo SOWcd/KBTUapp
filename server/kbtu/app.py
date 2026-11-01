@@ -150,7 +150,7 @@ Forum = Annotated[Viewer, Depends(forum_viewer)]
 
 def board_on(cfg, v: Viewer) -> bool:
     """The policy's section 12 is in force for this person (BOARD=1 everyone, BOARD=staff the admins and moderators):
-    the assistant, an event's sign-up questions, the map's flaws. Its old in-app forum (threads.py) is off for good:
+    the assistant, an event's sign-up questions, the map's flaws. Its old in-app forum is off for good (its code removed):
     the forum channel replaced it (Nov 1), migration 103 deleted its threads."""
     return cfg.board == "all" or cfg.board == "staff" and v.role in ("admin", "moderator")
 
@@ -1069,7 +1069,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             saved, read = await _picture(receipt.take, data, receipts)
         except receipt.NotReceipt:
             raise ApiError("bad_input", "not_receipt") from None
-        return logic.add_receipt(con, v, eid, saved, read)
+        try:
+            c, gone = logic.add_receipt(con, v, eid, saved, read)
+        except ApiError:  # the hold ran out meanwhile: the new picture leaves the disk too, unless a row has the same one
+            media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
+            raise
+        media.drop(receipts, gone)  # the one it replaced
+        return c
 
     @app.get("/api/receipts/{rid}/image")
     def receipt_image(rid: int, con: Con, v: Me):

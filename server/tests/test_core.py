@@ -5589,7 +5589,7 @@ def test_forum_bot_cards(env, monkeypatch):
     ask = logic.create_ask(con, a, {"kind": "project", "title": "A site", "skills": [web]}, True)
     row = lambda kind: {**dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone()), "lang": "en"}  # noqa: E731
     text, _, keys = bot._render(con, row("ask_match"))
-    assert text == texts.bot_message("en", "ask_match", skill="web", title="A site")[0]
+    assert text == texts.bot_message("en", "ask_match", skill="web")[0] and "A site" not in text   # their words stay in the app
     assert keys[0][0]["start"] == f"fa_{ask['id']}" and keys[1][0]["callback_data"] == "ps:0"
     logic.contact(con, b, aid=ask["id"])
     text, _, keys = bot._render(con, row("contact_ask"))

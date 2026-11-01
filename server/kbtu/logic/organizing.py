@@ -597,6 +597,8 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
                 return {"result": "other_event"}
             if r["status"] != "going":
                 return {"result": "cancelled"}
+        if r["user_id"] == v.id and not can(con, v, e["org_id"], "events"):  # as checkin_by_name (a walk-in rolls back)
+            raise ApiError("forbidden")
         if not r["checked_in_at"]:
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
                                                            (t, v.id, t, r["id"])))

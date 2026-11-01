@@ -1011,6 +1011,24 @@ MIGRATIONS: list[tuple[int, str]] = [
     (103, """DELETE FROM thread_joins; DELETE FROM thread_replies; DELETE FROM threads;
     DELETE FROM reports WHERE target IN ('thread', 'reply');
     DELETE FROM bot_outbox WHERE kind = 'thread_reply';"""),
+    # (cloud review, Nov 1) a replaced receipt's fingerprint: the duplicate check still sees it, and it counts toward the
+    # replacements' cap (seats.RECEIPT_TRIES); its picture leaves the disk. tgc_undel: a deleted account's comments
+    # still to come out of the discussion group (deleting, or in the moderators' queue): ids only, nothing personal
+    (104, """CREATE TABLE IF NOT EXISTS receipt_replaced (
+      registration_id INTEGER NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+      sha256          TEXT NOT NULL,
+      receipt_no      TEXT,
+      at              INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS receipt_replaced_by_reg ON receipt_replaced(registration_id);
+    CREATE INDEX IF NOT EXISTS receipt_replaced_by_sha ON receipt_replaced(sha256);
+    CREATE INDEX IF NOT EXISTS receipt_replaced_by_no ON receipt_replaced(receipt_no) WHERE receipt_no IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS tgc_undel (
+      chat_id INTEGER NOT NULL,
+      msg_id  INTEGER NOT NULL,
+      at      INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, msg_id)
+    ) STRICT;"""),
 ]
 
 

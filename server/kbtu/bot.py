@@ -122,13 +122,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return None
         sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
             ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "", title=a["title"])
+        text, button = texts.bot_message(lang, kind, skill=sk["name"] if sk else "")  # another's words: behind the button only
         return text, None, [[{"text": button, "start": f"fa_{a['id']}"}], [{"text": texts.bot_message(lang, "ask_stop")[0], "callback_data": "ps:0"}]]
-    if kind == "thread_reply":  # tr:<thread>:<hour>: someone answered or joined my forum thread; never their words
-        t = one(con, "SELECT id FROM threads WHERE id = ? AND status = 'live'", int(ref[1]))
-        if not t or not one(con, "SELECT n_forum FROM users WHERE id = ?", m["user_id"])[0]:  # gone, or the switch is off
-            return None
-        return (*texts.bot_message(lang, kind), f"th_{t['id']}")
     if kind == "contact_ask":  # ct:<contact>: someone offers help or wants to get in touch; Accept shares both contacts
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'pending'", int(ref[1]))
         p = c and one(con, logic.PERSON + " WHERE u.id = ?", c["from_id"])
@@ -290,8 +285,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             return None
         if kind == "round_yes":
             return (*texts.bot_message(lang, kind + ("_dept" if a["dept"] else ""), org=a["name"], dept=a["dept"] or ""), f"cl_{a['org_id']}")
-        text, button = texts.bot_message(lang, kind, org=a["name"])
-        return (text + ("\n\n" + html.escape(a["decline_text"]) if a["decline_text"] else ""), button, "clubs")
+        if a["decline_text"]:  # the club's own words are in the app, never in the bot's message (AGENTS.md: templates only)
+            return (*texts.bot_message(lang, "round_no_why", org=a["name"]), f"iv_{a['org_id']}")
+        return (*texts.bot_message(lang, kind, org=a["name"]), "clubs")
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
@@ -615,6 +611,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
         userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
+        logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
+        logic.fchannel.sweep(con)
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
@@ -875,10 +873,13 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     except (httpx.HTTPError, ValueError, KeyError, TypeError, media.BadImage) as exc:
         log.warning("receipt: %s", type(exc).__name__)
         return say("receipt_bad")
+    root = Path(cfg.db_path).resolve().parent / "receipts"
     try:
-        c = logic.add_receipt(con, logic.Viewer(u["id"], u["role"], True), eid, saved, read, via="bot")
-    except logic.ApiError:  # the hold ran out while the file was read
+        c, gone = logic.add_receipt(con, logic.Viewer(u["id"], u["role"], True), eid, saved, read, via="bot")
+    except logic.ApiError:  # the hold ran out while the file was read: the picture goes, unless a row has the same one
+        media.drop(root, [] if one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
         return say("receipt_none")
+    media.drop(root, gone)  # the one it replaced
     title = next(h["title"] for h in holds if h["id"] == eid)
     if flags := (c["my"] or {}).get("receiptFlags"):  # looks wrong: the ticket stays, the app's ticket takes another file
         return say("receipt_check", f"tk_{eid}", title=title, why=texts.receipt_why(lang, flags))

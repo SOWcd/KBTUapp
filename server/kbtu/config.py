@@ -25,8 +25,8 @@ class Config:
     cf_ai_token: str = field(default="", repr=False)
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
-    # the student forum (logic/threads.py): BOARD=1 every student (the policy's section 12 in force, everyone agrees
-    # again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
+    # the policy's section 12 (the assistant, sign-up questions, the map's flaws): BOARD=1 every student (in force,
+    # everyone agrees again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
     board: str = ""
     # the forum channel's discussion group (its chat id, -100...): only verified students may comment there (tgc.py,
     # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too. Never the events

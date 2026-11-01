@@ -176,7 +176,7 @@ def test_saved_text_for_its_author_only(env, monkeypatch):
     set_clock(monkeypatch, lambda: real() + 3601)
     assert c.post("/api/me/tg-comment", headers=tma(79)).json() is None          # past the hour, even before the wipe
     assert con.execute("SELECT COUNT(*) FROM tgc_saved").fetchone()[0] == 1
-    tick(cfg, tg, con)
+    logic.tgcomments.sweep(con)                                                  # the bot's round (send_due), on or off
     assert con.execute("SELECT COUNT(*) FROM tgc_saved").fetchone()[0] == 0
 
 
@@ -209,13 +209,13 @@ def test_reports_ai_gate_and_moderators(env, monkeypatch):
     assert tg.of("deleteMessage") == [{"chat_id": G, "message_id": 50}]
     assert con.execute("SELECT status FROM tgc_comments").fetchone()[0] == "deleted"
     m = bot._render(con, {"kind": "tgc_removed", "ref": f"tr:{cid}", "lang": "en", "user_id": author})
-    assert m[0].endswith("\n\nbad words")                                        # his own words, to him alone
+    assert "bad words" not in m[0]                                               # his words: in the app, not the bot's DM
 
     hear(cfg, tg, report(65, 21, fine), report(66, 22, fine), report(67, 23, fine))  # the AI: clean; three reports
     fid = con.execute("SELECT id FROM tgc_comments WHERE msg_id = 51").fetchone()[0]
     assert con.execute("SELECT status FROM tgc_comments WHERE id = ?", (fid,)).fetchone()[0] == "queued"
     assert (mod, f"ta:{fid}") in outbox(con, "tgc_queue")                     # three at once: the moderators now
-    tick(cfg, tg, con)
+    logic.tgcomments.sweep(con)                                                  # the bot's round (send_due)
     assert any(ref.startswith("tq:") for _, ref in outbox(con, "tgc_queue"))   # and the hourly digest
 
     q = [x for x in c.get("/api/admin/reports", headers=tma(24)).json() if x["target"] == "tgc"]
@@ -399,7 +399,7 @@ class NoEdits(Telegram):
 
 
 def test_verdict_edits_the_first_message(env, monkeypatch):
-    """Removed after reports: its author gets "under review" with his words; the moderator's verdict edits that same
+    """Removed after reports: its author gets "under review" (his words only with a restore); the moderator's verdict edits that same
     message (the rule picked from the report reasons, the AI's guess by default), the undo list's restore edits it
     again. Telegram refusing the edit: a new message. The bot blocked: the app's card says it instead."""
     c, cfg, con, _ = setup(env, monkeypatch, {"bad words": False, "more bad": False, "bad words!": False})
@@ -416,7 +416,7 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     tg.calls.clear()
     postman(cfg, tg)
     first = [b for b in tg.of("sendMessage") if b["chat_id"] == 20]
-    assert len(first) == 1 and "under a moderator's review" in first[0]["text"] and first[0]["text"].endswith("bad words")
+    assert len(first) == 1 and "under a moderator's review" in first[0]["text"] and "bad words" not in first[0]["text"]
     dm = con.execute("SELECT dm_id FROM tgc_comments WHERE id = ?", (cid,)).fetchone()[0]
     assert dm
 
@@ -428,14 +428,14 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     postman(cfg, tg)
     ed = tg.of("editMessageText")
     assert len(ed) == 1 and ed[0]["chat_id"] == 20 and ed[0]["message_id"] == dm
-    assert "spam, ads, deceit (Rules, s. 3)" in ed[0]["text"] and ed[0]["text"].endswith("bad words")
+    assert "spam, ads, deceit (Rules, s. 3)" in ed[0]["text"] and "bad words" not in ed[0]["text"]
     assert not [b for b in tg.of("sendMessage") if b["chat_id"] == 20]          # edited, not a second message
 
     assert c.post(f"/api/admin/taken-down/tgc/{cid}/restore", headers=tma(24)).status_code == 204  # the undo list
     tg.calls.clear()
     postman(cfg, tg)
     ed = tg.of("editMessageText")
-    assert len(ed) == 1 and ed[0]["message_id"] == dm and "by mistake" in ed[0]["text"]
+    assert len(ed) == 1 and ed[0]["message_id"] == dm and "by mistake" in ed[0]["text"] and ed[0]["text"].endswith("bad words")  # to post again
 
     # Telegram refuses the edit (too old, deleted by him): the verdict goes as a new message
     hear(cfg, tg, report(62, 21, msg(51, 20, "more bad")), report(63, 22, msg(51, 20, "more bad")))
@@ -447,7 +447,7 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     postman(cfg, refuse)
     assert len(refuse.of("editMessageText")) == 1
     new = [b for b in refuse.of("sendMessage") if b["chat_id"] == 20]
-    assert len(new) == 1 and "insults, threats" in new[0]["text"] and new[0]["text"].endswith("more bad")
+    assert len(new) == 1 and "insults, threats" in new[0]["text"] and "more bad" not in new[0]["text"]
 
     # the bot blocked: no message gets through; the app's card says what became of it
     hear(cfg, tg, report(64, 21, msg(52, 20, "bad words!")), report(65, 22, msg(52, 20, "bad words!")))

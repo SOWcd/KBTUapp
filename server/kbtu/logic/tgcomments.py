@@ -5,11 +5,11 @@ anyone else's comment, says so once as a reply in the thread (gone after a minut
 bans a second try. The stranger's text waits an hour for him alone: the app shows it to the same Telegram account
 (the signed initData), never to whoever opens a link.
 Reports: a student replies /report; the bot deletes the command and answers in DM. A comment goes at once only when two
-reporters verified more than two weeks ago reported it AND the AI says it breaks the rules; its author gets his words
-in DM ("removed after reports, under review") and a moderator has the last word: confirm or restore (owner, Nov 1: the
+reporters verified more than two weeks ago reported it AND the AI says it breaks the rules; its author hears in DM
+("removed after reports, under review"; his words only once restored, the app shows them) and a moderator has the last word: confirm or restore (owner, Nov 1: the
 AI never decides). Anything else reported waits in the same queue, still up (an hourly digest; 3+ reports at once).
 Reporters' accuracy changes only on a moderator's decision; /report is closed only by a moderator, and only for someone
-with two wrong reports or more. Here the rules; the Telegram calls are in tgc.py."""
+whose reports a moderator found abuse twice in 30 days. Here the rules; the Telegram calls are in tgc.py."""
 from __future__ import annotations
 
 import hashlib
@@ -22,10 +22,12 @@ SAVE_FOR = 3600            # a stranger's deleted text, for him alone (the polic
 STRANGER_KEEP = 90 * 86400  # a warning or a ban on record
 KEEP = 30 * 86400          # reported comments' copies and their reports; the owner's undo
 RAID_AT = 5                # strangers within a minute: a raid; no warnings (each is a send), the first comment bans
+REPORTER_AGE = 14 * 86400  # a reporter verified this long ago counts toward an automatic deletion
 DELETE_AT = 2              # distinct reporters verified over REPORTER_AGE ago, with the AI's "violation"
 ALERT_AT = 3               # reports on one comment still up: the moderators hear at once, not in the hourly digest
-CLOSE_AT = 2               # wrong reports (kept or restored by a moderator) within KEEP before a moderator may close /report
+CLOSE_AT = 2               # reports a moderator found abuse within KEEP before /report closes (the policy: twice in 30 days)
 PAIR_AT = 2                # a reporter's wrong reports on one author: his reports on that author never delete again
+EDIT_LOOKS = 10            # an author's edits of reported comments a day that may each bring a fresh AI look (a paid call)
 AI_LOOKS = 30              # a reporter's reports a day that may each bring a fresh AI look (reports themselves: no cap, owner)
 GOOD_AT = 10              # confirmed reports on as many different authors, none wrong: the owner hears (never a promotion)
 LIVE = ("open", "queued")  # in the moderators' queue, still up
@@ -134,6 +136,15 @@ def fresh_look(con, reporter_tg: int) -> bool:
                reporter_tg, now() - 86400)[0] <= AI_LOOKS
 
 
+def fresh_edit(con, author_tg: int) -> bool:
+    """May this edit of a reported comment bring about a fresh AI look? EDIT_LOOKS a day per author (counted in meta,
+    gone the next day: sweep); past them a moderator decides, as for a reporter past AI_LOOKS."""
+    key = f"tgcedit:{author_tg}:{now() // 86400}"
+    n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or ["0"])[0]) + 1
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n)))
+    return n <= EDIT_LOOKS
+
+
 def looked(con, cid: int) -> tuple[bool | None, str | None] | None:
     """The AI's verdict on this comment's text as it is now, if it looked at this very text before; else None."""
     c = one(con, "SELECT body, ai, ai_hash, clause FROM tgc_comments WHERE id = ?", cid)
@@ -168,7 +179,7 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
         n = one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN students s ON s.user_id = r.reporter_id AND s.manual = 0
             WHERE r.comment_id = ? AND s.verified_at < ? AND (SELECT COUNT(*) FROM tgc_reports w JOIN tgc_comments x ON x.id = w.comment_id
                 WHERE w.reporter_id = r.reporter_id AND x.author_tg = ? AND w.outcome IN ('overturned', 'abuse')) < ?""",
-                cid, now() - threads.REPORTER_AGE, c["author_tg"], PAIR_AT)[0]
+                cid, now() - REPORTER_AGE, c["author_tg"], PAIR_AT)[0]
         reports = one(con, "SELECT COUNT(*) FROM tgc_reports WHERE comment_id = ?", cid)[0]
         cleared = one(con, "SELECT 1 FROM meta WHERE key = ?", f"tgcok:{_hash(c['body'])}") is not None
         ai = {True: "ok", False: "flag", None: "none"}[verdict]
@@ -177,7 +188,7 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
         if verdict is False and n >= DELETE_AT and not cleared:
             con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
-            if c["author_id"]:  # his own words back at once, while the thread is still about them (review 3)
+            if c["author_id"]:  # he hears at once, while the thread is still about it (review 3)
                 notify(con, c["author_id"], "tgc_removed", f"tr:{cid}")
             return "delete"
         if reports >= ALERT_AT:  # many at once: the moderators now, not in the hour's digest
@@ -202,13 +213,15 @@ def edited(con, chat: int, msg_id: int, body: str) -> int | None:
 
 
 def to_delete(con) -> list[tuple[int, int, int]]:
-    """(id, chat, message) the bot takes out of Telegram now."""
-    return [tuple(r) for r in rows(con, "SELECT id, chat_id, msg_id FROM tgc_comments WHERE status = 'deleting'")]
+    """(id, chat, message) the bot takes out of Telegram now; a deleted account's (tgc_undel) with id 0."""
+    return [tuple(r) for r in rows(con, """SELECT id, chat_id, msg_id FROM tgc_comments WHERE status = 'deleting'
+        UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel""")]
 
 
-def deleted(con, cid: int) -> None:
+def deleted(con, cid: int, chat: int = 0, msg_id: int = 0) -> None:
     """Out of Telegram (or Telegram refused: its author deleted it first, mostly; a 48 h limit if there is one)."""
     con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ? AND status = 'deleting'", (cid,))
+    con.execute("DELETE FROM tgc_undel WHERE chat_id = ? AND msg_id = ?", (chat, msg_id))
 
 
 # ---- the moderators' side (moderation.report_queue / taken_down / restore, app.py's resolve route)
@@ -249,7 +262,7 @@ def queue_items(con, v: Viewer) -> list[dict]:
 def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
     """A moderator's verdict, audited: 'remove' (still up: the bot deletes it; removed: confirmed) with the rule it
     broke (RULES; the AI's guess by default), 'keep' (still up: the reports were wrong; removed: restored), 'abuse'
-    (as keep, and the reports were abuse: each reporter with CLOSE_AT wrong reports in KEEP loses /report; a person's
+    (as keep, and the reports were abuse: each reporter with CLOSE_AT abuse findings in KEEP loses /report; a person's
     call, never the AI's). Only now does accuracy change. Its author hears the verdict (the bot edits its first
     message into it: tgc.edit_first)."""
     _mod(v)
@@ -265,7 +278,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
             con.execute("""UPDATE tgc_comments SET status = CASE WHEN status = 'deleted' THEN 'deleted' ELSE 'deleting' END, review = 0,
                 clause = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["clause"] or "other", now(), cid))
             con.execute("UPDATE tgc_reports SET outcome = 'confirmed' WHERE comment_id = ?", (cid,))
-            if c["author_id"]:  # the verdict, with his words: the "under review" message edited, or a new one
+            if c["author_id"]:  # the verdict: the "under review" message edited, or a new one
                 notify(con, c["author_id"], "tgc_confirmed", f"tc:{cid}")
             log_action(con, v.id, "tg_confirm", f"tgc:{cid}")
             for (uid,) in rows(con, "SELECT reporter_id FROM tgc_reports WHERE comment_id = ?", cid):
@@ -280,7 +293,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
         log_action(con, v.id, "tg_restore" if c["review"] else "tg_keep", f"tgc:{cid}", '{"abuse": true}' if action == "abuse" else "{}")
         if action == "abuse":
             for (uid,) in rows(con, """SELECT r.reporter_id FROM tgc_reports r WHERE r.comment_id = ? AND (SELECT COUNT(*) FROM tgc_reports w
-                    WHERE w.reporter_id = r.reporter_id AND w.outcome IN ('overturned', 'abuse') AND w.at > ?) >= ?""", cid, now() - KEEP, CLOSE_AT):
+                    WHERE w.reporter_id = r.reporter_id AND w.outcome = 'abuse' AND w.at > ?) >= ?""", cid, now() - KEEP, CLOSE_AT):
                 if con.execute("INSERT OR IGNORE INTO tgc_closed (user_id, at, by_id) VALUES (?, ?, ?)", (uid, now(), v.id)).rowcount:
                     log_action(con, v.id, "tg_report_close", f"user:{uid}", f'{{"tgc": {cid}}}')
 
@@ -388,6 +401,7 @@ def sweep(con) -> None:
     con.execute("DELETE FROM tgc_strangers WHERE seen_at < ?", (now() - STRANGER_KEEP,))
     con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (now() - KEEP,))
     con.execute("DELETE FROM meta WHERE key LIKE 'tgcok:%' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
+    con.execute("DELETE FROM meta WHERE key LIKE 'tgcedit:%' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))
     if one(con, "SELECT 1 FROM tgc_comments WHERE (status = 'queued' OR review = 1) AND decided_at > ?", now() - 3600):
         for uid in _mods(con):
             notify(con, uid, "tgc_queue", f"tq:{now() // 3600}")
@@ -398,7 +412,7 @@ def now() -> int:
 
 
 # the other domains', imported last: they import this one too
-from . import core, threads  # noqa: E402
+from . import core  # noqa: E402
 from .core import _once  # noqa: E402
 from .oversight import _admin, _mod  # noqa: E402
 from .seats import notify  # noqa: E402
