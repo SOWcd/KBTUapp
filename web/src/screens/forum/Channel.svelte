@@ -125,8 +125,10 @@
             {/if}
             <button class="cm" onclick={() => { haptic.tap(); openLink(comments(p)); }}>
               <MessageCircle size={18} strokeWidth={2} /><span>{t('fc.comments')}</span>
-              <!-- who is talking there: the newest commenters' faces (app students only), then the count -->
-              {#if p.faces.length}<span class="faces">{#each p.faces as f (f.id)}<Avatar person={f} size={20} tappable={false} />{/each}</span>{/if}
+              <!-- who is talking there: the newest commenters' faces (app students only), then the count;
+                   no ids come: a face's colour by its letter -->
+
+              {#if p.faces.length}<span class="faces">{#each p.faces as f, i (i)}<Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} />{/each}</span>{/if}
               {#if p.comments}<span class="n" class:after={p.faces.length}>{p.comments}</span>{/if}
             </button>
           {/if}

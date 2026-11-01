@@ -60,8 +60,9 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'liv
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
 export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; msg: number | null; anon: boolean; sign: string; mine: boolean
   person: PersonRef | null /* a signed post's author; never on an anonymous one */; comments: number /* the students' comments the bot saw */; thread: number | null /* the bot's first comment in the group: the comments link */
-  /** the newest commenters (app students only), newest first: a face, no name (name: one letter, the photo's fallback) */
-  faces: { id: Id; avatar: string | null; name: string }[]
+  /** the newest commenters (app students who agreed to it), newest first, for students only (a guest: []): a face, no
+   *  id, no name (name: one letter, the photo's fallback) */
+  faces: { avatar: string | null; name: string }[]
   /** Telegram's top reactions on the channel post; a custom emoji as "custom:<id>", a paid one as "paid" */
   reactions: { emoji: string; n: number }[] }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous

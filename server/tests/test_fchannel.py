@@ -613,25 +613,34 @@ def test_post_faces_and_reactions(env, monkeypatch):
     def card(pid: int = p["id"]) -> dict:
         return next(x for x in c.get("/api/forum-posts/feed", headers=tma(3)).json() if x["id"] == pid)
     k = card()
-    assert k["comments"] == 5 and [f["id"] for f in k["faces"]] == [2, 5, 4]                  # newest first, distinct, the stranger's never
-    assert k["faces"][0] == {"id": 2, "avatar": None, "name": "B"} and "Bob" not in json.dumps(k["faces"])
+    assert k["comments"] == 5 and k["faces"] == []                                              # counted; no one agreed to show his face yet
+    assert con.execute("SELECT COUNT(*) FROM fchan_comments").fetchone()[0] == 5               # recorded all the same
+    con.execute("UPDATE students SET consent_version = '1+tgc1' || ? WHERE user_id IN (2, 3, 5)", (logic.CONSENT_FCH,))
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = 4")                             # staff: on staff terms
+    names = lambda pid=p["id"]: [f["name"] for f in card(pid)["faces"]]  # noqa: E731
+    k = card()
+    assert k["comments"] == 5 and names() == ["B", "E", "D"]                                    # newest first, distinct, the stranger's never
+    assert k["faces"][0] == {"avatar": None, "name": "B"} and "Bob" not in json.dumps(k["faces"])  # no id, no name
     assert card(q["id"])["faces"] == [] and card(q["id"])["comments"] == 0
+    # a guest (no KBTU sign-in) sees the count, never the people
+    guest = next(x for x in c.get("/api/forum-posts/feed", headers=tma(9)).json() if x["id"] == p["id"])
+    assert guest["comments"] == 5 and guest["faces"] == []
     # a report's deletion: out of the count and the faces; a moderator keeps it: back
     cid = con.execute("""INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, created_at)
         VALUES (?, 64, 5, 5, 'me too', 0)""", (G,)).lastrowid
     con.execute("UPDATE tgc_comments SET status = 'deleting' WHERE id = ?", (cid,))
     k = card()
-    assert k["comments"] == 4 and [f["id"] for f in k["faces"]] == [2, 4, 3]
+    assert k["comments"] == 4 and [f["name"] for f in k["faces"]] == ["B", "D", "C"]
     con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ?", (cid,))
     assert card()["comments"] == 4
     con.execute("UPDATE tgc_comments SET status = 'kept' WHERE id = ?", (cid,))  # (the trigger is its status, any path)
     assert card()["comments"] == 5
     # banned: hidden; a deleted account: gone (its rows with it)
     con.execute("UPDATE users SET banned_at = 1 WHERE id = 2")
-    assert [f["id"] for f in card()["faces"]] == [5, 4, 3]
+    assert names() == ["E", "D", "C"]
     con.execute("UPDATE users SET banned_at = NULL WHERE id = 2")
     delete_now(c, cfg, tma(5))
-    assert [f["id"] for f in card()["faces"]] == [2, 4, 3]
+    assert names() == ["B", "D", "C"]
     assert con.execute("SELECT COUNT(*) FROM fchan_comments WHERE user_id = 5").fetchone()[0] == 0
     # one query for every card's faces, however many posts
     seen: list[str] = []

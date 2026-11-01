@@ -83,7 +83,7 @@ def feed(con, v: Viewer) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
-    faces = _faces(con, [p["id"] for p in ps if p["comments"]])
+    faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
@@ -102,18 +102,22 @@ FACES = 3  # the newest commenters a card shows
 
 def _faces(con, ids: list[int]) -> dict[int, list[dict]]:
     """The newest FACES distinct commenters of each post, one query for all of them: students of the app alone (a
-    stranger's comment never gets here), not banned, comments still in Telegram; a deleted account's rows went with
-    it. A face is an avatar and nothing more (no name: the card shows who is there, not a list)."""
+    stranger's comment never gets here) who agreed to the policy that says so (CONSENT_FCH in their version; staff
+    too), not banned, comments still in Telegram; a deleted account's rows went with it. Rows are kept either way: a
+    face shows once its owner agrees. A face is an avatar and nothing more (no id, no name: who is there, not a list)."""
+    from .account import CONSENT_FCH  # here: account imports this module
     if not ids:
         return {}
     got = rows(con, f"""SELECT f.post_id, {PERSON_COLS} FROM (SELECT post_id, user_id, ROW_NUMBER() OVER
         (PARTITION BY post_id ORDER BY MAX(at) DESC, user_id) AS n FROM fchan_comments WHERE gone = 0 AND post_id IN ({','.join('?' * len(ids))})
-        AND user_id NOT IN (SELECT id FROM users WHERE banned_at IS NOT NULL) GROUP BY post_id, user_id) f
-        JOIN users u ON u.id = f.user_id LEFT JOIN students s ON s.user_id = u.id WHERE f.n <= ? ORDER BY f.post_id, f.n""", *ids, FACES)
+        AND user_id IN (SELECT u.id FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.banned_at IS NULL
+            AND (instr(s.consent_version, ?) > 0 OR s.consent_version = 'staff' OR u.role IN ('admin', 'moderator')))
+        GROUP BY post_id, user_id) f
+        JOIN users u ON u.id = f.user_id LEFT JOIN students s ON s.user_id = u.id WHERE f.n <= ? ORDER BY f.post_id, f.n""", *ids, CONSENT_FCH, FACES)
     out: dict[int, list[dict]] = {}
     for r in got:
         # name: one letter, the avatar's fallback without a photo (the name the app shows, its first letter)
-        out.setdefault(r["post_id"], []).append({"id": r["id"], "avatar": avatar_of(r), "name": (shown_name(r) or "?")[:1].upper()})
+        out.setdefault(r["post_id"], []).append({"avatar": avatar_of(r), "name": (shown_name(r) or "?")[:1].upper()})
     return out
 
 

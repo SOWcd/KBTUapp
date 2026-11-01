@@ -1062,7 +1062,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the bot saw, by its id in the discussion group: a comment seen twice counts once) and the channel post's
     # reactions (Telegram's message_reaction_count, as {"👍": 3, "custom:<id>": 1}). A comment taken out of Telegram
     # (a report's deletion) leaves the count and the faces, and comes back with a moderator's "keep": the trigger
-    # follows tgc_comments' status, so every path that changes it is covered (its 30-day sweep deletes, never updates)
+    # follows tgc_comments' status, so every path that changes it is covered (its 30-day sweep deletes, never updates).
+    # ponytail: the trigger matches msg_id alone, without chat_id: one discussion group today (FORUM_GROUP); a second
+    # group or a new one reusing ids needs chat_id in fchan_comments and in the match
     (107, """ALTER TABLE fchan_posts ADD COLUMN reactions TEXT;
     CREATE TABLE fchan_comments (
       msg_id  INTEGER PRIMARY KEY,
