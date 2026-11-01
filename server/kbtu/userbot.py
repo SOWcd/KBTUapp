@@ -152,6 +152,16 @@ class Mirror:
         from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
         from telethon.tl.types import Channel, PeerChannel
         skip: dict[str, float] = {}
+        try:  # what it joined before muting existed, or by hand
+            async for d in self.client.iter_dialogs():
+                ns = getattr(d.dialog, "notify_settings", None)
+                if (d.is_group or d.is_channel) and not (ns and ns.mute_until and ns.mute_until.timestamp() > time.time()):
+                    await self.mute(d.entity)
+                    await asyncio.sleep(1)
+        except FloodWaitError as exc:
+            log.warning("userbot: mute sweep, flood wait %ds", exc.seconds)
+        except Exception:  # noqa: BLE001
+            log.exception("userbot mute sweep")
         while True:
             try:
                 if out := mirror.to_leave(self.con):
@@ -172,6 +182,7 @@ class Mirror:
                         skip[name] = time.time() + 86400  # no such channel, or a group: the bot keeps its card, nothing to mirror
                     else:
                         await self.client(JoinChannelRequest(ent))
+                        await self.mute(ent)
                         mirror.joined(self.con, ent.id, name)
                         log.warning("userbot: joined @%s", name)
                         await self.first(ent)
@@ -183,6 +194,13 @@ class Mirror:
             except Exception:  # noqa: BLE001
                 log.exception("userbot joins")
             await asyncio.sleep(JOIN_GAP)
+
+    async def mute(self, ent) -> None:
+        """Silence a chat it's in for good (owner, Nov 2): the account's phone stays quiet."""
+        from telethon.tl.functions.account import UpdateNotifySettingsRequest
+        from telethon.tl.types import InputNotifyPeer, InputPeerNotifySettings
+        await self.client(UpdateNotifySettingsRequest(InputNotifyPeer(await self.client.get_input_entity(ent)),
+                                                      InputPeerNotifySettings(mute_until=2**31 - 1)))
 
     async def first(self, ent) -> None:
         """A first link: the channel's last few posts of the last month (an album is one), oldest first."""

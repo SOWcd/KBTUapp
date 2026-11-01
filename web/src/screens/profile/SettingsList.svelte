@@ -140,7 +140,16 @@
     try { cal = await api.calendarFeed(); } catch { say(t('common.error'), 'warning_3d'); return; }
     openLink(cal.page);
   }
-  $effect(() => on('homeScreenAdded', () => { home.v = 'added'; say(t('set.homeDone'), 'rocket_3d'); }));
+  $effect(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
+  // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
+  // no "added" within a few seconds -> say where to allow it (owner, Nov 2: "the button does nothing")
+  let homeWait: ReturnType<typeof setTimeout> | undefined;
+  function addHome() {
+    haptic.tap();
+    homeScreen.add();
+    clearTimeout(homeWait);
+    if (homeScreen.android()) homeWait = setTimeout(() => { if (home.v !== 'added') homeScreen.help(t('set.homeHelp')); }, 4000);
+  }
 
   // a row's menu, open: its aria-expanded
   let opened = $state<{ row: string; id: number } | null>(null);
@@ -203,7 +212,7 @@
       {@render row(BatteryMedium, t('power.title'), t(`power.${power.mode}`), 'menu', (r) => open('power', at(r), POWER_MODES.map((m) => ({ label: t(`power.${m}`), checked: power.mode === m,
         onselect: () => { if (power.mode !== m) { setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } } }))), 'power')}
       {#if home.v === 'unknown' || home.v === 'missed'}
-        <button class="set-row act" onclick={() => { haptic.tap(); homeScreen.add(); }}><span class="ic"><Smartphone size={20} strokeWidth={2} /></span><span class="lb">{t('set.homeShort')}</span></button>
+        <button class="set-row act" onclick={addHome}><span class="ic"><Smartphone size={20} strokeWidth={2} /></span><span class="lb">{t('set.homeShort')}</span></button>
       {/if}
     </div>
   </div>

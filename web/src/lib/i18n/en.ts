@@ -1468,6 +1468,7 @@ const en: Dict = {
   'app.codeSub': "open code",
   'set.homeDone': "On your home screen now",
   'set.calShort': "Calendar",
+  'set.homeHelp': "Nothing showed up? Allow Telegram home screen shortcuts in your phone's settings, or tap ⋮ at the top → Add to Home Screen",
   'set.homeShort': "Add to Home Screen",
   'set.privacy': "Privacy",
   'set.whoSees': "Who sees what",

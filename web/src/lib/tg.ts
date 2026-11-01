@@ -41,6 +41,7 @@ interface WebApp {
   requestWriteAccess?(cb?: (ok: boolean) => void): void;
   addToHomeScreen?(): void;
   checkHomeScreenStatus?(cb: (s: string) => void): void;
+  showAlert?(text: string): void;
   DeviceOrientation?: { start(p: { refresh_rate?: number }): void; stop(): void; beta: number | null; gamma: number | null };
 }
 
@@ -134,6 +135,9 @@ export const homeScreen = {
     setTimeout(() => r('unknown'), 1500); // a client that never answers
   }),
   add: () => can('8.0') && tgTry((w) => w.addToHomeScreen?.()),
+  /** Telegram's own alert: a hint too long for a toast */
+  help: (text: string) => tgTry((w) => w.showAlert?.(text)),
+  android: () => W?.platform === 'android',
 };
 
 export const backButton = {

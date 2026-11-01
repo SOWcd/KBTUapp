@@ -15,6 +15,7 @@
   // chunk) rises under the badge, the gear turns into a check; the check, Telegram's Back (SettingsMode, an overlay) or
   // Escape take it back.
   import Check from '@lucide/svelte/icons/check';
+  import Plus from '@lucide/svelte/icons/plus';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -209,7 +210,7 @@
         {#if friends.length}
           <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
             {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
-        {:else}<span class="hi"><Emoji name="waving_hand_3d_default" size={56} /></span>{/if}
+        {:else}<span class="cluster ghost" aria-hidden="true">{#each SPOTS.slice(0, 9) as [w, x, y], i}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%">{#if !i}<Plus size={22} strokeWidth={2.4} />{/if}</span>{/each}</span>{/if}
         {#if asked}<b class="req num">{asked}</b>{/if}
         <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
       </button>
@@ -314,7 +315,9 @@
   .spot :global(.seal) { display: none; }
   :global(html.lowfx) .spot { animation: none; }
   @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
-  .hi { display: flex; margin: -4px 0 0 -4px; }
+  /* no friends yet: the places waiting for them, the biggest with a plus (owner, Nov 2: not a waving hand) */
+  .ghost .spot { align-items: center; justify-content: center; background: var(--fill); box-shadow: none; color: var(--accent); }
+  .ghost .spot:not(:first-child) { opacity: 0.55; }
   .ft { display: flex; align-items: baseline; gap: 8px; }
   .ft b { font: 700 var(--fs-body)/1.2 var(--font-text); }
   .ft i { font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
