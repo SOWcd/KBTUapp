@@ -9,7 +9,7 @@ import time
 
 from ..db import tx
 
-from .core import (ApiError, PERSON, PERSON_COLS, RANK, Viewer, _org, log_action, one, org_ref, overseer, person_ref,
+from .core import (ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by_id, _org, _qs, log_action, one, org_ref, overseer, person_ref,
     rows, short_name, shown_name)
 
 
@@ -64,16 +64,23 @@ def registry(con, v: Viewer, back: int = 0) -> list[dict]:
     if not 0 <= back <= 12:
         raise ApiError("bad_input")
     m0, m1 = _month(back)
+    orgs = rows(con, "SELECT * FROM orgs WHERE kind IN ('club', 'school', 'council') AND status != 'archived' ORDER BY official DESC, name")
+    # each fact read once for every club (grouped), not four queries per club
+    pres: dict[int, sqlite3.Row] = {}
+    for p in rows(con, f"SELECT m.org_id, {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id "
+                       "WHERE m.role = 'president'"):
+        pres.setdefault(p["org_id"], p)
+    stats = {r["org_id"]: r for r in rows(con, """SELECT e.org_id, COUNT(DISTINCT e.id) AS events, COUNT(r.id) AS regs, COUNT(r.checked_in_at) AS came
+        FROM events e LEFT JOIN registrations r ON r.event_id = e.id AND r.status = 'going'
+        WHERE e.status = 'published' AND e.guest_host IS NULL AND e.starts_at >= ? AND e.starts_at < ? GROUP BY e.org_id""", m0, m1)}  # a partner's isn't the club's work
+    members = dict(rows(con, "SELECT org_id, COUNT(*) FROM org_members GROUP BY org_id"))
+    logos = _by_id(con, "files", (o["logo_file_id"] for o in orgs))
     out = []
-    for o in rows(con, "SELECT * FROM orgs WHERE kind IN ('club', 'school', 'council') AND status != 'archived' ORDER BY official DESC, name"):
-        pres = one(con, f"SELECT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id "
-                        "WHERE m.org_id = ? AND m.role = 'president'", o["id"])
-        st = one(con, """SELECT COUNT(DISTINCT e.id) AS events, COUNT(r.id) AS regs, COUNT(r.checked_in_at) AS came FROM events e
-            LEFT JOIN registrations r ON r.event_id = e.id AND r.status = 'going'
-            WHERE e.org_id = ? AND e.status = 'published' AND e.guest_host IS NULL AND e.starts_at >= ? AND e.starts_at < ?""", o["id"], m0, m1)  # a partner's isn't the club's work
-        out.append({"org": org_ref(con, o), "members": one(con, "SELECT COUNT(*) FROM org_members WHERE org_id = ?", o["id"])[0],
-                    "president": _dmp_person(pres, "president") if pres else None,
-                    "month": {"events": st["events"], "registrations": st["regs"], "came": st["came"]}})
+    for o in orgs:
+        st, p = stats.get(o["id"]), pres.get(o["id"])
+        out.append({"org": org_ref(con, o, logos), "members": members.get(o["id"], 0),
+                    "president": _dmp_person(p, "president") if p else None,
+                    "month": {"events": st["events"] if st else 0, "registrations": st["regs"] if st else 0, "came": st["came"] if st else 0}})
     return out
 
 
@@ -103,11 +110,17 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     found = rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id
         WHERE s.student_id LIKE ? OR (s.last_name || ' ' || s.first_name) LIKE ? OR (s.first_name || ' ' || s.last_name) LIKE ? LIMIT 30""", like, like, like)
     log_action(con, v.id, "registry_search", "registry", json.dumps({"q": q, "found": len(found)}))  # a look at personal data (§9)
+    ids = [p["id"] for p in found]
+    of: dict[int, list] = {}
+    for c in rows(con, f"""SELECT o.*, m.role, m.user_id AS member FROM org_members m JOIN orgs o ON o.id = m.org_id
+            WHERE m.user_id IN ({_qs(ids)}) ORDER BY o.name""", *ids) if ids else []:  # everyone's clubs in one query
+        of.setdefault(c["member"], []).append(c)
+    logos = _by_id(con, "files", (c["logo_file_id"] for cs in of.values() for c in cs))
     out = []
     for p in found:
-        clubs = rows(con, "SELECT o.*, m.role FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? ORDER BY o.name", p["id"])
+        clubs = of.get(p["id"], [])
         top = max((c["role"] for c in clubs), key=lambda r: RANK[r], default=None)
-        out.append({**_dmp_person(p, top), "clubs": [{"org": org_ref(con, c), "role": c["role"]} for c in clubs]})
+        out.append({**_dmp_person(p, top), "clubs": [{"org": org_ref(con, c, logos), "role": c["role"]} for c in clubs]})
     return out
 
 

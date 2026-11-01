@@ -129,8 +129,12 @@ def _row(con, key: bytes, s) -> dict:
 
 def sessions(con, key: bytes, v: Viewer) -> list[dict]:
     """The sessions I run: open ones and those finished in the last day (for the list), newest first."""
-    return [_row(con, key, s) for s in rows(con, "SELECT * FROM qr_sessions WHERE ended_at IS NULL OR ended_at > ? ORDER BY id DESC",
-                                              now() - 86400) if _runs(con, v, s)]
+    run = [o for o, r in logic._rights(con, v).items() if "events" in r]  # my rights read once, not a query per session
+    if v.role != "admin" and not run:
+        return []
+    mine = "" if v.role == "admin" else f"AND org_id IN ({logic._qs(run)})"
+    return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY id DESC",
+                                              now() - 86400, *([] if v.role == "admin" else run))]
 
 
 def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
