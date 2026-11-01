@@ -47,6 +47,10 @@ def hear(cfg, tg: Telegram, *updates: dict) -> None:
     asyncio.run(go())
 
 
+def banned(tg: Telegram) -> list[int]:
+    return [b["user_id"] for b in tg.of("banChatMember")]
+
+
 def tick(cfg, tg: Telegram, con) -> None:
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
@@ -115,7 +119,8 @@ def test_strangers_deleted_warned_banned(env, monkeypatch):
 
     tg.calls.clear()  # the second comment: deleted and banned, no second warning
     hear(cfg, tg, {"message": msg(14, 77, "again")})
-    assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [14]}] and tg.of("banChatMember") == [{"chat_id": G, "user_id": 77}]
+    assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [14]}] and banned(tg) == [77]
+    assert tg.of("banChatMember")[0]["until_date"] > logic.core.now() + 89 * 86400  # as long as the record: Telegram lifts it
     assert not tg.of("sendMessage")
 
     tg.calls.clear()  # as another channel: deleted, that channel banned; as the forum channel (its admins): stays
@@ -127,7 +132,7 @@ def test_strangers_deleted_warned_banned(env, monkeypatch):
     tg.calls.clear()  # banned in the app: banned here too, no warning
     con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 20")
     hear(cfg, tg, {"message": msg(17, 20)})
-    assert tg.of("banChatMember") == [{"chat_id": G, "user_id": 20}] and not tg.of("sendMessage")
+    assert banned(tg) == [20] and not tg.of("sendMessage")
     con.execute("UPDATE users SET banned_at = NULL WHERE tg_id = 20")
 
     tg.calls.clear()  # a raid: 6 strangers within a minute; the sixth and on are banned silently, the owner hears once
@@ -306,6 +311,74 @@ def test_policy_section_and_consent_only_with_the_switch(env, monkeypatch):
     assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC
     page = c.get("/privacy?lang=en").text
     assert "11. Comments in the forum's Telegram channel" in page and "{{tgcn}}" not in page
+
+
+def test_review_fixes(env, monkeypatch):
+    """The code review's cases: no channel ban before the forum channel is known; a stranger's edit isn't his second
+    comment; one message that breaks doesn't stop the batch's deletions; an app-banned student's group ban lifts with
+    the app's unban; the AI looks once per text, and a reporter's day of fresh looks is capped (the reports aren't)."""
+    c, cfg, con, looked = setup(env, monkeypatch, {"rude": False, "rude again": False})
+    tg = Telegram()
+    hear(cfg, tg, {"message": msg(5, 136817688, sender_chat={"id": -100555, "type": "channel"})})  # before any post's copy
+    assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [5]}] and not tg.of("banChatSenderChat")
+
+    tg.calls.clear()  # a stranger's comment and its edit in one batch: one warning, no ban
+    hear(cfg, tg, COPY, {"message": msg(12, 77, "hi")}, {"edited_message": msg(12, 77, "hi!")})
+    assert len(tg.of("sendMessage")) == 1 and not tg.of("banChatMember")
+    assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [12, 12]}]
+
+    tg.calls.clear()  # one message breaks (a locked database): the others' deletions and warnings still go
+    real = tgc.rules.stranger
+
+    def flaky(con_, tg_id, body, link):
+        if tg_id == 88:
+            raise logic.ApiError("busy")
+        return real(con_, tg_id, body, link)
+    monkeypatch.setattr(tgc.rules, "stranger", flaky)
+    hear(cfg, tg, {"message": msg(20, 88)}, {"message": msg(21, 89)})
+    assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [20, 21]}] and len(tg.of("sendMessage")) == 1
+    monkeypatch.setattr(tgc.rules, "stranger", real)
+
+    student(c, con, 30, "ali")  # banned in the app: banned in the group, on record; the app's unban lifts both
+    con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 30")
+    tg.calls.clear()
+    hear(cfg, tg, {"message": msg(31, 30)})
+    assert banned(tg) == [30]
+    con.execute("UPDATE users SET banned_at = NULL WHERE tg_id = 30")
+    tick(cfg, tg, con)
+    assert [b["user_id"] for b in tg.of("unbanChatMember")] == [30]
+
+    student(c, con, 40, "bek")  # the AI looks once per text: three reports, one look; the same words edited in: none
+    for tg_id, name in ((41, "cem"), (42, "dan"), (43, "erk")):
+        student(c, con, tg_id, name)
+    hear(cfg, tg, report(50, 41, msg(45, 40, "rude")), report(51, 42, msg(45, 40, "rude")), report(52, 43, msg(45, 40, "rude")))
+    assert looked == ["rude"]
+    hear(cfg, tg, {"edited_message": msg(45, 40, "rude")})
+    assert looked == ["rude"]
+    monkeypatch.setattr(tgc.rules, "AI_LOOKS", 0)  # the day's looks used up: the report counts, no new look, a moderator
+    hear(cfg, tg, report(53, 41, msg(46, 40, "rude again")))
+    assert looked == ["rude"]
+    assert con.execute("SELECT COUNT(*) FROM tgc_reports r JOIN tgc_comments x ON x.id = r.comment_id WHERE x.msg_id = 46").fetchone()[0] == 1
+
+
+def test_switched_off_changes_nothing(env):
+    """Without TG_COMMENTS_CHAT: no edits asked of Telegram, the round does nothing of this feature."""
+    _, cfg = env
+    asked = []
+
+    def telegram(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.params.get("allowed_updates"))
+        return httpx.Response(200, json={"ok": True, "result": []})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
+            await bot.hear(cfg, http, 0)
+    asyncio.run(go())
+    assert "edited_message" not in asked[0] and "message" in asked[0]
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO tgc_saved (tg_id, body, at) VALUES (1, 'x', 0)")
+    tick(cfg, Telegram(), con)
+    assert con.execute("SELECT COUNT(*) FROM tgc_saved").fetchone()[0] == 1
 
 
 def postman(cfg, handler) -> None:

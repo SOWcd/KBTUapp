@@ -24,19 +24,20 @@ CONTENT = ("text", "caption", "photo", "sticker", "animation", "video", "voice",
            "contact", "location", "venue", "dice", "story")
 
 _tasks: set[asyncio.Task] = set()
-_last: asyncio.Task | None = None
+_last: dict[str, asyncio.Task] = {}
 
 
-def spawn(coro) -> None:
-    """A slow job beside the ears, one after another (two event-post copies in a batch must not both comment)."""
-    global _last
-    prev = _last if _last and not _last.done() else None
+def spawn(coro, chain: str = "tgc") -> None:
+    """A slow job beside the ears, one after another on its chain: two event-post copies in a batch must not both
+    comment ("events"), and the comments' AI looks ("tgc") never hold up an event post's first comment."""
+    prev = _last.get(chain)
+    prev = prev if prev and not prev.done() else None
 
     async def run():
         if prev:
             await asyncio.gather(prev, return_exceptions=True)
         await coro
-    _last = t = asyncio.get_running_loop().create_task(run())
+    _last[chain] = t = asyncio.get_running_loop().create_task(run())
     _tasks.add(t)
     t.add_done_callback(_tasks.discard)
 
@@ -81,51 +82,72 @@ async def _call(cfg: Config, http: httpx.AsyncClient, method: str, body: dict) -
 async def gate(cfg: Config, http: httpx.AsyncClient, con, upds: list[dict]) -> None:
     """One batch's messages in the group: a stranger's comment deleted (all in one call), warned once in its thread or
     banned; posting as another channel deleted and that channel banned; a student's /report taken (the command
-    deleted); a reported comment's edit judged again."""
+    deleted); a reported comment's edit judged again. One message that breaks (a locked database) is logged and
+    skipped; what was decided for the rest still goes out."""
     doomed: list[int] = []
     bans: set[int] = set()
     chans: set[int] = set()
     warns: list[tuple[int, str, bool]] = []  # (thread root, language, text kept)
-    for upd in upds:
-        edit = "edited_message" in upd
-        msg = upd.get("message") or upd["edited_message"]
-        sender = msg.get("sender_chat") or {}
-        if msg.get("is_automatic_forward"):  # the channel's post, copied in: the root of its comments
-            if sender.get("username") and (post := (msg.get("forward_origin") or {}).get("message_id")):
-                rules.post_of(con, msg["message_id"], sender["username"], int(post))
-                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('tgc_channel', ?)", (str(sender["id"]),))
-            continue
-        if not any(k in msg for k in CONTENT):
-            continue
-        root = msg.get("message_thread_id") or (msg.get("reply_to_message") or {}).get("message_id")
-        if sender:  # as a channel, or an anonymous admin: nobody to check. The forum channel's own admins may
-            if str(sender.get("id")) != (one(con, "SELECT value FROM meta WHERE key = 'tgc_channel'") or [""])[0]:
-                doomed.append(msg["message_id"])
-                if sender.get("id") != cfg.tgc_chat:
-                    chans.add(sender["id"])
-            continue
-        tg = int((msg.get("from") or {}).get("id") or 0)
-        who = rules.commenter(con, tg)
-        if who == "student":
-            if not edit and _is_report(cfg, _text(msg)):
-                doomed.append(msg["message_id"])
-                _report(cfg, http, con, msg)
-            elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
-                spawn(_judge(cfg, http, cid))
-            continue
-        doomed.append(msg["message_id"])
-        if who == "banned" or not tg:
-            bans.add(tg)
-            continue
-        act, raid = rules.stranger(con, tg, _text(msg), _link(con, root, msg["message_id"]))
-        if act == "ban":
-            bans.add(tg)
-        elif not raid:
-            warns.append((root, str((msg.get("from") or {}).get("language_code") or "")[:2], bool(_text(msg))))
+    try:
+        for upd in upds:
+            try:
+                _one(cfg, http, con, upd, doomed, bans, chans, warns)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("tgc gate: %s", type(exc).__name__)
+    finally:
+        await _act(cfg, http, con, doomed, bans, chans, warns)
+
+
+def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, bans: set, chans: set, warns: list) -> None:
+    """One message of the group: what to delete, ban and warn (gate sends it all at once)."""
+    edit = "edited_message" in upd
+    msg = upd.get("message") or upd["edited_message"]
+    sender = msg.get("sender_chat") or {}
+    if msg.get("is_automatic_forward"):  # the channel's post, copied in: the root of its comments
+        if sender.get("username") and (post := (msg.get("forward_origin") or {}).get("message_id")):
+            rules.post_of(con, msg["message_id"], sender["username"], int(post))
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('tgc_channel', ?)", (str(sender["id"]),))
+        return
+    if not any(k in msg for k in CONTENT):
+        return
+    root = msg.get("message_thread_id") or (msg.get("reply_to_message") or {}).get("message_id")
+    if sender:  # as a channel, or an anonymous admin: nobody to check. The forum channel's own admins may
+        linked = (one(con, "SELECT value FROM meta WHERE key = 'tgc_channel'") or [""])[0]
+        if str(sender.get("id")) != linked:
+            doomed.append(msg["message_id"])
+            # a ban only once the forum channel is known (its first post's copy): it mustn't ban itself in its own group
+            if linked and sender.get("id") != cfg.tgc_chat:
+                chans.add(sender["id"])
+        return
+    tg = int((msg.get("from") or {}).get("id") or 0)
+    who = rules.commenter(con, tg)
+    if who == "student":
+        if not edit and _is_report(cfg, _text(msg)):
+            doomed.append(msg["message_id"])
+            _report(cfg, http, con, msg)
+        elif edit and (cid := rules.edited(con, cfg.tgc_chat, msg["message_id"], _text(msg))):
+            spawn(_judge(cfg, http, cid))
+        return
+    doomed.append(msg["message_id"])
+    if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
+        return
+    if who == "banned" or not tg:
+        if tg:
+            rules.banned(con, tg)  # on record: an unban in the app lifts it here too (unban_due)
+        bans.add(tg)
+        return
+    act, raid = rules.stranger(con, tg, _text(msg), _link(con, root, msg["message_id"]))
+    if act == "ban":
+        bans.add(tg)
+    elif not raid:
+        warns.append((root, str((msg.get("from") or {}).get("language_code") or "")[:2], bool(_text(msg))))
+
+
+async def _act(cfg: Config, http: httpx.AsyncClient, con, doomed: list, bans: set, chans: set, warns: list) -> None:
     for i in range(0, len(doomed), 100):
         await _call(cfg, http, "deleteMessages", {"chat_id": cfg.tgc_chat, "message_ids": doomed[i:i + 100]})
-    for tg in bans - {0}:
-        await _call(cfg, http, "banChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg})
+    for tg in bans - {0}:  # as long as the record (the policy's 90 days): Telegram lifts it by itself then
+        await _call(cfg, http, "banChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "until_date": now() + rules.STRANGER_KEEP})
     for ch in chans:
         await _call(cfg, http, "banChatSenderChat", {"chat_id": cfg.tgc_chat, "sender_chat_id": ch})
     for root, lang, kept in warns:
@@ -148,16 +170,24 @@ def _report(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     root = msg.get("message_thread_id") or t.get("message_thread_id")
     res, cid = rules.report(con, msg["from"]["id"], cfg.tgc_chat, t["message_id"], author["id"], _text(t), _link(con, root, t["message_id"]))
-    if res == "ok":
-        spawn(_judge(cfg, http, cid))
+    if res == "ok":  # no cap on reports (owner); a cap on the fresh AI looks one reporter brings about in a day
+        spawn(_judge(cfg, http, cid, rules.fresh_look(con, msg["from"]["id"])))
 
 
-async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int) -> None:
-    """The AI's look at a reported comment's text, then the rule (rules.judge); a deletion goes in the bot's next round."""
+async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int, fresh: bool = True) -> None:
+    """The AI's look at a reported comment's text, then the rule (rules.judge); a deletion goes in the bot's next round.
+    The same text looked at before: its verdict again, no AI call. fresh=False (the reporter's day of looks is used up):
+    no new look, the rule decides without it (a moderator then)."""
     con = db.connect(cfg.db_path)
     try:
         body = (one(con, "SELECT body FROM tgc_comments WHERE id = ?", cid) or [""])[0]
-        verdict, rule = await ai.screen_comment(cfg, http, body, con) if body.strip() else (None, None)  # a sticker: a moderator looks
+        if (seen := rules.looked(con, cid)) is not None:
+            verdict, rule = seen
+        elif fresh and body.strip():  # a sticker: a moderator looks
+            verdict, rule = await ai.screen_comment(cfg, http, body, con)
+            rules.look(con, cid, body, verdict)
+        else:
+            verdict, rule = None, None
         rules.judge(con, cid, verdict, rule)
     except Exception:  # noqa: BLE001 - one comment's look must not stop the next
         log.exception("tgc judge")
@@ -167,10 +197,11 @@ async def _judge(cfg: Config, http: httpx.AsyncClient, cid: int) -> None:
 
 async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The bot's round: the hour's texts and the old records wiped (logic), then, with the group set: the bot's
-    warnings past their minute, comments a moderator or the reports deleted, and new students unbanned."""
-    rules.sweep(con)
+    warnings past their minute, comments a moderator or the reports deleted, and new students unbanned. Off without the
+    group: nothing at all."""
     if not cfg.tgc_chat:
         return
+    rules.sweep(con)
     if gone := rules.due_deletes(con):
         await _call(cfg, http, "deleteMessages", {"chat_id": cfg.tgc_chat, "message_ids": gone})
     for cid, chat, mid in rules.to_delete(con):
@@ -178,7 +209,7 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         if r.get("ok") or r.get("error_code") == 400:  # gone, or never to be (its author deleted it first; too old)
             rules.deleted(con, cid)
         else:
-            return  # the network, a flood wait: next round
+            break  # the network, a flood wait, lost rights: next round (the unbans below still go)
     for tg in rules.unban_due(con):
         await _call(cfg, http, "unbanChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "only_if_banned": True})
 

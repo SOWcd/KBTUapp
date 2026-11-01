@@ -29,7 +29,8 @@ class Config:
     # again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
     board: str = ""
     # the forum channel's discussion group (its chat id, -100...): only verified students may comment there (tgc.py,
-    # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too
+    # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too. Never the events
+    # channel's discussion group: the bot would take its post copies as this group's and never comment under them
     tgc_chat: int = 0
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes

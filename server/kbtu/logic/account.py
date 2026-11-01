@@ -421,6 +421,9 @@ def me(con, v: Viewer) -> dict:
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "reports": sum(_about(con, t, i) != v.id for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"))
+                                + one(con, """SELECT COUNT(*) FROM tgc_comments c WHERE (c.status IN ('open', 'queued') OR c.review = 1)
+                                    AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)""",
+                                      v.id, v.id)[0]  # and the channel's comments in Telegram (tgcomments.queue_items' rule)
                                 if v.role in ("admin", "moderator") else 0,  # as the queue: not those about me
                      "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
         "unlocked": unlocked(con, v),

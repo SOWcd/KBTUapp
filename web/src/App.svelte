@@ -464,7 +464,7 @@
     Promise.all([loadMe(), loadAfisha()]).then(() => {
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
-      if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (nor over my Telegram comment's card) // (not over the policy gate's button)
+      if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
       deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));

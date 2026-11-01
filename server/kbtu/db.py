@@ -960,6 +960,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       link       TEXT,
       status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'queued', 'deleting', 'deleted', 'kept', 'restored')),
       ai         TEXT CHECK (ai IN ('ok', 'flag', 'none')),
+      ai_hash    TEXT,                                  -- the text the AI last looked at: the same text isn't sent again
       created_at INTEGER NOT NULL,
       decided_at INTEGER,
       review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores

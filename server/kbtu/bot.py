@@ -1035,7 +1035,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": '["message","edited_message","callback_query","chat_join_request","my_chat_member"]'}, timeout=WAIT + 10)
+                           params={"offset": offset, "timeout": WAIT, "allowed_updates": json.dumps(
+                               ["message", *(["edited_message"] if cfg.tgc_chat else []), "callback_query", "chat_join_request", "my_chat_member"])}, timeout=WAIT + 10)
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
@@ -1075,7 +1076,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
                     if _event_copy(cfg, msg):
-                        tgc.spawn(_discussion_bg(cfg, http, msg))
+                        tgc.spawn(_discussion_bg(cfg, http, msg), "events")
                     else:
                         await _group(cfg, http, con, msg)
                     continue

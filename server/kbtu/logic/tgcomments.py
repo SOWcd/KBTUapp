@@ -26,7 +26,8 @@ DELETE_AT = 2              # distinct reporters verified over REPORTER_AGE ago, 
 ALERT_AT = 3               # reports on one comment still up: the moderators hear at once, not in the hourly digest
 CLOSE_AT = 2               # wrong reports (kept or restored by a moderator) within KEEP before a moderator may close /report
 PAIR_AT = 2                # a reporter's wrong reports on one author: his reports on that author never delete again
-GOOD_AT = 10               # confirmed reports on as many different authors, none wrong: the owner hears (never a promotion)
+AI_LOOKS = 30              # a reporter's reports a day that may each bring a fresh AI look (reports themselves: no cap, owner)
+GOOD_AT = 10              # confirmed reports on as many different authors, none wrong: the owner hears (never a promotion)
 LIVE = ("open", "queued")  # in the moderators' queue, still up
 WRONG = ("overturned", "abuse")
 
@@ -44,7 +45,8 @@ def stranger(con, tg_id: int, body: str, link: str | None) -> tuple[str, bool]:
     app; ('ban', raid) the second time, or at once during a raid (the owner hears once an hour)."""
     t = now()
     with tx(con):
-        raid = one(con, "SELECT COUNT(*) FROM tgc_strangers WHERE seen_at > ? AND tg_id != ?", t - 60, tg_id)[0] >= RAID_AT
+        raid = one(con, """SELECT COUNT(*) FROM tgc_strangers WHERE seen_at > ? AND tg_id != ?
+            AND tg_id NOT IN (SELECT tg_id FROM users)""", t - 60, tg_id)[0] >= RAID_AT  # a raid's accounts never opened the app
         was = one(con, "SELECT warned_at FROM tgc_strangers WHERE tg_id = ?", tg_id)
         ban = raid or bool(was and was["warned_at"])
         con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, warned_at, banned_at) VALUES (?, ?, ?, ?) ON CONFLICT (tg_id)
@@ -125,6 +127,33 @@ def _hash(body: str) -> str:
     return hashlib.sha256(" ".join(body.split()).casefold().encode()).hexdigest()[:32]
 
 
+def fresh_look(con, reporter_tg: int) -> bool:
+    """May this reporter's new report bring about a fresh AI look? AI_LOOKS a day; past them the report still counts,
+    it reuses a look at the same text or waits for a moderator (review: the AI's cost, without capping /report)."""
+    return one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN users u ON u.id = r.reporter_id WHERE u.tg_id = ? AND r.at > ?""",
+               reporter_tg, now() - 86400)[0] <= AI_LOOKS
+
+
+def looked(con, cid: int) -> tuple[bool | None, str | None] | None:
+    """The AI's verdict on this comment's text as it is now, if it looked at this very text before; else None."""
+    c = one(con, "SELECT body, ai, ai_hash, rule FROM tgc_comments WHERE id = ?", cid)
+    if not c or c["ai"] not in ("ok", "flag") or c["ai_hash"] != _hash(c["body"]):
+        return None
+    return (True, None) if c["ai"] == "ok" else (False, c["rule"])
+
+
+def look(con, cid: int, body: str, verdict: bool | None) -> None:
+    """The AI looked at this text (an answer only: no answer is asked again next time)."""
+    if verdict is not None:
+        con.execute("UPDATE tgc_comments SET ai_hash = ? WHERE id = ?", (_hash(body), cid))
+
+
+def banned(con, tg_id: int) -> None:
+    """Banned in the app, so banned in the group: on record, so the app's unban lifts it here too (unban_due)."""
+    con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, banned_at) VALUES (?, ?, ?)
+        ON CONFLICT (tg_id) DO UPDATE SET seen_at = excluded.seen_at, banned_at = excluded.banned_at""", (tg_id, now(), now()))
+
+
 def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str | None:
     """The AI's look at a reported comment (True clean, False a violation of `rule`, None no answer), then the rule:
     'delete' with DELETE_AT reporters verified over two weeks ago and a violation (the bot deletes it, its author gets
@@ -164,8 +193,8 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
 def edited(con, chat: int, msg_id: int, body: str) -> int | None:
     """A reported comment edited (edit-to-abuse after a check, or edit-to-clean before the second report): the new text
     is the one judged again; one a moderator kept goes back to the checks."""
-    c = one(con, "SELECT id FROM tgc_comments WHERE chat_id = ? AND msg_id = ? AND status IN ('open', 'queued', 'kept')", chat, msg_id)
-    if not c:
+    c = one(con, "SELECT id, body FROM tgc_comments WHERE chat_id = ? AND msg_id = ? AND status IN ('open', 'queued', 'kept')", chat, msg_id)
+    if not c or c["body"] == body[:4096]:  # the same words (only a formatting change): nothing new to judge
         return None
     con.execute("UPDATE tgc_comments SET body = ?, status = CASE WHEN status = 'kept' THEN 'open' ELSE status END WHERE id = ?",
                 (body[:4096], c["id"]))
@@ -344,7 +373,8 @@ def post_of(con, root: int, username: str | None = None, post: int | None = None
 def unban_due(con) -> list[int]:
     """Strangers banned in the group who are students now (signed in with Microsoft, or unbanned in the app): their
     Telegram ids, to unban; their rows go."""
-    out = [r[0] for r in rows(con, "SELECT tg_id FROM tgc_strangers WHERE banned_at IS NOT NULL") if commenter(con, r[0]) == "student"]
+    out = [r[0] for r in rows(con, """SELECT g.tg_id FROM tgc_strangers g JOIN users u ON u.tg_id = g.tg_id AND u.banned_at IS NULL
+        JOIN students s ON s.user_id = u.id AND s.manual = 0 AND s.consent_version != 'staff' WHERE g.banned_at IS NOT NULL""")]  # commenter()'s rule, in one read
     con.executemany("DELETE FROM tgc_strangers WHERE tg_id = ?", [(t,) for t in out])
     return out
 

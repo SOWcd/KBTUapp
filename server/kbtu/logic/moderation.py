@@ -205,7 +205,8 @@ def report_queue(con, v: Viewer) -> list[dict]:
             WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
         out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1]}, "count": r["n"],
                     "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
-    return sorted(out + tgcomments.queue_items(con, v), key=lambda x: x["at"])  # and the channel's comments in Telegram
+    # and the channel's comments in Telegram; those the reports removed first (a person waits for the verdict)
+    return sorted(out + tgcomments.queue_items(con, v), key=lambda x: (not x.get("removed"), x["at"]))
 
 
 def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[str]:
