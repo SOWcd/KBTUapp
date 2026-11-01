@@ -6,12 +6,13 @@
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Archive from '@lucide/svelte/icons/archive';
   import Users from '@lucide/svelte/icons/users';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../ui/TelegramMark.svelte';
   import Cpu from '@lucide/svelte/icons/cpu';
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import Clock from '@lucide/svelte/icons/clock';
   import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import type { Component } from 'svelte';
   import Button from '../ui/Button.svelte';
   import { glass } from '../ui/glass';
   import { burst } from '../ui/burst';
@@ -26,12 +27,12 @@
   // what's new in the version asked, one short line each with its mark: v3 alone, the find-people forum (v4), the
   // student forum (v7), both (v8); a text's lines and its icons go in the same order (ru, kk, en alike)
   type Tone = 'accent' | 'success' | 'warning' | 'danger';
-  const PARTS: [Key, [typeof Cpu, Tone][]][] = [
+  const PARTS: [Key, [Component<any>, Tone][]][] = [
     ['consent.text', [[Archive, 'accent']]],
-    ['consent.textForum', [[Users, 'accent'], [Send, 'success'], [Cpu, 'warning']]],
+    ['consent.textForum', [[Users, 'accent'], [TelegramMark, 'success'], [Cpu, 'warning']]],
     ['consent.textBoard', [[EyeOff, 'accent'], [Cpu, 'warning'], [Clock, 'success'], [ThumbsUp, 'danger']]],
-    ['consent.textTgc', [[Send, 'accent'], [Cpu, 'warning']]],
-    ['consent.textFch', [[Send, 'accent'], [EyeOff, 'success'], [Cpu, 'warning']]],
+    ['consent.textTgc', [[TelegramMark, 'accent'], [Cpu, 'warning']]],
+    ['consent.textFch', [[TelegramMark, 'accent'], [EyeOff, 'success'], [Cpu, 'warning']]],
   ];
   // the channel's comments add "+tgc1" to whichever version (server logic/account.py CONSENT_TGC), its posts "+fch1"
   // after that (CONSENT_FCH): their lines, on top of the base's
@@ -41,8 +42,10 @@
   const p = $derived(tgc ? q.slice(0, -CONSENT_TGC.length) : q);
   const asked = (k: Key) => k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.text' ? p === CONSENT_VERSION
     : k === 'consent.textForum' ? p !== CONSENT_VERSION && p !== CONSENT_BOARD : p === CONSENT_BOARD || p === CONSENT_BOTH;
-  const items = $derived(PARTS.filter(([k]) => asked(k)).flatMap(([k, marks]) =>
+  // one card per section asked (owner, Nov 1: the lines read as one list, not by section)
+  const groups = $derived(PARTS.filter(([k]) => asked(k)).map(([k, marks]) =>
     t(k).split('\n').map((text, i) => ({ text, icon: marks[i]?.[0] ?? ShieldCheck, tone: marks[i]?.[1] ?? 'accent' }))));
+  const count = $derived(groups.reduce((n, g) => n + g.length, 0));
 
   async function agree() {
     if (busy) return;
@@ -66,21 +69,24 @@
       <span class="seal glass" bind:this={seal} use:glass><ShieldCheck size={40} strokeWidth={1.6} /></span>
     </div>
     <h1 id="cg-t" class="t-h1 rise" style="--i:1">{t('consent.title')}</h1>
-    <div class="card glass glass-sheet rise" style="--i:2" use:glass>
-      <span class="sweep"></span>
-      {#each items as it, i (i)}
-        <div class="item rise" style="--i:{i + 3}">
-          <span class="tile {it.tone}"><it.icon size={18} strokeWidth={2} /></span>
-          <p class="t-callout">{it.text}</p>
-        </div>
-      {/each}
-      <button class="item lnk" onclick={() => { haptic.tap(); openLink(`${location.origin}/privacy?lang=${i18n.lang}`); }}>
-        <span class="t-callout">{t('login.consentLink')}</span><ArrowUpRight size={18} />
-      </button>
-    </div>
+    {#each groups as items, g (g)}
+      <div class="card glass glass-sheet rise" style="--i:{g + 2}" use:glass>
+        <span class="sweep"></span>
+        {#each items as it, i (i)}
+          <div class="item rise" style="--i:{g + i + 3}">
+            <span class="tile {it.tone}"><it.icon size={18} strokeWidth={2} /></span>
+            <p class="t-callout">{it.text}</p>
+          </div>
+        {/each}
+      </div>
+    {/each}
+    <button class="lnk rise" style="--i:{count + 3}" onclick={() => { haptic.tap(); openLink(`${location.origin}/privacy?lang=${i18n.lang}`); }}>
+      <span class="t-callout">{t('login.consentLink')}</span><ArrowUpRight size={16} />
+    </button>
   </div>
-  <div class="foot rise" style="--i:{items.length + 3}">
-    <Button kind="primary" size="l" full loading={busy} onclick={agree}>{t('consent.ok')}</Button>
+  <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
+  <div class="foot rise" style="--i:{count + 4}">
+    <Button kind="primary" size="m" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
   </div>
 </div>
 
@@ -137,9 +143,13 @@
   .success { background: var(--success-soft); color: var(--success-text); }
   .warning { background: var(--warning-soft); color: var(--warning-text); }
   .danger { background: var(--danger-soft); color: var(--danger-text); }
-  .lnk { align-items: center; justify-content: space-between; color: var(--accent-text); font-weight: 620; }
+  .lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); font-weight: 620; padding: 4px 8px; }
 
-  .foot { position: relative; padding-top: 14px; }
+  .foot { position: relative; display: flex; justify-content: center; padding-top: 12px; }
+  .foot :global(.btn) { min-width: 200px; }
+  /* the list fades out under the button instead of a hard edge */
+  .foot::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--bg)); }
   /* one after another: the title, the card, each line, the button */
   .rise { animation: rise 0.55s calc(0.15s + var(--i) * 0.07s) cubic-bezier(0.22, 1, 0.36, 1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }

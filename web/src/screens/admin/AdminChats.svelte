@@ -11,7 +11,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Button from '../../ui/Button.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
 
@@ -57,7 +57,7 @@
 
 </script>
 
-<Sheet {overlay} icon={Send} full title={t('adm.chats')}>
+<Sheet {overlay} icon={TelegramMark} full title={t('adm.chats')}>
   <h2 class="t-h2 hd">{t('adm.chats')}</h2>
   <p class="t-foot lead">{t('adm.chatsLead')}</p>
   {#if pending.length}

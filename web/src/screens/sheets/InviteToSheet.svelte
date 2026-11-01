@@ -9,7 +9,7 @@
   import { relDay, time, nowTs } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
 
@@ -33,7 +33,7 @@
   function toEvents() { overlays.forEach((o) => close(o.id, true)); ui.tab = 'afisha'; } // as by a hand: a sheet with unsent text asks first
 </script>
 
-<Sheet {overlay} icon={Send} title={t('inv.toTitle', { name })}>
+<Sheet {overlay} icon={TelegramMark} title={t('inv.toTitle', { name })}>
   <h2 class="t-h2 hd">{t('inv.toTitle', { name })}</h2>
   {#if mine.length}
     <p class="t-foot sub">{t('inv.toSub')}</p>

@@ -5,7 +5,7 @@
   // answers at once (the post shows "under review" while the AI looks; a delete leaves the list before the server
   // says so). Moderators see what waits, and this week's posts to take one down; the owner alone can reveal a mask.
   import { untrack } from 'svelte';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import { api, ApiErr, type ChannelMod, type ChannelPost, type ChannelModPost } from '../../lib/api';
@@ -121,7 +121,7 @@
     <Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>
 
     <Group>
-      <Row title={t('fc.open')} icon={Send} tile="blue" accessory="external" onclick={() => openLink(CHANNEL)} />
+      <Row title={t('fc.open')} icon={TelegramMark} tile="blue" accessory="external" onclick={() => openLink(CHANNEL)} />
     </Group>
   {/if}
 
