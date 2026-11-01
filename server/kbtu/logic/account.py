@@ -301,11 +301,14 @@ def prefill_import(con, got: list[dict], name: str) -> dict[str, int]:
 
 
 def refer(con, v: Viewer, code: object) -> None:
-    """Opened by someone's invite link (r_<their link code>, never a user ID): the first link wins, and only before I
-    signed in with KBTU; it counts for them once I have (ms_link)."""
-    if not isinstance(code, str) or not re.fullmatch(r"[A-Z2-7]{10}", code):
+    """Opened by someone's invite link (r_<their link code>, never a user ID) or their profile QR (u_<id>_<badge code>,
+    the same QR the invite sheet shows; both halves must match): the first link wins, and only before I signed in with
+    KBTU; it counts for them once I have (ms_link)."""
+    m = re.fullmatch(r"(?:(\d{1,12})_)?([A-Z2-7]{10})", code) if isinstance(code, str) else None
+    if not m:
         raise ApiError("bad_input")
-    by = one(con, "SELECT id FROM users WHERE link_code = ? AND id != ?", code, v.id)
+    by = (one(con, "SELECT id FROM users WHERE id = ? AND qr_code = ? AND id != ?", int(m[1]), m[2], v.id) if m[1]
+          else one(con, "SELECT id FROM users WHERE link_code = ? AND id != ?", m[2], v.id))
     if by and not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
         con.execute("UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL", (by["id"], v.id))
 

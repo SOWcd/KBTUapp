@@ -306,6 +306,8 @@
     if (mo) { asStudent(() => sheets.memo(Number(mo[1]))); return; }
     const ref = p.match(/^ev_(\d+)_([A-Z2-7]{10})$/); // a club member's "My link": the sign-up goes to them
     if (ref) keepRef(Number(ref[1]), ref[2]);
+    const qr = p.match(/^u_(\d+_[A-Z2-7]{10})$/); // someone's profile QR (the invite sheet shows it too): noted for them as an invite
+    if (qr) void api.refer(qr[1]).catch(() => {});
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club; no longer in it: the club's page
     const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } ui.club = org; toClub(); sheets.team(); };

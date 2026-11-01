@@ -5707,6 +5707,29 @@ def test_referrals(env):
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
 
 
+def test_referral_by_profile_qr(env):
+    """The profile QR (u_<id>_<badge code>) is an invite link too: a newcomer counts once; a student already signed
+    in, myself, a wrong code or a code under another ID count nothing."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, ole = login(c, 100, "ann"), login(c, 101, "ole")
+    qr = ann["qr"]
+    refer = lambda tg, cd: c.post("/api/referral", headers=tma(tg), json={"code": cd}).status_code  # noqa: E731
+    by = lambda tg: con.execute("SELECT referred_by FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]  # noqa: E731
+    assert refer(100, qr) == 204 and by(100) is None                                    # not myself
+    assert refer(101, qr) == 204 and by(101) is None                                    # signed in already
+    c.get("/api/me", headers=tma(102))
+    assert refer(102, f"{ole['id']}_{qr.split('_')[1]}") == 204 and by(102) is None     # the code is Ann's, not Ole's
+    assert refer(102, f"{ann['id']}_AAAAAAAAAA") == 204 and by(102) is None
+    assert refer(102, qr) == 204 and by(102) == ann["id"]
+    assert refer(102, ole["qr"]) == 204 and refer(102, qr) == 204 and by(102) == ann["id"]  # the first wins, never twice
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 102").fetchone()[0]
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+        VALUES (?, '25B000102', 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid,))
+    logic.ms_link(con, uid, {"oid": "o102", "email": "x102@kbtu.kz", "first": "X", "last": "Testov"})
+    assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 1
+
+
 def test_forum_screen_munito_only(monkeypatch):
     """The forum's AI look goes to Munito's links only (privacy policy, section 11), however the chain is set: with
     Cloudflare, OpenRouter and Groq keys present and Munito busy, nobody else gets the text and a moderator decides."""

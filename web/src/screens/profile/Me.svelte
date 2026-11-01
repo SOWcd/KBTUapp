@@ -1,7 +1,7 @@
 <script lang="ts">
   // Profile, one screen (Oct 30: Friends and Settings were pages beside it). Guest: the sign-in card.
-  // Student: my badge (the same hero as everyone else sees), then my friends as one row (the Friends sheet: requests,
-  // everyone, Add; my tickets and saved events are on Afisha's list, not repeated here), the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
+  // Student: my badge (the same hero as everyone else sees), then two squares: my friends (the Friends sheet: requests,
+  // everyone, Add) and my invite (RefSheet); my tickets and saved events are on Afisha's list, not repeated here, the term (a strip of its weeks, the academic calendar behind it) with KBTU's psychologist
   // under it (one row, a small button to their own booking page) and KBTU's anthem, and the app's card (AppCard; it stays
   // on Me, not Settings).
   // Top right: the admin panel's shield and the gear (a guest's too). Settings open in place under the lanyard
@@ -32,6 +32,7 @@
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
   import Invite from './Invite.svelte';
+  import Emoji from '../../ui/Emoji.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
@@ -54,6 +55,8 @@
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
   const friends = $derived(data.friends?.friends ?? []);
   const asked = $derived(me?.counters.friendRequests ?? 0);
+  // the faces' cluster: [width, left, top] in % of its box (132 × 84; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
+  const SPOTS = [[38, 0, 18], [30, 33, 0], [27, 35, 52], [23, 61, 26], [19, 81, 2], [18, 80, 64]];
   const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
 
   let page = $state<HTMLDivElement>();
@@ -191,13 +194,18 @@
     <!-- my photo: settings, or in them the photo's menu at it -->
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
       onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on') list?.photoMenu(el); }} /></div>{/if}
-    <button class="fr surface" data-away onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
-      <span class="lb">{t('page.friends')}</span>
-      {#if friends.length}<span class="faces">{#each friends.slice(0, 3) as r (r.person.id)}<Avatar person={r.person} size={26} tappable={false} />{/each}</span>
-        <span class="num fn">{friends.length}</span>{/if}
-      {#if asked}<b class="req num">{asked}</b>{/if}
-      <ChevronRight size={18} />
-    </button>
+    <!-- two squares (owner, Nov 1): my friends as a cluster of faces, and my invite -->
+    <div class="duo" data-away>
+      <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
+        {#if friends.length}
+          <span class="cluster" aria-hidden="true">{#each friends.slice(0, SPOTS.length) as r, i (r.person.id)}
+            {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
+        {:else}<span class="hi"><Emoji name="waving_hand_3d_default" size={56} /></span>{/if}
+        {#if asked}<b class="req num">{asked}</b>{/if}
+        <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
+      </button>
+      {#if me.referrals}<Invite r={me.referrals} />{/if}
+    </div>
   {:else if session.failed}
     <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->
     <section class="failed surface" data-away>
@@ -255,7 +263,6 @@
     <button class="r psy" onclick={() => sheets.anthem()}><span class="pi"><Music size={18} /></span><span class="lb">{t('anthem.title')}</span><ChevronRight size={18} /></button>
   </div>
 
-  {#if me?.referrals}<Invite r={me.referrals} />{/if}
   <AppCard />
   <!-- last before the tail, so no block's stagger delay shifts -->
   {#if set && List}<List bind:this={list} />{/if}
@@ -286,13 +293,24 @@
   .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 16px; text-align: left; color: var(--text-3); }
   button.r:active { background: var(--surface-2); }
   .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
-  /* my friends: one row under the badge, a red count while requests wait */
-  .fr { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 14px 0 16px; border-radius: var(--r-l); text-align: left; color: var(--text-3); }
-  .fr:active { transform: scale(0.98); }
-  .faces { display: flex; flex: none; }
-  .faces > :global(*) { box-shadow: 0 0 0 2px var(--surface-solid); border-radius: 50%; }
-  .faces > :global(* + *) { margin-left: -8px; }
-  .fn { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+  /* my friends and my invite: two squares under the badge (Invite.svelte is the right one) */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sq { position: relative; overflow: hidden; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; border-radius: var(--r-l); text-align: left; }
+  .sq:active { transform: scale(0.97); }
+  .fr { background: radial-gradient(90% 70% at 15% 0%, var(--accent-soft), transparent 70%), var(--surface); }
+  .cluster { position: relative; display: block; width: 100%; aspect-ratio: 132 / 84; }
+  .spot { position: absolute; aspect-ratio: 1; display: flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--surface-solid), 0 6px 14px -8px rgba(0, 0, 0, 0.45);
+    z-index: calc(10 - var(--i)); animation: pop 520ms cubic-bezier(.2, .9, .25, 1.2) backwards; animation-delay: calc(120ms + var(--i) * 55ms); }
+  .spot :global(.av) { width: 100% !important; height: 100% !important; }
+  .spot :global(.seal) { display: none; }
+  :global(html.lowfx) .spot { animation: none; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
+  .hi { display: flex; margin: -4px 0 0 -4px; }
+  .ft { display: flex; align-items: baseline; gap: 8px; }
+  .ft b { font: 700 var(--fs-body)/1.2 var(--font-text); }
+  .ft i { font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
+  .fn { font: 700 var(--fs-body)/1 var(--font-text); color: var(--text-3); }
+  .sq .req { position: absolute; top: 12px; right: 12px; z-index: 11; }
   .req { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); text-align: center; }
   /* the shield and the gear: in the lanyard's gap right of its strap */
   .gears { position: absolute; top: calc(var(--page-top) - 6px); right: var(--gutter); z-index: 1; display: flex; gap: 8px; }
