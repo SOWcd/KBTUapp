@@ -187,6 +187,7 @@ def grant_link(con, v: Viewer, code: object) -> str:
     token = secrets.token_hex(12)
     con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
                 (token, code, v.id, core.now(), core.now() + GRANT_LINK_TTL))
+    log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code}))  # who made it; its use: "grant_link_used"
     return token
 
 
@@ -202,6 +203,7 @@ def use_grant_link(con, v: Viewer, token: str) -> dict:
         if not r["multi"]:
             _grant(con, r["created_by"], v.id, r["code"])
             con.execute("UPDATE grant_links SET used_by = ?, used_at = ? WHERE token = ?", (v.id, core.now(), token))
+            log_action(con, v.id, "grant_link_used", f"link:{token[:8]}", json.dumps({"code": r["code"], "by": r["created_by"]}))
         elif not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
             _grant(con, r["created_by"], v.id, r["code"])
     return {"code": r["code"]}

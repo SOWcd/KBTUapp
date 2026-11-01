@@ -258,7 +258,7 @@
       ui.tab = 'profile';
       asStudent(async () => {
         try { await api.useGrantLink(gl[1]); await loadMe(); void loadMyCard(); haptic.ok(); } // loadMe brings the unlock moment
-        catch { haptic.error(); say(t('give.linkDead'), 'pleading_face_3d'); }
+        catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('give.linkDead'), 'pleading_face_3d'); } // mine already: the link stays for whom it was meant
       }, p); // a guest's Microsoft sign-in round trip keeps the link (takeAgain)
       return;
     }

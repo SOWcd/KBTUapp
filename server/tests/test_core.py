@@ -1804,6 +1804,24 @@ def test_badge_variants(env):
     assert c.get("/api/admin/badges/sessions", headers=B).status_code == 403
     con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
     assert c.get("/api/admin/badges/sessions", headers=B).json() == []
+    # a one-time link for a variant (Admin -> Badges' "Send a link"): staff make it, the first to open it gets the
+    # badge, the link is spent; who made it and who used it are on record; its own bot card ("Get it")
+    boss = c.get("/api/me", headers=B).json()
+    with pytest.raises(logic.ApiError):
+        logic.grant_link(con, logic.Viewer(ali["id"], "user", True), "init26p")
+    token = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "init26p")
+    bea = tma(62, "Bea")
+    assert c.post(f"/api/grant-links/{token}", headers=bea).json() == {"code": "init26p"}
+    assert c.post(f"/api/grant-links/{token}", headers=bea).json()["error"] == "closed"
+    assert c.post(f"/api/grant-links/{token}", headers=A).json()["error"] == "closed"
+    assert next(a for a in c.get("/api/me", headers=bea).json()["unlocked"] if a["code"] == "init26")
+    acts = [r[0] for r in con.execute("SELECT action FROM audit_log WHERE target = ? ORDER BY id", (f"link:{token[:8]}",))]
+    assert acts == ["grant_link", "grant_link_used"]
+    stale = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "init26")
+    con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ?", (int(time.time()) - 1, stale))
+    assert c.post(f"/api/grant-links/{stale}", headers=bea).json()["error"] == "closed"            # 7 days, then closed
+    title, text, button = texts.share_invite("gb", "en", award=texts.BADGE_TITLES["en"]["init26p"])
+    assert "Initiation 2026 · Performer" in text and button.endswith("Get it")
     con.close()
 
 

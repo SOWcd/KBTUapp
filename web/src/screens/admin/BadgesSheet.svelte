@@ -10,7 +10,9 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, shareCard } from '../../lib/tg';
+  import Send from '@lucide/svelte/icons/send';
+  import Button from '../../ui/Button.svelte';
   import { dayMonth } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -48,6 +50,16 @@
     if (await sheets.ask({ title: t('bdg.takeAsk', { variant: vname(code), name: p.person.name }), ok: t('bdg.take'), cancel: t('common.cancel'), danger: true })) put(p, code, false);
   }
 
+  // a one-time link for the picked variant, sent from my Telegram: the bot's card with "Get it" (logic.grant_link)
+  let sending = $state(false);
+  async function sendLink() {
+    sending = true; haptic.tap();
+    const award = `${t(`ach.${badge}.name` as 'ach.init26.name')} · ${vname(code)}`;
+    try { if (await shareCard({ kind: 'gl', id: '0', code }, 'https://t.me/KBTUappBot', award)) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); } }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { sending = false; }
+  }
+
   // the owner's batch grant
   const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
   let sessions = $state<BadgeSession[]>([]);
@@ -72,6 +84,9 @@
       {/each}
     </div>
   {/each}
+
+  <div class="link"><Button kind="primary" size="m" full loading={sending} onclick={sendLink}>{#snippet icon()}<Send size={17} />{/snippet}{t('bdg.link')}</Button></div>
+  <p class="t-foot note">{t('bdg.linkNote')}</p>
 
   <div class="find"><SearchField bind:value={q} placeholder={t('bdg.find')} /></div>
   {#if found && !found.length}<p class="t-foot none">{t('bdg.none')}</p>{/if}
@@ -121,6 +136,8 @@
   .var.on { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
   .var.on img { opacity: 1; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35)); }
   .var:active { transform: scale(0.97); }
+  .link { margin-top: 12px; }
+  .note { margin: 8px 4px 0; }
   .find { margin-top: 18px; }
   .none { margin: 12px 4px 0; }
   .rows { display: flex; flex-direction: column; margin-top: 10px; padding: 4px 0; }
