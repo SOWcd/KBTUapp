@@ -17,7 +17,8 @@ from ..db import tx
 from .core import ApiError, PERSON, Viewer, log_action, need_student, one, person_ref, rows, short_name
 
 BODY_MAX = 1000
-POSTS_A_DAY = 1
+POSTS_A_DAY = 5           # owner, Nov 1: one a day was too strict; a pace, not a ration
+POST_GAP = 10 * 60        # and one at a time: ten minutes between a person's posts
 UNPOST_SPREAD = 72 * 3600  # a deleted account's anonymous posts leave within it, each at its own moment
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
@@ -92,7 +93,8 @@ def reserve(con, v: Viewer, body: dict) -> int:
         raise ApiError("bad_input")
     text = _clean(body.get("body"))
     with tx(con):
-        if one(con, "SELECT COUNT(*) FROM fchan_posts WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)[0] >= POSTS_A_DAY:
+        n, last = one(con, "SELECT COUNT(*), MAX(created_at) FROM fchan_posts WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)
+        if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
             raise ApiError("rate_limited", "posts")
         return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)",
                            (v.id, text, int(anon), _now())).lastrowid

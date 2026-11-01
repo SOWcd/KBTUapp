@@ -66,7 +66,7 @@ def test_post_publish_and_limits(env, monkeypatch):
     p = c.post("/api/forum-posts", headers=A, json={"body": "Lost a black umbrella in the library"}).json()
     assert p["status"] == "live" and not p["anon"]
     r = c.post("/api/forum-posts", headers=A, json={"body": "And another one today"})
-    assert r.status_code == 429 or r.json()["error"] == "rate_limited"                          # one a day
+    assert r.status_code == 429 or r.json()["error"] == "rate_limited"                          # ten minutes between posts
     tick(cfg, tg, con)
     sent = tg.of("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == CH and "parse_mode" not in sent[0]
@@ -146,7 +146,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     tick(cfg, tg, con)
     assert {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")} == {(CH, mid), (G, 77)}
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
-    # deleting doesn't buy another post today
+    # deleting doesn't buy another post sooner
     said["word"] = "ok"
     assert c.post("/api/forum-posts", headers=A, json={"body": "Trying again today"}).json()["error"] == "rate_limited"
     con.close()

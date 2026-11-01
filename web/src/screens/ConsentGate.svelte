@@ -89,7 +89,7 @@
   </div>
   <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
   <div class="foot rise" style="--i:{count + 4}">
-    <Button kind="primary" size="m" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
+    <Button kind="glass" size="l" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
   </div>
 </div>
 
@@ -150,7 +150,7 @@
 
   /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
   .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; justify-content: center; pointer-events: none; }
-  .foot :global(.btn) { min-width: 200px; pointer-events: auto; box-shadow: var(--shadow-card); }
+  .foot :global(.btn) { min-width: 220px; pointer-events: auto; } /* the app's glass button as it is (ui/Button glass) */
   /* one after another: the title, the card, each line, the button */
   .rise { animation: rise 0.55s calc(0.15s + var(--i) * 0.07s) cubic-bezier(0.22, 1, 0.36, 1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
