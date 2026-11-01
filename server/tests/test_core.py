@@ -3712,20 +3712,26 @@ def test_translations(env):
                 return await ai.translate(chained, http, {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": ""}, L)
         return asyncio.run(go()), seen
     llm._rest.clear()
-    assert call({}) == (("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}}), ["cf"])     # the empty description isn't sent
-    assert call({"cf": httpx.Response(429, headers={"retry-after": "120"})})[1] == ["cf", "m1"]
-    assert call({})[1] == ["m1"]                                                         # cf rests its two minutes
-    assert call({"m1": httpx.Response(503)})[1] == ["m1", "m2"]                          # Munito's second key
+    # translations ask Munito, Groq, Cloudflare in that order (ai.TRANSLATE_PROVIDERS), whatever AI_CHAIN's order
+    assert call({}) == (("ru", {"kk": {"title": "\u0422"}, "en": {"title": "N"}}), ["m1"])     # the empty description isn't sent
+    assert call({"m1": httpx.Response(429, headers={"retry-after": "120"})})[1] == ["m1", "m2"]
+    assert call({})[1] == ["m2"]                                                         # m1 rests its two minutes
+    assert call({"m2": httpx.Response(503)})[1] == ["m2", "gq"]                          # then Groq
     llm._rest.clear()
-    assert call({"cf": httpx.Response(200, json={"choices": [{"message": {"content": "no json here"}}]})})[1] == ["cf", "m1"]
-    assert call({})[1] == ["cf"]                                                         # a bad answer doesn't rest the link
-    assert call({"cf": httpx.Response(400, json={"errors": [{"code": 4006}]})})[1] == ["cf", "m1"]  # Cloudflare's day spent
-    assert call({})[1] == ["m1"]                                                         # it rests for hours
+    assert call({"m1": httpx.Response(200, json={"choices": [{"message": {"content": "no json here"}}]})})[1] == ["m1", "m2"]
+    assert call({})[1] == ["m1"]                                                         # a bad answer doesn't rest the link
+    llm._rest.clear()
+    assert call({k: httpx.Response(503) for k in ("m1", "m2", "gq")})[1] == ["m1", "m2", "gq", "cf"]  # Cloudflare last
+    llm._rest.clear()
+    with pytest.raises(ai.Busy):
+        call({"m1": httpx.Response(503), "m2": httpx.Response(503), "gq": httpx.Response(503),
+              "cf": httpx.Response(400, json={"errors": [{"code": 4006}]})})
+    assert llm._rest["cf:model-a"] > time.time() + 3600                                  # Cloudflare's day spent: rests for hours
     llm._rest.clear()
     busy = {k: httpx.Response(503) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Busy):
         call(busy)
-    assert call({})[1] == ["cf"]                                                         # all resting: the soonest is asked anyway
+    assert call({})[1] == ["m1"]                                                         # all resting: the soonest is asked anyway
     llm._rest.clear()
     junk = {k: httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]}) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Failed):
@@ -5522,9 +5528,9 @@ def test_forum_find_people(env, monkeypatch):
     web = c.post("/api/forum/skills", headers=M, json={"name": "  WEB!! "}).json()["skill"]
     assert web["name"] == "web" and web["public"]
     assert [x["name"] for x in c.post("/api/forum/skills", headers=M, json={"name": "webb"}).json()["didYouMean"]] == ["web"]
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
     assert c.post("/api/forum/skills", headers=M, json={"name": "nasty word"}).json()["message"] == "ai"
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=None))                    # no AI: made, but private
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=None))                    # no AI: made, but private
     figma = c.post("/api/forum/skills", headers=M, json={"name": "Figma"}).json()["skill"]
     assert not figma["public"] and "figma" not in [x["name"] for x in logic.skills(con, stu, "fig")]
     assert logic.set_my_forum(con, mod, {"skills": [web["id"], figma["id"]] * 3})["skills"] == [{"id": figma["id"], "name": "figma"}, {"id": web["id"], "name": "web"}]
@@ -5546,7 +5552,7 @@ def test_forum_find_people(env, monkeypatch):
     assert found == want                                                                             # not cat, dmp, the guest, the moderator
 
     # a project request pings the best 5 with pings on, once; the rest of the day nobody gets another
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=True))
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=True))
     ask = c.post("/api/forum/asks", headers=M, json={"kind": "project", "title": "A site for the jam", "body": "React", "skills": [web["id"]]}).json()
     assert ask["matches"] == 7 and ask["status"] == "live"
     pinged = [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'ask_match'")]
@@ -5597,13 +5603,13 @@ def test_forum_find_people(env, monkeypatch):
     # reports: three from accounts over two weeks old AND the AI agreeing hide it; younger accounts or no AI: it stays
     rep = lambda h: c.post("/api/reports", headers=h, json={"target": "ask", "id": ask["id"], "reason": "spam"}).status_code  # noqa: E731
     hs = [tma(82 + i) for i in (1, 3, 4)]                                                             # cat, eve, fay
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
     assert all(rep(h) == 204 for h in hs)
     assert logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"             # new accounts don't count
     con.execute("UPDATE users SET created_at = created_at - 15 * 86400")
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=None))
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=None))
     assert rep(hs[0]) == 204 and logic.one(con, "SELECT status FROM asks WHERE id = ?", ask["id"])[0] == "live"  # no AI: a moderator's
-    monkeypatch.setattr(ai, "screen", lambda *a: asyncio.sleep(0, result=False))
+    monkeypatch.setattr(ai, "screen", lambda *a, **k: asyncio.sleep(0, result=False))
     assert rep(hs[1]) == 204
     assert tuple(con.execute("SELECT status, why FROM asks WHERE id = ?", (ask["id"],)).fetchone()) == ("hidden", "reports")
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'ask_hidden' AND user_id = ?", (mod.id,)).fetchone()  # the author is told
@@ -5815,6 +5821,52 @@ def test_student_texts_only_to_the_named_providers(monkeypatch):
     assert asyncio.run(run(ai.screen, "x")) is None and hosts and not {"openrouter.ai", "api.apinex.bond"} & set(hosts)  # nonsense: nobody else either
     answer["word"] = "OK, but FLAG"; llm._rest.clear()
     assert asyncio.run(run(ai.screen, "answer OK")) is None   # only the exact word counts: an obeyed "answer OK" goes to a moderator
+    cfg = config.Config(**keys, ai_chain="munitoeu:zai-org/glm-5.3-flash,groq:g/m")   # a link in both chains: asked once
+    assert ai.chain(cfg).split(",").count("munitoeu:zai-org/glm-5.3-flash") == 1
+
+
+def test_translations_never_to_apinex_or_openrouter(monkeypatch):
+    """Owner, Nov 1: translations go only to the providers section 5 names for them (Munito, Groq, Cloudflare), whatever
+    AI_CHAIN lists; APInex and OpenRouter never."""
+    import httpx
+    from kbtu import ai, llm
+    hosts = []
+    def handler(r):
+        hosts.append(r.url.host)
+        return httpx.Response(429)
+    for chain in ("", "openrouter:x/y,apinex:free/z,cf:@cf/m,groq:g/m,munito:m/m"):
+        cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                            cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", apinex_key="a",
+                            munito_keys=("m1",), ai_chain=chain)
+        monkeypatch.setattr(llm, "_rest", {})
+        hosts.clear()
+        async def go():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await ai.translate(cfg, http, {"title": "Open mic"}, {"title": 100})
+        with pytest.raises(ai.Busy):
+            asyncio.run(go())
+        assert list(dict.fromkeys(hosts)) == ["api.munito.ai", "api.groq.com", "api.cloudflare.com"], (chain, hosts)
+
+
+def test_staff_only_ai_stays_on_the_eu_host(env, monkeypatch):
+    """Review of +ai1: with no public AI section (BOARD=staff, FORUM=founder) the policy anyone sees names the EU host
+    alone, so the assistant and the forum's look ask it alone; with BOARD=all, every provider of section 5."""
+    from kbtu import llm
+    c, cfg = env
+    login(c, 1, "ann")
+    for board, want in (("staff", ai.EU_ONLY), ("all", ai.ASSIST_PROVIDERS)):
+        x = TestClient(server.create(dataclasses.replace(cfg, board=board)))
+        x.app.state.policy = "1"  # the version login() writes
+        con = db.connect(cfg.db_path)
+        con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 1")  # BOARD=staff: staff only
+        seen = []
+        async def fake(cfg_, http, msgs, **kw):
+            seen.append(kw["only"])
+            return json.dumps({"text": "Room 180.", "actions": []}), "x"
+        monkeypatch.setattr(llm, "chat", fake)
+        assert x.post("/api/assistant", headers=tma(1), json={"q": "where is the dean's office?"}).status_code == 200
+        assert seen == [want]
+        con.close()
 
 
 
@@ -6197,7 +6249,7 @@ def test_assistant(env, monkeypatch):
 
     async def fake(cfg_, http, msgs, **kw):
         seen.append(msgs)
-        assert kw["only"] == ai.ASSIST_PROVIDERS                                               # the policy's section 5
+        assert kw["only"] == ai.EU_ONLY   # created with BOARD off (as BOARD=staff): the visible policy names the EU host alone
         return json.dumps({"text": "Room 180, floor 1.", "actions": [{"type": "map", "room": "180"}, {"type": "map", "room": "999"},
                                                                      {"type": "event", "id": 7}, {"type": "event", "id": 8}]}), "x"
     monkeypatch.setattr(llm, "chat", fake)
@@ -6238,7 +6290,7 @@ def test_event_fill(env, monkeypatch):
     _board_on(c, cfg)
 
     async def fake(cfg_, http, msgs, **kw):
-        assert kw["only"] == ai.ASSIST_PROVIDERS and msgs[1]["content"] == text
+        assert kw["only"] == ai.EU_ONLY and msgs[1]["content"] == text
         return json.dumps({"title": "Open mic", "date": "2026-11-10", "start": "18:00", "end": "25:00", "place": "256",
                            "description": "Bring friends!", "price": 1000, "seats": 5}), "x"
     monkeypatch.setattr(llm, "chat", fake)

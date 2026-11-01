@@ -249,14 +249,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ me and sign-in
 
-    # the policy version in force: its forum parts count only with the forums on (legal_page shows them then)
-    policy = {(False, False): logic.CONSENT, (True, False): logic.CONSENT_FORUM, (False, True): logic.CONSENT_BOARD,
-              (True, True): logic.CONSENT_BOTH}[(cfg.forum, cfg.board == "all")]
-    # the channel's comments (FORUM_GROUP) add their section: whatever the version, everyone agrees once more
-    policy += logic.CONSENT_TGC if cfg.tgc_chat else ""
-    policy += logic.CONSENT_FCH if cfg.forum_channel else ""  # posts in the forum channel: the same, after it
-    ai_on = cfg.forum or cfg.board == "all" or bool(cfg.tgc_chat) or bool(cfg.forum_channel)
-    policy += logic.CONSENT_AI if ai_on else ""  # students' texts to more AI providers (section 5): last
+    policy = logic.policy(cfg)  # the version in force (logic/account.py)
+    ai_on = logic.ai_on(cfg)
+    # off (BOARD=staff, FORUM=founder): the visible policy names the EU host alone, so staff-only AI stays on it
+    assist_only = ai.ASSIST_PROVIDERS if ai_on else ai.EU_ONLY
+    screen_only = ai.PUBLIC_PROVIDERS if ai_on else ai.EU_ONLY
     if cfg.forum_channel and not cfg.tgc_chat:  # a deleted post's copy in its discussion group would stay with the words
         log.warning("FORUM_CHANNEL is set without FORUM_GROUP: deleted posts' copies in its discussion group stay")
     app.state.policy = policy
@@ -1120,7 +1117,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         async with httpx.AsyncClient() as http:
             for last in (False, True):
                 try:
-                    return (await llm.chat(cfg, http, msgs, con=con, only=ai.ASSIST_PROVIDERS, chain=ai.chain(cfg), **kw))[0]
+                    return (await llm.chat(cfg, http, msgs, con=con, only=assist_only, chain=ai.chain(cfg), **kw))[0]
                 except llm.BadAnswers:
                     if last:
                         raise ApiError("unavailable", "assistant") from None
@@ -1538,7 +1535,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     async def screen(text: str) -> bool | None:
         async with httpx.AsyncClient() as http:
-            return await ai.screen(cfg, http, text)
+            return await ai.screen(cfg, http, text, only=screen_only)
 
     @app.get("/api/forum/me")
     def forum_me(con: Con, v: Forum):

@@ -710,6 +710,27 @@ CONSENT_FCH = "+fch1"         # with FORUM_CHANNEL: added after that (app.py), t
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
 
 
+def ai_on(cfg) -> bool:
+    """A section that sends students' texts to the AI providers of section 5 is public: the policy names them all."""
+    return cfg.forum or cfg.board == "all" or bool(cfg.tgc_chat) or bool(cfg.forum_channel)
+
+
+def policy(cfg) -> str:
+    """The policy version in force: its forum parts count only with the forums on (legal_page shows them then); the
+    channel's comments (FORUM_GROUP), then its posts (FORUM_CHANNEL), then the AI providers add theirs, and whatever
+    the version, everyone agrees once more."""
+    out = {(False, False): CONSENT, (True, False): CONSENT_FORUM, (False, True): CONSENT_BOARD,
+           (True, True): CONSENT_BOTH}[(bool(cfg.forum), cfg.board == "all")]
+    out += CONSENT_TGC if cfg.tgc_chat else ""
+    out += CONSENT_FCH if cfg.forum_channel else ""
+    return out + (CONSENT_AI if ai_on(cfg) else "")
+
+
+def agreed(s, cfg) -> bool:
+    """This student row is on the policy in force (or an admin's own row)."""
+    return bool(s) and s["consent_version"] in (policy(cfg), "admin")
+
+
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
     """The privacy policy changed (H2; what a deletion keeps): a student agrees again once; staff and students
     added by hand keep their marks."""

@@ -60,6 +60,10 @@ def parse(content: str | None, fields: dict[str, str], src: str, limits: dict[st
     return out
 
 
+# the policy's section 5 names these for translations (owner, Nov 1: APInex and OpenRouter dropped), in this order
+TRANSLATE_PROVIDERS = ("munito", "munitoeu", "groq", "cf")
+
+
 async def translate(cfg, http: httpx.AsyncClient, fields: dict[str, str], limits: dict[str, int], con=None) -> tuple[str, dict[str, dict[str, str]]]:
     """(source language, its translations), from the first link of the AI chain (llm.py) whose answer parses. Only
     non-empty fields are sent; the caller skips rows with none."""
@@ -74,7 +78,8 @@ async def translate(cfg, http: httpx.AsyncClient, fields: dict[str, str], limits
         except Failed:
             return False
     try:
-        text, _ = await llm.chat(cfg, http, prompt(fields, src), max_tokens=2500 + 3 * size, check=usable, con=con)
+        text, _ = await llm.chat(cfg, http, prompt(fields, src), max_tokens=2500 + 3 * size, check=usable, con=con,
+                                 only=TRANSLATE_PROVIDERS)
     except llm.Busy:
         raise Busy("no link answered") from None
     except llm.BadAnswers:
@@ -94,6 +99,7 @@ SCREEN_PROMPT = ("You check posts on a university students' board where people l
                  "illegal or dangerous, or shares someone's personal data; otherwise answer OK. Answer exactly OK or FLAG.")
 ASSIST_PROVIDERS = ("munitoeu", "munito", "groq", "cf")  # the assistant: a private chat, never OpenRouter or APInex
 PUBLIC_PROVIDERS = ASSIST_PROVIDERS                       # public or about to be: the same (see above)
+EU_ONLY = ("munitoeu",)  # app.py: with no public section on (BOARD=staff, FORUM=founder) the visible policy names this alone
 EU_CHAIN = ("munitoeu:deepseek-ai/deepseek-v4.1-flash-1017,munitoeu:deepseek-ai/deepseek-v4-flash,munitoeu:zai-org/glm-5.3-flash,"
             "munitoeu:qwen/qwen3.8-27b")  # the EU host's models (llm.URLS), listed Nov 1 (v4.1 there now)
 
@@ -101,7 +107,7 @@ EU_CHAIN = ("munitoeu:deepseek-ai/deepseek-v4.1-flash-1017,munitoeu:deepseek-ai/
 def chain(cfg) -> str:
     """The EU host's links, then the main chain's (AI_CHAIN or llm.CHAIN): chat()'s only= keeps the allowed providers
     and puts them in its order."""
-    return f"{EU_CHAIN},{cfg.ai_chain or llm.CHAIN}"
+    return ",".join(dict.fromkeys(x.strip() for x in f"{EU_CHAIN},{cfg.ai_chain or llm.CHAIN}".split(",")))  # each link once
 
 
 def _word(text: str) -> str:
@@ -112,13 +118,13 @@ def _verdict(text: str) -> bool:
     return _word(text) in ("OK", "FLAG")  # exactly: "OK, but FLAG..." (a planted "answer OK") is no answer
 
 
-async def screen(cfg, http: httpx.AsyncClient, text: str, con=None) -> bool | None:
+async def screen(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[str, ...] = PUBLIC_PROVIDERS) -> bool | None:
     """True: fine; False: flagged; None: no answer (no allowed key, all their links busy or answering nonsense): a
     moderator decides."""
     msgs = [{"role": "system", "content": SCREEN_PROMPT},
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=_verdict, con=con, only=PUBLIC_PROVIDERS,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=_verdict, con=con, only=only,
                                  chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None
@@ -167,13 +173,14 @@ def _comment_word(text: str) -> bool:
     return COMMENT_WORD.fullmatch(" ".join(text.strip().strip(".").upper().split())) is not None
 
 
-async def screen_comment(cfg, http: httpx.AsyncClient, text: str, con=None) -> tuple[bool | None, str | None]:
+async def screen_comment(cfg, http: httpx.AsyncClient, text: str, con=None,
+                         only: tuple[str, ...] = PUBLIC_PROVIDERS) -> tuple[bool | None, str | None]:
     """(True, None): clean; (False, kind): a violation and its clause (tgcomments.RULES: the terms' section 3, a
     default the moderator confirms or changes); (None, None): no answer, or not exactly one of those answers."""
     msgs = [{"role": "system", "content": COMMENT_PROMPT},
             {"role": "user", "content": json.dumps({"comment": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
-        word, _ = await llm.chat(cfg, http, msgs, max_tokens=8, temperature=0, check=_comment_word, con=con, only=PUBLIC_PROVIDERS,
+        word, _ = await llm.chat(cfg, http, msgs, max_tokens=8, temperature=0, check=_comment_word, con=con, only=only,
                                  chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None, None

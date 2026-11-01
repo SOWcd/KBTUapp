@@ -79,7 +79,7 @@ def setup(env, monkeypatch, verdicts: dict | None = None):
     c = TestClient(server.create(cfg))
     looked: list[str] = []
 
-    async def screen(cfg_, http, text, con=None):
+    async def screen(cfg_, http, text, con=None, only=None):
         looked.append(text)
         v = (verdicts or {}).get(text)
         return v, "abuse" if v is False else None
@@ -311,6 +311,25 @@ def test_policy_section_and_consent_only_with_the_switch(env, monkeypatch):
     assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC + logic.CONSENT_AI
     page = c.get("/privacy?lang=en").text
     assert "11. Comments in the forum's Telegram channel" in page and "{{tgcn}}" not in page
+
+
+def test_ai_look_only_eu_before_the_new_consent(env, monkeypatch):
+    """Review of +ai1: commenter() doesn't ask for the policy in force, so a reported author not yet on it has his
+    comment looked at by the EU host alone; on it, by every provider section 5 names."""
+    c, cfg, con, _ = setup(env, monkeypatch)
+    uid = student(c, con, 20, "ali")
+    asked = []
+
+    async def screen(cfg_, http, text, con=None, only=None):
+        asked.append(only)
+        return True, None
+    monkeypatch.setattr(tgc.ai, "screen_comment", screen)
+    for i, version in enumerate(("2026-10-v3+tgc1", logic.policy(cfg))):
+        con.execute("UPDATE students SET consent_version = ? WHERE user_id = ?", (version, uid))
+        cid = con.execute("INSERT INTO tgc_comments (chat_id, msg_id, author_id, author_tg, body, created_at) VALUES (?, ?, ?, 20, ?, 0)",
+                          (G, 900 + i, uid, f"words {i}")).lastrowid
+        asyncio.run(tgc._judge(cfg, None, cid))
+    assert asked == [tgc.ai.EU_ONLY, tgc.ai.PUBLIC_PROVIDERS] and logic.policy(cfg).endswith(logic.CONSENT_AI)
 
 
 def test_review_fixes(env, monkeypatch):
