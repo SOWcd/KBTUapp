@@ -17,8 +17,6 @@
   import { grow } from '../../ui/grow';
   import Sheet from '../../ui/Sheet.svelte';
   import Card from '../../ui/Card.svelte';
-  import Group from '../../ui/Group.svelte';
-  import Row from '../../ui/Row.svelte';
   import Button from '../../ui/Button.svelte';
 
   let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean } } = $props();
@@ -58,9 +56,12 @@
     <p class="rules">{t('fc.rules')}</p>
   </Card>
   <div class="gap"></div>
-  <Group footnote={anon ? t('fc.asAnon') : t('fc.as', { name: sign })}>
-    <Row title={t('fc.anon')} icon={VenetianMask} tile="gray" accessory="switch" checked={anon} onchange={(v) => { anon = v; haptic.select(); }} />
-  </Group>
+  <!-- who signs it: two buttons, not a switch (owner, Nov 1) -->
+  <div class="seg wide who" role="radiogroup" aria-label={t('fc.anon')}>
+    <button type="button" role="radio" aria-checked={!anon} class:on={!anon} onclick={() => { anon = false; haptic.select(); }}>{sign}</button>
+    <button type="button" role="radio" aria-checked={anon} class:on={anon} onclick={() => { anon = true; haptic.select(); }}><VenetianMask size={15} />{t('fc.anon')}</button>
+  </div>
+  <p class="as">{anon ? t('fc.asAnon') : t('fc.as', { name: sign })}</p>
   {#snippet footer()}<Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>{/snippet}
 </Sheet>
 
@@ -72,4 +73,7 @@
   .text:focus { outline: none; }
   .rules { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 0.5px solid var(--separator); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .gap { height: var(--s-4); }
+  .who { display: flex; width: 100%; }
+  .who button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; font-size: var(--fs-body); }
+  .as { margin: var(--s-2) var(--s-2) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
 </style>

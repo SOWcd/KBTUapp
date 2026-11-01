@@ -1,8 +1,8 @@
-// Campus map (CONTEXT), two versions. Main: UNI-Q's plans of floors 0-5 (another team's work, credited
+// Campus map (CONTEXT), two versions. Main: Uni-Q's plans of floors 0-5 (another team's work, credited
 // on the map), cut into an overview and tiles (design/map/tools/uniq) under public/map/u1, which the server caches for
 // a year; their rooms' numbers and where they sit on the plan, read off it, so the map glides to a room. Old: our
 // vector redraw, floors 1-5 from the 2023 plans (design/map/tools: walls on a shared grid, the rotunda in polar
-// coordinates, the labels as real text checked by eye, one frame for all floors), the basement (0) from UNI-Q's plan
+// coordinates, the labels as real text checked by eye, one frame for all floors), the basement (0) from Uni-Q's plan
 // (design/map/tools/basement). A Mini App always loads from the network, so the promise is "opens at once", not
 // "offline": the main map's overviews are fetched quietly soon after the first launch.
 import ru from './i18n/ru';
@@ -15,7 +15,7 @@ import f5 from '../assets/map/floor-5.svg?url';
 import k1 from '../assets/map/kbtu-1.svg?url';
 import k1d from '../assets/map/kbtu-1-dark.svg?url';
 
-/** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off UNI-Q's) */
+/** The old map's floors by number; 0, the basement, is the main map's only (the old one's was copied off Uni-Q's) */
 export const FLOORS = [null, f1, f2, f3, f4, f5];
 
 /** Our own map's floors (design/map/tools/clean, owner, Oct 27): light and dark renders, floor 1 so far */
@@ -59,7 +59,7 @@ export const SPOTS: Spot[] = [
   { k: 'kunaev', re: HALLS[0][0], room: '400a' },
   { k: 'farabi', re: HALLS[1][0], room: '470' },
   { k: 'indep', re: INDEP, f: 2, u: 0.498, v: 0.613 },
-  // UNI-Q's named rooms (all of them in Places, to route to and from; short names), known by name in any language
+  // Uni-Q's named rooms (all of them in Places, to route to and from; short names), known by name in any language
   { k: 'library', room: '158' },
   { k: 'career', room: '152' },
   { k: 'students', room: '155' },

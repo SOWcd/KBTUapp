@@ -104,7 +104,7 @@
   .b3 { bottom: -25vw; left: 5vw; background: rgba(53, 208, 255, 0.3); animation-duration: 27s; animation-delay: -12s; }
   :global(html[data-theme='light']) .blob { opacity: 0.3; }
   @keyframes drift { to { transform: translate(12vw, 8vh) scale(1.15); } }
-  .body { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 40px 0 8px; }
+  .body { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 40px 0 96px; }
   .body::-webkit-scrollbar { display: none; }
   /* centred while it fits, scrolled from the top when it doesn't (a short phone): justify-content would cut the top off */
   .body > :first-child { margin-top: auto; }
@@ -148,11 +148,9 @@
   .danger { background: var(--danger-soft); color: var(--danger-text); }
   .lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); font-weight: 620; padding: 4px 8px; }
 
-  .foot { position: relative; display: flex; justify-content: center; padding-top: 12px; }
-  .foot :global(.btn) { min-width: 200px; }
-  /* the list fades out under the button instead of a hard edge */
-  .foot::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--bg)); }
+  /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
+  .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; justify-content: center; pointer-events: none; }
+  .foot :global(.btn) { min-width: 200px; pointer-events: auto; box-shadow: var(--shadow-card); }
   /* one after another: the title, the card, each line, the button */
   .rise { animation: rise 0.55s calc(0.15s + var(--i) * 0.07s) cubic-bezier(0.22, 1, 0.36, 1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }

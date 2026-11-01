@@ -1,7 +1,7 @@
 <script lang="ts">
   // The campus map (CONTEXT): a floor of the main building full screen, pinch to zoom and drag to look around, a
   // double tap zooms in or out, the floors 0–5 at the bottom under the thumb. Three versions, picked from a list at the top left
-  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floor 1 so far): the main one, UNI-Q's plans (credited under the map), and the old one, our vector redraw with red
+  // (owner, Oct 6 and Oct 27; ours, KBTU App's, has floor 1 so far): the main one, Uni-Q's plans (credited under the map), and the old one, our vector redraw with red
   // walls (floors 1-5 from the 2023 plans, which nobody updates, so it says so). Opens on a room's floor ("Aud. 305"
   // → 3), rings the room's number and glides in to it (owner, Oct 5: "show where the room is"); a room the plan
   // doesn't number frames its nearest numbers on the floor, "somewhere here, look yourself", or just says it couldn't
@@ -53,9 +53,9 @@
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
   $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
-  // which map (owner, Oct 27: a list at the top left): UNI-Q's, ours (floor 1 so far, not the default yet), the 2023 plan
+  // which map (owner, Oct 27: a list at the top left): Uni-Q's, ours (floor 1 so far, not the default yet), the 2023 plan
   type Ver = 'main' | 'kbtu' | 'old';
-  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); UNI-Q stays the default for now
+  const VERS: Ver[] = ['kbtu', 'main', 'old']; // ours first in the list (owner, Oct 28); Uni-Q stays the default for now
   let ver = $state<Ver>('main');
   let menu = $state(false);
   let rt = $state<RouteView>({ graph: null, route: null, step: 0 });
@@ -129,7 +129,7 @@
   }
   const clamp = () => { [x, y] = clamped(s, x, y); };
   function reset() { halt(); s = 1; x = 0; y = Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
-  /** the view a floor opens in: on the main map the building (u .12-.85 of UNI-Q's sheet, white margins round it) fills
+  /** the view a floor opens in: on the main map the building (u .12-.85 of Uni-Q's sheet, white margins round it) fills
    *  the width (owner, Oct 24: "why is it so far away"); the old plan has no margins, the whole of it */
   function home(): [number, number, number] {
     const k = ver === 'main' ? 1.3 : 1;
@@ -394,7 +394,7 @@
     return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
   }
   // the frames in plan units (the 2023 plan's): the old map is the plan itself, ours a 1000-unit square cut of it at
-  // (120, 130), UNI-Q's sheet fitted to it by its room numbers (design/map/tools/clean, median error ~9 units)
+  // (120, 130), Uni-Q's sheet fitted to it by its room numbers (design/map/tools/clean, median error ~9 units)
   const FIT = [[0.186469, 0.000447], [-0.001899, 0.196124], [9.528454, 5.881245]];
   const UNITS: Record<Ver, number> = { main: uniq.w * FIT[0][0], old: 1240, kbtu: 1000 }; // the sheet's width
   function toPlan(v: Ver, u: number, w: number): [number, number] {
@@ -459,12 +459,12 @@
       glideTo(sp.u!, sp.v!, 3.2, true);
       return;
     }
-    const r = roomOf(text) ?? spotOf(text)?.room ?? null; // a named room: UNI-Q's library is 158
+    const r = roomOf(text) ?? spotOf(text)?.room ?? null; // a named room: Uni-Q's library is 158
     if (!r) return;
     at = null; glided = r === room; // the same room again: stay
     room = r;
     const f = floorOf(r)!;
-    if (ver === 'kbtu' || (!f && ver === 'old')) { ver = 'main'; reset(); } // rooms are ringed on UNI-Q's; the basement is there only
+    if (ver === 'kbtu' || (!f && ver === 'old')) { ver = 'main'; reset(); } // rooms are ringed on Uni-Q's; the basement is there only
     if (f !== cur) { halt(); cur = f; tiles = []; touched++; pickTiles(); }
   }
   const dest = $derived(room ?? at?.label ?? null);

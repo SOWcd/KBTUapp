@@ -6,7 +6,6 @@
   // "checking"; a delete leaves the list before the server says so). It looks the same for every viewer, staff too:
   // the channel's moderation lives in Admin (AdminForum) alone.
   import { untrack } from 'svelte';
-  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
@@ -23,8 +22,6 @@
   import { glass } from '../../ui/glass';
   import { fitTitle, largeTitle } from '../../ui/title';
   import { TAB_ICON } from '../../ui/icons';
-  import Group from '../../ui/Group.svelte';
-  import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -100,9 +97,6 @@
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
 
-  <Group>
-    <Row title={t('fc.open')} icon={TelegramMark} tile="blue" accessory="external" onclick={() => openLink(CHANNEL)} />
-  </Group>
   <div class="tail"></div>
 </div>
 
