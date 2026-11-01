@@ -338,7 +338,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/screen/pair")
     def screen_pair(request: Request, con: Con):
         # the visitor's address through Cloudflare's tunnel (the socket's peer is the tunnel itself)
-        return qr.pair(con, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else ""))
+        return qr.pair(con, cfg.token_key, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else ""))
 
     @app.get("/api/screen")
     def screen_show(con: Con, x_screen: str = Header("")):

@@ -5938,6 +5938,11 @@ def test_screen_pairing(env, monkeypatch):
     assert c.post("/api/screen/pair", headers=other).status_code == 200
     assert c.post("/api/screen/pair", headers=other).status_code == 429                      # one address can't take them all
     assert c.post("/api/screen/pair", headers={"cf-connecting-ip": "203.0.113.10"}).status_code == 200
+    assert c.post("/api/screen/pair", headers={"cf-connecting-ip": "2001:db8:1:2::1"}).status_code == 200
+    assert c.post("/api/screen/pair", headers={"cf-connecting-ip": "2001:db8:1:2:ffff::9"}).status_code == 429  # one IPv6 /64 is one address
+    import hashlib
+    plain = hashlib.sha256(b"kbtu-ip:203.0.113.10").hexdigest()[:16]
+    assert not con.execute("SELECT 1 FROM qr_screens WHERE ip = ?", (plain,)).fetchone()                  # keyed, not a plain hash
     monkeypatch.setattr(checkin, "PAIR_MAX", 1)
     c.post("/api/screen/pair")                                                               # one waiting: the cap
     assert c.post("/api/screen/pair").status_code == 429                                     # junk can't fill the table

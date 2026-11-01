@@ -11,6 +11,7 @@ import csv
 import hashlib
 import hmac
 import io
+import ipaddress
 import json
 import secrets
 import time
@@ -61,9 +62,20 @@ def _hash(secret: str) -> str:
     return hashlib.sha256(f"kbtu-screen:{secret}".encode()).hexdigest()
 
 
-def pair(con, ip: str = "") -> dict:
+def _where(key: bytes, ip: str) -> str:
+    """The address the per-IP limit counts, keyed (a plain hash of an IPv4 is reversed in minutes): an IPv6 by its /64,
+    the block one machine gets"""
+    if ":" in ip:
+        try:
+            ip = str(ipaddress.ip_network(ip + "/64", strict=False))
+        except ValueError:
+            pass
+    return hmac.new(key, f"screen-ip {ip}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def pair(con, key: bytes, ip: str = "") -> dict:
     """A new screen: its pairing code (public, in the QR) and its secret (stays in that browser, only its hash here)."""
-    where = hashlib.sha256(f"kbtu-ip:{ip}".encode()).hexdigest()[:16]
+    where = _where(key, ip)
     t = now()
     # unpaired ones rotate every PAIR_TTL; a paired one goes a day after its session ended
     con.execute("""DELETE FROM qr_screens WHERE session_id IS NULL AND created_at < ? OR session_id IN
