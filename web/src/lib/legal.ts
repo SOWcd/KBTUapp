@@ -8,3 +8,5 @@ export const CONSENT_BOARD = '2026-10-v7', CONSENT_BOTH = '2026-10-v8'; // v5, v
 export const CONSENT_TGC = '+tgc1';
 // with the forum channel on (FORUM_CHANNEL) the server adds this after that: the section on posts in the channel
 export const CONSENT_FCH = '+fch1';
+// with any of those on the server adds this last: students' texts to more AI providers (the policy's section 5)
+export const CONSENT_AI = '+ai1';

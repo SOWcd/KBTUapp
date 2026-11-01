@@ -255,6 +255,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the channel's comments (FORUM_GROUP) add their section: whatever the version, everyone agrees once more
     policy += logic.CONSENT_TGC if cfg.tgc_chat else ""
     policy += logic.CONSENT_FCH if cfg.forum_channel else ""  # posts in the forum channel: the same, after it
+    ai_on = cfg.forum or cfg.board == "all" or bool(cfg.tgc_chat) or bool(cfg.forum_channel)
+    policy += logic.CONSENT_AI if ai_on else ""  # students' texts to more AI providers (section 5): last
     if cfg.forum_channel and not cfg.tgc_chat:  # a deleted post's copy in its discussion group would stay with the words
         log.warning("FORUM_CHANNEL is set without FORUM_GROUP: deleted posts' copies in its discussion group stay")
     app.state.policy = policy
@@ -1113,12 +1115,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 logic.hide_ask(con, body["id"], "reports")
 
     async def eu_ai(con, msgs: list[dict], **kw) -> str:
-        """The assistant's model call: the EU host only (the policy's section 12); none answered: 503."""
+        """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503."""
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
         async with httpx.AsyncClient() as http:
             for last in (False, True):
                 try:
-                    return (await llm.chat(cfg, http, msgs, con=con, only=ai.SCREEN_PROVIDERS, chain=ai.SCREEN_CHAIN, **kw))[0]
+                    return (await llm.chat(cfg, http, msgs, con=con, only=ai.ASSIST_PROVIDERS, chain=ai.chain(cfg), **kw))[0]
                 except llm.BadAnswers:
                     if last:
                         raise ApiError("unavailable", "assistant") from None
@@ -1694,7 +1696,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         # the channel's comments section comes last: its number follows the forums' (11 with neither)
         tgcn = 11 + cfg.forum + (cfg.board == "all")
         body = body.replace("{{tgcn}}", str(tgcn)).replace("{{fchn}}", str(tgcn + bool(cfg.tgc_chat)))  # the channel's posts: after it
-        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel))):
+        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat)), ("fch", bool(cfg.forum_channel)),
+                         ("ai", ai_on)):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))

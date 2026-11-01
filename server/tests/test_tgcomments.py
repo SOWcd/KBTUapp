@@ -308,7 +308,7 @@ def test_policy_section_and_consent_only_with_the_switch(env, monkeypatch):
     off = c0.get("/api/me", headers=tma(20)).json()["consentNow"]
     assert "+tgc" not in off and "{{tgcn}}" not in c0.get("/privacy").text and "/report" not in c0.get("/privacy?lang=en").text
     c, *_ = setup(env, monkeypatch)
-    assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC
+    assert c.get("/api/me", headers=tma(20)).json()["consentNow"] == off + logic.CONSENT_TGC + logic.CONSENT_AI
     page = c.get("/privacy?lang=en").text
     assert "11. Comments in the forum's Telegram channel" in page and "{{tgcn}}" not in page
 

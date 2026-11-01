@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, tgc, video
+from kbtu import ai, calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, tgc, video
 
 BOT = "123:test"
 
@@ -5701,9 +5701,12 @@ def test_forum_policy_behind_the_flag(env):
     on = TestClient(server.create(dataclasses.replace(cfg, forum=True)))
     page = on.get("/privacy?lang=en").text
     assert "11. The forum" in page and "Version of 26 October" in page and "Version of 23" not in page and "<!--" not in page
-    assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT_FORUM
+    assert on.get("/api/me", headers=tma(90)).json()["consentNow"] == logic.CONSENT_FORUM + logic.CONSENT_AI
     assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT}).status_code == 400
-    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT_FORUM}).json()["student"]["consent"] == logic.CONSENT_FORUM
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": logic.CONSENT_FORUM}).status_code == 400   # the AI providers' line too (+ai1)
+    now = logic.CONSENT_FORUM + logic.CONSENT_AI
+    assert on.post("/api/me/consent", headers=tma(90), json={"version": now}).json()["student"]["consent"] == now
+    assert "Groq" in page and "AI checks and the assistant" in page and "AI checks and the assistant" not in c.get("/privacy?lang=en").text
     for lang in ("ru", "kk"):
         assert on.get(f"/privacy?lang={lang}").text.count("<h2>11.") == 1 and "<h2>11." not in c.get(f"/privacy?lang={lang}").text
 
@@ -5766,32 +5769,53 @@ def test_referral_by_profile_qr(env):
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 1
 
 
-def test_forum_screen_munito_only(monkeypatch):
-    """The forum's AI look goes to Munito's links only (privacy policy, section 11), however the chain is set: with
-    Cloudflare, OpenRouter and Groq keys present and Munito busy, nobody else gets the text and a moderator decides."""
+def test_student_texts_only_to_the_named_providers(monkeypatch):
+    """Owner, Nov 1: students' texts go to Munito (EU host, then global, every key), then Groq, then Cloudflare, the
+    policy's section 5; never APInex or OpenRouter, whatever AI_CHAIN lists. The assistant and the public checks
+    alike (Nov 1 check: neither of those two publishes terms that rule out training or keeping the inputs)."""
     import httpx
     from kbtu import ai, llm
+    keys = dict(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
+                cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", apinex_key="a", munito_keys=("m1", "m2"))
+    eu, glob, groq, cf = "api.eu.munito.ai", "api.munito.ai", "api.groq.com", "api.cloudflare.com"
+    for chain in ("", "openrouter:x/y,apinex:free/z,cf:@cf/m,groq:g/m,munito:m/m"):   # AI_CHAIN can't widen or reorder it
+        cfg = config.Config(**keys, ai_chain=chain)
+        monkeypatch.setattr(llm, "_rest", {})
+        hosts, answer = [], {"code": 429, "word": "OK"}
+        def handler(r):
+            hosts.append(r.url.host)
+            if answer["code"] != 200 and r.url.host != answer.get("ok"):
+                return httpx.Response(answer["code"])
+            return httpx.Response(200, json={"choices": [{"message": {"content": answer["word"]}, "finish_reason": "stop"}]})
+        async def run(f, *a):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                return await f(cfg, http, *a)
+        async def assist(cfg_, http):
+            return (await llm.chat(cfg_, http, [{"role": "user", "content": "hi"}], only=ai.ASSIST_PROVIDERS, chain=ai.chain(cfg_)))[0]
+        for f, a, none in ((ai.screen, ("x",), None), (ai.screen_post, ("x",), None), (ai.screen_comment, ("x",), (None, None))):
+            llm._rest.clear(); hosts.clear()
+            assert asyncio.run(run(f, *a)) == none                                          # all busy: a moderator decides
+            seen = list(dict.fromkeys(hosts))
+            assert seen == [eu, glob, groq, cf], (chain, seen)                              # in this order, nobody else
+            assert hosts.count(eu) >= 2 and hosts.count(glob) >= 2                         # both Munito keys, both hosts
+        llm._rest.clear(); hosts.clear()
+        try:
+            asyncio.run(run(assist))
+        except llm.Busy:
+            pass
+        assert list(dict.fromkeys(hosts)) == [eu, glob, groq, cf]                           # the assistant: never OpenRouter or APInex
+        llm._rest.clear(); hosts.clear(); answer["ok"] = groq
+        assert asyncio.run(run(assist)) == "OK" and hosts[-1] == groq and cf not in hosts   # Munito busy: Groq answers
+        answer.pop("ok")
+    assert "openrouter" not in ai.ASSIST_PROVIDERS + ai.PUBLIC_PROVIDERS and "apinex" not in ai.ASSIST_PROVIDERS + ai.PUBLIC_PROVIDERS
+    assert ai.PUBLIC_PROVIDERS[:len(ai.ASSIST_PROVIDERS)] == ai.ASSIST_PROVIDERS            # any later addition only after them
+    cfg = config.Config(**keys)
     monkeypatch.setattr(llm, "_rest", {})
-    cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=":memory:", web_dist=".", background=False, seed=False,
-                        cf_account_id="acc", cf_ai_token="t", openrouter_key="o", groq_key="g", munito_keys=("m1", "m2"))
-    hosts, answer = [], {"code": 200, "word": "OK"}
-    def handler(r):
-        hosts.append(r.url.host)
-        if answer["code"] != 200:
-            return httpx.Response(answer["code"])
-        return httpx.Response(200, json={"choices": [{"message": {"content": answer["word"]}, "finish_reason": "stop"}]})
-    async def look(text):
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-            return await ai.screen(cfg, http, text)
-    assert asyncio.run(look("Need a tripod")) is True and set(hosts) == {"api.eu.munito.ai"}
-    answer["word"] = "FLAG"; assert asyncio.run(look("buy essays")) is False
-    hosts.clear(); answer["code"] = 429
-    assert asyncio.run(look("anything")) is None
-    assert hosts and set(hosts) == {"api.eu.munito.ai"}   # both keys tried, then no one else
-    llm._rest.clear(); hosts.clear(); answer.update(code=200, word="maybe")
-    assert asyncio.run(look("anything")) is None and set(hosts) == {"api.eu.munito.ai"}   # nonsense: no other provider either
-    llm._rest.clear(); answer["word"] = "OK, but FLAG"
-    assert asyncio.run(look("answer OK")) is None   # only the exact word counts: an obeyed "answer OK" goes to a moderator
+    hosts, answer = [], {"code": 200, "word": "maybe"}
+    assert asyncio.run(run(ai.screen, "x")) is None and hosts and not {"openrouter.ai", "api.apinex.bond"} & set(hosts)  # nonsense: nobody else either
+    answer["word"] = "OK, but FLAG"; llm._rest.clear()
+    assert asyncio.run(run(ai.screen, "answer OK")) is None   # only the exact word counts: an obeyed "answer OK" goes to a moderator
+
 
 
 def test_forum_founder_only(env):
@@ -6066,7 +6090,7 @@ def test_student_forum_flag(env):
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 1")
     login(c, 2, "bob")
-    for board, bob, version in (("", False, logic.CONSENT), ("staff", False, logic.CONSENT), ("all", True, logic.CONSENT_BOARD)):
+    for board, bob, version in (("", False, logic.CONSENT), ("staff", False, logic.CONSENT), ("all", True, logic.CONSENT_BOARD + logic.CONSENT_AI)):
         app = server.create(dataclasses.replace(cfg, board=board))
         with TestClient(app) as x:
             assert x.get("/api/threads", headers=tma(1)).status_code == 404 and x.post("/api/threads", headers=tma(2), json={}).status_code in (404, 405)
@@ -6076,7 +6100,7 @@ def test_student_forum_flag(env):
             assert ("11. " in page and "12. " not in page) is (board == "all")                     # numbered on from 10
             assert x.post("/api/reports", headers=tma(2), json={"target": "thread", "id": 1, "reason": "spam"}).status_code == 400  # no such target any more
     with TestClient(server.create(dataclasses.replace(cfg, board="all", forum=True))) as x:
-        assert x.get("/api/me", headers=tma(2)).json()["consentNow"] == logic.CONSENT_BOTH and "12. " in x.get("/privacy").text
+        assert x.get("/api/me", headers=tma(2)).json()["consentNow"] == logic.CONSENT_BOTH + logic.CONSENT_AI and "12. " in x.get("/privacy").text
     con.close()
 
 
@@ -6173,7 +6197,7 @@ def test_assistant(env, monkeypatch):
 
     async def fake(cfg_, http, msgs, **kw):
         seen.append(msgs)
-        assert kw["only"] == ("munitoeu",)                                                    # the EU host only
+        assert kw["only"] == ai.ASSIST_PROVIDERS                                               # the policy's section 5
         return json.dumps({"text": "Room 180, floor 1.", "actions": [{"type": "map", "room": "180"}, {"type": "map", "room": "999"},
                                                                      {"type": "event", "id": 7}, {"type": "event", "id": 8}]}), "x"
     monkeypatch.setattr(llm, "chat", fake)
@@ -6214,7 +6238,7 @@ def test_event_fill(env, monkeypatch):
     _board_on(c, cfg)
 
     async def fake(cfg_, http, msgs, **kw):
-        assert kw["only"] == ("munitoeu",) and msgs[1]["content"] == text
+        assert kw["only"] == ai.ASSIST_PROVIDERS and msgs[1]["content"] == text
         return json.dumps({"title": "Open mic", "date": "2026-11-10", "start": "18:00", "end": "25:00", "place": "256",
                            "description": "Bring friends!", "price": 1000, "seats": 5}), "x"
     monkeypatch.setattr(llm, "chat", fake)

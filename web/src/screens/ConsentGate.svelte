@@ -21,7 +21,7 @@
   import { session } from '../lib/state/session.svelte';
   import { t, i18n, type Key } from '../lib/i18n/index.svelte';
   import { haptic, openLink } from '../lib/tg';
-  import { CONSENT_BOARD, CONSENT_BOTH, CONSENT_FCH, CONSENT_TGC, CONSENT_VERSION } from '../lib/legal';
+  import { CONSENT_AI, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FCH, CONSENT_TGC, CONSENT_VERSION } from '../lib/legal';
 
   let busy = $state(false), done = $state(false), seal: HTMLElement;
   // what's new in the version asked, one short line each with its mark: v3 alone, the find-people forum (v4), the
@@ -33,14 +33,17 @@
     ['consent.textBoard', [[EyeOff, 'accent'], [Cpu, 'warning'], [Clock, 'success'], [ThumbsUp, 'danger']]],
     ['consent.textTgc', [[TelegramMark, 'accent'], [Cpu, 'warning']]],
     ['consent.textFch', [[TelegramMark, 'accent'], [EyeOff, 'success'], [Cpu, 'warning']]],
+    ['consent.textAi', [[Cpu, 'warning']]],
   ];
   // the channel's comments add "+tgc1" to whichever version (server logic/account.py CONSENT_TGC), its posts "+fch1"
-  // after that (CONSENT_FCH): their lines, on top of the base's
-  const fch = $derived(session.policy.endsWith(CONSENT_FCH));
-  const q = $derived(fch ? session.policy.slice(0, -CONSENT_FCH.length) : session.policy);
+  // after that (CONSENT_FCH), the AI providers "+ai1" last (CONSENT_AI): their lines, on top of the base's
+  const ai = $derived(session.policy.endsWith(CONSENT_AI));
+  const noAi = $derived(ai ? session.policy.slice(0, -CONSENT_AI.length) : session.policy);
+  const fch = $derived(noAi.endsWith(CONSENT_FCH));
+  const q = $derived(fch ? noAi.slice(0, -CONSENT_FCH.length) : noAi);
   const tgc = $derived(q.endsWith(CONSENT_TGC));
   const p = $derived(tgc ? q.slice(0, -CONSENT_TGC.length) : q);
-  const asked = (k: Key) => k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.text' ? p === CONSENT_VERSION
+  const asked = (k: Key) => k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.text' ? p === CONSENT_VERSION
     : k === 'consent.textForum' ? p !== CONSENT_VERSION && p !== CONSENT_BOARD : p === CONSENT_BOARD || p === CONSENT_BOTH;
   // one card per section asked (owner, Nov 1: the lines read as one list, not by section)
   const groups = $derived(PARTS.filter(([k]) => asked(k)).map(([k, marks]) =>
