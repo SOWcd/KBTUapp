@@ -1,18 +1,17 @@
 <script lang="ts">
-  // KBTU's anthem, to listen to and learn (Oct 30: the volunteers learn it for the Oct 31 initiation). The words in big
-  // type, the Kazakh chorus on a soft band after each verse; the player stays at the bottom while they scroll, as in
-  // Apple Music's lyrics. One audio element, made on the first tap (iOS plays only from a tap; nothing loads before it),
-  // paused as the sheet leaves.
-  // Playing, the words follow the song (lib/lyrics.ts): the line being sung bright and a little larger, the rest dimmed,
-  // and in it word by word, as Apple Music's karaoke: the words sung lit, the one being sung filling from the left, the
-  // rest of the line dim (the clock read each frame while it plays); a pause as three dots filling before the next line; the page keeps that line in its upper third (a hand scrolling it
-  // wins for 3 s); a tap on any line plays from there.
+  // KBTU's anthem as a music player (owner, Nov 2: "like a real player"): a slow soft gradient behind, the emblem, the
+  // title and its three languages, then the words centred, one flow without stanza labels; the controls at the bottom.
+  // One audio element, made on the first tap (iOS plays only from a tap; nothing loads before it), paused as the sheet
+  // leaves.
+  // Playing, the words follow the song (lib/lyrics.ts), as Apple Music's lyrics: the emblem goes, the line being sung
+  // stays in the middle of the screen, bright and a little larger, its words lit one by one (the one being sung filling
+  // from the left; the clock read each frame while it plays); the lines around it dimmer and blurred the further they
+  // are. A hand scrolling the page wins for 3 s; a tap on any line plays from there.
   // The creator alone has an editor (the timer, from Admin): each line's time; a tap picks a line and plays it from a second before;
   // ±0.1 / ±0.5 s nudge it; "re-tap from this line" stamps it and the lines after it as they are sung; a line's end can
   // be marked where a pause follows it; Undo; Copy (TIMES for lib/i18n/anthem.ts, as JSON). His fixes stay on his phone
   // (a draft over the shipped TIMES) until they ship; nothing goes to the server.
   import { onMount, untrack } from 'svelte';
-  import { fade } from 'svelte/transition';
   import Music from '@lucide/svelte/icons/music';
   import Play from '@lucide/svelte/icons/play';
   import Pause from '@lucide/svelte/icons/pause';
@@ -32,9 +31,12 @@
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import { glass } from '../../ui/glass';
 
   // timing: opened from Admin (the creator's row): the editor; everywhere else the anthem is the same for everyone
   let { overlay, timing = false }: { overlay: Overlay; timing?: boolean } = $props();
+  // ponytail: two looks while the owner picks one (localStorage kb-anthem-look = 'b'); the other goes once he has
+  const LOOK = (() => { try { return localStorage.getItem('kb-anthem-look') === 'b' ? 'b' : 'a'; } catch { return 'a'; } })();
   let audio: HTMLAudioElement | null = null;
   let on = $state(false), waiting = $state(false), repeat = $state(false), held = $state(false);
   let cur = $state(0), dur = $state(211); // the file's length: the time left shows before it loads
@@ -167,14 +169,15 @@
   // the timings edited, the editor's re-tapping, a stop: the words catch up at once (not only on the next frame)
   $effect(() => { void [synced, cursor, len, dur, ...starts, ...ends]; untrack(() => sync(audio ? audio.currentTime : cur)); });
 
-  // the line (or the dots before the next one) stays in the page's upper third while the song plays; a hand scrolling
-  // the page wins for 3 s, then it comes back
+  // the line being sung (or, in a pause, the next one) stays in the middle of the page while the song plays; a hand
+  // scrolling the page wins for 3 s, then it comes back
   let userAt = 0, back = 0;
   const focus = $derived(lit >= 0 ? lit : gapAt);
   function follow(i: number) {
     const el = words.querySelector(`[data-i="${i}"]`), box = words.parentElement;
     if (!el || !box || performance.now() - userAt < 3000) return;
-    const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight * 0.3;
+    const r = el.getBoundingClientRect();
+    const top = box.scrollTop + r.top - box.getBoundingClientRect().top - (box.clientHeight - r.height) * (edit ? 0.3 : 0.45);
     box.scrollTo({ top: Math.max(0, top), behavior: still() ? 'auto' : 'smooth' });
   }
   $effect(() => { const f = focus; if (f >= 0 && (on || cursor >= 0)) untrack(() => follow(f)); });
@@ -252,31 +255,33 @@
 </script>
 
 <Sheet {overlay} tall title={t('anthem.title')} icon={Music} hold={() => edit} onhold={() => { edit = false; cursor = -1; }}>
-  <header class="hd">
-    <span class="art"><KbtuMark size={30} /></span>
+  <header class="hd look-{LOOK}" class:gone={synced && !edit}>
+    <span class="art"><KbtuMark size={LOOK === 'b' ? 72 : 52} /></span>
     <h2 class="t-h2">{t('anthem.title')}</h2>
+    <p class="sub">{LANG_FULL.kk} · {LANG_FULL.en} · {LANG_FULL.ru}</p>
   </header>
-  <div class="words" class:synced class:edit bind:this={words}>
+  <div class="words look-{LOOK}" class:synced class:edit bind:this={words}>
     {#each ANTHEM as part, i (i)}
-      <section class="part" class:chorus={part.kind === 'chorus'} lang={part.lang}>
-        <h3 class="t-cap" class:hush={gapAt === part.lines[0].i}>{part.n ? `${part.n} · ${LANG_FULL[part.lang]}` : t('anthem.chorus')}</h3>
-        {#each part.lines as line, j (j)}
-          {#if line.i < 0}<i class="gap"></i>
-          {:else}
-            {#if line.i === gapAt}<span class="dots" class:up={j === 0} aria-hidden="true" transition:fade={{ duration: 300 }}><i style:--k={0}></i><i style:--k={1}></i><i style:--k={2}></i></span>{/if}
+      <div class="part" lang={part.lang}>
+        {#each part.lines as line (line)}
+          {#if line.i >= 0}
             <button class="ln" class:now={line.i === lit} class:by={line.i === lit && cursor < 0} class:sel={edit && line.i === sel} data-i={line.i}
                     aria-current={line.i === lit || undefined} style:--d={focus >= 0 ? Math.min(4, Math.abs(line.i - focus)) : null} onclick={() => jump(line.i)}
                     >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w">{w}<span class="lit" aria-hidden="true"><span>{w}</span></span></span>{/each}{#if edit}<span class="tm num">{fine(starts[line.i])}{#if ends[line.i] != null}<br />⇥ {fine(ends[line.i]!)}{/if}</span>{/if}</button>
           {/if}
         {/each}
-      </section>
+      </div>
     {/each}
   </div>
   {#snippet footer()}
-    <div class="player">
-      <button class="play" class:off={!on} class:busy={on && waiting} onclick={toggle} aria-label={on ? t('anthem.pause') : t('anthem.play')} aria-busy={on && waiting}>
-        {#if on}<Pause size={24} fill="currentColor" />{:else}<Play size={24} fill="currentColor" />{/if}
+    <!-- in the footer, not the words: the page's scroll fade (a mask) would clip it to the words' box -->
+    <div class="aura look-{LOOK}" aria-hidden="true"><i></i><i></i><i></i></div>
+    {#snippet playBtn()}
+      <button class="play glass glass-pill" use:glass class:off={!on} class:busy={on && waiting} onclick={toggle} aria-label={on ? t('anthem.pause') : t('anthem.play')} aria-busy={on && waiting}>
+        {#if on}<Pause size={LOOK === 'a' ? 30 : 22} fill="currentColor" />{:else}<Play size={LOOK === 'a' ? 30 : 22} fill="currentColor" />{/if}
       </button>
+    {/snippet}
+    {#snippet seekBar()}
       <div class="seek" class:held role="slider" tabindex="0" aria-label={t('anthem.title')} aria-valuemin={0} aria-valuemax={Math.floor(dur)}
            aria-valuenow={Math.floor(cur)} aria-valuetext="{clock(cur)} / {clock(dur)}"
            onpointerdown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); held = true; scrub(e); }}
@@ -285,9 +290,21 @@
         <span class="track" bind:this={track}><i bind:this={fill} style:--p={cur / dur}></i></span>
         <span class="times num"><span>{clock(cur)}</span><span>−{clock(Math.floor(dur) - Math.floor(cur))}</span></span>
       </div>
-      <button class="rnd" class:on={repeat} onclick={loop} aria-pressed={repeat} aria-label={t('anthem.repeat')}><Repeat size={20} /></button>
-      {#if founder}<button class="rnd" class:on={edit} onclick={editor} aria-pressed={edit} aria-label={t('anthem.timing')}><Timer size={20} /></button>{/if}
-    </div>
+    {/snippet}
+    {#snippet side()}
+      <button class="rnd glass glass-pill" use:glass class:on={repeat} onclick={loop} aria-pressed={repeat} aria-label={t('anthem.repeat')}><Repeat size={20} /></button>
+    {/snippet}
+    {#snippet timer()}
+      {#if founder}<button class="rnd glass glass-pill" use:glass class:on={edit} onclick={editor} aria-pressed={edit} aria-label={t('anthem.timing')}><Timer size={20} /></button>
+      {:else if LOOK === 'a'}<i class="rnd-gap"></i>{/if}
+    {/snippet}
+    {#if LOOK === 'a'}
+      <!-- A: the scrubber across, then repeat · play · (the creator's timer), centred -->
+      <div class="player look-a">{@render seekBar()}<div class="ctl">{@render side()}{@render playBtn()}{@render timer()}</div></div>
+    {:else}
+      <!-- B: one glass capsule: play, the scrubber, repeat -->
+      <div class="player look-b glass glass-pill" use:glass>{@render playBtn()}{@render seekBar()}{@render side()}{@render timer()}</div>
+    {/if}
     {#if edit}
       {#if cursor >= 0}
         <div class="ed">
@@ -316,23 +333,53 @@
 </Sheet>
 
 <style>
-  .hd { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 8px 0 28px; text-align: center; }
-  .art { display: grid; place-items: center; width: 60px; height: 60px; border-radius: var(--r-m); background: var(--accent); color: var(--on-accent); }
+  /* the background: slow soft light in the app's colours behind the whole sheet (it doesn't scroll: the sheet's transform
+     holds the fixed layer). Soft by their own gradients (a blur filter cost a frame in three: measured), only moved by
+     transforms on composited layers; lowfx and reduced motion: still. A: three lights drifting; B: one slow turning
+     ring of colour over a darker floor */
+  /* the light is opaque: the sheet's own glass blur of the page behind would only be redone every frame for nothing
+     (it took 4 frames in 10 to 2 in 10 under a 4x slower CPU: measured) */
+  :global(.sheet:has(.aura)) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .aura { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--bg); }
+  .aura i { position: absolute; border-radius: 50%; will-change: transform; }
+  .aura.look-a i { width: 130vw; height: 130vw; max-width: 720px; max-height: 720px; opacity: 0.55; animation: drift 26s ease-in-out infinite alternate;
+    background: radial-gradient(closest-side, var(--c), transparent); }
+  .aura.look-a i:nth-child(1) { left: -55%; top: -25%; --c: var(--accent); }
+  .aura.look-a i:nth-child(2) { right: -60%; top: 10%; --c: var(--accent-2); animation-duration: 31s; animation-delay: -9s; }
+  .aura.look-a i:nth-child(3) { left: -35%; bottom: -45%; --c: var(--tile-pink); opacity: 0.3; animation-duration: 37s; animation-delay: -17s; }
+  @keyframes drift { 33% { transform: translate(18vw, 10vh) scale(1.15); } 66% { transform: translate(-8vw, 22vh) scale(0.9); } 100% { transform: translate(10vw, -6vh) scale(1.05); } }
+  .aura.look-b i:nth-child(1) { left: 50%; top: 34%; width: 170vmax; height: 170vmax; margin: -85vmax 0 0 -85vmax; opacity: 0.42;
+    background: conic-gradient(from 0deg, var(--accent), var(--accent-2), var(--tile-pink), var(--tile-teal), var(--accent)); animation: turn 60s linear infinite;
+    -webkit-mask-image: radial-gradient(closest-side, black, transparent); mask-image: radial-gradient(closest-side, black, transparent); }
+  .aura.look-b i:nth-child(2) { inset: 0; border-radius: 0; background: linear-gradient(180deg, transparent 30%, var(--bg) 92%); opacity: 0.85; }
+  .aura.look-b i:nth-child(3) { display: none; }
+  @keyframes turn { to { transform: rotate(360deg); } }
+  :global(html[data-theme='light']) .aura i { opacity: 0.3; }
+  :global(html[data-theme='light']) .aura.look-b i:nth-child(2) { opacity: 0.7; }
+  :global(html.lowfx) .aura i { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .aura i { animation: none; } }
 
-  .part { margin-bottom: 26px; }
-  .part h3 { margin-bottom: 10px; transition: opacity 300ms var(--ease); }
-  .part h3.hush { opacity: 0; } /* the dots take the label's place while a pause leads into its section */
-  /* big enough to sing from (20 px from a 400-px phone, 17 at 320); a line too long for the phone goes on under
-     itself, indented, the two halves even. Each line is a button: a tap plays from it */
-  .ln { position: relative; display: block; width: 100%; padding-left: 0.8em; text-indent: -0.8em; text-align: left;
-    font: 650 clamp(var(--fs-card), 5vw, calc(var(--fs-card) * 1.18))/1.4 var(--font-text); letter-spacing: -0.012em; text-wrap: balance;
-    transform-origin: 0 50%; transition: opacity 400ms var(--ease), transform 400ms var(--ease), filter 400ms var(--ease); }
-  /* playing, as Apple Music: the line being sung bright and a little larger; the lines around it fade and blur the
-     further they are (--d, 0..4, lines away; set once a line), so a few lines read and the rest is a soft hint; the page
-     glides to keep the sung line in its upper third (follow). Room below the last chorus, so its lines too come up */
-  .words.synced { padding-bottom: 40vh; }
-  .synced .ln { opacity: calc(0.4 - 0.07 * var(--d, 1)); filter: blur(calc(max(0, var(--d, 1) - 1) * 0.7px)); }
-  .synced .ln.now { opacity: 1; filter: none; transform: scale(1.04); }
+  /* the emblem, the title, the languages; playing, it fades and the page glides past it to the words */
+  .hd { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 18px 0 30px; text-align: center; transition: opacity 500ms var(--ease), transform 500ms var(--ease); }
+  .hd.gone { opacity: 0; transform: scale(0.94); }
+  .art { display: grid; place-items: center; width: 116px; height: 116px; margin-bottom: 10px; border-radius: var(--r-xl); background: var(--grad-accent); color: var(--on-accent);
+    box-shadow: 0 18px 40px -16px var(--accent); }
+  .hd.look-b .art { width: 188px; height: 188px; margin-bottom: 14px; }
+  .hd.look-b .t-h2 { font-size: var(--fs-title); }
+  .sub { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+
+  /* the words, centred, one flow; a part (a verse, a chorus) a little apart from the next */
+  .part { margin-bottom: 22px; }
+  .ln { position: relative; display: block; width: 100%; padding: 3px 0; text-align: center; text-wrap: balance;
+    font: 700 calc(var(--fs-card) * 1.3)/1.32 var(--font-text); letter-spacing: -0.016em;
+    transform-origin: 50% 50%; transition: opacity 400ms var(--ease), transform 400ms var(--ease), filter 400ms var(--ease); }
+  .look-b .ln { font: 780 calc(var(--fs-card) * 1.5)/1.24 var(--font-display); letter-spacing: -0.024em; padding: 5px 0; }
+  /* playing: the line being sung bright and a little larger; the lines around it fade and blur the further they are
+     (--d, 0..4 lines away; set once a line), a few read and the rest is a soft hint. Room above and below, so the
+     first and the last line too come to the middle */
+  .words.synced { padding-bottom: 46vh; }
+  .synced .ln { opacity: calc(0.42 - 0.075 * var(--d, 1)); filter: blur(calc(max(0, var(--d, 1) - 1) * 0.8px)); }
+  .synced .ln.now { opacity: 1; filter: none; transform: scale(1.05); will-change: transform; } /* its own layer: its words change, the blurred lines aren't repainted */
   .synced.edit .ln:not(.now) { opacity: 0.32; filter: none; } /* the creator reads every line */
   /* word by word in the line being sung: the words to come dim, the sung ones lit, the one being sung filling from the
      left with a soft edge. The fill is two transforms (a clipping box slid in by --f, the lit copy slid back by as much):
@@ -346,35 +393,27 @@
   .ln.by .w:global(.on) .lit { display: block; position: absolute; inset: 0 -0.4em 0 0; overflow: hidden; pointer-events: none;
     transform: translateX(calc((var(--f, 0) - 1) * 100%)); will-change: transform;
     -webkit-mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); mask-image: linear-gradient(90deg, black calc(100% - 0.4em), transparent); }
-  .lit > span { display: block; color: var(--text); transform: translateX(calc((1 - var(--f, 0)) * 100%)); will-change: transform; }
-  .gap { display: block; height: 14px; }
-  /* the chorus, the same words three times: set apart on a soft band the sheet's width (a card's padding broke its
-     lines on a phone), its label in the accent */
-  .chorus { margin-left: calc(-1 * var(--gutter)); margin-right: calc(-1 * var(--gutter)); padding: 16px var(--gutter) 18px; background: var(--surface); }
-  .chorus h3 { color: var(--accent-text); }
-  /* a pause (the intro, the breaks after the choruses): three dots where the next line starts, one lighting up after
-     another as it goes, breathing; no height of their own, nothing below moves */
-  .dots { position: relative; top: 0; display: flex; align-items: flex-end; gap: 7px; height: 0; padding-left: 2px; }
-  .dots.up { top: -12px; } /* a section's first line: on its label's row */
-  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text); transition: opacity 250ms linear; animation: breathe 2.4s ease-in-out infinite;
-    opacity: calc(0.25 + 0.75 * clamp(0, var(--g, 0) * 3 - var(--k), 1)); } /* --g: how far into the pause, set by sync() */
-  @keyframes breathe { 50% { transform: scale(1.15); } }
-  :global(html.lowfx) .dots i { animation: none; }
+  .lit > span { display: block; text-align: left; color: var(--text); transform: translateX(calc((1 - var(--f, 0)) * 100%)); will-change: transform; }
   :global(html.lowfx) .synced .ln { filter: none; }
   @media (prefers-reduced-motion: reduce) {
-    .synced .ln { filter: none; } .synced .ln.now { transform: none; } .dots i { animation: none; }
+    .synced .ln { filter: none; } .synced .ln.now, .hd.gone { transform: none; }
     .ln.by .w:global(.on) { color: var(--text); } .ln.by .w:global(.on) .lit { display: none; } /* a word lights whole */
   }
 
   /* the creator's editor: each line's time at its end, the picked line on an accent wash */
-  .edit .ln { padding-right: 76px; }
+  .edit .ln { padding-right: 76px; text-align: left; }
   .edit .ln.now { transform: none; } /* the times stay put */
   .tm { position: absolute; top: 0.45em; right: 0; text-indent: 0; text-align: right; font: 600 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
   .ln.sel { opacity: 1; background: var(--accent-soft); box-shadow: 0 0 0 6px var(--accent-soft); border-radius: var(--r-xs); }
   .ln.sel .tm { color: var(--accent-text); }
 
-  .player { display: flex; align-items: center; gap: 14px; }
-  .play { position: relative; flex: none; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); }
+  /* the controls float over the background: the sheet's footer without its line */
+  :global(.foot:has(> .player)) { border-top-color: transparent; }
+  .player.look-a { display: flex; flex-direction: column; gap: 10px; }
+  .ctl { display: flex; align-items: center; justify-content: center; gap: 28px; padding-bottom: 2px; }
+  .player.look-b { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 8px; border-radius: var(--r-full); }
+  .play { position: relative; flex: none; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: var(--text); }
+  .look-b .play { width: 52px; height: 52px; background: var(--grad-accent); color: var(--on-accent); }
   .off :global(svg) { translate: 2px 0; } /* the triangle's weight sits left of its box */
   /* buffering: a thin ring around the button, no layout change */
   .play::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); opacity: 0; transition: opacity var(--t-base); }
@@ -383,16 +422,22 @@
   @media (prefers-reduced-motion: reduce) { .play.busy::after { animation: none; } }
 
   .seek { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 0 4px; touch-action: none; cursor: pointer; outline: none; }
+  .look-b .seek { gap: 6px; padding: 10px 0 2px; }
   .track { position: relative; height: 5px; border-radius: var(--r-full); background: var(--line-2); overflow: hidden; transition: transform var(--t-fast) var(--ease); }
   .held .track { transform: scaleY(1.6); }
   .seek:focus-visible .track { box-shadow: 0 0 0 3px var(--accent-soft); }
-  .track i { position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); } /* a transform: set each frame, never laid out */
+  .track i { position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); will-change: transform; } /* a transform: set each frame, never laid out */
   .times { display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
 
   /* a round icon button: repeat, the creator's timer, Undo, Copy, the line's end, done */
   .rnd { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text-3);
     transition: transform 450ms var(--ease-bounce), background-color var(--t-base), color var(--t-base), opacity var(--t-base); }
   .rnd.on { background: var(--accent-soft); color: var(--accent-text); }
+  .player .rnd { width: 48px; height: 48px; color: var(--text-2); }
+  .player.look-b .rnd { width: 40px; height: 40px; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .player.look-b .rnd::before, .player.look-b .rnd::after { display: none; }
+  .player .rnd.on { color: var(--accent-text); }
+  .rnd-gap { flex: none; width: 48px; }
   .rnd:disabled, .nud:disabled, .re:disabled { opacity: 0.35; }
 
   .ed { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
