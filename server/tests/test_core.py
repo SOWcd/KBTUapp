@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, video
+from kbtu import calpage, casting, app as server, auth, bot, config, db, logic, media, receipt, texts, tgc, video
 
 BOT = "123:test"
 
@@ -3245,9 +3245,11 @@ def test_events_channel(env, monkeypatch):
         sent.append(json.loads(request.content))
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 71}})
 
-    async def go():
+    async def go():  # the wait for the post's id runs beside the ears (tgc.spawn), one copy after the other
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            return await bot.hear(cfg2, http, 0)
+            n = await bot.hear(cfg2, http, 0)
+            await tgc.settle()
+            return n
     asyncio.run(go())
     assert len(sent) == 1 and sent[0]["chat_id"] == -100 and sent[0]["reply_parameters"] == {"message_id": 70}  # once
     assert c.get(f"/api/events/{e['id']}", headers=tma(20)).json()["discuss"] == "https://t.me/kbtuevents/7?comment=71"

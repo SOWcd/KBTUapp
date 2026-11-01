@@ -205,7 +205,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
             WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
         out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1]}, "count": r["n"],
                     "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
-    return out
+    return sorted(out + tgcomments.queue_items(con, v), key=lambda x: x["at"])  # and the channel's comments in Telegram
 
 
 def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[str]:
@@ -250,7 +250,7 @@ def taken_down(con, v: Viewer) -> list[dict]:
     can be undone (§2 "hide / restore"). Things their own authors or clubs removed aren't here — that was their choice."""
     _mod(v)
     out = []
-    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'thread_hide') AND at > ?
+    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'thread_hide', 'tg_confirm') AND at > ?
             AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)
             GROUP BY target ORDER BY MAX(at) DESC LIMIT 50""", core.now() - 30 * 86400):  # undone ones stay undone
         kind, _, ref = a["target"].partition(":")
@@ -265,6 +265,9 @@ def taken_down(con, v: Viewer) -> list[dict]:
         elif kind in ("thread", "reply"):
             w = threads.words(con, kind, tid, hidden=True)
             x = {"text": w[0]} if w else None
+        elif kind == "tgc":  # a comment in the channel's Telegram group (tgcomments.py)
+            w = tgcomments.taken(con, tid)
+            x = {"text": w} if w is not None else None
         elif kind == "user":  # what the person wrote about themselves
             k = one(con, "SELECT data FROM takedowns WHERE target = 'user' AND target_id = ? ORDER BY id DESC", tid)
             d = json.loads(k["data"]) if k else None
@@ -292,6 +295,8 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             if threads.owner_of(con, target, tid) == v.id:  # their own: another moderator decides
                 raise ApiError("forbidden")
             n = threads.put_back(con, target, tid)
+        elif target == "tgc":  # Telegram can't bring it back: its author gets his words in DM
+            n = tgcomments.restore(con, v, tid)
         elif target in ("photo", "user"):
             k = one(con, "DELETE FROM takedowns WHERE id = (SELECT MAX(id) FROM takedowns WHERE target = ? AND target_id = ?) RETURNING *", target, tid)
             n = 1 if k else 0
@@ -333,4 +338,4 @@ from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import _event, notify  # noqa: E402
 from .teams import remove  # noqa: E402
-from . import threads  # noqa: E402
+from . import tgcomments, threads  # noqa: E402

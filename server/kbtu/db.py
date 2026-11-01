@@ -934,6 +934,52 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);"""),
     # an award link many may open until it expires, one award each (admin claim new: the volunteers' badge in their chat)
     (99, "ALTER TABLE grant_links ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
+    # the forum channel's comments (TG_COMMENTS_CHAT, logic/tgcomments.py): a stranger's deleted comment kept for him alone
+    # an hour; strangers warned once, then banned (90 days); reported comments with each reporter's snapshot (30 days);
+    # those whose /report a moderator closed for abuse (until an admin reopens it or the account goes)
+    (100, """CREATE TABLE tgc_saved (
+      tg_id INTEGER PRIMARY KEY,
+      body  TEXT NOT NULL,
+      link  TEXT,
+      at    INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE tgc_strangers (
+      tg_id     INTEGER PRIMARY KEY,
+      seen_at   INTEGER NOT NULL,
+      warned_at INTEGER,
+      banned_at INTEGER
+    ) STRICT;
+    CREATE INDEX tgc_strangers_seen ON tgc_strangers(seen_at);
+    CREATE TABLE tgc_comments (
+      id         INTEGER PRIMARY KEY,
+      chat_id    INTEGER NOT NULL,
+      msg_id     INTEGER NOT NULL,
+      author_id  INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      author_tg  INTEGER NOT NULL,
+      body       TEXT NOT NULL,                         -- the latest text seen (a report's snapshot, an edit)
+      link       TEXT,
+      status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'queued', 'deleting', 'deleted', 'kept', 'restored')),
+      ai         TEXT CHECK (ai IN ('ok', 'flag', 'none')),
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores
+      shown      INTEGER NOT NULL DEFAULT 0 CHECK (shown IN (0, 1)),   -- deleted, and its author (whom the bot can't write to) saw it in the app
+      UNIQUE (chat_id, msg_id)
+    ) STRICT;
+    CREATE TABLE tgc_reports (
+      comment_id  INTEGER NOT NULL REFERENCES tgc_comments(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,                        -- the text as this reporter saw it
+      at          INTEGER NOT NULL,
+      outcome     TEXT CHECK (outcome IN ('confirmed', 'overturned', 'abuse')),
+      PRIMARY KEY (comment_id, reporter_id)
+    ) STRICT;
+    CREATE INDEX tgc_reports_by ON tgc_reports(reporter_id, at);
+    CREATE TABLE tgc_closed (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL
+    ) STRICT;"""),
 ]
 
 

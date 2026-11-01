@@ -62,7 +62,11 @@ export type Joiner = PersonRef & { telegram: string | null };
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
-export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply'; id: Id; text: string; at: Ts }
+export interface TakenDown { target: 'comment' | 'post' | 'event' | 'photo' | 'user' | 'thread' | 'reply' | 'tgc'; id: Id; text: string; at: Ts }
+/** My own comment the bot deleted in the forum channel's Telegram group (POST /api/me/tg-comment): to me alone. */
+export interface TgComment { body: string; link: string | null; student: boolean; removed?: boolean }
+/** Someone whose /report in Telegram a moderator closed (the admin's switch reopens it). */
+export interface TgcClosed { person: PersonRef; at: Ts }
 /** The admin panel's numbers: online (10 min), active day/week/month, totals, new today; 30 nightly rows. */
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number;
   days: { day: number; active: number; new: number; students: number }[];
@@ -83,8 +87,11 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
 export interface AssistReply { text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'thread'; id: Id }; count: number; reasons: Partial<Record<ReportReason, number>>;
-  notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts }
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'thread' | 'reply' | 'tgc'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'thread' | 'tgc'; id: Id; link?: string | null }; count: number; reasons: Partial<Record<ReportReason, number>>;
+  notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
+  // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
+  // accuracy and days since Microsoft verified them, never a name
+  removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; reporters?: { right: number; wrong: number; days: number | null }[] }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }
@@ -205,6 +212,7 @@ export interface Me {
   msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the student forum is open to me (the server's BOARD switch)
+  tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)

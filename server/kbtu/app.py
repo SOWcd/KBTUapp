@@ -224,11 +224,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the policy version in force: its forum parts count only with the forums on (legal_page shows them then)
     policy = {(False, False): logic.CONSENT, (True, False): logic.CONSENT_FORUM, (False, True): logic.CONSENT_BOARD,
               (True, True): logic.CONSENT_BOTH}[(cfg.forum, cfg.board == "all")]
+    # the channel's comments (TG_COMMENTS_CHAT) add their section: whatever the version, everyone agrees once more
+    policy += logic.CONSENT_TGC if cfg.tgc_chat else ""
     app.state.policy = policy
 
     @app.get("/api/me")
     def get_me(con: Con, v: Me):
-        return logic.me(con, v) | {"consentNow": policy, "board": board_on(app.state.cfg, v)}
+        return logic.me(con, v) | {"consentNow": policy, "board": board_on(app.state.cfg, v),
+                                   **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {})}
 
     @app.patch("/api/me")
     def patch_me(con: Con, v: Me, body: dict = Body(...)):
@@ -1157,7 +1160,25 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/reports/{target}/{tid}", status_code=204)
     def resolve_report(target: str, tid: int, con: Con, v: Me, body: dict = Body(...)):
+        if target == "tgc":  # a comment in the channel's Telegram group: remove, keep, or keep and call the reports abuse
+            logic.tgcomments.resolve(con, v, tid, "remove" if body.get("remove") else "abuse" if body.get("abuse") else "keep")
+            return
         media.drop(photos, logic.resolve_report(con, v, target, tid, bool(body.get("remove"))))
+
+    # the channel's comments in Telegram (logic/tgcomments.py): whose /report is closed, the admin's switch to reopen it
+    @app.get("/api/admin/tgc-closed")
+    def tgc_closed(con: Con, v: Me):
+        return logic.tgcomments.closed(con, v)
+
+    @app.delete("/api/admin/tgc-closed/{uid}", status_code=204)
+    def tgc_reopen(uid: int, con: Con, v: Me):
+        logic.tgcomments.reopen(con, v, uid)
+
+    @app.post("/api/me/tg-comment")
+    def tg_comment(con: Con, v: Me):
+        """My own comment the bot deleted in the channel's group, under an hour old: shown to the Telegram account that
+        wrote it (the signed initData), never by a link; null for anyone else, the same as for nothing."""
+        return logic.tgcomments.take_saved(con, v)
 
     @app.post("/api/events/{eid}/seats")
     def add_seats(eid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -1640,7 +1661,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         lang = lang if lang in ("ru", "kk", "en") else "ru"
         body = (legal / f"{doc}.{lang}.html").read_text(encoding="utf-8").replace('href="privacy"', f'href="privacy?lang={lang}"')
         # each forum's part (and the version line that names it) only with that forum on for everyone
-        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all")):
+        # the channel's comments section comes last: its number follows the forums' (11 with neither)
+        body = body.replace("{{tgcn}}", str(11 + cfg.forum + (cfg.board == "all")))
+        for part, on in (("forum", cfg.forum), ("board", cfg.board == "all"), ("tgc", bool(cfg.tgc_chat))):
             off = f"no{part}" if on else part
             body = re.sub(f"<!--/?(?:no)?{part}-->\\n?", "", re.sub(f"<!--{off}-->.*?<!--/{off}-->\\n?", "", body, flags=re.S))
         langs = " ".join(f'<a href="?lang={x}"{" class=on" if x == lang else ""}>{x.upper()}</a>' for x in ("ru", "kk", "en"))

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import httpx
 
-from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, userbot, video
+from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, tgc, userbot, video
 from .config import Config
 from .logic import now, one, rows
 
@@ -102,6 +102,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     def listed(evs):  # a line per event, the first one opened
         text, button = texts.bot_message(lang, kind, list="\n".join(f"• {logic.title_in(e, lang)}, {texts.when(e['starts_at'], lang)}" for e in evs))
         return text, button, f"ev_{evs[0]['id']}"
+    if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
+        return tgc.render(con, m, lang)
     if kind == "id_clash":  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
@@ -613,6 +615,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
         userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
+        await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
         if logic._once(con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
@@ -967,13 +970,30 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_LINKED.format(title=html.escape(e["title"])), "parse_mode": "HTML"})
 
 
+def _event_copy(cfg: Config, msg: dict) -> bool:
+    """Telegram's copy of an events channel post in its discussion group."""
+    channel = cfg.events_channel.lstrip("@").lower()
+    return bool(channel) and bool(msg.get("is_automatic_forward")) and str((msg.get("sender_chat") or {}).get("username") or "").lower() == channel
+
+
+async def _discussion_bg(cfg: Config, http: httpx.AsyncClient, msg: dict) -> None:
+    """_discussion beside the ears (tgc.spawn): its wait for the post's id never holds up the batch (review 2)."""
+    con = db.connect(cfg.db_path)
+    try:
+        await _discussion(cfg, http, con, msg)
+    except Exception:  # noqa: BLE001
+        log.exception("discussion")
+    finally:
+        con.close()
+
+
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
     """The channel's discussion group: Telegram forwards each post there by itself, and the comments are replies to that
     copy. Under an event's post the bot writes the first comment, the rules and "Sign up", and keeps its link for the
     app's "Discuss". True: the message was such a copy. Needs the bot in that group, as an admin
     (a bot that isn't one doesn't see the group's messages)."""
     channel = cfg.events_channel.lstrip("@").lower()
-    if not channel or not msg.get("is_automatic_forward") or str((msg.get("sender_chat") or {}).get("username") or "").lower() != channel:
+    if not _event_copy(cfg, msg):
         return False
     post = int((msg.get("forward_origin") or {}).get("message_id") or msg.get("forward_from_message_id") or 0)
     # the copy can come before post_channel, running beside us, has stored the post's id: give it a moment
@@ -1012,7 +1032,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     """One long poll: answers what came and returns the next offset (the same one when the round failed)."""
     try:
         r = await http.get(f"https://api.telegram.org/bot{cfg.bot_token}/getUpdates",
-                           params={"offset": offset, "timeout": WAIT, "allowed_updates": '["message","callback_query","chat_join_request","my_chat_member"]'}, timeout=WAIT + 10)
+                           params={"offset": offset, "timeout": WAIT, "allowed_updates": '["message","edited_message","callback_query","chat_join_request","my_chat_member"]'}, timeout=WAIT + 10)
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("ears: %s", type(exc).__name__)
@@ -1024,10 +1044,18 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
         return offset
     con = db.connect(cfg.db_path)
     try:
+        # the forum channel's comments first: a stranger's comment is gone before anything slow in the batch runs
+        if mine := [u for u in answer["result"] if tgc.ours(cfg, u)]:
+            try:
+                await tgc.gate(cfg, http, con, mine)
+            except Exception as exc:  # noqa: BLE001 - the rest of the batch still goes
+                log.warning("tgc: %s", type(exc).__name__)
         for upd in answer["result"]:
             msg = {}
             try:  # all of it: a locked database even in the ban check replayed the whole batch
                 offset = upd["update_id"] + 1
+                if "edited_message" in upd or tgc.ours(cfg, upd):  # edits matter only in the forum's group (above)
+                    continue
                 msg = upd.get("message") or {}
                 sender = ((upd.get("callback_query") or upd.get("chat_join_request") or msg).get("from") or {}).get("id")
                 group = (msg.get("chat") or {}).get("type") in ("group", "supergroup")  # a group's housekeeping serves everyone in it
@@ -1043,7 +1071,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _member(cfg, http, con, upd["my_chat_member"])
                     continue
                 if (msg.get("chat") or {}).get("type") in ("group", "supergroup"):  # an event's group: only its linking matters
-                    if not await _discussion(cfg, http, con, msg):
+                    if _event_copy(cfg, msg):
+                        tgc.spawn(_discussion_bg(cfg, http, msg))
+                    else:
                         await _group(cfg, http, con, msg)
                     continue
                 # a receipt is taken even if it waited (the hold decides); a stale hello isn't answered (FRESH)

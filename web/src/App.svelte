@@ -265,6 +265,7 @@
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }   // the bot: "keep my account"
+    if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
@@ -371,9 +372,17 @@
       if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
       if (session.me?.oversee) void loadRegistry();
     });
-    if (st && !wasStudent && booted) moment(celebrate);
+    if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
   });
+  // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
+  // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
+  async function tgComment() {
+    if (!session.tgComment) return;
+    session.tgComment = false;
+    const c = await api.tgComment().catch(() => null);
+    if (c) return lazy(() => import('./screens/sheets/TgCommentSheet.svelte'), { c });
+  }
   // each level is one launch moment; "First 500" isn't one: it's the lanyard's drop on the first Profile open (Hero)
   async function celebrate() {
     const me = session.me, next = me?.unlocked?.find((x) => x.code !== 'first50');
@@ -455,10 +464,10 @@
     Promise.all([loadMe(), loadAfisha()]).then(() => {
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
-      if (!tg.startParam && !session.me?.msPending && !gated) greet(); // (not over the policy gate's button)
+      if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (nor over my Telegram comment's card) // (not over the policy gate's button)
       deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmBoard, 1800);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
-      moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
+      moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
     const tick = setInterval(() => (clock = nowTs()), 30000);
 

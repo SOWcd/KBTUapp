@@ -17,7 +17,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { ago } from '../../lib/time';
-  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown } from '../../lib/api';
+  import { api, ApiErr, type AdminDay, type AdminStats, type ClubApplication, type ReportItem, type ReportReason, type TakenDown, type TgcClosed } from '../../lib/api';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { openLink, haptic } from '../../lib/tg';
@@ -80,14 +80,27 @@
   let reports = $state<ReportItem[] | null>(null);
   $effect(() => { api.reports().then((l) => (reports = l)).catch(() => (reports = [])); });
   const reasons = (r: ReportItem) => (Object.entries(r.reasons) as [ReportReason, number][]).map(([k, n]) => t(`rep.${k}`) + (n > 1 ? ` ×${n}` : '')).join(', ');
-  async function resolve(r: ReportItem, remove: boolean) {
+  async function resolve(r: ReportItem, remove: boolean, abuse = false) {
     try {
-      await api.resolveReport(r.target, r.id, remove);
+      await api.resolveReport(r.target, r.id, remove, abuse || undefined);
       reports = (reports ?? []).filter((x) => !(x.target === r.target && x.id === r.id));
       if (remove) void loadDown();
+      if (abuse) void loadClosed();
       void loadMe(); // the count on the Admin row
-      haptic.ok(); say(remove ? t('adm.removed') : t('adm.kept'), 'raising_hands_3d_default');
+      haptic.ok(); say(abuse ? t('adm.tgcAbused') : remove ? t('adm.removed') : r.removed ? t('adm.restored') : t('adm.kept'), 'raising_hands_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
+  }
+  // a Telegram comment's line: the AI's word and each reporter as right / wrong and days since sign-in, never who
+  const tgcLine = (r: ReportItem) => [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', ago(r.at)].filter(Boolean).join(' · ');
+  const tgcWho = (r: ReportItem) => (r.reporters ?? []).map((x) => `${x.right}/${x.wrong}${x.days != null ? ` · ${x.days}` : ''}`).join(',  ');
+  // ---- whose Telegram /report a moderator closed for abuse: the admin's switch gives it back ----
+  let closedR = $state<TgcClosed[] | null>(null);
+  let closedOpen = $state(false);
+  const loadClosed = () => (admin ? api.tgcClosed().then((l) => (closedR = l)).catch(() => (closedR = [])) : Promise.resolve());
+  $effect(() => { void loadClosed(); });
+  async function reopen(x: TgcClosed) {
+    try { await api.tgcReopen(x.person.id); closedR = (closedR ?? []).filter((y) => y.person.id !== x.person.id); haptic.ok(); say(t('adm.tgcReopened'), 'raising_hands_3d_default'); }
+    catch { haptic.error(); say(t('common.error'), 'pleading_face_3d'); }
   }
   // ---- a wrong call undone: what I took down from the reports in the last 30 days, folded under its count ----
   let down = $state<TakenDown[] | null>(null);
@@ -128,6 +141,7 @@
     else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]); // no post screen: the row has its words, the thread its talk
     else if (r.target === 'ask') sheets.forum(r.id);
     else if (r.target === 'thread' || r.target === 'reply') sheets.thread(r.where.id); // the student forum: the thread it's in
+    else if (r.target === 'tgc' && r.where.link) openLink(r.where.link); // the channel's comments in Telegram
   }
 </script>
 
@@ -206,6 +220,21 @@
     <section class="reps">
       <h4 class="rh"><Flag size={14} />{tn('adm.reports', reports.length)}</h4>
       {#each reports as r (r.target + r.id)}
+        {#if r.target === 'tgc'}
+          <!-- a Telegram comment: removed by the reports and the AI (a moderator confirms or restores), or still up -->
+          <div class="rep">
+            <span class="tag" class:gone={r.removed}>{r.removed ? t('adm.tgcRemoved') : t('adm.tgcUp')}</span>
+            <button class="rt" onclick={() => look(r)}><b class="clamp-2">{r.text}</b><i>{t('adm.rep.tgc')} · {tn('adm.reports', r.count)} · {tgcLine(r)}</i></button>
+            <p class="rw">{t('adm.tgcWho')} {tgcWho(r)}</p>
+            <!-- the text as a reporter saw it before an edit (never who) -->
+            {#each r.notes ?? [] as n, i (i)}<p class="rn selectable">{n.note}</p>{/each}
+            <div class="ra">
+              <Button kind="danger" size="s" onclick={() => resolve(r, true)}>{r.removed ? t('adm.tgcConfirm') : t('adm.takeDown')}</Button>
+              <Button kind="neutral" size="s" onclick={() => resolve(r, false)}>{r.removed ? t('adm.tgcRestore') : t('adm.keep')}</Button>
+              <Button kind="plain" size="s" onclick={() => resolve(r, false, true)}>{t('adm.tgcAbuse')}</Button>
+            </div>
+          </div>
+        {:else}
         <div class="rep">
           <button class="rt" onclick={() => look(r)}>{#if r.target === 'photo'}<img class="rph" src={r.text} alt="" />{:else}<b class:clamp-2={r.target !== 'post'}>{r.text}</b>{/if}<i>{t(`adm.rep.${r.target}`)} · {reasons(r)} · {ago(r.at)}</i></button>
           <!-- what the reporters wrote (never who): newest first -->
@@ -215,6 +244,7 @@
             <Button kind="neutral" size="s" onclick={() => resolve(r, false)}>{t('adm.keep')}</Button>
           </div>
         </div>
+        {/if}
       {/each}
     </section>
   {/if}
@@ -245,9 +275,22 @@
       <div class="chl surface" transition:fold>{#each down as x (x.target + x.id)}<div class="chr">{#if x.target === 'photo'}<img class="th" src={x.text} alt="" />{/if}<span class="ellipsis">{x.target === 'photo' ? '' : x.text}<i>{t(`adm.rep.${x.target}`)} · {ago(x.at)}</i></span><button class="undo" onclick={() => undo(x)}>{t('adm.restore')}</button></div>{/each}</div>
     {/if}
   {/if}
+  {#if closedR?.length}
+    <!-- whose Telegram /report a moderator closed for abuse: the admin gives it back -->
+    <div class="rows surface tgc-closed">
+      <button class="r" aria-expanded={closedOpen} onclick={() => (closedOpen = !closedOpen)}><span class="ic"><Flag size={20} /></span><span class="lb">{t('adm.tgcClosed')}</span><i class="n num">{closedR.length}</i><span class="chev"><ChevronRight size={18} /></span></button>
+    </div>
+    {#if closedOpen}
+      <div class="chl surface" transition:fold>{#each closedR as x (x.person.id)}<div class="chr"><Avatar person={x.person} size={32} /><span class="ellipsis">{x.person.name}<i>{ago(x.at)}</i></span><button class="undo" onclick={() => reopen(x)}>{t('adm.tgcReopen')}</button></div>{/each}</div>
+    {/if}
+  {/if}
 </Sheet>
 
 <style>
+  .tag { display: inline-block; margin-bottom: 6px; padding: 3px 8px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 650 var(--fs-cap)/1.25 var(--font-text); }
+  .tag.gone { background: var(--danger); color: var(--on-accent); }
+  .rw { margin: 6px 0 0; font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); }
+  .tgc-closed { margin-top: 8px; }
   .sh { display: flex; align-items: center; gap: 8px; margin: 20px 2px 8px; }
   .cnt { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font: 700 12px/20px var(--font-text); text-align: center; letter-spacing: 0; }
   .clear { display: flex; align-items: center; gap: 10px; padding: 14px; color: var(--text-2); font: 600 14.5px/1.3 var(--font-text); }

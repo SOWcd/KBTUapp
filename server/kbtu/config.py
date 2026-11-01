@@ -28,6 +28,9 @@ class Config:
     # the student forum (logic/threads.py): BOARD=1 every student (the policy's section 12 in force, everyone agrees
     # again), BOARD=staff the app's staff only to try it (no new policy version: nobody else is asked anything)
     board: str = ""
+    # the forum channel's discussion group (its chat id, -100...): only verified students may comment there (tgc.py,
+    # logic/tgcomments.py); 0: all of it off, the policy's section and its consent version too
+    tgc_chat: int = 0
     # the userbot (PLAN 86: an org's main channel into its news, userbot.py): an old Telegram account's StringSession
     # and the api pair it was made with (tools/userbot_login.py); any of the three empty: off, nothing else changes
     tg_api_id: str = ""
@@ -76,6 +79,7 @@ def load() -> Config:
         forum=env.get("FORUM", "0") == "1",
         forum_founder=env.get("FORUM", "0") == "founder",
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),
+        tgc_chat=int(env.get("TG_COMMENTS_CHAT", "").strip() or 0),
         tg_api_id=env.get("TG_API_ID", "").strip(),
         tg_api_hash=env.get("TG_API_HASH", "").strip(),
         tg_session=env.get("TG_SESSION", "").strip(),

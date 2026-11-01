@@ -24,7 +24,7 @@ from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _
 from .queues import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note, _video,
     ai_failed, ai_next, ai_note, ai_save, ai_state, my_video, new_video, next_video, stale_videos, video_done,
     video_shape, video_uploaded)  # noqa: F401
-from .account import (CONSENT, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FORUM, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE,
+from .account import (CONSENT, CONSENT_BOARD, CONSENT_BOTH, CONSENT_FORUM, CONSENT_TGC,DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, _DEL_GONE,
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     deletion_hash, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me, me, ms_apply, ms_link, ms_pending, ms_remember, ms_sweep,
@@ -74,5 +74,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     _skills_of, add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
-from . import assistant, mapflaws, threads  # noqa: F401  (the student forum: logic.threads.*, its names overlap the find-people forum's)
+from . import assistant, mapflaws, tgcomments, threads  # noqa: F401  (the student forum: logic.threads.*, its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

@@ -699,6 +699,7 @@ CONSENT = "2026-10-v3"  # web/src/lib/legal.ts says the same
 CONSENT_FORUM = "2026-10-v4"  # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
 CONSENT_BOARD = "2026-10-v7"  # with BOARD=1 alone: the student forum's section (11 then); v5 until Oct 31, the assistant's feedback
 CONSENT_BOTH = "2026-10-v8"   # (v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
+CONSENT_TGC = "+tgc1"         # with TG_COMMENTS_CHAT: added to whichever of the above (app.py), the channel comments' section
 
 
 def consent(con, v: Viewer, version: object, current: str = CONSENT) -> dict:
@@ -818,6 +819,7 @@ _DEL_GONE = {
     ("takedowns", "user_id"), ("user_skills", "user_id"), ("asks", "user_id"), ("contacts", "from_id"), ("contacts", "to_id"),
     ("blocks", "user_id"), ("blocks", "blocked_id"), ("ask_pings", "user_id"),
     ("thread_replies", "user_id"), ("thread_joins", "user_id"), ("threads", "user_id"), ("assist_uses", "user_id"),  # the forum: mine go (a thread with its replies)
+    ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -904,6 +906,12 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             for r in rows(con, "SELECT * FROM prefill_rest WHERE student_id = ? OR (email IS NULL AND student_id IS NULL)", s_["student_id"]):
                 if prefill_mine(r, s_["first_name"], s_["last_name"]):
                     con.execute("DELETE FROM prefill_rest WHERE id = ?", (r["id"],))
+        # the channel's comments by my Telegram id (no foreign key: kept before anyone signed in): my saved text, a
+        # warning or a ban on record, a copy of mine reported before the account knew it
+        tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
+        for t in ("tgc_saved", "tgc_strangers"):
+            con.execute(f"DELETE FROM {t} WHERE tg_id = ?", (tg,))
+        con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))
