@@ -2108,9 +2108,9 @@ def test_club_profile(env):
     assert c.patch("/api/orgs/1", headers=M, json=patch).status_code == 403
     o = c.patch("/api/orgs/1", headers=V, json=patch).json()
     assert (o["name"], o["short"], o["emoji"], o["cover"], o["description"], o["links"], o["recruiting"]) == \
-        ("IT", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)
-    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT"   # one field at a time
-    assert c.patch("/api/orgs/1", headers=V, json={"name": "go club"}).json()["message"] == "taken"
+        ("IT Club", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)  # "KBTU" goes, the club's "Club" stays
+    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT Club"   # one field at a time
+    assert c.patch("/api/orgs/1", headers=V, json={"name": "go"}).json()["message"] == "taken"
     for bad in ({"links": ["javascript:alert(1)"]}, {"links": ["https://a.kz"] * 7}, {"cover": 9}, {"short": "ABC"}, {"emoji": "../x"},
                 {"name": "X"}, {"description": "x" * 601}, {}, {"description": "ok", "cover": True}):
         assert c.patch("/api/orgs/1", headers=V, json=bad).status_code == 400, bad
@@ -5200,9 +5200,9 @@ def test_org_names(env):
         assert c.patch(f"/api/orgs/{club['id']}", headers=tma(21), json=body).status_code == 200
         o = c.get(f"/api/orgs/{club['id']}", headers=tma(21)).json()
         return o["name"], o["abbr"]
-    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum", "SPE")             # renamed: the abbr it had stays
-    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum", "PC")         # one the new name carries
-    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil", "Oil")     # an abbr sent with it wins
+    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum Club", "SPE")        # renamed: the abbr it had stays; "Club" is theirs
+    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum Club", "PC")    # one the new name carries
+    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")  # an abbr sent with it wins
 
 
 COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")

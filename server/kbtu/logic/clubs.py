@@ -185,8 +185,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         sets["recruiting"] = body["recruiting"] if isinstance(body["recruiting"], bool) else bad
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
-    if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too
-        named, acro = org_name(text("name"))
+    if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too; "Club" stays
+        named, acro = org_name(text("name"), club=False)  # the club's own choice (a President's "Cheerleading Club" came back cut)
         sets["name"] = named if 2 <= len(text("name")) <= 60 else bad
         if acro and "abbr" not in body:
             sets["abbr"] = acro
