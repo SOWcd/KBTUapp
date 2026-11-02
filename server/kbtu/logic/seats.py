@@ -356,6 +356,8 @@ def add_seats(con, v: Viewer, eid: int, n: object) -> dict:
 def promote(con, e: sqlite3.Row) -> None:
     """Free seats go to the waitlist in order: going, or a 30-min hold for paid events (§4.2); a 1st-year student
     takes one of a paid event's free seats while any are left (§4.3)."""
+    if e["status"] != "published" or end_of(e) <= core.now():
+        return  # a cancelled or finished event hands out no seats (a hold to pay for nothing)
     while e["seats"] is None or taken(con, e["id"]) < e["seats"]:
         nxt = one(con, "SELECT * FROM registrations WHERE event_id = ? AND status = 'waitlist' ORDER BY waitlisted_at, id LIMIT 1", e["id"])
         if not nxt:
@@ -461,6 +463,8 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('hold', 'going')", eid, v.id)
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     old = None
+    if r and (e["status"] != "published" or r["status"] == "hold" and r["hold_until"] < core.now()):
+        r = None  # cancelled since, or the hold ran out while the file was read (OCR): the waitlist's seat
     if r and r["status"] == "going":
         old = one(con, "SELECT * FROM receipts WHERE registration_id = ? AND status = 'accepted' AND reviewed_at IS NULL ORDER BY id DESC", r["id"])
         if not old or (e["ends_at"] or e["starts_at"] + 3 * 3600) < core.now():
@@ -513,6 +517,8 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)):
         out.append("duplicate")
+    if read is not None and not (got.get("no") and got.get("amount")):
+        out.append("unreadable")  # no number or sum: the duplicate check couldn't run, the organizer looks
     if got.get("amount") and e["price"] and got["amount"] < e["price"]:
         out.append("amount_short")
     elif got.get("amount") and e["price"] and got["amount"] % e["price"]:

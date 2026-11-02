@@ -236,7 +236,7 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         w.writerow(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
                     x["full_name"] if x else name, r["middle_name"], r["last_lat"], r["first_lat"], r["middle_lat"], r["email"], r["student_id"], r["school"], r["course"], x and x["phone"],
                     (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime((r["done_at"] or r["scanned_at"]) + 5 * 3600)),
-                    ("A" if r["verified_at"] <= s["started_at"] else "B") if done and r["verified_at"] is not None else ""  # unlinked since: no row, hm(r["left_at"]),
+                    ("A" if r["verified_at"] <= s["started_at"] else "B") if done and r["verified_at"] is not None else "", hm(r["left_at"]),  # unlinked since: no tier
                     f"{(r['left_at'] - r['done_at']) / 3600:.1f}" if done and r["left_at"] and r["left_at"] > r["done_at"] else ""]))
     for x in xs:
         if x["email"] not in seen:

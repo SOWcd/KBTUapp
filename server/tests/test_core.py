@@ -3342,6 +3342,7 @@ def test_grant_link(env):
     c, cfg = env
     boss, ali = login(c, 60, "boss"), login(c, 61, "ali")
     con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))  # a link works while its maker is an admin
     with pytest.raises(logic.ApiError):
         logic.grant_link(con, logic.Viewer(ali["id"], "user", True), "bugs")      # not the admin
     token = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "bugs")
