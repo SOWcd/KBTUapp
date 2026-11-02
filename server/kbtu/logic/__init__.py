@@ -52,7 +52,7 @@ from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN
 from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, GRANT_LINK_TTL, LINK_TTL, PROFILES_A_DAY,
     REASK_AFTER, _befriend, _came, _celebrate, _counts, _drop_grant, _friend_row, _grant, _levels, _season_start,
     _stranger_view, _streak, _student, _week, achievements, anthem_heard, answer_friend, ask_friend, attended, brought, card_no,
-    find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, grant, grant_link, grant_scan,
+    find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, claim_link, grant, grant_link, grant_scan,
     BADGES, BADGE_OF, badge_people, badge_sessions, badge_set, my_grants, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_friend_link, use_grant_link)  # noqa: F401
 from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,

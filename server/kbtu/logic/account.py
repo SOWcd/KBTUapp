@@ -36,13 +36,14 @@ def ms_link(con, uid: int, who: dict) -> None:
     con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{uid}",))
     # the freshmen list's row for this mail (typed at registration, so a classmate's by mistake is possible): mine only
     # when the name matches too. Mine: what my row lacks, the initiation badge, then gone. Not mine: nothing, it stays.
-    # Either way the owner hears (ids only) what to check: no name match, another ID than the row's, the row's ID held
+    # Mine, the owner hears (ids only) what to check: another ID than the row's, the row's ID held. Not mine, silence: nothing
+    # was used, and an alert he can't act on is noise (owner, Nov 2)
     p = one(con, "SELECT * FROM prefill WHERE email = ?", str(who["email"] or "").lower())
     s = one(con, "SELECT first_name, last_name, student_id FROM students WHERE user_id = ?", uid)
     if p:
         mine = prefill_mine(p, s["first_name"], s["last_name"])
         held = one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", p["student_id"], uid)
-        alert = (("prefill_no_match", f"pn:{uid}") if not mine else ("prefill_id_held", f"ph:{uid}:{held[0]}") if held
+        alert = (None if not mine else ("prefill_id_held", f"ph:{uid}:{held[0]}") if held
                  else ("prefill_other_id", f"pf:{uid}") if s["student_id"] != p["student_id"] else None)
         for (owner,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0") if alert else []:
             notify(con, owner, *alert)

@@ -12,6 +12,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, shareCard } from '../../lib/tg';
   import Send from '@lucide/svelte/icons/send';
+  import Users from '@lucide/svelte/icons/users';
   import Button from '../../ui/Button.svelte';
   import { dayMonth } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
@@ -50,14 +51,15 @@
     if (await sheets.ask({ title: t('bdg.takeAsk', { variant: vname(code), name: p.person.name }), ok: t('bdg.take'), cancel: t('common.cancel'), danger: true })) put(p, code, false);
   }
 
-  // a one-time link for the picked variant, sent from my Telegram: the bot's card with "Get it" (logic.grant_link)
-  let sending = $state(false);
-  async function sendLink() {
-    sending = true; haptic.tap();
+  // a link for the picked variant, sent from my Telegram: the bot's card with "Get it". One-time (logic.grant_link), or
+  // the owner's for everyone, passed from hand to hand for 14 days (logic.claim_link; too many performers to give one by one)
+  let sending = $state<'one' | 'many' | null>(null);
+  async function sendLink(many: boolean) {
+    sending = many ? 'many' : 'one'; haptic.tap();
     const award = `${t(`ach.${badge}.name` as 'ach.init26.name')} · ${vname(code)}`;
-    try { if (await shareCard({ kind: 'gl', id: '0', code }, 'https://t.me/KBTUappBot', award)) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); } }
+    try { if (await shareCard({ kind: 'gl', id: '0', code, ...(many ? { many: true } : {}) }, 'https://t.me/KBTUappBot', award)) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); } }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-    finally { sending = false; }
+    finally { sending = null; }
   }
 
   // the owner's batch grant
@@ -85,8 +87,11 @@
     </div>
   {/each}
 
-  <div class="link"><Button kind="primary" size="m" full loading={sending} onclick={sendLink}>{#snippet icon()}<Send size={17} />{/snippet}{t('bdg.link')}</Button></div>
-  <p class="t-foot note">{t('bdg.linkNote')}</p>
+  <div class="link">
+    {#if owner}<Button kind="primary" size="m" full loading={sending === 'many'} onclick={() => sendLink(true)}>{#snippet icon()}<Users size={17} />{/snippet}{t('bdg.linkMany')}</Button>{/if}
+    <Button kind={owner ? 'gray' : 'primary'} size="m" full loading={sending === 'one'} onclick={() => sendLink(false)}>{#snippet icon()}<Send size={17} />{/snippet}{owner ? t('bdg.linkOne') : t('bdg.link')}</Button>
+  </div>
+  <p class="t-foot note">{owner ? t('bdg.linkManyNote') : t('bdg.linkNote')}</p>
 
   <div class="find"><SearchField bind:value={q} placeholder={t('bdg.find')} /></div>
   {#if found && !found.length}<p class="t-foot none">{t('bdg.none')}</p>{/if}
@@ -136,7 +141,7 @@
   .var.on { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
   .var.on img { opacity: 1; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35)); }
   .var:active { transform: scale(0.97); }
-  .link { margin-top: 12px; }
+  .link { display: flex; gap: 8px; margin-top: 12px; }
   .note { margin: 8px 4px 0; }
   .find { margin-top: 18px; }
   .none { margin: 12px 4px 0; }

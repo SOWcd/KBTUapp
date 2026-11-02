@@ -733,7 +733,7 @@ def test_admin_clubs(env):
     assert c.post("/api/admin/orgs", headers=A, json={"name": "X", "short": "X", "emoji": "trophy_3d"}).status_code == 400
 
     club = c.post("/api/admin/orgs", headers=A, json={"name": "Chess Club", "short": "ch", "emoji": "trophy_3d", "official": True}).json()
-    assert (club["short"], club["official"], club["slug"], club["team"], club["members"]) == ("CH", True, "chessclub", [], 0)
+    assert (club["short"], club["official"], club["slug"], club["team"], club["members"]) == ("CH", True, "chess", [], 0)
     put = lambda body: c.put(f"/api/admin/orgs/{club['id']}/role", headers=A, json=body)
     assert put({"who": "@nobody", "role": "president"}).json()["message"] == "who"   # never opened the app
     assert put({"who": "@pres_kbtu", "role": "boss"}).status_code == 400
@@ -996,6 +996,16 @@ def test_invite_cards(env, monkeypatch):
     assert c.post("/api/share", headers=A, json={"kind": "aw", "code": "bugs"}).status_code == 200
     card = sent[-1]["result"]
     assert card["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=aw_bugs") and "· I" in card["input_message_content"]["message_text"]
+    # Admin → Badges, a link for everyone: the owner's alone; many open it, each gets the badge once
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ali["id"],))
+    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 403  # an admin, not the owner
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
+    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 200
+    token = sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("gl_")[1]
+    assert "\u0434\u043e" in sent[-1]["result"]["input_message_content"]["message_text"]                   # "until" its day
+    login(c, 63, "zed")
+    assert c.post(f"/api/grant-links/{token}", headers=tma(62)).json() == c.post(f"/api/grant-links/{token}", headers=tma(63)).json() == {"code": "init26p"}
+    assert con.execute("SELECT COUNT(*) FROM achievement_grants WHERE code = 'init26p'").fetchone()[0] == 2
 
 
 def test_checkin_by_name(env):
@@ -1959,7 +1969,7 @@ def test_club_applications(env, monkeypatch):
     done = c.post(f"/api/admin/club-applications/{app['id']}", headers=B, json={"approve": True}).json()
     assert done["status"] == "approved" and done["applicant"]["fullName"] == "Testov Ali"
     me = c.get("/api/me", headers=A).json()
-    assert [(m["org"]["name"], m["role"]) for m in me["memberships"]] == [("Chess Club", "president")]
+    assert [(m["org"]["name"], m["role"]) for m in me["memberships"]] == [("Chess", "president")]
     assert c.get(f"/api/orgs/{done['orgId']}", headers=A).json()["links"] == links           # the club got them all
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application_decided'").fetchone()
     assert bot._render(con, told)[2] == f"cl_{done['orgId']}"
@@ -2026,7 +2036,7 @@ def test_club_profile(env):
     vice, mem = login(c, 20, "vice"), login(c, 21, "mem")
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0), "
-                "(2, 'go', 'club', 'Go Club', 'GO', 'trophy_3d', 0)")
+                "(2, 'go', 'club', 'Go', 'GO', 'trophy_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0), (1, ?, 'member', 0)", (vice["id"], mem["id"]))
     V, M = tma(20, "Vice"), tma(21, "Mem")
     patch = {"name": "IT Club KBTU", "short": "it", "emoji": "rocket_3d", "cover": 4, "description": "We build things.",
@@ -2034,8 +2044,8 @@ def test_club_profile(env):
     assert c.patch("/api/orgs/1", headers=M, json=patch).status_code == 403
     o = c.patch("/api/orgs/1", headers=V, json=patch).json()
     assert (o["name"], o["short"], o["emoji"], o["cover"], o["description"], o["links"], o["recruiting"]) == \
-        ("IT Club", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)
-    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT Club"   # one field at a time
+        ("IT", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)
+    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT"   # one field at a time
     assert c.patch("/api/orgs/1", headers=V, json={"name": "go club"}).json()["message"] == "taken"
     for bad in ({"links": ["javascript:alert(1)"]}, {"links": ["https://a.kz"] * 7}, {"cover": 9}, {"short": "ABC"}, {"emoji": "../x"},
                 {"name": "X"}, {"description": "x" * 601}, {}, {"description": "ok", "cover": True}):
@@ -4850,7 +4860,7 @@ def test_roster_load_and_join(env):
     got = roster.load(con, items, orgmap)
     assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
-    assert con.execute("SELECT official FROM orgs WHERE name = 'Chess Club'").fetchone()[0] == 1          # no "KBTU" in a name
+    assert con.execute("SELECT official FROM orgs WHERE name = 'Chess'").fetchone()[0] == 1          # no "KBTU" in a name
 
     me = c.get("/api/me", headers=h(71)).json()                                         # Ali: joined, told once
     assert [(m["org"]["slug"], m["role"], m["title"]) for m in me["memberships"]] == [("mic", "head", "Head of SMM")]
@@ -4983,14 +4993,16 @@ def test_student_government_mark(env):
 
 
 def test_org_names(env):
-    """Org names, one style: "KBTU" off either end on create and rename, an acronym the name carried
+    """Org names, one style: "KBTU" and "Club" off either end on create and rename, an acronym the name carried
     goes to the abbr (in brackets, or before a dash), else the initials without "KBTU"."""
     import dataclasses
-    for typed, name, abbr in [("KBTU Open Mic", "Open Mic", "OM"), ("Debate Club | kbtu", "Debate Club", "DC"),
+    for typed, name, abbr in [("KBTU Open Mic", "Open Mic", "OM"), ("Debate Club | kbtu", "Debate", "DC"),
                               ("IEEE KBTU Chapter", "IEEE", "IEEE"), ("AIESEC in KBTU", "AIESEC", "AIESEC"),
-                              ("KBTU’s Music Club", "Music Club", "MC"), ("Society of Petroleum Engineers (SPE)", "Society of Petroleum Engineers", "SPE"),
+                              ("KBTU’s Music Club", "Music", "MC"), ("Society of Petroleum Engineers (SPE)", "Society of Petroleum Engineers", "SPE"),
                               ("SPE – Society of Petroleum Engineers", "Society of Petroleum Engineers", "SPE"),
-                              ("Chess (beginners)", "Chess (beginners)", "CB"), ("Data KBTU Club", "Data KBTU Club", "DC"),
+                              ("Chess (beginners)", "Chess (beginners)", "CB"), ("Data KBTU Club", "Data", "DC"), ("Japanese Culture Club KBTU", "Japanese Culture", "JCC"),
+                              ("\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u0443\u0431", "\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u0443\u0431", "\u0428\u041a"),
+                              ("\u041a\u043b\u0443\u0431 \u00ab\u0414\u0435\u0431\u0430\u0442\u044b\u00bb", "\u0414\u0435\u0431\u0430\u0442\u044b", "\u041a\u0414"), ("Club", "Club", "CLUB"),
                               ("3D Printing (KBTU)", "3D Printing", "3P"), ("KBTU", "KBTU", "KBTU"),
                               ("\u041a\u0411\u0422\u0423 \u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0415\u0411\u0410\u0422\u042b")]:
         assert (logic.org_name(typed)[0], logic.guess_abbr(typed)) == (name, abbr), typed
@@ -5008,9 +5020,9 @@ def test_org_names(env):
         assert c.patch(f"/api/orgs/{club['id']}", headers=tma(21), json=body).status_code == 200
         o = c.get(f"/api/orgs/{club['id']}", headers=tma(21)).json()
         return o["name"], o["abbr"]
-    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum Club", "SPE")             # renamed: the abbr it had stays
-    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum Club", "PC")         # one the new name carries
-    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")     # an abbr sent with it wins
+    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum", "SPE")             # renamed: the abbr it had stays
+    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum", "PC")         # one the new name carries
+    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil", "Oil")     # an abbr sent with it wins
 
 
 COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")
@@ -6819,21 +6831,21 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert ach(uid[2])["init26f"] == 1 and ach(uid[2])["init26"] == 0 and alerts() == []
     out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
     assert bot._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
-    # a typo'd mail, another person's name: nothing from the row, no badge, the row stays; the owner hears (ids only)
+    # a typo'd mail, another person's name: nothing from the row, no badge, the row stays, no alert
     r = c.post("/api/kbtu/manual", headers=tma(3), json={"studentId": "25B010099", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
     assert con.execute("SELECT phone FROM students WHERE user_id = ?", (uid[3],)).fetchone()[0] is None
     assert ach(uid[3])["init26f"] == 0 and con.execute("SELECT 1 FROM prefill WHERE email = 'z_typo@kbtu.kz'").fetchone()
-    assert alerts() == [("prefill_no_match", f"pn:{uid[3]}")]
+    assert alerts() == []
     # the name matches but the row's ID is another student's: used, and the owner hears
     logic.ms_remember(con, uid[6], who(6, "h_eld@kbtu.kz", "Jan", "Ten"))
     assert c.post("/api/kbtu/manual", headers=tma(6), json={"studentId": "26B010011", "consentVersion": logic.CONSENT}).status_code == 200
     held = con.execute("SELECT user_id FROM students WHERE student_id = '25B000009'").fetchone()[0]
-    assert ach(uid[6])["init26f"] == 1 and alerts()[1:] == [("prefill_id_held", f"ph:{uid[6]}:{held}")]
+    assert ach(uid[6])["init26f"] == 1 and alerts() == [("prefill_id_held", f"ph:{uid[6]}:{held}")]
     # the name matches (Cyrillic list, Latin Microsoft) but the student gives another ID than the row's
     logic.ms_remember(con, uid[7], who(7, "j_ten@kbtu.kz", "Zhan", "Ten"))
     assert c.post("/api/kbtu/manual", headers=tma(7), json={"studentId": "26B010012", "consentVersion": logic.CONSENT}).status_code == 200
-    assert alerts()[2:] == [("prefill_other_id", f"pf:{uid[7]}")]
+    assert alerts()[1:] == [("prefill_other_id", f"pf:{uid[7]}")]
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'j_ten@kbtu.kz'").fetchone()
     for kind, ref in alerts():
         out = con.execute("SELECT * FROM bot_outbox WHERE kind = ? AND ref = ?", (kind, ref)).fetchone()
@@ -6845,7 +6857,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'b_two@kbtu.kz'").fetchone()
     con.execute("INSERT INTO prefill (email, student_id) VALUES ('held@kbtu.kz', '25B010010')")   # a student's own mail
     delete_now(c, cfg, tma(1))
-    assert [k for k, _ in alerts()] == ["prefill_no_match", "prefill_other_id"]              # the alert naming them went too
+    assert [k for k, _ in alerts()] == ["prefill_other_id"]                                  # the alert naming them went too
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'held@kbtu.kz'").fetchone()
     con.close()
 

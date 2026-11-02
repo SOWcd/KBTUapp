@@ -45,6 +45,11 @@ SHARE_BADGE = {  # Admin → Badges: a one-time link for a badge's variant (logi
     "kk": ("Саған белгіше", "🏅 Саған <b>«{award}»</b> белгішесі. Сілтеме бір реттік, 7 күн жұмыс істейді.", "🏅 Алу"),
     "en": ("A badge for you", "🏅 A badge for you: <b>“{award}”</b>. The link works once, for 7 days.", "🏅 Get it"),
 }
+SHARE_BADGE_MANY = {  # Admin → Badges, the owner's link for everyone (logic.claim_link): forwarded from hand to hand
+    "ru": ("Значок", "🏅 Значок <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
+    "kk": ("Белгіше", "🏅 <b>«{award}»</b> белгішесі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A badge", "🏅 The <b>“{award}”</b> badge. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
+}
 BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Admin → Badges says it (web ach.<badge>.v.<code>)
     "ru": {"init26f": "Посвящение 2026 · Гость", "init26": "Посвящение 2026 · Волонтёр", "init26p": "Посвящение 2026 · Выступающий"},
     "kk": {"init26f": "Бағыштау 2026 · Қонақ", "init26": "Бағыштау 2026 · Волонтёр", "init26p": "Бағыштау 2026 · Өнер көрсетуші"},
@@ -127,7 +132,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for my invite ('rf'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE}[kind][lang if lang in SHARE_REFER else "ru"]
+    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 

@@ -1510,10 +1510,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's one-time award link (logic.grant_link)
-                code = body.get("code")
-                start = f"gl_{logic.grant_link(con, v, code)}"
+                code, many = body.get("code"), body.get("many") is True
+                until = logic.now() + 14 * 86400
+                # many: the owner's link for everyone a badge is meant for, passed on from hand to hand (logic.claim_link)
+                start = f"gl_{logic.claim_link(con, code, until, v) if many else logic.grant_link(con, v, code)}"
                 badge = code in logic.BADGE_OF  # a badge's variant (Admin → Badges): its own card, "Get it"
                 fields = {"award": texts.pick(texts.BADGE_TITLES if badge else texts.ACH_NAMES, lang)[code]}
+                if many:
+                    fields["until"] = texts.when(until, lang).split(",")[0]
             elif kind == "rc":  # a club's open recruitment round (casting.py): anyone may pass it on
                 r = logic.one(con, "SELECT r.closes_at, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.org_id = ? AND r.status = 'open' AND r.closes_at > ?",
                               ref, logic.now())
@@ -1531,7 +1535,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             else:  # a new club's one-time President link (§2), the admin; each card is a fresh link
                 start = f"pres_{ref}_{logic.president_link(con, v, ref)['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
-            title, text, button = texts.share_invite("gb" if kind == "gl" and body.get("code") in logic.BADGE_OF else kind, lang, **fields)
+            title, text, button = texts.share_invite(("gm" if body.get("many") is True else "gb") if kind == "gl" and body.get("code") in logic.BADGE_OF else kind, lang, **fields)
             result = {"type": "article", "id": f"{kind}-{ref}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}

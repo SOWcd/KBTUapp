@@ -209,15 +209,20 @@ def use_grant_link(con, v: Viewer, token: str) -> dict:
     return {"code": r["code"]}
 
 
-def claim_link(con, code: str, until: int) -> str:
-    """admin claim new: a link many students open for `code` (not Bug hunter: that one is earned one by one), given by
-    the owner, until `until`. Signed-in KBTU students only, one award each; forwarded beyond the chat: accepted (owner)."""
+def claim_link(con, code: str, until: int, v: Viewer | None = None) -> str:
+    """admin claim new, or the owner's "Link for everyone" in Admin → Badges (v): a link many students open for `code`
+    (not Bug hunter: that one is earned one by one), given by the owner, until `until`. Signed-in KBTU students only, one
+    award each; forwarded beyond those it's meant for: accepted (owner, Nov 2: too many performers to give one by one)."""
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
+    if v is not None and (not owner or v.id != owner[0]):
+        raise ApiError("forbidden")
     if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
     con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi) VALUES (?, ?, ?, ?, ?, 1)",
                 (token, code, owner[0], core.now(), until))
+    if v is not None:
+        log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code, "many": True}))
     return token
 
 
@@ -493,7 +498,7 @@ def person(con, v: Viewer, uid: int) -> dict:
 
 # ---------------------------------------------------------------- friends (§4.7)
 
-FRIEND_ASKS_A_DAY = 20
+FRIEND_ASKS_A_DAY = 500  # no limit for a person (owner, Nov 2: 20 a day stopped the initiation crowd); only a script hits it
 REASK_AFTER = 30 * 86400    # a declined request looks pending to the asker this long, then they may ask again
 LINK_TTL = 7 * 86400
 

@@ -391,12 +391,16 @@ def initials(name: str) -> str:
 
 # Org names, one style: no "KBTU" in a name (the whole app is KBTU's), and no "short + long": the short
 # one is the abbr. Done to a name as it's created or renamed; the names already there were fixed by hand.
-KBTU = {"KBTU", "\u041a\u0411\u0422\u0423"}  # and in Cyrillic
-_KB = r"(?:kbtu|\u043a\u0431\u0442\u0443)"
+KBTU = {"KBTU", "\u041a\u0411\u0422\u0423", "\u049a\u0411\u0422\u0423"}  # and in Russian and Kazakh
+_KB = r"(?:kbtu|\u043a\u0431\u0442\u0443|\u049b\u0431\u0442\u0443)"
 _SEP = r"[\s\-\u2013\u2014|:,.]"
 _HEAD = re.compile(rf"^{_KB}(?:['\u2019]s)?\b{_SEP}*", re.I)
 # "... in KBTU", "... at KBTU", "... \u0432 / \u043f\u0440\u0438 \u041a\u0411\u0422\u0423": the little word goes too
 _TAIL = re.compile(rf"(?:\s+(?:in|at|of|\u0432|\u043f\u0440\u0438))?{_SEP}*\(?\b{_KB}(?:\s+chapter)?\)?$", re.I)
+# no "Club" either, the Clubs tab says it (owner, Nov 2): "Chess Club", Kazakh "\u0428\u0430\u0445\u043c\u0430\u0442 \u043a\u043b\u0443\u0431\u044b", Russian
+# \u041a\u043b\u0443\u0431 \u00abX\u00bb. A Russian "\u0428\u0430\u0445\u043c\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u0443\u0431" or "\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432" keeps it: an adjective or a genitive alone isn't a name
+_CLUB_TAIL = re.compile(rf"{_SEP}+(?:club|\u043a\u043b\u0443\u0431\u044b)$", re.I)
+_CLUB_QUOTED = re.compile(r"^(?:club|\u043a\u043b\u0443\u0431)\s*[\u00ab\"\u201c\u201e'](.+)[\u00bb\"\u201d']$", re.I)
 
 
 def _acronym(w: str) -> bool:
@@ -404,14 +408,17 @@ def _acronym(w: str) -> bool:
     return 2 <= len(w) <= 8 and bool(re.fullmatch(r"[^\W\d_][^\W_]*", w)) and w.isupper() and w not in KBTU
 
 
-def org_name(name: str) -> tuple[str, str | None]:
+def org_name(name: str, club: bool = True) -> tuple[str, str | None]:
     """A name as typed -> (the name, the acronym it carried, for the abbr): "KBTU" off either end ("KBTU Open Mic",
-    "Debate Club | KBTU", "IEEE KBTU Chapter"); "Society of Petroleum Engineers (SPE)" and "SPE \u2013 Society of ..."
-    give SPE and keep the long name. A name that would be left under 2 characters stays as typed."""
+    "Debate Club | KBTU", "IEEE KBTU Chapter"), and "Club" (club=False keeps it, for the initials); "Society of
+    Petroleum Engineers (SPE)" and "SPE \u2013 Society of ..." give SPE and keep the long name. A name that would be left
+    under 2 characters stays as typed."""
     typed = " ".join(name.split())
     def bare(n: str) -> str:
         for _ in range(3):
             n = _TAIL.sub("", _HEAD.sub("", n)).strip()
+            if club and len(c := _CLUB_QUOTED.sub(r"\1", _CLUB_TAIL.sub("", n)).strip()) >= 2:
+                n = c
         return n
     n, acro = bare(typed), None
     if (m := re.fullmatch(r"(.+?)\s*\(\s*([^\s()]+)\s*\)", n)) and _acronym(m[2]):
@@ -423,15 +430,20 @@ def org_name(name: str) -> tuple[str, str | None]:
 
 def guess_abbr(name: str) -> str:
     """The short name an org starts with: the acronym its name carried, else its initials."""
-    n, acro = org_name(name)
+    n, acro = org_name(name, club=False)  # "Debate Club": DC, not DEBATE
     return acro or initials(n)
 
 
 def fill_abbrs(con) -> None:
-    """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays."""
+    """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays.
+    A club's name made before "Club" went off loses it now, unless another club has that name."""
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
             con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
+        for o in rows(con, "SELECT id, name FROM orgs WHERE kind = 'club'"):
+            n = org_name(o["name"])[0]
+            if n != o["name"] and not one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND id != ?", n, o["id"]):
+                con.execute("UPDATE orgs SET name = ? WHERE id = ?", (n, o["id"]))
 
 
 def org_by_slug(con, slug: str) -> int | None:
