@@ -1140,6 +1140,7 @@ const en: Dict = {
   'ed.partnerLinkBad': "Needs an https:// link",
   'ed.partnerBad': "Check the partner: no price, open to everyone",
   'ed.partnerTaken': "People have signed up already: it can't become a partner's",
+  'ed.paidRight': "The price is set by someone with the club's “Prices and Kaspi” right",
   'ed.paidOfficial': "Only official clubs can run paid events",
   'ed.gisOffer': "An address? Make it a 2GIS route",
   'ed.form': "Questions at sign-up",

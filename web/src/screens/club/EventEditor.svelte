@@ -522,7 +522,7 @@
         {@render row(Users, t('ed.seats'), +f.seats > 0 ? f.seats : t('ex.unlimited'), () => open('seats'), tried && !!err.seats)}
         {@render row(Clock, t('ex.regUntil'), regVal, () => open('reg'), tried && !!err.reg)}
       </div>
-      {#if !canPrice && !official && may(mine, 'money')}<p class="hint">{t('ed.paidOfficial')}</p>{/if}
+      {#if !canPrice && !isMeeting}<p class="hint">{official ? t('ed.paidRight') : t('ed.paidOfficial')}</p>{/if}
     {/if}
 
     <h3 class="cap">{t('ex.options')}</h3>
