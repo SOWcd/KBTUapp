@@ -1666,6 +1666,7 @@ def test_first_fifty(env, monkeypatch):
     con.execute("DELETE FROM achievement_grants WHERE user_id = ?", (cc["id"],))
     con.execute("DELETE FROM achievement_levels WHERE user_id = ?", (cc["id"],))
     con.executescript(dict(db.MIGRATIONS)[36])
+    logic.profiles._RARITY[0] = 0                                       # rarity is kept a minute per worker
     ach = next(a for a in logic.achievements(con, cc["id"]) if a["code"] == "first50")
     assert ach["level"] == 1 and ach["rarity"] == 1
     # migration 59: a night sign-in left without a number gets the next one, and its "First 500" on the next open
@@ -2186,6 +2187,33 @@ def test_team_only_event(env):
     assert [x["id"] for x in c.get("/api/events", headers=M).json()] == [e["id"]]
     assert c.get("/api/events", headers=A).json() == [] and c.get(f"/api/events/{e['id']}", headers=A).status_code == 404
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'new_event'").fetchone()[0] == 0     # subscribers aren't told
+
+
+def test_shared_cards_never_leak(env):
+    """The Afisha's and Clubs' shared part is kept per worker (core.shared): warm from a member's request, a team-only
+    event still never reaches a non-member, and nobody's own marks (ticket, saved, role) reach anyone else."""
+    c, cfg = env
+    pres, mem, ali = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (mem["id"], "member")])
+    P, M, A = tma(70, "Pres"), tma(71, "Mem"), tma(72, "Ali")
+    body = {"title": "Sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    team = c.post("/api/orgs/1/events", headers=P, json={**body, "visibility": "members"}).json()
+    pub = c.post("/api/orgs/1/events", headers=P, json={**body, "title": "Open day"}).json()
+    for e in (team, pub):
+        c.post(f"/api/events/{e['id']}/publish", headers=P)
+    assert c.post(f"/api/events/{pub['id']}/registration", headers=M, json={}).json()["my"]["status"] == "going"
+    assert c.put(f"/api/events/{pub['id']}/saved", headers=M).status_code == 204
+    warm = {x["id"]: x for x in c.get("/api/events", headers=M).json()}
+    assert warm.keys() == {team["id"], pub["id"]} and warm[pub["id"]]["saved"] and warm[pub["id"]]["my"]["ticketCode"]
+    assert c.get("/api/orgs", headers=M).json()[0]["myRole"] == "member"
+    seen = c.get("/api/events", headers=A).json()
+    assert [x["id"] for x in seen] == [pub["id"]] and seen[0]["my"] is None and seen[0]["saved"] is False
+    assert c.get("/api/orgs", headers=A).json()[0]["myRole"] is None
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (mem["id"],))                         # left the club: gone at once
+    assert [x["id"] for x in c.get("/api/events", headers=M).json()] == [pub["id"]]
+    assert c.get("/api/orgs", headers=M).json()[0]["myRole"] is None
 
 
 def test_teambuilding_thunder(env):

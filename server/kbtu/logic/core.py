@@ -349,17 +349,41 @@ def card(con, v: Viewer, e: sqlite3.Row) -> dict:
     return cards(con, v, [e])[0]
 
 
-def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
+_SHARED: dict = {}  # (kind, id) -> (until, the row it was made from, its part that is the same for every viewer)
+SHARED_TTL = 15
+
+
+def shared(kind: str, found: list[sqlite3.Row], build) -> dict[int, dict]:
+    """The viewer-independent part of each row's shape (build(rows) -> {id: part}), kept per worker SHARED_TTL seconds
+    (load review: ~100 ms CPU per app open). Keyed by the whole row: an edit of it is seen at once, in every worker;
+    what is counted around it (seats taken, an org's logo) may lag up to SHARED_TTL. Only rows the viewer may see are
+    passed in: who sees what is decided per request, before this, never cached."""
+    t, out, miss = time.monotonic(), {}, []
+    for x in found:
+        hit = _SHARED.get((kind, x["id"]))
+        if hit and hit[0] > t and hit[1] == tuple(x):
+            out[x["id"]] = hit[2]
+        else:
+            miss.append(x)
+    if miss:
+        if len(_SHARED) > 5000:  # ponytail: drop all at a size cap, an LRU if lists ever outgrow it
+            _SHARED.clear()
+        made = build(miss)
+        for x in miss:
+            _SHARED[(kind, x["id"])] = (t + SHARED_TTL, tuple(x), made[x["id"]])
+        out |= made
+    return out
+
+
+def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[dict]:
     """Event cards (types.ts EventCard). A list asks each thing once for all its events: card by card, the Afisha of a
-    few hundred events was 1200 queries and the slowest call of the app's start (load test)."""
+    few hundred events was 1200 queries and the slowest call of the app's start (load test). share: the lists everyone
+    opens (Afisha) take the part that is the same for all from shared(); a single card is always read fresh."""
     if not evs:
         return []
     ids = [e["id"] for e in evs]
     q = _qs(ids)
-    taken = dict(rows(con, f"SELECT event_id, COUNT(*) FROM registrations WHERE event_id IN ({q}) AND status IN ('hold','going') GROUP BY event_id", *ids))
-    paid = [e["id"] for e in evs if e["price"] and e["free_first"]]  # free seats for 1st-years are counted only where there are some
-    free = dict(rows(con, f"SELECT event_id, COUNT(*) FROM registrations WHERE event_id IN ({_qs(paid)}) AND status = 'going' AND free = 1 GROUP BY event_id",
-                     *paid)) if paid else {}
+    part = shared("event", evs, lambda found: _event_parts(con, found)) if share else _event_parts(con, evs)
     mine = {r["event_id"]: r for r in rows(con, f"SELECT * FROM registrations WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
     regs = [r["id"] for r in mine.values()]
     receipts = {c["registration_id"]: c for c in rows(con, f"SELECT registration_id, status, flags, reviewed_at FROM receipts WHERE registration_id IN ({_qs(regs)}) ORDER BY id", *regs)}  # the last one wins
@@ -371,13 +395,6 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
                 LEFT JOIN students s ON s.user_id = u.id WHERE r.event_id IN ({q}) AND r.status = 'going' AND u.show_going = 1
                 AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?) ORDER BY r.id""", *ids, v.id, v.id):
             friends.setdefault(p["ev"], []).append(person_ref(p))
-    orgs = _by_id(con, "orgs", (e["org_id"] for e in evs))
-    slides: dict[int, list] = {}
-    for r in rows(con, f"SELECT event_id, file_id FROM event_slides WHERE event_id IN ({q}) ORDER BY pos", *ids):
-        slides.setdefault(r["event_id"], []).append(r["file_id"])
-    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in orgs.values()),
-                                  *(i for s in slides.values() for i in s)])
-    videos = _by_id(con, "videos", (e["video_id"] for e in evs))
     out = []
     for e in evs:
         reg, my = mine.get(e["id"]), None
@@ -388,24 +405,40 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row]) -> list[dict]:
                   "free": bool(reg["free"]),
                   "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" else None,
                   "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}
-        out.append({
-            "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "status": e["status"], "title": e["title"],
-            "startsAt": e["starts_at"], "endsAt": e["ends_at"], "publishedAt": e["published_at"], "place": e["place"], "placeUrl": e["place_url"],
-            "cover": _event_cover(con, e, files),
-            "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
-            "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
-            "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
-            # its own questions at sign-up ("questions" is Studio's count)
-            "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "my": my, "visibility": e["visibility"],
-            "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
-            "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
-            "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
-            "saved": e["id"] in saved,
-            "friends": friends.get(e["id"], []),
-            "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
-            **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
-        })
+        out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], [])})
     return out
+
+
+def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
+    """The part of each event's card that is the same for every viewer."""
+    ids = [e["id"] for e in evs]
+    q = _qs(ids)
+    taken = dict(rows(con, f"SELECT event_id, COUNT(*) FROM registrations WHERE event_id IN ({q}) AND status IN ('hold','going') GROUP BY event_id", *ids))
+    paid = [e["id"] for e in evs if e["price"] and e["free_first"]]  # free seats for 1st-years are counted only where there are some
+    free = dict(rows(con, f"SELECT event_id, COUNT(*) FROM registrations WHERE event_id IN ({_qs(paid)}) AND status = 'going' AND free = 1 GROUP BY event_id",
+                     *paid)) if paid else {}
+    orgs = _by_id(con, "orgs", (e["org_id"] for e in evs))
+    slides: dict[int, list] = {}
+    for r in rows(con, f"SELECT event_id, file_id FROM event_slides WHERE event_id IN ({q}) ORDER BY pos", *ids):
+        slides.setdefault(r["event_id"], []).append(r["file_id"])
+    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in orgs.values()),
+                                  *(i for s in slides.values() for i in s)])
+    videos = _by_id(con, "videos", (e["video_id"] for e in evs))
+    return {e["id"]: {
+        "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "status": e["status"], "title": e["title"],
+        "startsAt": e["starts_at"], "endsAt": e["ends_at"], "publishedAt": e["published_at"], "place": e["place"], "placeUrl": e["place_url"],
+        "cover": _event_cover(con, e, files),
+        "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
+        "emoji": e["emoji"], "color": e["color"], "tint": e["tint"] or "#3B6BFF", "seats": e["seats"], "taken": taken.get(e["id"], 0),
+        "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
+        # its own questions at sign-up ("questions" is Studio's count)
+        "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "visibility": e["visibility"],
+        "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
+        "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
+        "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
+        "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,
+        **({"i18n": {k: {"title": x["title"]} for k, x in json.loads(e["i18n"]).items()}} if e["i18n"] else {}),
+    } for e in evs}
 
 
 def full(con, v: Viewer, e: sqlite3.Row) -> dict:

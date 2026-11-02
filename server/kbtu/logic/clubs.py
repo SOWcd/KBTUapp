@@ -19,41 +19,54 @@ def org_shape(con, v: Viewer, o: sqlite3.Row) -> dict:
     return org_shapes(con, v, [o])[0]
 
 
-def org_shapes(con, v: Viewer, found: list[sqlite3.Row]) -> list[dict]:
-    """Clubs (types.ts Org), each count and each of my marks read once for the whole list (Clubs was 560 queries)."""
+def org_shapes(con, v: Viewer, found: list[sqlite3.Row], share: bool = False) -> list[dict]:
+    """Clubs (types.ts Org), each count and each of my marks read once for the whole list (Clubs was 560 queries).
+    share: the list everyone opens takes the part that is the same for all from core.shared()."""
     if not found:
         return []
+    ids = [o["id"] for o in found]
+    q = _qs(ids)
+    part = core.shared("org", found, lambda f: _org_parts(con, f)) if share else _org_parts(con, found)
+    mine = {r["org_id"]: r for r in rows(con, f"""SELECT m.org_id, m.role, {core.TITLES}, t.rights FROM org_members m
+        LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND m.org_id IN ({q})""", v.id, *ids)} if v.student else {}
+    subscribed = {r[0] for r in rows(con, f"SELECT org_id FROM subscriptions WHERE user_id = ? AND org_id IN ({q})", v.id, *ids)} if v.student else set()
+    asked = {r["org_id"]: r for r in rows(con, f"SELECT org_id, status, decided_at FROM join_requests WHERE user_id = ? AND org_id IN ({q}) ORDER BY id",
+                                          v.id, *ids)} if v.student else {}  # the last one wins
+    live = [i for i in ids if part[i]["round"]]
+    applied = {r[0] for r in rows(con, f"""SELECT r.org_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE a.user_id = ? AND r.org_id IN ({_qs(live)})
+        AND r.status != 'done' AND a.stage != 'withdrawn'""", v.id, *live)} if v.student and live else set()
+    return [{
+        **part[o["id"]], "round": {**r, "applied": o["id"] in applied} if (r := part[o["id"]]["round"]) else None,
+        "myRequest": _request_state(asked.get(o["id"])), "subscribed": o["id"] in subscribed,
+        "myRole": mine[o["id"]]["role"] if o["id"] in mine else None,
+        **({"myTitle": mine[o["id"]]["title"], "myTitleKk": mine[o["id"]]["title_kk"], "myTitleEn": mine[o["id"]]["title_en"]} if o["id"] in mine else {"myTitle": None}),
+        "myRights": _ordered(_rights_from(mine[o["id"]]["role"], mine[o["id"]]["rights"])) if o["id"] in mine else [],
+    } for o in found]
+
+
+def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
+    """The part of each club's shape that is the same for every viewer."""
     ids = [o["id"] for o in found]
     q = _qs(ids)
     count = lambda table, where="": dict(rows(con, f"SELECT org_id, COUNT(*) FROM {table} WHERE org_id IN ({q}) {where} GROUP BY org_id", *ids))  # noqa: E731
     subs, members = count("subscriptions"), count("org_members")
     upcoming = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL
         AND starts_at > ? GROUP BY org_id""", *ids, core.now()))
-    mine = {r["org_id"]: r for r in rows(con, f"""SELECT m.org_id, m.role, {core.TITLES}, t.rights FROM org_members m
-        LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND m.org_id IN ({q})""", v.id, *ids)} if v.student else {}
-    subscribed = {r[0] for r in rows(con, f"SELECT org_id FROM subscriptions WHERE user_id = ? AND org_id IN ({q})", v.id, *ids)} if v.student else set()
-    asked = {r["org_id"]: r for r in rows(con, f"SELECT org_id, status, decided_at FROM join_requests WHERE user_id = ? AND org_id IN ({q}) ORDER BY id",
-                                          v.id, *ids)} if v.student else {}  # the last one wins
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
-    # a recruitment round taking applications (casting.py), and whether I applied to it
+    # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)
     live = {r["org_id"]: r for r in rows(con, f"SELECT id, org_id, closes_at FROM rounds WHERE org_id IN ({q}) AND status = 'open' AND closes_at > ?", *ids, core.now())}
-    applied = {r[0] for r in rows(con, f"""SELECT r.org_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE a.user_id = ? AND r.org_id IN ({q})
-        AND r.status != 'done' AND a.stage != 'withdrawn'""", v.id, *ids)} if v.student and live else set()
-    return [{
+    return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": json.loads(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
-        "round": {"id": live[o["id"]]["id"], "closesAt": live[o["id"]]["closes_at"], "applied": o["id"] in applied} if o["id"] in live else None,
+        "round": {"id": live[o["id"]]["id"], "closesAt": live[o["id"]]["closes_at"]} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
-        "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "myRequest": _request_state(asked.get(o["id"])),
-        "subscribed": o["id"] in subscribed,
-        "myRole": mine[o["id"]]["role"] if o["id"] in mine else None, "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
-        **({"myTitle": mine[o["id"]]["title"], "myTitleKk": mine[o["id"]]["title_kk"], "myTitleEn": mine[o["id"]]["title_en"]} if o["id"] in mine else {"myTitle": None}),
-        "myRights": _ordered(_rights_from(mine[o["id"]]["role"], mine[o["id"]]["rights"])) if o["id"] in mine else [],
-    } for o in found]
+        "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]),
+        "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
+    } for o in found}
 
 
 def orgs(con, v: Viewer) -> list[dict]:
-    found = org_shapes(con, v, rows(con, "SELECT * FROM orgs WHERE status = 'active' AND kind NOT IN ('office','app')"))
+    found = org_shapes(con, v, rows(con, "SELECT * FROM orgs WHERE status = 'active' AND kind NOT IN ('office','app')"), share=True)
     return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 
@@ -228,6 +241,7 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             con.execute("UPDATE orgs SET i18n = ? WHERE id = ?", (json.dumps(tr, ensure_ascii=False), oid))
     if sets.keys() - {"recruiting"}:
         log_action(con, v.id, "org_edit", f"org:{oid}", json.dumps(sorted(sets.keys() - {"recruiting"})))
+    core._SHARED.clear()  # event cards carry the club's name and logo: seen at once here (other workers: SHARED_TTL)
     return org(con, v, oid)
 
 

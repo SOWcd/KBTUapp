@@ -203,6 +203,7 @@ FChanWrite = Annotated[Viewer, Depends(fchan_writer)]
 
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
+    logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
     def after(con) -> None:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)

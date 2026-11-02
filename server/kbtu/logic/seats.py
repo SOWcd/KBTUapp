@@ -296,14 +296,14 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     if hide_first:
         sql += " AND first_year = 0"
     roles, hidden = _roles(con, v), _hidden_orgs(con)
-    return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)])
+    return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)], share=True)
 
 
 def past_events(con, v: Viewer) -> list[dict]:
     found = rows(con, """SELECT * FROM events WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?
         ORDER BY starts_at DESC LIMIT 50""", NO_END, core.now())
     roles, hidden = _roles(con, v), _hidden_orgs(con)
-    return cards(con, v, [e for e in found if _visible(con, v, e, roles, hidden)])
+    return cards(con, v, [e for e in found if _visible(con, v, e, roles, hidden)], share=True)
 
 
 def _event(con, v: Viewer, eid: int) -> sqlite3.Row:

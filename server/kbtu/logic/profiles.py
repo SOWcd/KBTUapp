@@ -122,27 +122,35 @@ def sync_levels(con) -> None:
     9, a burst of moments for what was done weeks ago): a stored level is a place in the list, so it moves to the level
     of the same need first."""
     mark = json.dumps([[code, needs] for code, _, needs, _ in ACHIEVEMENTS])
-    last = one(con, "SELECT value FROM meta WHERE key = 'achievements'")
-    if last and last[0] == mark:
+    last, filled = (one(con, "SELECT value FROM meta WHERE key = ?", k) for k in ("achievements", "achievements_filled"))
+    if last and last[0] == mark and filled and filled[0] == mark:
         return
     was = {code: needs for code, needs in json.loads(last[0])} if last else {}
     now = {code: needs for code, _, needs, _ in ACHIEVEMENTS}
     to = lambda code, lv: sum(1 for n in now[code] if n <= was[code][lv - 1]) if lv > 0 else 0  # noqa: E731
-    with tx(con):
-        for code in was.keys() & now.keys():
-            if list(was[code]) != list(now[code]):
-                for r in rows(con, "SELECT user_id, level, seen FROM achievement_levels WHERE code = ?", code):
-                    con.execute("UPDATE achievement_levels SET level = ?, seen = ? WHERE user_id = ? AND code = ?",
-                                (to(code, min(r["level"], len(was[code]))), to(code, min(r["seen"], len(was[code]))), r["user_id"], code))
-        for (uid,) in rows(con, "SELECT user_id FROM students"):
-            have = dict(rows(con, "SELECT code, level FROM achievement_levels WHERE user_id = ?", uid))
-            for code, level in _levels(con, uid).items():
-                if level > have.get(code, 0):
-                    seen = level if code in was else 0
-                    con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at, seen = MAX(seen, excluded.seen)""",
-                                (uid, code, level, core.now(), seen))
-        con.execute("INSERT INTO meta (key, value) VALUES ('achievements', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (mark,))
+    put = lambda key: con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, mark))  # noqa: E731
+    if not last or last[0] != mark:
+        with tx(con):  # the re-tier moves stored levels once: done with its mark in one transaction, never twice
+            for code in was.keys() & now.keys():
+                if list(was[code]) != list(now[code]):
+                    for r in rows(con, "SELECT user_id, level, seen FROM achievement_levels WHERE code = ?", code):
+                        con.execute("UPDATE achievement_levels SET level = ?, seen = ? WHERE user_id = ? AND code = ?",
+                                    (to(code, min(r["level"], len(was[code]))), to(code, min(r["seen"], len(was[code]))), r["user_id"], code))
+            put("achievements")
+    # the fill only raises levels (safe to repeat): ~300 students a commit, so one write lock isn't held over all of them
+    # (3.2 s at 5k). Stopped midway, the next start finishes it, quietly (`was` is the new list by then).
+    students = [r[0] for r in rows(con, "SELECT user_id FROM students")]
+    for i in range(0, len(students), 300):
+        with tx(con):
+            for uid in students[i:i + 300]:
+                have = dict(rows(con, "SELECT code, level FROM achievement_levels WHERE user_id = ?", uid))
+                for code, level in _levels(con, uid).items():
+                    if level > have.get(code, 0):
+                        seen = level if code in was else 0
+                        con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at, seen = MAX(seen, excluded.seen)""",
+                                    (uid, code, level, core.now(), seen))
+    put("achievements_filled")
 
 
 # A badge with variants (owner, Nov 2): one award on the profile and in the count, the medal of my variant; each variant
@@ -404,10 +412,7 @@ def achievements(con, uid: int) -> list[dict]:
     reached (achievement_levels: an earned level stays), one query; counting every student's check-ins for every
     profile view was thousands of queries once a few hundred students had signed in (load test)."""
     mine = _counts(con, uid)
-    # out of students only: staff take no card and no "First 500", counted they made it "95%"
-    total = max(1, one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0])
-    at_level = {(r[0], r[1]): r[2] for r in rows(con, """SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
-        JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""")}
+    total, at_level, badges = _rarity(con)
     out = []
     reached = {r["code"]: r for r in rows(con, "SELECT code, level, reached_at FROM achievement_levels WHERE user_id = ?", uid)}
     for code, emoji, needs, secret in ACHIEVEMENTS:
@@ -416,18 +421,35 @@ def achievements(con, uid: int) -> list[dict]:
                     "levels": [{"need": n, "reached": mine[code] >= n, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                     "at": reached[code]["reached_at"] if code in reached else None,
                     **({"now": mine["streak_now"]} if code == "streak" else {})})
-    return _fold(con, out, total)
+    return _fold(out, badges)
 
 
-def _fold(con, out: list[dict], total: int) -> list[dict]:
+_RARITY: list = [0.0, None]  # (until, what _rarity read): the same for every profile view, so read once a minute per worker
+
+
+def _rarity(con) -> tuple[int, dict, dict]:
+    """How many students reached each level, out of how many, and each badge's share (any of its variants). Global and
+    slow to move: a minute stale is fine, and it was a GROUP BY over every level on every profile view (load review)."""
+    if _RARITY[0] > time.monotonic():
+        return _RARITY[1]
+    # out of students only: staff take no card and no "First 500", counted they made it "95%"
+    total = max(1, one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0])
+    at_level = {(r[0], r[1]): r[2] for r in rows(con, """SELECT l.code, l.level, COUNT(*) FROM achievement_levels l
+        JOIN students s ON s.user_id = l.user_id WHERE s.consent_version != 'staff' GROUP BY l.code, l.level""")}
+    badges = {b: one(con, f"""SELECT COUNT(DISTINCT l.user_id) FROM achievement_levels l JOIN students s ON s.user_id = l.user_id
+        WHERE s.consent_version != 'staff' AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total for b, vs in BADGES.items()}
+    _RARITY[:] = [time.monotonic() + 60, (total, at_level, badges)]
+    return _RARITY[1]
+
+
+def _fold(out: list[dict], badges: dict[str, float]) -> list[dict]:
     """A badge's variants as one entry at the badge's place: mine is the highest I have (`variant`), its medal shown;
     `variants` all of them, held or not, for the detail view. How rare: students with any of them."""
     by = {a["code"]: a for a in out}
     for b, vs in BADGES.items():
         held = [by[c] for c in vs if by[c]["level"]]
         top = held[0] if held else by[vs[-1]]
-        rarity = one(con, f"""SELECT COUNT(DISTINCT l.user_id) FROM achievement_levels l JOIN students s ON s.user_id = l.user_id
-            WHERE s.consent_version != 'staff' AND l.code IN ({','.join('?' * len(vs))})""", *vs)[0] / total
+        rarity = badges[b]
         by[b] = {**top, "code": b, "count": len(held), "level": 1 if held else 0, "rarity": rarity, "variant": held[0]["code"] if held else None,
                  "levels": [{"need": 1, "reached": bool(held), "rarity": rarity}], "at": min((a["at"] for a in held if a["at"]), default=None),
                  "variants": [{"code": c, "emoji": by[c]["emoji"], "have": bool(by[c]["level"]), "rarity": by[c]["rarity"]} for c in vs]}

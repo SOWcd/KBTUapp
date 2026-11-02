@@ -155,6 +155,7 @@ def video_done(con, vid: int, out: dict | None, error: str | None = None) -> Non
             WHERE id = ?""", (out["path"], out["width"], out["height"], out["duration"], out["bytes"], out["color"], vid))
     else:
         con.execute("UPDATE videos SET status = 'failed', error = ? WHERE id = ?", (error, vid))
+    core._SHARED.clear()  # a card shows its video once ready: here at once (other workers: core.SHARED_TTL)
 
 
 def stale_videos(con) -> list[tuple[int, str | None]]:

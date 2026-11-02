@@ -353,6 +353,7 @@ def _slides(con, v: Viewer, body: dict, e: sqlite3.Row, cover: int | None) -> No
             raise ApiError("bad_input")
     con.execute("DELETE FROM event_slides WHERE event_id = ?", (e["id"],))
     con.executemany("INSERT INTO event_slides (event_id, pos, file_id) VALUES (?, ?, ?)", [(e["id"], n, i) for n, i in enumerate(ids)])
+    core._SHARED.pop(("event", e["id"]), None)  # the Afisha's card shows them (other workers: core.SHARED_TTL)
 
 
 def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
