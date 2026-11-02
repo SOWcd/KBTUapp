@@ -273,8 +273,12 @@
   .shade { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; border-radius: inherit;
     background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
   /* a sheen that slides with the tilt */
-  .badge::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.13) 46%, transparent 60%);
-    background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
+  /* moved, not repainted: the band is its own layer 260% wide, slid by transform exactly where background-position
+     50% + gx * 45% put it (a 260% background at p sits at -1.6 widths * p). Painted into the card, it re-rasterised the
+     whole card with its art on every tilt frame */
+  .badge::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 260%; pointer-events: none;
+    background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.13) 46%, transparent 60%);
+    transform: translateX(calc(-30.769% - var(--gx, 0) * 27.692%)); will-change: transform; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
   /* round 5: the name and the role give way to the medallion (its 66 px corner; 52 px, was 58: it outweighed the photo),
