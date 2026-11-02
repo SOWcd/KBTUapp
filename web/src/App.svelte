@@ -180,6 +180,15 @@
   const built = $state<Record<string, boolean>>({});
   // (the Clubs tab waits for who I am: the copy or the server, a frame; else a member's hidden catalogue built too)
   $effect(() => { if (ui.tab === 'club' && !session.ready) return; if (!built[ui.tab]) built[ui.tab] = true; });
+  // ...and once the start has settled, the rest are built one per idle moment, so the first tap on a tab only shows it
+  // (a cold mount was the one long task left on a switch: ~1 s at 4x CPU). Away they cost nothing more: the hidden tab
+  // is skipped by the engine (.tab below); their effects wait for ui.tab (loads, the badge's drop, the forum's seen line).
+  function prebuild() {
+    const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
+    if (!k || session.banned) return;
+    built[k] = true;
+    if ('requestIdleCallback' in window) requestIdleCallback(prebuild, { timeout: 4000 }); else setTimeout(prebuild, 500);
+  }
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
@@ -494,7 +503,7 @@
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800);
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
@@ -559,8 +568,11 @@
   /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+  /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
+     layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
+  @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } }
   /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
-  .tab.on { visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
+  .tab.on { visibility: visible; content-visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
 </style>
