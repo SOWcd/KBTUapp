@@ -15,6 +15,14 @@ export const BADGES: { code: string; variants: { code: string; emoji: string }[]
   { code: 'init26', variants: [{ code: 'init26p', emoji: 'medal_init26p_2' }, { code: 'init26', emoji: 'medal_init26_2' }, { code: 'init26f', emoji: 'medal_init26f_2' }] },
 ];
 /** what it took: a badge's own variant says what I did there */
+/** a badge held in several variants as one entry per held variant, its own medal each; the rest as they are */
+export function splitVariants(list: Achievement[]): Achievement[] {
+  return list.flatMap((a) => {
+    const held = (a.variants ?? []).filter((v) => v.have);
+    return held.length > 1 ? held.map((v) => ({ ...a, variant: v.code, emoji: v.emoji, rarity: v.rarity ?? a.rarity })) : [a];
+  });
+}
+export const achKey = (a: Achievement): string => a.code + (a.variant ? ':' + a.variant : '');
 export const achHow = (a: Achievement): string => (a.variant ? variantHow(a.code, a.variant) : t(`ach.${a.code}.how` as 'ach.regular.how'));
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
@@ -41,7 +49,7 @@ export const QR_TONE: [string, string] = ['#1D3CB8', '#5B2BC0'];
 
 export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; founder?: boolean; idea?: boolean; name: string; sub: string }
 
-export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) });
+export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + achKey(a), ach: a, name: achName(a), sub: tierName(a) });
 export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) });
 /** the Creator's seal by the name, up close: what it is and why */
 export const founderItem = (): ShelfItem => ({ key: 'founder', founder: true, name: t('person.founder'), sub: '' });

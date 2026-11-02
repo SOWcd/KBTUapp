@@ -2,7 +2,7 @@
   // The universal profile card (SPEC §4.12): the same sheet from any avatar or name in the app, with the same
   // hero as Me. Shows only what the viewer may see (§3) — the server filters.
   import { roleName, titleOf } from '../../lib/perms';
-  import { achName, tierName } from '../../lib/awards';
+  import { achKey, achName, tierName } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
   import UserRound from '@lucide/svelte/icons/user-round';
   import Hero from '../profile/Hero.svelte';
@@ -167,7 +167,7 @@
     <h3 class="sec">{t('person.awards')}{earned.length + badges.length ? ' · ' + (earned.length + badges.length) : ''}</h3>
     {#if earned.length + badges.length}
       <div class="grid">
-        {#each earned as a (a.code)}
+        {#each earned as a (achKey(a))}
           <button class="cell" onclick={() => sheets.award({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) }, me)}><Medal {a} size={52} /><i>{achName(a)}{#if tierName(a)}<br />{tierName(a)}{/if}</i></button>
         {/each}
         {#each badges as b (b.eventId)}

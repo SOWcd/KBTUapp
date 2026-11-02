@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, hero } from './awards';
+import { artOf, hero, splitVariants } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -35,4 +35,11 @@ it("Recruiter's coin follows the level's metal", () => {
   const of = (level: number) => artOf({ code: 'referral', emoji: 'megaphone_3d', level, levels: lv as never });
   expect([0, 1, 3, 4, 6, 7, 8, 9].map(of)).toEqual(['medal_ref_b', 'medal_ref_b', 'medal_ref_b', 'medal_ref_s', 'medal_ref_s', 'medal_ref_g', 'medal_ref_g', 'medal_ref_l']);
   expect(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never })).toBe('raising_hands_3d_default');
+});
+
+it('a badge held in two variants shows both', () => {
+  const a = { code: 'init26', emoji: 'medal_init26p_2', variant: 'init26p', level: 1, variants: [
+    { code: 'init26p', emoji: 'medal_init26p_2', have: true, rarity: 0.01 }, { code: 'init26', emoji: 'medal_init26_2', have: true, rarity: 0.05 },
+    { code: 'init26f', emoji: 'medal_init26f_2', have: false, rarity: 0.3 }] } as never;
+  expect(splitVariants([a]).map((x) => [x.variant, x.emoji])).toEqual([['init26p', 'medal_init26p_2'], ['init26', 'medal_init26_2']]);
 });

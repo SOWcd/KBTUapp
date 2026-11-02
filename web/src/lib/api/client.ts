@@ -1,7 +1,8 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
 import type { Api } from './index';
-import type { ApiError, ClubApplication, Id, Video } from './types';
+import type { ApiError, ClubApplication, Id, PersonCard, Video } from './types';
+import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
 import { tg } from '../tg';
 import { i18n } from '../i18n/index.svelte';
@@ -140,7 +141,8 @@ export const server: Api = {
   readPosts: (ids) => call('POST', '/posts/read', { ids }),
   postVideo: (id) => call('GET', `/posts/${id}/video`),
 
-  person: (id) => call('GET', `/users/${id}`),
+  // a badge held in several variants (a performer who also volunteered): each shows (owner, Nov 2)
+  person: (id) => call<PersonCard>('GET', `/users/${id}`).then((p) => (p?.awards ? { ...p, awards: { ...p.awards, achievements: splitVariants(p.awards.achievements) } } : p)),
 
   friends: () => call('GET', '/friends'),
   findFriend: (username) => call('GET', '/friends/find?username=' + encodeURIComponent(username)),

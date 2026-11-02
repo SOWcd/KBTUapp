@@ -14,7 +14,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import { achItem, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, type ShelfItem } from '../../lib/awards';
+  import { achItem, achKey, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -160,12 +160,12 @@
             </span>
           </button>
         {/if}
-        <div class="grid">{#each sorted as a, i (a.code)}{@render card(a, i)}{/each}</div>
+        <div class="grid">{#each sorted as a, i (achKey(a))}{@render card(a, i)}{/each}</div>
         {#if !editing}<Recent />{/if}
       </div>
 
       <div class="pane" class:gone={tab !== 'badges'}>
-        <div class="grid">{#each medals as a, i (a.code)}{@render card(a, i)}{/each}</div>
+        <div class="grid">{#each medals as a, i (achKey(a))}{@render card(a, i)}{/each}</div>
       {#if p.awards.badges.length}
         <div class="pins">
           {#each p.awards.badges as b, i (b.eventId)}
