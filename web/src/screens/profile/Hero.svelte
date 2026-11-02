@@ -122,7 +122,17 @@
     swing.style.willChange = 'transform';
     const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 170, easing: TURN, fill: 'forwards' });
     shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 170, easing: TURN, fill: 'forwards' });
-    out.onfinish = () => sheets.myQr(link, p);
+    // the back never seen covering (its chunk failed, or it opened and closed between two effects): the card came back
+    // edge-on for good (slaidayZ, Nov 2: "the card just vanishes"), so it turns face on by itself
+    out.onfinish = () => { sheets.myQr(link, p); setTimeout(() => { if (back === 'out') faceOn(); }, 1500); };
+  }
+  function faceOn() {
+    back = '';
+    const land = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
+    swing.getAnimations().filter((x) => x !== land).forEach((x) => x.cancel());
+    shade.getAnimations().forEach((x) => x.cancel());
+    shade.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 400, easing: LAND });
+    land.onfinish = () => { swing.style.willChange = ''; spinning = false; };
   }
   function cardTap(e: MouseEvent) {
     if (!(e.target as Element).closest('button')) toBack(); // the photo, the seal and the medallion have their own
@@ -131,14 +141,7 @@
     const c = covered;
     untrack(() => {
       if (back === 'out' && c) back = 'away';
-      else if (back === 'away' && !c) {
-        back = '';
-        const land = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
-        swing.getAnimations().filter((x) => x !== land).forEach((x) => x.cancel());
-        shade.getAnimations().forEach((x) => x.cancel());
-        shade.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 400, easing: LAND });
-        land.onfinish = () => { swing.style.willChange = ''; spinning = false; };
-      }
+      else if (back === 'away' && !c) faceOn();
     });
   });
   $effect(() => {
