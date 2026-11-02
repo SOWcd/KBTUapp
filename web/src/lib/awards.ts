@@ -43,11 +43,12 @@ export const tierLabel = (level: number, of: number): string => (level === of &&
  *  I-III bronze, IV-VI silver, VII-VIII gold */
 export const metalOf = (level: number, of: number): number => (of <= 4 ? level - 1 : level === of ? 3 : Math.floor(((level - 1) * 3) / (of - 1)));
 export const METALS = ['bronze', 'silver', 'gold', 'legend'];
-// an achievement's own drawn coin per metal (Recruiter, owner Nov 2: for now, until better art): bronze, silver, gold, legend
-const DRAWN_BY_METAL: Record<string, string[]> = { referral: ['medal_ref_b', 'medal_ref_s', 'medal_ref_g', 'medal_ref_l'] };
-/** the picture an achievement shows: its own coin for this level's metal (not earned: the first), else its emoji */
+// an achievement drawn per level (Recruiter, owner Nov 2: a constellation, one more friend lit each level, the rim
+// in the level's metal; drawn by .claude/reports/recruiter-medal/gen.mjs)
+const DRAWN_BY_LEVEL: Record<string, string> = { referral: 'medal_rc' };
+/** the picture an achievement shows: its own medal for this level (not earned: the first), else its emoji */
 export const artOf = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string =>
-  DRAWN_BY_METAL[a.code]?.[metalOf(Math.max(1, a.level), a.levels.length)] ?? a.emoji;
+  a.code in DRAWN_BY_LEVEL ? DRAWN_BY_LEVEL[a.code] + Math.max(1, a.level) : a.emoji;
 
 export function tierName(a: Achievement): string {
   if (a.level === 0) return a.secret ? t('ach.secret') : t('ach.locked');

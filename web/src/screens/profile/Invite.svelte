@@ -40,7 +40,7 @@
   /* a warm glow behind the medal, the tile's one colour */
   .inv { background: radial-gradient(90% 70% at 15% 0%, rgba(255, 178, 61, 0.22), transparent 70%), var(--surface); }
   .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-  /* the megaphone's call, quieter: a coin's small turn now and then */
+  /* a medal's small turn now and then */
   .art { display: flex; margin: -2px 0 0 -2px; animation: nudge 4.8s ease-in-out 900ms infinite; }
   :global(html.lowfx) .art { animation: none; }
   /* under a sheet (the award's full-screen blur) it would make the backdrop re-blur every frame: it waits */

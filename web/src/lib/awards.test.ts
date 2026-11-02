@@ -30,10 +30,10 @@ it('puts DMP, then the Student Government, before a higher role in a club on the
   expect(hero(c).title).toMatch(/· Org 3$/);
 });
 
-it("Recruiter's coin follows the level's metal", () => {
+it("Recruiter's medal is drawn per level", () => {
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
   const of = (level: number) => artOf({ code: 'referral', emoji: 'megaphone_3d', level, levels: lv as never });
-  expect([0, 1, 3, 4, 6, 7, 8, 9].map(of)).toEqual(['medal_ref_b', 'medal_ref_b', 'medal_ref_b', 'medal_ref_s', 'medal_ref_s', 'medal_ref_g', 'medal_ref_g', 'medal_ref_l']);
+  expect([0, 1, 4, 9].map(of)).toEqual(['medal_rc1', 'medal_rc1', 'medal_rc4', 'medal_rc9']);
   expect(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never })).toBe('raising_hands_3d_default');
 });
 
