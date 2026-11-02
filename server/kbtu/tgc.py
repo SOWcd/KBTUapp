@@ -141,7 +141,9 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             rules.banned(con, tg)  # on record: an unban in the app lifts it here too (unban_due)
         bans.add(tg)
         return
-    act, raid = rules.stranger(con, tg, _text(msg), _link(con, root, msg["message_id"]))
+    act, raid = rules.stranger(con, tg, _text(msg), _link(con, root, msg["message_id"]), msg["message_id"])
+    if act == "again":  # warned for this very message already: deleted again (gone: fine), nothing more
+        return
     if act == "ban":
         bans.add(tg)
     elif not raid:
@@ -214,7 +216,7 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     for cid, chat, mid in rules.to_delete(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": mid})
         if r.get("ok") or r.get("error_code") == 400:  # gone, or never to be (its author deleted it first; too old)
-            rules.deleted(con, cid, chat, mid)
+            rules.deleted(con, cid, chat, mid, bool(r.get("ok")))
         else:
             break  # the network, a flood wait, lost rights: next round (the unbans below still go)
     for tg in rules.unban_due(con):

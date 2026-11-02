@@ -241,11 +241,17 @@ def set_ban(con, v: Viewer, uid, on, reason=None) -> dict:
         raise ApiError("bad_input", "reason")
     with tx(con):
         u = _touchable(con, v, uid)
+        # the ban takes the role, so _touchable can't see an admin in it any more: the ban's audit line remembers
+        was = one(con, "SELECT json_extract(data, '$.admin') FROM audit_log WHERE action = 'ban' AND target = ? ORDER BY id DESC LIMIT 1", f"user:{u['id']}")
+        adm = u["role"] == "admin" or bool(u["banned_at"] and was and was[0])  # banned again: still the admin's ban
+        if not on and adm and not _owner(con, v):
+            raise ApiError("forbidden")  # an admin's ban is lifted by the owner alone, as it was given
         if on:
             con.execute("UPDATE users SET banned_at = ?, ban_reason = ?, role = 'user' WHERE id = ?", (core.now(), why, u["id"]))
         else:
             con.execute("UPDATE users SET banned_at = NULL, ban_reason = NULL WHERE id = ?", (u["id"],))
-        log_action(con, v.id, "ban" if on else "unban", f"user:{u['id']}", json.dumps({"reason": why} if on else {}, ensure_ascii=False))
+        log_action(con, v.id, "ban" if on else "unban", f"user:{u['id']}", json.dumps({"reason": why, **({"admin": True} if adm else {})} if on else {},
+                                                                              ensure_ascii=False))
     return staff(con, v)
 
 

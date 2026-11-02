@@ -349,10 +349,10 @@ def test_review_fixes(env, monkeypatch):
     tg.calls.clear()  # one message breaks (a locked database): the others' deletions and warnings still go
     real = tgc.rules.stranger
 
-    def flaky(con_, tg_id, body, link):
+    def flaky(con_, tg_id, body, link, msg_id=0):
         if tg_id == 88:
             raise logic.ApiError("busy")
-        return real(con_, tg_id, body, link)
+        return real(con_, tg_id, body, link, msg_id)
     monkeypatch.setattr(tgc.rules, "stranger", flaky)
     hear(cfg, tg, {"message": msg(20, 88)}, {"message": msg(21, 89)})
     assert tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [20, 21]}] and len(tg.of("sendMessage")) == 1
