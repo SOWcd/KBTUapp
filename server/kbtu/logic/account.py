@@ -537,8 +537,8 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             raise ApiError("conflict", "fixed")
         if v == s[col]:
             return  # nothing changes: the once isn't spent
-        if col == "student_id" and not admin and v[:2] != s["student_id"][:2]:
-            raise ApiError("bad_input", "sid_year")  # the intake year is the year of study (free 1st-year seats): support
+        if col == "student_id" and not admin and v[:2] > s["student_id"][:2]:
+            raise ApiError("bad_input", "sid_year")  # a later intake year would make a 1st-year (free seats): support. An earlier one (26B typed for 25B) only loses that
         if col in ("first_name", "last_name", "first_lat", "last_lat") and not admin:
             # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
             # two of its words kept and none added, or one could rename into someone else ("Serikbayev Aidos" then

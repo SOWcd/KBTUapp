@@ -7081,6 +7081,19 @@ def test_same_person_kazakh_spellings():
     assert not same_person("\u0418\u0432\u0430\u043d\u043e\u0432 \u0418\u0432\u0430\u043d", "Petr", "Sidorov")
 
 
+def test_identity_earlier_intake(env):
+    """26B typed for 25B (a student, Nov 2): an earlier intake year is hers to fix (it only loses 1st-year seats); the course follows."""
+    c, cfg = env
+    ali = login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE students SET student_id = '26B031234', course = 1 WHERE user_id = ?", (ali["id"],))
+    r = c.patch("/api/me", headers=tma(10), json={"studentId": "25B031234"})
+    assert r.status_code == 200, r.text
+    row = con.execute("SELECT student_id, course FROM students WHERE user_id = ?", (ali["id"],)).fetchone()
+    assert row[0] == "25B031234" and row[1] >= 2
+    con.close()
+
+
 def test_identity_fix_once(env, monkeypatch):
     """Settings -> My data: the student ID and each name corrected once (review identity-edit-review.md); the ID within
     its intake year and free, first/last only as KBTU's own name in another spelling; the old value in the audit log;
@@ -7093,7 +7106,9 @@ def test_identity_fix_once(env, monkeypatch):
     con.execute("UPDATE students SET student_id = '26B031235' WHERE user_id = ?", (bek["id"],))
     con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (staff["id"],))
     fix = lambda **b: c.patch("/api/me", headers=tma(10), json=b)  # noqa: E731
-    assert fix(studentId="25B031236").json()["message"] == "sid_year"         # another intake: support
+    con.execute("UPDATE students SET student_id = '25B031234' WHERE user_id = ?", (ali["id"],))
+    assert fix(studentId="26B031236").json()["message"] == "sid_year"         # a later intake (a 1st-year's seats): support
+    con.execute("UPDATE students SET student_id = '26B031234' WHERE user_id = ?", (ali["id"],))
     con.execute("INSERT INTO prefill (email, student_id) VALUES ('other@kbtu.kz', '26B031240')")
     assert fix(studentId="26B031240").json()["message"] == "sid_taken"       # kept for another mail by the freshmen list
     assert fix(studentId="26B\uff10\uff13\uff11\uff12\uff13\uff19").status_code == 400  # fullwidth digits: a clone of a real ID
