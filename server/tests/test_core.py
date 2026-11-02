@@ -198,7 +198,18 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     assert nos() == [1, None, 3]
     login(c, 14, "it")
     assert nos() == [1, None, 3]
-
+    # signed in from a wrong Telegram (10): the whole account moves to the real one (12), which only opened the app
+    c.get("/api/me", headers=tma(12))
+    before = c.get("/api/me", headers=tma(10)).json()
+    login(c, 16, "dan")
+    with pytest.raises(SystemExit):
+        admin.main(["move", "10", "16"])  # the target holds its own KBTU account: refused
+    admin.main(["move", "10", "12"])
+    moved = c.get("/api/me", headers=tma(12)).json()
+    assert moved["id"] == before["id"] and moved["no"] == before["no"] and moved["student"]["studentId"] == "24Bbek"
+    assert c.get("/api/me", headers=tma(10)).json()["student"] is None
+    admin.main(["move", "12", "10"])  # and back
+    assert c.get("/api/me", headers=tma(10)).json()["id"] == before["id"]
 
 
 def test_frontend(env):

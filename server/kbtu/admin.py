@@ -9,6 +9,9 @@
   .venv/bin/python -m kbtu.admin mark <@username | telegram id> <idea | none>  the idea author's blue seal (one person)
   .venv/bin/python -m kbtu.admin unlink <@username | telegram id>           the KBTU account off this Telegram (a changed student ID,
                                                                          someone else's sign-in): the next sign-in links afresh
+  .venv/bin/python -m kbtu.admin move <@from | telegram id> <@to | telegram id>   a student signed in from a wrong Telegram:
+                                the whole account (card, friends, clubs, tickets) moves to their real one, which must have
+                                opened the app and hold nothing yet; check with the student that both are theirs first
   .venv/bin/python -m kbtu.admin staff <@username | telegram id> <first> <last> [<unit>]
                                 staff, not students (DMP, KBTU's IT testing the app): verified by hand,
                                 they act as students but take no card number and aren't counted in stats; `unlink` takes it back
@@ -68,6 +71,7 @@ import time
 from . import config, db
 from pathlib import Path
 
+from .logic.account import _DEL_GONE
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, delete_me, deletion_hash, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
@@ -172,6 +176,25 @@ def main(args: list[str]) -> None:
                 con.execute("UPDATE users SET mark = NULL WHERE mark = ?", (args[2],))  # one person each
             con.execute("UPDATE users SET mark = ? WHERE id = ?", (None if args[2] == "none" else args[2], u["id"]))
         print(f"@{u['tg_username'] or u['tg_id']}: mark {args[2]}")
+    elif cmd == "move" and len(args) == 3:  # the owner checked both Telegrams with the student: no in-app proof to phish
+        a, b = _user(con, args[1]), _user(con, args[2])
+        why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
+               else "the target is banned" if b["banned_at"] else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
+               if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads")  # opening the app is no data
+               if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
+        if why:
+            sys.exit(f"refused: {why}")
+        cols = ("tg_id", "tg_username", "tg_first_name", "tg_last_name", "tg_photo_url", "tg_photo_path", "tg_photo_src", "can_dm")
+        ra, rb = (tuple(one(con, f"SELECT {', '.join(cols)} FROM users WHERE id = ?", x["id"])) for x in (a, b))
+        sets = ", ".join(f"{c} = ?" for c in cols)
+        with db.tx(con):  # swap the Telegram side of the two rows; tg_id is UNIQUE, so one steps aside first
+            con.execute("UPDATE users SET tg_id = (SELECT min(tg_id) FROM users) - 1 WHERE id = ?", (a["id"],))
+            con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
+            con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
+            con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            con.execute("DELETE FROM meta WHERE key IN (?, ?)", (f"ms:{a['id']}", f"ms:{b['id']}"))
+            log_action(con, None, "account_move", f"user:{a['id']}", json.dumps({"other": b["id"]}))
+        print(f"moved: the account is on @{b['tg_username'] or b['tg_id']} now (run move again the other way to undo)")
     elif cmd == "unlink" and len(args) == 2:  # the card number stays (users.card_no): signing in again gets it back
         u = _user(con, args[1])
         with db.tx(con):
