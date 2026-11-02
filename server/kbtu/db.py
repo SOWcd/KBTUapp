@@ -1082,6 +1082,9 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
     END;"""),
+    # (Nov 2) a round's own "what's next" (casting audit: "come in person, 3-12 Nov, Kazybek bi, 1st floor"), the club's
+    # words shown in the app under the steps like its description; the bot keeps its template
+    (108, "ALTER TABLE rounds ADD COLUMN next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300);"),
 ]
 
 

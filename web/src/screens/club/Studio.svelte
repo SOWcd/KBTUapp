@@ -29,7 +29,7 @@
   import { tick, untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayNo } from '../../lib/time';
+  import { relDay, time, nowTs, dayNo, dayMonth } from '../../lib/time';
   import { may, byRank, roleName, titleOf } from '../../lib/perms';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Poster from '../../ui/Poster.svelte';
@@ -143,7 +143,12 @@
   const claimOrg = $derived(dmp ? undefined : m?.org.id);
   const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests(claimOrg).then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
   $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
-  const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
+  // "Recruiting" is the round: its tile is always there for the casting team (casting audit: on a day without a round Studio
+  // had no way in, so a President made her casting an event); closed, a tap opens the setup. Vice+ without the right:
+  // the any-time join requests' sheet while those are on
+  const recruitTile = $derived(casting || (vice && recruiting));
+  const openRecruit = () => (casting && !round && !waiting ? sheets.roundSetup(m!.org.id, null, refreshRound)
+    : vice ? sheets.joinInbox(m!.org.id) : sheets.roundBoard(m!.org.id));
 </script>
 
 <div class="page scroll stagger">
@@ -255,13 +260,13 @@
     <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
          the memo to DMP; inviting lives on Team, editing the club up top. First, to Vice+ (who link chats): the channel
          whose posts the userbot copies into the news, or "Link" -->
-    {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || (vice && recruiting) || (casting && round)}
+    {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || recruitTile}
       <div class="qa">
         {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Megaphone size={22} /><span class="tt"><b>{t('studio.channelShort')}</b><small class="clamp-2">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></span></button>{/if}
         {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><span class="tt"><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></span></button>{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><span class="tt"><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></span></button>{/if}
-        {#if (vice && recruiting) || (casting && round)}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><span class="tt"><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : t('studio.recruitOpen')}</small></span>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
+        {#if recruitTile}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><span class="tt"><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : 'studio.recruitClosed')}</small></span>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
         {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><span class="tt"><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></span></button>{/if}
       </div>
     {/if}

@@ -3099,6 +3099,41 @@ def test_casting(env):
     assert sorted(x[0] for x in con.execute("SELECT stage FROM round_apps WHERE round_id = ?", (rid,))) == ["no", "yes"]
 
 
+def test_casting_whole_club(env):
+    """Casting audit (Nov 2): a club without departments recruits for the whole club (accepted join without a tag);
+    one department: nothing to pick; picks never exceed the departments; the round's own "what's next" (in person,
+    dates, place) is the app's to show, at most 300 characters, and it puts the audition into the student's steps."""
+    c, cfg = env
+    for tg, name in ((20, "pres"), (10, "ann")):
+        login(c, tg, name)
+    con = db.connect(cfg.db_path)
+    ann = con.execute("SELECT id FROM users WHERE tg_id = 10").fetchone()[0]
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'jp', 'club', 'Japan', 'JP', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
+    body = {"title": "Recruiting", "picks": 3, "closesAt": int(time.time()) + 7 * 86400, "departments": [], "questions": [{"kind": "short", "text": "Why?"}]}
+    assert c.post("/api/orgs/1/round", headers=tma(20), json={**body, "nextText": "x" * 301}).status_code == 400
+    nxt = "Come to the audition: Nov 3-12, Kazybek bi, 1st floor"
+    r = c.post("/api/orgs/1/round", headers=tma(20), json={**body, "nextText": nxt}).json()
+    assert r["departments"] == [] and r["picks"] == 1 and r["nextText"] == nxt and r["interviews"]
+    seen = c.get("/api/orgs/1/round", headers=tma(10)).json()
+    assert seen["nextText"] == nxt and seen["interviews"]
+    q = str(r["questions"][0]["id"])
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [1], "answers": {q: "x"}}).status_code == 400
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [], "answers": {q: "Anime"}}).json()["mine"]["departments"] == []
+    app = c.get(f"/api/rounds/{r['id']}/apps", headers=tma(20)).json()[0]
+    assert c.post(f"/api/round-apps/{app['id']}/decide", headers=tma(20), json={"stage": "yes"}).json() == {"stage": "yes", "takenTag": None}
+    assert c.post(f"/api/rounds/{r['id']}/send", headers=tma(20)).json() == {"accepted": 1, "declined": 0}
+    assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ann,)).fetchone()[0] == "member"
+    # one department: the student picks nothing, it's that one; no next text and no slots: no audition step
+    con.execute("INSERT INTO org_tags (id, org_id, name, color, created_at) VALUES (1, 1, 'Art', '#FF4FA3', 0)")
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (ann,))
+    r = c.post("/api/orgs/1/round", headers=tma(20), json={**body, "departments": [{"tagId": 1}]}).json()
+    assert r["picks"] == 1 and r["nextText"] == "" and not r["interviews"]
+    q = str(r["questions"][0]["id"])
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [], "answers": {q: "Draw"}}).json()["mine"]["departments"] == [1]
+    assert c.patch(f"/api/rounds/{r['id']}", headers=tma(20), json={**body, "departments": [{"tagId": 1}], "nextText": nxt}).json()["nextText"] == nxt
+
+
 def test_saved_tomorrow(env, monkeypatch):
     """"Save" with a purpose (instead of a like): the day before, at noon, whoever saved an event and isn't going
     hears it once (with the reminders' switch); signing up meanwhile quiets it; the organizer sees how many saved it."""

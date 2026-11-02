@@ -2,8 +2,8 @@
   import { withNick } from '../../lib/perms';
   // A club's applications (Vice+, §4.5), oldest first. The owner's flow: look at the person (the avatar opens
   // their card), write to them first ("come by, let's meet"), then accept or decline; the bot tells them.
-  // The switch on top closes applications: nobody can apply, people can still write to the club.
-  // Studio's "Recruiting" tile opens this: the casting (recruitment rounds) is a row here, not a tile of its own.
+  // "Recruiting" (the round) is the row on top; the switch below it takes any-time join requests without a round.
+  // Studio's "Recruiting" tile opens this for Vice+.
   // ponytail: "Write" needs a Telegram @username (no username, no chat link); a bot relay if that bites.
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Id, type JoinRequest, type Round } from '../../lib/api';
@@ -58,18 +58,18 @@
 </script>
 
 <Sheet {overlay} icon={Inbox} full title={t('cast.card')}>
-  {#if o}
-    <label class="switch">
-      <span><b>{t('jr.open')}</b><i class="t-foot">{o.recruiting ? t('jr.openHint') : t('jr.closedHint')}</i></span>
-      <input type="checkbox" role="switch" checked={o.recruiting} onchange={(e) => { haptic.tap(); void setOpen(e.currentTarget.checked); }} />
-    </label>
-  {/if}
   {#if casting}
     <button class="cast" onclick={() => (round ? sheets.roundBoard(org) : sheets.roundSetup(org, null, loadRound))}>
-      <Megaphone size={20} /><span class="lbl">{t('cast.row')}</span>
-      {#if round?.counts?.new}<b class="count">{round.counts.new}</b>{:else}<span class="t-foot ellipsis">{round ? tn('cast.apps', total) : t('cast.cardOpen')}</span>{/if}
+      <Megaphone size={20} /><span class="lbl ellipsis">{round ? round.title : t('cast.cardOpen')}</span>
+      {#if round?.counts?.new}<b class="count">{round.counts.new}</b>{:else if round}<span class="t-foot">{tn('cast.apps', total)}</span>{/if}
       <ChevronRight size={18} />
     </button>
+  {/if}
+  {#if o}
+    <label class="switch">
+      <span><b>{t('jr.open')}</b><i class="t-foot">{t('jr.openHint')}</i></span>
+      <input type="checkbox" role="switch" checked={o.recruiting} onchange={(e) => { haptic.tap(); void setOpen(e.currentTarget.checked); }} />
+    </label>
   {/if}
   {#if list}
     <div class="list">
@@ -105,10 +105,11 @@
   .who b { font: 650 15.5px/1.3 var(--font-text); }
   .acts { display: flex; gap: 8px; }
   .acts :global(.btn.neutral) { background: var(--surface-3); } /* the card is surface-2 already */
-  .cast { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; margin-top: 10px; padding: 0 12px 0 14px; border-radius: var(--r-l);
+  .cast { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 0 12px 0 14px; border-radius: var(--r-l);
     background: var(--surface-2); text-align: left; color: var(--text-3); }
   .cast > :global(svg:first-child) { flex: none; color: var(--accent-text); }
-  .cast .lbl { flex: 1; color: var(--text); font: 620 15px/1 var(--font-text); }
+  .cast + .switch { margin-top: 10px; }
+  .cast .lbl { flex: 1; min-width: 0; color: var(--text); font: 620 15px/1 var(--font-text); }
   .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
   .none { padding: 18px 4px; text-align: center; }
 </style>

@@ -92,14 +92,20 @@
   }
   async function sendResults() {
     if (!r) return;
-    const yes = apps.filter((a) => a.stage === 'yes').length, no = apps.length - yes;
-    if (!(await sheets.ask({ title: t('cast.sendAsk'), text: t('cast.sendText', { yes, no }), ok: t('cast.sendGo'), cancel: t('common.cancel') }))) return;
+    const yes = apps.filter((a) => a.stage === 'yes').length, no = apps.length - yes, untouched = apps.filter((a) => a.stage === 'new').length;
+    const text = t('cast.sendText', { yes, no }) + (untouched ? ' ' + t('cast.sendUntouched', { n: untouched }) : '');
+    if (!(await sheets.ask({ title: t('cast.sendAsk'), text, ok: t('cast.sendGo'), cancel: t('common.cancel') }))) return;
     try {
       const res = await api.sendRound(r.id);
       haptic.ok(); burst(); say(t('cast.sentDone', { n: res.accepted }), 'party_popper_3d');
       studioChanged(); close(overlay.id);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // the stages row scrolls at 375/320: a fade on the side with more
+  let fade = $state({ l: false, r: false });
+  const edges = (el: HTMLElement) => { fade = { l: el.scrollLeft > 2, r: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 }; };
+  function stagesRow(el: HTMLElement) { edges(el); const ro = new ResizeObserver(() => edges(el)); ro.observe(el); return () => ro.disconnect(); }
+
   // interviews: the slots by day with who booked them, adding a day's slots, inviting the shortlisted, who came
   let view = $state<'apps' | 'iv'>('apps');
   let slots = $state<RoundSlot[]>([]);
@@ -198,6 +204,9 @@
     <div class="take">
       {#each r.departments as d (d.tagId)}
         <button class:on={a.stage === 'yes' && a.takenTag === d.tagId} style="--c:{d.color}" onclick={() => decide('yes', d.tagId)}>{t('cast.takeInto', { name: d.name })}</button>
+      {:else}
+        <!-- no departments: into the club -->
+        <button class:on={a.stage === 'yes'} style="--c:var(--success)" onclick={() => decide('yes')}>{t('cast.take')}</button>
       {/each}
       <button class="nope" class:on={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</button>
     </div>
@@ -257,7 +266,7 @@
         {/each}
       </div>
     {/if}
-    <div class="seg stages">{#each STAGES as s (s)}<button class:on={stage === s} onclick={() => (stage = s)}>{t(`cast.s.${s}`)}{count(s) ? ' · ' + count(s) : ''}</button>{/each}</div>
+    <div class="seg stages" class:fl={fade.l} class:fr={fade.r} {@attach stagesRow} onscroll={(e) => edges(e.currentTarget)}>{#each STAGES as s (s)}<button class:on={stage === s} onclick={(e) => { stage = s; e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}>{t(`cast.s.${s}`)}{count(s) ? ' · ' + count(s) : ''}</button>{/each}</div>
 
     {#if stage === 'new' && count('new')}<Button kind="primary" size="m" full onclick={review}>{t('cast.reviewGo', { n: count('new') })}</Button>{/if}
     <div class="list">
@@ -296,6 +305,9 @@
   .deps i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
   .stages { display: flex; overflow-x: auto; scrollbar-width: none; margin-bottom: 12px; max-width: 100%; }
   .stages button { flex: none; }
+  .stages.fr { mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent); }
+  .stages.fl { mask-image: linear-gradient(90deg, transparent, black 28px); }
+  .stages.fl.fr { mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent); }
   .list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left; }
@@ -317,8 +329,8 @@
   .stars button { color: var(--text-3); padding: 2px; }
   .stars button.on { color: #FFB23D; }
   .stars button.on :global(svg) { fill: currentColor; }
-  .verdicts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
-  .verdicts button { display: flex; align-items: center; justify-content: center; height: 48px; border-radius: var(--r-m); font: 700 15px/1 var(--font-text); }
+  .verdicts { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 8px; margin-top: 10px; }
+  .verdicts button { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 4px 6px; border-radius: var(--r-m); font: 700 14.5px/1.15 var(--font-text); text-align: center; overflow-wrap: anywhere; }
   .verdicts .no { background: var(--danger-soft); color: var(--danger-text); }
   .verdicts .maybe { background: var(--surface-2); color: var(--text); }
   .verdicts .next { background: var(--success-soft); color: var(--success-text); }

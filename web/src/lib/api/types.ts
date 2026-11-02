@@ -350,11 +350,13 @@ export type RoundKind = 'short' | 'long' | 'one' | 'many' | 'link';
 export interface RoundQuestion { id?: Id; kind: RoundKind; text: string; options?: string[] | null; required: boolean; tagId?: Id | null }
 export interface RoundDepartment { tagId: Id; name?: string; color?: string; about: string; places?: number | null }
 export interface RoundInput { title: string; picks: number; closesAt: Ts; resultsBy?: Ts | null; declineText?: string;
-  departments: RoundDepartment[]; questions: RoundQuestion[] }
+  /** the club's own "what's next" (≤ 300): auditions in person, dates, place; shown under the student's steps */
+  nextText?: string; departments: RoundDepartment[]; questions: RoundQuestion[] }
 export type AppStage = 'new' | 'maybe' | 'next' | 'yes' | 'no';
 /** The live round as I see it: a student its form and my application ('sent' until the results, then yes or no); the
  *  casting team its counts by stage too. */
 export interface Round { id: Id; title: string; picks: number; closesAt: Ts; resultsBy: Ts | null; open: boolean; status: 'open' | 'closed' | 'done';
+  nextText: string; interviews: boolean /* slots or a next-steps text: the student's steps show the audition */;
   departments: (RoundDepartment & { name: string; color: string })[]; questions: (RoundQuestion & { id: Id })[];
   mine: { departments: Id[]; answers: Record<string, string | string[]>; stage: 'sent' | 'yes' | 'no'; invited: boolean;
     slot: { id: Id; startsAt: Ts; minutes: number; place: string } | null } | null;

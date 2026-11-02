@@ -61,7 +61,8 @@
   const soon = $derived(data.orgs.filter((o) => !mineIds.has(o.id) && !o.myRole && (next.has(o.id) || o.round || o.recruiting))
     .map((o) => ({ o, at: next.get(o.id)?.at ?? o.round?.closesAt ?? Infinity }))
     .sort((a, b) => +!a.o.gov - +!b.o.gov || a.at - b.at).slice(0, SOON).map((x) => x.o));
-  const soonLine = (o: Org) => next.get(o.id)?.text ?? (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : t('clubs.openNow'));
+  // an open round first: its "Apply" button sits next to it, not next to an unrelated event (casting audit)
+  const soonLine = (o: Org) => (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : next.get(o.id)?.text ?? t('clubs.openNow'));
   const canApply = (o: Org) => !!session.me?.student && !o.myRole && (!!o.round || o.recruiting);
   // Popular: the six biggest that aren't mine, with someone in them or following
   const popular = $derived(clubsOnly.filter((o) => !mineIds.has(o.id) && (o.gov || weight(o) > 0)).sort(byWeight).slice(0, 6));
@@ -129,7 +130,7 @@
       <div class="sec"><h2>{t('clubs.soon')}</h2></div>
       <div class="rows surface">
         {#each soon as o (o.id)}
-          <ClubRow org={o} sub={soonLine(o)} hot={next.has(o.id)}>
+          <ClubRow org={o} sub={soonLine(o)} hot={!o.round && next.has(o.id)}>
             {#snippet end()}
               {#if canApply(o) && o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
               {:else if canApply(o) && o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>

@@ -1,7 +1,7 @@
 """Casting (PLAN "Casting", designed Oct 11 from the owner's club's process): a club's recruitment round. The club opens
 it with departments (its own tags, each with a line about it and maybe places) and at most six questions of its own;
 a student applies in a minute (name, year, school, KBTU email and Telegram are their profile already), picking up to
-`picks` departments in order; the casting team (the "casting" right: HR, heads) screens the applications one by one
+`picks` departments in order (no departments: a round for the whole club; one: nothing to pick); the casting team (the "casting" right: HR, heads) screens the applications one by one
 (no / maybe / next, stars, a note: the team's only), takes the shortlisted into a department or says no, and sends the
 results in one tap: the accepted are members at once with their department's tag, the rest get the club's own words.
 Interviews: the team adds time slots (one by one, or groups), invites the shortlisted, who pick a time in the app (the
@@ -53,8 +53,10 @@ def view(con, v: Viewer, oid: int) -> dict | None:
         WHERE d.round_id = ? ORDER BY d.pos""", r["id"])
     qs = rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", r["id"])
     mine = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ?", r["id"], v.id) if v.student else None
+    # the club's own "what's next" (in-person auditions, dates, place): shown in the app like its description, never by the bot
     out = {"id": r["id"], "title": r["title"], "picks": r["picks"], "closesAt": r["closes_at"], "resultsBy": r["results_by"],
-           "open": _accepting(r), "status": r["status"],
+           "open": _accepting(r), "status": r["status"], "nextText": r["next_text"],
+           "interviews": bool(r["next_text"] or one(con, "SELECT 1 FROM round_slots WHERE round_id = ?", r["id"])),
            "departments": [{"tagId": d["tag_id"], "name": d["name"], "color": d["color"], "about": d["about"], "places": d["places"]} for d in deps],
            "questions": [{"id": q["id"], "kind": q["kind"], "text": q["text"], "options": json.loads(q["options"]) if q["options"] else None,
                           "required": bool(q["required"]), "tagId": q["tag_id"]} for q in qs],
@@ -85,7 +87,7 @@ def _clean(con, oid: int, body: dict) -> dict:
         title = " ".join(str(body["title"]).split())
         picks, closes = int(body.get("picks") or 2), int(body["closesAt"])
         results = int(body["resultsBy"]) if body.get("resultsBy") is not None else None
-        decline = str(body.get("declineText") or "").strip()
+        decline, nxt = str(body.get("declineText") or "").strip(), str(body.get("nextText") or "").strip()
         deps = [(int(d["tagId"]), str(d.get("about") or "").strip(), int(d["places"]) if d.get("places") else None) for d in body["departments"]]
         qs = [(str(q["kind"]), " ".join(str(q["text"]).split()), [" ".join(str(o).split()) for o in q.get("options") or []],
                bool(q.get("required", True)), int(q["tagId"]) if q.get("tagId") is not None else None) for q in body.get("questions") or []]
@@ -93,14 +95,15 @@ def _clean(con, oid: int, body: dict) -> dict:
         raise ApiError("bad_input")
     tags = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ?", oid)}
     ids = [d[0] for d in deps]
-    ok = (0 < len(title) <= 80 and 1 <= picks <= 3 and now() < closes <= now() + 120 * 86400 and (results is None or results >= closes)
-          and len(decline) <= 500 and 1 <= len(deps) <= 12 and len(set(ids)) == len(ids) and set(ids) <= tags
+    picks = max(1, min(picks, 3, len(deps) or 1))  # never more than there are departments
+    ok = (0 < len(title) <= 80 and now() < closes <= now() + 120 * 86400 and (results is None or results >= closes)
+          and len(decline) <= 500 and len(nxt) <= 300 and len(deps) <= 12 and len(set(ids)) == len(ids) and set(ids) <= tags
           and all(len(a) <= 200 and (p is None or 0 < p <= 500) for _, a, p in deps) and len(qs) <= 6
           and all(k in KINDS and 0 < len(t) <= 200 and (k not in ("one", "many") or 2 <= len(o) <= 8 and all(0 < len(x) <= 60 for x in o))
                   and (g is None or g in ids) for k, t, o, _, g in qs))
     if not ok:
         raise ApiError("bad_input")
-    return {"title": title, "picks": picks, "closes": closes, "results": results, "decline": decline, "deps": deps, "qs": qs}
+    return {"title": title, "picks": picks, "closes": closes, "results": results, "decline": decline, "next": nxt, "deps": deps, "qs": qs}
 
 
 def open_round(con, v: Viewer, oid: int, body: dict) -> dict:
@@ -110,8 +113,8 @@ def open_round(con, v: Viewer, oid: int, body: dict) -> dict:
     with tx(con):
         if _live(con, oid):
             raise ApiError("conflict")  # one round at a time
-        rid = con.execute("""INSERT INTO rounds (org_id, title, picks, closes_at, results_by, decline_text, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (oid, f["title"], f["picks"], f["closes"], f["results"], f["decline"], v.id, now())).lastrowid
+        rid = con.execute("""INSERT INTO rounds (org_id, title, picks, closes_at, results_by, decline_text, next_text, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (oid, f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], v.id, now())).lastrowid
         _save_parts(con, rid, f)
         for (uid,) in rows(con, """SELECT s.user_id FROM subscriptions s WHERE s.org_id = ?
                 AND s.user_id NOT IN (SELECT user_id FROM org_members WHERE org_id = ?)""", oid, oid):
@@ -145,8 +148,8 @@ def update_round(con, v: Viewer, rid: int, body: dict) -> dict:
             if applied:
                 f["qs"] = [(q["kind"], q["text"], json.loads(q["options"]) if q["options"] else [], bool(q["required"]), q["tag_id"])
                            for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)]
-            con.execute("UPDATE rounds SET title = ?, picks = ?, closes_at = ?, results_by = ?, decline_text = ?, status = 'open' WHERE id = ?",
-                        (f["title"], f["picks"], f["closes"], f["results"], f["decline"], rid))
+            con.execute("UPDATE rounds SET title = ?, picks = ?, closes_at = ?, results_by = ?, decline_text = ?, next_text = ?, status = 'open' WHERE id = ?",
+                        (f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], rid))
             _save_parts(con, rid, f)
     return view(con, v, r["org_id"])
 
@@ -169,7 +172,9 @@ def apply(con, v: Viewer, rid: int, body: dict) -> dict:
         source = str(body.get("source") or "club")
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
-    if not (1 <= len(picked) <= r["picks"] and len(set(picked)) == len(picked) and set(picked) <= deps) or source not in SOURCES:
+    if len(deps) == 1 and not picked:  # one department: nothing to pick
+        picked = list(deps)
+    if not ((1 if deps else 0) <= len(picked) <= (r["picks"] if deps else 0) and len(set(picked)) == len(picked) and set(picked) <= deps) or source not in SOURCES:
         raise ApiError("bad_input")
     clean = {}
     for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid):
@@ -273,7 +278,7 @@ def decide(con, v: Viewer, app_id: int, body: dict) -> dict:
     a = _app(con, v, app_id)
     stage, tag = body.get("stage"), body.get("tagId")
     deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", a["round_id"])}
-    if stage == "yes" and tag in deps:
+    if stage == "yes" and (tag in deps or tag is None and not deps):  # no departments: into the club, no tag
         con.execute("UPDATE round_apps SET stage = 'yes', taken_tag = ?, updated_at = ? WHERE id = ?", (tag, now(), app_id))
     elif stage in ("no", "next", "maybe", "new"):
         con.execute("UPDATE round_apps SET stage = ?, taken_tag = NULL, updated_at = ? WHERE id = ?", (stage, now(), app_id))

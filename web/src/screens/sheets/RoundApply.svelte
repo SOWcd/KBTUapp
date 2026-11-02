@@ -2,7 +2,9 @@
   // Applying to a club's recruitment round (PLAN "Casting"): a minute. What the club knows already comes from the KBTU
   // sign-in and Telegram and is only shown; the student picks departments in order of wish (tap order = priority) and
   // answers the club's own questions (a department's question only once it's picked). The draft stays on the phone as
-  // it's typed (Telegram may close the app mid-answer). After sending: the stages and "results by". Opened from the
+  // it's typed (Telegram may close the app mid-answer). The steps (application, screening, the audition when the club
+  // holds one, results) with the club's own "what's next" under them, before and after sending. One department or none:
+  // nothing to pick. Opened from the
   // club's sheet, the Join page, a shared card or the bot (rc_<club>).
   import Check from '@lucide/svelte/icons/check';
   import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
@@ -44,6 +46,7 @@
     api.round(org).then((x) => {
       if (!x) { gone = true; return; }
       r = x;
+      if (x.departments.length === 1) picks = [x.departments[0].tagId];  // one department: nothing to pick
       if (x.mine) { picks = [...x.mine.departments]; answers = { ...x.mine.answers }; sent = true; saved = snap; return; }
       try { const d = JSON.parse(localStorage.getItem(key()) ?? 'null'); if (d) { picks = d.picks ?? []; answers = d.answers ?? {}; } } catch { /* blocked */ }
     }).catch(() => { gone = true; });
@@ -69,7 +72,7 @@
   const snap = $derived(JSON.stringify({ picks, answers: Object.fromEntries(Object.entries(payload())
     .map(([k, a]) => [k, Array.isArray(a) ? a : a.trim()] as const).filter(([, a]) => a.length)) }));
   const missing = (q: Round['questions'][number]) => q.required && !(Array.isArray(answers[q.id]) ? (answers[q.id] as string[]).length : String(answers[q.id] ?? '').trim());
-  const ready = $derived(picks.length > 0 && !shown.some(missing));
+  const ready = $derived((picks.length > 0 || (r?.departments.length ?? 0) <= 1) && !shown.some(missing));
   function toggleMany(qid: Id, opt: string) {
     const cur = (answers[qid] as string[] | undefined) ?? [];
     answers[qid] = cur.includes(opt) ? cur.filter((x) => x !== opt) : [...cur, opt];
@@ -147,13 +150,15 @@
     <h2 class="t-h2">{r.title}</h2>
     <p class="t-foot sub">{club?.name} · {t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) })}</p>
 
+    <!-- the steps, done as they pass; the club's own "what's next" under them (shown like its description) -->
+    {@const final = r.mine?.stage === 'yes' || r.mine?.stage === 'no'}
+    {@const steps = [[t('cast.stepSent'), sent], [t('cast.stepReview'), !!r.mine?.invited || final], ...(r.interviews ? [[t('cast.stepAudition'), final]] : []),
+      [r.resultsBy ? t('cast.stepResultsBy', { when: dayMonth(r.resultsBy) }) : t('cast.stepResults'), final]] as [string, boolean][]}
+    <ol class="steps">
+      {#each steps as [label, done] (label)}<li class:done>{#if done}<Check size={15} />{:else}<i class="dot"></i>{/if}{label}</li>{/each}
+    </ol>
+    {#if r.nextText}<p class="t-body nexttx selectable">{r.nextText}</p>{/if}
     {#if sent}
-      <!-- after sending: where it stands -->
-      <ol class="steps">
-        <li class="done"><Check size={15} />{t('cast.stepSent')}</li>
-        <li class:done={r.mine?.stage !== 'sent'}>{t('cast.stepReview')}</li>
-        <li class:done={r.mine?.stage === 'yes' || r.mine?.stage === 'no'}>{r.resultsBy ? t('cast.stepResultsBy', { when: dayMonth(r.resultsBy) }) : t('cast.stepResults')}</li>
-      </ol>
       {#if r.status === 'done' && r.declineText}<p class="t-callout decl">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
     {/if}
 
@@ -187,6 +192,7 @@
       </div>
     </section>
 
+    {#if r.departments.length > 1}
     <h3 class="t-cap sec">{r.picks > 1 ? t('cast.picksMany', { n: r.picks }) : t('cast.picksOne')}</h3>
     <div class="deps">
       {#each r.departments as d (d.tagId)}
@@ -198,6 +204,7 @@
       {/each}
     </div>
     {#if tried && !picks.length}<p class="err">{t('cast.pickOne')}</p>{/if}
+    {/if}
 
     {#each shown as q (q.id)}
       <div class="q">
@@ -244,7 +251,10 @@
   .steps { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px; padding: 12px 14px; border-radius: var(--r-l); background: var(--accent-soft); list-style: none; }
   .steps li { display: flex; align-items: center; gap: 8px; font: 600 14.5px/1.3 var(--font-text); color: var(--text-2); }
   .steps li.done { color: var(--text); }
+  .dot { flex: none; width: 15px; height: 15px; display: grid; place-items: center; }
+  .dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.6; }
   .note { margin: 6px 4px 0; }
+  .nexttx { margin: 10px 4px 0; white-space: pre-line; overflow-wrap: anywhere; }
   .decl { margin: var(--s-3) 4px 0; white-space: pre-line; overflow-wrap: anywhere; }
   .iv { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding: 12px 14px; box-shadow: inset 0 0 0 2px var(--accent); }
   .ivmine { display: flex; flex-direction: column; gap: 2px; }

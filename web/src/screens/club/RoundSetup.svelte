@@ -1,15 +1,16 @@
 <script lang="ts">
   // Opening a recruitment round, or changing the live one (PLAN "Casting"; the "casting" right). About three minutes:
-  // departments are the club's tags (a new one right here), each with a line about it and maybe places; how many a
+  // departments (optional: none is a round for the whole club) are the club's tags (a new one right here), each with a line about it and maybe places; how many a
   // student may pick; up to six questions of the club's own, from templates or written (in any one language: the screen
-  // around them is in the student's language already); the deadline and "results by"; the club's own words for a no.
+  // around them is in the student's language already); the deadline and "results by"; "what's next" (in-person
+  // auditions: dates, place) shown under the student's steps; the club's own words for a no.
   // Once someone has applied the questions stay as they are (answers would stop matching them).
   import { untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Plus from '@lucide/svelte/icons/plus';
   import { api, type ClubTag, type Id, type Round, type RoundKind, type RoundQuestion } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { studioChanged } from '../../lib/state/data.svelte';
+  import { data, studioChanged } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
   import { haptic } from '../../lib/tg';
@@ -24,13 +25,14 @@
   $effect(() => { api.teamSetup(org).then((s) => (tags = s.tags)).catch(() => {}); });
 
   const r0 = untrack(() => round); // the form starts from it once
-  let title = $state(r0?.title ?? t('cast.defTitle', { year: new Date().getFullYear() }));
+  let title = $state(r0?.title ?? t('cast.defTitle', { club: data.orgs.find((o) => o.id === org)?.name ?? '' }));
   let picks = $state(r0?.picks ?? 2);
   let closeDate = $state(dateInput(r0?.closesAt ?? nowTs() + 7 * 86400)), closeTime = $state(r0 ? time(r0.closesAt) : '23:59');
   let resultsDate = $state(r0?.resultsBy ? dateInput(r0.resultsBy) : '');
   let deps = $state<{ tagId: Id; about: string; places: string }[]>(r0?.departments.map((d) => ({ tagId: d.tagId, about: d.about, places: d.places ? String(d.places) : '' })) ?? []);
   let qs = $state<RoundQuestion[]>(r0?.questions.map((q) => ({ ...q })) ?? []);
   let decline = $state(r0?.declineText ?? '');
+  let next = $state(r0?.nextText ?? '');
   const locked = $derived(!!r0 && Object.values(r0.counts ?? {}).some((n) => (n ?? 0) > 0)); // someone applied: the questions stay
   let busy = $state(false), tried = $state(false);
 
@@ -65,13 +67,13 @@
   const closes = $derived(fromInputs(closeDate, closeTime));
   const results = $derived(resultsDate ? fromInputs(resultsDate, '20:00') : null);
   const err = $derived(!title.trim() ? 'title' : !Number.isFinite(closes) || closes <= nowTs() ? 'when' : results != null && results < closes ? 'results'
-    : !deps.length ? 'deps' : qs.some((q) => !q.text.trim() || ((q.kind === 'one' || q.kind === 'many') && (q.options ?? []).filter((o) => o.trim()).length < 2)) ? 'qs' : '');
+    : qs.some((q) => !q.text.trim() || ((q.kind === 'one' || q.kind === 'many') && (q.options ?? []).filter((o) => o.trim()).length < 2)) ? 'qs' : '');
 
   async function save() {
     tried = true;
     if (err) { haptic.error(); return; }
     busy = true;
-    const input = { title: title.trim(), picks, closesAt: closes, resultsBy: results, declineText: decline.trim(),
+    const input = { title: title.trim(), picks: Math.min(picks, Math.max(1, deps.length)), closesAt: closes, resultsBy: results, declineText: decline.trim(), nextText: next.trim(),
       departments: deps.map((d) => ({ tagId: d.tagId, about: d.about.trim(), places: +d.places > 0 ? +d.places : null })),
       questions: qs.map((q) => ({ kind: q.kind, text: q.text.trim(), options: q.kind === 'one' || q.kind === 'many' ? (q.options ?? []).map((o) => o.trim()).filter(Boolean) : null,
         required: q.required, tagId: q.tagId ?? null })) };
@@ -105,7 +107,6 @@
       </div>
     </div>
   {/each}
-  {#if tried && err === 'deps'}<p class="err">{t('cast.needDeps')}</p>{/if}
   {#if deps.length > 1}
     <span class="t-cap lbl">{t('cast.picks')}</span>
     <div class="seg">{#each [1, 2, 3] as n (n)}<button class:on={picks === n} onclick={() => (picks = n)} disabled={n > deps.length}>{n}</button>{/each}</div>
@@ -149,7 +150,8 @@
   <label class="field" class:bad={tried && err === 'results'}><span class="t-cap">{t('cast.resultsBy')}</span><input type="date" bind:value={resultsDate} /></label>
   <p class="hint">{t('cast.resultsHint')}</p>
 
-  <label class="field"><span class="t-cap">{t('cast.decline')}</span><textarea rows="3" maxlength="500" bind:value={decline} placeholder={t('cast.declinePh')}></textarea></label>
+  <label class="field gap"><span class="t-cap">{t('cast.next')}</span><textarea rows="3" maxlength="300" bind:value={next} placeholder={t('cast.nextPh')}></textarea></label>
+  <label class="field gap"><span class="t-cap">{t('cast.decline')}</span><textarea rows="3" maxlength="500" bind:value={decline} placeholder={t('cast.declinePh')}></textarea></label>
 
   {#snippet footer()}
     <Button kind="primary" size="l" full loading={busy} onclick={save}>{r0 ? t('common.save') : t('cast.openGo')}</Button>
@@ -158,6 +160,7 @@
 
 <style>
   .sub { margin: 2px 0 14px; }
+  .gap { margin-top: 10px; }
   .sec { margin: 22px 2px 6px; }
   .lbl { display: block; margin: 12px 2px 6px; }
   .hint { margin: 0 4px 8px; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
