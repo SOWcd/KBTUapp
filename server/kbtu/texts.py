@@ -90,7 +90,13 @@ SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {lan
     "kk": {"ru": "орысша", "kk": "қазақша", "en": "ағылшынша"},
     "en": {"ru": "Russian", "kk": "Kazakh", "en": "English"},
 }
-TIERS = {"ru": ("I", "II", "III", "Легенда"), "kk": ("I", "II", "III", "Аңыз"), "en": ("I", "II", "III", "Legend")}
+LEGEND = {"ru": "Легенда", "kk": "Аңыз", "en": "Legend"}
+ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
+
+
+def tier_name(lang: str, level: int, tiers: int) -> str:
+    """A level as the app names it (web lib/awards.ts tierLabel): Roman numerals, the last one of four or more is Legend."""
+    return pick(LEGEND, lang) if level == tiers >= 4 else ROMAN[level - 1]
 BAN = {"ru": " с баном", "kk": " (бан)", "en": " and ban them"}
 
 
@@ -126,7 +132,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
     lang = lang if lang in SHARE_AWARD else "ru"
     title, text, button = SHARE_AWARD[lang]
     p = "<1" if 0 < rarity < 0.01 else str(round(rarity * 100))
-    tier = f" · {TIERS[lang][level - 1]}" if tiers > 1 else ""
+    tier = f" · {tier_name(lang, level, tiers)}" if tiers > 1 else ""
     return title, text.format(name=html.escape(ACH_NAMES[lang][code]), tier=tier, p=html.escape(p)), button
 
 

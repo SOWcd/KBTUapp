@@ -14,7 +14,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import { achItem, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, nextOf, shelfItem, tierName, type ShelfItem } from '../../lib/awards';
+  import { achItem, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -54,10 +54,9 @@
   ] as const);
   // the closest to its next level: the reason to go to one more event
   const closest = $derived(closestOf(ach));
-  const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
   const pct = (a: Achievement) => { const n = nextOf(a); return n ? Math.min(100, Math.max(4, (a.count / n.need) * 100)) : 100; };
   const share = (x: number) => (x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)));
-  const tierClass = (a: Achievement) => (a.level === 0 ? 'none' : a.levels.length === 1 ? 'one' : ['bronze', 'silver', 'gold', 'legend'][a.level - 1] ?? 'legend');
+  const tierClass = (a: Achievement) => (a.level === 0 ? 'none' : a.levels.length === 1 ? 'one' : METALS[metalOf(a.level, a.levels.length)]);
 
   // ---- the showcase picker ----
   let editing = $state(false);
@@ -155,7 +154,7 @@
             <Medal a={closest} size={60} />
             <span class="nx">
               <i class="t-cap">{t('awp.next')}</i>
-              <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + tierOf(closest.levels.indexOf(n)) : '')}</b>
+              <b class="ellipsis">{achName(closest) + (closest.levels.length > 1 && n ? ' · ' + tierLabel(closest.levels.indexOf(n) + 1, closest.levels.length) : '')}</b>
               <span class="bar"><span style="width:{pct(closest)}%"></span></span>
               <em>{leftLine(closest)}</em>
             </span>

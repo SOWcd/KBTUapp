@@ -1,6 +1,6 @@
 <script lang="ts">
   // My invite (referrals), the right square beside Friends (owner, Nov 1): how many came, big in the corner (owner, Nov 2), and a bar to the next
-  // "Recruiter" level (3, 10, 25, 50); the tile opens RefSheet (my profile QR with my photo, Share). A student it brings
+  // "Recruiter" level; the tile opens RefSheet (my profile QR with my photo, Share). A student it brings
   // counts once they sign in with KBTU.
   import type { Me } from '../../lib/api';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -9,7 +9,7 @@
   import Emoji from '../../ui/Emoji.svelte';
 
   let { r }: { r: NonNullable<Me['referrals']> } = $props();
-  const LEVELS = [3, 10, 25, 50];
+  const LEVELS = [1, 3, 5, 10, 15, 25, 50, 75, 100]; // as the server's ACHIEVEMENTS
   const next = $derived(LEVELS.find((n) => n > r.count));
   const from = $derived(LEVELS.filter((n) => n <= r.count).at(-1) ?? 0);
 
@@ -35,6 +35,8 @@
   .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .art { display: flex; margin: -4px 0 0 -4px; transform-origin: 30% 70%; animation: call 3.6s ease-in-out 900ms infinite; }
   :global(html.lowfx) .art { animation: none; }
+  /* under a sheet (the award's full-screen blur) it would make the backdrop re-blur every frame: it waits */
+  :global(html[data-sheet]) .art { animation-play-state: paused; }
   @keyframes call { 0%, 70%, 100% { transform: none; } 76% { transform: rotate(-9deg) scale(1.06); } 82% { transform: rotate(5deg) scale(1.03); } 88% { transform: rotate(-3deg); } }
   .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .tx b { font: 700 var(--fs-body)/1.2 var(--font-text); }

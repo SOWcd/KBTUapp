@@ -56,7 +56,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal (owner, Nov 1)
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
-    ("referral", "megaphone_3d", (3, 10, 25, 50), False),  # students brought by my invite link who signed in with KBTU
+    ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU (9 levels since Nov 2)
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
     ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
@@ -117,18 +117,31 @@ def _celebrate(con, uid: int, before: dict[str, int]) -> None:
 def sync_levels(con) -> None:
     """Levels already reached, recorded once the achievements change (a new one, a new level): counts never stop at the
     top, so a level added later is reached by whoever already did it. At start, under the migration
-    lock (db.init), only when the list differs from the last run. No bot message: the app's unlock moment shows them."""
+    lock (db.init), only when the list differs from the last run. No bot message. A new achievement's levels get the
+    app's unlock moment; new levels of one that was there already come quietly (Nov 2: "Recruiter" went from 4 levels to
+    9, a burst of moments for what was done weeks ago): a stored level is a place in the list, so it moves to the level
+    of the same need first."""
     mark = json.dumps([[code, needs] for code, _, needs, _ in ACHIEVEMENTS])
     last = one(con, "SELECT value FROM meta WHERE key = 'achievements'")
     if last and last[0] == mark:
         return
+    was = {code: needs for code, needs in json.loads(last[0])} if last else {}
+    now = {code: needs for code, _, needs, _ in ACHIEVEMENTS}
+    to = lambda code, lv: sum(1 for n in now[code] if n <= was[code][lv - 1]) if lv > 0 else 0  # noqa: E731
     with tx(con):
+        for code in was.keys() & now.keys():
+            if list(was[code]) != list(now[code]):
+                for r in rows(con, "SELECT user_id, level, seen FROM achievement_levels WHERE code = ?", code):
+                    con.execute("UPDATE achievement_levels SET level = ?, seen = ? WHERE user_id = ? AND code = ?",
+                                (to(code, min(r["level"], len(was[code]))), to(code, min(r["seen"], len(was[code]))), r["user_id"], code))
         for (uid,) in rows(con, "SELECT user_id FROM students"):
             have = dict(rows(con, "SELECT code, level FROM achievement_levels WHERE user_id = ?", uid))
             for code, level in _levels(con, uid).items():
                 if level > have.get(code, 0):
-                    con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
-                        ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at""", (uid, code, level, core.now()))
+                    seen = level if code in was else 0
+                    con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at, seen = MAX(seen, excluded.seen)""",
+                                (uid, code, level, core.now(), seen))
         con.execute("INSERT INTO meta (key, value) VALUES ('achievements', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (mark,))
 
 

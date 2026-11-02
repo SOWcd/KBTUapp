@@ -528,7 +528,7 @@ export interface Achievement {
   emoji: string;
   secret: boolean;
   count: number;
-  level: number;                // 0 = not earned; tiers I/II/III/Legend = 1..4
+  level: number;                // 0 = not earned, else 1..levels.length: I, II, ..., the last of 4+ Legend
   levels: AwardLevel[];
   rarity: number;               // share of students with level ≥ 1, 0..1
   season?: string;              // season medals: '2026-fall'

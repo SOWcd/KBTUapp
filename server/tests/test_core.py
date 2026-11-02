@@ -5861,12 +5861,53 @@ def test_referrals(env):
     for tg in (102, 103):
         confirm(tg)
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
-    assert not con.execute("SELECT 1 FROM achievement_levels WHERE code = 'referral'").fetchone()
-    confirm(104)
     assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 1
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:1'", (ann["id"],)).fetchone()
+    confirm(104)
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (ann["id"],)).fetchone()[0] == 2
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:2'", (ann["id"],)).fetchone()
     delete_now(c, cfg, tma(103))                                                         # one of them leaves: no longer counted
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 2
+
+
+def test_new_levels_come_quietly(env):
+    """"Recruiter" went from 4 levels to 9 (Nov 2): at the start, the levels people had already passed are recorded with
+    no bot message and no unlock moment, stored levels move to the level of the same need; real progress afterwards is
+    celebrated as usual."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    ann, bob = login(c, 300, "ann"), login(c, 301, "bob")
+    def bring(uid, n):
+        for _ in range(n):
+            tg = 400000 + con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            u = c.get("/api/me", headers=tma(tg)).json()["id"]
+            con.execute("UPDATE users SET referred_by = ? WHERE id = ?", (uid, u))
+            con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+                VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 0, 0, 0)""", (u, f"25B{tg:06d}"))
+    bring(ann["id"], 18)
+    bring(bob["id"], 2)
+    # as before the change: ann had II (10 of the old 3/10/25/50) and saw it, bob had nothing
+    logic.sync_levels(con)
+    old = [[code, [3, 10, 25, 50] if code == "referral" else list(needs)] for code, _, needs, _ in logic.ACHIEVEMENTS]
+    con.execute("UPDATE meta SET value = ? WHERE key = 'achievements'", (json.dumps(old),))
+    con.execute("DELETE FROM achievement_levels WHERE code = 'referral'")
+    con.execute("INSERT INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, 'referral', 2, 0, 2)", (ann["id"],))
+    con.execute("DELETE FROM bot_outbox")
+    logic.sync_levels(con)
+    lv = lambda uid: con.execute("SELECT level, seen FROM achievement_levels WHERE user_id = ? AND code = 'referral'", (uid,)).fetchone()[:]  # noqa: E731
+    assert lv(ann["id"]) == (5, 5) and lv(bob["id"]) == (1, 1)                         # 18 of 1/3/5/10/15: V; 2: I
+    assert not con.execute("SELECT 1 FROM bot_outbox").fetchone()
+    assert not [u for u in c.get("/api/me", headers=tma(300)).json()["unlocked"] if u["code"] == "referral"]
+    tg, code = 500, c.get("/api/me", headers=tma(301)).json()["referrals"]["code"]     # the third one, after the start
+    c.get("/api/me", headers=tma(tg))
+    assert c.post("/api/referral", headers=tma(tg), json={"code": code}).status_code == 204
+    uid = con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0]
+    con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, manual, synced_at, verified_at)
+        VALUES (?, ?, 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid, f"25B{tg:06d}"))
+    logic.ms_link(con, uid, {"oid": f"o{tg}", "email": f"x{tg}@kbtu.kz", "first": "X", "last": "Testov"})
+    assert lv(bob["id"]) == (2, 1)
+    assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:referral:2'", (bob["id"],)).fetchone()
+    assert texts.tier_name("en", 2, 9) == "II" and texts.tier_name("en", 9, 9) == "Legend" and texts.tier_name("en", 3, 3) == "III"
 
 
 def test_invite_link_adds_friend(env):

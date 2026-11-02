@@ -56,7 +56,11 @@ function startTilt() {
     light.at = now;
     // the turn from neutral to now (neutral × up: its axis, sin of its angle), on the screen's own axes: a pose
     // that's rolled by gravity (on one's side, in landscape) reads as no tilt at all
-    [light.tx, light.ty] = tiltFrom(light.n, [x, y, z], screen.orientation?.angle ?? 0);
+    const [tx, ty] = tiltFrom(light.n, [x, y, z], screen.orientation?.angle ?? 0);
+    // a phone at rest still reads a few tenths of a degree of noise: below ~1 deg it is no move, nothing is written
+    // (Android, Nov 2: the noise kept every glass and the award coin repainting 20 times a second, idle)
+    if (Math.abs(tx - light.tx) + Math.abs(ty - light.ty) < 0.016) return;
+    [light.tx, light.ty] = [tx, ty];
     if (!light.raf) light.raf = requestAnimationFrame(paintLight);
   });
   on('activated', () => sensor.run());

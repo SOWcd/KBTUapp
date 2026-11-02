@@ -215,7 +215,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = next((x for x in logic.ACHIEVEMENTS if x[0] == code), None)
         if not a:
             return None
-        tier = f" · {texts.pick(texts.TIERS, lang)[level - 1]}" if len(a[2]) > 1 else ""
+        tier = f" · {texts.tier_name(lang, level, len(a[2]))}" if len(a[2]) > 1 else ""
         return (*texts.bot_message(lang, kind, name=texts.pick(texts.ACH_NAMES, lang)[code], tier=tier), f"aw_{logic.BADGE_OF.get(code, code)}")  # a variant opens its badge
     if kind == "photo_report":  # ph:<event>, to those who came, once: the guests' album filled up
         e = one(con, "SELECT id, title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))

@@ -9,7 +9,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { achHow, achName, tierName, variantName } from '../../lib/awards';
+  import { achHow, achName, metalOf, tierName, variantName } from '../../lib/awards';
   import { haptic, shareCard } from '../../lib/tg';
   import { burst } from '../../ui/burst';
   import { glass } from '../../ui/glass';
@@ -17,7 +17,7 @@
 
   let { overlay, a, ondone }: { overlay: Overlay; a: Achievement; ondone?: () => void } = $props();
   const GLOW = ['#7C4DFF', '#E0A06A', '#C8D2E6', '#FFD45E', '#B07CFF']; // one-level, bronze, silver, gold, legend
-  const glow = $derived(a.levels.length > 1 ? GLOW[Math.min(a.level, 4)] : GLOW[0]);
+  const glow = $derived(a.levels.length > 1 ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]);
   const tier = $derived(a.levels.length > 1 ? tierName(a) : '');
   const rare = $derived.by(() => { const x = a.levels[Math.max(0, a.level - 1)]?.rarity ?? a.rarity; return x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)); });
   $effect(() => { overlay.title = t('unlock.kicker'); overlay.icon = Trophy; });

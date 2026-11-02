@@ -8,12 +8,12 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
   import Share from '@lucide/svelte/icons/share';
-  import { haptic, shareCard } from '../../lib/tg';
+  import { haptic, onAndroid, shareCard } from '../../lib/tg';
   import { shareInvite } from '../../lib/friends';
   import { say } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
@@ -54,7 +54,15 @@
   const next = $derived(a?.levels.find((l) => !l.reached));
   const pct = $derived(a && next ? Math.min(100, Math.max(3, (a.count / next.need) * 100)) : 100); // as the words say: 6 of 15
   const share = (x: number) => (x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)));
-  const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
+  const tierOf = (i: number) => tierLabel(i + 1, a?.levels.length ?? 1);
+  // nine levels ("Recruiter") made a table taller than the screen: five round the next one, the rest a tap away
+  let all = $state(false);
+  const ladder = $derived.by(() => {
+    const ls = (a?.levels ?? []).map((l, i) => ({ ...l, i }));
+    if (all || ls.length <= 6) return ls;
+    const s = Math.max(0, Math.min((next ? a!.levels.indexOf(next) : ls.length - 1) - 2, ls.length - 5));
+    return ls.slice(s, s + 5);
+  });
   // the stage's light: the metal's own colour (one-level accent, bronze, silver, gold, legend; a drawn medal its metal);
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
@@ -69,12 +77,18 @@
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
   const round = $derived(!!a || !!it.founder || !!it.idea);
-  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[Math.min(a.level, 4)] : GLOW[0]));
+  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
   const EDGE = Array.from({ length: 22 }, (_, i) => i + 1); // 22 discs 1 px apart: ~10% of the 220 px coin, a real coin's thickness
   const SIZE = 220;
+  // Android (a user's video, Nov 2): the CSS coin flickered between its face and its milled edge many times a second
+  // at rest, and the capsule's title blinked empty with it. Its 24 composited 3D planes (22 edge discs, face, back,
+  // each 660 px square at 3x) re-sorted and re-rastered on every tilt step overran the WebView's GPU budget, so tiles
+  // went missing frame by frame. There the coin is one flat layer that tilts; the 3D (three.js) medals are one canvas
+  // and keep their spin. ponytail: no edge on Android; a rim drawn into the face (one layer) is the upgrade
+  const layered = $derived(!!edge && !onAndroid);
 
   // a finger turns the coin round its upright axis, a flick spins it past its back, then it settles face up (Apple's
   // award view); on top of the tilt. --spin is written straight on .big: no re-render per frame
@@ -91,7 +105,7 @@
     put(); raf = requestAnimationFrame(coast);
   }
   function grab(e: PointerEvent) {
-    if (!edge || matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx')) return;
+    if (!edge || (onAndroid && !gl) || matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx')) return;
     cancelAnimationFrame(raf); raf = 0;
     drag = { x: e.clientX, a: spin, t: e.timeStamp, id: e.pointerId }; vel = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -165,10 +179,10 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={round && !!glow} class:spins={!!edge} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
+  <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={round && !!glow} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={!!edge && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if edge && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -203,12 +217,13 @@
       {#if tiers}
         <div class="ladder up">
           <div class="lh t-cap"><span>{t('aw.levels')}</span><span>{t('aw.need')}</span><span>{t('aw.students')}</span></div>
-          {#each a.levels as l, i (i)}
+          {#each ladder as l (l.i)}
             <div class="lv" class:got={l.reached}>
-              <span class="ln">{#if l.reached}<Check size={15} strokeWidth={2.6} />{/if}{tierOf(i)}</span>
+              <span class="ln">{#if l.reached}<Check size={15} strokeWidth={2.6} />{/if}{tierOf(l.i)}</span>
               <span>{l.need}</span><span>{share(l.rarity)}%</span>
             </div>
           {/each}
+          {#if ladder.length < a.levels.length}<button class="lv more" onclick={() => { haptic.select(); all = true; }}>{t('aw.allLevels')}</button>{/if}
         </div>
       {:else if !a.level}
         <p class="t-foot rar">{t('person.rarity', { p: share(a.levels[0].rarity) })}</p>
@@ -345,4 +360,5 @@
   .lv.got { color: var(--text); }
   .ln { display: inline-flex; align-items: center; gap: 6px; }
   .lv.got .ln { color: var(--success-text); }
+  .more { display: block; width: 100%; text-align: center; color: var(--accent-text); font-weight: 600; }
 </style>

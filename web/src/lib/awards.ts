@@ -18,9 +18,17 @@ export const BADGES: { code: string; variants: { code: string; emoji: string }[]
 export const achHow = (a: Achievement): string => (a.variant ? variantHow(a.code, a.variant) : t(`ach.${a.code}.how` as 'ach.regular.how'));
 export const achName = (a: Achievement): string => (a.secret && !a.level ? t('ach.secret') : t(`ach.${a.code}.name` as 'ach.regular.name'));
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+/** a level (from 1) of `of` by name: Roman numerals, the last of four or more is Legend (the bot's texts.tier_name) */
+export const tierLabel = (level: number, of: number): string => (level === of && of >= 4 ? t('ach.tier.legend') : ROMAN[level - 1]);
+/** a level's metal, 0 bronze, 1 silver, 2 gold, 3 legend: four levels one each; nine (Recruiter) share them out,
+ *  I-III bronze, IV-VI silver, VII-VIII gold */
+export const metalOf = (level: number, of: number): number => (of <= 4 ? level - 1 : level === of ? 3 : Math.floor(((level - 1) * 3) / (of - 1)));
+export const METALS = ['bronze', 'silver', 'gold', 'legend'];
+
 export function tierName(a: Achievement): string {
   if (a.level === 0) return a.secret ? t('ach.secret') : t('ach.locked');
-  return a.levels.length > 1 ? t(`ach.tier.${a.level}` as 'ach.tier.1') : '';
+  return a.levels.length > 1 ? tierLabel(a.level, a.levels.length) : '';
 }
 
 /** The profile QR's ink: KBTU blue into violet, both dark enough for any camera on white. */
@@ -61,7 +69,6 @@ export interface HeroData {
 export const nextOf = (a: Achievement) => a.levels.find((l) => !l.reached);
 const hiddenAch = (a: Achievement) => a.secret && a.level === 0;
 const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
-const tierOf = (i: number) => t(`ach.tier.${i + 1}` as 'ach.tier.1');
 /** The closest one to its next level (started ones first, else the nearest goal); secrets don't count. */
 /** one-off medals for an event (not levels): Awards shows them among the badges */
 export const MEDALS = ['first50', 'init26'];
@@ -73,7 +80,7 @@ export function closest(ach: Achievement[]): Achievement | undefined {
 }
 export function leftLine(a: Achievement): string {
   const n = nextOf(a)!, left = n.need - a.count;
-  return a.levels.length > 1 ? t('awp.left', { n: left, tier: tierOf(a.levels.indexOf(n)) }) : t('awp.leftOne', { n: left });
+  return a.levels.length > 1 ? t('awp.left', { n: left, tier: tierLabel(a.levels.indexOf(n) + 1, a.levels.length) }) : t('awp.leftOne', { n: left });
 }
 
 export function hero(p: PersonCard): HeroData {
