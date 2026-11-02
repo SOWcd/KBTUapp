@@ -12,23 +12,21 @@
   const L = (n: string) => SC[`../assets/lanyards/schools/${n}-${wide ? 'card' : 'band'}.svg`];
   // each school's layers, far to near ('far' moves with the tilt)
   const LAYERS: Record<string, [string, string][]> = {
-    site: [['site-traces', 'far']], seogi: [['seogi-hazard', '']], geology: [['geo-contours', 'far'], ['geo-strata', '']],
+    site: [['site-traces', 'far']], seogi: [['seogi-hazard', '']], geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
     business: [['bs-chart', 'far']], ise: [['ise-globe', 'far']], kma: [['kma-moon', 'far'], ['kma-waves', 'waves']],
-    law: [['law-portico', 'far']], sam: [['sam-graph', 'far']], sce: [['sce-molecule', 'far']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
+    law: [['law-portico', 'far']], sam: [['sam-graph', 'far']], sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
-  const emblem = $derived(SH[`../assets/lanyards/school-${look}-emblem.webp`]);
 </script>
 
 <div class="sc {look}" class:wide class:qr aria-hidden="true">
   <i class="lit"></i>
-  {#each LAYERS[look] ?? [] as [n, c] (n)}<img class="l {c}" class:z={c.includes('far')} src={L(n)} alt="" />{/each}
+  {#each LAYERS[look] ?? [] as [n, c] (n)}<img class="l {c}" class:z={c.includes('far') || c.includes('near')} src={L(n)} alt="" />{/each}
   {#if look === 'seogi'}<i class="embers"></i>{/if}
   {#if look === 'site'}<span class="sww"><i class="sweep"></i></span>{/if}
-  <!-- the shield: on the card a big white emblem cut by the edge behind the QR, catching the light as the phone tilts (owner,
-       Nov 2: a shield squeezed under the QR looked terrible); on the badge's band whole, in its colours -->
-  {#if wide}<span class="emb z" style="--m: url({emblem})"><img src={emblem} alt="" /><i class="foil"></i></span>
-  {:else}<span class="fig"><img src={shield} alt="" /></span>{/if}
+  <!-- the shield: on the card it is the medallion in the corner (Hero's OrgMedal, owner Nov 2), so the art has the side
+       to itself; on the badge's band it stands whole in the middle -->
+  {#if !wide}<span class="fig"><img src={shield} alt="" /></span>{/if}
   <i class="gloss"></i>
 </div>
 
@@ -39,17 +37,11 @@
   .l { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; }
   .sc:not(.wide) .l { object-position: 50% 100%; }
   .far { --z: -2; --zs: 1.03; }
+  .near { --z: 3; --zs: 1.03; }
 
   /* the badge's band: the shield whole, in the middle */
   .fig { position: absolute; left: 50%; bottom: 12px; width: 100px; height: 92px; margin-left: -50px; display: flex; justify-content: center; align-items: flex-end; }
   .fig img { position: static; height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35)); }
-  /* the card: the shield as a white emblem, big, far, cut by the right edge and the foot, behind the QR */
-  .emb { position: absolute; right: -34px; top: -16px; width: 172px; --z: -3; }
-  .emb img { position: static; display: block; width: 100%; opacity: 0.13; }
-  /* the emblem catches the light with the tilt, like a foil print (the strip's mechanism; still at rest) */
-  .foil { inset: 0; opacity: 0.4; -webkit-mask: var(--m) 0 0 / 100% 100%; mask: var(--m) 0 0 / 100% 100%;
-    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.9) 50%, transparent 70%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat; }
-  :global(html.lowfx) .foil { display: none; }
   /* the light behind the shield */
   .lit { right: -60px; top: -40px; width: 240px; height: 200px; background: radial-gradient(closest-side, var(--lt, rgba(255, 255, 255, 0.22)), transparent); }
   .sc:not(.wide) .lit { right: auto; left: 50%; bottom: -30px; width: 260px; height: 180px; margin-left: -130px; }

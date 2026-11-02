@@ -34,10 +34,10 @@
     <img class="l z far" src={L('mk-far')} alt="" /><img class="l" src={L('mk-mid')} alt="" /><img class="l z near" src={L('mk-near')} alt="" />
     <i class="snow"></i>
   {:else if look === 'crystalkbtu'}
-    <!-- an ice field of facets, a prism's glint passing now and then; their diamond under its crown big on the right, cut by
-         the card's edge, its crown behind the QR -->
+    <!-- an ice field of facets, a prism's glint passing now and then; on the badge's band their diamond under its crown (on
+         the card it is the medallion: Hero's OrgMedal) -->
     <img class="l z far" src={L('cr-facets')} alt="" /><i class="halo"></i><span class="prw"><i class="prism"></i></span>
-    <span class="hero z"><img src={crystal} alt="" /></span>
+    {#if !wide}<span class="hero"><img src={crystal} alt="" /></span>{/if}
   {:else if look === 'spekbtu'}
     <!-- an oil field at dusk: their map's dots in the sky, the sun on the horizon, the derrick against it -->
     <img class="l z far" src={L('spe-map')} alt="" /><i class="sun"></i>
@@ -124,10 +124,9 @@
   @keyframes crprism { 0% { transform: translateX(0) rotate(18deg); opacity: 0; } 4% { opacity: 1; } 18% { opacity: 1; } 22%, 100% { transform: translateX(560px) rotate(18deg); opacity: 0; } }
   .crystalkbtu.wide .far { -webkit-mask: linear-gradient(90deg, transparent 22%, black 62%); mask: linear-gradient(90deg, transparent 22%, black 62%); } /* the ice away from the text */
   /* the diamond, big, cut by the right edge, the crown under the QR's corner; near with the tilt */
-  .hero { position: absolute; right: -18px; bottom: 6px; height: 132px; --z: 3; }
+  .hero { position: absolute; }
   .hero img { position: static; display: block; height: 100%; filter: drop-shadow(0 0 14px rgba(150, 245, 255, 0.45)); }
   .sc:not(.wide) .hero { left: 0; right: 0; bottom: 6px; height: 104px; display: flex; justify-content: center; }
-  .wide:not(.qr) .hero { right: -6px; height: 148px; }
 
   /* ---- SPE: dusk ---- */
   /* the sky to the horizon (68 % down the card, above the strip): navy, steel, a mauve band, the sunset's orange */
@@ -141,7 +140,7 @@
   .sc:not(.wide) .sun { right: auto; left: 50%; bottom: 22px; margin-left: -50px; }
   .spekbtu:not(.wide) { background: radial-gradient(50% 50% at 50% 82%, rgba(255, 170, 110, 0.6), transparent 70%), linear-gradient(180deg, rgb(8, 22, 52), rgb(26, 60, 110) 45%, rgb(170, 110, 120) 72%, rgb(246, 160, 100) 82%, rgb(10, 30, 64) 82.5%); }
   @keyframes spsun { from { opacity: 0.8; } to { opacity: 1; } }
-  .rig { bottom: 52px; height: 58px; } /* on the horizon; its crown rises behind the QR */
+  .rig { right: -4px; bottom: 52px; height: 104px; } /* on the horizon, tall: its crown rises behind the medallion */
   .wide:not(.qr) .rig { height: 70px; }
   .sc:not(.wide) .rig { bottom: 22px; height: 94px; }
 

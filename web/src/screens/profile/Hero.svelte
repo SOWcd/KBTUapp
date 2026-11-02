@@ -5,9 +5,9 @@
   // event badge on a lanyard — clubs print their titles in English on theirs, so this one does too. It hangs
   // from the capsule or the sheet's grip, swings in from the clip, then follows the phone's tilt; the
   // holographic strip is the only iridescence and stays inside the card. Data: lib/awards.ts.
-  // Your own badge (`qr`, on Me) carries your QR in the corner, like a conference badge: it holds only a
-  // link into the app (your profile; the friend invite once friends exist), never a student ID; a tap shows
-  // it full screen. Other people's cards never show it.
+  // Every card carries its organisation's medallion in the corner (OrgMedal). Your own badge (`qr`, on Me) has its QR
+  // on the back: a tap on the card or the medallion turns it over to the full-screen QR (MyQr). The code holds only a
+  // link into the app (your profile), never a student ID. Other people's cards never show it.
   import type { PersonCard } from '../../lib/api';
   import { hero, founderItem, ideaItem } from '../../lib/awards';
   import { glass } from '../../ui/glass';
@@ -17,10 +17,11 @@
   import Award from '../../ui/Award.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
-  import LookMark from '../../ui/LookMark.svelte';
+  import OrgMedal from '../../ui/OrgMedal.svelte';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
+  import { lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
@@ -39,7 +40,6 @@
   const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
-  const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
 
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
   const frames = Array.from({ length: 41 }, (_, f) => {
@@ -110,6 +110,37 @@
       });
     };
   }
+  // the card's back (MyQr): it turns edge-on and the back comes up over it; when the back is closed it turns face on again
+  // (the lanyard change's curves). `back`: out (turning), away (the back is up), so a close plays the return once
+  let back: '' | 'out' | 'away' = '';
+  function toBack() {
+    if (spinning || back) return;
+    haptic.soft();
+    if (still()) { sheets.myQr(link, p); return; }
+    spinning = true;
+    back = 'out';
+    swing.style.willChange = 'transform';
+    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 170, easing: TURN, fill: 'forwards' });
+    shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 170, easing: TURN, fill: 'forwards' });
+    out.onfinish = () => sheets.myQr(link, p);
+  }
+  function cardTap(e: MouseEvent) {
+    if (!(e.target as Element).closest('button')) toBack(); // the photo, the seal and the medallion have their own
+  }
+  $effect(() => {
+    const c = covered;
+    untrack(() => {
+      if (back === 'out' && c) back = 'away';
+      else if (back === 'away' && !c) {
+        back = '';
+        const land = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
+        swing.getAnimations().filter((x) => x !== land).forEach((x) => x.cancel());
+        shade.getAnimations().forEach((x) => x.cancel());
+        shade.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 400, easing: LAND });
+        land.onfinish = () => { swing.style.willChange = ''; spinning = false; };
+      }
+    });
+  });
   $effect(() => {
     if (look === untrack(() => face) || spinning) return;
     if (still()) face = look;
@@ -121,13 +152,15 @@
 <div class="hang {face}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
-    <div class="badge" use:glass>
+    <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
+    <div class="badge" use:glass onclick={mine ? cardTap : undefined} role="presentation">
       {#if face === 'sower'}<i class="rings z" aria-hidden="true"></i>{/if}
-      {#if banded(face)}<LanyardBand look={face} wide qr={mine} />{/if}
+      {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
       <span class="slot" aria-hidden="true"></span>
-      {#if mine}
-        <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[face]}><LookMark look={face} /></m.default>{/await}</button>
-      {/if}
+      <!-- the organisation's medallion where the QR was (owner, Nov 2); on mine it turns the card over to its back, the
+           full-screen QR (MyQr), as a tap anywhere on the card does -->
+      {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} /><span class="qrhint"><QrCode size={11} strokeWidth={2.4} /></span></button>
+      {:else}<span class="medal"><OrgMedal look={face} /></span>{/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} /></button>
         {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /><Frame id={h.frame} /></span>{/if}
@@ -195,12 +228,14 @@
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
   /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
   .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
-  .top.mine .id, .cheer .id, .knights .id, .club .id { padding-right: 62px; } /* the name never runs under the QR or the club's object */
+  .id { padding-right: 62px; } /* the name never runs under the medallion or the club's object */
   .top.mine .nm { font-size: 20px; }
-  .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
-    box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(10, 15, 36, 0.06); transition: transform var(--t-fast) var(--ease); }
+  .medal { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; transition: transform var(--t-fast) var(--ease); }
+  button.medal:active { transform: scale(0.92); }
+  /* the back is a QR: a small chip on the medallion's corner says so */
+  .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+    background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
 
-  .qr:active { transform: scale(0.92); }
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
   .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
