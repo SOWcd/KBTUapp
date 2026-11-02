@@ -14,7 +14,7 @@ export interface Api {
   me(): Promise<Me>;
   msStart(): Promise<{ url: string }>; // the KBTU Microsoft sign-in link, opened outside Telegram
   manualLogin(i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me>; // only while it isn't
-  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null; school?: string | null; city?: null; cityHidden?: boolean }
+  updateMe(patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; phone?: string | null; school?: string | null; course?: number; city?: null; cityHidden?: boolean }
     & { [k in Fixable]?: string }): Promise<Me>;  // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto(file: Blob): Promise<Me>;                        // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto(): Promise<Me>;                                  // gone from the server too; Telegram's is back

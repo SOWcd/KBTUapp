@@ -197,6 +197,7 @@ export interface StudentProfile {
   email: string | null;
   phone: string | null;
   course: number | null;
+  courseMin: number | null; // the year the ID says: Settings raises the course from it, never below (null: no year in it)
   school: string | null;
   program: string | null;
   syncedAt: Ts;

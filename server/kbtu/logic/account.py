@@ -402,7 +402,7 @@ def me(con, v: Viewer) -> dict:
         "photo": {"telegram": bool(u["avatar_tg"]), "tg": avatar_of({**name_row, "own_photo": None}), "own": f"media/{own['path']}.t.webp" if own else None},
         "student": {"studentId": s["student_id"], "firstName": s["first_name"], "lastName": s["last_name"], "middleName": s["middle_name"], "email": s["email"],
                     "lastLat": s["last_lat"], "firstLat": s["first_lat"], "middleLat": s["middle_lat"],
-                    "phone": s["phone"], "course": s["course"], "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
+                    "phone": s["phone"], "course": s["course"], "courseMin": core.course_of(s["student_id"]), "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity): nothing for staff
@@ -612,6 +612,15 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         if val is not None and not o:
             raise ApiError("bad_input")
         con.execute("UPDATE students SET school = ? WHERE user_id = ?", (o[0] if o else None, v.id))
+    if "course" in patch:  # Settings → My data: a transfer's new ID says a year too low; up from the ID's year only, never
+        need_student(v)  # below it (a lower one would take free 1st-year seats). course_year now: September moves it on
+        s = one(con, "SELECT student_id, consent_version FROM students WHERE user_id = ?", v.id)
+        lo, val = core.course_of(s["student_id"]), patch["course"]
+        if s["consent_version"] == "staff":
+            raise ApiError("forbidden")  # the ID is a placeholder
+        if lo is None or type(val) is not int or not lo <= val <= 6:
+            raise ApiError("bad_input")
+        con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (val, core.academic_year(), v.id))
     for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
         if k in patch:
             need_student(v)

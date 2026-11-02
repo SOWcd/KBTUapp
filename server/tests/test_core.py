@@ -1895,6 +1895,33 @@ def test_course_day(env, monkeypatch):
     assert got == [(4, 2026), (5, 2025), (2, 2026), (1, 2027), (3, 2026)]
 
 
+def test_course_raise(env, monkeypatch):
+    """Settings -> My data: a transfer's new ID says year 1, they're in year 2: the course goes up from the ID's year,
+    never below it (free 1st-year seats), to 6 at most; September moves the raised one on and never back down."""
+    import calendar
+    c, cfg = env
+    ali, stf = login(c, 10, "ali"), login(c, 12, "stf")
+    con = db.connect(cfg.db_path)
+    oct26 = calendar.timegm((2026, 10, 1, 0, 0, 0))
+    set_clock(monkeypatch, lambda: oct26)
+    con.execute("UPDATE students SET student_id = '26B031234', course = 1, course_year = 2026 WHERE user_id = ?", (ali["id"],))
+    con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (stf["id"],))
+    up = lambda n, uid=10: c.patch("/api/me", headers=tma(uid), json={"course": n})  # noqa: E731
+    assert c.get("/api/me", headers=tma(10)).json()["student"]["courseMin"] == 1
+    assert all(up(n).status_code == 400 for n in (0, 7, "2", True, None))
+    me = up(2).json()["student"]
+    assert me["course"] == 2 and not me["freeFirst"]
+    assert up(1).json()["student"]["course"] == 1                               # back to the ID's own year: allowed
+    up(2)
+    con.execute("UPDATE students SET student_id = '25B031234', course = 2 WHERE user_id = ?", (ali["id"],))
+    assert up(1).status_code == 400                                             # below the ID's year: never
+    assert up(1, 12).status_code == 403                                         # staff: the ID is a placeholder
+    con.execute("UPDATE students SET student_id = '26B031234', course = 2, course_year = 2026 WHERE user_id = ?", (ali["id"],))
+    set_clock(monkeypatch, lambda: calendar.timegm((2027, 9, 2, 0, 0, 0)))
+    logic.course_day(con)
+    assert con.execute("SELECT course FROM students WHERE user_id = ?", (ali["id"],)).fetchone()[0] == 3  # on, not back to the ID's 2
+
+
 def test_admin_stats(env, monkeypatch):
     """The admin's stats (PLAN): online in 10 minutes, active day/week/month, students, new today; a row a night
     just after midnight from seen_at, none later in the day; counts only."""

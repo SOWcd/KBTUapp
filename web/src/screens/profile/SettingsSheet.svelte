@@ -12,6 +12,7 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import Check from '@lucide/svelte/icons/check';
+  import User from '@lucide/svelte/icons/user';
   import { schoolOf, shortOf } from '../../lib/short';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -24,10 +25,12 @@
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
 
-  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'sees' | 'about';
+  type Part = 'last' | 'first' | 'middle';
+  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
-    school: ['look.school', GraduationCap], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+    school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
+    sees: ['set.whoSees', Lock], about: ['set.about', Info] };
   // where "‹ Back" goes: Privacy for its own pages, else Settings
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
@@ -58,9 +61,13 @@
   }
   // my name and student ID: corrected once each (it came in wrong), then through support; the server holds the rules
   // (account.fix_identity: the ID's year stays, the name stays KBTU's in another spelling at most)
-  const FIELDS: [Fixable, Key][] = [['lastName', 'login.lastName'], ['firstName', 'login.firstName'], ['middleName', 'pd.middle'],
-    ['lastLat', 'pd.lastLat'], ['firstLat', 'pd.firstLat'], ['middleLat', 'pd.middleLat'], ['studentId', 'pd.sid']];
+  // each name part one row (owner, Nov 2: six rows read as duplicates): its Cyrillic and Latin forms together, both a
+  // tap deeper on the part's own page
+  const PARTS: [Part, Fixable, Fixable, Key][] = [['last', 'lastName', 'lastLat', 'pd.lastLat'], ['first', 'firstName', 'firstLat', 'pd.firstLat'],
+    ['middle', 'middleName', 'middleLat', 'pd.middleLat']];
+  const part = $derived(PARTS.find((p) => p[0] === kind));
   const LAT: Fixable[] = ['lastLat', 'firstLat', 'middleLat'];
+  const ALL = PARTS.length * 2 + 1; // every Fixable (the parts' and the ID): one fixed, the "through support" footnote
   const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'login.sidTaken', fixed: 'pd.support' };
   async function fix(k: Fixable, label: Key) {
     const was = me?.student?.[k] ?? '';
@@ -88,6 +95,19 @@
     if (card) data.myCard = { ...card, school: name }; // the lanyard reads my card once it's loaded (Me)
     close(overlay.id);
     try { session.me = await api.updateMe({ school: name }); void loadMyCard(); }
+    catch { session.me = was; data.myCard = card; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  // my year up from the one the ID says (a transfer's new ID reads 1st year), never below it: the server holds that
+  // (account.update_me: free 1st-year seats). The lanyard turns at once, as with the school
+  const courses = $derived(me?.student?.courseMin ? Array.from({ length: 7 - me.student.courseMin }, (_, i) => me.student!.courseMin! + i) : []);
+  async function pickCourse(n: number) {
+    if (!me?.student) return;
+    const was = me, card = data.myCard;
+    haptic.select();
+    session.me = { ...me, student: { ...me.student, course: n } };
+    if (card) data.myCard = { ...card, course: n };
+    close(overlay.id);
+    try { session.me = await api.updateMe({ course: n }); void loadMyCard(); }
     catch { session.me = was; data.myCard = card; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function cityHidden(on: boolean) {
@@ -129,6 +149,10 @@
 {#snippet act(label: string, go: () => void, red = false)}
   <button class="set-row act" class:red onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span></button>
 {/snippet}
+<!-- a name part: Cyrillic over Latin at the row's end (one line when they're the same) -->
+{#snippet two(label: string, a: string | null, b: string | null)}
+  <span class="lb">{label}</span><span class="val two"><span>{a || b}</span>{#if a && b && a !== b}<span class="sub">{b}</span>{/if}</span>
+{/snippet}
 
 <Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]}>
   {#if kind === 'notify' && me}
@@ -142,21 +166,32 @@
     <p class="set-foot always">{t('set.always')}</p>
   {:else if kind === 'privacy'}
     <!-- my data: one row each, what can be done to it a tap deeper -->
-    {#if me?.student || phone || me?.city}
+    {#if me?.student}
+      {@const st = me.student}
+      <!-- who I am: each name part one row, its Latin form under it; correctable once (›), then a plain row -->
       <div class="set-group plain">
+        {#each PARTS as [p, cyr, lat] (p)}
+          {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
+          {#if can}<button class="set-row" onclick={() => { haptic.tap(); sheets.settings(p); }}>{@render two(t(TITLE[p][0]), st[cyr], st[lat])}<ChevronRight class="chev" size={18} /></button>
+          {:else if st[cyr] || st[lat]}<div class="set-row">{@render two(t(TITLE[p][0]), st[cyr], st[lat])}</div>{/if}
+        {/each}
+      </div>
+    {/if}
+    {#if me?.student || phone || me?.city}
+      <div class="set-group plain" class:gap={me?.student}>
         {#if me?.student}
           {@const st = me.student}
-          <!-- who I am: correctable once (›), then a plain row; the email is the Microsoft login, never edited -->
-          {#each FIELDS as [k, label] (k)}
-            {#if st.fixable?.includes(k)}{@render link(t(label), () => void fix(k, label), st[k] ?? '')}
-            {:else if st[k]}<div class="set-row"><span class="lb">{t(label)}</span><span class="val">{st[k]}</span></div>{/if}
-          {/each}
+          <!-- the ID once too; the year up from the ID's; the email is the Microsoft login, never edited -->
+          {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
+          {:else}<div class="set-row"><span class="lb">{t('pd.sid')}</span><span class="val">{st.studentId}</span></div>{/if}
+          {#if courses.length > 1 && st.consent !== 'staff'}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
+          {:else if st.course}<div class="set-row"><span class="lb">{t('pd.course')}</span><span class="val">{st.course}</span></div>{/if}
           {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val wide">{st.email}</span></div>{/if}
         {/if}
         {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
         {#if me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me.city.name)}{/if}
       </div>
-      {#if me?.student && me.student.fixable.length < FIELDS.length && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
+      {#if me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
     {/if}
     {#if me?.student}
       <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing) -->
@@ -182,6 +217,24 @@
     </div>
     <p class="set-foot">{t('pd.cityNote')}</p>
     <div class="set-group plain gap">{@render act(t('pd.cityDel'), dropCity, true)}</div>
+  {:else if part && me?.student}
+    {@const st = me.student}
+    {@const [, cyr, lat, latKey] = part}
+    <!-- the part's two spellings, each correctable once -->
+    <div class="set-group plain">
+      {#if st.fixable?.includes(cyr)}{@render link(t('pd.cyr'), () => void fix(cyr, TITLE[part[0]][0]), st[cyr] ?? '')}
+      {:else}<div class="set-row"><span class="lb">{t('pd.cyr')}</span><span class="val">{st[cyr] ?? ''}</span></div>{/if}
+      {#if st.fixable?.includes(lat)}{@render link(t('pd.lat'), () => void fix(lat, latKey), st[lat] ?? '')}
+      {:else}<div class="set-row"><span class="lb">{t('pd.lat')}</span><span class="val">{st[lat] ?? ''}</span></div>{/if}
+    </div>
+    <p class="set-foot">{t(st.fixable?.includes(cyr) || st.fixable?.includes(lat) ? 'pd.once' : 'pd.support')}</p>
+  {:else if kind === 'course' && me?.student}
+    <div class="set-group plain" role="radiogroup" aria-label={t('pd.course')}>
+      {#each courses as n (n)}
+        <button class="set-row" role="radio" aria-checked={me.student.course === n} onclick={() => void pickCourse(n)}>
+          <span class="lb">{t('person.course', { n })}</span><span class="tick">{#if me.student.course === n}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+      {/each}
+    </div>
   {:else if kind === 'school' && me?.student}
     <div class="set-group plain" role="radiogroup" aria-label={t('look.school')}>
       {#each schools as o (o.id)}
@@ -218,6 +271,10 @@
      makes room for it */
   .set-row > .lb.school { overflow-wrap: break-word; hyphens: auto; }
   @media (max-width: 340px) { .lb.school + .val { display: none; } }
+  /* a name part's end: its Cyrillic over its Latin, each cut with … rather than wrapped */
+  .val.two { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+  .val.two > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .val.two > .sub { font-size: var(--fs-sub); }
   .tick { flex: none; width: 20px; margin-right: -4px; display: grid; place-items: center; color: var(--accent-text); }
   /* who sees what: a heading and its text in each cell, read rather than tapped */
   .see { padding: 12px 16px; }
