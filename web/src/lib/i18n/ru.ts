@@ -2295,6 +2295,8 @@ const ru = {
   'ex.fix.cover': "Добавить обложку",
   'ex.f.noAbout': "Нет описания",
   'ex.fix.about': "Написать с ИИ",
+  'ex.f.clubInTitle': "Клуб и так виден на карточке события",
+  'ex.fix.clubTitle': "Убрать из названия",
   'ex.f.longTitle': "Длинное название, в ленте обрежется",
   'ex.fix.title': "Сократить",
   'ex.aiWrite': "Написать с ИИ",

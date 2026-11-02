@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { check, priceIn } from './eventCheck';
+import { check, priceIn, titleWithoutClub } from './eventCheck';
 
 const ok = { title: 'Open Mic', description: 'Stand-up and music, come with friends.', paid: false, price: null, tba: false, place: 'Atrium',
   startTs: 2000, now: 1000, live: false, cover: true, seats: null };
@@ -21,5 +21,14 @@ describe('event check', () => {
     const ids = check({ ...ok, title: 'x'.repeat(60), description: '', tba: true, startTs: 500, cover: false }).map((f) => f.id);
     expect(ids).toEqual(['past', 'noPlace', 'noCover', 'noAbout', 'longTitle']);
     expect(check({ ...ok, description: 'Only 30 seats, sign up early' }).map((f) => f.id)).toEqual(['seatsText']);
+  });
+  it('takes the club out of the title', () => {
+    const club = ['Big City Lights', 'BCL', 'BC'];
+    expect(titleWithoutClub('TSS by BCL', club)).toBe('TSS');
+    expect(titleWithoutClub('BCL | The Secret of Sin', club)).toBe('The Secret of Sin');
+    expect(titleWithoutClub('Open Mic x KBTU', [])).toBe('Open Mic');
+    expect(titleWithoutClub('BCLub night', club)).toBeNull();
+    expect(titleWithoutClub('BCL', club)).toBeNull();
+    expect(check({ ...ok, title: 'TSS by BCL', club })).toEqual([{ id: 'clubInTitle', clean: 'TSS' }]);
   });
 });

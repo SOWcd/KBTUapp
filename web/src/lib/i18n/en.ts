@@ -2275,6 +2275,8 @@ const en: Dict = {
   'ex.fix.cover': "Add a cover",
   'ex.f.noAbout': "No description",
   'ex.fix.about': "Write with AI",
+  'ex.f.clubInTitle': "The card shows the club already",
+  'ex.fix.clubTitle': "Remove from the title",
   'ex.f.longTitle': "A long name gets cut in the feed",
   'ex.fix.title': "Shorten",
   'ex.aiWrite': "Write with AI",

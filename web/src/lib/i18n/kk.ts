@@ -2275,6 +2275,8 @@ const kk: Dict = {
   'ex.fix.cover': "Мұқаба қосу",
   'ex.f.noAbout': "Сипаттама жоқ",
   'ex.fix.about': "ЖИ-мен жазу",
+  'ex.f.clubInTitle': "Клуб оқиға карточкасында көрініп тұр",
+  'ex.fix.clubTitle': "Атаудан алып тастау",
   'ex.f.longTitle': "Атауы ұзын, лентада қысқарады",
   'ex.fix.title': "Қысқарту",
   'ex.aiWrite': "ЖИ-мен жазу",

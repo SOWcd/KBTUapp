@@ -413,14 +413,15 @@
   // "Check my event": on the phone, at once, on every Publish/Save; a price or seats in a meeting's or a partner's
   // text aren't this event's to fix; a live event's Save stops only for a contradiction, never for a missing cover
   const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
+  const clubNames = $derived.by(() => { const o = data.orgs.find((x) => x.id === org) ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
   const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba,
-    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: +f.seats || null })
+    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: +f.seats || null, club: clubNames })
     .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
   const fixable = (x: Finding) => canPrice || !['priceText', 'priceDiff'].includes(x.id);
   const n = (x: number) => x.toLocaleString('ru-RU');
   const noteText = (x: Finding) => ('n' in x ? t(`ex.f.${x.id}`, { n: n(x.n) }) : t(`ex.f.${x.id}`));
   const fixLabel = (x: Finding) => x.id === 'priceText' ? t('ex.fix.paid', { n: n(x.n) }) : x.id === 'priceDiff' ? t('ex.fix.price', { n: n(x.n) })
-    : x.id === 'seatsText' ? t('ex.fix.seats', { n: x.n }) : t(`ex.fix.${({ past: 'time', noPlace: 'place', noCover: 'cover', noAbout: 'about', longTitle: 'title' } as const)[x.id]}`);
+    : x.id === 'seatsText' ? t('ex.fix.seats', { n: x.n }) : t(`ex.fix.${({ past: 'time', noPlace: 'place', noCover: 'cover', noAbout: 'about', longTitle: 'title', clubInTitle: 'clubTitle' } as const)[x.id]}`);
   // a note's one-tap fix: it changes the form, or opens the one place that needs the person
   function fix(x: Finding) {
     haptic.tap(); touch();
@@ -431,6 +432,7 @@
     else if (x.id === 'noAbout') pick = 'about';
     else if (x.id === 'noCover') pick = 'cover';
     else if (x.id === 'past') { pick = ''; try { panel.querySelector<HTMLInputElement>('.when input[type=date]')?.showPicker(); } catch { /* old webviews: the field is in sight */ } }
+    else if (x.id === 'clubInTitle') f.title = x.clean;
     else if (x.id === 'longTitle') { pick = ''; panel.querySelector<HTMLElement>('.name')?.focus(); }
   }
   // Publish/Save: the check first; nothing found goes straight on
