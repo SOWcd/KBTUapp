@@ -1757,6 +1757,8 @@ const en: Dict = {
   'ed.date': "Date",
   'ed.start': "Starts",
   'ed.end': "Ends",
+  'ed.endDate': "End date",
+  'ed.endEarly': "It ends before it starts",
   'ed.place': "Place",
   'ed.tba': "Place not known yet",
   'ed.tbaHint': "Students will see \"Place to be confirmed\". Ask for a room in the memo below, and put it in when DMP answers.",

@@ -50,10 +50,14 @@ export const weekday = (ts: number): string => fmt({ weekday: 'long' }, ts);
 /** Day and month (3 October). */
 export const dayMonth = (ts: number): string => fmt({ day: 'numeric', month: 'long' }, ts);
 /** Calendar days 'YYYY-MM-DD' as "12–24 October" or "31 August – 4 September"; one day when from = to. */
-export function dayRange(from: string, to: string): string {
-  const f = new Intl.DateTimeFormat(LOCALE[i18n.lang], { day: 'numeric', month: 'long', timeZone: 'UTC' }), a = new Date(from + 'T00:00:00Z');
-  return from === to ? f.format(a) : f.formatRange(a, new Date(to + 'T00:00:00Z'));
+export function dayRange(from: string, to: string, month: 'long' | 'short' = 'long'): string {
+  const f = new Intl.DateTimeFormat(LOCALE[i18n.lang], { day: 'numeric', month, timeZone: 'UTC' }), a = new Date(from + 'T00:00:00Z');
+  return (from === to ? f.format(a) : f.formatRange(a, new Date(to + 'T00:00:00Z'))).replace(/\.(?=\s|,|$)/g, '');
 }
+/** An event longer than a day: its end has its own date (the editor's end date). Up to 24 h is one evening or night. */
+export const multiDay = (start: number, end: number | null): end is number => end != null && end - start > DAY;
+/** A multi-day event's days, short: "2–12 Nov". */
+export const daySpan = (start: number, end: number): string => dayRange(dateInput(start), dateInput(end), 'short');
 /** Day and short month (3 Oct). */
 export const dayMonthShort = (ts: number): string => fmt({ day: 'numeric', month: 'short' }, ts);
 

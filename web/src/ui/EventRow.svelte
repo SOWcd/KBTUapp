@@ -3,7 +3,7 @@
   // its corner (Oct 30: Profile's "Coming up" is gone, the saved ones are found on the list).
   import type { EventCard } from '../lib/api';
   import { t, tn, money, friendsLine, placeOf } from '../lib/i18n/index.svelte';
-  import { time, nowTs } from '../lib/time';
+  import { time, nowTs, multiDay, daySpan } from '../lib/time';
   import { sheets } from '../lib/state/sheets';
   import { prefetchEvent } from '../lib/state/data.svelte';
   import Poster from './Poster.svelte';
@@ -28,7 +28,7 @@
   {#if e.saved && !cancelled}<span class="saved" title={t('event.saved')}><Bookmark size={14} strokeWidth={2.4} fill="currentColor" /></span>{/if}
   <span class="txt" class:pr={e.saved && !cancelled}>
     <span class="t-title clamp-2 title">{e.title}</span>
-    <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)} · {placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</span>
+    <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{#if multiDay(e.startsAt, e.endsAt)}{daySpan(e.startsAt, e.endsAt)}{:else}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)}{/if} ·{placeOf(e.place)}{e.price ? ' · ' + money(e.price) : ''}</span>
     <span class="foot">
       {#if e.toCheck && !cancelled}<Tag tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Tag>{/if}
       {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>

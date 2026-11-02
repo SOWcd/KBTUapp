@@ -25,7 +25,7 @@
   import { ui } from '../../lib/state/ui.svelte';
   import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS } from '../../lib/map';
@@ -57,7 +57,8 @@
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
   const days = $derived.by(() => {
     const by = new Map<number, Item[]>();
-    for (const e of data.events) { const d = dayNo(e.startsAt); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
+    // an event of several days that began earlier and still runs sits on today (a casting, 2-12 Nov)
+    for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), endOf(e) > now ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // the coming week's class days too (the owner missed his Wednesday), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -134,7 +135,7 @@
           <Poster item={e} big radius={0} />
           <div class="shade"></div>
           <div class="hero-tx">
-            <span class="when num">{soon(e.startsAt, now)} · {time(e.startsAt)}</span>
+            <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
             <b class="clamp-2">{e.title}</b>
             <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}</span>
             <!-- solid tinted, not glass: base.css keeps glass for what floats over the page (as the Feed's posters) -->
@@ -205,7 +206,7 @@
                 <span class="org"><OrgLogo org={e.org} size={16} /><span class="ellipsis">{nameOf(e.org)}</span>{#if inner(e)}<UsersRound size={13} strokeWidth={2.2} />{/if}{#if e.saved && e.status !== 'cancelled'}<Bookmark class="sv" size={13} strokeWidth={2.4} fill="currentColor" aria-label={t('event.saved')} />{/if}</span>
                 <b class="clamp-2 title">{e.title}</b>
                 <span class="meta num">
-                  <span><Clock size={14} strokeWidth={1.75} />{time(e.startsAt)}</span>
+                  <span><Clock size={14} strokeWidth={1.75} />{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
                   <span class="ellipsis"><MapPin size={14} strokeWidth={1.75} />{placeOf(e.place)}</span>
                   {#if e.price}<span>{money(e.price)}</span>{/if}
                 </span>

@@ -191,7 +191,8 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
-    ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP) and (ends is None or ends > starts)
+    ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
+          and (ends is None or ends > starts)  # any length: an event can run for days (a casting, 2-12 Nov)
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
           and re.fullmatch(r"#[0-9a-fA-F]{6}", color) and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and visibility in (None, "public", "members", *(("leaders",) if oversee else ()))
           and leaders in (None, "president", "vice", "head") and (not meeting or visibility == "members" and seats is None)

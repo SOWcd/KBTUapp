@@ -48,7 +48,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort } from '../../lib/time';
+  import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay } from '../../lib/time';
   import { haptic, inTelegram } from '../../lib/tg';
   import { shrink } from '../../lib/photo';
   import { shade, coverColor } from '../../lib/color';
@@ -86,7 +86,7 @@
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
-    end: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
+    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
@@ -114,12 +114,12 @@
   $effect(() => { if (isMeeting && !tags.length) api.teamSetup(org).then((s) => { tags = s.tags; ownDept = s.myDept ?? null; if (deptOnly && !saved) f.meetingTag = ownDept; }).catch(() => {}); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
-  // one end time: earlier than the start means the next day (a night hackathon)
-  // ponytail: events longer than 24 h can't be expressed; add an end date if a club needs one
+  // the end: a time on the start's day, earlier than the start meaning the next day (a night hackathon); an end date
+  // of its own for an event of several days (a casting, 2-12 Nov), taken as it is
   const endTs = $derived.by(() => {
-    const e = fromInputs(f.date, f.end);
+    const e = fromInputs(f.endDate || f.date, f.end);
     if (!Number.isFinite(e) || !Number.isFinite(startTs)) return null;
-    return e > startTs ? e : e + 86400;
+    return f.endDate || e > startTs ? e : e + 86400;
   });
   const regTs = $derived(fromInputs(f.regDate, f.regTime));
   // switched on: the day before the event, or its own day when that's already gone
@@ -130,7 +130,7 @@
   }
   const err = $derived({
     title: f.title.trim() ? '' : t('ed.need'),
-    when: !Number.isFinite(startTs) ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : '',
+    when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : endTs != null && endTs <= startTs ? t('ed.endEarly') : '',
     place: f.tba || f.place.trim() ? '' : t('ed.need'),
     seats: f.seats === '' || (Number.isInteger(+f.seats) && +f.seats > 0) ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
@@ -260,7 +260,7 @@
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
-          end: e.endsAt ? time(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
+          end: e.endsAt ? time(e.endsAt) : '', endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
@@ -387,6 +387,9 @@
   const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
   const regVal = $derived(f.deadline && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
   const dayText = $derived(Number.isFinite(startTs) ? `${weekdayShort(startTs)}, ${dayMonthShort(startTs)}` : '—');
+  // the end's day: its own date when set, else the day the end time falls on (dimmed: nothing chosen)
+  const endDay = $derived(endTs != null ? endTs : Number.isFinite(startTs) ? startTs : null);
+  const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
   const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
   const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;
   const memoN = $derived(Object.keys(f.memo).length);
@@ -500,6 +503,7 @@
         <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={t('ed.date')} /></label>
         <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={t('ed.start')} /></label></div>
       <div class="wr"><span class="dot o"></span><b>{t('ed.end')}</b>
+        <label class="tv" class:ph={!f.endDate}>{endDayText}<input type="date" bind:value={f.endDate} min={f.date} aria-label={t('ed.endDate')} /></label>
         <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={t('ed.end')} /></label></div>
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
@@ -795,6 +799,7 @@
   .wr b { flex: 1; min-width: 0; font-weight: 500; color: var(--text-2); }
   .tv { position: relative; flex: none; padding: 7px 8px; border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); white-space: nowrap; }
   .tv input { position: absolute; inset: 0; width: 100%; opacity: 0; }
+  .tv.ph { color: var(--text-3); } /* nothing chosen: the end's day as it follows from the start */
   .dot { position: absolute; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-2); }
   .dot.o { background: none; box-shadow: inset 0 0 0 1.5px var(--text-2); }
   .line { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }

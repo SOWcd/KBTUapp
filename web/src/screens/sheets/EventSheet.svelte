@@ -52,7 +52,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayMonth, parts, at, duration, ago } from '../../lib/time';
+  import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import X from '@lucide/svelte/icons/x';
   import { openLink, haptic, shareCard } from '../../lib/tg';
@@ -98,7 +98,7 @@
   // the student's classes around the event that day: the last one before, any that overlap, the first one
   // after — so they see at once whether they make it
   const day = $derived.by(() => {
-    if (!e || !data.schedule.length) return null;
+    if (!e || !data.schedule.length || multiDay(e.startsAt, e.endsAt)) return null; // days of it: no one day's classes to weigh
     const p = parts(e.startsAt);
     const on = (hm: string) => { const [h, m] = hm.split(':').map(Number); return at(p.y, p.m, p.d, h, m); };
     const cls = data.schedule.filter((c) => c.weekday === (p.wd || 7)).map((c) => ({ c, b: on(c.begins), en: on(c.ends) }));
@@ -353,7 +353,7 @@
 
     <div class="facts">
       <div class="fact"><span class="fi"><CalendarClock size={18} /></span>
-        <span><b>{relDay(e.startsAt)}</b><i>{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}</i></span></div>
+        <span><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}</b><i>{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}</i></span></div>
       {#if e.placeUrl}
         <button class="fact gis" onclick={() => openLink(e.placeUrl!)}><span class="fi"><TwoGisMark size={22} /></span><span><b>{e.place}</b><i class="go">{route.slice(0, -1).join(' ')} <span class="nw">{route.at(-1)}<ArrowUpRight size={14} strokeWidth={2.4} /></span></i></span></button>
       {:else if floorOf(e.place) != null}

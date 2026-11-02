@@ -141,6 +141,29 @@ def test_core_loop(env):
     assert c.get(f"/api/events/{eid}/attendees", headers=tma(30)).json()["error"] == "forbidden"
 
 
+def test_multi_day_event(env, monkeypatch):
+    """A casting of ten days: no 24 h cap; listed and live all along, the door open all along, one reminder before the start."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    pres, ali = login(c, 20, "pres"), login(c, 10, "ali")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    start = int(time.time()) + 3 * 3600
+    end = start + 10 * 86400
+    body = {"title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    assert c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["error"] == "bad_input"   # ends when it starts
+    eid = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": end}).json()["id"]
+    assert c.post(f"/api/events/{eid}/publish", headers=tma(20)).json()["endsAt"] == end
+    code = c.post(f"/api/events/{eid}/registration", headers=tma(10), json={}).json()["my"]["ticketCode"]
+    assert [r[0] for r in con.execute("SELECT send_after FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h'", (ali["id"],))] == [start - 7200]
+    set_clock(monkeypatch, lambda: start + 5 * 86400)   # day six
+    assert eid in [e["id"] for e in c.get("/api/events", headers=tma(10)).json()]
+    assert c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": code}).json()["result"] == "ok"
+    set_clock(monkeypatch, lambda: end + 60)
+    assert eid not in [e["id"] for e in c.get("/api/events", headers=tma(10)).json()]
+    con.close()
+
+
 def test_sign_in_rules(env, monkeypatch, capsys):
     c, cfg = env
     login(c, 10, "ali")

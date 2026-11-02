@@ -12,7 +12,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
   import Ticket from '@lucide/svelte/icons/ticket';
-  import { relDay, time, nowTs } from '../../lib/time';
+  import { relDay, time, nowTs, multiDay, daySpan } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import { calendarUrl } from '../../lib/calendar';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
@@ -99,7 +99,7 @@
           <span class="ttl clamp-2">{e.title}</span>
         </button>
         <div class="facts">
-          <div><i>{t('tk.when')}</i><b>{relDay(e.startsAt)}, {time(e.startsAt)}</b></div>
+          <div><i>{t('tk.when')}</i><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt) + ', ' + time(e.startsAt)}</b></div>
           <div><i>{t('tk.where')}</i><b>{placeOf(e.place)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
         </div>
         <div class="cut" aria-hidden="true"></div>

@@ -806,6 +806,8 @@ def memo_asks(e: dict, memo: dict) -> list[str]:
     None), off (an off-campus place: no room to book there), seats."""
     start, end = e["starts_at"], e["ends_at"] or e["starts_at"] + 3 * 3600
     when, hours = memo_day(start), f"{_hm(start)}-{_hm(end)}"
+    if end - start > 86400:  # an event of several days (a casting, 2-12 Nov): its days, the hours as the club set them
+        when = f"{when} – {memo_day(end)}"
     place = e["place"] or "уточняется"
     asks: list[str] = []
     if (r := memo.get("room")) is not None and not e.get("off"):  # off campus: no room of KBTU's to book
