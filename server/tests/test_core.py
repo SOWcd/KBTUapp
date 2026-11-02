@@ -3443,10 +3443,16 @@ def test_my_school(env):
     for bad in ("Made Up School", "IT Club", 5, ["x"]):
         assert me({"school": bad}).status_code == 400
     assert c.get("/api/me", headers=tma(10)).json()["student"]["school"] == sce
-    st = me({"school": None}).json()["student"]
-    assert st["school"] is None and "school" not in st["fixable"]            # a change: spent (review once-edit 4)
+    assert me({"school": None}).status_code == 400                           # no clearing (Nov 3: cleared by mistake)
+    other = con.execute("SELECT name FROM orgs WHERE kind = 'school' AND name != ? LIMIT 1", (sce,)).fetchone()[0]
+    st = me({"school": other}).json()["student"]
+    assert st["school"] == other and "school" not in st["fixable"]           # a change: spent (review once-edit 4)
     assert me({"school": sce}).json()["student"]["school"] == sce          # back to the one before: free, once (Nov 3)
-    assert me({"school": None}).json()["message"] == "fixed"                 # then support
+    assert me({"school": other}).json()["message"] == "fixed"                # then support
+    con.execute("UPDATE students SET school = NULL WHERE user_id = (SELECT id FROM users WHERE tg_id = 10)")
+    con.commit()                                                             # cleared before clearing was refused
+    assert "school" in c.get("/api/me", headers=tma(10)).json()["student"]["fixable"]
+    assert me({"school": sce}).json()["student"]["school"] == sce          # an empty one filled: free, even spent
     assert c.patch("/api/me", headers=tma(22, "Guest"), json={"school": sce}).status_code in (401, 403)
 
 

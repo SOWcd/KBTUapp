@@ -415,7 +415,7 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity, _spend): for staff only the school
-                    "fixable": [k for k, c in ONCE.items() if c not in s["fixed"].split(",") and (c == "school" or s["consent_version"] != "staff")],
+                    "fixable": [k for k, c in ONCE.items() if (c not in s["fixed"].split(",") or c in ("school", "course") and s[c] is None) and (c == "school" or s["consent_version"] != "staff")],
                     # spent, yet the value before it can come back once (_spend)
                     "undo": {k: x for k, x in json.loads(s["once_was"] or "{}").items() if k in s["fixed"].split(",")}} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
@@ -480,7 +480,8 @@ FRAMES = ("flowers", "space", "hearts")
 # the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
 # not (owner, Nov 2). The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
-            "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub")
+            "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
+            "choice")
 SKINNED = "o.status = 'active' AND o.slug IN (" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 
 
@@ -649,6 +650,8 @@ def _spend(con, uid: int, s, col: str, val) -> None:
     """Course and school: corrected once, then support (`kbtu.admin fix <user> reset`); an empty one filled is free.
     The school before the once is kept: going back to it is free, once (a mis-tap undone), and it stays spent."""
     was = json.loads(s["once_was"] or "{}")
+    if s[col] is None:  # an empty one filled: free, even after the once (a school cleared before clearing was refused)
+        return
     if col in s["fixed"].split(","):
         if col not in was or was[col] != val:
             raise ApiError("conflict", "fixed")
@@ -728,6 +731,8 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if val is not None and not o and not back:
             raise ApiError("bad_input")
         new = o[0] if o else val if back else None
+        if new is None and s["school"] is not None:  # no clearing (Nov 3: cleared by mistake, the once went with it)
+            raise ApiError("bad_input")
         # once, as the ID (review once-edit 4: switched and back, another school's lanyard, chats and CSV lines);
         # filling an empty one is free. The lanyard reads the school live: it follows by itself
         if new != s["school"]:
