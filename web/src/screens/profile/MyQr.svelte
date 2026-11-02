@@ -126,7 +126,7 @@
 
   /* the badge's own material, seen from the back */
   .pass {
-    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 420px)); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it (the QR stays ~180 px) */ border-radius: 26px; color: #fff;
+    position: relative; overflow: hidden; width: min(330px, calc(100vw - 40px), calc(100dvh - 480px)); padding: 26px 0 16px; /* a band makes it taller: a short phone narrows it so the two-line hint under it stays in sight */ border-radius: 26px; color: #fff;
     background: radial-gradient(110% 70% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(160deg, #2A4FD6, #121A3D 70%);
     box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.75), 0 10px 24px -12px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
