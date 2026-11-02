@@ -170,6 +170,7 @@
     else if (r.target === 'post') sheets.comments('post', r.id, r.text.split(' · ')[0]); // no post screen: the row has its words, the thread its talk
     else if (r.target === 'ask') sheets.forum(r.id);
     else if (r.target === 'tgc' && r.where.link) openLink(r.where.link); // the channel's comments in Telegram
+    else if (r.target === 'fpost' && r.where.msg) openLink(`https://t.me/KBTUappForum/${r.where.msg}`); // a forum channel post, in the channel
   }
 </script>
 

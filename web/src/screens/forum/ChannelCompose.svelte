@@ -31,7 +31,7 @@
 
   function fail(e: unknown) {
     haptic.error();
-    const why: Key = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : 'common.error') : 'common.error';
+    const why: Key = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : e.message === 'short' ? 'fc.short' : e.message === 'duplicate' ? 'fc.dup' : e.message === 'noise' ? 'fc.noise' : 'common.error') : 'common.error';
     say(t(why), 'pleading_face_3d');
   }
 

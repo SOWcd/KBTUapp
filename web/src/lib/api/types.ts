@@ -102,7 +102,7 @@ export interface AdminAi { on: boolean; today: number; error: string | null; cha
 export interface AssistReply { text: string; actions: ({ type: 'map'; room: string } | { type: 'event'; id: number })[]; mark?: string; pair?: string; care?: true; help?: string }
 /** One of the owner's manual grants ("You gave" on the Awards page). */
 export interface GrantItem { id: Id; code: 'bugs' | 'creator_laugh' | 'creator_found' | 'init26' | 'init26f' | 'init26p'; at: Ts; person: PersonRef }
-export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc'; id: Id; link?: string | null }; count: number; reasons: Partial<Record<ReportReason, number>>;
+export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'tgc' | 'fpost'; id: Id; text: string; where: { kind: 'post' | 'event' | 'person' | 'ask' | 'tgc' | 'fpost'; id: Id; link?: string | null; msg?: number /* fpost: its message in the forum channel */ }; count: number; reasons: Partial<Record<ReportReason, number>>;
   notes: { reason: ReportReason; note: string; at: Ts }[] /* what reporters wrote, newest first, never who */; at: Ts;
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name

@@ -1097,6 +1097,24 @@ MIGRATIONS: list[tuple[int, str]] = [
     (112, "ALTER TABLE users ADD COLUMN frame TEXT;"),
     # the stranger's message his warning was for: the same update again after a restart is not a second comment
     (113, "ALTER TABLE tgc_strangers ADD COLUMN warned_msg INTEGER;"),
+    # (Nov 2) a forum channel post reported from the feed ('fpost', logic/moderation.py): the CHECK takes the new kind.
+    # Rebuilt as 106 did: nothing references reports, so no cascade can reach a child
+    (114, """CREATE TABLE reports5 (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply', 'fpost')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    ) STRICT;
+    INSERT INTO reports5 SELECT id, reporter_id, target, target_id, reason, note, status, created_at, resolved_by, resolved_at FROM reports;
+    DROP TABLE reports;
+    ALTER TABLE reports5 RENAME TO reports;
+    CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
 ]
 
 

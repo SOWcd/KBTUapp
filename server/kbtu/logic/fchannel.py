@@ -7,6 +7,7 @@ through it). The author deletes, a moderator takes down, a deleted account's pos
 which keeps only the channel's message id. Only the owner reveals an anonymous author, each look in the audit log."""
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import secrets
@@ -57,6 +58,33 @@ def _clean(raw: object) -> str:
     if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):
         raise ApiError("bad_input", "signature")
     return s
+
+
+# Meaningless posts (owner, Nov 2: "\u0444\u0440\u0440\u0440" went out): a cheap gate before the AI. The letters counted with every run of
+# one letter squeezed to one ("\u0444\u0440\u0440\u0440" is "\u0444\u0440"), a word is two letters or more with a vowel in it; a post needs two
+# words ("who is here?"), or one of ten letters. Then not the same as one of my posts this week
+# (near: SequenceMatcher on those squeezed letters). What gets past and is still noise, the AI calls NOISE (ai.py).
+VOWELS = set("aeiouy\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f\u04d9\u04e9\u04af\u04b1\u0456")  # Latin, Russian, Kazakh
+SAME_DAYS, SAME_AT = 7, 0.9
+
+
+def _squeeze(s: str) -> list[str]:
+    """The post's words as letters only, lower case, each run of one letter as one."""
+    return [re.sub(r"(.)\1+", r"\1", w) for w in re.findall(r"[^\W\d_]+", s.lower())]
+
+
+def _meaningful(s: str) -> bool:
+    words = _squeeze(s)
+    letters = sum(map(len, words))
+    real = sum(1 for w in words if len(w) >= 2 and VOWELS & set(w))
+    return real >= 2 or real >= 1 and letters >= 10  # "who is here?" passes; one short word ("hello", "\u0444\u0440\u0440\u0440") is a comment, not a post
+
+
+def _repeat(con, uid: int, text: str) -> bool:
+    """The same words (or nearly) as one of my posts this week, still up or waiting."""
+    me = " ".join(_squeeze(text))
+    return any(difflib.SequenceMatcher(None, me, " ".join(_squeeze(p["body"]))).ratio() >= SAME_AT for p in rows(con,
+        "SELECT body FROM fchan_posts WHERE user_id = ? AND status != 'gone' AND created_at > ? ORDER BY id DESC LIMIT 20", uid, _now() - SAME_DAYS * 86400))
 
 
 def _shape(p) -> dict:
@@ -147,10 +175,17 @@ def reserve(con, v: Viewer, body: dict) -> int:
     if not isinstance(anon, bool):
         raise ApiError("bad_input")
     text = _clean(body.get("body"))
+    if not _meaningful(text):
+        raise ApiError("bad_input", "short")
     with tx(con):
-        n, last = one(con, "SELECT COUNT(*), MAX(created_at) FROM fchan_posts WHERE user_id = ? AND created_at > ?", v.id, _now() - 86400)
+        # the pace: five a day, ten minutes apart; a post the AI called noise counts toward the day, not the ten minutes
+        # (its author rewrites it now: told why, ChannelCompose gives the words back)
+        n, last = one(con, """SELECT COUNT(*), MAX(CASE WHEN why IS NOT 'noise' THEN created_at END) FROM fchan_posts
+                             WHERE user_id = ? AND created_at > ?""", v.id, _now() - 86400)
         if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
             raise ApiError("rate_limited", "posts")
+        if _repeat(con, v.id, text):
+            raise ApiError("bad_input", "duplicate")
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign) VALUES (?, ?, ?, 'held', 'check', ?, ?)",
                            (v.id, text, int(anon), _now(), sign)).lastrowid
@@ -170,6 +205,9 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
     with tx(con):
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'held' AND why = 'check'", pid)
         if p:
+            if verdict == "noise":  # no message in it: refused, its author told (the route), the words wiped
+                con.execute("UPDATE fchan_posts SET status = 'gone', why = 'noise', body = '', sign = NULL WHERE id = ?", (pid,))
+                return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
             if verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", _now() - 3600)[0] >= CHANNEL_AN_HOUR
                 status, why = ("held", "busy") if busy else ("live", None)

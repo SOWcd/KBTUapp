@@ -525,14 +525,14 @@ def test_post_first_comment(env, monkeypatch):
 
     rules = lambda: [b for b in tg.of("sendMessage") if b["chat_id"] == G]  # noqa: E731
     # the copy before the send's answer was stored (the mock's first answer is message 901)
-    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "a < b & c"}).json()
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "is a < b & c here"}).json()
     copy(55, 901)
     assert not rules()
     # the bot's emoji packs (bot.load_pack): the first comment's emoji go out as theirs, HTML, like every bot message
     monkeypatch.setattr(bot, "_custom", {"\U0001f91d": "111"})
     monkeypatch.setattr(bot, "_custom_re", re.compile("\U0001f91d️?"))
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == "a &lt; b &amp; c\n\n<i>— Ann T</i>"
+    assert tg.of("sendMessage")[0]["text"] == "is a &lt; b &amp; c here\n\n<i>— Ann T</i>"
     r = rules()
     assert len(r) == 1 and r[0]["reply_parameters"] == {"message_id": 55} and r[0]["parse_mode"] == "HTML"
     assert r[0]["text"] == html.escape(texts.FORUM_RULES).replace("\U0001f91d", '<tg-emoji emoji-id="111">\U0001f91d</tg-emoji>') != texts.FORUM_RULES
@@ -722,3 +722,72 @@ def test_post_hot(env, monkeypatch):
     assert hot() is False                                                                       # one fewer than HOT
     con.execute("UPDATE fchan_comments SET gone = 0, at = ? WHERE msg_id = 500", (now - 7200,))
     assert hot() is False                                                                       # one of them over an hour old
+
+
+def test_post_meaningless_and_repeats(env, monkeypatch):
+    """Noise never goes out (owner, Nov 2: "\u0444\u0440\u0440\u0440" did): too few letters or words is refused before the AI; the same
+    words as one of my posts this week too; the AI's NOISE refuses it with a reason, the words wiped, counted toward the
+    day but not the ten minutes (rewritten at once). The pace still holds: ten minutes, five a day."""
+    c, cfg, said, seen = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    A = tma(1)
+    for junk in ("\u0444\u0440\u0440\u0440", "\u0444\u0440\u0440", "\u0430\u0430\u0430\u0430 \u0431\u0431\u0431\u0431", "asdf", "!!! \U0001f525\U0001f525\U0001f525", "hello"):
+        r = c.post("/api/forum-posts", headers=A, json={"body": junk})
+        assert r.status_code == 400 and r.json()["message"] == "short", junk
+    assert not seen                                                                              # refused before the AI
+    clock = [int(time.time())]
+    set_clock(monkeypatch, lambda: clock[0])
+    said["word"] = "noise"
+    r = c.post("/api/forum-posts", headers=A, json={"body": "test test test post please ignore"})
+    assert r.status_code == 400 and r.json()["message"] == "noise"
+    assert [tuple(x) for x in con.execute("SELECT status, why, body FROM fchan_posts")] == [("gone", "noise", "")]
+    said["word"] = "ok"
+    assert c.post("/api/forum-posts", headers=A, json={"body": "Lost my blue umbrella near the library"}).json()["status"] == "live"
+    clock[0] += 11 * 60
+    r = c.post("/api/forum-posts", headers=A, json={"body": "Lost my blue umbrella near the library!!"})            # the same again
+    assert r.status_code == 400 and r.json()["message"] == "duplicate"
+    r = c.post("/api/forum-posts", headers=A, json={"body": "Lost my blue umbrela near the library"})              # nearly
+    assert r.status_code == 400 and r.json()["message"] == "duplicate"
+    assert c.post("/api/forum-posts", headers=A, json={"body": "Who wants to play chess on Friday?"}).json()["status"] == "live"
+    r = c.post("/api/forum-posts", headers=A, json={"body": "Anyone up for basketball tonight?"})
+    assert r.json()["error"] == "rate_limited"                                                    # ten minutes still
+    for i, text in enumerate(("Anyone up for basketball tonight?", "Selling a used calculator, cheap")):
+        clock[0] += 11 * 60
+        assert c.post("/api/forum-posts", headers=A, json={"body": text}).json()["status"] == "live"
+    clock[0] += 11 * 60
+    r = c.post("/api/forum-posts", headers=A, json={"body": "Looking for a math tutor this week"})
+    assert r.json()["error"] == "rate_limited"                                                    # five today, the noise one too
+
+
+def test_post_reports(env, monkeypatch):
+    """A channel post reported from the feed: into the admin's queue (its words, the way to it, never who reported);
+    one open report per person and post, not my own, not one that isn't in the channel; take it down: the channel's own
+    take-down (the minute's Undo in the channel's removed list); keep: its reports close."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    for i, n in enumerate(("ann", "bob", "cat", "mod"), 1):
+        login(c, i, n)
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = 4")
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Someone took my bike, again", "anon": True}).json()
+    rep = lambda who, reason="spam": c.post("/api/reports", headers=tma(who), json={"target": "fpost", "id": p["id"], "reason": reason})  # noqa: E731
+    assert rep(2).status_code == 404                                                             # not in the channel yet
+    tick(cfg, Telegram(), con)
+    assert rep(1).status_code == 404                                                             # my own: I delete it
+    assert rep(2).status_code == 204 and rep(2, "insult").status_code == 204 and rep(3).status_code == 204
+    assert con.execute("SELECT COUNT(*) FROM reports WHERE target = 'fpost'").fetchone()[0] == 2   # one per person: a repeat updates it
+    q = [x for x in c.get("/api/admin/reports", headers=tma(4)).json() if x["target"] == "fpost"]
+    assert len(q) == 1 and q[0]["text"] == "Someone took my bike, again" and q[0]["count"] == 2 and q[0]["where"]["msg"] > 0
+    assert "reporter" not in json.dumps(q) and "bob" not in json.dumps(q).lower()
+    assert c.post(f"/api/admin/reports/fpost/{p['id']}", headers=tma(2), json={"remove": True}).status_code == 403  # not a moderator
+    assert c.post(f"/api/admin/reports/fpost/{p['id']}", headers=tma(4), json={"remove": True}).status_code == 204
+    assert tuple(con.execute("SELECT status, why FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()) == ("hidden", "moderator")
+    assert con.execute("SELECT COUNT(*) FROM reports WHERE target = 'fpost' AND status = 'actioned'").fetchone()[0] == 2
+    assert [x["id"] for x in c.get("/api/forum-posts/mod", headers=tma(4)).json()["removed"]] == [p["id"]]  # Undo lives there
+    # keep: the reports close, the post stays
+    q2 = c.post("/api/forum-posts", headers=tma(2), json={"body": "Free pizza in the atrium now"}).json()
+    tick(cfg, Telegram(), con)
+    assert c.post("/api/reports", headers=tma(3), json={"target": "fpost", "id": q2["id"], "reason": "other"}).status_code == 204
+    assert c.post(f"/api/admin/reports/fpost/{q2['id']}", headers=tma(4), json={"remove": False}).status_code == 204
+    assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (q2["id"],)).fetchone()[0] == "live"
+    assert not [x for x in c.get("/api/admin/reports", headers=tma(4)).json() if x["target"] == "fpost"]

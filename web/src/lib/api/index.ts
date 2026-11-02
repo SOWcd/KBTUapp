@@ -145,7 +145,7 @@ export interface Api {
   addComment(kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread>; // 500 chars, 10 a minute
   setComments(kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread>;  // the club's Head+
   deleteComment(id: Id): Promise<void>;                                              // mine, or as the club's Head+
-  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
+  report(target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', id: Id, reason: ReportReason, note?: string): Promise<void>; // → the moderators' queue
   reports(): Promise<ReportItem[]>;                                                  // admin
   // the forum (F1 find people): 404 with the server's flag off, 403 for students while it's tried out
   forumMe(): Promise<ForumMe>;

@@ -119,7 +119,7 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
     need_student(v)
-    if target not in ("post", "comment", "event", "user", "photo", "ask") or reason not in ("spam", "insult", "danger", "other") \
+    if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") or reason not in ("spam", "insult", "danger", "other") \
             or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
         raise ApiError("bad_input")
     note = (note or "").strip() or None
@@ -135,6 +135,9 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
             raise ApiError("not_found")
     elif target == "ask":  # a forum request (forum.py): not my own, still up
         if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id):
+            raise ApiError("not_found")
+    elif target == "fpost":  # a post in the forum channel (fchannel.py): in the channel now, not my own; whose stays hidden
+        if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0 AND user_id != ?", tid, v.id):
             raise ApiError("not_found")
     elif target == "comment":
         c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
@@ -156,7 +159,8 @@ def _about(con, target: str, tid: int) -> int | None:
     """Whose the reported thing is: the person, a comment's author, a photo's uploader (a club's post or event: nobody's)."""
     r = (one(con, "SELECT ?", tid) if target == "user" else one(con, "SELECT user_id FROM comments WHERE id = ?", tid) if target == "comment"
          else one(con, "SELECT added_by FROM event_photos WHERE file_id = ?", tid) if target == "photo"
-         else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask" else None)
+         else one(con, "SELECT user_id FROM asks WHERE id = ?", tid) if target == "ask"
+         else one(con, "SELECT user_id FROM fchan_posts WHERE id = ?", tid) if target == "fpost" else None)
     return r[0] if r else None
 
 
@@ -179,6 +183,9 @@ def report_queue(con, v: Viewer) -> list[dict]:
         elif r["target"] == "ask":  # a forum request: its words (forum.py hides it only with three reports and the AI, or here)
             a = one(con, "SELECT title, body FROM asks WHERE id = ? AND status IN ('live', 'held')", r["target_id"])
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
+        elif r["target"] == "fpost":  # a forum channel post: its words, and the way to it in the channel (an anonymous one names nobody)
+            p = one(con, "SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND status = 'live'", r["target_id"])
+            text, where = (p["body"], ("fpost", r["target_id"], p["tg_msg"])) if p else (None, None)
         elif r["target"] == "post":
             # no post screen of its own to open: its words are the thing to judge, title and body
             p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
@@ -195,7 +202,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
         # what the reporters wrote, newest first, never who wrote it
         notes = [{"reason": n["reason"], "note": n["note"], "at": n["created_at"]} for n in rows(con, """SELECT reason, note, created_at FROM reports
             WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
-        out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1]}, "count": r["n"],
+        out.append({"target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1], **({"msg": where[2]} if len(where) > 2 else {})}, "count": r["n"],
                     "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
     # and the channel's comments in Telegram; those the reports removed first (a person waits for the verdict)
     return sorted(out + tgcomments.queue_items(con, v), key=lambda x: (not x.get("removed"), x["at"]))
@@ -208,6 +215,14 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
     _mod(v)
     if _about(con, target, tid) == v.id:
         raise ApiError("forbidden")
+    if target == "fpost":  # the channel's own take-down (the minute's Undo, Admin → the channel's removed list), then its reports close
+        if remove:
+            fchannel.mod_decide(con, v, tid, False)
+        with tx(con):
+            con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = 'fpost' AND target_id = ? AND status = 'open'",
+                        ("actioned" if remove else "dismissed", v.id, core.now(), tid))
+            log_action(con, v.id, "report_remove" if remove else "report_keep", f"fpost:{tid}")
+        return []
     photos: list[str] = []
     with tx(con):  # a take-down and its reports closing go together, or neither
         if remove:
@@ -325,6 +340,7 @@ from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
 from .clubs import org  # noqa: E402
 from .forum import hide_ask  # noqa: E402
+from . import fchannel  # noqa: E402
 from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import _event, notify  # noqa: E402

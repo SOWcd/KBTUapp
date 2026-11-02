@@ -19,6 +19,9 @@
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import Flag from '@lucide/svelte/icons/flag';
+  import { menu } from '../../ui/menu';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Avatar from '../../ui/Avatar.svelte';
   import { initials } from '../../ui/OrgLogo.svelte';
@@ -134,6 +137,12 @@
     setTimeout(() => { if (popped === p.id) popped = null; openLink(`${CHANNEL}/${p.msg}`); }, 260);
   }
 
+  // someone else's post: ⋯ → Report (the app's report sheet; into the admin's queue, whose it is stays hidden)
+  function more(e: MouseEvent, p: ChannelFeedPost) {
+    haptic.tap();
+    menu(e.currentTarget as Element, [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
+  }
+
   // the comments: the pill, or a tap anywhere on the post but its buttons (Enter and Space too)
   const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
   const press = (e: MouseEvent, p: ChannelFeedPost) => { if (!(e.target as Element).closest('button, a, .nw')) talk(p); };
@@ -173,8 +182,9 @@
               {:else}<b class="ellipsis">{p.sign}</b>{/if}
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-              {:else if p.hot && live}<span class="mk hot">🔥 {t('fc.hot')}</span>{/if}
-              {#if p.mine && p.id > 0}<button class="del" aria-label={t('fc.delete')} onclick={() => drop(p)}><Trash2 size={16} strokeWidth={2} /></button>{/if}
+              {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
+              {#if p.mine && p.id > 0}<button class="del" aria-label={t('fc.delete')} onclick={() => drop(p)}><Trash2 size={16} strokeWidth={2} /></button>
+              {:else if live && !p.mine}<button class="del" aria-label={t('common.more')} onclick={(e) => more(e, p)}><Ellipsis size={18} strokeWidth={2} /></button>{/if}
             </div>
             <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
             {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
@@ -261,7 +271,8 @@
   .mk { flex-shrink: 10; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* at 320 the mark gives way before the name */
   .mk::before { content: '·'; margin-right: 6px; color: var(--text-3); }
   .mk.accent { color: var(--accent-text); }
-  .mk.warning, .mk.hot { color: var(--warning-text); }
+  .mk.warning { color: var(--warning-text); }
+  .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */
   .del { align-self: center; margin: -12px -12px -12px auto; width: 44px; height: 44px; display: grid; place-items: center; flex: none;
     color: var(--text-3); border-radius: 50%; }
   .del:active { color: var(--danger-text); }
