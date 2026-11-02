@@ -1,14 +1,20 @@
 <script lang="ts">
+  // The Clubs tab: one feed for everyone, an App Store-like showcase (round 5, Nov 2: the "My club | All clubs" switch
+  // went, segmented controls inside screens are out app-wide). No large title (the capsule names the tab). Top down:
+  //   Mine      my clubs in a row, what's next at each; a club I'm in opens its Studio pushed from the right, one I
+  //             follow its page (each of my clubs its own Studio: no picker)
+  //   search    sticks under the capsule once Mine scrolls away (a catalogue of 50-100 clubs needs it); typing turns
+  //             the feed into the results
+  //   Recommended  clubs with an open recruitment round (or taking applications), Apply at the row's end
+  //   chats     KBTU's Telegram chats as avatars with a mark for what each is (§4.11)
+  //   All clubs one list A-Z, what's next at each in its line, the bell at its end
+  //   Schools and offices  their own list at the bottom; then "Create a club"
+  // The Student Government first wherever it shows.
   import Plus from '@lucide/svelte/icons/plus';
-  // Clubs → All clubs, the catalogue for everyone; no large title (the capsule names the tab, Nov 2) (a member's tab opens on My club; the switch on top) (owner, Oct 24: it moved here from Events; the Join page folded in as
-  // "Recruiting now" up top). Mockup v24, owner Oct 21: subscribe to a club to hear about its new events (the bell; the Feed
-  // and List show everything anyway). All / mine up top, search (a catalog of 50–100 clubs is unusable by scrolling),
-  // KBTU's chats as avatars with a mark for what each is, the clubs as tiles with what's next at each, the schools
-  // as a list. Categories wait for the server (orgs have no category yet).
-  import SearchField from '../../ui/SearchField.svelte';
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import SearchField from '../../ui/SearchField.svelte';
   import { data, toggleSub, toggleJoin, loadChats, chatsFor } from '../../lib/state/data.svelte';
   import Button from '../../ui/Button.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -18,119 +24,113 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import ChatKind from '../../ui/ChatKind.svelte';
   import CreateClubCard from '../../ui/CreateClubCard.svelte';
-  import { type Chat } from '../../lib/api';
+  import { type Org, type OrgRef } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
-  import { byWeight, hit, weight } from '../../lib/clubs';
-  import { shortOf } from '../../lib/short';
-  import type { Org } from '../../lib/api';
+  import { byWeight, hit } from '../../lib/clubs';
+  import { byRank, roleName, titleOf } from '../../lib/perms';
+  import { nameOf, shortOf } from '../../lib/short';
+  import { haptic } from '../../lib/tg';
   import ClubRow from '../../ui/ClubRow.svelte';
   import GovMark from '../../ui/GovMark.svelte';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import { slide } from 'svelte/transition';
-  import ClubSwitch from '../club/ClubSwitch.svelte';
-
 
   let q = $state('');
+  const searching = $derived(!!q.trim());
   // the chats directory (§4.11): mine first (my school and course, then everyone's); the rest a tap away
   const chats = $derived(data.chats);
   $effect(() => { if ((session.me?.id ?? null) !== chatsFor) loadChats(); });
-  function tapChat(c: Chat) {
-    void openChat(c);
-  }
-  // Owner, Oct 25 (video IMG_6648: 44 tiles, most empty, then 11 schools in full): priorities, not a catalogue. Mine (I'm
-  // in it or follow it), Soon (an event coming, or taking applications), Popular (the six biggest by members and
-  // followers), then "All clubs · N" for the rest (AllClubs.svelte) and the schools folded into one row. The Student
-  // Government first wherever it shows. A search goes over everything as plain rows.
-  const clubsOnly = $derived(data.orgs.filter((o) => o.kind !== 'school'));
-  const schools = $derived(data.orgs.filter((o) => o.kind === 'school'));
-  const found = $derived(q.trim() ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
-  const mine = $derived(clubsOnly.filter((o) => o.myRole || o.subscribed).sort(byWeight));
-  const mineIds = $derived(new Set(mine.map((o) => o.id)));
-  // what's next at each club: its soonest event (and when, for Soon's order)
+
+  const SCHOOLISH = new Set(['school', 'office']);
+  const clubsOnly = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
+  // ponytail: one A-Z list; orgs have no category yet, sections by theme (sport, creative, science…) once the server has one
+  const az = (a: Org, b: Org) => +!a.gov - +!b.gov || a.name.localeCompare(b.name, 'ru');
+  const all = $derived([...clubsOnly].sort(az));
+  const schools = $derived(data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')));
+  const found = $derived(searching ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
+
+  // what's next at each club: its soonest event
   const next = $derived.by(() => {
-    const m = new Map<number, { at: number; text: string }>(), now = nowTs();
+    const m = new Map<number, string>(), now = nowTs();
     for (const e of [...data.events].sort((a, b) => a.startsAt - b.startsAt))
       if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id))
-        m.set(e.org.id, { at: e.startsAt, text: `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}` });
+        m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
     return m;
   });
-  // Soon: not mine (their tiles show what's next), an event first by its time, then recruiting (a round by its deadline)
-  const SOON = 6;
-  const soon = $derived(data.orgs.filter((o) => !mineIds.has(o.id) && !o.myRole && (next.has(o.id) || o.round || o.recruiting))
-    .map((o) => ({ o, at: next.get(o.id)?.at ?? o.round?.closesAt ?? Infinity }))
-    .sort((a, b) => +!a.o.gov - +!b.o.gov || a.at - b.at).slice(0, SOON).map((x) => x.o));
-  // an open round first: its "Apply" button sits next to it, not next to an unrelated event (casting audit)
-  const soonLine = (o: Org) => (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : next.get(o.id)?.text ?? t('clubs.openNow'));
-  const canApply = (o: Org) => !!session.me?.student && !o.myRole && (!!o.round || o.recruiting);
-  // Popular: the six biggest that aren't mine, with someone in them or following
-  const popular = $derived(clubsOnly.filter((o) => !mineIds.has(o.id) && (o.gov || weight(o) > 0)).sort(byWeight).slice(0, 6));
-  let schoolsOpen = $state(false);
+
+  // Mine: the clubs I'm in (by my rank, each opens its Studio), then the ones I follow (their page)
+  type Mine = { org: OrgRef; full: Org | undefined; role: string | null };
+  const byId = $derived(new Map(data.orgs.map((o) => [o.id, o])));
+  const mine = $derived.by<Mine[]>(() => {
+    const ms = [...(session.me?.memberships ?? [])].sort(byRank);
+    const inIds = new Set(ms.map((m) => m.org.id));
+    return [...ms.map((m) => ({ org: m.org, full: byId.get(m.org.id), role: roleName(m.role, titleOf(m)) })),
+      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, full: o, role: null }))];
+  });
+  const openMine = (x: Mine) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+
+  // Recommended: open recruitment only (a round by its deadline, then any-time applications), not my own clubs
+  const mineIds = $derived(new Set(mine.map((x) => x.org.id)));
+  const recruit = $derived(data.orgs.filter((o) => !mineIds.has(o.id) && !o.myRole && (o.round || o.recruiting))
+    .sort((a, b) => +!a.gov - +!b.gov || (a.round?.closesAt ?? Infinity) - (b.round?.closesAt ?? Infinity) || byWeight(a, b)));
+  const recruitLine = (o: Org) => (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : t('clubs.openNow'));
+  const canApply = (o: Org) => !!session.me?.student && !o.myRole;
+  const sub = (o: Org) => next.get(o.id) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
+
+  // stuck under the capsule: the bar's ground reaches up to the capsule, so no row shows between them (a sentinel just
+  // above the bar: once it's under the capsule's line, the bar is stuck)
+  let stuck = $state(false);
+  function sentinel(el: HTMLElement) {
+    const top = Math.round((document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46) + 8);
+    const io = new IntersectionObserver(([e]) => { stuck = !e.isIntersecting && e.boundingClientRect.top < top; }, { rootMargin: `-${top}px 0px 0px 0px` });
+    io.observe(el);
+    return { destroy: () => io.disconnect() };
+  }
+
   // a chat without a picture: its letters on a colour of its own
   const tint = (title: string) => COVERS[[...title].reduce((h, c) => h + c.charCodeAt(0), 0) % COVERS.length];
 </script>
 
 <div class="page scroll stagger">
-  {#if session.me?.memberships.length}<ClubSwitch />{/if}
-  <SearchField bind:value={q} placeholder={t('clubs.search')} raised />
-
-  {#if q.trim()}
-    <div class="sec"><h2>{t('clubs.found')}</h2><span class="num">{found.length}</span></div>
-    <div class="rows surface">
-      {#each found as o (o.id)}<ClubRow org={o} name={o.kind === 'school' ? o.abbr ?? o.name : o.name} sub={o.kind === 'school' && o.abbr ? o.name : tn('clubs.subscribers', o.subscribers)} />
-      {:else}<p class="t-foot empty">{t('clubs.nothing')}</p>{/each}
-    </div>
-  {/if}
-
-  {#if chats && (chats.all.length || session.me?.student) && !q.trim()}
-    <section class="chats">
-      <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
-      <div class="ch-row hscroll">
-        <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
-        <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
-        {#each chats.forYou as c (c.id)}
-          <button class="chat" onclick={() => tapChat(c)}>
-            <span class="cav" class:sq={c.kind === 'forum'} style={c.photo ? '' : `background:${tint(c.title)}`}>
-              {#if c.photo}<img src={c.photo} alt="" />{:else}<em>{initials(c.title)}</em>{/if}
-              <!-- what it is, Telegram's way: a channel, a group, a group with topics -->
-              <span class="kind"><ChatKind kind={c.kind} /></span>
+  {#if mine.length && !searching}
+    <section>
+      <div class="sec"><h2>{t('clubs.mineShort')}</h2></div>
+      <div class="mine hscroll">
+        {#each mine as x (x.org.id)}
+          {@const nx = next.get(x.org.id)}
+          <div class="card surface">
+            <button class="open" onclick={() => openMine(x)} aria-label={x.org.name}></button>
+            <span class="top">
+              <OrgLogo org={x.org} size={44} />
+              {#if x.full && !x.role}
+                <button class="bell" class:on={x.full.subscribed} onclick={() => toggleSub(x.org.id)} aria-label={t(x.full.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={x.full.subscribed}>
+                  {#if x.full.subscribed}<BellCheck size={16} />{:else}<Bell size={16} />{/if}</button>
+              {:else if x.role}<span class="go" aria-hidden="true"><ChevronRight size={18} /></span>{/if}
             </span>
-            <b>{c.title}</b>
-            {#if c.org}<em class="who">{shortOf(c.org)}</em>{:else if c.members}<small><TelegramMark size={10} />{compact(c.members)}</small>{/if}
-          </button>
+            <span class="nm"><b class="clamp-2">{nameOf(x.org)}</b>{#if x.full?.gov}<GovMark size={14} />{/if}</span>
+            <small class="ellipsis">{x.role ?? (x.full ? tn('clubs.subscribers', x.full.subscribers) : '')}</small>
+            <em class="nx" class:none={!nx}>{#if nx}<i></i><span>{nx}</span>{:else}<span>{t('clubs.nothingSoon')}</span>{/if}</em>
+          </div>
         {/each}
       </div>
     </section>
   {/if}
 
-  {#snippet tile(o: Org)}
-    {@const nx = next.get(o.id)?.text ?? (o.recruiting ? t('clubs.recruiting') : '')}
-    <div class="club surface">
-      <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
-      <span class="ghost" aria-hidden="true"><OrgLogo org={{ ...o, logo: null }} size={88} /></span>
-      <button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
-        {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>
-      <OrgLogo org={o} size={52} />
-      <span class="txt">
-        <span class="nm"><b class="clamp-2">{o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={15} /></span>{/if}{#if o.gov}<GovMark size={15} />{/if}</span>
-        <small>{o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers)}</small>
-        {#if nx}<em class="cnx"><i></i><span>{nx}</span></em>{/if}
-      </span>
+  <!-- the search sticks under the capsule: the catalogue is long -->
+  <i class="sent" use:sentinel aria-hidden="true"></i>
+  <div class="find" class:stuck><SearchField bind:value={q} placeholder={t('clubs.search')} /></div>
+
+  {#if searching}
+    <div class="sec"><h2>{t('clubs.found')}</h2><span>{found.length}</span></div>
+    <div class="rows surface">
+      {#each found as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.kind === 'school' && o.abbr ? o.name : sub(o)} hot={next.has(o.id)} />
+      {:else}<p class="t-foot empty">{t('clubs.nothing')}</p>{/each}
     </div>
-  {/snippet}
-
-  {#if !q.trim()}
-    {#if mine.length}
-      <div class="sec"><h2>{t('clubs.mineShort')}</h2><span class="num">{mine.length}</span></div>
-      <div class="grid">{#each mine as o (o.id)}{@render tile(o)}{/each}</div>
-    {/if}
-
-    {#if soon.length}
-      <div class="sec"><h2>{t('clubs.soon')}</h2></div>
+  {:else}
+    {#if recruit.length}
+      <div class="sec"><h2>{t('clubs.recommend')}</h2></div>
       <div class="rows surface">
-        {#each soon as o (o.id)}
-          <ClubRow org={o} sub={soonLine(o)} hot={!o.round && next.has(o.id)}>
+        {#each recruit as o (o.id)}
+          <ClubRow org={o} sub={recruitLine(o)}>
             {#snippet end()}
               {#if canApply(o) && o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
               {:else if canApply(o) && o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>
@@ -143,26 +143,35 @@
       </div>
     {/if}
 
-    {#if popular.length}
-      <div class="sec"><h2>{t('clubs.popular')}</h2></div>
-      <div class="grid">{#each popular as o (o.id)}{@render tile(o)}{/each}</div>
+    {#if chats && (chats.all.length || session.me?.student)}
+      <section>
+        <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
+        <div class="ch-row hscroll">
+          <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
+          <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
+          {#each chats.forYou as c (c.id)}
+            <button class="chat" onclick={() => void openChat(c)}>
+              <span class="cav" class:sq={c.kind === 'forum'} style={c.photo ? '' : `background:${tint(c.title)}`}>
+                {#if c.photo}<img src={c.photo} alt="" />{:else}<em>{initials(c.title)}</em>{/if}
+                <!-- what it is, Telegram's way: a channel, a group, a group with topics -->
+                <span class="kind"><ChatKind kind={c.kind} /></span>
+              </span>
+              <b>{c.title}</b>
+              {#if c.org}<em class="who">{shortOf(c.org)}</em>{:else if c.members}<small><TelegramMark size={10} />{compact(c.members)}</small>{/if}
+            </button>
+          {/each}
+        </div>
+      </section>
     {/if}
 
-    <button class="allb surface" onclick={() => sheets.allClubs()}><span>{t('clubs.allBtn', { n: clubsOnly.length })}</span><ChevronRight size={18} /></button>
+    {#if all.length}
+      <div class="sec"><h2>{t('clubs.allTitle')}</h2><span>{all.length}</span></div>
+      <div class="rows surface">{#each all as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</div>
+    {/if}
 
     {#if schools.length}
-      <div class="rows surface fold">
-        <button class="srow" class:shown={schoolsOpen} onclick={() => (schoolsOpen = !schoolsOpen)} aria-expanded={schoolsOpen}>
-          <span class="stack" aria-hidden="true">{#each schools.slice(0, 3) as o (o.id)}<OrgLogo org={o} size={30} />{/each}</span>
-          <b>{t('clubs.schools')} · {schools.length}</b>
-          <span class="chev"><ChevronDown size={18} /></span>
-        </button>
-        {#if schoolsOpen}
-          <div transition:slide={{ duration: 260 }}>
-            {#each schools as o (o.id)}<ClubRow org={o} name={o.abbr ?? o.name} sub={o.abbr ? o.name : ''} />{/each}
-          </div>
-        {/if}
-      </div>
+      <div class="sec"><h2>{t('clubs.schoolsOffices')}</h2><span>{schools.length}</span></div>
+      <div class="rows surface">{#each schools as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)} />{/each}</div>
     {/if}
   {/if}
   <div class="cta"><CreateClubCard /></div>
@@ -171,10 +180,42 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
-  .sec { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 4px 12px; }
+  .sec { display: flex; align-items: baseline; justify-content: space-between; margin: var(--s-7) var(--s-1) var(--s-3); }
+  section:first-child .sec { margin-top: var(--s-1); }
   .sec h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .sec > span, .sec .all { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+  .sec > span, .sec .all { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); font-variant-numeric: tabular-nums; }
   .sec .all { color: var(--accent-text); }
+
+  /* Mine: cards in a row, the page's edges bled; the club, who I am there (or its followers), what's next */
+  .mine { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) var(--s-2); scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter); }
+  .card { position: relative; flex: none; width: 164px; display: flex; flex-direction: column; gap: 3px; padding: var(--s-3); border-radius: var(--r-l);
+    scroll-snap-align: start; transition: transform 420ms var(--ease-bounce); }
+  .card:active:not(:has(.bell:active)) { transform: scale(0.97); transition-duration: 80ms; }
+  .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+  .top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-2); }
+  .go { display: grid; place-items: center; width: 28px; height: 28px; color: var(--text-3); }
+  .nm { display: flex; align-items: flex-start; gap: 4px; min-width: 0; min-height: 2.4em; }
+  .nm b { font: 680 var(--fs-body)/1.2 var(--font-text); letter-spacing: -0.01em; }
+  .card small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
+  .nx { display: flex; align-items: center; gap: 6px; margin-top: var(--s-2); padding-top: var(--s-2); box-shadow: inset 0 0.5px 0 var(--line-2);
+    font: 650 var(--fs-cap)/1.25 var(--font-text); font-style: normal; color: var(--accent-text); min-width: 0; }
+  .nx.none { color: var(--text-3); font-weight: 500; }
+  .nx i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #46D6FF; }
+  .nx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bell { position: relative; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
+  .bell.on { background: var(--success-soft); color: var(--success-text); }
+
+  /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */
+  .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-4) calc(-1 * var(--gutter)) 0;
+    padding: 0 var(--gutter) var(--s-2); background: var(--bg); }
+  section + .sent + .find { margin-top: var(--s-3); }
+  .page > .sent:first-child + .find { margin-top: 0; }
+  .sent { display: block; height: 0; }
+  .find::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(var(--head-bottom) + var(--s-2)); background: var(--bg);
+    opacity: 0; transition: opacity var(--t-fast) var(--ease); pointer-events: none; }
+  .find.stuck::before { opacity: 1; }
+  .find.stuck { box-shadow: 0 0.5px 0 var(--separator); }
 
   /* chats: the chat's own picture (or its letters), a small mark for what it is (mockup v16) */
   .ch-row { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 6px; }
@@ -191,44 +232,10 @@
   .kind { position: absolute; right: -3px; bottom: -3px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--bg); }
   .sq .kind { border-radius: 32%; }
 
-  /* clubs: tiles, two a row; the club's emoji as a faint ghost in the corner; the bell its own button */
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .club { position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px; border-radius: var(--r-l); overflow: hidden; }
-  .club:active:not(:has(.bell:active)) { transform: scale(0.98); }
-  .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
-  .ghost { position: absolute; right: -18px; bottom: -22px; opacity: 0.1; transform: rotate(-12deg); pointer-events: none; }
-  .bell { position: absolute; top: 12px; right: 12px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
-  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
-  .bell.on { background: var(--success-soft); color: var(--success-text); }
-  .txt { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .nm { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
-  .nm b { font: 680 var(--fs-body)/1.2 var(--font-text); }
-  .ok { display: inline-flex; color: var(--accent-text); flex: none; margin-top: 1px; }
-  .txt small { font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-3); }
-  .cnx { display: flex; align-items: center; gap: 6px; margin-top: 6px; font: 650 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: var(--accent-text); min-width: 0; }
-  .cnx i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #46D6FF; }
-  .cnx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .empty { grid-column: 1 / -1; padding: 20px 4px; }
-
-  /* plain rows (Soon, a search, the schools): ClubRow */
+  /* plain rows (Recommended, All clubs, the schools, a search): ClubRow */
   .rows { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
   .rows .empty { padding: 20px 14px; }
-  .rows .bell { position: relative; top: auto; right: auto; }
-  /* everything else a tap away */
-  .allb { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 52px; margin-top: 16px; padding: 0 14px 0 16px;
-    border-radius: var(--r-l); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
-  .allb:active { transform: scale(0.98); }
-  /* the schools, folded into one row */
-  .fold { margin-top: 10px; }
-  .srow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 14px 8px 12px; text-align: left; color: var(--text-3); }
-  .srow b { flex: 1; font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
-  .chev { display: flex; transition: transform 0.26s ease; }
-  .srow.shown .chev { transform: rotate(180deg); }
-  .srow:active { background: var(--surface-2); }
-  .fold > div { box-shadow: inset 0 1px 0 var(--line); }
-  .stack { display: flex; }
-  .stack > :global(*) { box-shadow: 0 0 0 2px var(--surface); border-radius: 50%; }
-  .stack > :global(* + *) { margin-left: -10px; }
-  .cta { margin-top: 24px; }
+  .rows .bell { position: relative; }
+  .cta { margin-top: var(--s-6); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

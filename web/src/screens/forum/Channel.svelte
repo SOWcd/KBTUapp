@@ -150,12 +150,12 @@
 
   {#if channel.feed?.length}
     <div class="feed">
-      {#each channel.feed as p (p.id)}
+      {#each channel.feed as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
         <!-- one element per post (flip needs it): a live one is a button into its comments, the others plain (role by state) -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <div class="post" class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut === p.id} data-post={p.id}
+        <div class="post" style:--i={Math.min(i, 8)} class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut === p.id} data-post={p.id}
           role={live ? 'button' : undefined} tabindex={live ? 0 : undefined} onclick={live ? (e) => press(e, p) : undefined} onkeydown={live ? (e) => key(e, p) : undefined}
           animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
           {#if cut === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{t('fc.newSince')}</span></div>{/if}
@@ -184,7 +184,7 @@
                 <button class="rx" class:pop={popped === p.id} onclick={() => react(p)}
                   aria-label="{t('fc.reactions')}{p.reactions.length ? `: ${p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}` : ''}">
                   {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>
-                  {:else}<span class="r none"><Heart size={16} strokeWidth={1.8} /></span>{/each}
+                  {:else}<span class="r none"><Heart size={19} strokeWidth={1.8} /></span>{/each}
                 </button>
                 <!-- the way to the talk: who replied (faces; no ids come: a face's colour by its letter), the bubble, how many -->
                 <button class="talk" onclick={() => talk(p)} aria-label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}">
@@ -220,21 +220,21 @@
   .post + .post::before { top: 0; }
   .compose:active { background: var(--surface); transition-duration: 60ms; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
-  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2);
+  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text);
     transition: transform 380ms var(--ease-bounce); }
   .compose:active .pen { transform: scale(0.9); transition-duration: 80ms; }
 
   /* a post: the face's rail and the words; under them, when people replied, their faces and the count */
   .post { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: var(--s-3);
-    padding: var(--s-4) var(--gutter) var(--s-1); animation: rise 360ms cubic-bezier(.2, .9, .25, 1.05) backwards;
+    padding: var(--s-4) var(--gutter) var(--s-1); animation: rise 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */
     transition: background var(--t-base) var(--ease); }
   .post:not(:has(.acts)) { padding-bottom: var(--s-4); }
   /* the line between the new and the seen: a word on a hairline in the accent, in place of the post's own hairline */
   .post.cut::before { display: none; }
-  .nw { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--s-3); margin: calc(-1 * var(--s-2)) calc(-1 * var(--gutter)) var(--s-3);
+  .nw { grid-column: 2; display: flex; align-items: center; gap: var(--s-2); margin: calc(-1 * var(--s-2)) calc(-1 * var(--gutter)) var(--s-3) 0; /* from the words' edge, as the hairlines */
     font: 600 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); letter-spacing: 0.02em; }
   .nw::before, .nw::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.35; }
-  .nw::before { flex: 0 0 var(--gutter); }
+  .nw::before { display: none; }
   .nwl { display: inline-flex; align-items: center; gap: 3px; } /* the arrow: the new ones are above the line */
   .tap { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .tap:active:not(:has(button:active)) { background: var(--surface); transition-duration: 60ms; }
@@ -278,12 +278,12 @@
      fills, a press only dims; 44 high to hit, the air around the marks is the target */
   .acts { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: -4px 0 -2px; } /* the hit areas reach into the air */
   .rx, .talk { display: inline-flex; align-items: center; min-width: 44px; height: 44px; color: var(--text-2);
-    font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; transition: opacity var(--t-base) var(--ease); }
-  .rx:active, .talk:active { opacity: 0.45; transition-duration: 60ms; }
+    font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; transition: opacity var(--t-base) var(--ease), transform 380ms var(--ease-bounce); }
+  .rx:active, .talk:active { opacity: 0.45; transform: scale(0.96); transition-duration: 60ms; }
   .rx { gap: var(--s-3); padding-right: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; }
   .e { font-size: var(--fs-body); line-height: 1; }
-  .r.none { color: var(--text-3); }
+  .r.none { color: var(--text-2); } /* an empty heart still reads as a button */
   /* the tap's answer: the reactions pop softly (the empty heart fills red), then the channel */
   .rx.pop .r { animation: pop 420ms var(--ease-bounce); }
   .rx.pop .none { color: var(--danger); }
@@ -291,7 +291,7 @@
   @keyframes pop { 0% { transform: scale(0.9); } 45% { transform: scale(1.18); } 100% { transform: scale(1); } }
   .talk { justify-content: flex-end; gap: 6px; padding-left: var(--s-3); }
   .talk :global(svg) { flex: none; }
-  .faces { display: flex; margin-right: 2px; }
+  .faces { display: flex; margin-right: 4px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
   .faces :global(.av + .av) { margin-left: -5px; }
   .faces :global(.av:first-child) { z-index: 2; } /* the newest on top */

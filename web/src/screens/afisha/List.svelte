@@ -225,7 +225,7 @@
     <div class="empty more">
       <span class="ic"><Sparkles size={26} strokeWidth={1.75} /></span>
       <span class="tt"><b>{t('list.moreSoon')}</b><p>{t('list.moreSoonText')}</p>
-        <button onclick={() => { ui.tab = 'club'; ui.allClubs = true; }}>{t('list.toClubs')}<ChevronRight size={16} /></button></span>
+        <button onclick={() => { ui.tab = 'club'; }}>{t('list.toClubs')}<ChevronRight size={16} /></button></span>
     </div>
   {/if}
   <div class="tail"></div>

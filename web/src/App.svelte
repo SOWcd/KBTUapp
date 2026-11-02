@@ -69,8 +69,9 @@
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
   sheets.answers = (title, questions) => new Promise((done) => lazy(() => import('./screens/sheets/AnswersSheet.svelte'), { title, questions, done }));
   sheets.askText = ({ placeholder, max, tel, value, line, ...q }) => new Promise((done) => { open(Ask, { ...q, input: { placeholder, max, tel, value, line }, done: (yes: boolean, text: string) => done(yes ? text : null) }); });
-  // My club is for club members only: its page and views are their own chunks
-  const studioPage = () => import('./screens/club/Studio.svelte');
+  // a club's Studio is for its members only: its page and views are their own chunks
+  const studioPage = () => import('./screens/club/StudioPane.svelte');
+  sheets.studio = (org) => lazy(studioPage, { org });
   const teamPage = () => import('./screens/club/Team.svelte');
   const feedPage = () => import('./screens/afisha/Feed.svelte');
   // what used to be pages beside a tab's screen: named loaders, warmed ahead, so their sheets open in the tap's frame
@@ -89,10 +90,10 @@
   $effect(() => { ui.gate = gated; });
   // while gated no overlay shows: they wait in the stack and show after "Accept" (a deep link isn't lost)
   const shown = (_o: unknown) => !gated;
-  // My club and its Team are chunks and the tab builds on its first tap: fetch them ahead, so it doesn't open blank;
+  // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList].forEach(warm); if (!session.me?.memberships.length) return; void studioPage(); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });
@@ -134,7 +135,6 @@
   sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
-  sheets.allClubs = () => lazy(() => import('./screens/sheets/AllClubs.svelte'), {});
   sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
   sheets.week = () => lazy(() => import('./screens/sheets/WeekSheet.svelte'), {});
   sheets.forum = (ask) => lazy(() => import('./screens/forum/Forum.svelte'), { ask });
@@ -163,8 +163,7 @@
   sheets.team = () => lazy(teamPage, {});
   setLoginHook((after, lock) => sheets.login(after, lock));
 
-  // ---- the Clubs tab: a member's has My club and All clubs (a switch on top of the content, tap only) ----
-  const member = $derived((session.me?.memberships.length ?? 0) > 0);
+  // ---- the Clubs tab: one feed for everyone; a club of mine opens its Studio pushed over it (round 5) ----
   // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
   $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
@@ -174,14 +173,13 @@
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
     profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0,
   };
-  /** The Clubs tab on My club (a non-member: the catalogue, all there is). */
-  function toClub() { ui.tab = 'club'; ui.allClubs = false; }
+  /** A club of mine: the Clubs tab with its Studio pushed over it. */
+  function toClub(org: number) { ui.tab = 'club'; sheets.studio(org); }
   // a screen builds on its first showing and stays alive (scroll kept); a tab never shown builds nothing (the hidden tabs
   // were ~1400 of 1900 nodes and 40 % of the blocking time at start)
-  const clubView = $derived(member && !ui.allClubs ? 'mine' : 'all');
   const built = $state<Record<string, boolean>>({});
   // (the Clubs tab waits for who I am: the copy or the server, a frame; else a member's hidden catalogue built too)
-  $effect(() => { if (ui.tab === 'club' && !session.ready) return; const k = ui.tab === 'club' ? 'club:' + clubView : ui.tab; if (!built[k]) built[k] = true; });
+  $effect(() => { if (ui.tab === 'club' && !session.ready) return; if (!built[ui.tab]) built[ui.tab] = true; });
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
@@ -313,9 +311,9 @@
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (p === 'clubs') { ui.tab = 'club'; ui.allClubs = true; return; } // the bot's "other clubs recruit now"
+    if (p === 'clubs') { ui.tab = 'club'; return; } // the bot's "other clubs recruit now"
     if (p === 'chats') { // the bot's "your suggested chat is in the app": the chats directory
-      ui.tab = 'club'; ui.allClubs = true;
+      ui.tab = 'club';
       void api.chats().then((c) => { data.chats = c; sheets.chats(c.all); }).catch(() => {});
       return;
     }
@@ -326,8 +324,8 @@
     const qr = p.match(/^u_(\d+_[A-Z2-7]{10})$/); // someone's profile QR (the invite sheet shows it too): noted for them as an invite
     if (qr) void api.refer(qr[1]).catch(() => {});
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
-    // tm_<club>: the bot's removal messages open that club's Team (§2b) over My club; no longer in it: the club's page
-    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } ui.club = org; toClub(); sheets.team(); };
+    // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
+    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } toClub(org); sheets.team(); };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
     // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
     else if (p) say(t('link.unknown'), 'thinking_face_3d');
@@ -445,7 +443,7 @@
         const o = await api.acceptInvite(token);
         await loadMe(); studioChanged();
         haptic.ok(); burst(); say(t('pres.done', { club: o.name }), 'party_popper_3d');
-        ui.club = o.id; toClub();
+        toClub(o.id);
       } catch { haptic.error(); say(t('join.linkDead'), 'pleading_face_3d'); }
     });
   }
@@ -509,9 +507,7 @@
       {:else if tab === 'forum'}
         {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
       {:else if tab === 'club'}
-        <!-- My club and All clubs both stay alive once shown: the switch answers in the tap's frame, each keeps its scroll -->
-        {#if built['club:all']}<div class="view" class:off={clubView !== 'all'}><Clubs /></div>{/if}
-        {#if member && built['club:mine']}<div class="view" class:off={clubView !== 'mine'}>{#await studioPage() then m}<m.default />{/await}</div>{/if}
+        {#if built.club}<Clubs />{/if}
       {:else if built.profile}<Me />{/if}
     </section>
   {/each}

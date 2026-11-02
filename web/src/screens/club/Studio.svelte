@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Clubs → My club, Studio for Head+ and the club's page for a Member: the switch to All clubs, the Team row (the roster
+  // A club of mine, pushed over the Clubs tab (StudioPane; round 5: no My club | All clubs switch): Studio for Head+ and the club's page for a Member: the Team row (the roster
   // as a sheet, with the removal requests waiting), "To do" on top only when something waits (new applications, the memo on
   // Tue-Wed, recruitment at a term's start, questions, receipts to check), the club's next event with the door
   // scanner and "New event", a row of small actions (memo, recruitment, invite, club profile), its events by state.
@@ -10,7 +10,6 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Users from '@lucide/svelte/icons/users';
-  import ClubSwitch from './ClubSwitch.svelte';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -49,7 +48,10 @@
   import { photosFirst } from '../../lib/faces';
   import Avatar from '../../ui/Avatar.svelte';
 
+  // onTitle: in a pane, the club's name scrolled under the capsule (the pane's quiet capsule speaks then)
+  let { onTitle }: { onTitle?: (gone: boolean) => void } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
+  const multi = $derived(!onTitle && mine.length > 1); // a pane is one club's: no picker (each card opens its own)
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
   const staff = $derived(may(m, 'events'));
   const vice = $derived(may(m, 'team'));  // applications
@@ -151,19 +153,18 @@
     : vice ? sheets.joinInbox(m!.org.id) : sheets.roundBoard(m!.org.id));
 </script>
 
-<div class="page scroll stagger">
-  <ClubSwitch />
+<div class="page stagger" class:scroll={!onTitle} class:inpane={!!onTitle}>
   {#if m}
     <header class="hd">
       <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right, in glass
            (not inside the list) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
-        <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={'club'}>{nameOf(m.org)}</h1>{#if mine.length > 1}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
+        <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
           <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, titleOf(m))}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
       {/snippet}
       <div class="row">
-        {#if mine.length > 1}
+        {#if multi}
           <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>{@render who()}</button>
         {:else}<div class="title">{@render who()}</div>{/if}
         {#if vice}<button class="ic glass glass-pill" use:glass onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} strokeWidth={2.2} /></button>{/if}
@@ -286,6 +287,7 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
+  .inpane { position: static; padding: 0; } /* the pane is the scroller, with its own edges */
   .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
   .title { display: flex; align-items: center; gap: 12px; }

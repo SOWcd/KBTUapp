@@ -11,7 +11,8 @@
   import { fitTitle, largeTitle } from './title';
   import { unsent } from './guard';
 
-  let { overlay, title, icon, children }: { overlay: Overlay; title: string; icon?: Component<any>; children: Snippet } = $props();
+  //   bare: no large title of ours, the page brings its own (Studio's club header) and says when it scrolls away
+  let { overlay, title, icon, bare = false, children }: { overlay: Overlay; title: string; icon?: Component<any>; bare?: boolean; children: Snippet } = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let el: HTMLDivElement;
@@ -72,7 +73,7 @@
 
 <div class="pane scroll" class:scrolled role="region" aria-label={title} bind:this={el} onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}
   onscroll={() => { if (scrolled !== el.scrollTop > 2) scrolled = !scrolled; }}>
-  <h1 class="ttl" use:fitTitle use:largeTitle={(g) => (overlay.quiet = !g)}>{title}</h1>
+  {#if !bare}<h1 class="ttl" use:fitTitle use:largeTitle={(g) => (overlay.quiet = !g)}>{title}</h1>{/if}
   {@render children()}
   <div class="tail"></div>
 </div>
