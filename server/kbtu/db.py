@@ -1091,6 +1091,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (110, """CREATE INDEX IF NOT EXISTS join_requests_by_user ON join_requests(user_id);
     CREATE INDEX IF NOT EXISTS posts_feed ON posts(audience, pinned, created_at);
     CREATE INDEX IF NOT EXISTS events_by_start ON events(starts_at);"""),
+    # (Nov 2) a club's member link for the whole team (logic.team_link): many join by it as plain members, 7 days, one per club
+    (111, "ALTER TABLE org_invites ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 

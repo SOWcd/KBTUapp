@@ -4,8 +4,9 @@
   // actions instead (the card is the first of them): Vice+ give a role (a level or one of the club's own) and remove;
   // Head+ put on probation and ask the President and Vice to remove someone. On top for Vice+: the
   // removal requests. Tags (and probation) filter the list; "Roles and tags" makes the club's own. The club is the one
-  // picked in My club (ui.club). Vice+ also get the club's invite link (§4.5): share it to the club's chat, copy it, or
-  // replace it if it went somewhere it shouldn't. Anyone but the President can leave.
+  // picked in My club (ui.club). Vice+ also get the club's invite link (§4.5): the link icon opens a small choice, the
+  // team's link for everyone (7 days, one per club, shared again until turned off) or a one-time one. Anyone but the
+  // President can leave.
   import { api, ApiErr, type ClubRole, type OrgRole, type RemovalRequest, type TeamMember, type TeamSetup } from '../../lib/api';
   import Sheet from '../../ui/Sheet.svelte';
   import Users from '@lucide/svelte/icons/users';
@@ -19,6 +20,8 @@
   import { byRank, canGive, canManage, isAbove, may, RANK, inLang, roleName, ROLE_NAME, titleOf, withNick } from '../../lib/perms';
   import { haptic } from '../../lib/tg';
   import { shareInvite } from '../../lib/invite';
+  import { fold } from '../../ui/fold';
+  import { dayMonth } from '../../lib/time';
   import LinkIcon from '@lucide/svelte/icons/link';
   import Tags from '@lucide/svelte/icons/tags';
   import Crown from '@lucide/svelte/icons/crown';
@@ -36,6 +39,16 @@
   const loadSetup = (org: number) => api.teamSetup(org).then((x) => { if (m?.org.id === org) setup = x; }).catch(() => {});
   $effect(() => { const org = m?.org.id; untrack(() => { open = null; filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); } }); });
   let open = $state<number | null>(null); // whose actions are out
+  let linkOpen = $state(false); // the link icon's choice
+  async function shareLink(many: boolean) {
+    if (!m) return;
+    if (await shareInvite(m.org, undefined, many)) linkOpen = false;
+    if (many) void loadSetup(m.org.id); // the live link's day on the button
+  }
+  async function linkOff() {
+    if (!m || !(await sheets.ask({ title: t('team.linkOffAsk'), text: t('team.linkOffText'), ok: t('team.linkOff'), cancel: t('common.cancel'), danger: true }))) return;
+    if (await run(() => api.teamLinkOff(m.org.id), t('team.linkOffDone'), 'raising_hands_3d_default')) linkOpen = false;
+  }
   let busy = $state(false);
   let filter = $state<number | 'probation' | null>(null); // a tag's id, or those on probation
   const me = $derived(session.me?.id);
@@ -147,12 +160,21 @@
       <span class="org"><OrgLogo org={m.org} size={30} /><b class="nm ellipsis">{m.org.name}</b></span>
       <!-- the list first; invite and roles are icons up here (the invite row was too big, the hint noise) -->
       <span class="icons">
-        {#if vice}<button class="ic" onclick={() => shareInvite(m.org)} aria-label={t('team.inviteTitle')}><LinkIcon size={19} /></button>{/if}
+        {#if vice}<button class="ic" class:on={linkOpen} aria-expanded={linkOpen} onclick={() => { haptic.select(); linkOpen = !linkOpen; }} aria-label={t('team.inviteTitle')}><LinkIcon size={19} /></button>{/if}
         {#if may(m, 'people') || vice || setup?.roles.length || setup?.tags.length}
           <button class="ic" onclick={() => sheets.teamSetup(m.org.id, refresh)} aria-label={t('team.setup')}><Tags size={19} /></button>
         {/if}
       </span>
     </header>
+    {#if vice && linkOpen}
+      <div class="linkpick" transition:fold>
+        <Button kind="filled" size="m" full onclick={() => shareLink(true)}>
+          {setup?.teamLink ? t('team.linkAllUntil', { date: dayMonth(setup.teamLink.expiresAt) }) : t('team.linkAll')}</Button>
+        <Button kind="gray" size="m" full onclick={() => shareLink(false)}>{t('team.linkOnce')}</Button>
+        <p class="t-foot">{t('team.linkHint')}</p>
+        {#if setup?.teamLink}<button class="off t-callout" disabled={busy} onclick={linkOff}>{t('team.linkOff')}</button>{/if}
+      </div>
+    {/if}
 
     {#if setup?.removals?.length}
       <!-- §2b: a Head's request; the President or a Vice above them decides -->
@@ -278,6 +300,10 @@
     background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface-solid); }
   .icons { display: flex; gap: 8px; flex: none; }
   .ic { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
+  .ic.on { background: var(--accent); color: var(--on-accent); }
+  .linkpick { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+  .linkpick .t-foot { margin: 0 4px; }
+  .off { align-self: center; padding: 6px 10px; color: var(--danger-text); }
   .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows */
   .hd { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }

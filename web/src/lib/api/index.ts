@@ -263,6 +263,8 @@ export interface Api {
   people(org: Id): Promise<Member[]>;
   // the club's invite link (§4.5, Vice+): the same token until replaced; a student who opens it is a Member at once
   invite(org: Id, dept?: Id): Promise<{ token: string }>;   // dept: the newcomer lands in that department
+  teamLink(org: Id): Promise<{ token: string; expiresAt: Ts }>; // the link for the whole team, 7 days: the live one, else a new one
+  teamLinkOff(org: Id): Promise<void>;
   acceptInvite(token: string): Promise<Org>;
   removeMember(org: Id, user: Id): Promise<void>;          // my own id = leave; a President: conflict/'president'
   transfer(org: Id, user: Id): Promise<TeamMember[]>;

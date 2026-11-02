@@ -1,18 +1,20 @@
-// The club's invite (§4.5): a fresh one-time link per share (one person, 48 h), so a page view makes none; sent as our
-// bot's card in the chat (a line and a button, no bare link), the plain link only on old Telegram.
-// Team's header and Studio's actions both share it.
+// The club's invite (§4.5): a fresh one-time link per share (one person, 48 h), so a page view makes none; or `many`, the
+// team's one link for everyone (7 days, plain Members; the live one is shared again). Sent as our bot's card in the chat
+// (a line and a button, no bare link), the plain link only on old Telegram. Team's header and Studio's actions share it.
 import { api } from './api';
 import { t } from './i18n/index.svelte';
 import { say, ui } from './state/ui.svelte';
 import { haptic, shareCard } from './tg';
 
-export async function shareInvite(org: { id: number; name: string }, dept?: { id: number; name: string }) {
-  if (ui.busy) return; // a second tap while the first link is made
+export async function shareInvite(org: { id: number; name: string }, dept?: { id: number; name: string }, many = false): Promise<boolean> {
+  if (ui.busy) return false; // a second tap while the first link is made
   haptic.tap(); ui.busy = t('invite.making'); // the tap is felt and the capsule says so (nothing showed)
   try {
-    const link = `https://t.me/KBTUappBot?startapp=join_${org.id}_${(await api.invite(org.id, dept?.id)).token}`;
-    const msg = dept ? t('team.inviteDeptMsg', { club: org.name, dept: dept.name }) : t('team.inviteMsg', { club: org.name });
-    await shareCard({ kind: 'join', id: String(org.id) }, link, msg, () => (ui.busy = ''));
-  } catch { say(t('common.error'), 'warning_3d'); }
+    const { token } = await (many ? api.teamLink(org.id) : api.invite(org.id, dept?.id));
+    const link = `https://t.me/KBTUappBot?startapp=join_${org.id}_${token}`;
+    const msg = many ? t('team.linkMsg', { club: org.name }) : dept ? t('team.inviteDeptMsg', { club: org.name, dept: dept.name }) : t('team.inviteMsg', { club: org.name });
+    await shareCard({ kind: 'join', id: String(org.id), ...(many ? { many: true } : {}) }, link, msg, () => (ui.busy = ''));
+    return true;
+  } catch { say(t('common.error'), 'warning_3d'); return false; }
   finally { ui.busy = ''; }
 }

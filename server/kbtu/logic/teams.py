@@ -146,6 +146,8 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
         "myDept": dept_of(con, oid, v.id),
     }
     if can(con, v, oid, "team"):
+        link = _team_link(con, oid)
+        out["teamLink"] = {"expiresAt": link["expires_at"]} if link else None
         asks = rows(con, f"""SELECT q.*, m.role, {PERSON_COLS} FROM removal_requests q JOIN org_members m ON m.org_id = q.org_id AND m.user_id = q.user_id
             JOIN users u ON u.id = q.user_id JOIN students s ON s.user_id = u.id WHERE q.org_id = ? AND q.status = 'pending' ORDER BY q.id""", oid)
         by = {b["id"]: b for b in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(asks))})", *[a["by_id"] for a in asks])} if asks else {}
@@ -406,6 +408,39 @@ def invite(con, v: Viewer, oid: int, dept: object = None) -> dict:
     return {"token": token}
 
 
+TEAM_LINK_TTL = 7 * 86400
+
+
+def _team_link(con, oid: int):
+    return one(con, "SELECT token, expires_at FROM org_invites WHERE org_id = ? AND multi = 1 AND revoked_at IS NULL AND expires_at > ?", oid, core.now())
+
+
+def team_link(con, v: Viewer, oid: int) -> dict:
+    """The club's member link for the whole team (a president forwards one card to the senate chat; the one-time link let
+    the first in only): many join by it as plain Members, never a role with rights, for 7 days. One per club: the live one
+    is shared again (so it can go to several chats); ended early with team_link_off, the next one is new. The same people
+    as the one-time link make it; it lands nobody in a department."""
+    _may(con, v, oid, "team")
+    with tx(con):
+        r = _team_link(con, oid)
+        if r:
+            return {"token": r["token"], "expiresAt": r["expires_at"]}
+        token, until = secrets.token_hex(12), core.now() + TEAM_LINK_TTL
+        con.execute("UPDATE org_invites SET revoked_at = ? WHERE org_id = ? AND multi = 1 AND revoked_at IS NULL", (core.now(), oid))
+        con.execute("INSERT INTO org_invites (token, org_id, role, created_by, created_at, expires_at, multi) VALUES (?, ?, 'member', ?, ?, ?, 1)",
+                    (token, oid, v.id, core.now(), until))
+        log_action(con, v.id, "team_link", f"org:{oid}", json.dumps({"link": token[:8]}))  # each join by it: "team_link_join"
+    return {"token": token, "expiresAt": until}
+
+
+def team_link_off(con, v: Viewer, oid: int) -> None:
+    """Ends the club's link for the whole team now (those in by it stay; a new one is one tap away)."""
+    _may(con, v, oid, "team")
+    with tx(con):
+        if con.execute("UPDATE org_invites SET revoked_at = ? WHERE org_id = ? AND multi = 1 AND revoked_at IS NULL", (core.now(), oid)).rowcount:
+            log_action(con, v.id, "team_link_off", f"org:{oid}")
+
+
 PRESIDENT_LINK_TTL = 7 * 86400
 
 
@@ -434,12 +469,18 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
     if not o or o["status"] != "active" or r["used_by"] or (r["expires_at"] or 0) < core.now():
         raise ApiError("not_found")   # every link is one person's, once; the old reusable ones (no expiry) are dead
     member = r["role"] == "member"
+    if r["multi"] and not member:
+        raise ApiError("not_found")  # a link for many never gives a role with rights (team_link can't make one; belt and braces)
     if member and banned(con, o["id"], v.id):
         raise ApiError("forbidden", "banned")
     if member and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", o["id"], v.id):
         return org_shape(con, v, o)   # already in: the link stays for the one it was meant for
     with tx(con):
-        if not con.execute("UPDATE org_invites SET used_by = ? WHERE token = ? AND used_by IS NULL", (v.id, token)).rowcount:
+        if r["multi"]:  # for many: still live (turned off meanwhile: closed); each join audited, nobody pinged
+            if not one(con, "SELECT 1 FROM org_invites WHERE token = ? AND revoked_at IS NULL AND expires_at > ?", token, core.now()):
+                raise ApiError("not_found")
+            log_action(con, v.id, "team_link_join", f"org:{o['id']}", json.dumps({"link": token[:8], "by": r["created_by"]}))
+        elif not con.execute("UPDATE org_invites SET used_by = ? WHERE token = ? AND used_by IS NULL", (v.id, token)).rowcount:
             raise ApiError("not_found")
         if member:
             con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (o["id"], v.id, core.now()))

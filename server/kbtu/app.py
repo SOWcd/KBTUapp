@@ -923,6 +923,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def invite(oid: int, con: Con, v: Me, body: dict | None = Body(None)):
         return logic.invite(con, v, oid, body.get("dept") if isinstance(body, dict) else None)
 
+    @app.post("/api/orgs/{oid}/team-link")  # the member link for the whole team, 7 days: the live one, else a new one
+    def team_link(oid: int, con: Con, v: Me):
+        return logic.team_link(con, v, oid)
+
+    @app.delete("/api/orgs/{oid}/team-link", status_code=204)
+    def team_link_off(oid: int, con: Con, v: Me):
+        logic.team_link_off(con, v, oid)
+
     @app.post("/api/invites/{token}")
     def accept_invite(token: str, con: Con, v: Me):
         return logic.accept_invite(con, v, token)
@@ -1555,9 +1563,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     raise ApiError("need_student")
                 kind, start = "rf", f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
-            elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link
-                start = f"join_{ref}_{logic.invite(con, v, ref)['token']}"
+            elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link; many: the team's 7-day link
+                link = logic.team_link(con, v, ref) if body.get("many") is True else logic.invite(con, v, ref)
+                start = f"join_{ref}_{link['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
+                if "expiresAt" in link:
+                    kind, fields["until"] = "jm", texts.when(link["expiresAt"], lang).split(",")[0]
             else:  # a new club's one-time President link (§2), the admin; each card is a fresh link
                 start = f"pres_{ref}_{logic.president_link(con, v, ref)['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}

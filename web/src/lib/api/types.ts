@@ -475,7 +475,7 @@ export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn
 export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null; ban: boolean; note: string; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }
-export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDept?: Id | null; removals?: RemovalRequest[]; bans?: ClubBan[] }
+export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDept?: Id | null; removals?: RemovalRequest[]; bans?: ClubBan[]; teamLink?: { expiresAt: Ts } | null }
 /** One person in Team, only what is sent: a level or a club role (Vice+), tags (Head+), probation (on: Head+, off: Vice+). */
 export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; dept?: Id | null; probation?: boolean }
 

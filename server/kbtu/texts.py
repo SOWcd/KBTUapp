@@ -60,6 +60,11 @@ SHARE_ROUND = {  # a club's open recruitment round (casting.py)
     "kk": ("Клубқа қабылдау", "📣 <b>{club}</b> {until} дейін адам қабылдайды. Өтінім — бір минут, қалғанын клуб KBTU-дан біледі.", "📝 Өтінім беру"),
     "en": ("Club recruiting", "📣 <b>{club}</b> is recruiting until {until}. Applying takes a minute: the club knows the rest from KBTU.", "📝 Apply"),
 }
+SHARE_JOIN_MANY = {  # Studio → Team, the link for the whole team (logic.team_link): one card for the club's chat
+    "ru": ("Вступай в команду", "🎉 Ссылка для всей команды <b>{club}</b> в KBTU App: открой и вступай. Работает до {until}.", "Вступить в команду"),
+    "kk": ("Командаға қосыл", "🎉 KBTU App-тағы <b>{club}</b> командасының бәріне арналған сілтеме: аш та, қосыл. {until} дейін жұмыс істейді.", "Командаға қосылу"),
+    "en": ("Join the team", "🎉 A link for the whole <b>{club}</b> team on KBTU App: open it to join. Works until {until}.", "Join the team"),
+}
 SHARE_JOIN = {
     "ru": ("Вступай в клуб", "🎉 Тебя зовут в <b>{club}</b> в KBTU App — вступай в команду.", "Вступить в клуб"),
     "kk": ("Клубқа қосыл", "🎉 Сені KBTU App-та <b>{club}</b> клубына шақырады — командаға қосыл.", "Клубқа қосылу"),
@@ -138,7 +143,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for my invite ('rf'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
+    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "jm": SHARE_JOIN_MANY, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 
