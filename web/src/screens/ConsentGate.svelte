@@ -5,6 +5,7 @@
   // no "Delete account" here); the way out is Telegram's own close, the policy one tap away.
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import AtSign from '@lucide/svelte/icons/at-sign';
+  import UserX from '@lucide/svelte/icons/user-x';
   import Users from '@lucide/svelte/icons/users';
   import TelegramMark from '../ui/TelegramMark.svelte';
   import Cpu from '@lucide/svelte/icons/cpu';
@@ -29,6 +30,7 @@
   type Tone = 'accent' | 'success' | 'warning' | 'danger';
   const PARTS: [Key, [Component<any>, Tone][]][] = [
     ['consent.textNick', [[AtSign, 'accent']]],
+    ['consent.textKeep', [[UserX, 'accent']]],
     ['consent.textForum', [[Users, 'accent'], [TelegramMark, 'success'], [Cpu, 'warning']]],
     ['consent.textBoard', [[EyeOff, 'accent'], [Cpu, 'warning'], [Clock, 'success'], [ThumbsUp, 'danger']]],
     ['consent.textTgc', [[TelegramMark, 'accent'], [Cpu, 'warning']]],
@@ -43,7 +45,7 @@
   const q = $derived(fch ? noAi.slice(0, -CONSENT_FCH.length) : noAi);
   const tgc = $derived(q.endsWith(CONSENT_TGC));
   const p = $derived(tgc ? q.slice(0, -CONSENT_TGC.length) : q);
-  const asked = (k: Key) => k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.textNick' ? true
+  const asked = (k: Key) => k === 'consent.textAi' ? ai : k === 'consent.textFch' ? fch : k === 'consent.textTgc' ? tgc : k === 'consent.textNick' || k === 'consent.textKeep' ? true
     : k === 'consent.textForum' ? p !== CONSENT_VERSION && p !== CONSENT_BOARD : p === CONSENT_BOARD || p === CONSENT_BOTH;
   // one card per section asked (owner, Nov 1: the lines read as one list, not by section)
   const groups = $derived(PARTS.filter(([k]) => asked(k)).map(([k, marks]) =>

@@ -262,6 +262,16 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         else:
             break  # the network, a flood wait: next round
         F.unposted(con, u["msg_id"])
+    for msg, body, sign in F.resigns(con):  # a deleted account's named post: its name off the signature, the words stay
+        r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML",
+                                                       "text": f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>", "link_preview_options": {"is_disabled": True}})
+        if r.get("ok") or _gone(r) or "not modified" in str(r.get("description")):
+            F.resigned(con, msg)
+        elif r.get("error_code") == 400:  # Telegram won't edit it (rights lost, too old): not tried forever, the owner told
+            log.warning("forum channel: message %s keeps a deleted account's name, edit refused: %s", msg, r.get("description"))
+            F.resigned(con, msg)
+        else:
+            break  # the network, a flood wait: next round
     for key, root in F.copies(con):
         if not cfg.tgc_chat:
             break

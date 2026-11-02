@@ -737,10 +737,10 @@ def delete_info(con, v: Viewer) -> dict:
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
-CONSENT = "2026-11-v9"  # web/src/lib/legal.ts says the same; v9-v12 (Nov 2): the nick rule (section 4), everyone agrees again
-CONSENT_FORUM = "2026-11-v10" # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
-CONSENT_BOARD = "2026-11-v11"  # with BOARD=1 alone: the student forum's section (11 then); v7 until Nov 2, v5 until Oct 31
-CONSENT_BOTH = "2026-11-v12"  # (v8 until Nov 2, v6 until Oct 31) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
+CONSENT = "2026-11-v13"  # web/src/lib/legal.ts says the same; v13-v16 (Nov 2): a deleted account's posts and comments stay, nameless (section 7); v9-v12: the nick rule
+CONSENT_FORUM = "2026-11-v14" # with FORUM=1: the policy's forum part is in force, everyone agrees again (app.py)
+CONSENT_BOARD = "2026-11-v15"  # with BOARD=1 alone: the student forum's section (11 then); v11, v7, v5 before
+CONSENT_BOTH = "2026-11-v16"  # (v12, v8, v6 before) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
 CONSENT_FCH = "+fch2"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch1 until Nov 2: commenters' faces and reactions added)
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
@@ -887,7 +887,7 @@ _DEL_GONE = {
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
-    ("fchan_posts", "user_id"),  # my channel posts (their messages sent to be taken down first: fchannel.unpost_account)
+    ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
 
@@ -946,7 +946,22 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute(f"UPDATE round_apps SET user_id = :p, answers = '{{}}', source = NULL WHERE user_id = :u AND round_id IN ({done})", me_)
         con.execute(f"""UPDATE round_votes SET user_id = :p, note = '' WHERE user_id = :u
             AND app_id IN (SELECT id FROM round_apps WHERE round_id IN ({done}))""", me_)
-        con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u AND as_org = 1", me_)
+        # what I wrote stays, the person goes (owner, Nov 2: as Telegram and Reddit): comments and the forum channel's live
+        # posts move to the nameless placeholder, shown as a deleted account; a named post's signature in the channel
+        # is rewritten (fch_resign), an anonymous one stays as it was, so nothing tells which posts were one person's
+        con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
+        con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
+        for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        con.execute("UPDATE fchan_posts SET user_id = :p, sign = :gone WHERE user_id = :u AND status = 'live' AND anon = 0", {**me_, "gone": core.GONE["ru"]})
+        # the anonymous ones to one placeholder all deleted accounts share: never the named ones' (that would pair them)
+        ghost = one(con, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'anon_ghost'")
+        anon = one(con, "SELECT 1 FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 1", v.id)
+        if anon and (not ghost or not one(con, "SELECT 1 FROM users WHERE id = ?", ghost[0])):
+            ghost = (_placeholder(con),)
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('anon_ghost', ?)", (str(ghost[0]),))
+        if anon:
+            con.execute("UPDATE fchan_posts SET user_id = ? WHERE user_id = ? AND status = 'live' AND anon = 1", (ghost[0], v.id))
         # album photos: without my name, or gone if I asked (ask_delete)
         drop = one(con, "DELETE FROM meta WHERE key = ? RETURNING 1", f"delphotos:{v.id}") is not None
         mine = [r[0] for r in rows(con, "SELECT file_id FROM event_photos WHERE added_by = ?", v.id)] if drop else []
@@ -993,7 +1008,6 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             WHERE author_tg = ? AND status IN ('deleting', 'open', 'queued')""", (core.now(), tg))
         con.execute("DELETE FROM tgc_comments WHERE author_tg = ?", (tg,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"tgcedit:{tg}:%",))  # today's count of my edits' AI looks
-        fchannel.unpost_account(con, v.id)  # before the rows go: their channel message ids would go with them
         fks = _user_fks(con)
         for t, c in sorted(_DEL_GONE, key=lambda x: x[0] == "org_history"):
             con.execute(f"DELETE FROM {t} WHERE {c} = ?", (v.id,))

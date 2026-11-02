@@ -189,7 +189,12 @@ def short_name(p: sqlite3.Row) -> str:
     """"Alikhan S" for students (§3; no dot, owner Nov 2), the Telegram first name otherwise."""
     if p["first_name"]:
         return f"{p['first_name']} {p['last_name'][:1] if p['last_name'] else ''}".strip()
-    return p["tg_first_name"] or "?"
+    return p["tg_first_name"] or GONE["ru"]  # Telegram never has an empty first name: a deleted account's
+
+
+# a deleted account's name where its posts and comments stay (owner, Nov 2: content stays, the person goes)
+GONE = {"ru": "\u0423\u0434\u0430\u043b\u0451\u043d\u043d\u044b\u0439 \u0430\u043a\u043a\u0430\u0443\u043d\u0442",
+        "kk": "\u0416\u043e\u0439\u044b\u043b\u0493\u0430\u043d \u0430\u043a\u043a\u0430\u0443\u043d\u0442", "en": "Deleted account"}
 
 
 def shown_name(p: sqlite3.Row) -> str:
@@ -220,7 +225,8 @@ def person_ref(p: sqlite3.Row) -> dict:
     # A9: the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
     return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff,
-            **({"realName": short_name(p)} if p["nick"] else {}), **name_i18n(p)}  # a nick never hides the name (§4)
+            **({"realName": short_name(p)} if p["nick"] else {}),  # a nick never hides the name (§4)
+            **({"i18n": {k: {"name": x} for k, x in GONE.items()}} if not p["first_name"] and not p["tg_first_name"] else name_i18n(p))}
 
 
 def _door_ref(p: sqlite3.Row) -> dict:

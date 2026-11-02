@@ -361,9 +361,12 @@ def test_post_send_lost_and_takedown_kept(env, monkeypatch):
     con.close()
 
 
-def test_post_account_deletion_unposts(env, monkeypatch):
+def test_post_account_deletion_keeps_posts(env, monkeypatch):
+    """A deleted account's live posts stay, its name goes (owner, Nov 2: as Telegram and Reddit): both move to a
+    nameless placeholder; the named one's signature in the channel is rewritten, the anonymous one isn't touched, so
+    nothing tells the channel they were one person's. A held one, never public, goes."""
     c, cfg, _, _ = setup(env, monkeypatch)
-    login(c, 1, "ann")
+    login(c, 1, "ann"), login(c, 2, "bob")
     con = db.connect(cfg.db_path)
     tg = Telegram()
     c.post("/api/forum-posts", headers=tma(1), json={"body": "My last words here"})
@@ -371,18 +374,22 @@ def test_post_account_deletion_unposts(env, monkeypatch):
     mid = con.execute("SELECT tg_msg FROM fchan_posts").fetchone()[0]
     con.execute("""INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at)
         SELECT user_id, 'an anonymous one', 1, 'live', 777, 0 FROM fchan_posts""")
-    t = int(time.time())
+    con.execute("""INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at)
+        SELECT user_id, 'not out yet', 0, 'held', 'check', 0 FROM fchan_posts WHERE tg_msg = 777""")
     delete_now(c, cfg, tma(1))
-    assert not con.execute("SELECT 1 FROM fchan_posts").fetchone()                              # the rows went
-    due = dict(con.execute("SELECT msg_id, at FROM tg_unpost").fetchall())                       # their messages didn't
-    assert set(due) == {mid, 777} and due[mid] <= t + 5 and due[777] <= t + 72 * 3600 + 5     # the anonymous one: within 3 days
-    con.execute("UPDATE tg_unpost SET at = ? WHERE msg_id = 777", (t + 3600,))                   # (not now, whatever the draw)
+    left = con.execute("SELECT body, user_id, sign FROM fchan_posts ORDER BY id").fetchall()
+    assert [r[0] for r in left] == ["My last words here", "an anonymous one"]                  # the held one went
+    assert left[0][1] != left[1][1]                                                             # never one placeholder for both: it would pair them
+    assert all(con.execute("SELECT tg_id FROM users WHERE id = ?", (r[1],)).fetchone()[0] < 0 for r in left)
+    assert left[1][1] == int(con.execute("SELECT value FROM meta WHERE key = 'anon_ghost'").fetchone()[0])  # the shared one
+    feed = {p["body"]: p for p in c.get("/api/forum-posts/feed", headers=tma(2)).json()}
+    assert set(feed) == {"My last words here", "an anonymous one"}                              # both still in the app
+    assert feed["My last words here"]["sign"] == logic.core.GONE["ru"]
     tick(cfg, tg, con)
-    gone = {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
-    assert (CH, mid) in gone and (CH, 777) not in gone                                           # not together with the named one
-    set_clock(monkeypatch, lambda: t + 3601)
-    tick(cfg, tg, con)
-    assert (CH, 777) in {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")}
+    assert not tg.of("deleteMessage")                                                           # nothing leaves the channel
+    edits = tg.of("editMessageText")
+    assert [e["message_id"] for e in edits] == [mid] and "Ann" not in edits[0]["text"] and logic.core.GONE["ru"] in edits[0]["text"]
+    assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'fch_resign:%'").fetchone()       # done once
     con.close()
 
 
@@ -675,4 +682,23 @@ def test_post_faces_and_reactions(env, monkeypatch):
     assert card()["reactions"] == [{"emoji": "custom:5368", "n": 4}]
     logic.fchannel.reacted(con, {"message_id": mid, "reactions": []})
     assert card()["reactions"] == []
+    con.close()
+
+
+def test_deleted_account_anon_post_not_revealed(env, monkeypatch):
+    """The owner's reveal of an anonymous post: none for a deleted account's (the policy: no one learns it any more)."""
+    import pytest
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    boss = login(c, 2, "bob")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1, role = 'admin' WHERE id = ?", (boss["id"],))
+    con.execute("""INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at)
+        SELECT id, 'an anonymous one', 1, 'live', 777, 0 FROM users WHERE tg_id = 1""")
+    pid = con.execute("SELECT id FROM fchan_posts").fetchone()[0]
+    v = logic.Viewer(boss["id"], "admin", True)
+    assert logic.fchannel.reveal(con, v, pid)["id"]                                              # a live account's: the owner may
+    con.execute("UPDATE users SET tg_id = -5 WHERE tg_id = 1")                                  # as a deletion leaves it: a placeholder
+    with pytest.raises(logic.ApiError):
+        logic.fchannel.reveal(con, v, pid)
     con.close()

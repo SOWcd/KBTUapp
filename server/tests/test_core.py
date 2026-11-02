@@ -629,7 +629,8 @@ def test_delete_my_data(env):
     assert tuple(con.execute("SELECT user_id, note FROM volunteers").fetchone()) == (ph["id"], "")
     assert tuple(con.execute("SELECT user_id, answers FROM round_apps").fetchone()) == (ph["id"], "{}")
     assert con.execute("SELECT note FROM round_votes").fetchone()[0] == ""                  # others' words about him go too
-    assert [tuple(r) for r in con.execute("SELECT user_id, body FROM comments")] == [(ph["id"], "Thanks all")]
+    # his words stay, nameless (owner, Nov 2: as Telegram and Reddit), the club's comment and his own alike
+    assert sorted(tuple(r) for r in con.execute("SELECT user_id, body FROM comments")) == [(ph["id"], "Thanks all"), (ph["id"], "mine")]
     assert con.execute("SELECT 1 FROM org_bans WHERE user_id = ?", (ali["id"],)).fetchone()
     assert con.execute("SELECT added_by FROM event_photos").fetchone()[0] is None            # the photo stays, nameless
     assert con.execute("SELECT owner_id FROM files WHERE id = ?", (pic,)).fetchone()[0] is None
@@ -722,7 +723,7 @@ def test_consent_again(env):
     assert c.get("/api/me", headers=A).json()["student"]["consent"] == "1"
     assert c.post("/api/me/consent", headers=A, json={"version": ""}).status_code == 400
     assert c.post("/api/me/consent", headers=A, json={"version": "2026-10-v3"}).status_code == 400  # before the nick rule (v9): agree again
-    assert c.post("/api/me/consent", headers=A, json={"version": logic.CONSENT}).json()["student"]["consent"] == logic.CONSENT == "2026-11-v9"
+    assert c.post("/api/me/consent", headers=A, json={"version": logic.CONSENT}).json()["student"]["consent"] == logic.CONSENT == "2026-11-v13"
     assert "Section 4 changed on 2 November 2026: a nickname no longer hides your name" in c.get("/privacy?lang=en").text
     assert c.post("/api/me/consent", headers=tma(22, "Guest"), json={"version": logic.CONSENT}).status_code == 401
     con = db.connect(cfg.db_path)

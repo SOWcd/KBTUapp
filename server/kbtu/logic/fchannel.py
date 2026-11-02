@@ -20,7 +20,6 @@ from .core import ApiError, PERSON, PERSON_COLS, Viewer, avatar_of, log_action, 
 BODY_MAX = 1000
 POSTS_A_DAY = 5           # owner, Nov 1: one a day was too strict; a pace, not a ration
 POST_GAP = 10 * 60        # and one at a time: ten minutes between a person's posts
-UNPOST_SPREAD = 72 * 3600  # a deleted account's anonymous posts leave within it, each at its own moment
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
 UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: Undo inside keeps the message and its comments
@@ -184,13 +183,21 @@ def delete(con, v: Viewer, pid: int) -> None:
         con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
 
 
-def unpost_account(con, uid: int) -> None:
-    """A deleted account's published posts leave the channel (account.delete_me, before the rows cascade away). The
-    anonymous ones each at a random moment within 3 days (the privacy policy says so): gone all in one second together
-    with a named one, they'd tell the channel whose they were, and that they share an author."""
-    for p in rows(con, "SELECT tg_msg, anon FROM fchan_posts WHERE user_id = ? AND tg_msg > 0", uid):
-        at = _now() + (secrets.randbelow(UNPOST_SPREAD) if p["anon"] else 0)
-        con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, 'author', ?)", (p["tg_msg"], at))
+def resigns(con) -> list:
+    """A deleted account's named posts still signed with its name in the channel (account.delete_me): (message, words,
+    the deleted account's signature), a few a round; one whose post is gone meanwhile leaves the queue."""
+    out = []
+    for (k,) in rows(con, "SELECT key FROM meta WHERE key >= 'fch_resign:' AND key < 'fch_resign;' LIMIT 5"):
+        p = one(con, "SELECT body, sign FROM fchan_posts WHERE tg_msg = ? AND status = 'live'", int(k[11:]))
+        if p:
+            out.append((int(k[11:]), p["body"], p["sign"]))
+        else:
+            resigned(con, int(k[11:]))
+    return out
+
+
+def resigned(con, msg: int) -> None:
+    con.execute("DELETE FROM meta WHERE key = ?", (f"fch_resign:{msg}",))
 
 
 # ---- the bot's side (tgc.py): what to send, what was sent, what to take down
@@ -226,7 +233,11 @@ def sending(con, pid: int) -> bool:
 def sent(con, pid: int, msg_id: int) -> None:
     """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
     right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
-    if not con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
+    if con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
+        # its author deleted the account while it went out, signed with the name: the signature rewritten next round
+        if one(con, "SELECT 1 FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND f.anon = 0 AND u.tg_id < 0", pid):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg_id}",))
+    else:
         p = one(con, "SELECT status FROM fchan_posts WHERE id = ?", pid)
         why = "moderator" if p and p["status"] == "hidden" else "author"
         con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at) VALUES (?, ?, ?)", (msg_id, why, _now()))
@@ -470,8 +481,8 @@ def reveal(con, v: Viewer, pid: int) -> dict:
     which only the owner reads, keeps every look."""
     if not _owner(con, v):
         raise ApiError("forbidden")
-    p = one(con, "SELECT user_id, anon FROM fchan_posts WHERE id = ? AND status != 'gone'", pid)
-    if not p or not p["anon"]:
+    p = one(con, "SELECT f.user_id, f.anon, u.tg_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND f.status != 'gone'", pid)
+    if not p or not p["anon"] or p["tg_id"] < 0:  # a deleted account's: its author is gone, for the owner too (policy, section 7)
         raise ApiError("not_found")
     log_action(con, v.id, "reveal_anon", f"fchan:{pid}")
     return person_ref(one(con, PERSON + " WHERE u.id = ?", p["user_id"]))

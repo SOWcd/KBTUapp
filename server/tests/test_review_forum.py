@@ -8,7 +8,7 @@ from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixtu
 from test_fchannel import Telegram, setup, tick
 
 
-@pytest.mark.xfail(strict=True, reason="needs the owner: the policy says posts leave the app at once; keeping the anonymous ones until their own channel deletion changes that wording (a new consent version)")
+
 def test_deleted_account_anon_post_not_dropped_from_feed_with_named(env, monkeypatch):
     """Deleting an account spreads its anonymous posts' channel deletions over 3 days so they can't be linked to its
     named ones. But the rows go at once, so every student's Forum tab loses the named and the anonymous post in the
