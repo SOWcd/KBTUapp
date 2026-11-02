@@ -25,7 +25,7 @@ export const sheets = {
   person: (_id: Id, _invite?: { code: string; card: LinkCard }) => {},
   /** my QR full screen (the corner of my badge) */
   myQr: (_link: string, _p: PersonCard) => {},
-  /** a new photo of me framed in a circle; the square crop, or null when cancelled */
+  /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
   cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
   club: (_id: Id) => {},
   /** `from`: the tapped poster, which grows into the sheet's header */
