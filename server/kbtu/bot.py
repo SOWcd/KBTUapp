@@ -20,6 +20,7 @@ import sqlite3
 import time
 from pathlib import Path
 
+import anyio.to_thread
 import httpx
 
 from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, tgc, userbot, video
@@ -654,16 +655,16 @@ def _answered(con, m, status: int, answer: dict) -> None:
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
     con = db.connect(cfg.db_path)  # one connection, used by one thread at a time (check_same_thread=False)
     try:
-        await asyncio.to_thread(_chores, cfg, con)
+        await anyio.to_thread.run_sync(_chores, cfg, con)
         offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too); reads, a write an hour at most
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
-        if await asyncio.to_thread(logic._once, con, "chats_day", str(now() // 86400)):
+        if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
-        for m in await asyncio.to_thread(_due, con):
-            msg = await asyncio.to_thread(_take, con, m)
+        for m in await anyio.to_thread.run_sync(_due, con):
+            msg = await anyio.to_thread.run_sync(_take, con, m)
             if msg is None:
                 continue
             text, button, start = msg
@@ -684,7 +685,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             if not answer.get("ok") and r.status_code == 429:  # too fast: wait as told, this one goes again next round
                 await asyncio.sleep(float(answer.get("parameters", {}).get("retry_after", 5)))
                 return
-            await asyncio.to_thread(_answered, con, m, r.status_code, answer)
+            await anyio.to_thread.run_sync(_answered, con, m, r.status_code, answer)
             await asyncio.sleep(GAP)
     finally:
         con.close()

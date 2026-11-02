@@ -55,7 +55,7 @@ def test_public_files_cache_and_304(env):
     """4 and 9: emoji are kept a day and revalidate to a 304; the page is never cached; big JSON goes gzipped."""
     c, _ = env
     r = c.get("/emoji/party_popper_3d.webp")
-    assert r.headers["cache-control"] == "public, max-age=86400, stale-while-revalidate=604800"
+    assert r.headers["cache-control"] == "public, max-age=300, stale-while-revalidate=86400"
     assert c.get("/emoji/party_popper_3d.webp", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
     assert c.get("/", headers={"If-None-Match": r.headers["etag"]}).headers["cache-control"] == "no-cache"
     assert c.get("/assets/a.js").headers["cache-control"].endswith("immutable")

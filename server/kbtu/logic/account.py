@@ -398,7 +398,11 @@ def me(con, v: Viewer) -> dict:
     if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
-        db.maybe(con, first_fifty, con, v.id)  # the number and, with it, "First 500" (skipped in a burst: the next open)
+        if u["card_no"] is None and not u["is_founder"]:
+            with tx(con):  # the number in the order people came: it waits for the lock, once per person (review)
+                first_fifty(con, v.id)
+        else:
+            db.maybe(con, first_fifty, con, v.id)  # a missing "First 500" repaired (skipped in a burst: the next open)
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
         "id": u["id"], "tg": {"id": u["tg_id"], "username": u["tg_username"], "firstName": u["tg_first_name"], "lastName": u["tg_last_name"]},

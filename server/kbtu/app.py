@@ -1786,7 +1786,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         # folder names their cut (map/u1/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
         # video) changes rarely: a day, then revalidated in the background; a page (.html) is always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
-                 "no-cache" if f.suffix == ".html" else "public, max-age=86400, stale-while-revalidate=604800")
+                 "no-cache" if f.suffix == ".html" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
         r = FileResponse(f, stat_result=f.stat(), headers={"Cache-Control": cache})
         if StaticFiles.is_not_modified(None, r.headers, request.headers):  # (it uses no self) If-None-Match / -Modified-Since
             return Response(status_code=304, headers={k: r.headers[k] for k in ("etag", "last-modified", "cache-control")})

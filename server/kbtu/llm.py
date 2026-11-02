@@ -83,15 +83,22 @@ def available(cfg) -> bool:
     return bool(links(cfg))
 
 
-def _count(con, link: str, ok: bool) -> None:
-    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>)."""
-    if con is None:
+def _count(path: str | None, link: str, ok: bool) -> None:
+    """Today's answers and failures per link, for the admin's AI page (meta ai_use:<day>). Its own short connection:
+    a request cut at the 30 s cap abandons this thread, which must never touch the request's pooled one (review)."""
+    if not path:
         return
-    key = f"ai_use:{time.strftime('%Y-%m-%d', time.gmtime())}"
-    row = con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
-    use = json.loads(row[0]) if row else {}
-    use.setdefault(link, [0, 0])[0 if ok else 1] += 1
-    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(use)))
+    from . import db  # here: llm is imported by db's users
+    c = db.connect(path)
+    try:
+        with c:
+            key = f"ai_use:{time.strftime('%Y-%m-%d', time.gmtime())}"
+            row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+            use = json.loads(row[0]) if row else {}
+            use.setdefault(link, [0, 0])[0 if ok else 1] += 1
+            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(use)))
+    finally:
+        c.close()
 
 
 def _rest_for(r: httpx.Response) -> float:
@@ -109,6 +116,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
     chain. Busy: none answered; BadAnswers: none usable."""
     answered = False
+    path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
     if only:  # stable: each provider's links keep the chain's order
         pool.sort(key=lambda x: only.index(x.provider))
@@ -123,17 +131,17 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         except httpx.HTTPError as exc:
             log.warning("ai %s: %s", link.name, type(exc).__name__)
             _rest[link.name] = time.time() + REST
-            await asyncio.to_thread(_count, con, link.name, False)
+            await asyncio.to_thread(_count, path, link.name, False)
             continue
         if r.status_code in (429, 503) or r.status_code >= 500:
             _rest[link.name] = time.time() + _rest_for(r)
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
-            await asyncio.to_thread(_count, con, link.name, False)
+            await asyncio.to_thread(_count, path, link.name, False)
             continue
         if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
             _rest[link.name] = time.time() + REST_BROKEN
             log.warning("ai %s: http %d: %s", link.name, r.status_code, r.text[:160].replace("\n", " "))
-            await asyncio.to_thread(_count, con, link.name, False)
+            await asyncio.to_thread(_count, path, link.name, False)
             continue
         try:
             body = r.json()
@@ -145,10 +153,10 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         answered = True
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
             log.warning("ai %s: unusable answer", link.name)
-            await asyncio.to_thread(_count, con, link.name, False)
+            await asyncio.to_thread(_count, path, link.name, False)
             continue
         log.info("ai %s answered in %.1f s", link.name, time.time() - t0)
-        await asyncio.to_thread(_count, con, link.name, True)  # a write: never on the event loop
+        await asyncio.to_thread(_count, path, link.name, True)  # a write: never on the event loop
         return text, link.name
     raise BadAnswers() if answered else Busy()
 
