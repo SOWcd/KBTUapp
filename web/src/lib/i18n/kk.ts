@@ -1053,6 +1053,7 @@ const kk: Dict = {
   'adm.restore': "Қайтару",
   'adm.restored': "Орнына қайтарылды",
   'adm.reports': { one: "{n} шағым", other: "{n} шағым" },
+  'adm.claimsSub': "{n} · президенті жоқ клубтар: ДМП тізімінде басқа атпен",
   'adm.chats': "Арналар мен топтар",
   'adm.clubs': "Клубтар мен мектептер",
   'adm.find': "Клуб табу",

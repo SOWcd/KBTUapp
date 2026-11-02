@@ -251,12 +251,13 @@ def _approves(con, v, oid: int) -> bool:
     return (pres and pres["user_id"] == v.id and v.student) or (not pres and overseer(con, v))
 
 
-def requests(con, v) -> list[dict]:
+def requests(con, v, org: int | None = None) -> list[dict]:
     """The claims I confirm: the student's KBTU name beside the sheet's (the President knows their people), the
-    position and department; for DMP, the clubs with no President."""
+    position and department; for DMP, the clubs with no President. org: that club's alone (its Studio; an admin's
+    DMP fallback lives in the Admin sheet, never in a club's Studio)."""
     out = []
     for r in rows(con, """SELECT r.*, s.first_name, s.last_name FROM roster_pending r JOIN students s ON s.user_id = r.claimed_by
-            WHERE r.claimed_by IS NOT NULL ORDER BY r.id"""):
+            WHERE r.claimed_by IS NOT NULL AND (? IS NULL OR r.org_id = ?) ORDER BY r.id""", org, org):
         if _approves(con, v, r["org_id"]):
             out.append({"id": r["id"], "org": r["org_id"], "title": r["title"], "role": r["role"], "dept": r["dept"],
                         "sheetName": r["full_name"], "name": f"{r['first_name']} {r['last_name']}".strip(), "user": r["claimed_by"]})

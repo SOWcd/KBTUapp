@@ -11,6 +11,7 @@
   import Building from '@lucide/svelte/icons/building-2';
   import EyeOff from '@lucide/svelte/icons/eye-off';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ListChecks from '@lucide/svelte/icons/list-checks';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -51,6 +52,10 @@
   let fcHeld = $state<number | null>(null);
   $effect(() => { api.channelMod().then((m) => (fcHeld = m.held.length)).catch(() => {}); });
   let chatsN = $state<number | null>(null);
+  // "it's me in DMP's list under another name" for clubs with no President: the admin's, here and not in Studio
+  let claimsN = $state(0);
+  const loadClaims = () => api.rosterRequests().then((l) => (claimsN = l.length)).catch(() => {});
+  $effect(() => { if (admin) void loadClaims(); });
   let chatsP = $state(0); // suggested, waiting for a look
   $effect(() => { api.chats().then((c) => { chatsN = c.all.length; chatsP = c.pending?.length ?? 0; }).catch(() => {}); });
   // ---- the numbers (PLAN "Admin stats"): no per-person logs, counts only; the chart is the nightly rows ----
@@ -289,6 +294,7 @@
     {#if admin}
     <button class="r" onclick={() => sheets.adminClubs()}><span class="ic"><Building size={20} /></span><span class="lb">{t('adm.clubs')}{#if clubsN != null}<i>{tn('reg.clubs', clubsN)} · {tn('adm.schools', schoolsN)}</i>{/if}</span><ChevronRight size={18} /></button>
     <!-- the app's team: moderators, admins (the owner gives those), bans -->
+    {#if claimsN}<button class="r" onclick={() => sheets.rosterRequests(loadClaims)}><span class="ic"><ListChecks size={20} /></span><span class="lb">{t('ro.reqTitle')}<i>{t('adm.claimsSub', { n: claimsN })}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.adminTeam()}><span class="ic"><UsersRound size={20} /></span><span class="lb">{t('staff.title')}<i>{t('staff.sub')}</i></span><ChevronRight size={18} /></button>
     {#if owner}<button class="r" onclick={() => sheets.adminAudit()}><span class="ic"><ScrollText size={20} /></span><span class="lb">{t('audit.title')}<i>{t('audit.sub')}</i></span><ChevronRight size={18} /></button>{/if}
     <button class="r" onclick={() => sheets.mapFlaws()}><span class="ic"><MapPinned size={20} /></span><span class="lb">{t('mf.title')}<i>{t('mf.adminSub')}</i></span><ChevronRight size={18} /></button>

@@ -461,8 +461,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         roster.claim(con, v.id, rid)
 
     @app.get("/api/roster/requests")
-    def roster_requests(con: Con, v: Me):
-        return logic.roster_requests(con, v)
+    def roster_requests(con: Con, v: Me, org: int | None = None):
+        return logic.roster_requests(con, v, org)
 
     @app.post("/api/roster/requests/{rid}", status_code=204)
     def roster_decide(rid: int, con: Con, v: Me, body: dict = Body(...)):

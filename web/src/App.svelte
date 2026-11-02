@@ -103,7 +103,7 @@
   sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
-  sheets.rosterRequests = (ondone) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone });
+  sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });
   sheets.volunteers = (id, need) => lazy(() => import('./screens/club/VolunteersSheet.svelte'), { id, need });
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled

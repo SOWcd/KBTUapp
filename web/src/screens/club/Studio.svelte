@@ -139,7 +139,9 @@
   }
   // DMP's list (PLAN 95): students who say they're the one listed under another name, for the President (DMP: clubs
   // with none) to confirm
-  const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests().then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
+  // this club's claims; DMP's Studio, every club's without a President. An admin's fallback is in the Admin sheet
+  const claimOrg = $derived(dmp ? undefined : m?.org.id);
+  const refreshClaims = () => { if (m?.role === 'president' || dmp) api.rosterRequests(claimOrg).then((l) => (claims = l.length)).catch(() => {}); else claims = 0; };
   $effect(() => { void data.rev; void m?.org.id; void dmp; refreshClaims(); });
   const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
 </script>
@@ -181,7 +183,7 @@
       <h2 class="sec">{t('studio.todo')}</h2>
       <div class="todo surface">
         {#if claims}
-          <button onclick={() => sheets.rosterRequests(refreshClaims)}><UsersRound size={20} /><span class="tx"><b class="ellipsis">{t('ro.reqTitle')}</b></span><b class="count">{claims}</b><ChevronRight size={18} /></button>
+          <button onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)}><UsersRound size={20} /><span class="tx"><b class="ellipsis">{t('ro.reqTitle')}</b></span><b class="count">{claims}</b><ChevronRight size={18} /></button>
         {/if}
         {#if alone}
           <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>

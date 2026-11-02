@@ -235,7 +235,7 @@ export interface Api {
   mirrorOrgChat(org: Id, chat: Id, on: boolean): Promise<StudioChat[]>;
   rosterSeen(): Promise<void>;                            // PLAN 95: the join toasts shown
   rosterClaim(row: Id): Promise<void>;                    // "Yes, it's me" on a row under another name
-  rosterRequests(): Promise<RosterRequest[]>;             // the claims I confirm (President; DMP for a club without one)
+  rosterRequests(org?: Id): Promise<RosterRequest[]>;             // the claims I confirm (President; DMP for a club without one)
   rosterDecide(row: Id, ok: boolean): Promise<void>; // the main channel's posts in the club's news
   registry(back?: number): Promise<RegistryOrg[]>;       // DMP Head+ and the admin (§4.13); a month `back` months ago (0–12)
   registryRoster(org: Id): Promise<RosterMember[]>;

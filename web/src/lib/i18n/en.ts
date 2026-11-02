@@ -1053,6 +1053,7 @@ const en: Dict = {
   'adm.restore': "Restore",
   'adm.restored': "Back in its place",
   'adm.reports': { one: "{n} report", other: "{n} reports" },
+  'adm.claimsSub': "{n} · clubs with no President: in DMP's list under another name",
   'adm.chats': "Channels and groups",
   'adm.clubs': "Clubs and schools",
   'adm.find': "Find a club",

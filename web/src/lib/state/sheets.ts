@@ -48,7 +48,7 @@ export const sheets = {
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (_org: Id) => {},
   /** the clubs' rosters (PLAN 95): the claims I confirm */
-  rosterRequests: (_ondone?: () => void) => {},
+  rosterRequests: (_ondone?: () => void, _org?: number) => {},
   /** one memo item (a room, guests...) without an event, dated from the memo's week `from`; `oninsert` takes its text */
   /** an event's volunteer applications (the organizers) */
   volunteers: (_id: Id, _need: number) => {},

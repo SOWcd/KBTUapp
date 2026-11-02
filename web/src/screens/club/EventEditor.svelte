@@ -554,20 +554,20 @@
       {@render row(Eye, t('ed.preview'), '', showPreview)}
     </div>
 
+    <!-- the form's end, as Luma's Create (owner, Nov 2: no floating bar over the form) -->
+    <div class="foot">
+      {#if live}
+        <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
+      {:else}
+        <Button kind="filled" size="l" full loading={busy === 'publish'} onclick={publish}>{t('ed.publish')}</Button>
+        <button class="draft" disabled={!!busy} onclick={() => submit('draft')}>{busy === 'draft' ? '…' : t('ed.saveDraft')}</button>
+      {/if}
+    </div>
     {#if saved?.status === 'draft'}
       <button class="del" onclick={remove}><Trash size={18} />{t('ed.delete')}</button>
     {/if}
     <div class="tail"></div>
   </div>
-
-  <footer class="foot btns glass glass-sheet" class:hide={!!pick}>
-    {#if live}
-      <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
-    {:else}
-      <Button kind="gray" size="l" full loading={busy === 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>
-      <Button kind="filled" size="l" full loading={busy === 'publish'} onclick={publish}>{t('ed.publish')}</Button>
-    {/if}
-  </footer>
 
   <!-- the focused panel: one thing at a time; Telegram's Back, the scrim or Done closes it -->
   {#if pick}
@@ -768,7 +768,7 @@
 
   .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); margin-top: max(48px, var(--top)); padding: var(--s-2) var(--gutter) 0; }
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
-  .tail { height: calc(var(--safe-bottom) + 96px); }
+  .tail { height: calc(var(--safe-bottom) + 24px); }
   .ph { color: var(--text-3); }
   .err { margin: -6px var(--s-4) 0; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
   .hint { margin: 0 var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
@@ -816,12 +816,9 @@
   .r.still { cursor: default; }
   .del { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; margin-top: var(--s-1); color: var(--danger-text); font: 620 var(--fs-body)/1 var(--font-text); }
 
-  .foot { position: absolute; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px); display: flex; gap: var(--s-2); padding: var(--s-2); border-radius: var(--r-xl);
-    transition: opacity var(--t-fast) var(--ease); }
-  /* the publish keeps its label whole; the draft takes what's left (two lines at 320) */
-  .foot > :global(.btn:first-child:not(:last-child)) { flex: 0 1 auto; min-width: 0; }
-  .foot > :global(.btn:last-child:not(:first-child)) { flex: 1 0 auto; }
-  .foot.hide { opacity: 0; pointer-events: none; }
+  .foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); margin-top: var(--s-5); }
+  .draft { height: 46px; color: var(--accent-text, var(--accent)); font: 600 var(--fs-body)/1 var(--font-text); }
+  .draft:active { opacity: 0.6; }
 
   /* the panel */
   .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }

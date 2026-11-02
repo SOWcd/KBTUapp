@@ -13,9 +13,10 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, ondone }: { overlay: Overlay; ondone?: () => void } = $props();
+  // org: one club's (its Studio); none: every claim I confirm (DMP's Studio, the Admin sheet, the bot's link)
+  let { overlay, ondone, org }: { overlay: Overlay; ondone?: () => void; org?: number } = $props();
   let list = $state<RosterRequest[] | null>(null);
-  $effect(() => { api.rosterRequests().then((l) => (list = l)).catch(() => (list = [])); });
+  $effect(() => { api.rosterRequests(org).then((l) => (list = l)).catch(() => (list = [])); });
   async function decide(r: RosterRequest, ok: boolean) {
     try {
       await api.rosterDecide(r.id, ok); haptic.ok(); say(t(ok ? 'ro.confirmed' : 'ro.declined'), ok ? 'party_popper_3d' : 'waving_hand_3d_default');

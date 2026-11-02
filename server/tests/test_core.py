@@ -4906,6 +4906,8 @@ def test_roster_load_and_join(env):
     assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
     req = c.get("/api/roster/requests", headers=tma(70)).json()
     assert [(r["sheetName"], r["name"]) for r in req] == [("Someone Else", "Bek Testov")]
+    org = req[0]["org"]["id"]                                                            # its Studio: that club's only
+    assert len(c.get(f"/api/roster/requests?org={org}", headers=tma(70)).json()) == 1 and c.get(f"/api/roster/requests?org={org + 999}", headers=tma(70)).json() == []
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=h(72), json={"ok": True}).status_code == 403
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
     me = c.get("/api/me", headers=h(72)).json()

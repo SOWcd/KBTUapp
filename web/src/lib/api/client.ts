@@ -295,7 +295,7 @@ export const server: Api = {
   dropOrgChat: (org, chat) => call('DELETE', `/orgs/${org}/chats/${chat}`),
   rosterSeen: () => call('POST', '/roster/seen'),
   rosterClaim: (row) => call('POST', `/roster/${row}/claim`),
-  rosterRequests: () => call('GET', '/roster/requests'),
+  rosterRequests: (org) => call('GET', org ? `/roster/requests?org=${org}` : '/roster/requests'),
   rosterDecide: (row, ok) => call('POST', `/roster/requests/${row}`, { ok }),
   mirrorOrgChat: (org, chat, on) => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
   deleteChat: (id) => call('DELETE', `/admin/chats/${id}`),
