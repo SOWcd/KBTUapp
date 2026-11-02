@@ -8,13 +8,13 @@
 import {
   BoxGeometry, BufferAttribute, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group,
   LinearMipmapLinearFilter, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, NeutralToneMapping, PerspectiveCamera, PMREMGenerator,
-  RepeatWrapping, Scene, SRGBColorSpace, Texture, TorusGeometry, Vector3, WebGLRenderer,
+  RepeatWrapping, Scene, SRGBColorSpace, Texture, TorusGeometry, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 export type CoinState = () => { x: number; y: number; spin: number }; // tilt -1..1, spin in degrees
 // the canvas round the medal, in medal sizes: wide enough for the swing, tall above for the ribbon
-const W = 1.55, UP = 1.42, DOWN = 0.62;
+const W = 1.55, UP = 1.42, DOWN = 0.8; // DOWN: room under the medal for a tilt toward me while it turns (owner, Nov 3: at 0.62 its bottom was cut flat)
 // the chain in medal radii (the medal's centre at 0): lug, jump ring, the bar the ribbon loops under, the neck
 const LUG = 1.05, RING_R = 0.13, TUBE = 0.028, RING_Y = LUG + RING_R - 0.02, NECK = 2.38;
 const WID = 0.6, THICK = 0.016, GATHER = 0.2; // a strap's width, its thickness, its width where it loops the ring
@@ -28,7 +28,7 @@ const canvas2d = (w: number, h: number) => { const c = document.createElement('c
 /** Mounts the medal into `host`; resolves once the first frame is drawn. Throws without WebGL. */
 export async function mountCoin(host: HTMLElement, o: { src: string; tint: string; ribbon: string[]; size: number; state: CoinState; onLand?: () => void }): Promise<() => void> {
   const renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+  renderer.setPixelRatio(Math.min(3, devicePixelRatio || 1)); // 3x phones too: at 2 the edge stepped (owner, Nov 3: "no pixels")
   const w = Math.round(o.size * W), up = Math.round(o.size * UP), h = up + Math.round(o.size * DOWN);
   renderer.setSize(w, h);
   renderer.toneMapping = NeutralToneMapping; // ACES pushed the blue enamel toward lavender and the gold to cream
@@ -101,7 +101,8 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
   rg2.filter = 'blur(1.5px)'; rg2.drawImage(hc, 0, 0); // no canvas filter (old Safari): a sharp bevel, still fine
   const relief = own(new CanvasTexture(rc2));
 
-  const rim = new MeshStandardMaterial({ color: metal.clone().multiplyScalar(0.72), metalness: 1, roughness: 0.3, normalMap: ridges });
+  // ridges half as deep: at full depth the milling sparkled into coloured specks at a glancing angle (owner, Nov 3: "pixels")
+  const rim = new MeshStandardMaterial({ color: metal.clone().multiplyScalar(0.72), metalness: 1, roughness: 0.34, normalMap: ridges, normalScale: new Vector2(0.5, 0.5) });
   // a thin, wide-lobed lacquer: the room's lights glance off it without blanking the enamel (owner, Nov 1: at some
   // tilts the blue went lavender and the gold cream)
   const top = new MeshPhysicalMaterial({ map: front, metalnessMap: relief, roughnessMap: relief, bumpMap: relief, bumpScale: 3, metalness: 1, roughness: 1,

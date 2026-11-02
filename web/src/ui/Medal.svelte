@@ -3,7 +3,7 @@
   // iridescence lives inside one object, never smeared over text (owner's taste).
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
-  import { METALS, artOf, metalOf } from '../lib/awards';
+  import { METALS, artOf, layersOf, metalOf } from '../lib/awards';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();
 
   const multi = $derived(a.levels.length > 1);
@@ -12,9 +12,13 @@
   // a drawn medal of its own (the 2026 initiation's, First 500; owner Nov 1): the picture is the whole medal, no rim or disc
   const art = $derived(artOf(a));
   const drawn = $derived(art.startsWith('medal_'));
+  // a layered one (SVG, crisp at any size): the field, the art and its near part float with the tilt (base.css .z, the
+  // glass's --gx/--gy from above) under the still rim
+  const layers = $derived(layersOf(art));
 </script>
 
-{#if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" draggable="false" /></span>{:else}
+{#if layers}<span class="medal drawn lay" class:none={a.level === 0} style="width:{size}px;height:{size}px">{#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}</span>
+{:else if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" draggable="false" /></span>{:else}
 <span class="medal {tier}" style="width:{size}px;height:{size}px">
   <span class="disc">
     {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>
@@ -38,6 +42,11 @@
   .drawn, .medal.drawn:not(.none) { padding: 0; background: none; box-shadow: none; }
   .drawn img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45)); }
   .drawn.none img { filter: grayscale(1); opacity: 0.38; }
+  .lay { border-radius: 50%; }
+  .lay img { position: absolute; inset: 0; filter: none; }
+  .medal.lay:not(.none) { box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.45); }
+  .lay.none { filter: grayscale(1); opacity: 0.38; }
+  .lay.none img { filter: none; opacity: 1; }
   .medal:not(.none) { box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6); }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>

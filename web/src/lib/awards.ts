@@ -43,12 +43,19 @@ export const tierLabel = (level: number, of: number): string => (level === of &&
  *  I-III bronze, IV-VI silver, VII-VIII gold */
 export const metalOf = (level: number, of: number): number => (of <= 4 ? level - 1 : level === of ? 3 : Math.floor(((level - 1) * 3) / (of - 1)));
 export const METALS = ['bronze', 'silver', 'gold', 'legend'];
-// an achievement drawn per level (Recruiter, owner Nov 2: a constellation, one more friend lit each level, the rim
-// in the level's metal; drawn by .claude/reports/recruiter-medal/gen.mjs)
-const DRAWN_BY_LEVEL: Record<string, string> = { referral: 'medal_rc' };
+// achievements drawn in layers (public/medals, made by tools/medals.mjs; owner, Nov 3: crisp at any size, the art
+// floating under a still rim with the tilt): Recruiter per level (a constellation, one more friend lit each level, the
+// rim the level's metal), the anthem's colonnade at sunrise under its staff
+const LAYERED: Record<string, string> = { referral: 'layer_rc', anthem: 'layer_an' };
 /** the picture an achievement shows: its own medal for this level (not earned: the first), else its emoji */
 export const artOf = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string =>
-  a.code in DRAWN_BY_LEVEL ? DRAWN_BY_LEVEL[a.code] + Math.max(1, a.level) : a.emoji;
+  a.code in LAYERED ? LAYERED[a.code] + (a.levels.length > 1 ? Math.max(1, a.level) : '') : a.emoji;
+/** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
+export function layersOf(art: string): [string, number][] | null {
+  const rc = /^layer_rc(\d)$/.exec(art);
+  if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
+  return art === 'layer_an' ? [['an-field', -1], ['an-staff', 0.5], ['an-hall', 1], ['an-rim', 0]] : null;
+}
 
 export function tierName(a: Achievement): string {
   if (a.level === 0) return a.secret ? t('ach.secret') : t('ach.locked');

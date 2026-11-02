@@ -20,6 +20,7 @@
   import { glass, recenter } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
   import Award from '../../ui/Award.svelte';
+  import MedalArt from '../../ui/Medal.svelte';
   import { nameOf } from '../../lib/short';
   import { session } from '../../lib/state/session.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -48,6 +49,17 @@
     finally { inviting = false; }
   }
   const a = $derived(it.ach), b = $derived(it.badge);
+  // every level side by side under the progress (owner, Nov 3): a tap shows that level's medal in the hero spot, a
+  // tap on it again (or on mine) comes back to mine. The hero, its light and the line over the name follow it
+  let peek = $state(0);
+  const shown = $derived<ShelfItem>(peek && a ? { ...it, ach: { ...a, level: peek } } : it);
+  const va = $derived(shown.ach);
+  function look(level: number) {
+    haptic.select();
+    peek = level === peek || level === a?.level ? 0 : level;
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+      medal?.animate([{ transform: 'scale(0.9)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.9,.25,1)' });
+  }
   let seen = $state<string | null>(null); // a variant tapped to read what it means (null: mine)
   const hidden = $derived(!!a && a.secret && a.level === 0);
   const tiers = $derived(!!a && a.levels.length > 1);
@@ -67,7 +79,7 @@
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
   const ROSE = '226, 152, 124'; // the performer's rose gold
-  const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
+  const DRAWN: Record<string, string> = { layer_an: GLOW[3], medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
   // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
   const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246', AMETHYST = '88, 34, 150';
   const RIBBON: Record<string, string[]> = {
@@ -77,7 +89,7 @@
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
   const round = $derived(!!a || !!it.founder || !!it.idea);
-  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[artOf(a)] ?? (tiers ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]));
+  const glow = $derived(it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
@@ -145,7 +157,7 @@
     return () => { dead = true; cancelAnimationFrame(raf); off?.(); };
   });
   // the line over the name: the event a medal is from, else the level reached; a badge: its club and day
-  const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : a?.level && tiers ? t('aw.level', { tier: tierOf(a.level - 1) })
+  const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : va?.level && tiers ? t('aw.level', { tier: tierOf(va.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
   $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
@@ -183,7 +195,7 @@
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={round && !!glow} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award {it} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award {it} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={round ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -216,6 +228,13 @@
         <p class="top">{t('aw.topCount', { count: a.count })}</p>
       {/if}
       {#if tiers}
+        <div class="steps up" role="group">
+          {#each a.levels as l, i (i)}
+            <button class="step" class:fut={!l.reached} class:on={(peek || a.level) === i + 1} aria-label={tierOf(i)} onclick={() => look(i + 1)}>
+              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{l.reached ? tierOf(i) : l.need}</span>
+            </button>
+          {/each}
+        </div>
         <div class="ladder up">
           <div class="lh t-cap"><span>{t('aw.levels')}</span><span>{t('aw.need')}</span><span>{t('aw.students')}</span></div>
           {#each ladder as l (l.i)}
@@ -352,6 +371,16 @@
   .rar { text-align: center; margin-top: 8px; }
   .top { text-align: center; margin-top: 14px; font: 650 14px/1.3 var(--font-text); color: var(--success-text); }
 
+  /* every level in a row: mine and below lit, the rest dim with what they take; the one shown in the hero raised */
+  .steps { flex: none; display: flex; gap: 2px; margin: 14px -20px 0; padding: 4px 20px; overflow-x: auto; scrollbar-width: none; justify-content: safe center; }
+  .steps::-webkit-scrollbar { display: none; }
+  .step { flex: 1 1 0; min-width: 34px; max-width: 52px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0 4px; border-radius: var(--r-m);
+    font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); transition: background-color 0.2s, color 0.2s; }
+  .step > :global(.medal) { transition: transform 0.25s cubic-bezier(.2,.9,.25,1), opacity 0.2s, filter 0.2s; }
+  .step.fut > :global(.medal) { opacity: 0.4; filter: grayscale(0.7); }
+  .step.on { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+  .step.on > :global(.medal) { opacity: 1; filter: none; transform: scale(1.08); }
+  .step:active > :global(.medal) { transform: scale(0.94); }
   .ladder { margin-top: 14px; display: flex; flex-direction: column; border-radius: var(--r-m); background: var(--surface-2); padding: 4px 0; }
   .lh, .lv { display: grid; grid-template-columns: 1fr 70px 90px; align-items: center; padding: 8px 14px; }
   .lh { color: var(--text-3); padding-bottom: 4px; }

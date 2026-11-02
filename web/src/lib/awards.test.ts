@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS } from './awards';
+import { artOf, layersOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -33,7 +33,9 @@ it('puts DMP, then the Student Government, before a higher role in a club on the
 it("Recruiter's medal is drawn per level", () => {
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
   const of = (level: number) => artOf({ code: 'referral', emoji: 'megaphone_3d', level, levels: lv as never });
-  expect([0, 1, 4, 9].map(of)).toEqual(['medal_rc1', 'medal_rc1', 'medal_rc4', 'medal_rc9']);
+  expect([0, 1, 4, 9].map(of)).toEqual(['layer_rc1', 'layer_rc1', 'layer_rc4', 'layer_rc9']);
+  expect(layersOf(of(4))?.map(([n]) => n)).toEqual(['rc-field-s', 'rc-net-4', 'rc-core-s', 'rc-rim-s']);
+  expect(layersOf(artOf({ code: 'anthem', emoji: 'headphone_3d', level: 1, levels: lv.slice(0, 1) as never }))?.[0][0]).toBe('an-field');
   expect(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never })).toBe('raising_hands_3d_default');
 });
 
