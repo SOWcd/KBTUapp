@@ -50,7 +50,7 @@
   $effect(() => { if (admin) api.adminOrgs().then((l) => { clubsN = l.filter((o) => o.kind === 'club').length; schoolsN = l.length - clubsN; }).catch(() => {}); });
   // the forum channel's posts (moderators): here when the server has the channel on; the number is what waits
   let fcHeld = $state<number | null>(null);
-  $effect(() => { api.channelMod().then((m) => (fcHeld = m.held.length)).catch(() => {}); });
+  $effect(() => { api.channelMod().then((m) => (fcHeld = m.held.length + m.replies.held.length + m.replies.live.filter((r) => r.reports).length)).catch(() => {}); });
   let chatsN = $state<number | null>(null);
   // "it's me in DMP's list under another name" for clubs with no President: the admin's, here and not in Studio
   let claimsN = $state(0);

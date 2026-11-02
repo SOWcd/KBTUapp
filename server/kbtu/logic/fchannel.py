@@ -231,6 +231,7 @@ def delete(con, v: Viewer, pid: int) -> None:
         if not p:
             raise ApiError("not_found")
         _unpost(con, p, "author")
+        _post_off(con, pid)
         con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
 
 
@@ -403,6 +404,8 @@ def sweep(con) -> None:
         return
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 30 * 86400))
+    # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
+    con.execute("DELETE FROM fchan_replies WHERE status IN ('gone', 'hidden', 'held') AND tg_msg IS NULL AND created_at < ?", (_now() - 30 * 86400,))
 
 
 def unposts(con) -> list:
@@ -462,7 +465,7 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     shape = lambda p: _shape(p) | {"why": p["why"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
-            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed]}
+            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
 
 def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
@@ -481,6 +484,7 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
         else:
             # its message stays a minute (UNDO_WINDOW), kept on the row: Undo puts it back as it was, comments and all
             _unpost(con, p, "moderator", UNDO_WINDOW)
+            _post_off(con, pid, UNDO_WINDOW)
             con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
         log_action(con, v.id, "fchan_release" if ok else "fchan_hide", f"fchan:{pid}")
 
@@ -539,6 +543,264 @@ def reveal(con, v: Viewer, pid: int) -> dict:
     return person_ref(one(con, PERSON + " WHERE u.id = ?", p["user_id"]))
 
 
+# ---- the anonymous author's replies in the comments (Nov 3, .claude/reports/anon-reply/review.md)
+# The author of an anonymous post answers under it through the bot, so the answer doesn't carry their Telegram account.
+# No comment list in the app (other people's words are never stored): the reply goes to the thread, or to a comment
+# whose Telegram link the author pasted, checked against fchan_comments. Its own AI look, then a random wait (the time
+# it lands can't be matched to the author's "online"), then the bot sends it once. Stored without a user id: the post
+# is the only way to its author (the owner's reveal, account deletion), and the replies go with it.
+
+REPLY_GAP = 60             # one reply a minute per author
+REPLIES_A_DAY = 10         # per post
+REPLIES_A_COMMENT = 3      # per comment answered (all time)
+# seconds, at random, from the author's tap (the AI's look inside it) to the bot's send. ponytail: owner, Nov 3: 30-120 s
+# felt too slow; 5-20 s blurs the moment less (the author's "online" in Telegram and a reply seconds later still line up
+# across many replies), the composer warns of it; widen it if timing ever narrows an author down
+REPLY_WAIT = (5, 20)
+COMMENT_LINK = re.compile(r"(?:https?://)?(?:t|telegram)\.me/(?:s/)?(\w{4,32})/(\d+)/?\?(?:[^#\s]*&)?comment=(\d+)(?:[&#]\S*)?", re.I)
+
+
+def _wait(base: int | None = None) -> int:
+    return (base or _now()) + REPLY_WAIT[0] + secrets.randbelow(REPLY_WAIT[1] - REPLY_WAIT[0] + 1)
+
+
+def _my_anon_post(con, v: Viewer, pid: int):
+    """My anonymous post, in the channel with its copy in the group (the thread to answer in); else not found."""
+    p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1 AND status = 'live' AND tg_msg > 0", pid, v.id)
+    if not p or not one(con, "SELECT 1 FROM meta WHERE key = ?", f"fchcopy:{p['tg_msg']}"):
+        raise ApiError("not_found")
+    return p
+
+
+def _reply_shape(r) -> dict:
+    """What the author sees of a reply: its words and where it stands (checking, held, soon, sent, removed)."""
+    state = ("checking" if r["why"] == "check" else "maybe" if r["why"] == "lost" else "held") if r["status"] == "held" else \
+        ("sent" if r["tg_msg"] else "soon") if r["status"] == "live" else "missing" if r["why"] == "missing" else "removed"
+    return {"id": r["id"], "body": r["body"], "comment": r["comment_msg"], "state": state, "at": r["created_at"]}
+
+
+def replies(con, v: Viewer, pid: int) -> list[dict]:
+    """My replies under my post, newest first (the author's own view, the only one that ties them to anyone)."""
+    need_student(v)
+    if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1", pid, v.id):
+        raise ApiError("not_found")
+    return [_reply_shape(r) for r in rows(con, "SELECT * FROM fchan_replies WHERE post_id = ? AND status != 'gone' OR post_id = ? AND why = 'missing' ORDER BY id DESC LIMIT 30", pid, pid)]
+
+
+def reply_reserve(con, v: Viewer, pid: int, body: dict) -> int:
+    """A reply, held ('check') before the AI looks, the caps counted in the same transaction: one a minute (all my
+    posts), REPLIES_A_DAY under a post, REPLIES_A_COMMENT to one comment (deleting one buys nothing back). The comment by
+    its link: under this post's message, a student's comment the bot saw (fchan_comments) and still up."""
+    need_student(v)
+    text = _clean(body.get("body"))
+    link = str(body.get("link") or "").strip()
+    with tx(con):
+        p = _my_anon_post(con, v, pid)
+        comment = None
+        if link:
+            m = COMMENT_LINK.fullmatch(link)
+            if not m or int(m[2]) != p["tg_msg"] or not one(con, "SELECT 1 FROM fchan_comments WHERE msg_id = ? AND post_id = ? AND gone = 0", int(m[3]), pid):
+                raise ApiError("bad_input", "comment")
+            comment = int(m[3])
+        last = one(con, """SELECT MAX(r.created_at) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE p.user_id = ?""", v.id)[0]
+        if last and last > _now() - REPLY_GAP:
+            raise ApiError("rate_limited", "replies")
+        if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND created_at > ?", pid, _now() - 86400)[0] >= REPLIES_A_DAY \
+                or comment and one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND comment_msg = ?", pid, comment)[0] >= REPLIES_A_COMMENT:
+            raise ApiError("rate_limited", "replies")
+        return con.execute("INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)",
+                           (pid, comment, text, _now())).lastrowid
+
+
+def reply_settle(con, rid: int, verdict: str | None) -> dict:
+    """The AI's word (ai.screen_reply): 'ok' goes out after a random wait; 'person', 'flag' or no answer wait for a moderator."""
+    with tx(con):
+        if verdict == "ok":
+            r = one(con, "SELECT created_at FROM fchan_replies WHERE id = ?", rid)
+            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'",
+                        (_wait(r["created_at"]) if r else _now(), rid))
+        else:
+            con.execute("UPDATE fchan_replies SET why = ? WHERE id = ? AND status = 'held' AND why = 'check'",
+                        ({"person": "person", "flag": "ai"}.get(verdict or "", "check"), rid))
+    return _reply_shape(one(con, "SELECT * FROM fchan_replies WHERE id = ?", rid))
+
+
+def _drop(con, r, why: str, status: str = "gone", delay: int = 0) -> None:
+    """A reply off: the words wiped when its author deletes it (a takedown keeps them 30 days for an undo); out of the
+    group in the bot's round (now, or after the undo minute)."""
+    con.execute("UPDATE fchan_replies SET status = ?, why = ?, body = CASE WHEN ? = 'gone' THEN '' ELSE body END, drop_at = ? WHERE id = ?",
+                (status, why, status, _now() + delay, r["id"]))
+
+
+def reply_delete(con, v: Viewer, rid: int) -> None:
+    """The author deletes their reply: through the post (no user id on the reply)."""
+    with tx(con):
+        r = one(con, "SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND r.status != 'gone'", rid, v.id)
+        if not r:
+            raise ApiError("not_found")
+        _drop(con, r, "author")
+
+
+def _post_off(con, pid: int, delay: int = 0) -> None:
+    """The post left (deleted, taken down): its replies leave the group with it (an undo of the post inside the minute
+    keeps the sent ones: the round only takes a live reply out while its post isn't live); unsent ones never go."""
+    con.execute("UPDATE fchan_replies SET drop_at = ? WHERE post_id = ? AND tg_msg >= 0", (_now() + delay, pid))  # 0: on its way, reply_sent keeps it
+    con.execute("UPDATE fchan_replies SET status = 'hidden', why = 'post' WHERE post_id = ? AND status IN ('held', 'live') AND tg_msg IS NULL", (pid,))
+
+
+REPLY_HIDE_AT = 3  # distinct reporters, each verified over tgcomments.REPORTER_AGE ago: the reply leaves at once, a moderator decides
+
+
+def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
+    """/report on the bot's reply in the group (tgc._report): once per reporter (fchan_reply_reports), the reporter told
+    as for a comment, the moderators pinged (an hourly note; the Admin sheet lists it whatever its age). REPLY_HIDE_AT
+    long-verified reporters take it down at once (as a moderator's take-down: Undo, Bring back). False: not ours."""
+    from .tgcomments import REPORTER_AGE, _mods
+    r = one(con, "SELECT r.*, p.user_id AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live'", msg_id)
+    u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
+    if not r or not u:
+        return bool(r)
+    with tx(con):
+        if u["id"] != r["author"] and con.execute("INSERT OR IGNORE INTO fchan_reply_reports (reply_id, user_id, at) VALUES (?, ?, ?)",
+                                                  (r["id"], u["id"], _now())).rowcount:
+            for uid in _mods(con):
+                notify(con, uid, "fch_reply_queue", f"rq:{_now() // 3600}")
+            n = one(con, """SELECT COUNT(*) FROM fchan_reply_reports x JOIN students s ON s.user_id = x.user_id AND s.manual = 0
+                WHERE x.reply_id = ? AND s.verified_at < ?""", r["id"], _now() - REPORTER_AGE)[0]
+            if n >= REPLY_HIDE_AT:
+                _drop(con, r, "reports", "hidden", UNDO_WINDOW)
+                log_action(con, None, "fchan_reply_auto_hide", f"fchanr:{r['id']}")
+        notify(con, u["id"], "tgc_report_ok", f"rr:{r['id']}")
+    return True
+
+
+def reply_answered(con, msg_id: int, tg: int) -> None:
+    """A student answered the bot's reply in the group (tgc.gate): its author hears, a template with a button to the
+    post, at most once an hour per reply (never their own answer)."""
+    r = one(con, """SELECT r.id, p.id AS pid, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id JOIN users u ON u.id = p.user_id
+        WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live' AND u.tg_id > 0 AND u.tg_id != ?""", msg_id, tg)
+    if r:
+        notify(con, r["user_id"], "fch_reply_answer", f"fa:{r['id']}:{_now() // 3600}")
+
+
+# the bot's side (tgc.post_tick)
+
+def replies_to_send(con) -> list:
+    """Replies due now: live, their wait over, the post live in the channel, its author not banned: (id, words, the
+    message to answer: the comment or the post's copy in the group)."""
+    return [(r["id"], r["body"], r["comment_msg"] or int(r["root"])) for r in rows(con, """SELECT r.*, m.value AS root FROM fchan_replies r
+        JOIN fchan_posts p ON p.id = r.post_id AND p.status = 'live' AND p.tg_msg > 0 JOIN users u ON u.id = p.user_id AND u.banned_at IS NULL
+        JOIN meta m ON m.key = 'fchcopy:' || p.tg_msg WHERE r.status = 'live' AND r.tg_msg IS NULL AND r.send_at <= ? ORDER BY r.send_at LIMIT 5""", _now())]
+
+
+def reply_sending(con, rid: int) -> bool:
+    return con.execute("UPDATE fchan_replies SET tg_msg = 0 WHERE id = ? AND status = 'live' AND tg_msg IS NULL", (rid,)).rowcount > 0
+
+
+def reply_sent(con, rid: int, msg_id: int) -> None:
+    """Its message id kept; it or its post deleted or taken down meanwhile, it leaves the group right away (a post's
+    take-down keeps its undo minute: _post_off stamped drop_at). ponytail: an account deleted while one is on its way
+    takes the row with a non-live post (cascade) and the message stays; a one-second window in the bot's one process"""
+    con.execute("UPDATE fchan_replies SET tg_msg = ? WHERE id = ? AND tg_msg = 0", (msg_id, rid))
+    con.execute("""UPDATE fchan_replies SET drop_at = COALESCE(drop_at, ?) WHERE id = ? AND (status != 'live'
+        OR post_id IN (SELECT id FROM fchan_posts WHERE status != 'live'))""", (_now(), rid))
+
+
+def reply_unsend(con, rid: int) -> None:
+    con.execute("UPDATE fchan_replies SET tg_msg = NULL WHERE id = ? AND tg_msg = 0", (rid,))
+
+
+def reply_missing(con, rid: int) -> None:
+    """Telegram: the comment answered is gone. The reply is dropped (never sent elsewhere), its author told."""
+    r = one(con, "SELECT p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND r.tg_msg = 0", rid)
+    if r:
+        con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', tg_msg = NULL WHERE id = ?", (rid,))
+        notify(con, r["user_id"], "fch_reply_gone", f"fg:{rid}")
+
+
+def replies_lost(con) -> None:
+    """A send with no answer: to a moderator, never sent twice by itself (as lost())."""
+    con.execute("UPDATE fchan_replies SET status = 'held', why = 'lost', tg_msg = NULL WHERE status = 'live' AND tg_msg = 0")
+
+
+def reply_drops(con) -> list:
+    """Replies to take out of the group now: (id, message, why) deleted by the author, taken down, or their post left."""
+    return [tuple(r) for r in rows(con, """SELECT r.id, r.tg_msg, CASE WHEN r.status = 'hidden' THEN 'moderator' ELSE 'author' END FROM fchan_replies r
+        JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg > 0 AND r.drop_at <= ? AND (r.status != 'live' OR p.status != 'live') LIMIT 20""", _now())]
+
+
+def reply_dropped(con, rid: int) -> None:
+    """Out of the group: a live one whose post left is removed with it."""
+    con.execute("""UPDATE fchan_replies SET tg_msg = NULL, drop_at = NULL, status = CASE WHEN status = 'live' THEN 'hidden' ELSE status END,
+        why = CASE WHEN status = 'live' THEN 'post' ELSE why END WHERE id = ?""", (rid,))
+
+
+def reply_drop_later(con, rid: int) -> None:
+    con.execute("UPDATE fchan_replies SET drop_at = ? WHERE id = ?", (_now() + 600, rid))
+
+
+# moderators (the Admin sheet): held replies, this week's live ones (reported first), this week's take-downs
+
+def _reply_mod_shape(r) -> dict:
+    return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]),
+            "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
+
+
+def reply_mod_queue(con) -> dict:
+    """Shown as anonymous posts are: the words and the post they answer, never whose (the author is the post's)."""
+    q = """SELECT r.*, p.body AS pbody, p.anon, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
+        FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE """
+    held = rows(con, q + "r.status = 'held' AND (r.why != 'check' OR r.created_at < ?) ORDER BY r.id", _now() - 60)
+    # reported ones whatever their age (a report must reach someone), first; then this week's
+    live = rows(con, q + """r.status = 'live' AND p.status = 'live' AND (r.created_at > ? OR EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id))
+        ORDER BY reports DESC, r.id DESC LIMIT 50""", _now() - MOD_RECENT)
+    removed = rows(con, q + "r.status = 'hidden' AND r.why IN ('moderator', 'reports') AND (r.created_at > ? OR r.why = 'reports') ORDER BY r.id DESC LIMIT 50", _now() - MOD_RECENT)
+    return {"held": [_reply_mod_shape(r) for r in held], "live": [_reply_mod_shape(r) for r in live], "removed": [_reply_mod_shape(r) for r in removed]}
+
+
+def _mod_reply(con, v: Viewer, rid: int, where: str):
+    _mod(v)
+    r = one(con, "SELECT r.*, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND " + where, rid)
+    if not r:
+        raise ApiError("not_found")
+    if r["user_id"] == v.id:  # their own post's: another moderator decides
+        raise ApiError("forbidden")
+    return r
+
+
+def reply_mod_decide(con, v: Viewer, rid: int, ok: object, again: object = False) -> None:
+    """A held reply goes out (after the random wait) or is removed; a live one: ok clears its reports (kept), else it
+    is taken down (out of the group after the undo minute). A lost send (may be in the group already, the bot can't
+    tell) goes out again only on the moderator's explicit again=True, after looking at the comments. Audited."""
+    if not isinstance(ok, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        r = _mod_reply(con, v, rid, "r.status IN ('held', 'live')")
+        if ok and r["status"] == "held" and r["why"] == "lost" and again is not True:
+            raise ApiError("conflict", "lost")
+        if ok and r["status"] == "held":
+            con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ?", (_wait(), rid))
+            act = "fchan_reply_release"
+        elif ok:  # the reports were wrong: cleared (a new one brings it back)
+            con.execute("DELETE FROM fchan_reply_reports WHERE reply_id = ?", (rid,))
+            act = "fchan_reply_keep"
+        else:
+            _drop(con, r, "moderator", "hidden", UNDO_WINDOW)
+            act = "fchan_reply_hide"
+        log_action(con, v.id, act, f"fchanr:{rid}")
+
+
+def reply_mod_restore(con, v: Viewer, rid: int) -> None:
+    """A take-down undone: inside the minute the message stays as it was; later the reply goes out anew (after the wait)."""
+    with tx(con):
+        r = _mod_reply(con, v, rid, "r.status = 'hidden' AND r.why IN ('moderator', 'reports') AND p.status = 'live'")
+        con.execute("DELETE FROM fchan_reply_reports WHERE reply_id = ?", (rid,))
+        kept = bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()
+        con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, drop_at = NULL, send_at = ? WHERE id = ?",
+                    (r["send_at"] if kept else _wait(), rid))
+        log_action(con, v.id, "fchan_reply_undo" if kept else "fchan_reply_restore", f"fchanr:{rid}")
+
+
 def _now() -> int:
     return core.now()
 
@@ -546,3 +808,4 @@ def _now() -> int:
 # the other domains', imported last: they import this one too
 from . import core  # noqa: E402
 from .oversight import _mod, _owner  # noqa: E402
+from .seats import notify  # noqa: E402

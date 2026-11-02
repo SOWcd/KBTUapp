@@ -174,6 +174,11 @@ export interface Api {
   channelModRepublish(id: Id): Promise<void>;                                           // a live post sent anew (its message lost in Telegram)
   channelModRestore(id: Id): Promise<void>;                                            // a moderator's take-down undone: published anew
   revealChannelPost(id: Id): Promise<PersonRef>;                                        // the owner alone; audited
+  channelReplies(post: Id): Promise<import('./types').ChannelReply[]>;                   // my replies under my anonymous post
+  newChannelReply(post: Id, body: string, link: string): Promise<import('./types').ChannelReply>; // the AI first; the bot sends it seconds later
+  deleteChannelReply(id: Id): Promise<void>;                                            // mine: out of the group
+  channelReplyMod(id: Id, ok: boolean, again?: boolean): Promise<void>;                 // held: out or removed; live: kept or taken down; again: a lost send, re-sent
+  channelReplyRestore(id: Id): Promise<void>;                                           // a take-down undone
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
   mapFlawDone(id: Id, done: boolean): Promise<void>;

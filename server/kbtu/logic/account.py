@@ -853,7 +853,7 @@ CONSENT_FORUM = "2026-11-v14" # with FORUM=1: the policy's forum part is in forc
 CONSENT_BOARD = "2026-11-v15"  # with BOARD=1 alone: the student forum's section (11 then); v11, v7, v5 before
 CONSENT_BOTH = "2026-11-v16"  # (v12, v8, v6 before) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
-CONSENT_FCH = "+fch2"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch1 until Nov 2: commenters' faces and reactions added)
+CONSENT_FCH = "+fch3"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch2 until Nov 3: the anonymous author's replies; fch1 until Nov 2: commenters' faces and reactions)
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
 
 
@@ -998,6 +998,7 @@ _DEL_GONE = {
     ("tgc_comments", "author_id"), ("tgc_reports", "reporter_id"), ("tgc_closed", "user_id"),  # the channel's comments: copies of mine, my reports
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
+    ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
@@ -1060,6 +1061,12 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         # what I wrote stays, the person goes (owner, Nov 2: as Telegram and Reddit): comments and the forum channel's live
         # posts move to the nameless placeholder, shown as a deleted account; a named post's signature in the channel
         # is rewritten (fch_resign), an anonymous one stays as it was, so nothing tells which posts were one person's
+        # my anonymous replies (fchan_replies: no user id, through my posts): sent ones under a post that stays live
+        # follow it to the placeholder; those under a post that goes now (held, hidden, deleted) leave the group too
+        # (the bot's round, tgcdel: as tgc.later_delete), and what never went out goes now
+        con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+            WHERE p.user_id = ? AND p.status != 'live' AND r.tg_msg > 0""", (core.now(), v.id))
+        con.execute("DELETE FROM fchan_replies WHERE tg_msg IS NULL AND post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):

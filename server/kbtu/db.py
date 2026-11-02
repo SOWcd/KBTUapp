@@ -1120,6 +1120,33 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the school before its one correction ({"school": ...}): going back to it is free, once
     # (owner, Nov 3: a mis-tap cost the only change and every student wrote to support)
     (116, "ALTER TABLE students ADD COLUMN once_was TEXT NOT NULL DEFAULT '{}';"),
+    # (Nov 3, .claude/reports/anon-reply/review.md) an anonymous post's author answers in its comments through the bot.
+    # No user_id: the author is reached through the post alone (reveal, account deletion follow it), and the replies go
+    # with their post. comment_msg: the comment answered (fchan_comments.msg_id), NULL for the thread. tg_msg as the
+    # posts': NULL not sent, 0 on its way, else the bot's message in the group; drop_at: when it leaves the group
+    (117, """CREATE TABLE fchan_replies (
+      id          INTEGER PRIMARY KEY,
+      post_id     INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      comment_msg INTEGER,
+      body        TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
+      status      TEXT NOT NULL CHECK (status IN ('held', 'live', 'hidden', 'gone')),
+      why         TEXT,
+      tg_msg      INTEGER,
+      send_at     INTEGER,
+      drop_at     INTEGER,
+      created_at  INTEGER NOT NULL
+    ) STRICT;
+    -- /report on a reply in the group: who reported, once each; gone with the reply and with the reporter's account
+    CREATE TABLE fchan_reply_reports (
+      reply_id INTEGER NOT NULL REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at       INTEGER NOT NULL,
+      PRIMARY KEY (reply_id, user_id)
+    ) STRICT;
+    CREATE INDEX fchan_reply_reports_by_user ON fchan_reply_reports(user_id);
+    CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
+    CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
+    CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;"""),
 ]
 
 

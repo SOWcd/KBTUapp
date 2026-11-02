@@ -292,6 +292,12 @@ BOT = {
         "fch_gone": ("Автор удалил этот пост.", None),
         "fch_removed": ("Модератор снял этот пост.", None),
         "fch_moved": ("Этот пост опубликован в канале заново.", None),
+        # an anonymous post's author replying in its comments (fchannel.reply_*, tgc._replies): to the author; the group's template
+        "fch_reply_answer": ("💬 Тебе ответили на твой анонимный ответ в комментариях.", "Открыть пост"),
+        "fch_reply_gone": ("Комментарий, на который ты отвечал(а) анонимно, удалён — ответ не отправлен.", "Открыть пост"),
+        "fch_reply_removed": ("Модератор снял этот ответ.", None),
+        "fch_reply_deleted": ("Автор удалил этот ответ.", None),
+        "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -417,6 +423,11 @@ BOT = {
         "fch_gone": ("Бұл постты авторы өшірді.", None),
         "fch_removed": ("Бұл постты модератор алып тастады.", None),
         "fch_moved": ("Бұл пост арнада қайта жарияланды.", None),
+        "fch_reply_answer": ("💬 Пікірлердегі анонимді жауабыңа жауап жазды.", "Постты ашу"),
+        "fch_reply_gone": ("Сен анонимді жауап берген пікір өшірілген — жауап жіберілмеді.", "Постты ашу"),
+        "fch_reply_removed": ("Бұл жауапты модератор алып тастады.", None),
+        "fch_reply_deleted": ("Бұл жауапты авторы өшірді.", None),
+        "fch_reply_queue": ("🛡 Пікірлердегі авторлардың анонимді жауаптары модераторды күтуде (шағым немесе тексеру): {n}.", "Ашу"),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -542,6 +553,11 @@ BOT = {
         "fch_gone": ("The author deleted this post.", None),
         "fch_removed": ("A moderator removed this post.", None),
         "fch_moved": ("This post was published in the channel again.", None),
+        "fch_reply_answer": ("💬 Someone answered your anonymous reply in the comments.", "Open the post"),
+        "fch_reply_gone": ("The comment you replied to anonymously was deleted, so the reply wasn't sent.", "Open the post"),
+        "fch_reply_removed": ("A moderator removed this reply.", None),
+        "fch_reply_deleted": ("The author deleted this reply.", None),
+        "fch_reply_queue": ("🛡 Authors' anonymous replies in the comments wait for a moderator (reports or a check): {n}.", "Open"),
     },
 }
 
@@ -764,6 +780,7 @@ FORUM_RULES = ("🤝 Сыйластықпен сөйлесейік: балаға
                "💬 Общаемся с уважением: без оскорблений, спама и рекламы.\n\n"
                "✌️ Be kind: no insults, spam or ads.")  # owner, Nov 2: short, his words exactly; an emoji only at a line's start
 FORUM_BUTTON = "Открыть в приложении"
+FCH_REPLY_SIGN = "🎭 Автор поста"  # the anonymous author's replies in the group (tgc._replies); a Telegram name with it is deleted (tgc.posing)
 # an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."

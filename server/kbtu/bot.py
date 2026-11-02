@@ -105,6 +105,14 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
+    if kind in ("fch_reply_answer", "fch_reply_gone"):  # fa:<reply>:<hour> / fg:<reply>, to the post's author (through the post): its card
+        r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
+                int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, kind), f"fp_{r['id']}") if r else None
+    if kind == "fch_reply_queue":  # rq:<hour>, to moderators: anonymous authors' replies reported or held, in Admin
+        n = one(con, """SELECT COUNT(*) FROM fchan_replies r WHERE r.status = 'held' AND r.why != 'check'
+            OR r.status = 'live' AND EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id)""")[0]
+        return (*texts.bot_message(lang, kind, n=n), "capps") if n else None
     if kind == "id_clash":  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]

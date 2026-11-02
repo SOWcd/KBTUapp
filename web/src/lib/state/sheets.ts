@@ -125,6 +125,8 @@ export const sheets = {
   newAsk: (_onmade?: () => void) => {},
   /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
   channelPost: (_draft?: { body: string; anon: boolean; why?: string }) => {},
+  /** my anonymous post: a reply in its comments through the bot, and how my replies stand */
+  channelReply: (_post: { id: Id; body: string }) => {},
   askPeople: (_ask: Id, _title: string) => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},

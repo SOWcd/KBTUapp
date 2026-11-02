@@ -205,6 +205,8 @@
                   {#if p.comments}<span>{compact(p.comments)}</span>{/if}
                 </button>
               </div>
+              <!-- my anonymous post: answering in its comments through the bot (ChannelReply), a quiet line under the row -->
+              {#if p.mine && p.anon}<button class="areply" onclick={() => { haptic.tap(); sheets.channelReply({ id: p.id, body: p.body }); }}><VenetianMask size={15} strokeWidth={2} />{t('fcr.entry')}</button>{/if}
             {/if}
           </div>
         </div>
@@ -315,6 +317,9 @@
   .faces :global(.av:nth-child(2)) { z-index: 1; }
   @media (max-width: 359px) { .r:nth-child(3) { display: none; } } /* 320: two reactions */
 
+  .areply { display: inline-flex; align-items: center; gap: 6px; height: 36px; margin: -6px 0 var(--s-2); font: 500 var(--fs-sub)/1 var(--font-text); color: var(--text-2);
+    transition: opacity var(--t-base) var(--ease); }
+  .areply:active { opacity: 0.45; transition-duration: 60ms; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .tail { height: calc(var(--bottom) + var(--s-8)); }
 </style>

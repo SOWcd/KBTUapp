@@ -1687,6 +1687,30 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_reveal(pid: int, con: Con, v: FChan):
         return F.reveal(con, v, pid)
 
+    # the anonymous author's replies in the comments (fchannel.reply_*): the author's own view and actions; moderators'
+    # in the Admin sheet (mod_queue's "replies")
+    @app.get("/api/forum-posts/{pid}/replies")
+    def fchan_replies(pid: int, con: Con, v: FChan):
+        return F.replies(con, v, pid)
+
+    @app.post("/api/forum-posts/{pid}/replies")
+    async def fchan_reply(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        rid = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
+        verdict = await ai.screen_reply(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_replies WHERE id = ?", rid)[0])
+        return await run_in_threadpool(F.reply_settle, con, rid, verdict)
+
+    @app.delete("/api/forum-replies/{rid}", status_code=204)
+    def fchan_reply_drop(rid: int, con: Con, v: FChan):
+        F.reply_delete(con, v, rid)
+
+    @app.post("/api/forum-replies/{rid}/mod", status_code=204)
+    def fchan_reply_mod(rid: int, con: Con, v: FChan, body: dict = Body(...)):
+        F.reply_mod_decide(con, v, rid, body.get("ok"), body.get("again", False))
+
+    @app.post("/api/forum-replies/{rid}/restore", status_code=204)
+    def fchan_reply_restore(rid: int, con: Con, v: FChan):
+        F.reply_mod_restore(con, v, rid)
+
     @app.post("/api/forum/asks/{aid}/close")
     def forum_close_ask(aid: int, con: Con, v: Forum, body: dict = Body(default={})):
         return logic.close_ask(con, v, aid, body.get("found"))

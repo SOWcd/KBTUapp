@@ -15,6 +15,7 @@ from . import ai, db, logic, texts
 from .config import Config
 from .logic import now, one
 from .logic import tgcomments as rules
+from .logic.clubs import _skeleton
 
 log = logging.getLogger("kbtu.tgc")
 
@@ -124,6 +125,9 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         return
     tg = int((msg.get("from") or {}).get("id") or 0)
     who = rules.commenter(con, tg)
+    if who == "student" and posing(msg.get("from") or {}, _text(msg)):  # the anonymous author's mark: only the bot signs so
+        doomed.append(msg["message_id"])
+        return
     if who == "student":
         if not edit and _is_report(cfg, _text(msg)):
             doomed.append(msg["message_id"])
@@ -132,6 +136,8 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
             spawn(_judge(cfg, http, cid, rules.fresh_edit(con, tg)))
         elif not edit and root:  # the Forum tab's count, under a forum post's copy only (the bot's own never comes here)
             logic.fchannel.commented(con, root, msg["message_id"], tg)
+            if (to := msg.get("reply_to_message") or {}).get("from", {}).get("is_bot"):  # an answer to the anonymous author's reply
+                logic.fchannel.reply_answered(con, to["message_id"], tg)
         return
     doomed.append(msg["message_id"])
     if edit:  # a stranger's edit isn't a second comment (it came with the first, after a restart): it just goes
@@ -148,6 +154,16 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         bans.add(tg)
     elif not raid:
         warns.append((root, str((msg.get("from") or {}).get("language_code") or "")[:2], bool(_text(msg))))
+
+
+def posing(sender: dict, text: str = "") -> bool:
+    """The anonymous author's mark (texts.FCH_REPLY_SIGN's words, with or without the mask) in a Telegram name, or as a
+    line of its own in the text (the bot's signature line): read as letters only, NFKC, case and the common Latin and
+    Cyrillic look-alikes folded, invisible characters gone (clubs._skeleton). The mask alone in a name is fine. ponytail:
+    a rename after commenting shows on old messages and the bot never hears of it; the bot's identity is the real mark"""
+    mark = _skeleton(texts.FCH_REPLY_SIGN)
+    return mark in _skeleton(f"{sender.get('first_name') or ''} {sender.get('last_name') or ''}") \
+        or any(_skeleton(line) == mark for line in text.splitlines())
 
 
 async def _act(cfg: Config, http: httpx.AsyncClient, con, doomed: list, bans: set, chans: set, warns: list) -> None:
@@ -173,6 +189,8 @@ def _report(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     the reporter hears in DM (the outbox: only if he lets the bot write), the AI's look runs beside."""
     t = msg.get("reply_to_message") or {}
     author = t.get("from") or {}
+    if author.get("is_bot") and t.get("message_id") and logic.fchannel.reply_reported(con, msg["from"]["id"], t["message_id"]):
+        return  # an anonymous author's reply the bot sent (fchannel.reply_*): to the Admin sheet
     if not t or t.get("is_automatic_forward") or t.get("sender_chat") or author.get("is_bot") or not author.get("id"):
         return
     root = msg.get("message_thread_id") or t.get("message_thread_id")
@@ -300,6 +318,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             break
     if not cfg.tgc_chat:
         return
+    await _replies(cfg, http, con)
     for pid, root in F.rules_due(con):  # the first comment under each post's copy: the rules, and the way to it in the app
         if not F.rules_claim(con, pid):  # claimed (committed) before it goes: once per post, across restarts and workers
             continue
@@ -317,6 +336,40 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             F.rules_unclaim(con, pid)
             break
 
+
+
+async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
+    """The anonymous authors' replies (fchannel.reply_*): first what must leave the group (deleted by the author, taken
+    down, its post gone: deleted, or edited to the template once Telegram refuses), then what is due, each sent once
+    (claimed before it goes; no answer: a moderator). Plain words, escaped, signed with the mark under them."""
+    F = logic.fchannel
+    await asyncio.to_thread(F.replies_lost, con)
+    for rid, mid, why in F.reply_drops(con):
+        r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.tgc_chat, "message_id": mid})
+        if r.get("error_code") == 400 and not _gone(r):  # too old to delete: its words edited away
+            r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.tgc_chat, "message_id": mid,
+                                                           "text": texts.bot_message("ru", "fch_reply_removed" if why == "moderator" else "fch_reply_deleted")[0]})
+            if not (r.get("ok") or _gone(r) or "not modified" in str(r.get("description"))):
+                F.reply_drop_later(con, rid)
+                continue
+        elif not (r.get("ok") or _gone(r)):
+            break  # the network, a flood wait: next round
+        F.reply_dropped(con, rid)
+    for rid, body, to in F.replies_to_send(con):
+        if not F.reply_sending(con, rid):
+            continue
+        r = await _call(cfg, http, "sendMessage", {
+            "chat_id": cfg.tgc_chat, "text": f"{html.escape(body)}\n\n<i>— {html.escape(texts.FCH_REPLY_SIGN)}</i>", "parse_mode": "HTML",
+            "link_preview_options": {"is_disabled": True}, "reply_parameters": {"message_id": to}})
+        if r.get("ok"):
+            F.reply_sent(con, rid, r["result"]["message_id"])
+        elif r.get("error_code") == 400 and "message to be replied not found" in str(r.get("description")).lower():
+            F.reply_missing(con, rid)  # the comment is gone: dropped, its author told
+        elif r.get("error_code"):
+            F.reply_unsend(con, rid)
+            break
+        else:
+            break  # no answer: replies_lost hands it to a moderator next round
 
 
 # the author's messages about one comment, each said only while it's still true: "under review" while a moderator hasn't

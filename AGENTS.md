@@ -62,9 +62,11 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **The bot** sends templates with a button into the app, never a user's words. Two exceptions: a student's own post
   to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
   links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
-  take it down, and only the creator can reveal an anonymous author (audit log). And a user's own text going back to
-  them alone: a channel comment a moderator restored (`tgc_back`, to post it again), the title of my own find-people
-  request (`contact_ask`, `ask_hidden`).
+  take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
+  reply in its comments the same way (`fchan_replies`): plain text, its own AI check, a random few seconds' wait, signed
+  with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
+  taken down from Admin. And a user's own text going back to them alone: a channel comment a moderator restored
+  (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own
@@ -85,5 +87,5 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   consent version; `BOARD=staff`: admins and moderators only. Its old in-app forum is off for good.
 - `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
 - `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`),
-  with its privacy section and a consent version suffix (`+fch2`). `FORUM_GROUP`: its discussion group.
+  with its privacy section and a consent version suffix (`+fch3`). `FORUM_GROUP`: its discussion group.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

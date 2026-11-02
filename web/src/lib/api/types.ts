@@ -70,7 +70,13 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null; undo?: boolean };
 /** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
-export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[] }
+export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
+  replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }
+/** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
+ *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
+export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts }
+/** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
+export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; reports: number; at: Ts; undo: boolean; anon: boolean }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */
