@@ -778,6 +778,8 @@ const ru = {
   'look.upload': "Загрузить…",
   'look.dropOwn': "Удалить своё",
   'look.uploading': "Загружаю фото",
+  'look.crop': "Новое фото",
+  'look.cropTip': "Двигай фото пальцем, увеличивай двумя",
   'look.noNick': "Нет",
   'look.nickEdit': "Изменить…",
   'look.nickFoot': "Ник видят вместо имени в ленте и списках. В профиле видно и имя.",

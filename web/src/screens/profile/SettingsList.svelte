@@ -79,8 +79,10 @@
 
   // ---- the photo: Telegram's (it refreshes by itself) or my own ----
   let file = $state<HTMLInputElement>();
-  function upload(f: File | undefined) {
-    if (f) void work(() => api.uploadMyPhoto(f), () => t('look.photoSet'), t('look.uploading')).then(() => { if (file) file.value = ''; });
+  async function upload(f: File | undefined) {
+    if (file) file.value = '';  // the same photo picked again opens the crop again
+    const cut = f && await sheets.cropPhoto(f);
+    if (cut) void work(() => api.uploadMyPhoto(cut), () => t('look.photoSet'), t('look.uploading'));
   }
   async function dropOwn() {
     if (await sheets.ask({ title: t('look.dropOwn'), ok: t('look.dropOwn'), cancel: t('common.cancel'), danger: true })) void work(() => api.deleteMyPhoto(), () => t('look.photoGone'));
@@ -170,7 +172,7 @@
 
 <div class="set-list" role="region" aria-label={t('me.settings')}>
   {#if me?.student}
-    <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => upload(e.currentTarget.files?.[0])} />
+    <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
     <div data-unit>
       <h2 class="set-h first" tabindex="-1">{t('look.skin')}</h2>
       {#if skins.length || me.founder}

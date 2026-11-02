@@ -56,6 +56,7 @@
   sheets.event = (id, from) => lazy(eventSheet, { id, from });
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
+  sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));
   sheets.person = (id, invite) => lazy(personSheet, { id, invite });
   sheets.club = (id) => lazy(clubSheet, { id });
   // the ticket brings the QR encoder: its own chunk, fetched once the app is idle

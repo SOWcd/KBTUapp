@@ -758,6 +758,8 @@ const en: Dict = {
   'look.upload': "Upload…",
   'look.dropOwn': "Delete my own",
   'look.uploading': "Uploading photo",
+  'look.crop': "New photo",
+  'look.cropTip': "Drag to move, pinch to zoom",
   'look.noNick': "None",
   'look.nickEdit': "Change…",
   'look.nickFoot': "Your nickname shows instead of your name in feeds and lists. Your profile shows your name too.",
