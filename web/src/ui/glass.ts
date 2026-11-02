@@ -8,6 +8,7 @@
 //  4. Jelly: squash-and-stretch of a sliding pill when it starts to move, leaning the way it goes.
 import { deviceOrientation, on, tg } from '../lib/tg';
 import { tiltFrom, upOf } from './tilt';
+import { capped, measure } from '../lib/frames';
 
 /** Telegram Android appends the device performance class to the User-Agent; LOW turns power saving on (in Auto) */
 export const LOW = /;\s*LOW\)/.test(navigator.userAgent);
@@ -129,6 +130,16 @@ function lensMap(w: number, h: number): string {
  *  fallback, `backdrop-filter: var(--refract, blur(…))`. */
 export function refract(node: HTMLElement) {
   if (!/^(android|tdesktop)$/.test(tg.platform) || LOW || typeof ResizeObserver === 'undefined') return;
+  // Android: only where the screen is measured drawing at 60 (the displacement redraws with what moves under it;
+  // a mid-range phone dropped frames), a moment after the start so the start's own work doesn't count
+  let gone = false, off = () => {};
+  const go = () => { if (!gone) off = lens(node); };
+  if (tg.platform === 'android') setTimeout(() => void measure().then((r) => { if (capped(r) === false) go(); }), 2000);
+  else go();
+  return { destroy() { gone = true; off(); } };
+}
+
+function lens(node: HTMLElement): () => void {
   const id = `kb-rf-${Math.random().toString(36).slice(2, 8)}`;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
@@ -151,7 +162,7 @@ export function refract(node: HTMLElement) {
   const ro = new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(build, 160); });
   ro.observe(node);
   build();
-  return { destroy() { ro.disconnect(); clearTimeout(timer); svg.remove(); } };
+  return () => { ro.disconnect(); clearTimeout(timer); svg.remove(); node.style.removeProperty('--refract'); };
 }
 
 /** Squash-and-stretch on a pill as it starts to slide. Uses transform, so put it on an element that

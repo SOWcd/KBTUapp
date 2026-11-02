@@ -11,7 +11,7 @@
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { api, ApiErr, type Id, type LinkCard, type PersonCard } from '../../lib/api';
+  import { api, ApiErr, type Friendship, type Id, type LinkCard, type PersonCard } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase, personCard, keepPerson } from '../../lib/state/data.svelte';
   import { data, friendsChanged } from '../../lib/state/data.svelte';
@@ -60,7 +60,9 @@
     const at = (x: T) => { const i = pick.indexOf(key(x)); return i < 0 ? pick.length : i; };
     return [...list].sort((a, b) => at(a) - at(b));
   }
-  const shown = $derived(p ?? (late || me ? known : null));
+  // a friend tap moves the card at once (the speed rule): its answer-to-be until the server's card replaces it
+  let next = $state<Friendship | null>(null);
+  const shown = $derived.by(() => { const c = p ?? (late || me ? known : null); return c && next ? { ...c, friendship: next } : c; });
 
   // friendship (§4.7): ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
   let acting = $state(false);
@@ -80,42 +82,34 @@
           shelf: p!.shelf.filter((k) => !k.startsWith('b')), username: null, limited: true };
     keepPerson(p);
   }
-  async function act(job: () => Promise<unknown>, done: () => void, stranger = false) {
-    acting = true;
-    try { await job(); done(); friendsChanged(); await reload(stranger); }
-    catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
-    finally { acting = false; }
+  // the card moves first; the server's answer settles it (rolled back on an error) and the card refetches quietly
+  async function act<R>(job: () => Promise<R>, done: (r: R) => void, to: Friendship, stranger = false) {
+    if (acting) return;
+    acting = true; next = to; haptic.tap();
+    try { done(await job()); }
+    catch (e) {
+      next = null; haptic.error();
+      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d');
+      return;
+    } finally { acting = false; }
+    friendsChanged();
+    reload(stranger).catch(() => {}).finally(() => (next = null));
   }
   const welcome = () => { haptic.ok(); burst(); say(t('fr.accepted', { name: shown!.name }), 'partying_face_3d'); };
-  async function ask() {
-    acting = true;
-    try {
-      const r = await api.askFriend(id);
-      if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
-      friendsChanged(); await reload();
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
-    finally { acting = false; }
-  }
-  // the invite's tap: a guest signs in first (a Microsoft round trip comes back to this landing: `again`)
+  const asked = (r: { friendship: Friendship }) => { if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); } };
+  const ask = () => act(() => api.askFriend(id), asked, 'requested');
+  // the invite's tap: a guest signs in first (a Microsoft round trip comes back to this landing: `again`); one tap, friends
   function addByLink() {
     if (!invite) return;
     const { code } = invite;
-    asStudent(async () => {
-      acting = true;
-      try {
-        const r = await api.addByLink(code);
-        if (r.friendship === 'friends') welcome(); else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
-        friendsChanged(); await reload();
-      } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
-      finally { acting = false; }
-    }, 'r_' + code);
+    asStudent(() => act(() => api.addByLink(code), asked, 'friends'), 'r_' + code);
   }
-  const accept = () => act(() => api.answerFriend(id, true), welcome);
-  const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }, true);
-  const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }, true);
+  const accept = () => act(() => api.answerFriend(id, true), welcome, 'friends');
+  const decline = () => act(() => api.answerFriend(id, false), () => { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }, 'none', true);
+  const takeBack = () => act(() => api.takeBackRequest(id), () => { haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }, 'none', true);
   async function unfriend() {
     if (!shown || !(await sheets.ask({ title: t('fr.removeAsk', { name: shown.name }), text: t('fr.removeText'), ok: t('fr.remove'), cancel: t('common.cancel'), danger: true }))) return;
-    await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); }, true);
+    await act(() => api.unfriend(id), () => { haptic.soft(); say(t('fr.removed'), 'waving_hand_3d_default'); }, 'none', true);
   }
 </script>
 

@@ -64,17 +64,24 @@
     catch (e) { miss = e instanceof ApiErr && e.code === 'bad_input' ? t('fr.badName') : e instanceof ApiErr && e.code === 'not_found' ? t('fr.notFound') : t('common.error'); }
     finally { looking = false; }
   }
+  // the row answers first (the speed rule): friends, or the request sent; an error puts it back
   async function ask() {
-    if (!found) return;
+    const was = found;
+    if (!was || asking) return;
     asking = true;
+    const incoming = was.friendship === 'incoming';
+    found = { ...was, friendship: incoming ? 'friends' : 'requested' };
+    haptic.tap();
     try {
-      if (found.friendship === 'incoming') { await api.answerFriend(found.person.id, true); found = { ...found, friendship: 'friends' }; }
-      else found = { ...found, friendship: (await api.askFriend(found.person.id)).friendship };
-      if (found.friendship === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: found.person.name }), 'partying_face_3d'); }
+      const now = incoming ? (await api.answerFriend(was.person.id, true), 'friends' as const) : (await api.askFriend(was.person.id)).friendship;
+      if (found?.person.id === was.person.id) found = { ...was, friendship: now };
+      if (now === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: was.person.name }), 'partying_face_3d'); }
       else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
       friendsChanged();
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d'); }
-    finally { asking = false; }
+    } catch (e) {
+      if (found?.person.id === was.person.id) found = was;
+      haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d');
+    } finally { asking = false; }
   }
 </script>
 

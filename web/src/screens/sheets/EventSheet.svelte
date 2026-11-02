@@ -48,7 +48,7 @@
   import { floorOf } from '../../lib/map';
   import { api, ApiErr, translated, type AlbumPhoto, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, goingBusy, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -534,13 +534,13 @@
         {:else if st === 'hold'}
           <Button kind="primary" size="l" full onclick={() => sheets.pay(id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button>
         {:else if st === 'waitlist'}
-          <Button kind="neutral" size="l" full onclick={() => toggleGoing(id)}>{t('event.notifyOn')}</Button>
+          <Button kind="neutral" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id)}>{t('event.notifyOn')}</Button>
         {:else if regShut}
           <Button kind="neutral" size="l" full disabled>{t('event.regClosed')}</Button>
         {:else if full}
-          <Button kind="secondary" size="l" full onclick={() => toggleGoing(id)}>{t('event.notify')}</Button>
+          <Button kind="secondary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id)}>{t('event.notify')}</Button>
         {:else}
-          <Button kind="primary" size="l" full onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button>
+          <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button>
         {/if}
       </div>
     {/if}

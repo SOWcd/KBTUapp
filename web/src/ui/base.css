@@ -1,5 +1,13 @@
 /* Reset, type scale and the two materials. Everything here reads tokens.css. */
 
+/* "₸" alone from Inter (1 KB, cut from the latin-ext file with pyftsubset --unicodes=U+20B8): every price pulled the
+   whole 133 KB latin-ext file for it. Declared after Inter's own faces, so it is the one checked first for U+20B8. */
+@font-face {
+  font-family: 'Inter Variable'; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(./fonts/inter-tenge.woff2) format('woff2-variations');
+  unicode-range: U+20B8;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {

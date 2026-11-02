@@ -117,7 +117,7 @@
   sheets.removeMember = (org, user, name, request, ondone) => lazy(() => import('./screens/club/RemoveSheet.svelte'), { org, user, name, request, ondone });
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
-  sheets.map = (place, exit) => lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit });
+  sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });
   sheets.consent = () => void loadMe();
   sheets.award = (it, mine) => lazy(() => import('./screens/sheets/AwardSheet.svelte'), { it, mine });
@@ -362,14 +362,24 @@
     else if (session.me?.student && !tg.startParam) again();
   }
 
-  // the copy for the next launch follows what the screens show, a second after it settles (only once the server answered)
+  // the copy for the next launch follows what the screens show, a second after it settles (only once the server answered).
+  // The effect reads only the lists' references and data.kept (a tap's change inside a list): no deep read before the
+  // paint; the JSON is made when the app is idle, and again as it goes to the background.
+  // ponytail: a change deep inside a list that bumps no data.kept waits for the next reload or the background; bump it there if one matters
+  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
+  const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
+  const keep = () => { if (keepable()) writeCache(JSON.stringify(snap())); }; // no $state.snapshot: a clone through the proxies cost more
   $effect(() => {
-    const snap = { me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team };
-    const json = JSON.stringify(snap); // read deeply, so any change schedules a save; the same string is what gets saved
-    if (!booted || data.error || session.failed || session.banned) return;
+    void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key
+    if (!keepable()) return;
     clearTimeout(keepTimer);
-    keepTimer = setTimeout(() => writeCache(json), 1000); // no $state.snapshot: a clone through the proxies cost more than the save
+    keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(keep, { timeout: 3000 }) : keep()), 1000);
+  });
+  onMount(() => {
+    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(); } };
+    document.addEventListener('visibilitychange', away);
+    return () => document.removeEventListener('visibilitychange', away);
   });
 
   // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
@@ -480,7 +490,7 @@
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmMap, 6000); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800);
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });

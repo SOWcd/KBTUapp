@@ -4,6 +4,23 @@
 
 export type Rate = { fps: number; steady: boolean } | null;
 
+/** The rate of 24 idle frames, or null when none came for 2.5 s (hidden). */
+export function measure(): Promise<Rate> {
+  return new Promise((done) => {
+    const at: number[] = [];
+    let over = false;
+    const end = (r: Rate) => { if (!over) { over = true; done(r); } };
+    setTimeout(() => end(null), 2500);
+    const frame = (ts: number) => {
+      if (over) return;
+      at.push(ts);
+      if (at.length > 24) end(rateOf(at.slice(1).map((x, i) => x - at[i])));
+      else requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+}
+
 /** The median rate of the gaps between frames (ms), and whether 70% of them sit within a fifth of the median; null
  *  for fewer than 8. */
 export function rateOf(gaps: number[]): Rate {

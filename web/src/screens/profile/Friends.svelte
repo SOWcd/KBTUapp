@@ -37,23 +37,21 @@
   const nextOf = (r: FriendRow): EventCard | undefined => f?.going.find((e) => e.friends.some((p) => p.id === r.person.id));
   const today = $derived(dayNo(nowTs()));
 
-  let busy = $state<number | null>(null);
+  // the row moves first (the speed rule); an error puts the list back, the server's copy lands in the background
   async function answer(r: FriendRow, yes: boolean) {
-    busy = r.person.id;
-    try {
-      data.friends = await api.answerFriend(r.person.id, yes);
-      forgetPeople(); // their card changed
-      if (yes) { haptic.ok(); burst(); say(t('fr.accepted', { name: r.person.name }), 'partying_face_3d'); }
-      else { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }
-      void loadMe(); // the dot on the Profile tab
-    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
-    finally { busy = null; }
+    const was = data.friends; if (!was) return;
+    data.friends = { ...was, incoming: was.incoming.filter((x) => x.person.id !== r.person.id), friends: yes ? [{ ...r, at: nowTs() }, ...was.friends] : was.friends };
+    if (yes) { haptic.ok(); burst(); say(t('fr.accepted', { name: r.person.name }), 'partying_face_3d'); }
+    else { haptic.soft(); say(t('fr.declined'), 'waving_hand_3d_default'); }
+    try { data.friends = await api.answerFriend(r.person.id, yes); forgetPeople(); void loadMe(); } // the dot on the Profile tab
+    catch { data.friends = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function takeBack(r: FriendRow) {
-    busy = r.person.id;
-    try { await api.takeBackRequest(r.person.id); forgetPeople(); if (data.friends) data.friends = { ...data.friends, outgoing: data.friends.outgoing.filter((x) => x.person.id !== r.person.id) }; haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default'); }
-    catch { say(t('common.error'), 'warning_3d'); }
-    finally { busy = null; }
+    const was = data.friends; if (!was) return;
+    data.friends = { ...was, outgoing: was.outgoing.filter((x) => x.person.id !== r.person.id) };
+    haptic.soft(); say(phrase('say.takenBack'), 'waving_hand_3d_default');
+    try { await api.takeBackRequest(r.person.id); forgetPeople(); }
+    catch { data.friends = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 </script>
 
@@ -75,8 +73,8 @@
             <div class="req" style="--i:{i}">
               <Avatar person={r.person} size={46} ring />
               <button class="tx" onpointerdown={() => prefetchPerson(r.person.id)} onclick={() => sheets.person(r.person.id)}><b class="ellipsis">{withNick(r.fullName, r.person)}</b><i class="ellipsis">{line(r)}</i></button>
-              <Button kind="primary" size="s" loading={busy === r.person.id} onclick={() => answer(r, true)}>{t('fr.accept')}</Button>
-              <button class="no" aria-label={t('fr.decline')} disabled={busy === r.person.id} onclick={() => answer(r, false)}><X size={18} /></button>
+              <Button kind="primary" size="s" onclick={() => answer(r, true)}>{t('fr.accept')}</Button>
+              <button class="no" aria-label={t('fr.decline')} onclick={() => answer(r, false)}><X size={18} /></button>
             </div>
           {/each}
         </section>
@@ -124,7 +122,7 @@
               <div class="row">
                 <Avatar person={r.person} size={36} />
                 <span class="tx"><b class="ellipsis">{withNick(r.fullName, r.person)}</b><i class="ellipsis">{line(r)}</i></span>
-                <button class="tb" disabled={busy === r.person.id} onclick={() => takeBack(r)}>{t('fr.takeBack')}</button>
+                <button class="tb" onclick={() => takeBack(r)}>{t('fr.takeBack')}</button>
               </div>
             {/each}
           </div>

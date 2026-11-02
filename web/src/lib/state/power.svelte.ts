@@ -12,7 +12,7 @@
 // caps a cross-origin frame until one. The verdict is kept, so a phone in Low Power Mode opens light at once.
 // Turning on by itself says so (a toast), once until it has been off again.
 import { LOW, tilt } from '../../ui/glass';
-import { capped, rateOf, type Rate } from '../frames';
+import { capped, measure } from '../frames';
 import { t } from '../i18n/index.svelte';
 import { on } from '../tg';
 import { say } from './ui.svelte';
@@ -44,23 +44,6 @@ function apply(): void {
   keep();
   // after the first screen has shown, if it's the start
   if (lite) setTimeout(() => say(t(power.why === 'device' ? 'power.sayDevice' : 'power.say'), 'high_voltage_3d'), Math.max(0, 2500 - performance.now()));
-}
-
-/** The rate of 24 idle frames, or null when none came for 2.5 s (hidden). */
-function measure(): Promise<Rate> {
-  return new Promise((done) => {
-    const at: number[] = [];
-    let over = false;
-    const end = (r: Rate) => { if (!over) { over = true; done(r); } };
-    setTimeout(() => end(null), 2500);
-    const frame = (ts: number) => {
-      if (over) return;
-      at.push(ts);
-      if (at.length > 24) end(rateOf(at.slice(1).map((x, i) => x - at[i])));
-      else requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  });
 }
 
 let ready = false, busy = false;

@@ -127,8 +127,12 @@ export const bldg2Room = (place: string): string | null => place.trim().replace(
 /** The main map's tiles: public/map/u1, next to index.html */
 export const TILES = `${import.meta.env.BASE_URL}map/u1/`;
 
-/** Fetch the main map's floor overviews once the app has settled (about 0.6 MB, once: the server caches them a year) */
+/** Fetch the main map's floor overviews with the map's first opening (about 0.6 MB, once: the server caches them a year;
+ *  most students never open it, so nobody pays for it at the start) */
+let warmed = false;
 export function warmMap(): void {
+  if (warmed) return;
+  warmed = true;
   FLOORS.forEach((_, n) => fetch(`${TILES}f${n}/o.webp`).catch(() => {}));
 }
 

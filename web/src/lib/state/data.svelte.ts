@@ -27,6 +27,7 @@ export const data = $state({
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
   error: false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
+  kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
@@ -91,10 +92,13 @@ export function phrase(key: Key, vars?: Record<string, string | number>): string
 export async function loadAfisha(): Promise<void> {
   loadChats();
   try {
-    const [events, orgs, schedule, posts] = await Promise.all([api.events(), api.orgs(), api.schedule(), api.posts('all')]);
-    data.events = events; data.orgs = orgs; data.schedule = joinClasses(schedule); data.posts = posts;
-    warm(posts.slice(0, 4).map((p) => p.photo?.url)); // Afisha's News page opens with its first photos in place
-    data.error = false;
+    // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
+    const [events, orgs, schedule, posts] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all')]);
+    if (events.status === 'fulfilled') data.events = events.value;
+    if (orgs.status === 'fulfilled') data.orgs = orgs.value;
+    if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
+    if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
+    data.error = events.status === 'rejected';
   } catch { data.error = true; }
   data.eventsReady = true;
 }
@@ -147,6 +151,7 @@ export function keepPerson(c: PersonCard): void { people.set(c.id, { at: Date.no
 export function forgetPeople(): void { people.clear(); }
 
 export function put(card: EventCard): void {
+  data.kept++;
   const i = data.events.findIndex((e) => e.id === card.id);
   if (i >= 0) data.events[i] = card;
 }
@@ -169,6 +174,10 @@ export function keepRef(id: Id, code: string): void {
   if (!all[id]) try { localStorage.setItem(REF_KEY, JSON.stringify({ ...all, [id]: code })); } catch { /* blocked */ }
 }
 
+/** Events whose Going waits for the server (paid, full, a form): their buttons show a spinner. */
+export const goingBusy = new SvelteSet<Id>();
+const flying = new Set<Id>();
+
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
@@ -185,20 +194,32 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     // the event's own questions: answered here, sent with the same tap (closed: no sign-up)
     const answers = !leaving && before.form?.length ? await sheets.answers(before.title, before.form) : undefined;
     if (answers === null) return;
+    if (flying.has(id)) return; // a second tap while the first is on its way
+    flying.add(id);
+    // a free event with nothing to ask and a seat left: going at once (the speed rule), the server's card settles it;
+    // anything else (paid, full, a form) shows the button pressed until the answer
+    const sure = !leaving && !before.price && !answers && !phone && (before.seats == null || before.taken < before.seats);
+    const was = { my: before.my, taken: before.taken };
+    if (sure) {
+      before.my = { ...(before.my ?? { cancelReason: null, ticketCode: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going' };
+      before.taken++;
+      haptic.tap();
+    } else goingBusy.add(id);
     try {
       const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers);
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);
       const st = after.my?.status;
       if (leaving) { haptic.warn(); burst(true); say(phrase('say.cancel'), 'crying_face_3d'); }
-      else if (st === 'going') { haptic.ok(); burst(false, undefined, after.emoji); say(phrase('say.going'), 'party_popper_3d'); }
+      else if (st === 'going') { if (!sure) haptic.ok(); burst(false, undefined, after.emoji); say(phrase('say.going'), 'party_popper_3d'); }
       else if (st === 'waitlist') { haptic.tap(); say(phrase('say.wait'), 'pleading_face_3d'); }
       else if (st === 'hold') { haptic.tap(); say(phrase('say.hold'), 'sparkles_3d'); onPaid?.(after); }
       if (!leaving && st !== 'hold') setTimeout(() => void askDm(id), 1300);
     } catch (e) {
+      if (sure) { before.my = was.my; before.taken = was.taken; }
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
-    }
+    } finally { goingBusy.delete(id); flying.delete(id); }
   }, 'go_' + id);
 }
 
@@ -228,7 +249,7 @@ export function toggleSaved(id: Id): void {
     e.saved = on; // optimistic
     haptic.tap();
     if (on) burst(false, undefined, e.emoji); // "Save" with a purpose: a moment, and the bot reminds the day before
-    try { await api.setSaved(id, on); say(phrase(on ? 'say.save' : 'say.unsave'), on ? 'sparkles_3d' : 'waving_hand_3d_default'); }
+    try { await api.setSaved(id, on); data.kept++; say(phrase(on ? 'say.save' : 'say.unsave'), on ? 'sparkles_3d' : 'waving_hand_3d_default'); }
     catch { e.saved = !on; say(t('common.error'), 'warning_3d'); }
   });
 }
@@ -242,7 +263,7 @@ export function toggleJoin(id: Id): void {
     o.myRequest = on ? 'pending' : null;
     haptic.tap();
     try {
-      Object.assign(o, await (on ? api.apply(id) : api.withdraw(id)));
+      Object.assign(o, await (on ? api.apply(id) : api.withdraw(id))); data.kept++;
       say(phrase(on ? 'say.applied' : 'say.withdrawn'), on ? 'raising_hands_3d_default' : 'waving_hand_3d_default');
     } catch (e) {
       const closed = e instanceof ApiErr && e.code === 'closed';
@@ -259,7 +280,7 @@ export function toggleSub(id: Id): void {
     const on = !o.subscribed;
     o.subscribed = on; o.subscribers += on ? 1 : -1;
     haptic.tap();
-    try { await api.subscribe(id, on); say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
+    try { await api.subscribe(id, on); data.kept++; say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
     catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   });
 }

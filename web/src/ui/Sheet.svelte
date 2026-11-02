@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
-  import { haptic, inTelegram } from '../lib/tg';
+  import { haptic, inTelegram, tg } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
   import { glass } from './glass';
   import { unsent } from './guard';
@@ -33,6 +33,8 @@
   let body: HTMLDivElement;
   let gone = false;
   let scrolled = $state(false);
+  // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
+  let rising = $state(tg.platform === 'android');
 
   // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
   // put its top edge higher in one frame (details arriving after it opened: a person's card, a club); instead an added
@@ -47,7 +49,11 @@
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
     const h = panel.getBoundingClientRect().height, dh = h - height;
-    if (!lift) { height = h; lift = panel.animate([{ transform: `translate3d(0,${h}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion()); return; }
+    if (!lift) {
+      height = h; lift = panel.animate([{ transform: `translate3d(0,${h}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion());
+      if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));
+      return;
+    }
     height = h;
     if (Math.abs(dh) < 2 || gone || dragging || currentY) return;
     panel.animate([{ translate: `0 ${dh}px` }, { translate: '0 0' }], { ...motion(), composite: 'add' });
@@ -134,7 +140,7 @@
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
@@ -156,6 +162,7 @@
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     will-change: transform;
   }
+  .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
   .sheet:focus { outline: none; }
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }

@@ -11,7 +11,7 @@
   import Volume2 from '@lucide/svelte/icons/volume-2';
   import VolumeX from '@lucide/svelte/icons/volume-x';
   import { onMount } from 'svelte';
-  import { data, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
+  import { data, goingBusy, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
   import { focusPos } from '../../lib/photo';
   import { sheets } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
@@ -96,7 +96,7 @@
          onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.side')) sheets.event(e.id); }} onkeydown={(k) => k.key === 'Enter' && sheets.event(e.id)}>
       <div class="bg">
         {#if e.video?.url && Math.abs(i - cur) <= 1}
-          <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload="auto" use:playing={i === cur && shown}></video>
+          <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload={i === cur ? 'auto' : 'metadata'} use:playing={i === cur && shown}></video>
         {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
         {:else if e.cover && e.slides?.length}
           <!-- the cover and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
@@ -128,7 +128,7 @@
         {#if e.externalUrl}
           <button class="act go" onclick={() => openLink(e.externalUrl!)} aria-label={t('event.external')}><span class="ring"><Plus size={26} strokeWidth={2.4} /></span></button>
         {:else}
-          <button class="act go" class:on={st === 'going'} class:wait={full || st === 'waitlist'} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}
+          <button class="act go" class:on={st === 'going'} class:wait={full || st === 'waitlist'} class:busy={goingBusy.has(e.id)} aria-busy={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}
                   aria-label={st === 'going' ? t('event.cancelReg') : full ? t('event.notify') : t('event.go')}>
             <span class="ring">
               {#if st === 'going'}<Check size={26} strokeWidth={2.6} />{:else if full || st === 'waitlist'}<Bell size={22} strokeWidth={2.2} fill={st === 'waitlist' ? 'currentColor' : 'none'} />{:else}<Plus size={26} strokeWidth={2.4} />{/if}
@@ -210,6 +210,7 @@
   .go .ring { background: var(--accent); box-shadow: 0 10px 26px -8px rgba(59, 107, 255, 0.9); }
   .go.on .ring { background: #fff; color: var(--accent); }
   .go.wait .ring { background: rgba(20, 22, 32, 0.42); }
+  .go.busy .ring { transform: scale(0.9); animation: busy 0.9s var(--ease) infinite alternate; } /* waits for the server: pressed */
   .act b { font: 700 12.5px/1 var(--font-text); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
   .saved .ring { color: #FFD23F; }
 
@@ -225,6 +226,7 @@
   .endacts button:active { transform: scale(0.96); }
   .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.7); padding: 40px; text-align: center; }
   :global(html.lowfx) .cur .bg img, :global(html.lowfx) .cur .art :global(img), :global(html.lowfx) .cur .endart :global(img) { animation: none; } /* power saving */
+  @keyframes busy { to { opacity: 0.55; } }
   @keyframes kb { from { transform: scale(1.06) translate3d(0, 0, 0); } to { transform: scale(1.16) translate3d(-2%, -1.5%, 0); } }
   @keyframes float { from { transform: translate3d(0, -6px, 0) rotate(-3deg); } to { transform: translate3d(0, 8px, 0) rotate(3deg); } }
 </style>
