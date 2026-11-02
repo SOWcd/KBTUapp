@@ -734,14 +734,18 @@ MEMO2_BLANK = "Студенческая организация «{org}» про�
 MEMO2_DATES = "Даты: {dates}"
 def channel_post(title: str, org: str, starts: int, place: str, price: int | None, cancelled: bool, link: str = "",
                  also: list[str] = ()) -> str:
-    """A public event's post in the events channel (HTML), in Russian: the channel's language; `also`: the title in the
-    other languages (ai.py), in italics under it. Signing up is a link in
-    the text, not a button: Telegram hides a post's comments under a button."""
-    lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "", f"🗓 {when(starts, 'ru')}", f"📍 {html.escape(place_or_tba(place, 'ru'))}",
-             f"💸 {price} ₸" if price else "🆓 Бесплатно"]
+    """A public event's post in the events channel (HTML), in the channel's three languages (an event there is in all
+    three, owner Nov 2): the title as written, `also` its other languages (ai.py) in italics under it; the date, a place
+    to be confirmed, Free and the sign-up in kk, ru and en, each on one line; a place the club typed stays as it is.
+    Signing up is a link in the text, not a button: Telegram hides a post's comments under a button."""
+    t = time.gmtime(starts + 5 * 3600)
+    day = " · ".join(f"{MONTHS[x][t.tm_mon - 1]} {t.tm_mday}" if x == "en" else f"{t.tm_mday} {MONTHS[x][t.tm_mon - 1]}" for x in ("kk", "ru", "en"))
+    where = html.escape(place) if place else " · ".join(place_or_tba("", x) for x in ("kk", "ru", "en")).capitalize()
+    lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "",
+             f"🗓 {day}, {t.tm_hour:02d}:{t.tm_min:02d}", f"📍 {where}", f"💸 {price} ₸" if price else "🆓 Тегін · Бесплатно · Free"]
     if link and not cancelled:
-        lines += ["", f'👉 <a href="{html.escape(link)}">Записаться в KBTU App</a>']
-    return ("❌ <b>ОТМЕНЕНО</b>\n\n" if cancelled else "") + "\n".join(lines)
+        lines += ["", f'👉 <a href="{html.escape(link)}">KBTU App: тіркелу · записаться · sign up</a>']
+    return ("❌ <b>ЖОЙЫЛДЫ · ОТМЕНЕНО · CANCELLED</b>\n\n" if cancelled else "") + "\n".join(lines)
 
 
 CHANNEL_BUTTON = "📝 Записаться · Тіркелу · Sign up"
