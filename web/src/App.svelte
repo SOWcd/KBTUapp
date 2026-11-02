@@ -325,7 +325,12 @@
     if (qr) void api.refer(qr[1]).catch(() => {});
     const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
-    const team = (org: number) => { if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; } toClub(org); sheets.team(); };
+    // (the Team once the Studio pane is open: two chunk loads at once, lazy() opens only the later one, and Team reads
+    // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
+    const team = (org: number) => {
+      if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
+      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }).then(() => sheets.team());
+    };
     if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
     // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
     else if (p) say(t('link.unknown'), 'thinking_face_3d');

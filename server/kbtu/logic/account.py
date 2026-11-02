@@ -542,7 +542,10 @@ def _skin(con, uid: int) -> int | str | None:
 def _skin_ok(con, uid: int, oid: int):
     """A club's lanyard is its members' alone (owner, Oct 31: it was open to all), a school's its students' alone (Nov 2);
     read on every look, so a pick of a club I'm not in (or left), or of a school no longer mine, falls back by itself
-    (`_skin`)."""
+    (`_skin`). The creator wears any (owner, Nov 2)."""
+    if one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1", uid):
+        return bool(one(con, f"SELECT 1 FROM orgs o WHERE o.id = ? AND ({SKINNED} OR o.status = 'active' AND o.kind = 'school' AND o.slug IN ("
+                        + ", ".join(f"'{x}'" for x in SCHOOL_LANYARDS) + "))", oid))
     return bool(one(con, f"SELECT 1 FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? WHERE o.id = ? AND {SKINNED}",
                     uid, oid)) or (oid is not None and oid == _my_school_org(con, uid))
 

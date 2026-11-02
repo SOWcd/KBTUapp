@@ -2,6 +2,7 @@
 
   .venv/bin/python -m kbtu.admin users                                  who opened the app
   .venv/bin/python -m kbtu.admin orgs                                   clubs and their teams
+  .venv/bin/python -m kbtu.admin rename <slug> "<name>"                 an org's name as is (its slug and lanyard stay)
   .venv/bin/python -m kbtu.admin org <slug> "<name>" <short> <emoji> [--official] [--school]   a school is official, never closes
   .venv/bin/python -m kbtu.admin role <@username | telegram id> <slug> <member | head | vice | president | none>
   .venv/bin/python -m kbtu.admin links <slug> [https://… …]                 the club's socials (none = clear), up to 6
@@ -150,6 +151,10 @@ def main(args: list[str]) -> None:
             sys.exit(f"{slug}: taken")
         create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
+    elif cmd == "rename" and len(args) == 3 and args[2].strip():  # owner, Nov 2: "Moments" without its sparkles
+        o = one(con, "SELECT id, name FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such club")
+        con.execute("UPDATE orgs SET name = ? WHERE id = ?", (args[2].strip(), o["id"]))
+        print(f"{args[1]}: {o['name']} -> {args[2].strip()}")
     elif cmd == "role" and len(args) == 4:
         u, role = _user(con, args[1]), args[3]
         o = one(con, "SELECT * FROM orgs WHERE slug = ?", args[2]) or sys.exit(f"{args[2]}: no such club")

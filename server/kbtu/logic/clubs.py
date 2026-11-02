@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 
 from .. import media
@@ -190,8 +191,6 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         sets["name"] = named if 2 <= len(text("name")) <= 60 else bad
         if acro and "abbr" not in body:
             sets["abbr"] = acro
-        if sets["name"] is not bad and one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived' AND id != ?", sets["name"], oid):
-            raise ApiError("conflict", "taken")
     if "slug" in body:  # the short link is the President's
         if _roles(con, v).get(oid) != "president":
             raise ApiError("forbidden")
@@ -228,6 +227,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
             if k in sets and any(sets[k] == f.get(k) for f in shown.values()):
                 sets[k] = before[k]
         with tx(con):  # the name checked and taken at once
+            if sets.get("name", before["name"]) != before["name"]:
+                _rename_ok(con, before, sets["name"])
             if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
                 if not _slug_free(con, sets["slug"], oid):
                     raise ApiError("conflict", "taken")
@@ -442,6 +443,29 @@ def org_name(name: str, club: bool = True) -> tuple[str, str | None]:
     return (n, acro) if len(n) >= 2 else (typed, None)
 
 
+# letters that read as Latin ones (Cyrillic, Greek): with NFKC and case folded, a Cyrillic KBTU, fullwidth or dotted
+# KBTU read as KBTU, a "Chess" with a Cyrillic C as "Chess". ponytail: the common look-alikes only; Unicode's confusables.txt if one slips by
+_LOOK = str.maketrans(dict(zip("\u0430\u0431\u0432\u0435\u043a\u043c\u043d\u043e\u0440\u0441\u0442\u0443\u0445\u0456\u0458\u049b\u04af\u04b1\u03b1\u03b2\u03b5\u03b9\u03ba\u03bd\u03bf\u03c1\u03c4\u03c5\u03c7",
+                                 "abbekmhopctyxijkyyabeikvoptux")))
+_TICKS = set("✓✔☑✅\U0001f5f8\U0001f5f9")  # the official badge's look, typed into a name
+
+
+def _skeleton(name: str) -> str:
+    s = unicodedata.normalize("NFKC", name).casefold().translate(_LOOK)
+    return "".join(c for c in s if c.isalnum() or c in "+#&")
+
+
+def _rename_ok(con, before, name: str) -> None:
+    """A club's new name (update_org; the admin's create_org is the admin's): not another org's in any letters or case,
+    no KBTU in look-alike letters (org_name took the plain one off its ends), no check mark posing as the official one
+    (lanyards go by slug: a rename neither gains nor loses one)."""
+    if re.search("kbt[uy]", _skeleton(name)) or _TICKS & set(name):
+        raise ApiError("bad_input", "name")
+    skel = _skeleton(name)
+    if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id != ?", before["id"])):
+        raise ApiError("conflict", "taken")
+
+
 def guess_abbr(name: str) -> str:
     """The short name an org starts with: the acronym its name carried, else its initials."""
     n, acro = org_name(name, club=False)  # "Debate Club": DC, not DEBATE
@@ -450,15 +474,11 @@ def guess_abbr(name: str) -> str:
 
 def fill_abbrs(con) -> None:
     """At start: an org without a short name takes its initials (the clubs made before it existed); a set one stays.
-    A club's name made before "Club" went off loses it now, unless another club has that name."""
+    (The one-time "Club" cut of the old names ran with 20c7f1b's deploys; run at every start it cut a club's own
+    "Club" from its rename again, review 3.)"""
     with tx(con):
         for o in rows(con, "SELECT id, name FROM orgs WHERE abbr IS NULL"):
             con.execute("UPDATE orgs SET abbr = ? WHERE id = ?", (guess_abbr(o["name"]), o["id"]))
-        for o in rows(con, "SELECT id, name FROM orgs WHERE kind = 'club'"):
-            n = org_name(o["name"])[0]
-            if n != o["name"] and not one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND id != ?", n, o["id"]):
-                con.execute("UPDATE orgs SET name = ? WHERE id = ?", (n, o["id"]))
-                log_action(con, None, "org_rename", f"org:{o['id']}", json.dumps({"from": o["name"], "to": n}))  # undoable by hand
 
 
 def org_by_slug(con, slug: str) -> int | None:

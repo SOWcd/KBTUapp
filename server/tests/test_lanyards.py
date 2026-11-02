@@ -46,6 +46,9 @@ def test_school_lanyard(env):
     assert c.patch("/api/me", headers=A, json={"skin": ise}).status_code == 400   # not my school
     assert c.patch("/api/me", headers=B, json={"skin": site}).status_code == 400
     assert c.get(f"/api/users/{ann['id']}", headers=B).json()["skin"] == site    # others see it
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (bob["id"],))
+    con.commit()
+    assert c.patch("/api/me", headers=B, json={"skin": site}).json()["skin"] == site   # the creator wears any (Nov 2)
     con.execute("UPDATE students SET school = NULL WHERE user_id = ?", (ann["id"],))
     con.commit()
     assert c.get("/api/me", headers=A).json()["skin"] is None          # no school any more: KBTU's

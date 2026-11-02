@@ -5214,6 +5214,29 @@ def test_org_names(env):
     assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")  # an abbr sent with it wins
 
 
+
+def test_club_rename_review3(env):
+    """Review 3: a club's own "Club" survives the next start (fill_abbrs cut it again at every start); a rename takes
+    no other org's name in other letters or case, no KBTU alone or in look-alike letters, no check mark."""
+    c, cfg = env
+    pres = login(c, 21, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'phys', 'club', 'Physics', 'P', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', '\u0428\u0430\u0445\u043c\u0430\u0442\u044b', 'C', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (3, 'go', 'club', 'Go', 'G', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (4, 'cheer', 'club', 'Cheerleading', 'C', 'laptop_3d', 1, 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0)", [(o, pres["id"]) for o in (1, 3, 4)])
+    rename = lambda oid, name: c.patch(f"/api/orgs/{oid}", headers=tma(21), json={"name": name})  # noqa: E731
+    assert rename(3, "Go Club").json()["name"] == "Go Club"
+    logic.fill_abbrs(con)                                                      # the next deploy's start
+    assert con.execute("SELECT name FROM orgs WHERE id = 3").fetchone()[0] == "Go Club"
+    for name in ("KBTU", "\u041a\u0412\u0422\u0423 Go", "\uff2b\uff22\uff34\uff35 Go", "K.B.T.U. Go", "Go \u2705"):
+        assert rename(3, name).status_code == 400, name                       # KBTU look-alikes, a fake badge
+    for name in ("\u0448\u0430\u0445\u043c\u0430\u0442\u044b", "\u0428\u0410\u0425\u041c\u0410\u0422\u042b", "\u0420hysics", "physics."):
+        assert rename(3, name).json()["message"] == "taken", name             # another club's, in other case or letters
+    assert rename(4, "Cheerleading Club").status_code == 200 and rename(1, "Physics Lab").status_code == 200
+    assert rename(1, "Physics Lab").status_code == 200                        # unchanged: no check
+
 COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")
 
 

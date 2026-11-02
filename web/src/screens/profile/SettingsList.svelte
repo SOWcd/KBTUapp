@@ -51,14 +51,15 @@
   // a school's lanyard is its students' alone, even for a member of its org (staff are): only my own school's (server: _skin_ok)
   const mine = $derived(me ? [...me.memberships].sort(byRank).map((m) => m.org).filter((o) => skinned(o) && o.kind !== 'school') : []);
   // my school's lanyard: mine with no joining, nobody else's (the server holds it too: logic.school_slug); others' schools
-  // aren't offered even under a lock
+  // show locked, to try on
   const school = $derived(schoolOf(me?.student?.school));
   // once each: a member of my school's org (staff often are) had it twice, a duplicate key that blanked Settings (Nov 2)
   const own = $derived([...mine, ...(school && skinned(school) && !mine.some((o) => o.id === school.id) ? [school] : [])]);
-  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && o.kind !== 'school' && !own.some((x) => x.id === o.id))]
+  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && !own.some((x) => x.id === o.id))]
     .filter((o, i, all) => all.findIndex((x) => x.id === o.id) === i));  // a key twice blanks the list: never
+  // the creator wears any (owner, Nov 2; the server holds it too)
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
-    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !own.some((x) => x.id === o.id) })),
+    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !me?.founder && !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
 
   // a locked one can be tried on: the lanyard above wears it, the check then says it isn't mine (Me) and turns it back
@@ -202,7 +203,7 @@
               <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2) -->
               <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
               {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
-              <b class="ellipsis">{k.name}</b>
+              <b>{k.name}</b>
             </button>
           {/each}
         </div>
@@ -319,7 +320,7 @@
   .ly .ln { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); }
   .ly .ln.s { width: 60%; opacity: 0.6; }
   .ly .hl { grid-column: 1 / 3; align-self: end; height: 7px; border-radius: 3px; background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A); }
-  .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); }
+  .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }  /* whole names on two lines (owner: "Big City Lig..." cut) */
   .ly .ph { z-index: 1; }
   .ly .ln, .ly .hl { position: relative; z-index: 1; }
   /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch: 340 px wide -> 74 */
