@@ -42,11 +42,14 @@
     if (!ready) return;
     const text = body.trim(), was = anon;
     const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, sign: was ? anonSign(text) : sign, mine: true,
-      person: !was && session.me ? { id: session.me.id, name: session.me.name, avatar: session.me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [] };
+      person: !was && session.me ? { id: session.me.id, name: session.me.name, avatar: session.me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false };
     channel.feed = [temp, ...(channel.feed ?? [])]; haptic.select(); close(overlay.id);
     try {
       const p = await api.newChannelPost(text, was);
-      channel.feed = (channel.feed ?? []).map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at } : x));
+      // a refresh may have brought the real one already (Channel's poll): then the stand-in just goes (no twin keys)
+      const feed = channel.feed ?? [];
+      channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
+        : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at } : x));
       haptic.ok();
       if (p.status === 'live') { burst(); say(t('fc.postedSay'), 'party_popper_3d'); setTimeout(loadChannel, 5000); } // the bot sends it within seconds: its link then
       else say(t('fc.heldSay'), 'thinking_face_3d');

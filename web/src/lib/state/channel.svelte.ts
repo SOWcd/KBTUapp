@@ -6,5 +6,7 @@ import { api, type ChannelFeedPost } from '../api';
 export const channel = $state({ feed: null as ChannelFeedPost[] | null, focus: null as number | null });
 
 export async function loadChannel(): Promise<void> {
-  try { channel.feed = await api.channelFeed(); } catch { if (!channel.feed) channel.feed = []; }
+  // a post of mine still on its way (a temporary id below 0, ChannelCompose) stays on top through a refresh
+  try { const got = await api.channelFeed(); channel.feed = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got]; }
+  catch { if (!channel.feed) channel.feed = []; }
 }

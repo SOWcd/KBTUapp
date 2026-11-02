@@ -462,7 +462,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] in ("Anonymous", "\u0410\u043d\u043e\u043d\u0438\u043c") and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions"}  # no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot"}  # no user id
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -470,7 +470,7 @@ def test_post_feed(env, monkeypatch):
         f = c.get("/api/forum-posts/feed", headers=viewer).json()
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
-        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread")} == {
+        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "sign": "Anonymous", "person": None, "mine": False,
             "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
@@ -658,7 +658,7 @@ def test_post_faces_and_reactions(env, monkeypatch):
     con2 = db.connect(cfg.db_path)
     con2.set_trace_callback(seen.append)
     logic.fchannel.feed(con2, logic.Viewer(id=3, role="user", student=True))
-    assert sum("fchan_comments" in s for s in seen) == 1
+    assert sum("fchan_comments" in s for s in seen) == 2                                    # the faces and the "being discussed", one each
     con2.close()
     # reactions: Telegram's totals on the channel post (the bot asks for them), the top three on the card
     asked: list[str] = []
@@ -703,3 +703,22 @@ def test_deleted_account_anon_post_not_revealed(env, monkeypatch):
     with pytest.raises(logic.ApiError):
         logic.fchannel.reveal(con, v, pid)
     con.close()
+
+
+def test_post_hot(env, monkeypatch):
+    """"Being discussed": HOT comments or more still up in the last hour; older ones, fewer, or deleted ones: not."""
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Anyone at the library?"}).json()
+    tick(cfg, Telegram(), con)
+    now = int(time.time())
+    hot = lambda: next(x for x in c.get("/api/forum-posts/feed", headers=tma(1)).json() if x["id"] == p["id"])["hot"]  # noqa: E731
+    for i in range(logic.fchannel.HOT):
+        con.execute("INSERT INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, 1, ?)", (500 + i, p["id"], now - 60))
+    con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, p["id"]))
+    assert hot() is True
+    con.execute("UPDATE fchan_comments SET gone = 1 WHERE msg_id = 500")
+    assert hot() is False                                                                       # one fewer than HOT
+    con.execute("UPDATE fchan_comments SET gone = 0, at = ? WHERE msg_id = 500", (now - 7200,))
+    assert hot() is False                                                                       # one of them over an hour old

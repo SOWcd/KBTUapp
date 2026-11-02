@@ -83,6 +83,7 @@ def feed(con, v: Viewer) -> list[dict]:
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
+    hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT])
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
@@ -92,8 +93,20 @@ def feed(con, v: Viewer) -> list[dict]:
              # the comments: the students' count, and the bot's first comment (the link opens the thread there)
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
-             "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"])})
+             "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
+             "hot": p["id"] in hot})  # being discussed: HOT comments or more in the last hour (a count, nobody's)
     return out
+
+
+HOT = 5  # comments in the last hour that make a post "being discussed" (the feed's label)
+
+
+def _hot(con, ids: list[int]) -> set[int]:
+    """The posts with HOT or more students' comments (still up) in the last hour, one query for all of them."""
+    if not ids:
+        return set()
+    return {r[0] for r in rows(con, f"""SELECT post_id FROM fchan_comments WHERE gone = 0 AND at > ? AND post_id IN ({','.join('?' * len(ids))})
+        GROUP BY post_id HAVING COUNT(*) >= ?""", _now() - 3600, *ids, HOT)}
 
 
 FACES = 3  # the newest commenters a card shows
