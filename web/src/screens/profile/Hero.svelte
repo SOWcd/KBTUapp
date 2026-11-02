@@ -21,11 +21,13 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
+  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, QR_LOOK } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
-  import { say, overlays, moment } from '../../lib/state/ui.svelte';
+  import { say, overlays, moment, backTo } from '../../lib/state/ui.svelte';
+  import Qr from '../../ui/Qr.svelte';
+  import LookMark from '../../ui/LookMark.svelte';
   import { burst } from '../../ui/burst';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
@@ -39,6 +41,7 @@
   let face = $state(untrack(() => look));
   const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
+  const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
 
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
@@ -110,40 +113,47 @@
       });
     };
   }
-  // the card's back (MyQr): it turns edge-on and the back comes up over it; when the back is closed it turns face on again
-  // (the lanyard change's curves). `back`: out (turning), away (the back is up), so a close plays the return once
-  let back: '' | 'out' | 'away' = '';
-  function toBack() {
-    if (spinning || back) return;
+  // the card's back (round 5, owner: the edge-on turn into the full-screen QR was flat and empty in the middle): a real
+  // two-sided badge. A tap turns it a whole half turn in 3D, lifted toward you at the edge, the face darkening as it turns
+  // away and the back coming out of the shade with a sheen; the back carries my QR big enough to scan on the card. A tap
+  // on the code opens the full-screen one (MyQr) for a door's scanner; a tap elsewhere on the back, or Back, turns it face
+  // on. The resting pose is the class (.flipped), the motion only a WAAPI layer over it, so a cancelled or interrupted
+  // turn always lands face on or back on, never edge-on (53a0929's lesson).
+  let flipped = $state(false), card: HTMLDivElement, bshade = $state<HTMLElement>(); // the back is mine only
+  const DARK = 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))', LIGHT = 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.24))';
+  function flip(to: boolean) {
+    if (spinning || flipped === to) return;
     haptic.soft();
-    if (still()) { sheets.myQr(link, p); return; }
+    flipped = to;
+    if (still()) return;
     spinning = true;
-    back = 'out';
-    swing.style.willChange = 'transform';
-    const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 170, easing: TURN, fill: 'forwards' });
-    shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 170, easing: TURN, fill: 'forwards' });
-    // the back never seen covering (its chunk failed, or it opened and closed between two effects): the card came back
-    // edge-on for good (slaidayZ, Nov 2: "the card just vanishes"), so it turns face on by itself
-    out.onfinish = () => { sheets.myQr(link, p); setTimeout(() => { if (back === 'out') faceOn(); }, 1500); };
+    const from = to ? 0 : 180, end = to ? 180 : 0;
+    card.style.willChange = 'transform';
+    const turn = card.animate([{ transform: `rotateY(${from}deg)` }, { transform: `translateZ(46px) rotateY(${(from + end) / 2}deg) scale(1.02)`, offset: 0.5 },
+      { transform: `rotateY(${end}deg)` }], { duration: 620, easing: 'cubic-bezier(.45, .05, .25, 1)' });
+    const [gone, come] = to ? [shade, bshade!] : [bshade!, shade];
+    gone.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.5 }, { opacity: 0.6 }], { duration: 620, easing: 'ease-in' });
+    come.animate([{ opacity: 0.6, background: DARK }, { opacity: 0.6, background: DARK, offset: 0.5 }, { opacity: 0.5, background: LIGHT, offset: 0.75 },
+      { opacity: 0, background: LIGHT }], { duration: 620 });
+    const done = () => { card.style.willChange = ''; spinning = false; };
+    turn.onfinish = done;
+    turn.oncancel = done;
   }
-  function faceOn() {
-    back = '';
-    const land = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
-    swing.getAnimations().filter((x) => x !== land).forEach((x) => x.cancel());
-    shade.getAnimations().forEach((x) => x.cancel());
-    shade.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 400, easing: LAND });
-    land.onfinish = () => { swing.style.willChange = ''; spinning = false; };
-  }
+  const toBack = () => flip(true);
   function cardTap(e: MouseEvent) {
     if (!(e.target as Element).closest('button')) toBack(); // the photo, the seal and the medallion have their own
   }
+  function backTap(e: MouseEvent) {
+    if (!(e.target as Element).closest('button')) flip(false); // the code opens the full-screen one
+  }
+  // Back turns it face on; leaving the screen does too, at once
   $effect(() => {
-    const c = covered;
-    untrack(() => {
-      if (back === 'out' && c) back = 'away';
-      else if (back === 'away' && !c) faceOn();
-    });
+    if (!flipped) return;
+    const f = () => flip(false);
+    backTo.fn = f;
+    return () => { if (backTo.fn === f) backTo.fn = null; };
   });
+  $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations().forEach((x) => x.cancel()); flipped = false; } }); });
   $effect(() => {
     if (look === untrack(() => face) || spinning) return;
     if (still()) face = look;
@@ -156,26 +166,41 @@
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
-    <div class="badge" use:glass onclick={mine ? cardTap : undefined} role="presentation">
+    <div class="card" class:flipped bind:this={card}>
+    <div class="badge" use:glass onclick={mine ? cardTap : undefined} role="presentation" inert={flipped}>
       {#if face === 'sower'}<i class="rings z" aria-hidden="true"></i>{/if}
       {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
       <span class="slot" aria-hidden="true"></span>
       <!-- the organisation's medallion where the QR was (owner, Nov 2); on mine it turns the card over to its back, the
            full-screen QR (MyQr), as a tap anywhere on the card does -->
-      {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} /><span class="qrhint"><QrCode size={11} strokeWidth={2.4} /></span></button>
-      {:else}<span class="medal"><OrgMedal look={face} /></span>{/if}
+      {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><QrCode size={10} strokeWidth={2.4} /></span></button>
+      {:else}<span class="medal"><OrgMedal look={face} logo={medalLogo} /></span>{/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} /></button>
-        {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /><Frame id={h.frame} /></span>{/if}
+        {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} /></span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
-          <span class="role">{h.title}</span>
-          <span class="meta">{h.line}</span>
+          <span class="role clamp">{h.title}</span>
+          <span class="meta clamp">{h.line}</span>
         </span>
       </div>
       <span class="foot"><LanyardHolo look={face} no={h.no} /></span>
       <i class="shade" bind:this={shade} aria-hidden="true"></i>
+    </div>
+    <!-- the back, mine only: my QR on a white plate, big enough to scan here; the medallion, my name and number beside it -->
+    {#if mine}
+      <div class="back" onclick={backTap} role="presentation" inert={!flipped}>
+        <button class="plate" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}><Qr text={link} tone={QR_LOOK[face]} lazy><LookMark look={face} /></Qr></button>
+        <span class="bside">
+          <span class="bmed"><OrgMedal look={face} logo={medalLogo} /></span>
+          <b class="bnm ellipsis">{h.name}</b>
+          <span class="role bro">{h.title}</span>
+          <span class="bno">№ {h.no}</span>
+        </span>
+        <i class="bshade" bind:this={bshade} aria-hidden="true"></i>
+      </div>
+    {/if}
     </div>
     <div class="clip" aria-hidden="true"></div>
   </div>
@@ -202,7 +227,7 @@
 <style>
   .rest :global(*) { animation-play-state: paused !important; }
   .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
-  .hang { display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
+  .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
   /* the strap swings with the card, from its top (owner, Oct 29: it stood still while the card moved) */
   .strap { position: absolute; top: -52px; left: 50%; margin-left: -13px; width: 26px; height: 52px; display: flex; justify-content: center; align-items: center; padding-bottom: 4px; overflow: hidden;
@@ -211,11 +236,35 @@
   /* the clip swings with the card, down into its slot (owner, Oct 29: it hung above it) */
   .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
-  .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; }
+  .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; perspective: 1100px; } /* the card's turn in depth */
 
+  /* the two-sided card: the face and the back share one 3D turn; each hides its own back side */
+  .card { position: relative; transform-style: preserve-3d; }
+  .card.flipped { transform: rotateY(180deg); }
+  .badge, .back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .back { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; gap: 16px; padding: 22px 18px 18px; overflow: hidden; border-radius: 22px;
+    transform: rotateY(180deg); color: white; background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
+    box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+  .club .back { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
+  .sower .back, .faces .back { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .studex .back { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
+  .cheer .back { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
+  .knights .back { background: linear-gradient(150deg, rgb(47, 107, 208), rgb(14, 42, 98)); }
+  .moments .back { background: linear-gradient(150deg, #C46D47, #6E3322); }
+  /* the plate: white, the code's own quiet zone in it; the size a door's scanner reads from a phone */
+  .plate { flex: none; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
+    box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
+  .plate:active { transform: scale(0.96); }
+  .bside { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; flex: 1; }
+  .bmed { width: 40px; height: 40px; }
+  .bnm { max-width: 100%; font: 780 19px/1.15 var(--font-display); letter-spacing: -0.02em; }
+  .bro { margin-top: -4px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .bno { font: 800 11px/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
+  .bshade { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; border-radius: inherit; background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
+  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
   .badge {
     position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;
-    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), linear-gradient(155deg, #2A4FD6, #121A3D 72%);
+    background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), 0 10px 22px -14px rgba(16, 22, 51, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.28);
     transform: rotateX(calc(var(--gy, 0) * -6deg)) rotateY(calc(var(--gx, 0) * 8deg));
     transition: transform 160ms ease-out;
@@ -228,28 +277,35 @@
     background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
+  /* round 5: the name and the role give way to the medallion (its 66 px corner; 52 px, was 58: it outweighed the photo),
+     the course line has the card's width; the role and the course line wrap to two lines at most (owner: long names fit) */
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
   /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
   .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
-  .id { padding-right: 62px; } /* the name never runs under the medallion or the club's object */
-  .top.mine .nm { font-size: 20px; }
-  .medal { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; transition: transform var(--t-fast) var(--ease); }
+  .medal { position: absolute; z-index: 1; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.medal:active { transform: scale(0.92); }
   /* the back is a QR: a small chip on the medallion's corner says so */
-  .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
 
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
   .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
-  .id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .id { display: block; flex: 1; min-width: 0; }
+  .nm, .id > .role { padding-right: 54px; } /* the medallion: 14 + 52 in from the edge, less the row's 18 px, and a gap */
   .nm { display: flex; align-items: center; gap: 7px; min-width: 0; font: 780 22px/1.12 var(--font-display); letter-spacing: -0.025em; }
+  .nick, .role, .meta { display: block; }
+  .role { margin-top: 6px; }
+  .meta { margin-top: 3px; }
+  .clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
   .nm :global(svg) { flex: none; }
   .seal { flex: none; display: inline-flex; padding: 10px; margin: -10px; transition: transform var(--t-fast) var(--ease); } /* a 39 px target */
   .seal:active { transform: scale(0.88); }
-  .role { font: 760 11px/1.25 var(--font-text); letter-spacing: 0.13em; text-transform: uppercase; }
+  .role { font: 760 10.5px/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; }
   .meta { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
-  .meta.nick { margin-top: -2px; font-weight: 650; }
+  .meta.nick { margin-top: 1px; font-weight: 650; }
+  .top.mine .nm { font-size: 20px; }
+  @media (max-width: 359px) { .nm { font-size: 20px; } }
 
   /* below the band, each look's own body and role colour; the strap's colours (the band and the strip: LanyardBand,
      LanyardHolo) */

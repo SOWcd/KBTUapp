@@ -8,7 +8,7 @@
 </script>
 
 <div class="holo {look}" class:club={!!club}>
-  {#if club}<b class="w ch">{club.strip}</b>
+  {#if club}<b class="w ch" class:long={club.strip.length > 12}>{club.strip}</b>
   {:else if look === 'sower'}<b class="w sw">SOWER</b>
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
   {:else if look === 'cheer'}<b class="w ch">CHEERLEADING</b>
@@ -23,7 +23,10 @@
   .holo { position: relative; display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 12px; border-radius: 9px;
     background: linear-gradient(100deg, #FFA6DA, #B9A3FF, #86E3FF, #A6FFD6, #FFE69A, #FFA6DA); background-size: 320% 100%;
     background-position: calc(50% + var(--gx, 0) * 60%) 0; color: rgba(14, 20, 48, 0.75); font: 800 10.5px/1 var(--font-text); letter-spacing: 0.16em; }
-  .w { display: flex; align-items: center; gap: 7px; font: inherit; }
+  /* a long name gives way before the number does (round 5: JCC's motto ran into it at 320 px) */
+  .w { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; font: inherit; white-space: nowrap; }
+  .holo > span { flex: none; margin-left: 10px; font-variant-numeric: tabular-nums; }
+  .w.long { display: block; text-overflow: ellipsis; letter-spacing: 0.12em; }
   /* StudEx (owner, Oct 31: the rainbow made it like every other lanyard; review: .claude/reports/studex-strip-review.md):
      a pearl strip, one light sliding with the tilt and a faint cool one slower behind it, their name as in their logo
      (STUD red, EX navy); no arrow here: the card above has it (owner: two arrows read as a tautology) */

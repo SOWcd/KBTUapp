@@ -61,6 +61,10 @@ export function open<P extends Record<string, unknown>>(component: Component<P>,
   return id;
 }
 
+/** Back with no overlay up: something on the tab itself to undo first (my badge turned to its QR side, Hero); its owner
+ *  sets and clears it. Telegram's Back stays the only Back (AGENTS.md: One Back). */
+export const backTo = $state<{ fn: (() => void) | null }>({ fn: null });
+
 /** Ask the overlay to leave: it plays its exit animation, then calls removeOverlay(). No id: the top one, by a hand. */
 export function close(id?: number, byUser = id == null): void {
   const o = id == null ? [...overlays].reverse().find((x) => !x.closing) : overlays.find((x) => x.id === id);

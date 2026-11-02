@@ -318,7 +318,7 @@
   "mix": 0
  },
  "screens/profile/Hero.svelte": {
-  "font": 7,
+  "font": 10,
   "radius": 6,
   "hex": 40,
   "mix": 0
@@ -543,6 +543,12 @@
   "font": 0,
   "radius": 0,
   "hex": 1,
+  "mix": 0
+ },
+ "ui/ClubScene.svelte": {
+  "font": 1,
+  "radius": 0,
+  "hex": 0,
   "mix": 0
  },
  "ui/EmojiPick.svelte": {

@@ -3,7 +3,7 @@
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
-  import { ui, TABS, overlays, open, close, persistNav, say, moment, type Tab } from './lib/state/ui.svelte';
+  import { ui, TABS, overlays, open, close, persistNav, say, moment, backTo, type Tab } from './lib/state/ui.svelte';
   import { session, loadMe, setLoginHook, asStudent, takeAgain } from './lib/state/session.svelte';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
@@ -213,7 +213,7 @@
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 
   // ---- Back button: closes the top overlay ----
-  $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack && shown(o))) backButton.show(); else backButton.hide(); });
+  $effect(() => { if (overlays.some((o) => !o.closing && !o.holdBack && shown(o)) || backTo.fn) backButton.show(); else backButton.hide(); });
 
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
@@ -478,7 +478,7 @@
   }
 
   onMount(() => {
-    backButton.onClick(() => close());
+    backButton.onClick(() => { if (!overlays.some((o) => !o.closing) && backTo.fn) backTo.fn(); else close(); });
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing && shown(o))) close(); };
     addEventListener('keydown', esc);

@@ -6,11 +6,11 @@
   import panther from '../assets/lanyards/panther-mark.webp'; // white: a black head on navy is a blob this small
   import KnightsHelm from './KnightsHelm.svelte';
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
-  import hands from '../assets/lanyards/faces-hands.webp';
+  import facesMark from '../assets/lanyards/faces-mark.webp'; // their wordmark on its black (round 5: their logo, not the hands)
 
   let { look }: { look: Look } = $props();
   const club = $derived(clubLook(look)); // the template's clubs: their mark on their plate's colours (lookVars)
-  const art = $derived(club ? club.mark : ({ cheer: panther, moments: aperture, faces: hands } as Partial<Record<Look, string>>)[look]);
+  const art = $derived(club ? club.mark : ({ cheer: panther, moments: aperture, faces: facesMark } as Partial<Record<Look, string>>)[look]);
 </script>
 
 <span class="appmark {look}" class:club={!!club}>
@@ -32,7 +32,7 @@
   .helm :global(svg) { width: 100%; height: 100%; } /* not base.css's .appmark svg (64%) */
   .moments { background: linear-gradient(150deg, #C46D47, #6E3322); }
   .moments img { width: 66%; height: 66%; }
-  .faces { background: radial-gradient(circle at 50% 100%, #C040FF, #07060B 75%); }
-  .faces img { width: 90%; height: 90%; }
+  .faces { background: #000; }
+  .faces img { width: 100%; height: 100%; }
   .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
 </style>

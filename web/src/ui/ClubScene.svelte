@@ -12,7 +12,6 @@
   import derrick from '../assets/lanyards/spe-derrick-dark.webp';
   import arthouse from '../assets/lanyards/arthouse.webp';
   import people from '../assets/lanyards/qairym-people-dark.webp';
-  import brush from '../assets/lanyards/shade-brush-red.webp';
   import shadeWord from '../assets/lanyards/shade-word-red.webp';
   import jccBack from '../assets/lanyards/jcc-back.webp';
   import jccSakura from '../assets/lanyards/jcc-sakura.webp';
@@ -62,9 +61,12 @@
     <img class="l z far" src={L('qa-sun')} alt="" /><i class="motes"></i>
     <img class="l" src={L('qa-hill')} alt="" /><span class="fig ppl"><img src={people} alt="" /></span>
   {:else if look === 'shadekbtu'}
-    <!-- paper: their red swept across it, the splatter of a flick, the brush at the stroke's end -->
-    <i class="paper"></i><img class="l z near" src={L('sh-strokes')} alt="" />
-    {#if wide}<span class="fig z"><img src={brush} alt="" /></span>{:else}<img class="word" src={shadeWord} alt="" />{/if}
+    <!-- paper. The card (round 5, owner: their official logo, not our smear): their brush-lettered SHADE painted across
+         the whole sheet, their line from the logo set small at the top; the brush itself is the medallion (OrgMedal).
+         The badge's band: their red swept across it, the word in the middle -->
+    <i class="paper"></i>
+    {#if wide}<img class="sw z" src={shadeWord} alt="" /><span class="shtag">CREATIVE PEOPLE CLUB</span>
+    {:else}<img class="l z near" src={L('sh-strokes')} alt="" /><img class="word" src={shadeWord} alt="" />{/if}
   {:else if look === 'japanesecultureclub'}
     <!-- their own layers (Nov 2): the pink sky with its pale sun and their shanyrak far, the sakura near, petals drifting
          between; on the badge's band their whole logo in the middle -->
@@ -200,7 +202,8 @@
   .paper { inset: 0; opacity: 0.4; mix-blend-mode: multiply;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .45 0 0 0 0 .35 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
   .shadekbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(120, 60, 40, 0.12); }
-  .shadekbtu .fig { height: 40px; }
+  .sw { left: 4%; top: 50%; width: 104%; margin-top: -46px; opacity: 0.2; transform: rotate(-5deg); mix-blend-mode: multiply; --z: -2; --zs: 1.03; }
+  .shtag { position: absolute; left: 18px; top: 10px; display: flex; gap: 6px; font: 800 6.5px/1 var(--font-text); letter-spacing: 0.2em; color: rgb(200, 0, 0); opacity: 0.85; }
   .shadekbtu .word { top: 30px; height: 56px; }
 
   /* ---- Japanese Culture: their pink, their shanyrak top right (behind the QR on the card), sakura near ---- */

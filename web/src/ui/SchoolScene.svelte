@@ -10,18 +10,19 @@
   const SC = import.meta.glob('../assets/lanyards/schools/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   const SH = import.meta.glob('../assets/lanyards/school-*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   const L = (n: string) => SC[`../assets/lanyards/schools/${n}-${wide ? 'card' : 'band'}.svg`];
-  // each school's layers, far to near ('far' moves with the tilt)
+  // each school's layers, far to near ('far' moves with the tilt); a layer drawn for one framing only is skipped in the other.
+  // Round 5 (owner: the left was empty, SEPI and Law plain): every card's art runs its whole width, quieter under the text
   const LAYERS: Record<string, [string, string][]> = {
-    site: [['site-traces', 'far']], seogi: [['seogi-hazard', '']], geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
+    site: [['site-traces', 'far']], seogi: [['seogi-sky', 'far'], ['seogi-field', '']], geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
     business: [['bs-chart', 'far']], ise: [['ise-globe', 'far']], kma: [['kma-moon', 'far'], ['kma-waves', 'waves']],
-    law: [['law-portico', 'far']], sam: [['sam-graph', 'far']], sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
+    law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far']], sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
 </script>
 
 <div class="sc {look}" class:wide class:qr aria-hidden="true">
   <i class="lit"></i>
-  {#each LAYERS[look] ?? [] as [n, c] (n)}<img class="l {c}" class:z={c.includes('far') || c.includes('near')} src={L(n)} alt="" />{/each}
+  {#each (LAYERS[look] ?? []).filter(([n]) => L(n)) as [n, c] (n)}<img class="l {c}" class:z={c.includes('far') || c.includes('near')} src={L(n)} alt="" />{/each}
   {#if look === 'seogi'}<i class="embers"></i>{/if}
   {#if look === 'site'}<span class="sww"><i class="sweep"></i></span>{/if}
   <!-- the shield: on the card it is the medallion in the corner (Hero's OrgMedal, owner Nov 2), so the art has the side
@@ -50,12 +51,13 @@
 
   /* each school's ground: its official colour, lit from the top right */
   .site { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 170, 240, 0.4), transparent 70%), linear-gradient(160deg, rgb(10, 100, 160), rgb(8, 91, 148) 50%, rgb(4, 50, 86)); --lt: rgba(245, 194, 66, 0.3); }
-  .seogi { background: radial-gradient(60% 80% at 88% 80%, rgba(255, 140, 50, 0.4), transparent 70%), linear-gradient(160deg, rgb(48, 46, 38), rgb(30, 29, 24) 55%, rgb(16, 15, 12)); --lt: rgba(255, 150, 60, 0.5); }
+  /* SEPI: an oil field at dusk, the sky darkening up from the amber horizon */
+  .seogi { background: linear-gradient(180deg, rgb(22, 20, 15), rgb(48, 36, 18) 45%, rgb(122, 76, 26) 74%, rgb(30, 26, 16)); --lt: rgba(255, 150, 60, 0.4); }
   .geology { background: radial-gradient(70% 70% at 90% 10%, rgba(230, 215, 160, 0.25), transparent 70%), linear-gradient(170deg, rgb(84, 112, 88), rgb(72, 100, 75) 50%, rgb(46, 66, 50)); --lt: rgba(240, 225, 170, 0.35); }
   .business { background: radial-gradient(70% 90% at 100% 0%, rgba(231, 200, 115, 0.2), transparent 70%), linear-gradient(160deg, rgb(44, 62, 104), rgb(35, 50, 83) 50%, rgb(18, 26, 46)); --lt: rgba(231, 200, 115, 0.3); }
   .ise { background: radial-gradient(70% 90% at 100% 100%, rgba(255, 120, 90, 0.35), transparent 70%), linear-gradient(160deg, rgb(232, 30, 18), rgb(200, 14, 6) 50%, rgb(120, 6, 2)); }
   .kma { background: radial-gradient(70% 60% at 85% 0%, rgba(120, 140, 255, 0.25), transparent 70%), linear-gradient(175deg, rgb(28, 32, 72), rgb(21, 24, 55) 55%, rgb(10, 12, 30)); }
-  .law { background: radial-gradient(70% 90% at 100% 0%, rgba(200, 220, 245, 0.25), transparent 70%), linear-gradient(160deg, rgb(56, 92, 128), rgb(45, 78, 109) 50%, rgb(24, 44, 64)); }
+  .law { background: radial-gradient(70% 90% at 30% 0%, rgba(255, 240, 210, 0.22), transparent 70%), linear-gradient(170deg, rgb(48, 80, 114), rgb(34, 60, 88) 50%, rgb(16, 30, 46)); }
   .sam { background: radial-gradient(70% 90% at 100% 0%, rgba(160, 210, 255, 0.25), transparent 70%), linear-gradient(160deg, rgb(64, 100, 132), rgb(53, 84, 112) 50%, rgb(30, 48, 66)); }
   .sce { background: radial-gradient(70% 90% at 100% 0%, rgba(200, 180, 255, 0.3), transparent 70%), linear-gradient(160deg, rgb(110, 84, 158), rgb(93, 68, 136) 50%, rgb(52, 36, 80)); }
   .smsgt { background: radial-gradient(70% 90% at 100% 0%, rgba(150, 240, 180, 0.25), transparent 70%), linear-gradient(160deg, rgb(16, 122, 80), rgb(11, 101, 66) 50%, rgb(5, 56, 36)); }
@@ -66,10 +68,10 @@
   .sweep { left: -80px; top: 0; bottom: 0; width: 60px; opacity: 0; background: linear-gradient(90deg, transparent, rgba(245, 194, 66, 0.28), transparent);
     animation: stsweep 8s 1.4s ease-in-out infinite; }
   @keyframes stsweep { 0% { transform: translateX(0); opacity: 0; } 5% { opacity: 1; } 25% { opacity: 1; } 32%, 100% { transform: translateX(500px); opacity: 0; } }
-  /* SEOGI: embers rising from the flame */
+  /* SEPI: embers rising from the flare */
   .embers { left: 0; top: 0; width: 100%; height: calc(100% + 100px); background: url('../assets/lanyards/schools/seogi-embers.svg') 0 0 / 100px 100px;
-    -webkit-mask: radial-gradient(50% 80% at 87% 100%, black, transparent); mask: radial-gradient(50% 80% at 87% 100%, black, transparent); animation: seember 20s linear infinite; }
-  .sc:not(.wide) .embers { -webkit-mask: radial-gradient(50% 90% at 50% 100%, black, transparent); mask: radial-gradient(50% 90% at 50% 100%, black, transparent); }
+    -webkit-mask: radial-gradient(22% 45% at 88% 30%, black, transparent); mask: radial-gradient(22% 45% at 88% 30%, black, transparent); animation: seember 20s linear infinite; }
+  .sc:not(.wide) .embers { -webkit-mask: radial-gradient(22% 50% at 72% 35%, black, transparent); mask: radial-gradient(22% 50% at 72% 35%, black, transparent); }
   @keyframes seember { to { transform: translateY(-100px); } }
   /* KMA: the wheel far, the sea's lines swaying a little */
   .waves { animation: kmwave 10s ease-in-out infinite alternate; }

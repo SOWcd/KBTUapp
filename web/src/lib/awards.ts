@@ -14,7 +14,7 @@ import aicheFlask from '../assets/lanyards/aiche-flask.webp';
 import bclColor from '../assets/lanyards/bcl-color.webp';
 import arthouse from '../assets/lanyards/arthouse.webp';
 import qairymColor from '../assets/lanyards/qairym-people-color.webp';
-import shadeBrush from '../assets/lanyards/shade-brush.webp';
+import shadeBrush from '../assets/lanyards/shade-brush-red.webp'; // their red brush on their cream (round 5: the official logo)
 import jccLogo from '../assets/lanyards/jcc-logo.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
@@ -175,7 +175,7 @@ export const CLUB_LOOKS = {
   qairymdylyqkbtu: { strap: 'QAIRYMDYLYQ', strip: 'QAIRYMDYLYQ', bg: ['#46103A', '#4A0F2C', '#2A0818'],
     straps: ['#C2412A', '#F08A3A', '#FFFFFF'], holo: ['#FFF4DC', '#FFD27A', '#8E1F4F'], role: '#FFE3A3', qr: ['#A3203F', '#6B1640'], plate: ['#FFFFFF', '#FFFFFF'], mark: qairymColor },
   shadekbtu: { strap: 'SHADE', strip: 'SHADE', bg: ['#F6EEE2', '#EDE0CC', '#E4D4BC'],
-    straps: ['#A60000', '#D3110F', '#F6EEE2'], holo: ['#C80000', '#9E0000', '#F6EEE2'], role: '#B00000', qr: ['#B00000', '#5E0000'], plate: ['#D3110F', '#7A0000'],
+    straps: ['#A60000', '#D3110F', '#F6EEE2'], holo: ['#C80000', '#9E0000', '#F6EEE2'], role: '#B00000', qr: ['#B00000', '#5E0000'], plate: ['#FBF6EE', '#EEE3D2'],
     mark: shadeBrush, ring: '#FFFFFF', ink: ['#1F1612', 'rgba(31, 22, 18, 0.68)'] },
   // Japanese Culture (Nov 2, from their own layers): sakura on pink, their shanyrak; their motto as they asked it
   japanesecultureclub: { strap: 'JCC\n\u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!', strip: 'JCC \u00b7 \u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!',
@@ -212,6 +212,10 @@ export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
 export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
+/** the org a look belongs to, as this person's card knows it (their clubs first, then the app's list): its logo is the
+ *  card's medallion (ui/OrgMedal) */
+export const orgOfLook = (p: PersonCard, look: Look): OrgRef | undefined =>
+  look === 'kbtu' || look === 'sower' ? undefined : p.clubs.find((m) => skinOf(m.org) === look)?.org ?? data.orgs.find((o) => skinOf(o) === look);
 /** the word on each one's strap */
 export type Look = Skin | 'sower' | 'kbtu';
 const clubWords = Object.fromEntries(Object.entries(CLUBS).map(([k, c]) => [k, c.strap])) as Record<ClubSlug, string>;

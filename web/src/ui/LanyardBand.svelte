@@ -21,7 +21,11 @@
   import aperture from '../assets/lanyards/moments-aperture.svg?url';
   import faces from '../assets/lanyards/faces.webp';
   import hands from '../assets/lanyards/faces-hands.webp';
+  import facesWord from '../assets/lanyards/faces-word.webp'; // their official wordmark, cut from its black (round 5)
   import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
+  // the card's security print (round 5, .claude/reports/club-lanyards/gen-kbtu.py): a rosette round the photo, the colonnade engraved
+  import rosette from '../assets/lanyards/kbtu-rosette.svg?url';
+  import facade from '../assets/lanyards/kbtu-facade.svg?url';
   import KbtuMark from './KbtuMark.svelte';
   import KnightsHelm from './KnightsHelm.svelte';
   import ClubScene from './ClubScene.svelte';
@@ -83,10 +87,13 @@
       <span class="tag">BE STUDENT. BE EXCELLENT.</span>
   {:else if look === 'kbtu'}
     <img class="dec gl" src={guilloche} alt="" />
-    {#if wide}<span class="colw z"><span class="mark"><KbtuMark size={150} /></span></span>{:else}<span class="mark"><KbtuMark size={70} /></span>{/if}
+    {#if wide}<i class="kbl"></i><img class="dec ros z" src={rosette} alt="" /><img class="dec fac z" src={facade} alt="" /><i class="gloss"></i>
+    {:else}<span class="mark"><KbtuMark size={70} /></span>{/if}
     {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
   {:else if look === 'faces'}
-    <i class="beams"></i><i class="bokeh" class:z={wide}></i><img class="hands" class:z={wide} src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
+    <!-- the card (round 5, owner: their logo is the wavy gradient wordmark, not the hands): the wordmark big across the
+         club night, the lasers and lights round it; the badge's band keeps the hands under the word -->
+    <i class="beams"></i><i class="bokeh" class:z={wide}></i>{#if wide}<img class="fw z" src={facesWord} alt="" />{:else}<img class="hands" src={hands} alt="" /><img class="art" src={faces} alt="" />{/if}
   {/if}
 </div>
 
@@ -161,8 +168,14 @@
     linear-gradient(155deg, #2A4FD6, #121A3D 72%); }
   .gl { opacity: 0.13; mix-blend-mode: screen; }
   .mark { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; color: #fff; filter: drop-shadow(0 6px 18px rgba(124, 77, 255, 0.8)); }
-  .colw { position: absolute; inset: 0; pointer-events: none; --z: -3; } /* the colonnade far behind; .mark keeps its rotate */
-  .wide .mark { left: auto; top: auto; right: -26px; bottom: 36px; transform: rotate(-8deg); opacity: 0.12; filter: none; }
+  /* the card (round 5, owner: the flat one needed real work): security print, as on a banknote: the rosette woven round
+     the photo, the main building's colonnade engraved under the medallion, lit from behind; the rosette far (tilt) */
+  .kbtu.wide { background: radial-gradient(80% 90% at 0% 0%, rgba(124, 77, 255, 0.55), transparent 60%), radial-gradient(70% 90% at 85% 70%, rgba(80, 130, 255, 0.45), transparent 70%),
+    linear-gradient(155deg, #2747C8, #18256A 55%, #0E1434); }
+  .kbtu.wide .gl { opacity: 0.07; }
+  .kbl { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(170, 190, 255, 0.1) 45%, transparent 60%); }
+  .ros { --z: -2; --zs: 1.04; opacity: 0.75; }
+  .fac { --z: 2; --zs: 1.02; opacity: 0.55; } /* engraved, not drawn over the text */
   .word { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 800 7.5px/1 var(--font-text); letter-spacing: 0.28em; color: rgba(255, 255, 255, 0.7); }
   /* Cheerleading: their navy and black, the black panther from their logo in a still navy halo, its eyes the only gold
      in the art. The badge's band: the whole head centred, the band ending in the pass's navy (MyQr) with no seam. */
@@ -286,5 +299,5 @@
       radial-gradient(circle at 56% 18%, rgba(255, 255, 255, 0.35) 0 2px, transparent 4px), radial-gradient(circle at 40% 88%, rgba(192, 75, 255, 0.35) 0 3px, transparent 7px); }
   .hands { left: 50%; bottom: -6px; width: 300px; margin-left: -150px; opacity: 0.16; }
   .faces .art { left: 50%; top: 50%; height: 80px; transform: translate(-50%, calc(-50% + 10px)); /* 14 px clear of the slot */ filter: drop-shadow(0 4px 18px rgba(200, 64, 255, 0.45)); }
-  .wide .hands { left: auto; right: -40px; bottom: 44px; width: 230px; margin: 0; opacity: 0.2; --z: -3; }
+  .fw { right: -8%; top: 50%; width: 82%; margin-top: -78px; opacity: 0.3; transform: rotate(-4deg); --z: -2; --zs: 1.03; filter: drop-shadow(0 0 22px rgba(200, 64, 255, 0.35)); }
 </style>
