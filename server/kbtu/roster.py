@@ -185,15 +185,19 @@ def asks(con, uid: int) -> list[sqlite3.Row]:
     return [r for r in found if r["claimed_by"] != uid and not same_person(r["full_name"], s["first_name"], s["last_name"])] if s else []
 
 
-def join(con, uid: int, r: sqlite3.Row) -> bool:
+def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = False) -> bool:
     """The row made real; what the app already has wins: a membership held keeps its role, a missing one
     is added (a President on the sheet where the club already has another in the app: Vice), and the position as the
     club role's name, the department, the city, the year and the phone fill only what's empty. Then the row goes.
-    True when a President on the sheet came in as Vice."""
+    trusted=False (a claim no one has confirmed): never the row's city, year or phone (maybe someone else's).
+    promote: a member who claimed an officer's row, now confirmed, takes the row's role. True when a President on the
+    sheet came in as Vice."""
     oid = r["org_id"]
     vice = False
     with tx(con):
         m = one(con, "SELECT role, role_id FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)
+        if m and promote and m["role"] == "member" and r["role"] != "member":
+            m = None  # set below like a new one: a President's row where the club has one becomes Vice
         role = m["role"] if m else r["role"]
         if not m:
             if role == "president" and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND role = 'president'", oid):
@@ -215,9 +219,10 @@ def join(con, uid: int, r: sqlite3.Row) -> bool:
             if g and not g["department"]:
                 con.execute("UPDATE org_tags SET department = 1 WHERE id = ?", (gid,))
             con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) VALUES (?, ?)", (gid, uid))
-        if r["city"]:
+        if r["city"] and trusted:
             con.execute("UPDATE users SET city = COALESCE(city, ?) WHERE id = ?", (r["city"][:60], uid))
-        con.execute("UPDATE students SET course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?", (r["course"], r["phone"], uid))
+        if trusted:
+            con.execute("UPDATE students SET course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?", (r["course"], r["phone"], uid))
         con.execute("INSERT INTO roster_toasts (user_id, org_id, title, at) VALUES (?, ?, ?, ?)", (uid, oid, r["title"], now()))
         con.execute("DELETE FROM roster_pending WHERE id = ?", (r["id"],))
         con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{r['key']}", str(now())))  # a reload skips it
@@ -225,14 +230,20 @@ def join(con, uid: int, r: sqlite3.Row) -> bool:
 
 
 def claim(con, uid: int, rid: int) -> None:
-    """"Yes, it's me" on a row listed under another name (a typo, a new surname): whoever confirms hears it (the club's
-    President, or DMP's leads for a club without one). A student never removes a row: a wrong one goes
-    to support from the app."""
+    """"Yes, it's me" on a row listed under another name (a typo, a new surname): taken at the student's word (owner,
+    Nov 2), never the row's city, year or phone. A member's row: joined, done. An officer's row: joined as a member now;
+    the position waits for whoever confirms (the club's President, or DMP's leads / the Admin sheet for a club without
+    one), who hears it: a claimed "President" never runs a club unchecked."""
     from .logic import ApiError, notify
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)
     if r is None:
         raise ApiError("not_found")
+    if r["role"] == "member":
+        join(con, uid, r, trusted=False)
+        return
     with tx(con):
+        if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
+            set_role(con, None, uid, r["org_id"], "member", "roster")
         con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ?", (uid, rid))
         for (aid,) in _approvers(con, r["org_id"]):
             notify(con, aid, "roster_claim", f"rq:{rid}:{uid}")
@@ -275,7 +286,7 @@ def decide(con, v, rid: int, ok: bool) -> None:
         raise ApiError("forbidden")
     with tx(con):
         if ok:
-            join(con, r["claimed_by"], r)
+            join(con, r["claimed_by"], r, trusted=False, promote=True)
         else:
             con.execute("UPDATE roster_pending SET rejected_by = claimed_by, claimed_by = NULL WHERE id = ?", (rid,))
 

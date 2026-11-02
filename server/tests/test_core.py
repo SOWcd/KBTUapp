@@ -4912,7 +4912,8 @@ def test_roster_load_and_join(env):
     """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
     whose username and name match joins at once (role, position as the club role's name, department, city, year,
     phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
-    username but another name: asked without the phone or city, "Yes, it's me" goes to the President, who confirms."""
+    username but another name: asked without the phone or city; "Yes, it's me" joins at once as a member, the position
+    goes to the President, who confirms; the row's city and phone never come with a claim."""
     from kbtu import roster
     c, cfg = env
     pres = login(c, 70, "pres")
@@ -4929,7 +4930,7 @@ def test_roster_load_and_join(env):
     row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": None, "school": "SITE",  # noqa: E731
                        "year": "2", "course": 2, "city": None, "phone": None, "tg": None, "email": None, **k}
     items = [row(full_name="Testov Ali Made", tg="ali_t", position="Head of SMM", title="Head of SMM", role="head", dept="SMM", city="Taraz", phone="8 701 000 00 00"),
-             row(full_name="Someone Else", tg="bek_t", position="HR", title="HR", city="Aktau", phone="+77010000001"),
+             row(full_name="Someone Else", tg="bek_t", position="Head of HR", title="Head of HR", role="head", city="Aktau", phone="+77010000001"),
              row(full_name="Not Yet Here", tg="new_one", position="Vice president", role="vice", city="Shymkent"),
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
     orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
@@ -4954,7 +4955,8 @@ def test_roster_load_and_join(env):
     ask = c.get("/api/me", headers=h(72)).json()["roster"]["ask"]                      # Bek: the username, another name
     assert len(ask) == 1 and set(ask[0]) == {"id", "org", "title", "role", "dept"} and not c.get("/api/me", headers=h(72)).json()["memberships"]
     assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(72)).status_code == 204
-    assert c.get("/api/me", headers=h(72)).json()["roster"] is None                       # asked: waits for the President
+    me = c.get("/api/me", headers=h(72)).json()                                         # at his word: a member now, the position waits
+    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("member", None)] and me["roster"] is None and me["city"] is None
     assert con.execute("SELECT kind FROM bot_outbox WHERE user_id = ? AND kind = 'roster_claim'", (pres["id"],)).fetchone()
     assert c.get("/api/roster/requests", headers=h(72)).json() == []                    # not Bek's to confirm
     req = c.get("/api/roster/requests", headers=tma(70)).json()
@@ -4964,7 +4966,7 @@ def test_roster_load_and_join(env):
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=h(72), json={"ok": True}).status_code == 403
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
     me = c.get("/api/me", headers=h(72)).json()
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("member", "HR")] and me["city"]["name"] == "Aktau"
+    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"] is None   # never the row's city
 
 
 def test_roster_app_wins(env):
