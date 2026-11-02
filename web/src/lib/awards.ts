@@ -258,4 +258,4 @@ export const banded = (look: Look) => look !== 'sower';
 /** The creator's card, seal and strip (round 5b, owner: "redo everything"): two concepts, one line to switch.
  *  'holo': black titanium, a guilloche rosette in holographic foil round the seal, the seal's rim iridescent;
  *  'gold': black lacquer and gold leaf, the seal a gold coin. */
-export const SOWER: 'holo' | 'gold' = 'holo';
+export const SOWER: 'holo' | 'gold' = 'gold'; // owner, Nov 3: the gold one
