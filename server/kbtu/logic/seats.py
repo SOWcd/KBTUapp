@@ -289,10 +289,10 @@ def sweep_holds(con) -> None:
 def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
     sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
-    # starts_at's bound is implied (an event lasts 31 days at most, organizing.clean_event) and makes it an index range,
-    # not a scan of every event ever (review 12)
+    # starts_at's bound makes it an index range, not a scan of every event ever (review 12): a year back, wider than the
+    # 31-day cap (organizing.clean_event) so a long event published before the cap still shows while it runs
     sql = "SELECT * FROM events WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
-    args: list = [core.now() - 32 * 86400, NO_END, core.now()]
+    args: list = [core.now() - 366 * 86400, NO_END, core.now()]
     if org is not None:
         sql += " AND org_id = ?"; args.append(org)
     if frm is not None:
