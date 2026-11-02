@@ -13,9 +13,9 @@
   import arthouse from '../assets/lanyards/arthouse.webp';
   import people from '../assets/lanyards/qairym-people-dark.webp';
   import shadeWord from '../assets/lanyards/shade-word-red.webp';
+  import chEmblem from '../assets/lanyards/choice-emblem.webp'; // their logo cut off its navy (round 5b)
+  import chHelm from '../assets/lanyards/choice-helm.webp';
   import jccBack from '../assets/lanyards/jcc-back.webp';
-  import jccSakura from '../assets/lanyards/jcc-sakura.webp';
-  import jccLogo from '../assets/lanyards/jcc-logo.webp';
   import mic from '../assets/lanyards/scenes/ah-mic.svg?url';
   import keys from '../assets/lanyards/scenes/ah-keys.svg?url';
 
@@ -65,13 +65,22 @@
          the whole sheet, their line from the logo set small at the top; the brush itself is the medallion (OrgMedal).
          The badge's band: their red swept across it, the word in the middle -->
     <i class="paper"></i>
-    {#if wide}<img class="sw z" src={shadeWord} alt="" /><span class="shtag">CREATIVE PEOPLE CLUB</span>
+    <!-- round 5b (owner: both): round 4's red sweep across the card over round 5's brushed word in the paper -->
+    {#if wide}<img class="sw z" src={shadeWord} alt="" /><img class="l z near" src={L('sh-strokes')} alt="" /><span class="shtag">CREATIVE PEOPLE CLUB</span>
     {:else}<img class="l z near" src={L('sh-strokes')} alt="" /><img class="word" src={shadeWord} alt="" />{/if}
+  {:else if look === 'choice'}
+    <!-- Choice (round 5b, their logo): near-black navy, the gold of their shield. The card: the shield's outline big and
+         far, sharp gold rays behind it as the helmet's planes, their Spartan near in white, lit gold from behind the
+         medallion; the badge's band: the whole emblem in the middle under the same light -->
+    <i class="chrays z"></i>
+    {#if wide}<svg class="chsh z" viewBox="0 0 100 120"><path d="M50 3L95 18V58C95 88 74 106 50 117C26 106 5 88 5 58V18Z" /><path d="M50 12L86 24V58C86 82 69 97 50 106C31 97 14 82 14 58V24Z" /></svg>
+      <i class="chglow"></i><img class="chh z" src={chHelm} alt="" />
+    {:else}<img class="che" src={chEmblem} alt="" />{/if}
   {:else if look === 'japanesecultureclub'}
-    <!-- their own layers (Nov 2): the pink sky with its pale sun and their shanyrak far, the sakura near, petals drifting
-         between; on the badge's band their whole logo in the middle -->
-    <img class="l z far jb" src={jccBack} alt="" /><i class="petals"></i><img class="l z near js" src={jccSakura} alt="" />
-    {#if !wide}<span class="hero jl"><img src={jccLogo} alt="" /></span>{/if}
+    <!-- their own layers (round 5): the pink sky with its pale sun and their shanyrak far, petals drifting over it; their
+         sakura is the card's top layer, over the photo and the strip (Hero). The badge's band (MyQr) as they asked: no
+         logo in the middle, no sakura -->
+    <img class="l z far jb" src={jccBack} alt="" /><i class="petals"></i>
   {/if}
   <i class="gloss"></i>
 </div>
@@ -206,17 +215,31 @@
   .shtag { position: absolute; left: 18px; top: 10px; display: flex; gap: 6px; font: 800 6.5px/1 var(--font-text); letter-spacing: 0.2em; color: rgb(200, 0, 0); opacity: 0.85; }
   .shadekbtu .word { top: 30px; height: 56px; }
 
+  /* ---- Choice: their navy all but black, gold rays fanning from behind the helmet, the shield's outline far ---- */
+  .choice { background: radial-gradient(46% 80% at calc(100% - 48px) 72%, rgba(226, 188, 114, 0.26), transparent 70%), radial-gradient(70% 90% at 0% 0%, rgba(70, 80, 140, 0.28), transparent 62%),
+    linear-gradient(160deg, rgb(30, 35, 64), rgb(20, 22, 35) 55%, rgb(7, 8, 15)); }
+  .sc:not(.wide).choice { background: radial-gradient(60% 90% at 50% 0%, rgba(226, 188, 114, 0.26), transparent 70%), linear-gradient(180deg, rgb(30, 35, 64), rgb(20, 22, 35)); }
+  .chrays { inset: -40px; --z: -3; opacity: 0.9;
+    background: repeating-conic-gradient(from 0deg at calc(100% - 88px) calc(100% - 70px), rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
+    -webkit-mask: radial-gradient(70% 90% at calc(100% - 88px) calc(100% - 70px), black, transparent 75%); mask: radial-gradient(70% 90% at calc(100% - 88px) calc(100% - 70px), black, transparent 75%); }
+  .sc:not(.wide) .chrays { background: repeating-conic-gradient(from 0deg at 50% 60%, rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
+    -webkit-mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); }
+  .chsh { position: absolute; right: -22px; top: 2px; height: 180px; overflow: visible; --z: -2; fill: none; stroke: rgb(226, 188, 114); stroke-linejoin: round; }
+  .chsh path { stroke-width: 1.8; stroke-opacity: 0.75; filter: drop-shadow(0 0 6px rgba(226, 188, 114, 0.45)); }
+  .chsh path + path { stroke-width: 0.6; stroke-opacity: 0.3; filter: none; }
+  .chglow { right: 10px; bottom: 30px; width: 110px; height: 70px; background: radial-gradient(closest-side, rgba(255, 230, 180, 0.3), transparent); }
+  .chh { right: 6px; bottom: 30px; height: 104px; --z: 4; filter: drop-shadow(-2px 0 0 rgba(226, 188, 114, 0.4)) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.6)); }
+  .che { left: 50%; top: 14px; height: 100px; transform: translateX(-50%); filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)); }
+  .choice .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.08), transparent 65%); box-shadow: inset 0 1px 0 rgba(226, 188, 114, 0.35); }
+
   /* ---- Japanese Culture: their pink, their shanyrak top right (behind the QR on the card), sakura near ---- */
   .japanesecultureclub { background: rgb(224, 172, 190); }
   .jb { object-position: 100% 0; --z: -3; }
   .sc:not(.wide) .jb { object-position: 100% 30%; }
-  .js { object-position: 100% 0; --z: 4; --zs: 1.05; }
   .petals { left: -120px; top: -120px; width: calc(100% + 240px); height: calc(100% + 240px); background: url('../assets/lanyards/scenes/jcc-petals.svg') 0 0 / 120px 120px;
     opacity: 0.85; animation: jcpetal 24s linear infinite; }
   @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam */
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
-  .jl { height: 96px; }
-  .jl img { filter: drop-shadow(0 6px 14px rgba(90, 30, 60, 0.35)); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
   @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } }

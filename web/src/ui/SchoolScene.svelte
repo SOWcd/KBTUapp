@@ -13,9 +13,15 @@
   // each school's layers, far to near ('far' moves with the tilt); a layer drawn for one framing only is skipped in the other.
   // Round 5 (owner: the left was empty, SEPI and Law plain): every card's art runs its whole width, quieter under the text
   const LAYERS: Record<string, [string, string][]> = {
-    site: [['site-traces', 'far']], seogi: [['seogi-sky', 'far'], ['seogi-field', '']], geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
-    business: [['bs-chart', 'far']], ise: [['ise-globe', 'far']], kma: [['kma-moon', 'far'], ['kma-waves', 'waves']],
-    law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far']], sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
+    // round 5b (owner, Nov 3: Geology and KMA are the bar): one subject each under the medallion, with depth and its own
+    // light (.claude/reports/school-lanyards/gen-r5b.py, card files only; the band keeps round 4's)
+    site: [['site-traces', 'far'], ['site-board', 'far'], ['site-chip', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
+    geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
+    business: [['bs-chart', 'far'], ['bs-city', 'far'], ['bs-bars', 'near']], ise: [['ise-globe', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near']],
+    kma: [['kma-moon', 'far'], ['kma-waves', 'waves'], ['kma-ship', 'near ship']],
+    law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
+    sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-ring', 'far'], ['sce-flask', 'near']],
+    smsgt: [['smsgt-comb', 'far'], ['smsgt-lattice', 'far'], ['smsgt-leaf', 'near']], sss: [['sss-book', 'far'], ['sss-people', 'far'], ['sss-open', 'near']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
 </script>
@@ -75,8 +81,11 @@
   @keyframes seember { to { transform: translateY(-100px); } }
   /* KMA: the wheel far, the sea's lines swaying a little */
   .waves { animation: kmwave 10s ease-in-out infinite alternate; }
+  /* the ship rides the swell: a slow rise and roll about its waterline, on the waves' beat (its tilt depth is .near's) */
+  .ship { transform-origin: 55% 62%; animation: kmship 10s ease-in-out infinite alternate; }
+  @keyframes kmship { from { rotate: -1.2deg; translate: 0 0.6px; } to { rotate: 1deg; translate: 0 -0.8px; } }
   @keyframes kmwave { from { transform: translateX(-5px); } to { transform: translateX(5px); } }
 
-  @media (prefers-reduced-motion: reduce) { .sweep, .embers, .waves { animation: none; } }
-  :global(html.lowfx) .sweep, :global(html.lowfx) .embers, :global(html.lowfx) .waves { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .sweep, .embers, .waves, .ship { animation: none; } }
+  :global(html.lowfx) .sweep, :global(html.lowfx) .embers, :global(html.lowfx) .waves, :global(html.lowfx) .ship { animation: none; }
 </style>

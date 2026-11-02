@@ -1,13 +1,13 @@
 <script lang="ts">
   // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (owner,
   // Oct 20: "the bottom is the same on every card"). The shimmer follows the tilt (--gx, set by `glass` above it).
-  import { clubLook, type Look } from '../lib/awards';
+  import { clubLook, SOWER, type Look } from '../lib/awards';
 
   let { look, no }: { look: Look; no: string } = $props();
   const club = $derived(clubLook(look)); // the template's clubs: their word on their colours (lookVars)
 </script>
 
-<div class="holo {look}" class:club={!!club}>
+<div class="holo {look}" class:club={!!club} class:swg={look === 'sower' && SOWER === 'gold'}>
   {#if club}<b class="w ch" class:long={club.strip.length > 12}>{club.strip}</b>
   {:else if look === 'sower'}<b class="w sw">SOWER</b>
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
@@ -37,7 +37,16 @@
     background-size: 260% 100%, 200% 100%, 100% 100%; background-position: calc(50% + var(--gx, 0) * 110%) 0, calc(50% + var(--gx, 0) * 40%) 0, 0 0;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(23, 48, 100, 0.16), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .studex span { font-variant-numeric: tabular-nums; }
-  .sower { background-image: linear-gradient(100deg, #fff 25%, #D9D9DE 40%, #fff 52%, #C9C9CF 62%, #fff 75%); color: #0A0A0A; }
+  /* SOWER (round 5b, lib/awards.ts SOWER): black glass in a hairline of holographic foil sliding with the tilt, the name in
+     silver; or (gold) in gold leaf */
+  .sower { border: 1px solid transparent; color: rgba(232, 234, 240, 0.75);
+    background: linear-gradient(180deg, rgb(23, 23, 28), rgb(5, 5, 7)) padding-box,
+      linear-gradient(100deg, rgb(142, 197, 255), rgb(199, 166, 255) 17%, rgb(255, 179, 217) 33%, rgb(255, 230, 166) 50%, rgb(166, 255, 224) 67%, rgb(142, 197, 255) 83%, rgb(199, 166, 255)) border-box;
+    background-size: 100% 100%, 300% 100%; background-position: 0 0, calc(50% + var(--gx, 0) * 60%) 0; box-shadow: 0 6px 16px -6px rgba(160, 140, 255, 0.35); }
+  .sower .sw { color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, rgb(255, 255, 255), rgb(169, 174, 188)); }
+  .swg { background: linear-gradient(180deg, rgb(21, 18, 12), rgb(5, 4, 3)) padding-box, linear-gradient(100deg, rgb(122, 82, 16), rgb(246, 217, 138) 40%, rgb(255, 244, 208) 50%, rgb(216, 167, 67) 60%, rgb(122, 82, 16)) border-box;
+    background-size: 100% 100%, 260% 100%; background-position: 0 0, calc(50% + var(--gx, 0) * 60%) 0; color: rgba(232, 196, 120, 0.8); box-shadow: 0 6px 16px -6px rgba(200, 150, 60, 0.35); }
+  .swg .sw { background-image: linear-gradient(180deg, rgb(255, 240, 200), rgb(232, 196, 120) 55%, rgb(184, 137, 62)); }
   .sx { gap: 0; font: 900 16px/1 var(--font-display); letter-spacing: -0.03em; color: #173064; }
   .sx i { font-style: normal; color: rgb(214, 38, 27); }
   .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; }
@@ -48,13 +57,17 @@
     color: rgb(29, 32, 66); box-shadow: inset 0 0 0 1px rgba(255, 236, 190, 0.6), inset 0 -1px 2px rgba(70, 46, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
   .cheer span { font-variant-numeric: tabular-nums; }
   .ch { font: 800 11px/1 var(--font-display); letter-spacing: 0.2em; }
-  /* Knights: their blue as a material, a specular band sliding with the tilt (not silver: that is StudEx's and Sower's) */
-  .knights { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.22) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
-    linear-gradient(100deg, rgb(47, 107, 208), rgb(28, 76, 148));
-    color: rgba(255, 255, 255, 0.8); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), inset 0 -1px 2px rgba(0, 0, 0, 0.25), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
-  .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; color: white; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
-  .moments { background-image: linear-gradient(100deg, #F2DEC8 15%, #E3A985 40%, #F6E7D6 55%, #C9C391 75%, #F2DEC8 90%); color: #3A2016;
-    box-shadow: inset 0 0 0 1px rgba(58, 32, 22, 0.15); }
+  /* Knights (round 5b): navy enamel in a gold rim, their name in gold leaf, one light sliding with the tilt */
+  .knights { background: linear-gradient(100deg, transparent 38%, rgba(255, 236, 190, 0.2) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(180deg, rgb(26, 63, 134), rgb(11, 29, 68));
+    color: rgba(232, 196, 120, 0.9); box-shadow: inset 0 0 0 1px rgba(232, 196, 120, 0.75), inset 0 1px 0 rgba(255, 236, 190, 0.35), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
+  .kn { font: italic 900 15px/1 var(--font-display); letter-spacing: 0.04em; color: transparent; -webkit-background-clip: text; background-clip: text;
+    background-image: linear-gradient(180deg, rgb(255, 240, 200), rgb(232, 196, 120) 55%, rgb(184, 137, 62)); }
+  /* Moments (round 5b): a frame of colour negative, its amber base, sprocket holes along both edges, a light sliding */
+  .moments { background: linear-gradient(100deg, transparent 38%, rgba(255, 240, 220, 0.35) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    repeating-linear-gradient(90deg, rgba(42, 18, 9, 0.6) 0 4px, transparent 4px 9px) 0 2px / 100% 3px no-repeat,
+    repeating-linear-gradient(90deg, rgba(42, 18, 9, 0.6) 0 4px, transparent 4px 9px) 0 calc(100% - 2px) / 100% 3px no-repeat, linear-gradient(100deg, rgb(238, 154, 72), rgb(201, 98, 42) 60%, rgb(224, 138, 62));
+    color: rgb(42, 18, 9); box-shadow: inset 0 0 0 1px rgba(255, 220, 180, 0.4), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
   .mo { font: 800 12px/1 var(--font-display); letter-spacing: 0.34em; }
   /* Faces: black glass, their gradient in the name's letters and a thin line under the strip (white on their bright
      gradient was 3:1); the letters' gradient a tint lighter than the wordmark's, so its violet keeps 4.5:1 on black */

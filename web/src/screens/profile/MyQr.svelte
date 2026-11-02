@@ -7,7 +7,8 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
+  import { hero, QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars, SOWER } from '../../lib/awards';
+  import SowerArt from '../../ui/SowerArt.svelte';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -70,12 +71,12 @@
 <div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
   <div class="page">
-  <div class="stage {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
+  <div class="stage {look} {look === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!clubLook(look)} style={lookVars(look)}>
     <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
     <div class="pass" class:banded={banded(look)}>
-      {#if banded(look)}<LanyardBand {look} />{/if}
+      {#if banded(look)}<LanyardBand {look} />{:else if look === 'sower'}<SowerArt />{/if}
       <span class="slot" aria-hidden="true"></span>
       <div class="who">
         <span class="ph"><Avatar person={h.person} size={46} tappable={false} /><Frame id={h.frame} /></span>
@@ -156,17 +157,17 @@
   .cheer .pass { background: linear-gradient(180deg, rgb(24, 26, 52) 124px, rgb(9, 10, 20)); } /* from the band's last colour where it ends: no seam */
   .cheer .strap { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); box-shadow: inset 1px 0 0 rgba(232, 192, 98, 0.45), inset -1px 0 0 rgba(232, 192, 98, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25); }
   .cheer .strap span { color: rgb(255, 200, 61); }
-  .knights { --role: #9CC2FF; }
-  .knights .pass { background: linear-gradient(180deg, #0F2B66, #071631); }
-  .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
-  .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
+  .knights { --role: rgb(232, 196, 120); }
+  .knights .pass { background: linear-gradient(180deg, rgb(11, 29, 68) 124px, rgb(5, 14, 36)); }
+  .knights .strap { background: linear-gradient(90deg, rgb(11, 29, 68), rgb(30, 74, 158) 50%, rgb(11, 29, 68)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.6), inset -1px 0 0 rgba(232, 196, 120, 0.6), 0 2px 6px rgba(0, 0, 0, 0.25); }
+  .knights .strap span { letter-spacing: 0.12em; color: rgb(232, 196, 120); } /* seven letters on the short strap */
   .moments { --role: #F4D9BE; }
   /* below the band the look's texture goes on: Moments' film grain and a warm leak, Faces' club lights */
   .moments .pass { background: radial-gradient(60% 40% at 100% 70%, rgba(255, 150, 80, 0.16), transparent 70%), linear-gradient(180deg, #3A2419, #160D09); }
   .moments .pass::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.12; mix-blend-mode: overlay;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"); }
-  .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
-  .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
+  .moments .strap { background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) 3px 0 / 3px 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) calc(100% - 3px) 0 / 3px 100% no-repeat, rgb(27, 19, 16); }
+  .moments .strap span { color: rgb(242, 179, 92); letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
   .faces .pass { background: radial-gradient(circle at 8% 62%, rgba(255, 79, 154, 0.3) 0 4px, transparent 9px), radial-gradient(circle at 93% 48%, rgba(110, 123, 255, 0.3) 0 3px, transparent 8px),
     radial-gradient(circle at 90% 90%, rgba(255, 164, 61, 0.28) 0 5px, transparent 10px), radial-gradient(80% 50% at 50% 100%, rgba(200, 64, 255, 0.22), transparent 70%), linear-gradient(180deg, #0E0C14, #050408); }
@@ -175,12 +176,14 @@
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .pass { background: linear-gradient(180deg, #13295C, #081633); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  .sower { --role: rgba(255, 255, 255, 0.92); }
-  .sower .pass { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
-  .sower .pass::before { content: ''; position: absolute; right: -130px; top: -130px; width: 340px; height: 340px; border-radius: 50%; pointer-events: none;
-    background: repeating-radial-gradient(circle, transparent 0 18px, rgba(255, 255, 255, 0.12) 18px 19.5px); }
-  .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
-  .sower .strap span { color: #000; }
+  /* SOWER (round 5b): as on the card (Hero) */
+  .sower { --role: rgb(212, 218, 232); }
+  .sower .pass { background: rgb(0, 0, 0); }
+  .sower .strap { background: linear-gradient(90deg, rgb(18, 18, 22), rgb(42, 42, 49) 50%, rgb(18, 18, 22)); box-shadow: inset 1px 0 0 rgba(199, 166, 255, 0.7), inset -1px 0 0 rgba(166, 255, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sower .strap span { color: rgb(232, 234, 240); letter-spacing: 0.3em; }
+  .sw-gold { --role: rgb(232, 196, 120); }
+  .sw-gold .strap { background: linear-gradient(90deg, rgb(10, 8, 6), rgb(30, 26, 18) 50%, rgb(10, 8, 6)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.75), inset -1px 0 0 rgba(232, 196, 120, 0.75), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sw-gold .strap span { color: rgb(232, 196, 120); }
   /* the template's clubs (CLUB_LOOKS as CSS variables, Hero's): the body goes on from the band's last colour, no seam */
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }

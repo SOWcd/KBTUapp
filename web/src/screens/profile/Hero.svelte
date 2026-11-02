@@ -21,7 +21,8 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, QR_LOOK } from '../../lib/awards';
+  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, QR_LOOK, SOWER } from '../../lib/awards';
+  import SowerArt from '../../ui/SowerArt.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
@@ -29,6 +30,9 @@
   import Qr from '../../ui/Qr.svelte';
   import LookMark from '../../ui/LookMark.svelte';
   import { burst } from '../../ui/burst';
+  import jccPhoto from '../../assets/lanyards/jcc-top-photo.webp';
+  import jccLeft from '../../assets/lanyards/jcc-top-left.webp';
+  import jccRight from '../../assets/lanyards/jcc-top-right.webp';
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always). onphoto: my photo tapped (Me: settings, or
@@ -161,14 +165,18 @@
   });
 </script>
 
+<!-- JCC's top layer (round 5, their own split): their sakura over the photo, its frame and the strip, where their mock puts
+     it; part of their lanyard, not a frame (a frame worn with it stays under it) -->
+{#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
+
 <section class="h">
-<div class="hang {face}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
+<div class="hang {face} {face === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
     <div class="card" class:flipped bind:this={card}>
     <div class="badge" use:glass onclick={mine ? cardTap : undefined} role="presentation" inert={flipped}>
-      {#if face === 'sower'}<i class="rings z" aria-hidden="true"></i>{/if}
+      {#if face === 'sower'}<SowerArt wide />{/if}
       {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
       <span class="slot" aria-hidden="true"></span>
       <!-- the organisation's medallion where the QR was (owner, Nov 2); on mine it turns the card over to its back, the
@@ -176,8 +184,8 @@
       {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><QrCode size={10} strokeWidth={2.4} /></span></button>
       {:else}<span class="medal"><OrgMedal look={face} logo={medalLogo} /></span>{/if}
       <div class="top" class:mine>
-        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} /></button>
-        {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} /></span>{/if}
+        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
+        {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
@@ -185,7 +193,7 @@
           <span class="meta clamp">{h.line}</span>
         </span>
       </div>
-      <span class="foot"><LanyardHolo look={face} no={h.no} /></span>
+      <span class="foot"><LanyardHolo look={face} no={h.no} />{#if face === 'japanesecultureclub'}<img class="jt jl" src={jccLeft} alt="" /><img class="jt jr" src={jccRight} alt="" />{/if}</span>
       <i class="shade" bind:this={shade} aria-hidden="true"></i>
     </div>
     <!-- the back, mine only: my QR on a white plate, big enough to scan here; the medallion, my name and number beside it -->
@@ -246,11 +254,13 @@
     transform: rotateY(180deg); color: white; background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club .back { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
-  .sower .back, .faces .back { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .faces .back { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
+  .sower .back { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 130, 170, 0.2), transparent 60%), linear-gradient(160deg, rgb(27, 28, 33), rgb(0, 0, 0)); }
+  .sw-gold .back { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 90, 30, 0.26), transparent 60%), linear-gradient(160deg, rgb(21, 18, 12), rgb(0, 0, 0)); }
   .studex .back { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .cheer .back { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
-  .knights .back { background: linear-gradient(150deg, rgb(47, 107, 208), rgb(14, 42, 98)); }
-  .moments .back { background: linear-gradient(150deg, #C46D47, #6E3322); }
+  .knights .back { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
+  .moments .back { background: radial-gradient(70% 90% at 100% 100%, rgba(214, 120, 70, 0.4), transparent 70%), linear-gradient(150deg, rgb(74, 42, 30), rgb(20, 11, 8)); }
   /* the plate: white, the code's own quiet zone in it; the size a door's scanner reads from a phone */
   .plate { flex: none; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
     box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
@@ -313,13 +323,13 @@
   .cheer { --role: #FFC83D; }
   .cheer .strap { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); box-shadow: inset 1px 0 0 rgba(232, 192, 98, 0.45), inset -1px 0 0 rgba(232, 192, 98, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25); } /* their navy, gold stitches at the edges */
   .cheer .strap span { color: rgb(255, 200, 61); }
-  .knights { --role: #9CC2FF; }
-  .knights .strap { background: linear-gradient(90deg, #163E7C, #2F6BD0 50%, #163E7C); }
-  .knights .strap span { letter-spacing: 0.12em; } /* seven letters on the short strap */
+  .knights { --role: rgb(232, 196, 120); } /* round 5b: their navy, a knight's gold */
+  .knights .strap { background: linear-gradient(90deg, rgb(11, 29, 68), rgb(30, 74, 158) 50%, rgb(11, 29, 68)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.6), inset -1px 0 0 rgba(232, 196, 120, 0.6), 0 2px 6px rgba(0, 0, 0, 0.25); }
+  .knights .strap span { letter-spacing: 0.12em; color: rgb(232, 196, 120); } /* seven letters on the short strap */
   .moments { --role: #F4D9BE; }
   .moments .meta { color: rgba(255, 255, 255, 0.84); } /* with the darker column behind it (LanyardBand), 4.5:1 */
-  .moments .strap { background: linear-gradient(90deg, #7A321F, #B5603F 50%, #7A321F); }
-  .moments .strap span { color: #F4D9BE; letter-spacing: 0.12em; }
+  .moments .strap { background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) 3px 0 / 3px 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 3px, rgba(233, 210, 186, 0.8) 3px 6px, transparent 6px 8px) calc(100% - 3px) 0 / 3px 100% no-repeat, rgb(27, 19, 16); } /* round 5b: a strip of film */
+  .moments .strap span { color: rgb(242, 179, 92); letter-spacing: 0.12em; }
   .faces { --role: #FF9BD6; }
   .faces .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .faces .strap span { color: #fff; }
@@ -330,14 +340,16 @@
   .moments .id { text-shadow: 0 1px 2px rgba(40, 16, 8, 0.6), 0 0 14px rgba(40, 16, 8, 0.55); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone (Oct 14 after four drafts): black, rings spreading from behind the QR's corner; the strap white with black letters */
-  .sower { --role: rgba(255, 255, 255, 0.92); }
-  .sower .badge { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
-  .rings { position: absolute; right: -120px; top: -120px; width: 300px; height: 300px; border-radius: 50%; pointer-events: none; --z: -2; /* depth: base.css */
-    background: repeating-radial-gradient(circle, transparent 0 17px, rgba(255, 255, 255, 0.12) 17px 18.5px); }
-  .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
-  .sower .strap span { color: #000; }
+  /* SOWER, the creator's alone (round 5b, owner: "redo everything"; ui/SowerArt, lib/awards.ts SOWER): holo, black titanium
+     and holographic foil; gold, black lacquer and gold leaf */
+  .sower { --role: rgb(212, 218, 232); }
   .sower .meta { color: rgba(255, 255, 255, 0.66); }
+  .sower .badge { background: rgb(0, 0, 0); }
+  .sower .strap { background: linear-gradient(90deg, rgb(18, 18, 22), rgb(42, 42, 49) 50%, rgb(18, 18, 22)); box-shadow: inset 1px 0 0 rgba(199, 166, 255, 0.7), inset -1px 0 0 rgba(166, 255, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sower .strap span { color: rgb(232, 234, 240); letter-spacing: 0.3em; }
+  .sw-gold { --role: rgb(232, 196, 120); }
+  .sw-gold .strap { background: linear-gradient(90deg, rgb(10, 8, 6), rgb(30, 26, 18) 50%, rgb(10, 8, 6)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.75), inset -1px 0 0 rgba(232, 196, 120, 0.75), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sw-gold .strap span { color: rgb(232, 196, 120); }
   /* the template's clubs (lib/awards.ts CLUB_LOOKS, as CSS variables): the card under the band, the strap, the photo's
      ring; the role's colour comes as --role itself */
   .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }
@@ -347,6 +359,13 @@
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .club .id { text-shadow: var(--tsh); }
   .club .meta { color: var(--ink2); }
+  /* JCC's sakura, cut from their 1712 px card (.claude/reports/club-lanyards/cut-jcc-r5.py): placed by their mock's photo
+     (124..500 x 183..558) and strip (80..1610 x 738..868), at the strip's 28 px / 130 = 0.2154 px per art px */
+  .jt { position: absolute; z-index: 3; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
+  .jp { left: -33%; top: -30.05%; width: 164.9%; height: 162.2%; }
+  .jl { left: -10.8px; top: -2.8px; width: 34.5px; height: 36px; }
+  .jr { right: -17.2px; top: -35.1px; width: 58.2px; height: 71.1px; }
+  .japanesecultureclub .id { position: relative; z-index: 2; } /* the name over the petals */
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
   /* the award shelf: six places, the empty ones dashed */

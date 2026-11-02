@@ -7,8 +7,8 @@
   // (owner: never half hidden behind it). Knights (redrawn Oct 31): their blue, a jersey's
   // side piping; v2 (Oct 31): the knight under the arena light, one spotlight sweeping slowly down from behind the QR
   // onto a silver pin of their helmet (on the card) or their whole logo (on the badge's band).
-  // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band; on the
-  // profile's card only the lens's aperture (lucide's), as the wordmark ran under the name.
+  // Moments (photo club, Oct 29): their wordmark on their poster's warm watercolour, film sprockets on the band. The
+  // profile's card (round 5b): a lens big in the corner over bokeh in a darkroom's warm dark.
   // Faces (a party club): their gradient wordmark over the hands' triangle from their logo, drawn white, on a club
   // night's black with laser beams and lights in the haze.
   // The other clubs (Nov 2): their own scenes (ui/ClubScene) in the template's frame (lib/awards.ts CLUB_LOOKS); the
@@ -17,17 +17,16 @@
   import panther from '../assets/lanyards/panther.webp';
   import pantherEyes from '../assets/lanyards/panther-eyes.webp';
   import knights from '../assets/lanyards/knights.webp';
+  import KnightsHelm from './KnightsHelm.svelte';
   import moments from '../assets/lanyards/moments.webp';
-  import aperture from '../assets/lanyards/moments-aperture.svg?url';
+  import lens from '../assets/lanyards/moments-lens.svg?url'; // round 5b: .claude/reports/club-lanyards/gen-moments-lens.py
   import faces from '../assets/lanyards/faces.webp';
   import hands from '../assets/lanyards/faces-hands.webp';
-  import facesWord from '../assets/lanyards/faces-word.webp'; // their official wordmark, cut from its black (round 5)
   import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
   // the card's security print (round 5, .claude/reports/club-lanyards/gen-kbtu.py): a rosette round the photo, the colonnade engraved
   import rosette from '../assets/lanyards/kbtu-rosette.svg?url';
   import facade from '../assets/lanyards/kbtu-facade.svg?url';
   import KbtuMark from './KbtuMark.svelte';
-  import KnightsHelm from './KnightsHelm.svelte';
   import ClubScene from './ClubScene.svelte';
   import SchoolScene from './SchoolScene.svelte';
 
@@ -47,11 +46,19 @@
     {#if wide}<i class="halo z"></i><i class="ground"></i>{/if}
     <span class="pan" class:z={wide}><img src={panther} alt="" /><img class="eyes" src={pantherEyes} alt="" /></span>{#if wide}<i class="gloss"></i>{/if}
   {:else if look === 'knights'}
-    {#if wide}<span class="beamw z"><i class="beam"></i></span><i class="ground"></i><span class="pin z"><KnightsHelm metal /></span><i class="gloss"></i>
+    <!-- round 5b (owner: "poor, not pretty"): heraldic, their navy and a knight's gold. The card: a gold light falling from
+         behind the medallion onto their helmet in silver, standing before a great shield (a chevron, its gold rim) far
+         behind it; fine gold hatching as an engraving's ground -->
+    {#if wide}<span class="beamw z"><i class="beam"></i></span>
+      <svg class="kshield z" viewBox="0 0 100 120"><defs><linearGradient id="{gid}k" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="rgb(42, 91, 184)" /><stop offset="1" stop-color="rgb(11, 31, 77)" /></linearGradient></defs>
+        <path class="kf" d="M50 3L95 18V58C95 88 74 106 50 117C26 106 5 88 5 58V18Z" fill="url(#{gid}k)" /><path class="kc" d="M5 70L50 40L95 70V84L50 54L5 84Z" /><path class="kr" d="M50 3L95 18V58C95 88 74 106 50 117C26 106 5 88 5 58V18Z" /><path class="kr2" d="M50 11L87 23V58C87 83 69 98 50 108C31 98 13 83 13 58V23Z" /></svg>
+      <i class="kfacet"></i><i class="ground"></i><span class="pin z"><KnightsHelm metal /></span><i class="gloss"></i>
     {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
-    {#if wide}<i class="vf z"></i><span class="exif"><b>●</b> f/1.8 · 1/250 · ISO 400</span><img class="ap z" src={aperture} alt="" />
+    <!-- the card (round 5b, owner: "poor, not pretty"): a darkroom's warm dark, out-of-focus lights far behind, the lens
+         itself big in the corner looking back at you, its coated glass catching the light; the viewfinder over it all -->
+    {#if wide}<i class="mbokeh z"></i><span class="mlens z"><img src={lens} alt="" /></span><i class="vf z"></i><span class="exif"><b>●</b> f/1.4 · 1/250 · ISO 400</span>
     {:else}<i class="film t"></i><i class="film b"></i><span class="edge">MOMENTS 400 <b>▸</b> 24 <b>▸</b> 24A</span><img class="art" src={moments} alt="" />{/if}
   {:else if look === 'studex' && wide}
     <!-- the profile's card: the Oct 29 art (owner, Oct 31: both redraws of it were worse) with what he asked on top: their
@@ -91,9 +98,9 @@
     {:else}<span class="mark"><KbtuMark size={70} /></span>{/if}
     {#if !wide}<b class="word">KAZAKH-BRITISH TECHNICAL UNIVERSITY</b>{/if}
   {:else if look === 'faces'}
-    <!-- the card (round 5, owner: their logo is the wavy gradient wordmark, not the hands): the wordmark big across the
-         club night, the lasers and lights round it; the badge's band keeps the hands under the word -->
-    <i class="beams"></i><i class="bokeh" class:z={wide}></i>{#if wide}<img class="fw z" src={facesWord} alt="" />{:else}<img class="hands" src={hands} alt="" /><img class="art" src={faces} alt="" />{/if}
+    <!-- the club night with the hands' triangle (round 5b, owner: back to round 4's card; their wavy wordmark is the
+         medallion, OrgMedal) -->
+    <i class="beams"></i><i class="bokeh" class:z={wide}></i><img class="hands" class:z={wide} src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
   {/if}
 </div>
 
@@ -207,39 +214,38 @@
   @media (prefers-reduced-motion: reduce) { .eyes { animation: none; opacity: 0.85; } }
   :global(html.lowfx) .eyes { animation: none; opacity: 0.85; }
 
-  /* Knights: their blue (from the logo's pixels), a jersey's side piping at the edge (vertical, where StudEx's cut is
-     diagonal). The badge's band: lit from the top, the whole logo, ending in the pass's own blue (MyQr) with no seam. */
-  .knights { --pipe: transparent 7px, rgba(255, 255, 255, 0.22) 7px 9px, transparent 9px 12px, rgba(255, 255, 255, 0.12) 12px 13px, transparent 13px;
-    background: linear-gradient(90deg, var(--pipe)), linear-gradient(270deg, var(--pipe)),
-      radial-gradient(50% 40% at 50% 100%, rgba(80, 145, 245, 0.45), transparent 70%),
-      radial-gradient(60% 90% at 50% 0%, rgba(58, 123, 234, 0.5), transparent 70%), linear-gradient(180deg, rgb(28, 76, 148), rgb(15, 43, 102)); }
+  /* Knights (round 5b): their navy, a knight's gold. The band: a gold light from above onto their logo, ending in the
+     pass's navy (MyQr) with no seam */
+  .knights { background: radial-gradient(60% 90% at 50% 0%, rgba(232, 196, 120, 0.3), transparent 70%), linear-gradient(180deg, rgb(23, 52, 110), rgb(11, 29, 68)); }
   .knights .art { left: 50%; top: 20px; height: 94px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35)); }
-  /* the card: darker at the top left (the role line keeps 4.5:1 under the gloss and the beam's spill), a pool of light
-     at the pin's foot. Everything new is anchored right, so 320 px needs no second set of numbers. */
-  .knights.wide { background: linear-gradient(90deg, var(--pipe)), radial-gradient(45% 60% at calc(100% - 43px) calc(100% - 36px), rgba(70, 135, 240, 0.5), transparent 70%),
-    linear-gradient(160deg, rgb(22, 63, 130), rgb(16, 48, 106) 55%, rgb(10, 30, 74)); }
-  /* one spotlight, a 36° cone (6° core) whose centre is its apex: 40 px above the card at the QR's centre, straight
-     down (Knights' light is vertical, StudEx's diagonal). The QR hides its top; it falls from behind it onto the pin. */
-  .beamw { position: absolute; inset: 0; pointer-events: none; --z: -2; } /* behind the pin with the tilt */
+  .knights.wide { background: radial-gradient(44% 75% at calc(100% - 46px) 72%, rgba(232, 196, 120, 0.3), transparent 70%),
+    radial-gradient(70% 90% at 0% 0%, rgba(60, 110, 210, 0.3), transparent 62%), linear-gradient(160deg, rgb(24, 58, 126), rgb(15, 38, 89) 55%, rgb(7, 20, 54)); }
+  /* one gold light, a cone falling from behind the medallion, sweeping a little */
+  .beamw { position: absolute; inset: 0; pointer-events: none; --z: -2; }
   .beam { position: absolute; right: -104px; top: -190px; width: 300px; height: 300px; pointer-events: none; transform-origin: 50% 50%;
-    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.22) 0deg 3deg, rgba(190, 215, 255, 0) 18deg 342deg, rgba(190, 215, 255, 0.22) 357deg);
+    background: conic-gradient(from 180deg at 50% 50%, rgba(240, 206, 140, 0.22) 0deg 4deg, rgba(240, 206, 140, 0) 20deg 340deg, rgba(240, 206, 140, 0.22) 356deg);
     animation: knsweep 12s ease-in-out infinite alternate; }
   @keyframes knsweep { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
-  /* the badge's band: the same light, centred over the slot, wider and a little dimmer, ±5° */
-  .band.knights:not(.wide) .beam { left: 50%; right: auto; top: -210px; margin-left: -150px; animation-name: knsweepb;
-    background: conic-gradient(from 180deg at 50% 50%, rgba(190, 215, 255, 0.14) 0deg 4deg, rgba(190, 215, 255, 0) 24deg 336deg, rgba(190, 215, 255, 0.14) 356deg); }
+  .band.knights:not(.wide) .beam { left: 50%; right: auto; top: -210px; margin-left: -150px; animation-name: knsweepb; }
   @keyframes knsweepb { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
-  /* the pin: their helmet in silver standing on the strip under the QR, nearest with the tilt. It catches the light as
-     the beam crosses it: with the sweep's ease-in-out, 38-62 % is the beam within ±2° of it. Same duration, direction
-     and (no) delay as the sweep, or the two drift apart. */
-  .pin { position: absolute; right: 13px; bottom: 40px; height: 44px; aspect-ratio: 252 / 264; pointer-events: none; --z: 5; } /* the helmet's body at 29 % of the box: on the axis */
-  .wide:not(.qr) .pin { right: 5px; height: 64px; } /* 5 px off the axis: at 0 the plume touched the edge */
-  .knights .ground { --gw: 29px; }
-  .wide:not(.qr).knights .ground { --gw: 42px; }
+  /* the great shield, far: their blue, a gold chevron, a gold rim; the helmet stands before it */
+  .kshield { position: absolute; right: -18px; top: 4px; height: 176px; pointer-events: none; overflow: visible; --z: -3; opacity: 0.85; }
+  .kf { filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45)); }
+  .kc { fill: rgba(232, 196, 120, 0.22); }
+  .kr { fill: none; stroke: rgb(232, 196, 120); stroke-width: 1.6; stroke-opacity: 0.7; stroke-linejoin: round; }
+  .kr2 { fill: none; stroke: rgb(232, 196, 120); stroke-width: 0.6; stroke-opacity: 0.35; }
+  /* an engraving's hatching in gold on the right, fading under the text */
+  .kfacet { position: absolute; inset: 0; pointer-events: none; opacity: 0.6;
+    background: repeating-linear-gradient(118deg, transparent 0 22px, rgba(232, 196, 120, 0.09) 22px 23px), repeating-linear-gradient(62deg, transparent 0 30px, rgba(232, 196, 120, 0.06) 30px 31px);
+    -webkit-mask: linear-gradient(90deg, transparent 38%, black 78%); mask: linear-gradient(90deg, transparent 38%, black 78%); }
+  /* the pin: their helmet in silver before the shield, nearest with the tilt; it catches the light as the beam crosses it
+     (38-62 % of the sweep is the beam within ±2° of it) */
+  .pin { position: absolute; right: 13px; bottom: 40px; height: 44px; aspect-ratio: 252 / 264; pointer-events: none; --z: 5; }
+  .wide .pin { right: 10px; bottom: 36px; height: 64px; } /* round 5b: the hero before the shield */
+  .knights .ground { --gw: 46px; }
   .knights .pin :global(.lit) { animation: knlit 12s linear infinite alternate; }
   @keyframes knlit { 0%, 38% { opacity: 0; } 50% { opacity: 0.45; } 62%, 100% { opacity: 0; } }
-  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
-  /* still: the beam rests straight down on the pin, still drawn (it is the composition, not an effect) */
+  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%); box-shadow: inset 0 1px 0 rgba(232, 196, 120, 0.4); }
   @media (prefers-reduced-motion: reduce) { .beam { animation: none; } .knights .pin :global(.lit) { display: none; } }
   :global(html.lowfx) .beam { animation: none; }
   :global(html.lowfx) .knights .pin :global(.lit) { display: none; }
@@ -248,8 +254,18 @@
   .moments { background: radial-gradient(55% 75% at 28% 62%, rgba(122, 116, 66, 0.95), transparent 72%),
     radial-gradient(45% 70% at 82% 30%, rgba(143, 62, 38, 0.9), transparent 70%),
     radial-gradient(35% 55% at 95% 95%, rgba(236, 205, 178, 0.55), transparent 70%), linear-gradient(160deg, #C46D47, #A24F31); }
-  .moments.wide { background: radial-gradient(60% 55% at 92% 88%, rgba(122, 116, 66, 0.9), transparent 72%),
-    radial-gradient(70% 60% at 0% 0%, rgba(214, 137, 98, 0.7), transparent 70%), linear-gradient(165deg, #A9563A, #6E3322 70%, #4A2318); }
+  .moments.wide { background: radial-gradient(40% 70% at calc(100% - 40px) 80%, rgba(214, 120, 70, 0.45), transparent 70%),
+    radial-gradient(70% 60% at 0% 0%, rgba(150, 80, 50, 0.45), transparent 70%), linear-gradient(165deg, rgb(74, 42, 30), rgb(42, 23, 17) 60%, rgb(20, 11, 8)); }
+  /* bokeh: the lights of a street far behind, out of focus (far, against the tilt) */
+  .mbokeh { position: absolute; inset: -20px; pointer-events: none; --z: -4; mix-blend-mode: screen;
+    background: radial-gradient(circle at 58% 22%, rgba(255, 196, 120, 0.32) 0 9px, transparent 11px), radial-gradient(circle at 70% 48%, rgba(255, 150, 90, 0.26) 0 14px, transparent 16px),
+      radial-gradient(circle at 46% 64%, rgba(255, 220, 160, 0.18) 0 7px, transparent 9px), radial-gradient(circle at 84% 18%, rgba(255, 170, 110, 0.3) 0 12px, transparent 14px),
+      radial-gradient(circle at 92% 58%, rgba(160, 200, 255, 0.16) 0 8px, transparent 10px), radial-gradient(circle at 36% 30%, rgba(255, 190, 130, 0.12) 0 6px, transparent 8px),
+      radial-gradient(circle at 64% 80%, rgba(255, 140, 80, 0.2) 0 10px, transparent 12px);
+    -webkit-mask: linear-gradient(90deg, transparent 25%, black 70%); mask: linear-gradient(90deg, transparent 25%, black 70%); }
+  /* the lens: big, its lower right off the card, a warm rim light on its barrel */
+  .mlens { position: absolute; right: -52px; bottom: -58px; width: 170px; height: 170px; pointer-events: none; --z: 4; }
+  .mlens img { position: static; width: 100%; height: 100%; filter: drop-shadow(-4px -4px 10px rgba(255, 150, 80, 0.35)) drop-shadow(0 12px 22px rgba(0, 0, 0, 0.6)); }
   .film { position: absolute; left: 0; right: 0; height: 16px; background: #1B1310; }
   .film::after { content: ''; position: absolute; inset: 4px 0; background: repeating-linear-gradient(90deg, transparent 0 5px, #E9D2BA 5px 13px, transparent 13px 18px); }
   .film.t { top: 0; }
@@ -276,7 +292,6 @@
     color: #FF9A3C; text-shadow: 0 0 6px rgba(255, 120, 40, 0.9); opacity: 0.9; }
   .wide .date { right: 14px; bottom: 50px; font-size: 9px; } /* just above the strip, its edge on the QR's */
   .moments .art { left: 50%; top: 55%; width: 210px; transform: translate(-50%, -50%); filter: drop-shadow(0 0 14px rgba(255, 228, 200, 0.55)); }
-  .ap { right: -34px; bottom: -40px; width: 180px; opacity: 0.2; --z: -3; } /* the profile's card: the lens's aperture, far */
 
   /* Faces: black, a violet-pink-orange glow from their wordmark, the hands' triangle */
   .faces { background: radial-gradient(60% 80% at 50% 110%, rgba(200, 64, 255, 0.5), transparent 70%),
@@ -299,5 +314,5 @@
       radial-gradient(circle at 56% 18%, rgba(255, 255, 255, 0.35) 0 2px, transparent 4px), radial-gradient(circle at 40% 88%, rgba(192, 75, 255, 0.35) 0 3px, transparent 7px); }
   .hands { left: 50%; bottom: -6px; width: 300px; margin-left: -150px; opacity: 0.16; }
   .faces .art { left: 50%; top: 50%; height: 80px; transform: translate(-50%, calc(-50% + 10px)); /* 14 px clear of the slot */ filter: drop-shadow(0 4px 18px rgba(200, 64, 255, 0.45)); }
-  .fw { right: -8%; top: 50%; width: 82%; margin-top: -78px; opacity: 0.3; transform: rotate(-4deg); --z: -2; --zs: 1.03; filter: drop-shadow(0 0 22px rgba(200, 64, 255, 0.35)); }
+  .wide .hands { left: auto; right: -40px; bottom: 44px; width: 230px; margin: 0; opacity: 0.2; --z: -3; }
 </style>

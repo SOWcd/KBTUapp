@@ -15,7 +15,8 @@ import bclColor from '../assets/lanyards/bcl-color.webp';
 import arthouse from '../assets/lanyards/arthouse.webp';
 import qairymColor from '../assets/lanyards/qairym-people-color.webp';
 import shadeBrush from '../assets/lanyards/shade-brush-red.webp'; // their red brush on their cream (round 5: the official logo)
-import jccLogo from '../assets/lanyards/jcc-logo.webp';
+import choiceLogo from '../assets/lanyards/choice-logo.webp'; // their Spartan in its gold shield (round 5b)
+import jccFlower from '../assets/lanyards/jcc-flower.webp'; // round 5: their sakura, cut from their top layer
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -128,7 +129,7 @@ export function hero(p: PersonCard): HeroData {
     name: p.realName ?? p.name,
     nick: p.realName && p.nick ? p.nick : null,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
-    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, titleOf(top))} · ${shortOf(top.org)}` : nameOf(top.org)) : 'Student',
+    title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, titleOf(top))} · ${CLUBS[top.org.slug]?.short ?? shortOf(top.org)}` : CLUBS[top.org.slug]?.short ?? nameOf(top.org)) : 'Student',
     line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95
     bio: p.bio,
     no: p.no == null ? '—' : String(p.no).padStart(5, '0'),
@@ -165,6 +166,7 @@ export interface ClubLook {
   mark: string;                     // the club's logo in the QR's middle
   ring?: string;                    // the photo's ring (white)
   ink?: [string, string];           // the name and the meta line on a light card (white on the dark ones)
+  short?: string;                   // the club's own short name in the role line, over the app's (JCC asked, round 5)
 }
 export const CLUB_LOOKS = {
   mountainkingskbtu: { strap: 'MOUNTAIN\nKINGS', strip: 'MOUNTAIN KINGS', bg: ['#0B1660', '#1F47C2', '#060B30'],
@@ -184,10 +186,14 @@ export const CLUB_LOOKS = {
   shadekbtu: { strap: 'SHADE', strip: 'SHADE', bg: ['#F6EEE2', '#EDE0CC', '#E4D4BC'],
     straps: ['#A60000', '#D3110F', '#F6EEE2'], holo: ['#C80000', '#9E0000', '#F6EEE2'], role: '#B00000', qr: ['#B00000', '#5E0000'], plate: ['#FBF6EE', '#EEE3D2'],
     mark: shadeBrush, ring: '#FFFFFF', ink: ['#1F1612', 'rgba(31, 22, 18, 0.68)'] },
-  // Japanese Culture (Nov 2, from their own layers): sakura on pink, their shanyrak; their motto as they asked it
-  japanesecultureclub: { strap: 'JCC\n\u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!', strip: 'JCC \u00b7 \u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!',
+  // Japanese Culture (Nov 2, from their own layers): sakura on pink, their shanyrak; their motto on the strip as they
+  // asked it, the strap and the role line just JCC (round 5)
+  japanesecultureclub: { strap: 'JCC', short: 'JCC', strip: 'JCC \u00b7 \u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!',
     bg: ['#E3B0C2', '#DCA2B8', '#C98AA3'], straps: ['#4A1F3A', '#7A3460', '#FFE3EC'], holo: ['#5A2448', '#3E1530', '#FFE3EC'], role: '#7A1F4A',
-    qr: ['#6B1F45', '#3E1530'], plate: ['#FFFFFF', '#F6E9EE'], mark: jccLogo, ink: ['#2A0F20', 'rgba(42, 15, 32, 0.7)'] },
+    qr: ['#6B1F45', '#3E1530'], plate: ['#FFFFFF', '#F6E9EE'], mark: jccFlower, ink: ['#2A0F20', 'rgba(42, 15, 32, 0.7)'] },
+  // Choice (ambassadors; round 5b, their official logo): their near-black navy, the shield's gold, the helmet's white
+  choice: { strap: 'CHOICE', strip: 'CHOICE', bg: ['#1E2340', '#141623', '#0A0B14'], straps: ['#0E1020', '#262B4A', '#E2BC72'],
+    holo: ['#F2D9A0', '#C79A48', '#141623'], role: '#E2BC72', qr: ['#141623', '#4A3610'], plate: ['#141623', '#0A0B14'], mark: choiceLogo },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh
@@ -249,3 +255,7 @@ export function lookVars(look: Look): string {
     .map(([k, v]) => `--${k}: ${v}`).join('; ');
 }
 export const banded = (look: Look) => look !== 'sower';
+/** The creator's card, seal and strip (round 5b, owner: "redo everything"): two concepts, one line to switch.
+ *  'holo': black titanium, a guilloche rosette in holographic foil round the seal, the seal's rim iridescent;
+ *  'gold': black lacquer and gold leaf, the seal a gold coin. */
+export const SOWER: 'holo' | 'gold' = 'holo';
