@@ -3,17 +3,18 @@
   // iridescence lives inside one object, never smeared over text (owner's taste).
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
-  import { METALS, metalOf } from '../lib/awards';
+  import { METALS, artOf, metalOf } from '../lib/awards';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();
 
   const multi = $derived(a.levels.length > 1);
   const tier = $derived(a.level === 0 ? 'none' : !multi ? 'one' : METALS[metalOf(a.level, a.levels.length)]);
   const hidden = $derived(a.secret && a.level === 0);
   // a drawn medal of its own (the 2026 initiation's, First 500; owner Nov 1): the picture is the whole medal, no rim or disc
-  const drawn = $derived(a.emoji.startsWith('medal_'));
+  const art = $derived(artOf(a));
+  const drawn = $derived(art.startsWith('medal_'));
 </script>
 
-{#if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${a.emoji}.webp`} alt="" draggable="false" /></span>{:else}
+{#if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" draggable="false" /></span>{:else}
 <span class="medal {tier}" style="width:{size}px;height:{size}px">
   <span class="disc">
     {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>

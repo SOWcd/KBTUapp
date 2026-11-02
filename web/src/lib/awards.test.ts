@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { hero } from './awards';
+import { artOf, hero } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -28,4 +28,11 @@ it('puts DMP, then the Student Government, before a higher role in a club on the
   expect(hero(c).title).toBe('Minister · Org 2');
   c.clubs = [...c.clubs, { org: org(3, { kind: 'office' }), role: 'member', title: null }] as PersonCard['clubs'];
   expect(hero(c).title).toMatch(/· Org 3$/);
+});
+
+it("Recruiter's coin follows the level's metal", () => {
+  const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
+  const of = (level: number) => artOf({ code: 'referral', emoji: 'megaphone_3d', level, levels: lv as never });
+  expect([0, 1, 3, 4, 6, 7, 8, 9].map(of)).toEqual(['medal_ref_b', 'medal_ref_b', 'medal_ref_b', 'medal_ref_s', 'medal_ref_s', 'medal_ref_g', 'medal_ref_g', 'medal_ref_l']);
+  expect(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never })).toBe('raising_hands_3d_default');
 });

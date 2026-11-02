@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, artOf, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -77,7 +77,7 @@
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
   const round = $derived(!!a || !!it.founder || !!it.idea);
-  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[a.emoji] ?? (tiers ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]));
+  const glow = $derived(it.founder || it.idea ? GLOW[0] : !a || !a.level ? '' : DRAWN[artOf(a)] ?? (tiers ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
@@ -127,7 +127,7 @@
   // a drawn medal is a real 3D coin (WebGL, three.js in its own lazy chunk; owner, Nov 1: the CSS layers read cheap).
   // The flat art shows until the first frame is drawn, and stays when there is no WebGL, under power saving or reduced
   // motion. ponytail: the tier medals and seals keep the CSS coin; a canvas-painted face for them is the upgrade
-  const art = $derived(a && a.level && a.emoji.startsWith('medal_') ? a.emoji : '');
+  const art = $derived(a && a.level && artOf(a).startsWith('medal_') ? artOf(a) : '');
   let gl = $state<'' | 'wait' | 'on'>('');
   let landed = $state(true); // the 3D entrance: the light behind fades up as the medal arrives
   let host: HTMLSpanElement, stage: HTMLDivElement;
