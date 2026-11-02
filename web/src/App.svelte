@@ -382,15 +382,31 @@
   const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
   const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
-  const keep = () => { if (keepable()) writeCache(JSON.stringify(snap())); }; // no $state.snapshot: a clone through the proxies cost more
+  // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
+  // data.kept since) reuses its JSON: a tab's own refresh (friends, my card) re-wrote all 400 events, 60 ms through the
+  // proxies on each visit. Going to the background writes everything afresh (`all`): it catches the ponytail case above.
+  const jsonOf = new Map<string, { ref: unknown; kept: number; json: string }>();
+  const keep = (all = false) => {
+    if (!keepable()) return;
+    const out: string[] = [];
+    for (const [k, v] of Object.entries(snap())) {
+      const m = jsonOf.get(k);
+      // (studio and team are records of lists that gain a key in place: always written; they are small)
+      const json = !all && m && m.ref === v && m.kept === data.kept && k !== 'studio' && k !== 'team' ? m.json : JSON.stringify(v);
+      if (json === undefined) continue; // as JSON.stringify of the whole drops an undefined field
+      jsonOf.set(k, { ref: v, kept: data.kept, json });
+      out.push(`${JSON.stringify(k)}:${json}`);
+    }
+    writeCache(`{${out.join(',')}}`);
+  };
   $effect(() => {
     void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key
     if (!keepable()) return;
     clearTimeout(keepTimer);
-    keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(keep, { timeout: 3000 }) : keep()), 1000);
+    keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(() => keep(), { timeout: 3000 }) : keep()), 1000);
   });
   onMount(() => {
-    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(); } };
+    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(true); } };
     document.addEventListener('visibilitychange', away);
     return () => document.removeEventListener('visibilitychange', away);
   });
