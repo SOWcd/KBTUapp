@@ -518,9 +518,9 @@ def _my_school_org(con, uid: int) -> int | None:
 
 def _skin(con, uid: int) -> int | str | None:
     """The badge I show (badges as skins): a club's id, "sower" (the creator's own), None for KBTU's.
-    My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the newest club I joined
-    that has a badge, the creator's own for the creator (a new club's badge comes by itself); of
-    several, the one where my role is highest, as the picker lists them (SettingsList)."""
+    My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the creator's own for the
+    creator; else the club I joined that has a badge (of several, where my role is highest, then the newest); else my
+    school's; else KBTU's. A new club's badge or a school set comes by itself."""
     u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
         return None
@@ -530,7 +530,13 @@ def _skin(con, uid: int) -> int | str | None:
         return u["skin_org"]
     r = one(con, f"""SELECT o.id FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? AND {SKINNED}
         ORDER BY CASE m.role WHEN 'president' THEN 4 WHEN 'vice' THEN 3 WHEN 'head' THEN 2 ELSE 1 END DESC, m.joined_at DESC LIMIT 1""", uid)
-    return r[0] if r else None
+    if r:
+        return r[0]
+    # no club with a lanyard: my school's, once I have a school (owner, Nov 2: KBTU's -> my school's -> my club's -> special)
+    s = one(con, "SELECT school FROM students WHERE user_id = ?", uid)
+    slug = school_slug(s["school"]) if s else None
+    o = slug and one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug)
+    return o[0] if o else None
 
 
 def _skin_ok(con, uid: int, oid: int):

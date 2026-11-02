@@ -30,7 +30,7 @@ def test_school_slug():
 
 
 def test_school_lanyard(env):
-    """A school's lanyard is its own students' alone, with no joining; a school no longer mine falls back to KBTU's."""
+    """A school's lanyard is its own students' alone, with no joining, and mine by default; a school no longer mine falls back to KBTU's."""
     c, cfg = env
     ann, bob = login(c, 80, "ann"), login(c, 81, "bob")                 # both SITE (login)
     con = db.connect(cfg.db_path)
@@ -40,7 +40,8 @@ def test_school_lanyard(env):
     con.execute("UPDATE students SET school = 'ISE' WHERE user_id = ?", (bob["id"],))
     con.commit()
     A, B = tma(80, "Ann"), tma(81, "Bob")
-    assert c.get("/api/me", headers=A).json()["skin"] is None          # never picked: it doesn't come by itself
+    assert c.get("/api/me", headers=A).json()["skin"] == site          # never picked: my school's comes by itself (owner, Nov 2)
+    assert c.patch("/api/me", headers=A, json={"skin": None}).json()["skin"] is None   # KBTU's picked: it stays
     assert c.patch("/api/me", headers=A, json={"skin": site}).json()["skin"] == site
     assert c.patch("/api/me", headers=A, json={"skin": ise}).status_code == 400   # not my school
     assert c.patch("/api/me", headers=B, json={"skin": site}).status_code == 400
