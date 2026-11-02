@@ -507,7 +507,6 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing && shown(o))) close(); };
     addEventListener('keydown', esc);
-    for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
@@ -516,6 +515,8 @@
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
+      // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
+      for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)

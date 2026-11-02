@@ -7,15 +7,25 @@ import { ApiErr } from './errors';
 import { tg } from '../tg';
 import { i18n } from '../i18n/index.svelte';
 
+// the start's first answers, asked for by index.html with the page: each taken once, in the first seconds, and only when
+// signed with the initData this app holds (else the call goes out as usual)
+type First = { auth: string; at: number; r: Record<string, Promise<Response> | undefined> };
+function first(path: string): Promise<Response> | undefined {
+  const f = (window as { __kbFirst?: First }).__kbFirst, p = f?.r[path];
+  if (!f || !p) return undefined;
+  delete f.r[path];
+  return f.auth === tg.initData && Date.now() - f.at < 20_000 ? p : undefined;
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let r: Response;
   const raw = body instanceof Blob; // a file goes as the body itself (POST /api/photos)
   try {
-    r = await fetch('/api' + path, {
+    r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
       headers: { Authorization: `tma ${tg.initData}`, ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
-    });
+    }));
   } catch {
     throw new ApiErr('unavailable', 'network');
   }
