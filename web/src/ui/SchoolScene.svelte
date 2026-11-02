@@ -14,14 +14,16 @@
   // Round 5 (owner: the left was empty, SEPI and Law plain): every card's art runs its whole width, quieter under the text
   const LAYERS: Record<string, [string, string][]> = {
     // round 5b (owner, Nov 3: Geology and KMA are the bar): one subject each under the medallion, with depth and its own
-    // light (.claude/reports/school-lanyards/gen-r5b.py, card files only; the band keeps round 4's)
-    site: [['site-traces', 'far'], ['site-board', 'far'], ['site-chip', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
+    // light (.claude/reports/school-lanyards/gen-r5b.py, card files only; the band keeps round 4's). Round 6 (owner, on
+    // 5b): SITE a wafer, Business round 5's chart finished, ISE's left a world chart, SCE a molecule in 3D, SMSGT a wind
+    // turbine at dawn, SSS an amphitheatre (.claude/reports/club-lanyards/gen-r6.py)
+    site: [['site-traces', 'far'], ['site-board', 'far'], ['site-wafer', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
     geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
-    business: [['bs-chart', 'far'], ['bs-city', 'far'], ['bs-bars', 'near']], ise: [['ise-globe', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near']],
+    business: [['bs-chart', 'far'], ['bs-trend', 'near']], ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near']],
     kma: [['kma-moon', 'far'], ['kma-waves', 'waves'], ['kma-ship', 'near ship']],
     law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
-    sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-ring', 'far'], ['sce-flask', 'near']],
-    smsgt: [['smsgt-comb', 'far'], ['smsgt-lattice', 'far'], ['smsgt-leaf', 'near']], sss: [['sss-book', 'far'], ['sss-people', 'far'], ['sss-open', 'near']],
+    sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-bokeh', 'far'], ['sce-mol', 'near']],
+    smsgt: [['smsgt-comb', 'far'], ['smsgt-dawn', 'far'], ['smsgt-wind', 'near']], sss: [['sss-book', 'far'], ['sss-theatre', 'near']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
 </script>

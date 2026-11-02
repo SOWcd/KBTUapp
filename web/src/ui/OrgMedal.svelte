@@ -8,20 +8,25 @@
   // the strip already says), Faces' wordmark cropped tight on its black (their avatar's white margin wastes the face),
   // Shade's brush on their cream (their official logo is mostly empty cream at this size). Round 5b (owner, back to round
   // 4): every school's big shield on its colours, Crystal's big diamond, ArtHouse's red mark; AIChE's drawn benzene ring
-  // (aiche-medal.svg), Choice's logo cut square on its navy.
+  // (aiche-medal.svg), Choice's logo cut square on its navy. Round 6 (owner): StudEx's and Moments' official logos, bundled
+  // (their wordmarks trimmed onto their own ground, .claude/reports/club-lanyards/src/prod-logos), not our drawn marks.
   import { clubLook, isSchool, type Look } from '../lib/awards';
   import LookMark from './LookMark.svelte';
   import Founder from './Founder.svelte';
   import aicheMedal from '../assets/lanyards/aiche-medal.svg?url';
-  import lens from '../assets/lanyards/moments-lens.svg?url';
+  import studexLogo from '../assets/lanyards/studex-logo.webp';
+  import momentsLogo from '../assets/lanyards/moments-logo.webp';
 
   let { look, logo = null }: { look: Look; logo?: string | null } = $props();
   const DRAWN: Look[] = ['cheer', 'moments', 'faces', 'shadekbtu', 'aichekbtu', 'crystalkbtu', 'arthousekbtu', 'choice'];
+  // the official logos we ship: this file whatever the org's avatar is. ponytail: Knights' slot: their logo goes here
+  // (knights: <file>) when they send it; LookMark's helmet until then
+  const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 
 <span class="medal {look}" class:club={!!clubLook(look)} aria-hidden="true">
-  <span class="face">{#if look === 'sower'}<Founder size={44} />{:else if look === 'aichekbtu'}<img src={aicheMedal} alt="" draggable="false" />{:else if look === 'moments'}<img class="lens" src={lens} alt="" draggable="false" />{:else if own}<img src={own} alt="" draggable="false" />{:else}<LookMark {look} />{/if}</span>
+  <span class="face">{#if look === 'sower'}<Founder size={44} />{:else if look === 'aichekbtu'}<img src={aicheMedal} alt="" draggable="false" />{:else if OFFICIAL[look]}<img src={OFFICIAL[look]} alt="" draggable="false" />{:else if own}<img src={own} alt="" draggable="false" />{:else}<LookMark {look} />{/if}</span>
   <i class="catch"></i>
 </span>
 
@@ -46,8 +51,6 @@
   .knights { --rim: linear-gradient(145deg, rgb(255, 240, 200), rgb(196, 150, 70) 45%, rgb(240, 214, 150) 62%, rgb(120, 84, 30)); } /* round 5b: gold */
   .studex { --rim: linear-gradient(145deg, rgb(255, 255, 255), rgb(214, 38, 27) 45%, rgb(255, 210, 200) 62%, rgb(23, 48, 100)); }
   .moments { --rim: linear-gradient(145deg, rgb(246, 231, 214), rgb(196, 109, 71) 45%, rgb(242, 222, 200) 62%, rgb(110, 51, 34)); }
-  .moments .face { background: radial-gradient(circle at 70% 80%, rgb(110, 51, 34), rgb(20, 11, 8)); }
-  .face > img.lens { width: 90%; height: 90%; margin: 5%; object-fit: contain; } /* round 5b: their lens, the card's subject */
   .faces { --rim: linear-gradient(145deg, rgb(110, 123, 255), rgb(192, 75, 255) 40%, rgb(255, 79, 154) 70%, rgb(255, 164, 61)); }
   .club { --rim: linear-gradient(145deg, rgba(255, 255, 255, 0.95), var(--s2) 42%, var(--h1) 62%, var(--s1)); }
   /* the creator's seal is round: its own rim */
