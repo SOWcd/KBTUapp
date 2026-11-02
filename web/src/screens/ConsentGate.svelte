@@ -90,14 +90,14 @@
     </button>
   </div>
   <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
-  <div class="foot rise" style="--i:{count + 4}">
+  <div class="foot" style="--i:{count + 4}">
     <Button kind="glass" size="l" loading={busy} onclick={agree}>{t('consent.ok')}</Button>
   </div>
 </div>
 
 <style>
   .gate { position: absolute; inset: 0; z-index: calc(var(--z-sheet) - 1); display: flex; flex-direction: column; overflow: hidden;
-    padding: var(--page-top) 20px calc(var(--safe-bottom) + 16px); background: var(--bg); animation: fade var(--t-base) ease-out both; }
+    padding: var(--page-top) 20px 0; background: var(--bg); animation: fade var(--t-base) ease-out both; }
 
   /* a living ground: three soft lights drifting slowly behind the glass */
   .blob { position: absolute; width: 70vw; height: 70vw; border-radius: 50%; filter: blur(60px); opacity: 0.55; pointer-events: none; animation: drift 18s ease-in-out infinite alternate; }
@@ -106,7 +106,8 @@
   .b3 { bottom: -25vw; left: 5vw; background: rgba(53, 208, 255, 0.3); animation-duration: 27s; animation-delay: -12s; }
   :global(html[data-theme='light']) .blob { opacity: 0.3; }
   @keyframes drift { to { transform: translate(12vw, 8vh) scale(1.15); } }
-  .body { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 40px 0 96px; }
+  .body { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 40px 0 calc(var(--safe-bottom) + 96px); }
+  /* the list runs to the screen's edge under the button: a bottom padding on .gate cut it off in a hard band (owner, Nov 2) */
   .body::-webkit-scrollbar { display: none; }
   /* centred while it fits, scrolled from the top when it doesn't (a short phone): justify-content would cut the top off */
   .body > :first-child { margin-top: auto; }
@@ -153,12 +154,16 @@
   /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
   .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; justify-content: center; pointer-events: none; }
   .foot :global(.btn) { min-width: 220px; pointer-events: auto; } /* the app's glass button as it is (ui/Button glass) */
+  /* the button slides up from below the screen, never fading: WebKit drops a backdrop-filter under a fading parent,
+     so the glass switched on at once when the fade ended (owner, Nov 2) */
+  .foot { animation: up 0.6s calc(0.15s + var(--i) * 0.07s) cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes up { from { transform: translateY(calc(100% + var(--safe-bottom) + 24px)); } }
   /* one after another: the title, the card, each line, the button */
   .rise { animation: rise 0.55s calc(0.15s + var(--i) * 0.07s) cubic-bezier(0.22, 1, 0.36, 1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   @keyframes fade { from { opacity: 0; } }
   :global(html.lowfx) .ring, :global(html.lowfx) .halo { animation: none; }
   :global(html.lowfx) .blob { animation: none; filter: none; opacity: 0.12; }
-  @media (prefers-reduced-motion: reduce) { .blob, .ring, .halo, .sweep::after { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .blob, .ring, .halo, .sweep::after, .foot { animation: none; }
     .seal :global(svg path) { animation: none; stroke-dashoffset: 0; } }
 </style>
