@@ -5240,6 +5240,7 @@ def test_portal_schedule(env, monkeypatch):
     same = portal.same_person
     assert same("Testov A.", "Ali", "Testov") and same("Ali Testov", "Ali", "Testov") and same("Ali T.", "Ali", "Testov")
     assert same("\u0422\u0435\u0441\u0442\u043e\u0432 \u0410.", "Ali", "Testov")         # a Cyrillic page, a Latin Microsoft name
+    assert same("Akhmetov A.", "\u0410\u043b\u0430\u043d", "\u0410\u0445\u043c\u0435\u0442\u043e\u0432") and same("Yerlan Zh.", "\u0415\u0440\u043b\u0430\u043d", "\u0416\u0430\u043d\u043e\u0432")  # passport Latin
     assert not same("Testov B.", "Ali", "Testov") and not same("Other A.", "Ali", "Testov") and not same(None, "Ali", "Testov")
 
     c, cfg = env

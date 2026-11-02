@@ -712,7 +712,7 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
 
 def _student(con, tg_id: int | None) -> sqlite3.Row | None:
     """Who writes to the bot, if a student signed in with KBTU (a typed-in row waiting for Microsoft is nobody yet)."""
-    return one(con, """SELECT u.id, u.role, u.lang, s.first_name, s.last_name FROM users u
+    return one(con, """SELECT u.id, u.role, u.lang, s.first_name, s.last_name, s.first_lat, s.last_lat FROM users u
         JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?""", tg_id)
 
 
@@ -854,7 +854,8 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
         log.warning("schedule: %s", type(exc).__name__)
         return say("sched_bad")
-    if not portal.same_person(week.name, u["first_name"], u["last_name"]):
+    # the Cyrillic names or the Latin ones (the portal may write either, transliterated its own way)
+    if not any(portal.same_person(week.name, f or "", l or "") for f, l in ((u["first_name"], u["last_name"]), (u["first_lat"], u["last_lat"]))):
         return say("sched_other")
     got = await asyncio.to_thread(logic.save_schedule, con, u["id"], week.lessons, week.lang)
     if got is None:  # the account deleted while the page was read: its week doesn't come back

@@ -257,8 +257,8 @@ def guess_lang(names: list[str]) -> str | None:
 def same_person(shown: str | None, first: str, last: str) -> bool:
     """The page's "Surname I." (or "Name S.", or the full name) is this student: a whole word is one of the names and an
     initial, if any, starts the other. Letters compared in Latin (a Cyrillic page against a Latin Microsoft name)."""
-    from .logic import TRANSLIT
-    norm = lambda s: re.sub(r"[^a-z]", "", s.lower().translate(TRANSLIT))  # noqa: E731
+    from .roster import _words  # one spelling for both alphabets' usual variants (Akhmetov for the Cyrillic Ahmetov, Zhanna/Janna, Yerlan/Erlan)
+    norm = lambda w: "".join(sorted(_words(w)))  # noqa: E731
     words = [w for w in re.split(r"[\s,]+", shown or "") if w]
     full = [norm(w) for w in words if not w.endswith(".") and len(norm(w)) > 1]
     initials = [norm(w)[:1] for w in words if w.endswith(".") or len(norm(w)) == 1]
