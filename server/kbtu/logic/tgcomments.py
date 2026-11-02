@@ -368,7 +368,7 @@ def later_delete(con, msg_id: int, at: int) -> None:
 
 
 def due_deletes(con) -> list[int]:
-    found = [int(r[0][7:]) for r in rows(con, "SELECT key FROM meta WHERE key LIKE 'tgcdel:%' AND CAST(value AS INTEGER) <= ?", now())]
+    found = [int(r[0][7:]) for r in rows(con, "SELECT key FROM meta WHERE key >= 'tgcdel:' AND key < 'tgcdel;' AND CAST(value AS INTEGER) <= ?", now())]
     con.executemany("DELETE FROM meta WHERE key = ?", [(f"tgcdel:{m}",) for m in found])
     return found
 
@@ -393,15 +393,16 @@ def unban_due(con) -> list[int]:
 
 
 def sweep(con) -> None:
-    """Each bot round: strangers' texts after the hour (every read checks the hour too); every few minutes the old
+    """Every 5 minutes (the bot's round): strangers' texts after the hour (every read checks the hour too); the old
     records (the policy's 30 and 90 days) and the moderators' hourly digest when something new waits."""
-    con.execute("DELETE FROM tgc_saved WHERE at <= ?", (now() - SAVE_FOR,))
-    if not _once(con, "tgc_sweep", str(now() // 300)):
+    if not _once(con, "tgc_sweep", str(now() // 300)):  # a DELETE takes the write lock even finding nothing
         return
+    con.execute("DELETE FROM tgc_saved WHERE at <= ?", (now() - SAVE_FOR,))
     con.execute("DELETE FROM tgc_strangers WHERE seen_at < ?", (now() - STRANGER_KEEP,))
     con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (now() - KEEP,))
-    con.execute("DELETE FROM meta WHERE key LIKE 'tgcok:%' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
-    con.execute("DELETE FROM meta WHERE key LIKE 'tgcedit:%' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))
+    # key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key
+    con.execute("DELETE FROM meta WHERE key >= 'tgcok:' AND key < 'tgcok;' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
+    con.execute("DELETE FROM meta WHERE key >= 'tgcedit:' AND key < 'tgcedit;' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))
     if one(con, "SELECT 1 FROM tgc_comments WHERE (status = 'queued' OR review = 1) AND decided_at > ?", now() - 3600):
         for uid in _mods(con):
             notify(con, uid, "tgc_queue", f"tq:{now() // 3600}")

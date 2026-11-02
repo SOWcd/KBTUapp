@@ -150,7 +150,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
 
 def channel_gone(con) -> list[tuple[int, str]]:
     """Channel posts of deleted events, still to delete: (the post's id, "chat_id message_id" of its discussion copy or "")."""
-    return [(int(k.split(":")[1]), v) for k, v in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'channel_gone:%'")]
+    return [(int(k.split(":")[1]), v) for k, v in rows(con, "SELECT key, value FROM meta WHERE key >= 'channel_gone:' AND key < 'channel_gone;'")]
 
 
 def channel_discussion(con, post: int) -> sqlite3.Row | None:

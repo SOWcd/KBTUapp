@@ -6,6 +6,7 @@ the prompt). The chain's model names are measured from the providers' lists on p
 ("provider:model,provider:model"), so a renamed model is fixed without a deploy of code."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -122,17 +123,17 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         except httpx.HTTPError as exc:
             log.warning("ai %s: %s", link.name, type(exc).__name__)
             _rest[link.name] = time.time() + REST
-            _count(con, link.name, False)
+            await asyncio.to_thread(_count, con, link.name, False)
             continue
         if r.status_code in (429, 503) or r.status_code >= 500:
             _rest[link.name] = time.time() + _rest_for(r)
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
-            _count(con, link.name, False)
+            await asyncio.to_thread(_count, con, link.name, False)
             continue
         if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
             _rest[link.name] = time.time() + REST_BROKEN
             log.warning("ai %s: http %d: %s", link.name, r.status_code, r.text[:160].replace("\n", " "))
-            _count(con, link.name, False)
+            await asyncio.to_thread(_count, con, link.name, False)
             continue
         try:
             body = r.json()
@@ -144,10 +145,10 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         answered = True
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
             log.warning("ai %s: unusable answer", link.name)
-            _count(con, link.name, False)
+            await asyncio.to_thread(_count, con, link.name, False)
             continue
         log.info("ai %s answered in %.1f s", link.name, time.time() - t0)
-        _count(con, link.name, True)
+        await asyncio.to_thread(_count, con, link.name, True)  # a write: never on the event loop
         return text, link.name
     raise BadAnswers() if answered else Busy()
 

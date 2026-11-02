@@ -310,10 +310,10 @@ def commented(con, root: int, msg_id: int, tg: int) -> None:
     """A student's comment (msg_id in the group) in the thread under this group copy (tgc.gate): counted on the forum
     post it copies, if it is one, once per message (a batch replayed after a restart counts nothing twice), his face
     kept for the card. ponytail: a comment its author deletes in Telegram stays counted (the Bot API never says); a
-    report's deletion leaves (migration 107's trigger); fine for a hint. A LIKE over meta per comment; an index if it grows"""
+    report's deletion leaves (migration 107's trigger); fine for a hint. A scan of fchcopy: keys per comment; an index on value if it grows"""
     with tx(con):
         p = one(con, """SELECT id FROM fchan_posts WHERE tg_msg > 0 AND tg_msg =
-            (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key LIKE 'fchcopy:%' AND value = ?)""", str(root))
+            (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key >= 'fchcopy:' AND key < 'fchcopy;' AND value = ?)""", str(root))
         u = one(con, "SELECT id FROM users WHERE tg_id = ?", tg)
         if p and u and con.execute("INSERT OR IGNORE INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)",
                                    (msg_id, p["id"], u["id"], _now())).rowcount:
@@ -334,7 +334,10 @@ def reacted(con, upd: dict) -> None:
 
 
 def sweep(con) -> None:
-    """What the privacy policy promises: a deleted post's wordless row after its day, a taken-down one after 30 days."""
+    """What the privacy policy promises: a deleted post's wordless row after its day, a taken-down one after 30 days.
+    Every 5 minutes (the bot's round): a DELETE takes the write lock even finding nothing."""
+    if not core._once(con, "fch_sweep", str(_now() // 300)):
+        return
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 30 * 86400))
 
@@ -358,7 +361,7 @@ def copy_gone(con, msg_id: int) -> None:
 def copies(con) -> list[tuple[str, int | None]]:
     """Group copies to delete: (key, the copy's id); None once a week passed with no mapping (no group linked)."""
     out = []
-    for key, at in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'fchgone:%'"):
+    for key, at in rows(con, "SELECT key, value FROM meta WHERE key >= 'fchgone:' AND key < 'fchgone;'"):
         root = one(con, "SELECT value FROM meta WHERE key = ?", f"fchcopy:{key.split(':')[1]}")  # the forum channel's copy alone
         if root:
             out.append((key, int(root[0])))

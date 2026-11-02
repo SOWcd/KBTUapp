@@ -247,7 +247,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     if not cfg.forum_channel:
         return
     F = logic.fchannel
-    F.lost(con)  # a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
+    await asyncio.to_thread(F.lost, con)  # (in a thread: an UPDATE takes the write lock) a send cut off last round (a timeout, a crash): to a moderator, never sent twice by itself
     for u in F.unposts(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"]})
         if r.get("ok") or _gone(r):

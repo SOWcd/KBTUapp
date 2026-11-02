@@ -30,6 +30,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer
@@ -119,9 +120,11 @@ def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
         dm = max(dm, u["can_dm"])  # only the bot turns it off (when Telegram says it's blocked)
         if (u["tg_username"], u["tg_first_name"], u["tg_last_name"], u["tg_photo_url"]) != fresh or (role, dm) != (u["role"], u["can_dm"]) \
                 or t - u["seen_at"] > SEEN_EVERY or logic.day_of(t) != logic.day_of(u["seen_at"]):
-            con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
-                WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
-            logic.visit(con, u["id"], t)
+            def fresh_seen() -> None:  # one short transaction, skipped while a burst holds the lock: every GET comes here
+                con.execute("""UPDATE users SET tg_username = ?, tg_first_name = ?, tg_last_name = ?, tg_photo_url = ?, role = ?, can_dm = ?, seen_at = ?
+                    WHERE id = ?""", (*fresh, role, dm, t, u["id"]))
+                logic.visit(con, u["id"], t)
+            db.maybe(con, fresh_seen)
             u = logic.one(con, "SELECT * FROM users WHERE id = ?", u["id"])
     if u["banned_at"]:
         raise ApiError("forbidden", "banned", logic.ban_info(con, u["id"]))
@@ -218,8 +221,17 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         yield
         if task:
             task.cancel()
+        if http := getattr(app.state, "http", None):
+            await http.aclose()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)  # JSON lists; pictures and video are excluded
+
+    def ai_http() -> httpx.AsyncClient:
+        """One client for the AI calls (keep-alive: a new one per request paid DNS and TLS each time)."""
+        if getattr(app.state, "http", None) is None:
+            app.state.http = httpx.AsyncClient()
+        return app.state.http
     app.router.route_class = _Route
     dist = Path(cfg.web_dist).resolve()
     photos = Path(cfg.db_path).resolve().parent / "media"   # next to the database: one volume to back up
@@ -1066,25 +1078,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         logic.need_student(v)  # before the work, not only after it
         saved = await _picture(media.save, data, photos)
-        media.drop(photos, logic.set_photo(con, v, saved))
-        return logic.me(con, v)
+
+        def done() -> dict:
+            media.drop(photos, logic.set_photo(con, v, saved))
+            return logic.me(con, v)
+        return await run_in_threadpool(done)
 
     # paid events (§4.3): the receipt is the body, like /api/photos; its image only through the API, to whom may see it
     @app.post("/api/events/{eid}/receipt")
     async def upload_receipt(eid: int, request: Request, con: Con, v: Me):
         data = await read_upload(request)
-        logic.receipt_open(con, v, eid)  # before the work, not only after it
+        await run_in_threadpool(logic.receipt_open, con, v, eid)  # before the work, not only after it
         try:  # Kaspi's PDF or a screenshot; read by OCR (~0.5 s) right here, no queue
             saved, read = await _picture(receipt.take, data, receipts)
         except receipt.NotReceipt:
             raise ApiError("bad_input", "not_receipt") from None
-        try:
-            c, gone = logic.add_receipt(con, v, eid, saved, read)
-        except ApiError:  # the hold ran out meanwhile: the new picture leaves the disk too, unless a row has the same one
-            media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
-            raise
-        media.drop(receipts, gone)  # the one it replaced
-        return c
+
+        def keep() -> dict:
+            try:
+                c, gone = logic.add_receipt(con, v, eid, saved, read)
+            except ApiError:  # the hold ran out meanwhile: the new picture leaves the disk too, unless a row has the same one
+                media.drop(receipts, [] if logic.one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
+                raise
+            media.drop(receipts, gone)  # the one it replaced
+            return c
+        return await run_in_threadpool(keep)
 
     @app.get("/api/receipts/{rid}/image")
     def receipt_image(rid: int, con: Con, v: Me):
@@ -1113,38 +1131,43 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/reports", status_code=204)
     async def report(con: Con, v: Me, body: dict = Body(...)):
-        logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
-        # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
-        if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
-            a = logic.one(con, "SELECT title, body FROM asks WHERE id = ?", body["id"])
-            if a and await screen(f"{a['title']}\n{a['body']}") is False:
-                logic.hide_ask(con, body["id"], "reports")
+        def file_it():
+            logic.report(con, v, body.get("target"), body.get("id"), body.get("reason"), body.get("note"))
+            # a forum request goes only with three reports and the AI agreeing (else a moderator decides)
+            if body.get("target") == "ask" and logic.reported_enough(con, body["id"]):
+                return logic.one(con, "SELECT title, body FROM asks WHERE id = ?", body["id"])
+        a = await run_in_threadpool(file_it)
+        if a and await screen(f"{a['title']}\n{a['body']}") is False:
+            await run_in_threadpool(logic.hide_ask, con, body["id"], "reports")
 
     async def eu_ai(con, msgs: list[dict], **kw) -> str:
         """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503."""
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
-        async with httpx.AsyncClient() as http:
-            for last in (False, True):
-                try:
-                    return (await llm.chat(cfg, http, msgs, con=con, only=assist_only, chain=ai.chain(cfg), **kw))[0]
-                except llm.BadAnswers:
-                    if last:
+        try:
+            async with asyncio.timeout(30):  # the whole chain: a link's own timeout is 25 s, and two may be slow
+                for last in (False, True):
+                    try:
+                        return (await llm.chat(cfg, ai_http(), msgs, con=con, only=assist_only, chain=ai.chain(cfg), **kw))[0]
+                    except llm.BadAnswers:
+                        if last:
+                            raise ApiError("unavailable", "assistant") from None
+                    except llm.Busy:
                         raise ApiError("unavailable", "assistant") from None
-                except llm.Busy:
-                    raise ApiError("unavailable", "assistant") from None
+        except TimeoutError:
+            raise ApiError("unavailable", "assistant") from None
 
     # the students' assistant (logic/assistant.py): with the forum's switch and policy section; the EU host only
     @app.post("/api/assistant")
     async def assistant(con: Con, v: BoardWrite, request: Request, body: dict = Body(...)):
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)[0] or "ru"
         try:
-            msgs, rooms, events = logic.assistant.prompt(con, v, body, lang)
+            msgs, rooms, events = await run_in_threadpool(logic.assistant.prompt, con, v, body, lang)
             text = await eu_ai(con, msgs, max_tokens=500, temperature=0.3, check=logic.assistant.usable, timeout=25)
         except ApiError as e:  # no model answer (down, or the day's 30 used): the helplines still come to one in distress
             if e.code in ("unavailable", "rate_limited") and logic.assistant.distress(body.get("q")):
-                return {"text": "", "actions": [], **logic.assistant.care(con, lang)}
+                return {"text": "", "actions": [], **await run_in_threadpool(logic.assistant.care, con, lang)}
             raise
-        return logic.assistant.reply(con, text, rooms, events, lang, msgs[-1]["content"])
+        return await run_in_threadpool(logic.assistant.reply, con, text, rooms, events, lang, msgs[-1]["content"])
 
     # its feedback (logic/assistant.py): a 👍/👎 on an answer's signed topic; on 👎, the one question and answer if sent
     @app.post("/api/assistant/vote", status_code=204)
@@ -1274,7 +1297,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def export_attendees(eid: int, con: Con, v: Me):
         """The bot sends the CSV to the organizer's own chat: it opens on any phone and can be forwarded (a download
         link would need the app's sign-in, which Telegram's downloader doesn't carry)."""
-        e, people = logic.attendees_export(con, v, eid)
+        e, people = await run_in_threadpool(logic.attendees_export, con, v, eid)
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.attendees_csv(u["lang"], e["title"], people))
 
@@ -1429,12 +1452,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 peek["photo"] = (await _img(media.save, peek["image"], photos))["path"]
             except media.BadImage:
                 pass
-        try:
-            out = logic.add_chat(con, v, body, peek)
-        finally:  # a club's row joined the catalog with its own avatar, or the add was refused
-            if peek.get("photo") and logic.photo_free(con, peek["photo"]):
-                media.drop(photos, [peek["photo"]])
-        return out
+
+        def save() -> dict:
+            try:
+                return logic.add_chat(con, v, body, peek)
+            finally:  # a club's row joined the catalog with its own avatar, or the add was refused
+                if peek.get("photo") and logic.photo_free(con, peek["photo"]):
+                    media.drop(photos, [peek["photo"]])
+        return await run_in_threadpool(save)
 
     @app.put("/api/admin/chats/{cid}/org")
     def chat_org(cid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -1476,7 +1501,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/registry/export", status_code=204)
     async def registry_export(con: Con, v: Me):
-        people = logic.registry_export(con, v)
+        people = await run_in_threadpool(logic.registry_export, con, v)
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.registry_csv(u["lang"], people))
 
@@ -1567,8 +1592,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ the forum: F1 find people (logic/forum.py)
 
     async def screen(text: str) -> bool | None:
-        async with httpx.AsyncClient() as http:
-            return await ai.screen(cfg, http, text, only=screen_only)
+        return await ai.screen(cfg, ai_http(), text, only=screen_only)
 
     @app.get("/api/forum/me")
     def forum_me(con: Con, v: Forum):
@@ -1619,10 +1643,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
-        pid = F.reserve(con, v, body)  # held, inside the day's one, before the AI is asked
-        async with httpx.AsyncClient() as http:
-            verdict = await ai.screen_post(cfg, http, logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
-        return F.settle(con, v, pid, verdict)  # live: the bot's round publishes it within seconds
+        pid = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked
+        verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
+        return await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
 
     @app.delete("/api/forum-posts/{pid}", status_code=204)
     def fchan_drop(pid: int, con: Con, v: FChan):
@@ -1755,14 +1778,19 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     def page() -> Response:
         return Response((dist / "index.html").read_text(encoding="utf-8"), media_type="text/html", headers={"Cache-Control": "no-cache"})
 
-    def file(path: str) -> Response | None:
+    def file(path: str, request: Request) -> Response | None:
         f = (dist / path).resolve()
         if not path or path == "index.html" or not f.is_file() or dist not in f.parents:
             return None
         # Vite puts a content hash into every name under assets/, so those never change; nor do the map's tiles, whose
-        # folder names their cut (map/u1/: a new cut gets a new folder)
-        immutable = path.startswith(("assets/", "map/"))
-        return FileResponse(f, headers={"Cache-Control": "public, max-age=31536000, immutable" if immutable else "no-cache"})
+        # folder names their cut (map/u1/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
+        # video) changes rarely: a day, then revalidated in the background; a page (.html) is always asked again
+        cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
+                 "no-cache" if f.suffix == ".html" else "public, max-age=86400, stale-while-revalidate=604800")
+        r = FileResponse(f, stat_result=f.stat(), headers={"Cache-Control": cache})
+        if StaticFiles.is_not_modified(None, r.headers, request.headers):  # (it uses no self) If-None-Match / -Modified-Since
+            return Response(status_code=304, headers={k: r.headers[k] for k in ("etag", "last-modified", "cache-control")})
+        return r
 
     @app.get("/og/poster.jpg")
     def og_poster(c: str = "3B6BFF", e: str = "sparkles_3d"):
@@ -1789,7 +1817,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"/{start}/?" + request.url.query, status_code=302)
         if path == "demo" or path.startswith("demo/"):  # the in-browser demo went: its old links open the app in Telegram
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
-        if f := file(path):
+        if f := file(path, request):
             return f
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):

@@ -596,46 +596,75 @@ def _offsite_run(db_path: str, home: Path, date: str, jobs: list) -> None:
         log.warning("offsite: %s, %d KB", name, size // 1024)
 
 
+def _chores(cfg: Config, con) -> None:
+    """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
+    hold the API worker's event loop, /healthz included."""
+    logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
+    logic.tba_day(con)    # 10:00: events still without a place, to their organizers
+    logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
+    logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
+    logic.course_day(con)  # September 1: every student's year of study a year on
+    casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
+    purge(cfg, con)       # accounts whose week to change their mind ran out
+    logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
+    backup_day(cfg, con)  # a nightly copy of the database, 14 kept
+    userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
+    logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
+    logic.fchannel.sweep(con)
+
+
+def _due(con) -> list:
+    # the partial index outbox_todo (migration 109), named: the planner liked outbox_due, which walks every failed row
+    return rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
+        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
+
+
+def _mark(con, m, sent: bool, error: str | None = None) -> None:
+    con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ?", (now() if sent else None, error, m["id"]))
+
+
+def _take(con, m):
+    """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why)."""
+    # take it first: during a deploy the old and the new container run side by side for a few seconds, and
+    # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
+    if not con.execute("UPDATE bot_outbox SET send_after = ? WHERE id = ? AND send_after = ? AND sent_at IS NULL AND error IS NULL",
+                       (now() + LEASE, m["id"], m["send_after"])).rowcount:
+        return None
+    if not m["can_dm"]:
+        return _mark(con, m, False, "no_dm")
+    if m["banned_at"]:  # banned: the bot stops writing
+        return _mark(con, m, False, "banned")
+    msg = _render(con, m)
+    if msg is None:
+        _mark(con, m, False, "gone")
+    return msg
+
+
+def _answered(con, m, status: int, answer: dict) -> None:
+    if answer.get("ok"):
+        _mark(con, m, True)
+        tgc.sent(con, m, answer)
+    elif status == 403:  # blocked the bot or never started it
+        con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (m["user_id"],))
+        _mark(con, m, False, "blocked")
+    else:
+        _mark(con, m, False, str(answer.get("description", status))[:200])
+
+
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
-    con = db.connect(cfg.db_path)
+    con = db.connect(cfg.db_path)  # one connection, used by one thread at a time (check_same_thread=False)
     try:
-        logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
-        logic.tba_day(con)    # 10:00: events still without a place, to their organizers
-        logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
-        logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
-        logic.course_day(con)  # September 1: every student's year of study a year on
-        casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
-        purge(cfg, con)       # accounts whose week to change their mind ran out
-        logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
-        backup_day(cfg, con)  # a nightly copy of the database, 14 kept
-        offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too)
-        userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
+        await asyncio.to_thread(_chores, cfg, con)
+        offsite_round(cfg, con)  # and that copy, encrypted, to R2 (Sundays the media too); reads, a write an hour at most
         await post_channel(cfg, http, con)  # public events to @KBTUevents, edits and cancels too
-        logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
-        logic.fchannel.sweep(con)
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me took ~1 s on every open
-        if logic._once(con, "chats_day", str(now() // 86400)):
+        if await asyncio.to_thread(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
-        due = rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b JOIN users u ON u.id = b.user_id
-            WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
-        for m in due:
-            # take it first: during a deploy the old and the new container run side by side for a few seconds, and
-            # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
-            if not con.execute("UPDATE bot_outbox SET send_after = ? WHERE id = ? AND send_after = ? AND sent_at IS NULL AND error IS NULL",
-                               (now() + LEASE, m["id"], m["send_after"])).rowcount:
-                continue
-            mark = lambda sent, error=None: con.execute("UPDATE bot_outbox SET sent_at = ?, error = ? WHERE id = ?", (now() if sent else None, error, m["id"]))
-            if not m["can_dm"]:
-                mark(False, "no_dm")
-                continue
-            if m["banned_at"]:  # banned: the bot stops writing
-                mark(False, "banned")
-                continue
-            msg = _render(con, m)
+        for m in await asyncio.to_thread(_due, con):
+            msg = await asyncio.to_thread(_take, con, m)
             if msg is None:
-                mark(False, "gone")
                 continue
             text, button, start = msg
             body = {"chat_id": m["tg_id"], "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
@@ -652,17 +681,10 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             except (httpx.HTTPError, ValueError) as exc:
                 log.warning("postman: %s", type(exc).__name__)
                 return  # the network is down: everything stays queued for the next round
-            if answer.get("ok"):
-                mark(True)
-                tgc.sent(con, m, answer)
-            elif r.status_code == 429:  # too fast: wait as told, this one goes again next round
+            if not answer.get("ok") and r.status_code == 429:  # too fast: wait as told, this one goes again next round
                 await asyncio.sleep(float(answer.get("parameters", {}).get("retry_after", 5)))
                 return
-            elif r.status_code == 403:  # blocked the bot or never started it
-                con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (m["user_id"],))
-                mark(False, "blocked")
-            else:
-                mark(False, str(answer.get("description", r.status_code))[:200])
+            await asyncio.to_thread(_answered, con, m, r.status_code, answer)
             await asyncio.sleep(GAP)
     finally:
         con.close()

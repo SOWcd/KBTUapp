@@ -1085,14 +1085,19 @@ MIGRATIONS: list[tuple[int, str]] = [
     # (Nov 2) a round's own "what's next" (casting audit: "come in person, 3-12 Nov, Kazybek bi, 1st floor"), the club's
     # words shown in the app under the steps like its description; the bot keeps its template
     (108, "ALTER TABLE rounds ADD COLUMN next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300);"),
+    # (Nov 2) the postman's due query (bot._due) every 2 s walked every failed row: only the waiting ones indexed
+    (109, "CREATE INDEX IF NOT EXISTS outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;"),
 ]
+
+
+BUSY_MS = 15000  # a write's wait for the lock (maybe() waits less)
 
 
 def connect(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path, isolation_level=None, check_same_thread=False, timeout=5)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
-    con.execute("PRAGMA busy_timeout = 15000")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core
+    con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core
     con.execute("PRAGMA secure_delete = ON")  # deleted rows' text doesn't linger in free pages (H2)
     con.execute("PRAGMA synchronous = NORMAL")  # with WAL: no corruption on a crash, fsync only at checkpoints
     return con
@@ -1169,3 +1174,19 @@ def tx(con: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
         con.execute("ROLLBACK")
         raise
     con.execute("COMMIT")
+
+
+def maybe(con: sqlite3.Connection, fn: Callable, *args, ms: int = 200):
+    """A best-effort write on a read (seen_at, a roster match on /api/me): fn(*args) in one transaction that waits for
+    the write lock `ms` at most and is skipped (rolled back, None) while a burst holds it; the next call tries again.
+    A GET never waits connect()'s 15 s behind someone else's writes."""
+    con.execute(f"PRAGMA busy_timeout = {int(ms)}")
+    try:
+        with tx(con):
+            return fn(*args)
+    except sqlite3.OperationalError as exc:
+        if "locked" not in str(exc) and "busy" not in str(exc):
+            raise
+        return None
+    finally:
+        con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")

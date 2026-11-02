@@ -12,6 +12,7 @@ from math import comb
 from pathlib import Path
 
 from .. import portal
+from .. import db
 from ..db import tx
 
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
@@ -345,9 +346,12 @@ def ms_apply(con, uid: int, who: dict) -> bool:
 
 
 def ms_sweep(con) -> None:
-    """Each bot round: Microsoft sign-ins never finished (they hold the Graph profile) and the used-link marks"""
-    con.execute("DELETE FROM meta WHERE key LIKE 'ms:%' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
-    con.execute("DELETE FROM meta WHERE key LIKE 'ms_used:%' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
+    """Every 5 minutes (the bot's round): Microsoft sign-ins never finished (they hold the Graph profile) and the used-link
+    marks. Key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key."""
+    if not core._once(con, "ms_sweep", str(core.now() // 300)):
+        return
+    con.execute("DELETE FROM meta WHERE key >= 'ms:' AND key < 'ms;' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
+    con.execute("DELETE FROM meta WHERE key >= 'ms_used:' AND key < 'ms_used;' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
 
 
 def id_clash(con, sid: str, new: int, old: int) -> None:
@@ -372,8 +376,8 @@ def _channel(c) -> dict | None:
 
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
-    if v.student:
-        roster.match(con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below
+    if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
+        db.maybe(con, roster.match, con, v.id)  # a club's roster row that's mine (PLAN 95): joined now, a toast below; skipped in a burst
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
@@ -394,7 +398,7 @@ def me(con, v: Viewer) -> dict:
     if s and s["consent_version"] != "staff" and (u["card_no"] is None and not u["is_founder"] or (
             (u["is_founder"] or (u["card_no"] or profiles.FIRST_N + 1) <= profiles.FIRST_N)
             and not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'first50'", v.id))):
-        first_fifty(con, v.id)  # the number and, with it, "First 500"
+        db.maybe(con, first_fifty, con, v.id)  # the number and, with it, "First 500" (skipped in a burst: the next open)
         u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     return {
         "id": u["id"], "tg": {"id": u["tg_id"], "username": u["tg_username"], "firstName": u["tg_first_name"], "lastName": u["tg_last_name"]},
