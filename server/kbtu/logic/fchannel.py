@@ -82,13 +82,12 @@ def feed(con, v: Viewer) -> list[dict]:
                       ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
-    anon = texts.bot_message("ru", "fch_anon")[0]  # the channel's language, as tgc.post_tick signs
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
         out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
-             "sign": anon if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
+             "sign": anon_sign(p["body"]) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id,
              # the comments: the students' count, and the bot's first comment (the link opens the thread there)
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
@@ -201,11 +200,17 @@ def to_send(con) -> list:
     return [(p["id"], p["body"], _sign(con, p)) for p in rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")]
 
 
+def anon_sign(body: str) -> str:
+    """An anonymous post's signature, short and in the post's own script (owner, Nov 2): "Anon" in Russian and Kazakh
+    alike for any Cyrillic, else English."""
+    return "\u0410\u043d\u043e\u043d\u0438\u043c" if re.search("[\u0400-\u04ff]", body or "") else "Anonymous"
+
+
 def _sign(con, p) -> str:
     """The post's signature in the channel (its last line, after the dash): the one fixed when written, or the anonymous
     line (the channel speaks Russian). A post from before signatures were kept: the short name, as it was signed then."""
     if p["anon"]:
-        return texts.bot_message("ru", "fch_anon")[0]
+        return anon_sign(p["body"])
     if p["sign"]:
         return p["sign"]
     who = one(con, PERSON + " WHERE u.id = ?", p["user_id"])

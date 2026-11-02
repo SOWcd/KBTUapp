@@ -230,7 +230,7 @@ def test_lost_send_found_by_its_copy(env):
     q = lambda sql, *a: con.execute(sql, a).lastrowid  # noqa: E731
     lost = q("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'who goes tonight?', 1, 'held', 'lost', 0)", ann["id"])
     q("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'who goes tonight?', 0, 'live', 500, 0)", bob["id"])
-    anon = texts.bot_message("ru", "fch_anon")[0]
+    anon = F.anon_sign("who goes tonight?")
     F.found(con, 500, "Bob T\n\nwho goes tonight?")
     F.found(con, 500, f"{anon}\n\nwho goes tonight?")
     assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (lost,)).fetchone()[0] is None

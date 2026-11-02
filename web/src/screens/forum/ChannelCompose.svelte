@@ -35,10 +35,13 @@
     say(t(why), 'pleading_face_3d');
   }
 
+  // as the channel signs an anonymous post (fchannel.anon_sign): "Anon" for any Cyrillic, else English
+  const anonSign = (text: string) => (/[\u0400-\u04ff]/.test(text) ? '\u0410\u043d\u043e\u043d\u0438\u043c' : 'Anonymous');
+
   async function post() {
     if (!ready) return;
     const text = body.trim(), was = anon;
-    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, sign: was ? t('fc.anonSign') : sign, mine: true,
+    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, sign: was ? anonSign(text) : sign, mine: true,
       person: !was && session.me ? { id: session.me.id, name: session.me.name, avatar: session.me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [] };
     channel.feed = [temp, ...(channel.feed ?? [])]; haptic.select(); close(overlay.id);
     try {
@@ -61,7 +64,7 @@
       {#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
       {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}
       <div class="col">
-        <b class="ellipsis">{anon ? t('fc.anonSign') : sign}</b>
+        <b class="ellipsis">{anon ? anonSign(body) : sign}</b>
         <textarea class="text" bind:value={body} maxlength="1000" rows="3" placeholder={t('fc.ph')} aria-label={t('fc.ph')} use:grow={280}></textarea>
       </div>
     </div>

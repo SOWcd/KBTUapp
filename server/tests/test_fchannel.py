@@ -140,7 +140,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == f"Secret confession here\n\n<i>— {texts.bot_message('ru', 'fch_anon')[0]}</i>"
+    assert tg.of("sendMessage")[0]["text"] == f"Secret confession here\n\n<i>— Anonymous</i>"
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     # the author deletes it: the words go at once, the channel message (and its copy in the group) in the bot's round
     con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:77', f"KBTUappForum {mid}"), (f"fchcopy:{mid}", '77')])
@@ -449,7 +449,7 @@ def test_post_feed(env, monkeypatch):
     feed = c.get("/api/forum-posts/feed", headers=C).json()
     assert [p["id"] for p in feed] == [held["id"], masked["id"], named["id"]]                   # newest first, my held one too
     assert feed[0]["status"] == "held" and feed[0]["mine"] and feed[0]["msg"] is None
-    assert feed[1]["sign"] == texts.bot_message("ru", "fch_anon")[0] and not feed[1]["mine"] and feed[1]["msg"] > 0
+    assert feed[1]["sign"] in ("Anonymous", "\u0410\u043d\u043e\u043d\u0438\u043c") and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
         assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions"}  # no user id
@@ -461,7 +461,7 @@ def test_post_feed(env, monkeypatch):
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread")} == {
-            "body": "A quiet confession", "status": "live", "anon": True, "sign": texts.bot_message("ru", "fch_anon")[0], "person": None, "mine": False,
+            "body": "A quiet confession", "status": "live", "anon": True, "sign": "Anonymous", "person": None, "mine": False,
             "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
