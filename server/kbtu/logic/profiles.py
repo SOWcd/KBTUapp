@@ -229,6 +229,8 @@ def claim_link(con, code: str, until: int, v: Viewer | None = None) -> str:
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
     if v is not None and (not owner or v.id != owner[0]):
         raise ApiError("forbidden")
+    if v is not None and code not in BADGE_OF:  # from the app: badges only (the CLI keeps the rest)
+        raise ApiError("bad_input")
     if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
@@ -610,6 +612,7 @@ def ask_friend(con, v: Viewer, uid: int) -> dict:
             notify(con, uid, "friend_new", f"fn:{v.id}:{core.now() // 86400}")
         state = "friends"
     elif state == "none":
+        _stranger_view(con, v, uid)  # a person opened the profile already (free); a script walking ids meets the 200 a day (review)
         if one(con, "SELECT COUNT(*) FROM friend_requests WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
             raise ApiError("rate_limited")
         with tx(con):

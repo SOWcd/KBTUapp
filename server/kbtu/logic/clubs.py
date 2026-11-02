@@ -444,6 +444,7 @@ def fill_abbrs(con) -> None:
             n = org_name(o["name"])[0]
             if n != o["name"] and not one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND id != ?", n, o["id"]):
                 con.execute("UPDATE orgs SET name = ? WHERE id = ?", (n, o["id"]))
+                log_action(con, None, "org_rename", f"org:{o['id']}", json.dumps({"from": o["name"], "to": n}))  # undoable by hand
 
 
 def org_by_slug(con, slug: str) -> int | None:

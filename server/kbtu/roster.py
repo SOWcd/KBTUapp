@@ -208,9 +208,14 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
             fixed = mine is None or one(con, "SELECT fixed FROM org_roles WHERE id = ?", mine)["fixed"]
             if fixed:  # a role name the club gave in the app stays
                 t = one(con, "SELECT id FROM org_roles WHERE org_id = ? AND lower(name) = lower(?)", oid, r["title"][:40])
-                tid = t["id"] if t else con.execute("""INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (?, ?, ?, ?, ?)""",
-                                                    (oid, r["title"][:40], {"vice": "#7C4DFF", "head": "#3B6BFF"}.get(role, "#8E8E93"), role, now())).lastrowid
-                con.execute("UPDATE org_members SET role_id = ? WHERE org_id = ? AND user_id = ?", (tid, oid, uid))
+                if t and not trusted:  # a club's own role may carry rights: an unchecked claim never takes one (review)
+                    t = None
+                    tid = None
+                else:
+                    tid = t["id"] if t else con.execute("""INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (?, ?, ?, ?, ?)""",
+                                                        (oid, r["title"][:40], {"vice": "#7C4DFF", "head": "#3B6BFF"}.get(role, "#8E8E93"), role, now())).lastrowid
+                if tid:
+                    con.execute("UPDATE org_members SET role_id = ? WHERE org_id = ? AND user_id = ?", (tid, oid, uid))
         if r["dept"] and not one(con, """SELECT 1 FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id
                 WHERE g.org_id = ? AND mt.user_id = ? AND g.department = 1""", oid, uid):
             g = one(con, "SELECT id, department FROM org_tags WHERE org_id = ? AND lower(name) = lower(?)", oid, r["dept"][:40])
@@ -238,12 +243,15 @@ def claim(con, uid: int, rid: int) -> None:
     r = next((x for x in asks(con, uid) if x["id"] == rid), None)
     if r is None:
         raise ApiError("not_found")
+    if r["claimed_by"]:  # another student's claim on it waits: never overwritten (review)
+        raise ApiError("conflict")
     if r["role"] == "member":
         join(con, uid, r, trusted=False)
         return
     with tx(con):
         if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
             set_role(con, None, uid, r["org_id"], "member", "roster")
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"rclaim:{rid}", str(uid)))  # the claim let me in: a no takes it back
         con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ?", (uid, rid))
         for (aid,) in _approvers(con, r["org_id"]):
             notify(con, aid, "roster_claim", f"rq:{rid}:{uid}")
@@ -285,10 +293,14 @@ def decide(con, v, rid: int, ok: bool) -> None:
     if not _approves(con, v, r["org_id"]):
         raise ApiError("forbidden")
     with tx(con):
+        came = one(con, "SELECT value FROM meta WHERE key = ?", f"rclaim:{rid}")
+        con.execute("DELETE FROM meta WHERE key = ?", (f"rclaim:{rid}",))
         if ok:
             join(con, r["claimed_by"], r, trusted=False, promote=True)
         else:
             con.execute("UPDATE roster_pending SET rejected_by = claimed_by, claimed_by = NULL WHERE id = ?", (rid,))
+            if came and came[0] == str(r["claimed_by"]) and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role = 'member'", r["org_id"], r["claimed_by"]):
+                set_role(con, v.id, r["claimed_by"], r["org_id"], "none", "roster_decline")  # "not them": out of the club the claim let them in
 
 
 def mine(con, uid: int) -> dict | None:

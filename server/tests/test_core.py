@@ -152,6 +152,7 @@ def test_multi_day_event(env, monkeypatch):
     end = start + 10 * 86400
     body = {"title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["error"] == "bad_input"   # ends when it starts
+    assert c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": start + 40 * 86400}).json()["error"] == "bad_input"  # days, not years
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": end}).json()["id"]
     assert c.post(f"/api/events/{eid}/publish", headers=tma(20)).json()["endsAt"] == end
     code = c.post(f"/api/events/{eid}/registration", headers=tma(10), json={}).json()["my"]["ticketCode"]
@@ -4967,6 +4968,36 @@ def test_roster_load_and_join(env):
     assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(70), json={"ok": True}).status_code == 204
     me = c.get("/api/me", headers=h(72)).json()
     assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"] is None   # never the row's city
+
+
+def test_roster_claim_no_rights(env):
+    """A claim at the student's word (review, Nov 2): a member's row never hands over a club role that carries rights;
+    an officer's row lets the claimer in as a member, and a no takes them out again; a waiting claim isn't overwritten."""
+    from kbtu import roster
+    c, cfg = env
+    pres, zed = login(c, 80, "pres"), login(c, 81, "zed")
+    con = db.connect(cfg.db_path)
+    h = lambda uid, u: {"Authorization": "tma " + auth.sign_init_data({"id": uid, "first_name": "X", "username": u}, BOT)}  # noqa: E731
+    c.get("/api/me", headers=h(81, "zed_t"))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, created_at) VALUES (1, 'HR', '#8E8E93', 'member', 'casting,team', 0)")
+    row = lambda **k: {"sheet": "Open Mic sheet", "position": None, "title": None, "role": "member", "dept": None, "full_name": "Someone Else", "school": None,  # noqa: E731
+                       "year": None, "course": None, "city": None, "phone": None, "tg": "zed_t", "email": None, **k}
+    roster.load(con, [row(position="HR", title="HR")], {"Open Mic sheet": "mic"})
+    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
+    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
+    assert tuple(con.execute("SELECT role, role_id FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()) == ("member", None)
+    con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],))
+    roster.load(con, [row(full_name="Other Person", position="Head of SMM", title="Head of SMM", role="head")], {"Open Mic sheet": "mic"})
+    ask = c.get("/api/me", headers=h(81, "zed_t")).json()["roster"]["ask"]
+    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code == 204
+    assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()[0] == "member"
+    assert c.post(f"/api/roster/{ask[0]['id']}/claim", headers=h(81, "zed_t")).status_code in (404, 409)   # claimed: not twice
+    req = c.get("/api/roster/requests", headers=tma(80)).json()
+    assert c.post(f"/api/roster/requests/{req[0]['id']}", headers=tma(80), json={"ok": False}).status_code == 204
+    assert not con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (zed["id"],)).fetchone()   # "not them": out again
+    con.close()
 
 
 def test_roster_app_wins(env):
