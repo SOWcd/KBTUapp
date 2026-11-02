@@ -26,6 +26,7 @@
   import Pane from '../../ui/Pane.svelte';
 
   type Part = 'last' | 'first' | 'middle';
+  type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
   type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
@@ -63,13 +64,13 @@
   // (account.fix_identity: the ID's year stays, the name stays KBTU's in another spelling at most)
   // each name part one row (owner, Nov 2: six rows read as duplicates): its Cyrillic and Latin forms together, both a
   // tap deeper on the part's own page
-  const PARTS: [Part, Fixable, Fixable, Key][] = [['last', 'lastName', 'lastLat', 'pd.lastLat'], ['first', 'firstName', 'firstLat', 'pd.firstLat'],
+  const PARTS: [Part, Typed, Typed, Key][] = [['last', 'lastName', 'lastLat', 'pd.lastLat'], ['first', 'firstName', 'firstLat', 'pd.firstLat'],
     ['middle', 'middleName', 'middleLat', 'pd.middleLat']];
   const part = $derived(PARTS.find((p) => p[0] === kind));
   const LAT: Fixable[] = ['lastLat', 'firstLat', 'middleLat'];
-  const ALL = PARTS.length * 2 + 1; // every Fixable (the parts' and the ID): one fixed, the "through support" footnote
-  const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'login.sidTaken', fixed: 'pd.support' };
-  async function fix(k: Fixable, label: Key) {
+  const ALL = PARTS.length * 2 + 3; // every Fixable (the parts', the ID, course, school): one fixed, the "through support" footnote
+  const WHY: Record<string, Key> = { sid_year: 'pd.sidYear', name_far: 'pd.nameFar', sid_taken: 'pd.sidTaken', sid_tries: 'pd.sidTries', fixed: 'pd.support' };
+  async function fix(k: Typed, label: Key) {
     const was = me?.student?.[k] ?? '';
     const fill = LAT.includes(k) && !was; // an empty Latin one filled doesn't spend the once (the server's rule)
     const v = await sheets.askText({ title: t(label), text: t(fill ? 'pd.latFill' : 'pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
@@ -88,27 +89,29 @@
   const schools = $derived(data.orgs.filter((o) => o.kind === 'school').sort((a, b) => a.name.localeCompare(b.name, i18n.lang)));
   const mySchool = $derived(schoolOf(me?.student?.school));
   async function pickSchool(name: string | null) {
-    if (!me?.student) return;
+    if (!me?.student || name === me.student.school) return;
+    if (me.student.school && !(await sheets.ask({ title: name ?? t('look.noSchool'), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
     const was = me, card = data.myCard;
     haptic.select();
     session.me = { ...me, student: { ...me.student, school: name } };
     if (card) data.myCard = { ...card, school: name }; // the lanyard reads my card once it's loaded (Me)
     close(overlay.id);
     try { session.me = await api.updateMe({ school: name }); void loadMyCard(); }
-    catch { session.me = was; data.myCard = card; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (e) { session.me = was; data.myCard = card; haptic.error(); say(t(e instanceof ApiErr && WHY[e.message] || 'common.error'), 'warning_3d'); }
   }
   // my year up from the one the ID says (a transfer's new ID reads 1st year), never below it: the server holds that
   // (account.update_me: free 1st-year seats). The lanyard turns at once, as with the school
   const courses = $derived(me?.student?.courseMin ? Array.from({ length: 7 - me.student.courseMin }, (_, i) => me.student!.courseMin! + i) : []);
   async function pickCourse(n: number) {
-    if (!me?.student) return;
+    if (!me?.student || n === me.student.course) return;
+    if (me.student.course && !(await sheets.ask({ title: t('person.course', { n }), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
     const was = me, card = data.myCard;
     haptic.select();
     session.me = { ...me, student: { ...me.student, course: n } };
     if (card) data.myCard = { ...card, course: n };
     close(overlay.id);
     try { session.me = await api.updateMe({ course: n }); void loadMyCard(); }
-    catch { session.me = was; data.myCard = card; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (e) { session.me = was; data.myCard = card; haptic.error(); say(t(e instanceof ApiErr && WHY[e.message] || 'common.error'), 'warning_3d'); }
   }
   async function cityHidden(on: boolean) {
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
@@ -184,7 +187,7 @@
           <!-- the ID once too; the year up from the ID's; the email is the Microsoft login, never edited -->
           {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
           {:else}<div class="set-row"><span class="lb">{t('pd.sid')}</span><span class="val">{st.studentId}</span></div>{/if}
-          {#if courses.length > 1 && st.consent !== 'staff'}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
+          {#if courses.length > 1 && st.fixable?.includes('course')}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
           {:else if st.course}<div class="set-row"><span class="lb">{t('pd.course')}</span><span class="val">{st.course}</span></div>{/if}
           {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val wide">{st.email}</span></div>{/if}
         {/if}
@@ -229,12 +232,23 @@
     </div>
     <p class="set-foot">{t(st.fixable?.includes(cyr) || st.fixable?.includes(lat) ? 'pd.once' : 'pd.support')}</p>
   {:else if kind === 'course' && me?.student}
-    <div class="set-group plain" role="radiogroup" aria-label={t('pd.course')}>
-      {#each courses as n (n)}
-        <button class="set-row" role="radio" aria-checked={me.student.course === n} onclick={() => void pickCourse(n)}>
-          <span class="lb">{t('person.course', { n })}</span><span class="tick">{#if me.student.course === n}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
-      {/each}
-    </div>
+    {#if me.student.fixable?.includes('course')}
+      <div class="set-group plain" role="radiogroup" aria-label={t('pd.course')}>
+        {#each courses as n (n)}
+          <button class="set-row" role="radio" aria-checked={me.student.course === n} onclick={() => void pickCourse(n)}>
+            <span class="lb">{t('person.course', { n })}</span><span class="tick">{#if me.student.course === n}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+        {/each}
+      </div>
+      <p class="set-foot">{t('pd.once')}</p>
+    {:else}
+      <div class="set-group plain"><div class="set-row"><span class="lb">{t('person.course', { n: me.student.course ?? 0 })}</span></div></div>
+      <p class="set-foot">{t('pd.support')}</p>
+    {/if}
+  {:else if kind === 'school' && me?.student && !me.student.fixable?.includes('school')}
+    <!-- the once spent: my school alone, then support -->
+    <div class="set-group plain"><div class="set-row"><span class="lb school">{mySchool?.name ?? me.student.school ?? t('look.noSchool')}</span>
+      {#if mySchool}<span class="val">{shortOf(mySchool)}</span>{/if}</div></div>
+    <p class="set-foot">{t('pd.support')}</p>
   {:else if kind === 'school' && me?.student}
     <div class="set-group plain" role="radiogroup" aria-label={t('look.school')}>
       {#each schools as o (o.id)}
@@ -247,6 +261,7 @@
       <button class="set-row" role="radio" aria-checked={!me.student.school} onclick={() => void pickSchool(null)}>
         <span class="lb">{t('look.noSchool')}</span><span class="tick">{#if !me.student.school}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
     </div>
+    <p class="set-foot">{t('pd.once')}</p>
   {:else if kind === 'sees'}
     <div class="set-group plain">
       {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}

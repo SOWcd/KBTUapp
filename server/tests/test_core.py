@@ -1923,10 +1923,10 @@ def test_course_raise(env, monkeypatch):
     assert c.get("/api/me", headers=tma(10)).json()["student"]["courseMin"] == 1
     assert all(up(n).status_code == 400 for n in (0, 7, "2", True, None))
     me = up(2).json()["student"]
-    assert me["course"] == 2 and not me["freeFirst"]
-    assert up(1).json()["student"]["course"] == 1                               # back to the ID's own year: allowed
-    up(2)
-    con.execute("UPDATE students SET student_id = '25B031234', course = 2 WHERE user_id = ?", (ali["id"],))
+    assert me["course"] == 2 and not me["freeFirst"] and "course" not in me["fixable"]
+    assert up(1).json()["message"] == "fixed"                                   # once (review once-edit 3): 2, then 1 for a free seat
+    assert up(2).status_code == 200                                             # the same year again: nothing to spend
+    con.execute("UPDATE students SET student_id = '25B031234', course = 2, fixed = '' WHERE user_id = ?", (ali["id"],))
     assert up(1).status_code == 400                                             # below the ID's year: never
     assert up(1, 12).status_code == 403                                         # staff: the ID is a placeholder
     con.execute("UPDATE students SET student_id = '26B031234', course = 2, course_year = 2026 WHERE user_id = ?", (ali["id"],))
@@ -3414,11 +3414,16 @@ def test_my_school(env):
     con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     sce = "\u0428\u043a\u043e\u043b\u0430 \u0445\u0438\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u0438"
     me = lambda body: c.patch("/api/me", headers=tma(10), json=body)
-    assert me({"school": sce}).json()["student"]["school"] == sce
+    con.execute("UPDATE students SET school = NULL WHERE user_id = (SELECT id FROM users WHERE tg_id = 10)")
+    st = me({"school": sce}).json()["student"]
+    assert st["school"] == sce and "school" in st["fixable"]                 # an empty one filled: the once kept
     for bad in ("Made Up School", "IT Club", 5, ["x"]):
         assert me({"school": bad}).status_code == 400
     assert c.get("/api/me", headers=tma(10)).json()["student"]["school"] == sce
-    assert me({"school": None}).json()["student"]["school"] is None
+    st = me({"school": None}).json()["student"]
+    assert st["school"] is None and "school" not in st["fixable"]            # a change: spent (review once-edit 4)
+    assert me({"school": sce}).json()["message"] == "fixed"                  # then support, even to fill it again
+    assert me({"school": None}).status_code == 200                           # the same: nothing to spend
     assert c.patch("/api/me", headers=tma(22, "Guest"), json={"school": sce}).status_code in (401, 403)
 
 
@@ -7141,7 +7146,7 @@ def test_identity_fix_once(env, monkeypatch):
     assert fix(firstName="Aidos Bekzat").json()["message"] == "name_far"
     surname = "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432"
     assert fix(lastName=surname).json()["student"]["lastName"] == surname    # KBTU's name in Cyrillic
-    assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName", "lastLat", "firstLat", "middleLat"]  # nothing changed: not spent
+    assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName", "lastLat", "firstLat", "middleLat", "course", "school"]  # nothing changed: not spent
     assert fix(middleName="Kairatuly").json()["student"]["middleName"] == "Kairatuly"
     assert fix(middleName="X").json()["message"] == "fixed"
     assert fix(email="x@kbtu.kz").json()["student"]["email"] == ali["student"]["email"]  # never: it's the Microsoft login
@@ -7159,6 +7164,49 @@ def test_identity_fix_once(env, monkeypatch):
     admin.main(["fix", "10", "reset"])                                      # support gives the once back, logged
     assert con.execute("SELECT fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()[0] == ""
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'identity_fix_reset' AND target = ?", (f"user:{ali['id']}",)).fetchone()[0] == 1
+
+
+def test_once_edit(env, monkeypatch):
+    """Review once-edit (Nov 2): an ID that makes a 1st-year bachelor is support's, any other year mine once; an ID on a
+    check-in's expected list for another mail is taken (an absent friend shown as "came"); 5 ID tries a day, taken or
+    not; a save is all or nothing, yet a taken try still counts and the admins still hear."""
+    import calendar
+    from kbtu import checkin
+    c, cfg = env
+    ali, bek, boss = login(c, 10, "ali"), login(c, 11, "bek"), login(c, 12, "boss")
+    con = db.connect(cfg.db_path)
+    t0 = calendar.timegm((2026, 10, 1, 0, 0, 0))
+    set_clock(monkeypatch, lambda: t0)
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    con.execute("UPDATE students SET student_id = '24B031234', course = 3, email = 'ali@kbtu.kz' WHERE user_id = ?", (ali["id"],))
+    con.execute("UPDATE students SET student_id = '24B031235' WHERE user_id = ?", (bek["id"],))
+    fix = lambda **b: c.patch("/api/me", headers=tma(10), json=b)  # noqa: E731
+    row = lambda: con.execute("SELECT student_id, course, phone, school, fixed FROM students WHERE user_id = ?", (ali["id"],)).fetchone()  # noqa: E731
+    again = lambda **k: con.execute(f"UPDATE students SET {''.join(f'{x} = ?, ' for x in k)}fixed = '' WHERE user_id = ?", (*k.values(), ali["id"]))  # noqa: E731
+    r = fix(phone="+77011234567", studentId="24B031235")                     # bek's, with a phone in the same save
+    assert r.json()["message"] == "sid_taken" and row()["phone"] is None    # all or nothing: the phone isn't saved
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'id_clash' AND user_id = ?", (boss["id"],)).fetchone()[0] == 1  # yet the admins hear
+    checkin.new(con, "Meeting", [{"email": "friend@kbtu.kz", "name": "Friend", "studentId": "24b099001"},
+                                 {"email": "ali@kbtu.kz", "name": "Ali", "studentId": "24B099002"}])
+    assert fix(studentId="24B099001").json()["message"] == "sid_taken"      # an absent friend's place on the list
+    assert "studentId" in c.get("/api/me", headers=tma(10)).json()["student"]["fixable"]  # not spent
+    assert fix(studentId="26B031234").json()["message"] == "sid_year"       # year 3 into year 1 (free seats): support
+    assert tuple(row())[:2] == ("24B031234", 3)
+    assert fix(studentId="25B031234").json()["student"]["course"] == 2      # a later year, still not the 1st: mine
+    again(student_id="26M031234", course=1)
+    assert fix(studentId="26B031234").json()["message"] == "sid_year"       # a 1st-year master into a bachelor: support
+    again(student_id="26B031234", course=1)
+    assert fix(studentId="26B031299").status_code == 200                    # a 1st-year's typo: theirs
+    again()
+    assert fix(studentId="24B099002").status_code == 200                    # on a list under my own mail: mine
+    again()
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'sid_try' AND actor_id = ?", (ali["id"],)).fetchone()[0] == 2
+    r = fix(studentId="24B031240")                                          # the 6th try today (2 taken, 3 saved)
+    assert r.status_code == 429 and r.json()["message"] == "sid_tries"
+    set_clock(monkeypatch, lambda: t0 + 86401)
+    assert fix(studentId="24B031240").status_code == 200                    # tomorrow: again
+    assert fix(school=None, course=9).status_code == 400 and row()["school"] == "SITE"  # a refused course keeps the school
+    con.close()
 
 
 def test_latin_names(env, monkeypatch, capsys):
