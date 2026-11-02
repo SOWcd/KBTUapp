@@ -36,4 +36,6 @@ ENV BOARD=1
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
 # secrets come from the environment (Coolify): BOT_TOKEN, TOKEN_KEY, ADMIN_TG_IDS, DOMAIN
-CMD ["uvicorn", "kbtu.app:create", "--factory", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*", "--no-access-log"]
+# workers: WEB_CONCURRENCY if the host sets it, else one per core up to 4 (the app is multi-worker safe; one was the bottleneck
+# at 300 people opening at once). exec keeps uvicorn PID 1 for the stop signal
+CMD ["sh", "-c", "n=$(nproc); [ \"$n\" -gt 4 ] && n=4; export WEB_CONCURRENCY=${WEB_CONCURRENCY:-$n}; exec uvicorn kbtu.app:create --factory --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips '*' --no-access-log"]
