@@ -16,10 +16,10 @@ boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() 
 
 // A deploy replaces the lazily loaded screens, so an app opened before it fails to load its next sheet and the tap
 // does nothing: reload into the new build.
-// At most once a minute, so a real outage can't loop.
+// At most once in 15 s, so a real outage can't loop fast (a minute left a screen blank after two deploys in a row).
 window.addEventListener('vite:preloadError', (e) => {
   try {
-    if (Date.now() - Number(sessionStorage.getItem('kb-reloaded') ?? 0) < 60_000) return;
+    if (Date.now() - Number(sessionStorage.getItem('kb-reloaded') ?? 0) < 15_000) return;
     sessionStorage.setItem('kb-reloaded', String(Date.now()));
   } catch { /* no storage: reload anyway */ }
   e.preventDefault();
