@@ -52,8 +52,10 @@
   // my school's lanyard: mine with no joining, nobody else's (the server holds it too: logic.school_slug); others' schools
   // aren't offered even under a lock
   const school = $derived(schoolOf(me?.student?.school));
-  const own = $derived([...mine, ...(school && skinned(school) ? [school] : [])]);
-  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && o.kind !== 'school' && !own.some((x) => x.id === o.id))]);
+  // once each: a member of my school's org (staff often are) had it twice, a duplicate key that blanked Settings (Nov 2)
+  const own = $derived([...mine, ...(school && skinned(school) && !mine.some((o) => o.id === school.id) ? [school] : [])]);
+  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && o.kind !== 'school' && !own.some((x) => x.id === o.id))]
+    .filter((o, i, all) => all.findIndex((x) => x.id === o.id) === i));  // a key twice blanks the list: never
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
     ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
