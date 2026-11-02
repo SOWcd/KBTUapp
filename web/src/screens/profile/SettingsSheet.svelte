@@ -10,6 +10,9 @@
   import Info from '@lucide/svelte/icons/info';
   import Phone from '@lucide/svelte/icons/phone';
   import MapPin from '@lucide/svelte/icons/map-pin';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+  import Check from '@lucide/svelte/icons/check';
+  import { schoolOf, shortOf } from '../../lib/short';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
@@ -21,9 +24,10 @@
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
 
-  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'sees' | 'about';
+  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'sees' | 'about';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
-  const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+  const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
+    school: ['look.school', GraduationCap], sees: ['set.whoSees', Lock], about: ['set.about', Info] };
   // where "‹ Back" goes: Privacy for its own pages, else Settings
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
@@ -71,6 +75,20 @@
       const why = e instanceof ApiErr ? (e.message === 'bad_input' ? (k === 'studentId' ? 'pd.badSid' : LAT.includes(k) ? 'pd.badLat' : 'pd.badName') : WHY[e.message]) : undefined;
       say(t(why ?? 'common.error'), 'pleading_face_3d');
     }
+  }
+  // my school over the list's, which can be wrong (owner, Nov 2): KBTU's schools from the store, or none. The lanyard
+  // turns at once and the page goes back to it; the server keeps the school's own name (account.update_me)
+  const schools = $derived(data.orgs.filter((o) => o.kind === 'school').sort((a, b) => a.name.localeCompare(b.name, i18n.lang)));
+  const mySchool = $derived(schoolOf(me?.student?.school));
+  async function pickSchool(name: string | null) {
+    if (!me?.student) return;
+    const was = me, card = data.myCard;
+    haptic.select();
+    session.me = { ...me, student: { ...me.student, school: name } };
+    if (card) data.myCard = { ...card, school: name }; // the lanyard reads my card once it's loaded (Me)
+    close(overlay.id);
+    try { session.me = await api.updateMe({ school: name }); void loadMyCard(); }
+    catch { session.me = was; data.myCard = card; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   async function cityHidden(on: boolean) {
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
@@ -164,6 +182,18 @@
     </div>
     <p class="set-foot">{t('pd.cityNote')}</p>
     <div class="set-group plain gap">{@render act(t('pd.cityDel'), dropCity, true)}</div>
+  {:else if kind === 'school' && me?.student}
+    <div class="set-group plain" role="radiogroup" aria-label={t('look.school')}>
+      {#each schools as o (o.id)}
+        {@const on = mySchool?.id === o.id}
+        <button class="set-row" role="radio" aria-checked={on} onclick={() => void pickSchool(o.orig?.name ?? o.name)}>
+          <span class="lb school">{o.name}</span><span class="val">{shortOf(o)}</span><span class="tick">{#if on}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+      {/each}
+    </div>
+    <div class="set-group plain gap">
+      <button class="set-row" role="radio" aria-checked={!me.student.school} onclick={() => void pickSchool(null)}>
+        <span class="lb">{t('look.noSchool')}</span><span class="tick">{#if !me.student.school}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+    </div>
   {:else if kind === 'sees'}
     <div class="set-group plain">
       {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}
@@ -183,6 +213,12 @@
   .sw + .sw { margin-top: 22px; }
   .always { margin-top: 26px; }
   .gap { margin-top: 26px; }
+  /* the pick's check, Apple's: a fixed slot at the row's end so the short names line up */
+  /* a long school's name breaks between syllables, never mid-letter; at 320 px the short name
+     makes room for it */
+  .set-row > .lb.school { overflow-wrap: break-word; hyphens: auto; }
+  @media (max-width: 340px) { .lb.school + .val { display: none; } }
+  .tick { flex: none; width: 20px; margin-right: -4px; display: grid; place-items: center; color: var(--accent-text); }
   /* who sees what: a heading and its text in each cell, read rather than tapped */
   .see { padding: 12px 16px; }
   .see + .see { border-top: 1px solid var(--line); }

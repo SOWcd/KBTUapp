@@ -17,6 +17,8 @@
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+  import { schoolShort } from '../../lib/short';
   import Languages from '@lucide/svelte/icons/languages';
   import Sun from '@lucide/svelte/icons/sun';
   import Moon from '@lucide/svelte/icons/moon';
@@ -191,6 +193,7 @@
         {@render row(ImageIcon, t('look.photo'), me.photo.telegram ? 'Telegram' : t('look.own'), 'menu', (r) => photoMenu(at(r)), 'photo')}
         {#if me.nick}{@render row(AtSign, t('look.nick'), me.nick, 'menu', (r) => nickMenu(at(r)), 'nick')}
         {:else}{@render row(AtSign, t('look.nick'), t('look.noNick'), 'in', () => void editNick())}{/if}
+        {@render row(GraduationCap, t('look.school'), schoolShort(me.student.school) || t('look.noSchool'), 'in', () => sheets.settings('school'))}
       </div>
       <p class="set-foot">{t('look.nickFoot')}</p>
     </div>

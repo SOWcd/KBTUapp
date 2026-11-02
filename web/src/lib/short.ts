@@ -17,8 +17,13 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
  *  languages) by its abbreviation in the app's language; one the app doesn't know stays as it is. */
 export function schoolShort(s: string | null | undefined): string {
   if (!s) return '';
-  const k = norm(s);
-  const o = data.orgs.find((x) => x.kind === 'school'
-    && [x.name, x.abbr, x.orig?.name, ...Object.values(x.i18n ?? {}).flatMap((tr) => [tr?.name, tr?.abbr])].some((n) => n && norm(n) === k));
+  const o = schoolOf(s);
   return o ? shortOf(o) : s;
+}
+
+/** The school org a typed school is (schoolShort's match), or undefined. */
+export function schoolOf(s: string | null | undefined) {
+  const k = norm(s ?? '');
+  return k ? data.orgs.find((x) => x.kind === 'school'
+    && [x.name, x.abbr, x.orig?.name, ...Object.values(x.i18n ?? {}).flatMap((tr) => [tr?.name, tr?.abbr])].some((n) => n && norm(n) === k)) : undefined;
 }

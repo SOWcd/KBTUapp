@@ -761,6 +761,8 @@ const en: Dict = {
   'look.noNick': "None",
   'look.nickEdit': "Change…",
   'look.nickFoot': "Your nickname shows instead of your name in feeds and lists. Your profile shows your name too.",
+  'look.school': "School",
+  'look.noSchool': "Not set",
   'set.showGoing': "Friends see where I'm going",
   'person.report': "Report this profile",
 

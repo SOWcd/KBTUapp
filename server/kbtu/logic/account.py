@@ -605,6 +605,13 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         if patch["phone"] is not None and not phone:
             raise ApiError("bad_input")
         con.execute("UPDATE students SET phone = ? WHERE user_id = ?", (phone, v.id))
+    if "school" in patch:  # Settings: mine over the list's (_from_list can be wrong): a KBTU school's name as the app keeps it, or none
+        need_student(v)
+        val = patch["school"]
+        o = val is not None and one(con, "SELECT name FROM orgs WHERE kind = 'school' AND status = 'active' AND name = ?", val if type(val) is str else None)
+        if val is not None and not o:
+            raise ApiError("bad_input")
+        con.execute("UPDATE students SET school = ? WHERE user_id = ?", (o[0] if o else None, v.id))
     for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
         if k in patch:
             need_student(v)

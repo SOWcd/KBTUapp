@@ -781,6 +781,8 @@ const ru = {
   'look.noNick': "Нет",
   'look.nickEdit': "Изменить…",
   'look.nickFoot': "Ник видят вместо имени в ленте и списках. В профиле видно и имя.",
+  'look.school': "Школа",
+  'look.noSchool': "Не указана",
   'set.showGoing': "Друзья видят, куда я иду",
   'person.report': "Пожаловаться на профиль",
 

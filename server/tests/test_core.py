@@ -3331,6 +3331,24 @@ def test_schools_seeded(env):
     assert law["name"] == "Our Law" and json.loads(law["i18n"])["en"]["abbr"] == "SL"
 
 
+def test_my_school(env):
+    """Settings: my school over the list's (it can be wrong): a KBTU school's name as the app keeps it, or none;
+    never free text, a club, or a guest's."""
+    c, cfg = env
+    login(c, 10, "ali")
+    con = db.connect(cfg.db_path)
+    logic.seed_schools(con, Path(cfg.db_path).parent / "media")
+    con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    sce = "\u0428\u043a\u043e\u043b\u0430 \u0445\u0438\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0439 \u0438\u043d\u0436\u0435\u043d\u0435\u0440\u0438\u0438"
+    me = lambda body: c.patch("/api/me", headers=tma(10), json=body)
+    assert me({"school": sce}).json()["student"]["school"] == sce
+    for bad in ("Made Up School", "IT Club", 5, ["x"]):
+        assert me({"school": bad}).status_code == 400
+    assert c.get("/api/me", headers=tma(10)).json()["student"]["school"] == sce
+    assert me({"school": None}).json()["student"]["school"] is None
+    assert c.patch("/api/me", headers=tma(22, "Guest"), json={"school": sce}).status_code in (401, 403)
+
+
 def test_official_roles(env):
     """Every club has the three official roles: the President (the level) and the fixed Vice
     and Head, which can't be renamed, deleted or raised (their rights below the level may be tuned); a Vice or Head
