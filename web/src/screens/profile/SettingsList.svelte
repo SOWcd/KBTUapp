@@ -222,7 +222,7 @@
         <div class="skins" role="radiogroup" aria-label={t(label)}>
           {#each ks as k (k.id ?? 'kbtu')}
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
-                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
+                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: kindOf(k) === 'school' }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2) -->
               <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>

@@ -760,6 +760,8 @@ const en: Dict = {
   'look.nick': "Nickname",
   'look.nickPh': "What to call you",
   'look.locked': "The {name} lanyard is for club members only",
+  'look.lockedSchool': "The {name} lanyard is for this school's students only",
+  'look.noSchoolYet': "A school's lanyard is for its students. Set your school: Settings → School",
   'look.skin': "Lanyard",
   'look.frame': "Frame",
   'look.gSchools': "Schools",

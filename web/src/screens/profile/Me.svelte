@@ -143,7 +143,7 @@
     phase = 'leaving'; hold = true; pending = false;
     haptic.soft();
     // a lanyard tried on but not mine to wear (owner, Oct 31): said so, and mine turns back
-    if (ui.tryOn) { say(t('look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
+    if (ui.tryOn) { say(t(ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
     icons(false, q);
     fades = all('[data-unit]').map((u) => u.animate(q ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px)' }],
       { duration: q ? 150 : 140, easing: IN, fill: 'forwards' }));
