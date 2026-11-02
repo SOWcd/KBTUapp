@@ -74,7 +74,10 @@ def _counts(con, uid: int) -> dict[str, int]:
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
     seasons = [_season_start(t) for t in times]  # the best semester counts: every semester is a new chance
-    busy = {_week(r[0]) for r in rows(con, "SELECT starts_at FROM events WHERE status = 'published' AND visibility = 'public' AND guest_host IS NULL")}  # a partner's week has nothing to check in at
+    # a partner's week has nothing to check in at. Only weeks from my first check-in's on count (_streak): an index
+    # range from that week's Monday, O(my weeks' events), not every event ever under the door's write lock (review 7)
+    busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
+        AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
     streak, streak_now = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
@@ -461,11 +464,11 @@ PROFILES_A_DAY = 200  # strangers' profiles a day (audit M2): browsing needs a f
 
 def _stranger_view(con, v: Viewer, uid: int) -> None:
     """Counts a profile opened by someone who is neither a friend nor a clubmate; past the day's limit, refused. One
-    row per (Almaty day, viewer, profile), so reopening the same one is free; the day before yesterday's rows go."""
+    row per (Almaty day, viewer, profile), so reopening the same one is free; old days go in the daily job (stats_day)."""
     day = (core.now() + 5 * 3600) // 86400
     if one(con, "SELECT 1 FROM profile_views WHERE day = ? AND viewer_id = ? AND user_id = ?", day, v.id, uid):
         return
-    con.execute("DELETE FROM profile_views WHERE day < ?", (day - 1,))  # ponytail: count then insert, a burst can pass 200 by a few
+    # ponytail: count then insert, a burst can pass 200 by a few
     if one(con, "SELECT COUNT(*) FROM profile_views WHERE day = ? AND viewer_id = ?", day, v.id)[0] >= PROFILES_A_DAY:
         raise ApiError("rate_limited")
     con.execute("INSERT INTO profile_views (day, viewer_id, user_id) VALUES (?, ?, ?)", (day, v.id, uid))

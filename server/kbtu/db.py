@@ -1087,6 +1087,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     (108, "ALTER TABLE rounds ADD COLUMN next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300);"),
     # (Nov 2) the postman's due query (bot._due) every 2 s walked every failed row: only the waiting ones indexed
     (109, "CREATE INDEX IF NOT EXISTS outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;"),
+    # (Nov 2, review 12) my join requests on every club list; the feed's pinned-first order; the Afisha's date range
+    (110, """CREATE INDEX IF NOT EXISTS join_requests_by_user ON join_requests(user_id);
+    CREATE INDEX IF NOT EXISTS posts_feed ON posts(audience, pinned, created_at);
+    CREATE INDEX IF NOT EXISTS events_by_start ON events(starts_at);"""),
 ]
 
 

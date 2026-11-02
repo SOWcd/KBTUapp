@@ -4244,9 +4244,10 @@ def test_profile_privacy(env, monkeypatch):
     assert c.get(f"/api/users/{bob}", headers=tma(13)).status_code == 200
     assert c.get(f"/api/users/{cat}", headers=tma(13)).json()["error"] == "rate_limited"
     assert c.get(f"/api/users/{ann}", headers=tma(12)).status_code == 200                              # a clubmate is never counted
-    later = int(time.time()) + 2 * 86400
-    set_clock(monkeypatch, lambda: later)                                                   # two days on
+    later = ((int(time.time()) + 5 * 3600) // 86400 + 2) * 86400 - 4 * 3600
+    set_clock(monkeypatch, lambda: later)                                                   # two days on, 01:00 Almaty
     assert c.get(f"/api/users/{cat}", headers=tma(13)).status_code == 200
+    logic.stats_day(con)                                                                    # the night's job clears old days
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE day < ?", ((later + 5 * 3600) // 86400 - 1,)).fetchone()[0] == 0
     c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
     logic.delete_me(con, logic.Viewer(dan, "user", True))

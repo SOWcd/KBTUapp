@@ -207,6 +207,7 @@ def stats_day(con) -> None:
                  one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", lo, hi)[0],
                  one(con, "SELECT COUNT(*) FROM students WHERE verified_at < ? AND consent_version != 'staff'", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
+    con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
     con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words

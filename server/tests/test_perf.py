@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 
 from kbtu import bot, db, logic
-from test_core import env, tma  # noqa: F401  (env: the fixture)
+from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
 def test_outbox_due_uses_its_index(env):
@@ -61,3 +62,64 @@ def test_public_files_cache_and_304(env):
     assert c.get("/assets/a.js").headers["cache-control"].endswith("immutable")
     me = c.get("/api/me", headers={**tma(8), "Accept-Encoding": "gzip"})
     assert me.status_code == 200 and (me.headers.get("content-encoding") == "gzip") == (len(me.content) >= 1024)
+
+
+def _plans(con, fn) -> list[tuple[str, str]]:
+    q: list[str] = []
+    con.set_trace_callback(q.append)
+    fn()
+    con.set_trace_callback(None)
+    return [(s, " | ".join(r[3] for r in con.execute("EXPLAIN QUERY PLAN " + s))) for s in q if s.lstrip().upper().startswith("SELECT")]
+
+
+def test_hot_reads_use_indexes(env):
+    """12: the Afisha, the news feed, a club list's join requests and a check-in's achievement scan search an index:
+    no SCAN of the table, no TEMP B-TREE for the order."""
+    c, cfg = env
+    login(c, 7, "Ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('oo', 'club', 'O', 'O', 'x', 0)")
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 7").fetchone()[0]
+    v = logic.Viewer(uid, "user", True)
+    plans = _plans(con, lambda: (logic.events(con, v), logic.posts(con, v, "all"), logic.orgs(con, v), logic.profiles._counts(con, uid)))
+    for table, sql in [("events", "FROM events WHERE starts_at >"), ("posts", "FROM posts WHERE"), ("join_requests", "FROM join_requests WHERE user_id")]:
+        found = [p for s, p in plans if sql in s]
+        assert found, sql
+        assert f"SCAN {table}" not in found[-1] and f"SEARCH {table} USING" in found[-1] and "TEMP B-TREE" not in found[-1], found[-1]
+
+
+def test_streak_scans_only_my_weeks(env, monkeypatch):
+    """7: the streak reads public events from my first check-in's week on (an index range), and counts the same as
+    reading every event ever: a busy week before my first check-in changes nothing, one after it breaks the run."""
+    c, cfg = env
+    login(c, 7, "Ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (900, 'oo', 'club', 'O', 'O', 'x', 0)")
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 7").fetchone()[0]
+    week = 7 * 86400
+    base = (logic.profiles._week(int(time.time())) - 20) * week - 3 * 86400 - 5 * 3600 + 86400  # a Tuesday, 20 weeks ago
+    starts = [base - 30 * week, base - week, base, base + week, base + 3 * week, base + 4 * week, base + 6 * week, base + 7 * week, base + 8 * week]
+    mine = {base, base + week, base + 4 * week, base + 7 * week, base + 8 * week}
+    for i, s in enumerate(starts):
+        e = con.execute("INSERT INTO events (org_id, status, title, starts_at, created_at, updated_at) VALUES (900, 'published', 't', ?, 0, 0)", (s,)).lastrowid
+        if s in mine:
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, checked_in_at, created_at, updated_at)
+                VALUES (?, ?, 'going', ?, ?, 0, 0)""", (e, uid, f"tk{i}", s + 3600))
+    every = {logic.profiles._week(r[0]) for r in con.execute("SELECT starts_at FROM events WHERE status = 'published' AND visibility = 'public' AND guest_host IS NULL")}
+    want = logic.profiles._streak({logic.profiles._week(t) for t in logic.profiles.attended(con, uid)}, every, logic.profiles._week(logic.core.now()))
+    plans = _plans(con, lambda: logic.profiles._counts(con, uid))
+    got = logic.profiles._counts(con, uid)
+    assert (got["streak"], got["streak_now"]) == want == (2, 2)  # weeks 3 and 6 broke it; the empty weeks since break nothing
+    busy = [p for s, p in plans if "SELECT starts_at FROM events" in s]
+    assert busy and "SEARCH events USING INDEX" in busy[0] and "starts_at>?" in busy[0], busy
+
+
+def test_expired_holds_promote_once(env, monkeypatch):
+    """11: a GET that saw an expired hold but finds it swept once it holds the lock moves no waitlist again."""
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    calls = []
+    monkeypatch.setattr(logic.seats, "promote", lambda con, e: calls.append(e))
+    monkeypatch.setattr(logic.seats, "one", lambda *a: (1,))  # the lock-free look saw an expiry another request swept since
+    logic.seats.sweep_holds(con)
+    assert not calls and not con.in_transaction

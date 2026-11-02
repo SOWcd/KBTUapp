@@ -272,12 +272,16 @@ def _hidden_orgs(con) -> set[int]:
 
 
 def sweep_holds(con) -> None:
-    """Expired holds give their seats back, and the waitlist moves (a worker does this too)."""
-    expired = rows(con, "SELECT DISTINCT event_id FROM registrations WHERE status = 'hold' AND hold_until < ?", core.now())
-    if not expired:
+    """Expired holds give their seats back, and the waitlist moves (a worker does this too). The lock-free look first;
+    under the lock again, so the GETs that saw the same expiry at once don't each promote() it (review 11)."""
+    if not one(con, "SELECT 1 FROM registrations WHERE status = 'hold' AND hold_until < ?", core.now()):
         return
     with tx(con):
-        con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'hold_expired', updated_at = ? WHERE status = 'hold' AND hold_until < ?", (core.now(), core.now()))
+        t = core.now()
+        expired = rows(con, "SELECT DISTINCT event_id FROM registrations WHERE status = 'hold' AND hold_until < ?", t)
+        if not expired:
+            return  # another request swept them meanwhile
+        con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'hold_expired', updated_at = ? WHERE status = 'hold' AND hold_until < ?", (t, t))
         for r in expired:
             promote(con, one(con, "SELECT * FROM events WHERE id = ?", r[0]))
 
@@ -285,8 +289,10 @@ def sweep_holds(con) -> None:
 def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
     sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
-    sql = "SELECT * FROM events WHERE status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
-    args: list = [NO_END, core.now()]
+    # starts_at's bound is implied (an event lasts 31 days at most, organizing.clean_event) and makes it an index range,
+    # not a scan of every event ever (review 12)
+    sql = "SELECT * FROM events WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
+    args: list = [core.now() - 32 * 86400, NO_END, core.now()]
     if org is not None:
         sql += " AND org_id = ?"; args.append(org)
     if frm is not None:
