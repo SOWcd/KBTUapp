@@ -14,6 +14,7 @@
   import Check from '@lucide/svelte/icons/check';
   import User from '@lucide/svelte/icons/user';
   import { schoolOf, shortOf } from '../../lib/short';
+  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
@@ -76,7 +77,7 @@
     const v = await sheets.askText({ title: t(label), text: t(fill ? 'pd.latFill' : 'pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
     if (v == null || v.trim() === was) return;
     // a typo would spend the once: the new value read back before it's saved
-    if (!fill && !(await sheets.ask({ title: v.trim(), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
+    if (!fill && !(await sheets.ask({ title: t('pd.onceTitle'), text: t('pd.onceSure', { v: v.trim() }), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
     try { session.me = await api.updateMe({ [k]: v }); haptic.ok(); say(t('pd.saved'), 'sparkles_3d'); }
     catch (e) {
       haptic.error();
@@ -90,7 +91,7 @@
   const mySchool = $derived(schoolOf(me?.student?.school));
   async function pickSchool(name: string | null) {
     if (!me?.student || name === me.student.school) return;
-    if (me.student.school && !(await sheets.ask({ title: name ?? t('look.noSchool'), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
+    if (me.student.school && !(await sheets.ask({ title: t('pd.onceTitle'), text: t('pd.onceSure', { v: name ?? t('look.noSchool') }), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
     const was = me, card = data.myCard;
     haptic.select();
     session.me = { ...me, student: { ...me.student, school: name } };
@@ -104,7 +105,7 @@
   const courses = $derived(me?.student?.courseMin ? Array.from({ length: 7 - me.student.courseMin }, (_, i) => me.student!.courseMin! + i) : []);
   async function pickCourse(n: number) {
     if (!me?.student || n === me.student.course) return;
-    if (me.student.course && !(await sheets.ask({ title: t('person.course', { n }), text: t('pd.onceAsk'), ok: t('common.save'), cancel: t('common.cancel') }))) return;
+    if (me.student.course && !(await sheets.ask({ title: t('pd.onceTitle'), text: t('pd.onceSure', { v: t('person.course', { n }) }), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
     const was = me, card = data.myCard;
     haptic.select();
     session.me = { ...me, student: { ...me.student, course: n } };
@@ -145,6 +146,8 @@
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
+<!-- a correction that can't be undone: said big and red above the choices, not in a grey footnote (owner, Nov 2) -->
+{#snippet once()}<p class="once" role="note"><TriangleAlert size={20} strokeWidth={2.4} /><span><b>{t('pd.onceTitle')}</b>{t('pd.onceBig')}</span></p>{/snippet}
 {#snippet link(label: string, go: () => void, value = '', out = false)}
   <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
     {#if out}<ArrowUpRight class="chev" size={18} />{:else}<ChevronRight class="chev" size={18} />{/if}</button>
@@ -227,6 +230,7 @@
     {@const st = me.student}
     {@const [, cyr, lat, latKey] = part}
     <!-- the part's two spellings, each correctable once -->
+    {#if st.fixable?.includes(cyr) || st.fixable?.includes(lat)}{@render once()}{/if}
     <div class="set-group plain">
       {#if st.fixable?.includes(cyr)}{@render link(t('pd.cyr'), () => void fix(cyr, TITLE[part[0]][0]), st[cyr] ?? '')}
       {:else}<div class="set-row"><span class="lb">{t('pd.cyr')}</span><span class="val">{st[cyr] ?? ''}</span></div>{/if}
@@ -236,13 +240,13 @@
     <p class="set-foot">{t(st.fixable?.includes(cyr) || st.fixable?.includes(lat) ? 'pd.once' : 'pd.support')}</p>
   {:else if kind === 'course' && me?.student}
     {#if me.student.fixable?.includes('course')}
+      {@render once()}
       <div class="set-group plain" role="radiogroup" aria-label={t('pd.course')}>
         {#each courses as n (n)}
           <button class="set-row" role="radio" aria-checked={me.student.course === n} onclick={() => void pickCourse(n)}>
             <span class="lb">{t('person.course', { n })}</span><span class="tick">{#if me.student.course === n}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
         {/each}
       </div>
-      <p class="set-foot">{t('pd.once')}</p>
     {:else}
       <div class="set-group plain"><div class="set-row"><span class="lb">{t('person.course', { n: me.student.course ?? 0 })}</span></div></div>
       <p class="set-foot">{t('pd.support')}</p>
@@ -251,8 +255,12 @@
     <!-- the once spent: my school alone, then support -->
     <div class="set-group plain"><div class="set-row"><span class="lb school">{mySchool?.name ?? me.student.school ?? t('look.noSchool')}</span>
       {#if mySchool}<span class="val">{shortOf(mySchool)}</span>{/if}</div></div>
-    <p class="set-foot">{t('pd.support')}</p>
+    <!-- a mis-tap undone: the one before comes back, free, once (owner, Nov 3: everyone wrote to support) -->
+    {#if me.student.undo && 'school' in me.student.undo}{@const was = me.student.undo.school ?? null}
+      <div class="set-group plain gap">{@render act(t('pd.undo', { v: schoolOf(was)?.name ?? was ?? t('look.noSchool') }), () => void pickSchool(was))}</div>{/if}
+    <p class="set-foot">{t(me.student.undo && 'school' in me.student.undo ? 'pd.undoFoot' : 'pd.support')}</p>
   {:else if kind === 'school' && me?.student}
+    {#if me.student.school}{@render once()}{/if}
     <div class="set-group plain" role="radiogroup" aria-label={t('look.school')}>
       {#each schools as o (o.id)}
         {@const on = mySchool?.id === o.id}
@@ -260,11 +268,7 @@
           <span class="lb school">{o.name}</span><span class="val">{shortOf(o)}</span><span class="tick">{#if on}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
       {/each}
     </div>
-    <div class="set-group plain gap">
-      <button class="set-row" role="radio" aria-checked={!me.student.school} onclick={() => void pickSchool(null)}>
-        <span class="lb">{t('look.noSchool')}</span><span class="tick">{#if !me.student.school}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
-    </div>
-    <p class="set-foot">{t('pd.once')}</p>
+    <!-- no "no school" here: two students cleared theirs by mistake (Nov 2), and the once went with it -->
   {:else if kind === 'sees'}
     <div class="set-group plain">
       {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}
@@ -287,6 +291,10 @@
   /* the pick's check, Apple's: a fixed slot at the row's end so the short names line up */
   /* a long school's name breaks between syllables, never mid-letter; at 320 px the short name
      makes room for it */
+  .once { display: flex; gap: var(--s-3); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-4); border-radius: var(--r-l);
+    background: var(--danger-soft); color: var(--text); font: 500 var(--fs-body)/1.35 var(--font-text); }
+  .once :global(svg) { flex: none; margin-top: 2px; color: var(--danger); }
+  .once b { display: block; margin-bottom: 2px; font-weight: 700; color: var(--danger-text); }
   .set-row > .lb.school { overflow-wrap: break-word; hyphens: auto; }
   @media (max-width: 340px) { .lb.school + .val { display: none; } }
   /* a name part's end: its Cyrillic over its Latin, each cut with … rather than wrapped */

@@ -415,7 +415,9 @@ def me(con, v: Viewer) -> dict:
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
                     # what My data still lets me correct myself (fix_identity, _spend): for staff only the school
-                    "fixable": [k for k, c in ONCE.items() if c not in s["fixed"].split(",") and (c == "school" or s["consent_version"] != "staff")]} if s else None,
+                    "fixable": [k for k, c in ONCE.items() if c not in s["fixed"].split(",") and (c == "school" or s["consent_version"] != "staff")],
+                    # spent, yet the value before it can come back once (_spend)
+                    "undo": {k: x for k, x in json.loads(s["once_was"] or "{}").items() if k in s["fixed"].split(",")}} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         # prefill: the student ID an organizers' check-in list, or the freshmen list when the name matches, has for this KBTU mail (checkin.py)
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
@@ -643,12 +645,18 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
         log_action(con, None if admin else uid, "identity_fix", f"user:{uid}", json.dumps({"field": col, "old": s[col], "new": v}, ensure_ascii=False))
 
 
-def _spend(con, uid: int, s, col: str) -> None:
-    """Course and school: corrected once, then support (`kbtu.admin fix <user> reset`); an empty one filled is free."""
+def _spend(con, uid: int, s, col: str, val) -> None:
+    """Course and school: corrected once, then support (`kbtu.admin fix <user> reset`); an empty one filled is free.
+    The school before the once is kept: going back to it is free, once (a mis-tap undone), and it stays spent."""
+    was = json.loads(s["once_was"] or "{}")
     if col in s["fixed"].split(","):
-        raise ApiError("conflict", "fixed")
-    if s[col] is not None:
-        con.execute("UPDATE students SET fixed = ? WHERE user_id = ?", (",".join(filter(None, [*s["fixed"].split(","), col])), uid))
+        if col not in was or was[col] != val:
+            raise ApiError("conflict", "fixed")
+        del was[col]  # the undo used: no flipping back and forth (review once-edit 4)
+        con.execute("UPDATE students SET once_was = ? WHERE user_id = ?", (json.dumps(was, ensure_ascii=False), uid))
+    elif s[col] is not None:  # the school's undo alone: a course back down was the free-seat trick (review once-edit 3)
+        con.execute("UPDATE students SET fixed = ?, once_was = ? WHERE user_id = ?",
+                    (",".join(filter(None, [*s["fixed"].split(","), col])), json.dumps({**was, col: s[col]} if col == "school" else was, ensure_ascii=False), uid))
 
 
 def update_me(con, v: Viewer, patch: dict) -> dict:
@@ -714,25 +722,27 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
     if "school" in patch:  # Settings: mine over the list's (_from_list can be wrong): a KBTU school's name as the app keeps it, or none
         need_student(v)
         val = patch["school"]
+        s = one(con, "SELECT school, fixed, once_was FROM students WHERE user_id = ?", v.id)
         o = val is not None and one(con, "SELECT name FROM orgs WHERE kind = 'school' AND status = 'active' AND name = ?", val if type(val) is str else None)
-        if val is not None and not o:
+        back = "school" in s["fixed"].split(",") and json.loads(s["once_was"] or "{}").get("school", 0) == val  # as the portal wrote it
+        if val is not None and not o and not back:
             raise ApiError("bad_input")
+        new = o[0] if o else val if back else None
         # once, as the ID (review once-edit 4: switched and back, another school's lanyard, chats and CSV lines);
         # filling an empty one is free. The lanyard reads the school live: it follows by itself
-        s = one(con, "SELECT school, fixed FROM students WHERE user_id = ?", v.id)
-        if (o[0] if o else None) != s["school"]:
-            _spend(con, v.id, s, "school")
-            con.execute("UPDATE students SET school = ? WHERE user_id = ?", (o[0] if o else None, v.id))
+        if new != s["school"]:
+            _spend(con, v.id, s, "school", new)
+            con.execute("UPDATE students SET school = ? WHERE user_id = ?", (new, v.id))
     if "course" in patch:  # Settings → My data: a transfer's new ID says a year too low; up from the ID's year only, never
         need_student(v)  # below it (a lower one would take free 1st-year seats). course_year now: September moves it on
-        s = one(con, "SELECT student_id, consent_version, course, fixed FROM students WHERE user_id = ?", v.id)
+        s = one(con, "SELECT student_id, consent_version, course, fixed, once_was FROM students WHERE user_id = ?", v.id)
         lo, val = core.course_of(s["student_id"]), patch["course"]
         if s["consent_version"] == "staff":
             raise ApiError("forbidden")  # the ID is a placeholder
         if lo is None or type(val) is not int or not lo <= val <= 6:
             raise ApiError("bad_input")
         if val != s["course"]:  # once (review once-edit 3: 2 to pass volunteers_senior, then 1 for a free seat); September's isn't one
-            _spend(con, v.id, s, "course")
+            _spend(con, v.id, s, "course", val)
         con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (val, core.academic_year(), v.id))
     for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
         if k in patch:

@@ -403,6 +403,7 @@ def test_old_board_cleaned_up(env):
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
     con.execute("ALTER TABLE users DROP COLUMN can_friend")  # 115's
+    con.execute("ALTER TABLE students DROP COLUMN once_was")  # 116's
     con.execute("ALTER TABLE tgc_strangers DROP COLUMN warned_msg")  # 113's
     con.execute("ALTER TABLE users DROP COLUMN frame")  # 112's
     con.execute("ALTER TABLE org_invites DROP COLUMN multi")  # 111's

@@ -212,6 +212,7 @@ export interface StudentProfile {
   middleLat: string | null;
   freeFirst: boolean; // a paid event's free 1st-year seat is mine to take (the server's rule: year, ID, account age)
   fixable: Fixable[]; // what Settings → My data still lets me correct myself (once each; then support)
+  undo?: { school?: string | null }; // spent, yet the value before can come back once, free
 }
 
 /** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */

@@ -243,7 +243,7 @@ def main(args: list[str]) -> None:
     elif cmd == "fix" and len(args) == 3 and args[2] == "reset":  # support: My data's one-time corrections again
         u = _user(con, args[1])
         with db.tx(con):
-            n = con.execute("UPDATE students SET fixed = '' WHERE user_id = ?", (u["id"],)).rowcount
+            n = con.execute("UPDATE students SET fixed = '', once_was = '{}' WHERE user_id = ?", (u["id"],)).rowcount
             if n:
                 log_action(con, None, "identity_fix_reset", f"user:{u['id']}")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("can correct the student ID and name once more" if n else "not a student"))

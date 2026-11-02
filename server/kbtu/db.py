@@ -1117,6 +1117,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
     # "Can add me as a friend" (owner, Nov 2): off, nobody can send me a request; friends and waiting requests stay
     (115, "ALTER TABLE users ADD COLUMN can_friend INTEGER NOT NULL DEFAULT 1;"),
+    # the school before its one correction ({"school": ...}): going back to it is free, once
+    # (owner, Nov 3: a mis-tap cost the only change and every student wrote to support)
+    (116, "ALTER TABLE students ADD COLUMN once_was TEXT NOT NULL DEFAULT '{}';"),
 ]
 
 

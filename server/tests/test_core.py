@@ -3445,8 +3445,8 @@ def test_my_school(env):
     assert c.get("/api/me", headers=tma(10)).json()["student"]["school"] == sce
     st = me({"school": None}).json()["student"]
     assert st["school"] is None and "school" not in st["fixable"]            # a change: spent (review once-edit 4)
-    assert me({"school": sce}).json()["message"] == "fixed"                  # then support, even to fill it again
-    assert me({"school": None}).status_code == 200                           # the same: nothing to spend
+    assert me({"school": sce}).json()["student"]["school"] == sce          # back to the one before: free, once (Nov 3)
+    assert me({"school": None}).json()["message"] == "fixed"                 # then support
     assert c.patch("/api/me", headers=tma(22, "Guest"), json={"school": sce}).status_code in (401, 403)
 
 
@@ -7256,6 +7256,29 @@ def test_once_edit(env, monkeypatch):
     assert fix(school=None, course=9).status_code == 400 and row()["school"] == "SITE"  # a refused course keeps the school
     con.close()
 
+
+
+def test_once_undo(env):
+    """A school or course corrected by mistake goes back to what it was, free, once; then it stays (owner, Nov 3)."""
+    c, cfg = env
+    login(c, 30, "nur")
+    con = db.connect(cfg.db_path)
+    con.execute("""INSERT INTO orgs (slug, kind, name, short, emoji, official, created_at) VALUES ('site', 'school', 'SITE', 'IT', 'laptop_3d', 1, 0),
+        ('sce', 'school', 'SCE', 'SC', 'laptop_3d', 1, 0), ('law', 'school', 'LAW', 'LA', 'laptop_3d', 1, 0)""")
+    con.execute("UPDATE students SET school = 'SITE' WHERE user_id = (SELECT id FROM users WHERE tg_id = 30)")
+    con.commit()
+    me = lambda **b: c.patch("/api/me", headers=tma(30), json=b)  # noqa: E731
+    r = me(school="SCE").json()["student"]                                   # the mis-tap: the once spent
+    assert r["school"] == "SCE" and "school" not in r["fixable"] and r["undo"] == {"school": "SITE"}
+    assert me(school="LAW").json()["message"] == "fixed"                     # not another one
+    r = me(school="SITE").json()["student"]                                  # back to mine: free
+    assert r["school"] == "SITE" and r["undo"] == {}
+    assert me(school="SCE").json()["message"] == "fixed"                     # and no flipping back and forth
+    con.execute("UPDATE students SET school = '\u0428\u0418\u0422\u0438\u0418', fixed = '', once_was = '{}' WHERE user_id = (SELECT id FROM users WHERE tg_id = 30)")
+    con.commit()                                                             # as the portal wrote it, not an org's name
+    assert me(school="SCE").json()["student"]["undo"] == {"school": "\u0428\u0418\u0422\u0438\u0418"}
+    assert me(school="\u0428\u0418\u0422\u0438\u0418").json()["student"]["school"] == "\u0428\u0418\u0422\u0438\u0418"
+    con.close()
 
 def test_latin_names(env, monkeypatch, capsys):
     """The name in Latin (latin-names-review.md, made-up people): read from Microsoft's displayName word by word or a Latin
