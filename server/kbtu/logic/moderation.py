@@ -236,11 +236,11 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
 
 
 def taken_down(con, v: Viewer) -> list[dict]:
-    """What the admin took down from the report queue in the last 30 days and is still down, newest first: a wrong call
+    """What the admin took down (the report queue, a post hidden directly) in the last 30 days and is still down, newest first: a wrong call
     can be undone (§2 "hide / restore"). Things their own authors or clubs removed aren't here — that was their choice."""
     _mod(v)
     out = []
-    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'tg_confirm') AND at > ?
+    for a in rows(con, """SELECT target, MAX(at) AS at FROM audit_log a WHERE action IN ('report_remove', 'tg_confirm', 'post_hide') AND at > ?
             AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)
             GROUP BY target ORDER BY MAX(at) DESC LIMIT 50""", core.now() - 30 * 86400):  # undone ones stay undone
         kind, _, ref = a["target"].partition(":")
@@ -271,6 +271,14 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
     nick, photo and "about me" back where the person hasn't set new ones since (a kept photo not used then goes).
     Audited. Returns files to remove from disk."""
     _mod(v)
+    if target != "tgc" and _about(con, target, tid) == v.id:  # my own thing: another moderator decides, as for its report
+        raise ApiError("forbidden")
+    # only what a moderator took down (the report queue, a post's direct hide), in the undo list's 30 days and not undone since: never an author's own delete
+    # (photos and profiles: their takedowns row says so, purged at 30 days)
+    if target in ("comment", "post", "event") and not one(con, """SELECT 1 FROM audit_log a WHERE action IN ('report_remove', 'post_hide') AND target = ?
+            AND at > ? AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)""",
+            f"{target}:{tid}", core.now() - TAKEDOWN_KEEP):
+        raise ApiError("not_found")
     gone: list[str] = []
     with tx(con):
         if target == "comment":

@@ -1095,6 +1095,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     (111, "ALTER TABLE org_invites ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
     # (Nov 2) a frame drawn over my photo on the lanyard, picked apart from the lanyard itself (logic.FRAMES)
     (112, "ALTER TABLE users ADD COLUMN frame TEXT;"),
+    # the stranger's message his warning was for: the same update again after a restart is not a second comment
+    (113, "ALTER TABLE tgc_strangers ADD COLUMN warned_msg INTEGER;"),
 ]
 
 

@@ -181,7 +181,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang)), f"ev_{ref[1]}")
     if kind == "event_update":  # upd:<id>; gone if the organizer deleted it or the event is no longer on
         u = one(con, """SELECT e.id, e.title, e.i18n, o.name FROM event_updates x JOIN events e ON e.id = x.event_id JOIN orgs o ON o.id = e.org_id
-            WHERE x.id = ? AND e.status = 'published'""", int(ref[1]))
+            WHERE x.id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND o.status != 'hidden'""", int(ref[1]))
         return (*texts.bot_message(lang, kind, title=logic.title_in(u, lang), org=u["name"]), f"ev_{u['id']}") if u else None
     if kind in ("broadcast", "important"):  # post:<id>, to every club member / to its club's members; gone if taken down
         post = one(con, "SELECT p.title, p.i18n, o.name FROM posts p JOIN orgs o ON o.id = p.org_id WHERE p.id = ? AND p.hidden_at IS NULL", int(ref[1]))
@@ -322,8 +322,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
-    e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
-    if not e or (kind != "event_cancelled" and e["status"] != "published"):
+    e = one(con, "SELECT e.*, o.name AS org_name, o.status AS org_status FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ?", int(ref[1]))
+    # a moderator's take-down (hidden_at) or the admin's hidden club: nobody can open it, so nobody hears of it (a cancel still goes)
+    if not e or (kind != "event_cancelled" and (e["status"] != "published" or e["hidden_at"] or e["org_status"] == "hidden")):
         return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket
         kind += "_team"

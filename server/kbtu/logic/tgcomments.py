@@ -42,18 +42,22 @@ def commenter(con, tg_id: int | None) -> str | None:
     return None if not u else "banned" if u["banned_at"] else "student" if u["st"] else None
 
 
-def stranger(con, tg_id: int, body: str, link: str | None) -> tuple[str, bool]:
+def stranger(con, tg_id: int, body: str, link: str | None, msg_id: int = 0) -> tuple[str, bool]:
     """A stranger's comment (already on its way out): ('warn', raid) the first time, his text kept SAVE_FOR for the
-    app; ('ban', raid) the second time, or at once during a raid (the owner hears once an hour)."""
+    app; ('ban', raid) the second time, or at once during a raid (the owner hears once an hour); ('again', False) for
+    the message he was warned for, handed again after a restart (Telegram's offset lives in memory)."""
     t = now()
     with tx(con):
+        if msg_id and one(con, "SELECT 1 FROM tgc_strangers WHERE tg_id = ? AND warned_msg = ?", tg_id, msg_id):
+            return "again", False
         raid = one(con, """SELECT COUNT(*) FROM tgc_strangers WHERE seen_at > ? AND tg_id != ?
             AND tg_id NOT IN (SELECT tg_id FROM users)""", t - 60, tg_id)[0] >= RAID_AT  # a raid's accounts never opened the app
         was = one(con, "SELECT warned_at FROM tgc_strangers WHERE tg_id = ?", tg_id)
         ban = raid or bool(was and was["warned_at"])
-        con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, warned_at, banned_at) VALUES (?, ?, ?, ?) ON CONFLICT (tg_id)
+        con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, warned_at, banned_at, warned_msg) VALUES (?, ?, ?, ?, ?) ON CONFLICT (tg_id)
             DO UPDATE SET seen_at = excluded.seen_at, warned_at = COALESCE(warned_at, excluded.warned_at),
-            banned_at = COALESCE(excluded.banned_at, banned_at)""", (tg_id, t, None if ban else t, t if ban else None))
+            banned_at = COALESCE(excluded.banned_at, banned_at), warned_msg = COALESCE(warned_msg, excluded.warned_msg)""",
+                    (tg_id, t, None if ban else t, t if ban else None, None if ban else msg_id or None))
         if not ban and body:  # one row per person: a newer comment replaces the older
             con.execute("INSERT OR REPLACE INTO tgc_saved (tg_id, body, link, at) VALUES (?, ?, ?, ?)", (tg_id, body[:4096], link, t))
         if raid:
@@ -218,9 +222,16 @@ def to_delete(con) -> list[tuple[int, int, int]]:
         UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel""")]
 
 
-def deleted(con, cid: int, chat: int = 0, msg_id: int = 0) -> None:
-    """Out of Telegram (or Telegram refused: its author deleted it first, mostly; a 48 h limit if there is one)."""
-    con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ? AND status = 'deleting'", (cid,))
+def deleted(con, cid: int, chat: int = 0, msg_id: int = 0, out: bool = False) -> None:
+    """Out of Telegram (or Telegram refused: its author deleted it first, mostly; a 48 h limit if there is one).
+    `out`: Telegram said it deleted it. A moderator's keep landed while the delete was on its way (_restore saw it
+    still up): it's gone after all, so it's restored as a deleted one is, its author gets his words back."""
+    if not con.execute("UPDATE tgc_comments SET status = 'deleted' WHERE id = ? AND status = 'deleting'", (cid,)).rowcount and out:
+        c = one(con, "SELECT author_id FROM tgc_comments WHERE id = ? AND status = 'kept'", cid)
+        if c:
+            con.execute("UPDATE tgc_comments SET status = 'restored' WHERE id = ?", (cid,))
+            if c["author_id"]:
+                notify(con, c["author_id"], "tgc_back", f"tb:{cid}")
     con.execute("DELETE FROM tgc_undel WHERE chat_id = ? AND msg_id = ?", (chat, msg_id))
 
 
