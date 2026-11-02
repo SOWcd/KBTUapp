@@ -20,7 +20,8 @@ from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON,
 
 
 SETTINGS = {"lang": "lang", "theme": "theme", "nRemind": "n_remind", "nNewEvents": "n_new_events",
-            "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year"}
+            "nFriends": "n_friends", "showGoing": "show_going", "hideFirstYear": "hide_first_year",
+            "canFriend": "can_friend"}
 
 
 def ms_link(con, uid: int, who: dict) -> None:

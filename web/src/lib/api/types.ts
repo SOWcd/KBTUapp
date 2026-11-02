@@ -187,6 +187,7 @@ export interface Settings {
   nNewEvents: boolean;
   nFriends: boolean;
   showGoing: boolean;
+  canFriend: boolean;           // others may send me a friend request
   hideFirstYear: boolean;
 }
 
@@ -576,6 +577,7 @@ export interface PersonCard extends PersonRef {
   frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
+  closed?: boolean;             // they take no friend requests (their setting): no "Add friend"
 }
 
 /** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the
@@ -586,7 +588,7 @@ export interface FriendRow { person: PersonRef; fullName: string; course: number
 export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing: FriendRow[]; going: EventCard[] }
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
-export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean }
+export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self' }

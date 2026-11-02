@@ -791,6 +791,7 @@ const en: Dict = {
   'look.school': "School",
   'look.noSchool': "Not set",
   'set.showGoing': "Friends see where I'm going",
+  'set.canFriend': "Can add me as a friend",
   'person.report': "Report this profile",
 
   'say.going': "You're in — see you there!|Nice, it's going to be fun|Booked. Don't be late|Great pick|The seat is yours",
@@ -2081,6 +2082,7 @@ const en: Dict = {
   'fr.nowFriend': "is your friend now",
   'fr.invitesYou': "Invites you to be friends",
   'fr.tooMany': "Too many requests today — try tomorrow",
+  'fr.closed': "Not taking requests",
   // the Awards page (§4.11)
   'awp.showcase': "Showcase",
   'awp.next': "Almost there",

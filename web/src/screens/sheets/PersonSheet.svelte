@@ -89,7 +89,9 @@
     try { done(await job()); }
     catch (e) {
       next = null; haptic.error();
-      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d');
+      const closed = e instanceof ApiErr && e.code === 'closed';  // they switched requests off just now
+      if (closed && p) p = { ...p, closed };
+      say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : closed ? t('fr.closed') : t('common.error'), 'warning_3d');
       return;
     } finally { acting = false; }
     friendsChanged();
@@ -146,6 +148,8 @@
             <Button kind="neutral" size="l" full disabled={acting} onclick={decline}>{t('fr.decline')}</Button>
             <Button kind="primary" size="l" full loading={acting} onclick={accept}>{t('fr.acceptReq')}</Button>
           </div>
+        {:else if shown.friendship !== 'friends' && shown.closed}<!-- they take no requests: the place stays, quiet -->
+          <Button kind="neutral" size="l" full disabled>{t('fr.closed')}</Button>
         {:else if shown.friendship !== 'friends'}
           <Button kind="primary" size="l" full loading={acting} onclick={ask}>{t('person.addFriend')}</Button>
         {/if}

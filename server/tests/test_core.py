@@ -938,6 +938,29 @@ def test_friends(env):
     assert c.get(f"/api/users/{zhan['id']}", headers=A).json()["friendship"] == "none"
 
 
+
+def test_can_friend_off(env):
+    """"Can add me as a friend" off (owner, Nov 2): no new requests to me (no bot message either), the card and the
+    @username search say so; a request already waiting stays mine to accept, and my own asks still work."""
+    c, cfg = env
+    ali, zhan, dana = login(c, 51, "ali"), login(c, 52, "zhan"), login(c, 53, "dana")
+    A, Z, D = tma(51, "Ali"), tma(52, "Zhan"), tma(53, "Dana")
+    con = db.connect(cfg.db_path)
+    assert c.get("/api/me", headers=Z).json()["settings"]["canFriend"] is True       # on by default
+    assert "closed" not in c.get(f"/api/users/{zhan['id']}", headers=A).json()
+    c.post("/api/friends/requests", headers=D, json={"userId": zhan["id"]})          # asked before the switch
+    assert c.patch("/api/me", headers=Z, json={"canFriend": False}).json()["settings"]["canFriend"] is False
+    assert c.get(f"/api/users/{zhan['id']}", headers=A).json()["closed"] is True
+    con.execute("UPDATE users SET tg_username = 'zhan_k' WHERE tg_id = 52")
+    assert c.get("/api/friends/find?username=zhan_k", headers=A).json()["closed"] is True
+    r = c.post("/api/friends/requests", headers=A, json={"userId": zhan["id"]})
+    assert r.status_code == 409 and r.json()["error"] == "closed"
+    assert [r[0] for r in con.execute("SELECT kind FROM bot_outbox")] == ["friend_request"]  # Dana's only
+    assert "closed" not in c.get(f"/api/users/{zhan['id']}", headers=D).json()     # Dana waits: "requested"
+    assert c.post(f"/api/friends/requests/{dana['id']}/accept", headers=Z).status_code == 200
+    assert c.post("/api/friends/requests", headers=Z, json={"userId": ali["id"]}).json()["friendship"] == "requested"
+    assert c.post("/api/friends/requests", headers=A, json={"userId": zhan["id"]}).json()["friendship"] == "friends"  # the answer to mine
+
 def test_showcase(env):
     """The showcase (SPEC §4.11): up to 6 keys — achievement codes and badges as b<event id> — kept in the order picked;
     junk is dropped; the card's shelf shows only what the person actually has."""

@@ -209,7 +209,7 @@
         {#if asked}<b class="req num">{asked}</b>{/if}
         <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
       </button>
-      {#if me.referrals}<Invite r={me.referrals} />{/if}
+      {#if me.referrals}<Invite r={me.referrals} ach={card?.awards.achievements.find((a) => a.code === 'referral')} />{/if}
     </div>
   {:else if session.failed}
     <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->

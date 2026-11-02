@@ -486,7 +486,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
     if not p or not s:
         raise ApiError("not_found")
-    u = one(con, "SELECT bio, showcase, show_going, card_no, is_founder, tg_username, skin_pick, skin_org, city, city_hidden, frame FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT bio, showcase, show_going, can_friend, card_no, is_founder, tg_username, skin_pick, skin_org, city, city_hidden, frame FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
     # their @username, to their own club's team only (§3: the team sees it in its roster anyway): "Message on Telegram"
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
@@ -534,6 +534,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         "skin": _skin(con, uid) if close else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
                 else u["skin_org"] if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]) else None,
         **({} if close else {"limited": True}),
+        **({"closed": True} if state == "none" and not u["can_friend"] else {}),  # no "Add friend" for them (their setting)
     }
 
 
@@ -623,7 +624,13 @@ def find_student(con, v: Viewer, username: str) -> dict:
             con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?", v.id, p["id"]):
         _stranger_view(con, v, p["id"])
     s = one(con, "SELECT course, school FROM students WHERE user_id = ?", p["id"])
-    return {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
+    out = {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
+    return {**out, "closed": True} if state == "none" and not _can_friend(con, p["id"]) else out
+
+
+def _can_friend(con, uid: int) -> bool:
+    """Their "Can add me as a friend" (Settings): off, nobody may send them a new request."""
+    return bool(one(con, "SELECT can_friend FROM users WHERE id = ?", uid)[0])
 
 
 def ask_friend(con, v: Viewer, uid: int) -> dict:
@@ -640,6 +647,8 @@ def ask_friend(con, v: Viewer, uid: int) -> dict:
             notify(con, uid, "friend_new", f"fn:{v.id}:{core.now() // 86400}")
         state = "friends"
     elif state == "none":
+        if not _can_friend(con, uid):
+            raise ApiError("closed")
         _stranger_view(con, v, uid)  # a person opened the profile already (free); a script walking ids meets the 200 a day (review)
         if one(con, "SELECT COUNT(*) FROM friend_requests WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
             raise ApiError("rate_limited")

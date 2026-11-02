@@ -1115,6 +1115,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     DROP TABLE reports;
     ALTER TABLE reports5 RENAME TO reports;
     CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';"""),
+    # "Can add me as a friend" (owner, Nov 2): off, nobody can send me a request; friends and waiting requests stay
+    (115, "ALTER TABLE users ADD COLUMN can_friend INTEGER NOT NULL DEFAULT 1;"),
 ]
 
 

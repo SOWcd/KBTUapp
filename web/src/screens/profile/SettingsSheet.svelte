@@ -39,7 +39,7 @@
   // a switch saves at once and puts itself back if the server says no
   const SWITCHES = [['nRemind', 'set.remind', 'set.remindHint'], ['nNewEvents', 'set.newEvents', 'set.newEventsHint']] as const;
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
-  async function set(k: (typeof SWITCHES)[number][0] | 'showGoing', on: boolean, quiet = false) {
+  async function set(k: (typeof SWITCHES)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
     if (!me) return;
     haptic.tap();
     me.settings[k] = on;
@@ -197,9 +197,12 @@
       {#if me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
     {/if}
     {#if me?.student}
-      <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing) -->
-      <label class="set-group plain sw-on gap"><span class="set-row"><span class="lb">{t('set.showGoing')}</span>
-        <input type="checkbox" role="switch" checked={me.settings.showGoing} onchange={(e) => set('showGoing', e.currentTarget.checked, true)} /></span></label>
+      <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing); and off, nobody can
+           send me a friend request (my friends and the requests waiting stay) -->
+      <div class="set-group plain sw-on gap">
+        <label class="set-row"><span class="lb">{t('set.showGoing')}</span><input type="checkbox" role="switch" checked={me.settings.showGoing} onchange={(e) => set('showGoing', e.currentTarget.checked, true)} /></label>
+        <label class="set-row"><span class="lb">{t('set.canFriend')}</span><input type="checkbox" role="switch" checked={me.settings.canFriend} onchange={(e) => set('canFriend', e.currentTarget.checked, true)} /></label>
+      </div>
     {/if}
     <div class="set-group plain" class:gap={phone || me?.city || me?.student}>
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}

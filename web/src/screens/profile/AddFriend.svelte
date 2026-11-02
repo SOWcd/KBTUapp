@@ -79,8 +79,9 @@
       else { haptic.ok(); say(t('person.requestSent'), 'raising_hands_3d_default'); }
       friendsChanged();
     } catch (e) {
-      if (found?.person.id === was.person.id) found = was;
-      haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : t('common.error'), 'warning_3d');
+      const closed = e instanceof ApiErr && e.code === 'closed';
+      if (found?.person.id === was.person.id) found = { ...was, closed };
+      haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('fr.tooMany') : closed ? t('fr.closed') : t('common.error'), 'warning_3d');
     } finally { asking = false; }
   }
 </script>
@@ -116,6 +117,7 @@
       {#if found.me}<span class="st">{t('fr.isMe')}</span>
       {:else if found.friendship === 'friends'}<span class="st ok">{t('fr.already')}</span>
       {:else if found.friendship === 'requested'}<span class="st">{t('person.requestSent')}</span>
+      {:else if found.closed}<span class="st">{t('fr.closed')}</span>
       {:else}<Button kind="primary" size="s" loading={asking} onclick={ask}>{found.friendship === 'incoming' ? t('fr.accept') : t('fr.add')}</Button>{/if}
     </div>
   {/if}
