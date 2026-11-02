@@ -1575,7 +1575,7 @@ const en: Dict = {
   'pd.latFill': "As in your passport. Later it can be corrected once",
   'pd.badLat': "Latin letters, a hyphen and an apostrophe only",
   'pd.sid': "Student ID",
-  'pd.onceAsk': "This can be corrected only once. Save?",
+  'pd.onceAsk': "This can be corrected only once — it stays with you for good. Save?",
   'pd.badSid': "An ID like 26B031234",
   'pd.badName': "Letters, a hyphen and an apostrophe only",
   'pd.email': "Email",
