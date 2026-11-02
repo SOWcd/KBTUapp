@@ -28,8 +28,8 @@ export function titleWithoutClub(title: string, names: string[]): string | null 
   const word = `(?:${ns})(?![\\p{L}\\p{N}])`;
   let t = title.trim();
   for (let i = 0; i < 2; i++) {
-    t = t.replace(new RegExp(`\\s*(?:\\bby|\\bfrom|\\u043e\\u0442|[|\\u2013\\u2014:×x]|-)\\s*${word}\\s*$`, 'iu'), '')
-      .replace(new RegExp(`^${word}\\s*(?:[|\\u2013\\u2014:×x-]|presents|\\u043f\\u0440\\u0435\\u0434\\u0441\\u0442\\u0430\\u0432\\u043b\\u044f\\u0435\\u0442)\\s*`, 'iu'), '').trim();
+    t = t.replace(new RegExp(`(?:\\s+(?:by|from|\\u043e\\u0442|x|\\u00d7|-)\\s+|\\s*[|\\u2013\\u2014:]\\s*)${word}\\s*$`, 'iu'), '')
+      .replace(new RegExp(`^${word}(?:\\s*[|\\u2013\\u2014:]\\s*|\\s+(?:x|\\u00d7|-|presents|\\u043f\\u0440\\u0435\\u0434\\u0441\\u0442\\u0430\\u0432\\u043b\\u044f\\u0435\\u0442)\\s+)`, 'iu'), '').trim();
   }
   return t !== title.trim() && t.length >= 2 ? t : null;
 }

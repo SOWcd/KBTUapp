@@ -29,6 +29,8 @@ describe('event check', () => {
     expect(titleWithoutClub('Open Mic x KBTU', [])).toBe('Open Mic');
     expect(titleWithoutClub('BCLub night', club)).toBeNull();
     expect(titleWithoutClub('BCL', club)).toBeNull();
+    expect(titleWithoutClub('Fox KBTU', [])).toBeNull();                        // no separator: a word, not "x KBTU"
+    expect(titleWithoutClub('Big City Lights \u2014 Halloween', club)).toBe('Halloween');
     expect(check({ ...ok, title: 'TSS by BCL', club })).toEqual([{ id: 'clubInTitle', clean: 'TSS' }]);
   });
 });
