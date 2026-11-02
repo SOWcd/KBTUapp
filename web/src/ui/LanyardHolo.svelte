@@ -1,13 +1,15 @@
 <script lang="ts">
   // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (owner,
   // Oct 20: "the bottom is the same on every card"). The shimmer follows the tilt (--gx, set by `glass` above it).
-  import type { Look } from '../lib/awards';
+  import { clubLook, type Look } from '../lib/awards';
 
   let { look, no }: { look: Look; no: string } = $props();
+  const club = $derived(clubLook(look)); // the template's clubs: their word on their colours (lookVars)
 </script>
 
-<div class="holo {look}">
-  {#if look === 'sower'}<b class="w sw">SOWER</b>
+<div class="holo {look}" class:club={!!club}>
+  {#if club}<b class="w ch">{club.strip}</b>
+  {:else if look === 'sower'}<b class="w sw">SOWER</b>
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
   {:else if look === 'cheer'}<b class="w ch">CHEERLEADING</b>
   {:else if look === 'knights'}<b class="w kn">KNIGHTS</b>
@@ -57,4 +59,11 @@
     color: rgba(255, 255, 255, 0.88); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 18px -6px rgba(200, 64, 255, 0.6); }
   .fa { font: italic 900 12px/1 var(--font-display); letter-spacing: 0.14em; color: transparent; -webkit-background-clip: text; background-clip: text;
     background-image: linear-gradient(100deg, rgb(160, 170, 255), rgb(214, 140, 255) 30%, rgb(255, 135, 185) 60%, rgb(255, 190, 110)); }
+  /* the template (CLUB_LOOKS): the strip in the club's two colours, one specular sliding with the tilt (Knights' and
+     Cheer's mechanism), their word in its ink */
+  .club { background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, var(--hs, 0.45)) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(100deg, var(--h1), var(--h2) 50%, var(--h1)); color: var(--h3);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 -1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
+  .club span { font-variant-numeric: tabular-nums; }
+  .club .ch { white-space: nowrap; }
 </style>

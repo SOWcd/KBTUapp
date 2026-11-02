@@ -21,9 +21,11 @@ export function schoolShort(s: string | null | undefined): string {
   return o ? shortOf(o) : s;
 }
 
+// how the portal also writes a school (an older abbreviation), by the school's slug (server: logic.account._SCHOOL_ALIAS)
+const ALIAS: Record<string, string> = { '\u0448\u044d\u0438\u043d\u0433\u0438': 'seogi' };
 /** The school org a typed school is (schoolShort's match), or undefined. */
 export function schoolOf(s: string | null | undefined) {
   const k = norm(s ?? '');
   return k ? data.orgs.find((x) => x.kind === 'school'
-    && [x.name, x.abbr, x.orig?.name, ...Object.values(x.i18n ?? {}).flatMap((tr) => [tr?.name, tr?.abbr])].some((n) => n && norm(n) === k)) : undefined;
+    && ((!!ALIAS[k] && x.slug === ALIAS[k]) || [x.name, x.abbr, x.orig?.name, ...Object.values(x.i18n ?? {}).flatMap((tr) => [tr?.name, tr?.abbr])].some((n) => n && norm(n) === k))) : undefined;
 }

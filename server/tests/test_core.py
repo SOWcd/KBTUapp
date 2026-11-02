@@ -3230,13 +3230,13 @@ def test_saved_tomorrow(env, monkeypatch):
 
 
 def test_badge_skin(env):
-    """Badge skins: I show the badge of an official club I'm in, or the KBTU one; never picked, a club
+    """Badge skins: I show the lanyard of a club I'm in (by slug, official or not), or the KBTU one; never picked, a club
     with a badge shows by itself; my pick holds, and others see it. A club's is its members' alone (Oct 31); the
     creator's own is his alone."""
     c, cfg = env
     pres, ali = login(c, 90, "pres"), login(c, 91, "ali")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'sx', 'club', 'StudEx', 'SX', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'studex', 'club', 'StudEx', 'SX', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'x', 'club', 'Side', 'X', 'laptop_3d', 0)")
     for o in (1, 2):
         con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (o, pres["id"]))
@@ -3244,7 +3244,7 @@ def test_badge_skin(env):
     P, A = tma(90, "Pres"), tma(91, "Ali")
     assert c.get("/api/me", headers=P).json()["skin"] == 1                        # never picked: StudEx's by itself
     assert c.patch("/api/me", headers=P, json={"skin": None}).json()["skin"] is None  # picked KBTU: it holds
-    for bad in (2, 3, "1", True, "sower"):  # not official, not a club, not an id, not the creator
+    for bad in (2, 3, "1", True, "sower"):  # no lanyard, not a club, not an id, not the creator
         assert c.patch("/api/me", headers=P, json={"skin": bad}).status_code == 400
     assert c.patch("/api/me", headers=A, json={"skin": 1}).status_code == 400  # not in it: not his to wear
     con.execute("UPDATE users SET skin_pick = 'org', skin_org = 1 WHERE id = ?", (ali["id"],))  # one picked while it was open
@@ -3261,13 +3261,17 @@ def test_badge_skin(env):
     con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] is None  # never picked: only a club I'm in comes by itself
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (3, 'kn', 'club', 'KBTU Knights', 'KN', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (3, 'kbtuknights', 'club', 'KBTU Knights', 'KN', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (3, ?, 'member', 0)", (pres["id"],))
     con.commit()
     assert c.patch("/api/me", headers=P, json={"skin": 3}).json()["skin"] == 3  # Knights have one too
     con.execute("UPDATE users SET skin_pick = NULL WHERE id = ?", (pres["id"],))
     con.commit()
     assert c.get("/api/me", headers=P).json()["skin"] == 3                        # and it comes by itself
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (4, 'crystalkbtu', 'club', 'Crystal', 'CR', 'gem_3d', 0, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (4, ?, 'member', 0)", (pres["id"],))
+    con.commit()
+    assert c.patch("/api/me", headers=P, json={"skin": 4}).json()["skin"] == 4  # not official: a lanyard all the same (Nov 2)
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
     con.commit()
     assert c.get("/api/me", headers=A).json()["skin"] == "sower"

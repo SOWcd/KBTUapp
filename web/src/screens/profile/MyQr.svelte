@@ -7,7 +7,7 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
+  import { hero, QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -70,7 +70,7 @@
 <div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
   <div class="page">
-  <div class="stage {look}">
+  <div class="stage {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
     <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
@@ -181,6 +181,11 @@
     background: repeating-radial-gradient(circle, transparent 0 18px, rgba(255, 255, 255, 0.12) 18px 19.5px); }
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
+  /* the template's clubs (CLUB_LOOKS as CSS variables, Hero's): the body goes on from the band's last colour, no seam */
+  .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
+  .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
+  .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; }
+  .club .ph { background: var(--ring); }
 
   .hint { max-width: 300px; text-align: center; font: 550 13px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.66); }
   .pill { position: relative; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }

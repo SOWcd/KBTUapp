@@ -18,7 +18,7 @@
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
-  import { schoolShort } from '../../lib/short';
+  import { nameOf, schoolOf, schoolShort } from '../../lib/short';
   import Languages from '@lucide/svelte/icons/languages';
   import Sun from '@lucide/svelte/icons/sun';
   import Moon from '@lucide/svelte/icons/moon';
@@ -38,7 +38,7 @@
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
   import { haptic, openLink, on } from '../../lib/tg';
   import { menu, type MenuItem } from '../../ui/menu';
-  import { skinOf, skinned, STRAP, banded, type Look } from '../../lib/awards';
+  import { skinOf, skinned, STRAP, banded, clubLook, lookVars, type Look } from '../../lib/awards';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import { byRank } from '../../lib/perms';
 
@@ -49,9 +49,13 @@
   // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
   // Oct 31: a club's lanyard is its members' alone; the server holds it too, `_skin_ok`), KBTU's last; SOWER first for the founder
   const mine = $derived(me ? [...me.memberships].sort(byRank).map((m) => m.org).filter(skinned) : []);
-  const skins = $derived([...mine, ...data.orgs.filter((o) => skinned(o) && !mine.some((x) => x.id === o.id))]);
+  // my school's lanyard: mine with no joining, nobody else's (the server holds it too: logic.school_slug); others' schools
+  // aren't offered even under a lock
+  const school = $derived(schoolOf(me?.student?.school));
+  const own = $derived([...mine, ...(school && skinned(school) ? [school] : [])]);
+  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && o.kind !== 'school' && !own.some((x) => x.id === o.id))]);
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
-    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: o.name, word: STRAP[skinOf(o)!], locked: !mine.some((x) => x.id === o.id) })),
+    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
 
   // a locked one can be tried on: the lanyard above wears it, the check then says it isn't mine (Me) and turns it back
@@ -189,7 +193,7 @@
         <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
         <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
           {#each swatches as k (k.id ?? 'kbtu')}
-            <button class="ly {k.kind}" role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
+            <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
                     onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <span class="cd">{#if banded(k.kind as Look)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
@@ -333,4 +337,7 @@
   .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 76px; height: 76px; border-radius: 50%;
     background: repeating-radial-gradient(circle, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 5.6px); }
   .ly.sower .hl { background: #fff; }
+  .ly.club .st { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
+  .ly.club .st i { color: var(--s3); font-size: calc(var(--sf) * 0.6); font-weight: var(--sfw); letter-spacing: var(--sl); line-height: calc(var(--slh) * 0.6); white-space: pre; text-align: center; }
+  .ly.club .hl { background: linear-gradient(100deg, var(--h1), var(--h2)); }
 </style>

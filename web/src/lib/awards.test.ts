@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, hero, splitVariants } from './awards';
+import { artOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -42,4 +42,13 @@ it('a badge held in two variants shows both', () => {
     { code: 'init26p', emoji: 'medal_init26p_2', have: true, rarity: 0.01 }, { code: 'init26', emoji: 'medal_init26_2', have: true, rarity: 0.05 },
     { code: 'init26f', emoji: 'medal_init26f_2', have: false, rarity: 0.3 }] } as never;
   expect(splitVariants([a]).map((x) => [x.variant, x.emoji])).toEqual([['init26p', 'medal_init26p_2'], ['init26', 'medal_init26_2']]);
+});
+
+it("every club's and school's lanyard QR ink reads on the white plate (>= 7:1)", () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const low = [...Object.keys(CLUB_LOOKS), ...Object.keys(SCHOOL_LOOKS)].flatMap((k) => QR_LOOK[k as keyof typeof QR_LOOK]!.filter((c) => 1.05 / (lum(c) + 0.05) < 7).map((c) => `${k} ${c}`));
+  expect(low).toEqual([]);
 });

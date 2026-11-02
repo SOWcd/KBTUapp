@@ -474,9 +474,46 @@ def _roster_mine(con, uid: int) -> dict | None:
 FRAMES = ("flowers", "space", "hearts")
 
 
-# the clubs with a badge of their own (web: awards.ts `skinned`)
-SKINNED = ("o.official = 1 AND o.status = 'active' AND (lower(o.name) LIKE '%studex%' OR lower(o.name) LIKE '%cheer%'"
-           " OR lower(o.name) LIKE '%knight%' OR lower(o.name) LIKE '%moment%' OR lower(o.name) LIKE '%faces%')")
+# the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
+# not (owner, Nov 2). The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
+LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
+            "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub")
+SKINNED = "o.status = 'active' AND o.slug IN (" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
+
+
+# the schools' lanyards (Nov 2: their official shields and colours): each its own students' alone, by students.school,
+# with no joining; web: awards.ts SCHOOL_LOOKS
+SCHOOL_LANYARDS = ("site", "seogi", "geology", "business", "ise", "kma", "law", "sam", "sce", "smsgt", "sss")
+# how prod's students.school writes a school beyond schools.json's names (the portal's older abbreviations)
+_SCHOOL_ALIAS = {"\u0448\u044d\u0438\u043d\u0433\u0438": "seogi"}  # ShEiNGI
+
+
+def _norm(s: str) -> str:
+    return " ".join(s.lower().replace("\u0451", "\u0435").split())
+
+
+def school_slug(school: str | None) -> str | None:
+    """The school org's slug a student's school is, as the portal or Settings wrote it: its full name or abbreviation in
+    any of the three languages (schools.json), its own slug or short name; None for none or not a KBTU school ("DIT")."""
+    from .clubs import SCHOOLS  # the schools' names: clubs imports this module
+    k = _norm(school or "")
+    if not k:
+        return None
+    for s in SCHOOLS:
+        names = {s["slug"], s["short"], *(s[lang][f] for lang in ("ru", "kk", "en") for f in ("name", "abbr") if s[lang].get(f))}
+        if k in {_norm(n) for n in names}:
+            return s["slug"]
+    return _SCHOOL_ALIAS.get(k)
+
+
+def _my_school_org(con, uid: int) -> int | None:
+    """My school's org, when it has a lanyard (school_slug of students.school)."""
+    s = one(con, "SELECT school FROM students WHERE user_id = ?", uid)
+    slug = school_slug(s["school"] if s else None)
+    if slug not in SCHOOL_LANYARDS:
+        return None
+    o = one(con, "SELECT id FROM orgs WHERE kind = 'school' AND status = 'active' AND slug = ?", slug)
+    return o[0] if o else None
 
 
 def _skin(con, uid: int) -> int | str | None:
@@ -497,10 +534,11 @@ def _skin(con, uid: int) -> int | str | None:
 
 
 def _skin_ok(con, uid: int, oid: int):
-    """A club's lanyard is its members' alone (owner, Oct 31: it was open to all); read on every look, so a pick of a club
-    I'm not in (or left) falls back by itself (`_skin`)."""
-    return one(con, f"SELECT 1 FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? WHERE o.id = ? AND {SKINNED}",
-               uid, oid)
+    """A club's lanyard is its members' alone (owner, Oct 31: it was open to all), a school's its students' alone (Nov 2);
+    read on every look, so a pick of a club I'm not in (or left), or of a school no longer mine, falls back by itself
+    (`_skin`)."""
+    return bool(one(con, f"SELECT 1 FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? WHERE o.id = ? AND {SKINNED}",
+                    uid, oid)) or (oid is not None and oid == _my_school_org(con, uid))
 
 
 def _qr_code(con, uid: int, col: str = "qr_code") -> str:

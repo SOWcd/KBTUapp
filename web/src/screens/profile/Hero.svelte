@@ -20,7 +20,7 @@
   import LookMark from '../../ui/LookMark.svelte';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { QR_LOOK, lookOf, STRAP, banded } from '../../lib/awards';
+  import { QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
@@ -36,6 +36,7 @@
   const look = $derived(lookOf(p)); // the lanyard picked
   // the one on show: it trails `look` while a new one is put on, so the old face turns away before the new one shows
   let face = $state(untrack(() => look));
+  const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   const encoder = () => import('../../ui/Qr.svelte'); // its own chunk, shared with the ticket
@@ -117,7 +118,7 @@
 </script>
 
 <section class="h">
-<div class="hang {face}" class:rest={!live || !seen || covered}>
+<div class="hang {face}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
     <div class="badge" use:glass>
@@ -194,7 +195,7 @@
   .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
   /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
   .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
-  .top.mine .id, .cheer .id, .knights .id { padding-right: 62px; } /* the name never runs under the QR or the club's object */
+  .top.mine .id, .cheer .id, .knights .id, .club .id { padding-right: 62px; } /* the name never runs under the QR or the club's object */
   .top.mine .nm { font-size: 20px; }
   .qr { position: absolute; z-index: 1; top: 16px; right: 14px; width: 58px; height: 58px; padding: 5px; border-radius: 13px; background: #fff;
     box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(10, 15, 36, 0.06); transition: transform var(--t-fast) var(--ease); }
@@ -243,6 +244,15 @@
   .sower .strap { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
   .sower .strap span { color: #000; }
   .sower .meta { color: rgba(255, 255, 255, 0.66); }
+  /* the template's clubs (lib/awards.ts CLUB_LOOKS, as CSS variables): the card under the band, the strap, the photo's
+     ring; the role's colour comes as --role itself */
+  .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }
+  .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
+  .club .strap span { color: var(--s3); letter-spacing: var(--sl); font-size: var(--sf); font-weight: var(--sfw); line-height: var(--slh); white-space: pre; text-align: center; } /* lookVars: two lines, or a long word a size smaller */
+  .club .photo { background: var(--ring); }
+  .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
+  .club .id { text-shadow: var(--tsh); }
+  .club .meta { color: var(--ink2); }
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
   /* the award shelf: six places, the empty ones dashed */

@@ -11,7 +11,9 @@
   // profile's card only the lens's aperture (lucide's), as the wordmark ran under the name.
   // Faces (a party club): their gradient wordmark over the hands' triangle from their logo, drawn white, on a club
   // night's black with laser beams and lights in the haze.
-  import type { Look } from '../lib/awards';
+  // The other clubs (Nov 2): their own scenes (ui/ClubScene) in the template's frame (lib/awards.ts CLUB_LOOKS); the
+  // schools' the same way (ui/SchoolScene, SCHOOL_LOOKS).
+  import { clubLook, isSchool, type Look } from '../lib/awards';
   import panther from '../assets/lanyards/panther.webp';
   import pantherEyes from '../assets/lanyards/panther-eyes.webp';
   import knights from '../assets/lanyards/knights.webp';
@@ -22,17 +24,22 @@
   import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
   import KbtuMark from './KbtuMark.svelte';
   import KnightsHelm from './KnightsHelm.svelte';
+  import ClubScene from './ClubScene.svelte';
+  import SchoolScene from './SchoolScene.svelte';
 
   // qr: the card carries my QR (Hero on Me); without it a club's object takes the QR's column alone
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   // Moments' date stamp, as an old film camera burns it into the corner: today
   const d = new Date(), two = (n: number) => String(n).padStart(2, '0');
   const stamp = `'${two(d.getFullYear() % 100)} ${two(d.getMonth() + 1)} ${two(d.getDate())}`;
+  const club = $derived(clubLook(look));
   const gid = 'sxr' + Math.random().toString(36).slice(2, 8); // gradient ids are page-global: the picker draws several
 </script>
 
-<div class="band {look}" class:wide class:qr aria-hidden="true">
-  {#if look === 'cheer'}
+<div class="band {look}" class:wide class:qr class:club={!!club} aria-hidden="true">
+  {#if club && isSchool(look)}<SchoolScene {look} {wide} {qr} />
+  {:else if club}<ClubScene {look} {wide} {qr} />
+  {:else if look === 'cheer'}
     {#if wide}<i class="halo z"></i><i class="ground"></i>{/if}
     <span class="pan" class:z={wide}><img src={panther} alt="" /><img class="eyes" src={pantherEyes} alt="" /></span>{#if wide}<i class="gloss"></i>{/if}
   {:else if look === 'knights'}

@@ -1,7 +1,7 @@
 <script lang="ts">
   // The mark in the middle of a badge's QR: the app's for KBTU and SOWER, else the club's own (owner, Oct 29),
   // the same art as its lanyard (ui/LanyardBand) on its colours.
-  import type { Look } from '../lib/awards';
+  import { clubLook, type Look } from '../lib/awards';
   import KbtuMark from './KbtuMark.svelte';
   import panther from '../assets/lanyards/panther-mark.webp'; // white: a black head on navy is a blob this small
   import KnightsHelm from './KnightsHelm.svelte';
@@ -9,11 +9,12 @@
   import hands from '../assets/lanyards/faces-hands.webp';
 
   let { look }: { look: Look } = $props();
-  const art: Partial<Record<Look, string>> = { cheer: panther, moments: aperture, faces: hands };
+  const club = $derived(clubLook(look)); // the template's clubs: their mark on their plate's colours (lookVars)
+  const art = $derived(club ? club.mark : ({ cheer: panther, moments: aperture, faces: hands } as Partial<Record<Look, string>>)[look]);
 </script>
 
-<span class="appmark {look}">
-  {#if art[look]}<img src={art[look]} alt="" />
+<span class="appmark {look}" class:club={!!club}>
+  {#if art}<img src={art} alt="" />
   {:else if look === 'knights'}<span class="helm"><KnightsHelm /></span>
   {:else if look === 'studex'}<svg viewBox="0 0 100 100"><path d="M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z" fill="#fff" /></svg>
   {:else}<KbtuMark />{/if}
@@ -33,4 +34,5 @@
   .moments img { width: 66%; height: 66%; }
   .faces { background: radial-gradient(circle at 50% 100%, #C040FF, #07060B 75%); }
   .faces img { width: 90%; height: 90%; }
+  .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
 </style>

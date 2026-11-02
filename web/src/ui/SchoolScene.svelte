@@ -1,0 +1,88 @@
+<script lang="ts">
+  // A school's lanyard (Nov 2: their official shields and colours): its colour, a scene from its shield's own symbols
+  // (assets/lanyards/schools, drawn by .claude/reports/school-lanyards/gen-schools.py), the shield itself as the figure:
+  // on the card standing on the strip on the QR's axis, on the badge's band in the middle. The grammar of ClubScene:
+  // far layers move with the tilt (base.css .z), one quiet loop at most, transform and opacity only, still under reduced
+  // motion and power saving, paused with the card, static in the picker.
+  import type { Look } from '../lib/awards';
+
+  let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
+  const SC = import.meta.glob('../assets/lanyards/schools/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  const SH = import.meta.glob('../assets/lanyards/school-*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  const L = (n: string) => SC[`../assets/lanyards/schools/${n}-${wide ? 'card' : 'band'}.svg`];
+  // each school's layers, far to near ('far' moves with the tilt)
+  const LAYERS: Record<string, [string, string][]> = {
+    site: [['site-traces', 'far']], seogi: [['seogi-hazard', '']], geology: [['geo-contours', 'far'], ['geo-strata', '']],
+    business: [['bs-chart', 'far']], ise: [['ise-globe', 'far']], kma: [['kma-moon', 'far'], ['kma-waves', 'waves']],
+    law: [['law-portico', 'far']], sam: [['sam-graph', 'far']], sce: [['sce-molecule', 'far']], smsgt: [['smsgt-comb', 'far']], sss: [['sss-book', 'far']],
+  };
+  const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
+  const emblem = $derived(SH[`../assets/lanyards/school-${look}-emblem.webp`]);
+</script>
+
+<div class="sc {look}" class:wide class:qr aria-hidden="true">
+  <i class="lit"></i>
+  {#each LAYERS[look] ?? [] as [n, c] (n)}<img class="l {c}" class:z={c.includes('far')} src={L(n)} alt="" />{/each}
+  {#if look === 'seogi'}<i class="embers"></i>{/if}
+  {#if look === 'site'}<span class="sww"><i class="sweep"></i></span>{/if}
+  <!-- the shield: on the card a big white emblem cut by the edge behind the QR, catching the light as the phone tilts (owner,
+       Nov 2: a shield squeezed under the QR looked terrible); on the badge's band whole, in its colours -->
+  {#if wide}<span class="emb z" style="--m: url({emblem})"><img src={emblem} alt="" /><i class="foil"></i></span>
+  {:else}<span class="fig"><img src={shield} alt="" /></span>{/if}
+  <i class="gloss"></i>
+</div>
+
+<style>
+  .sc { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  img { position: absolute; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  i { position: absolute; display: block; pointer-events: none; }
+  .l { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; }
+  .sc:not(.wide) .l { object-position: 50% 100%; }
+  .far { --z: -2; --zs: 1.03; }
+
+  /* the badge's band: the shield whole, in the middle */
+  .fig { position: absolute; left: 50%; bottom: 12px; width: 100px; height: 92px; margin-left: -50px; display: flex; justify-content: center; align-items: flex-end; }
+  .fig img { position: static; height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35)); }
+  /* the card: the shield as a white emblem, big, far, cut by the right edge and the foot, behind the QR */
+  .emb { position: absolute; right: -34px; top: -16px; width: 172px; --z: -3; }
+  .emb img { position: static; display: block; width: 100%; opacity: 0.13; }
+  /* the emblem catches the light with the tilt, like a foil print (the strip's mechanism; still at rest) */
+  .foil { inset: 0; opacity: 0.4; -webkit-mask: var(--m) 0 0 / 100% 100%; mask: var(--m) 0 0 / 100% 100%;
+    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.9) 50%, transparent 70%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat; }
+  :global(html.lowfx) .foil { display: none; }
+  /* the light behind the shield */
+  .lit { right: -60px; top: -40px; width: 240px; height: 200px; background: radial-gradient(closest-side, var(--lt, rgba(255, 255, 255, 0.22)), transparent); }
+  .sc:not(.wide) .lit { right: auto; left: 50%; bottom: -30px; width: 260px; height: 180px; margin-left: -130px; }
+  .gloss { inset: 0; border-radius: inherit; background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.14), transparent 65%), linear-gradient(180deg, transparent 65%, rgba(0, 0, 0, 0.14));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 8px rgba(0, 0, 0, 0.22); }
+
+  /* each school's ground: its official colour, lit from the top right */
+  .site { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 170, 240, 0.4), transparent 70%), linear-gradient(160deg, rgb(10, 100, 160), rgb(8, 91, 148) 50%, rgb(4, 50, 86)); --lt: rgba(245, 194, 66, 0.3); }
+  .seogi { background: radial-gradient(60% 80% at 88% 80%, rgba(255, 140, 50, 0.4), transparent 70%), linear-gradient(160deg, rgb(48, 46, 38), rgb(30, 29, 24) 55%, rgb(16, 15, 12)); --lt: rgba(255, 150, 60, 0.5); }
+  .geology { background: radial-gradient(70% 70% at 90% 10%, rgba(230, 215, 160, 0.25), transparent 70%), linear-gradient(170deg, rgb(84, 112, 88), rgb(72, 100, 75) 50%, rgb(46, 66, 50)); --lt: rgba(240, 225, 170, 0.35); }
+  .business { background: radial-gradient(70% 90% at 100% 0%, rgba(231, 200, 115, 0.2), transparent 70%), linear-gradient(160deg, rgb(44, 62, 104), rgb(35, 50, 83) 50%, rgb(18, 26, 46)); --lt: rgba(231, 200, 115, 0.3); }
+  .ise { background: radial-gradient(70% 90% at 100% 100%, rgba(255, 120, 90, 0.35), transparent 70%), linear-gradient(160deg, rgb(232, 30, 18), rgb(200, 14, 6) 50%, rgb(120, 6, 2)); }
+  .kma { background: radial-gradient(70% 60% at 85% 0%, rgba(120, 140, 255, 0.25), transparent 70%), linear-gradient(175deg, rgb(28, 32, 72), rgb(21, 24, 55) 55%, rgb(10, 12, 30)); }
+  .law { background: radial-gradient(70% 90% at 100% 0%, rgba(200, 220, 245, 0.25), transparent 70%), linear-gradient(160deg, rgb(56, 92, 128), rgb(45, 78, 109) 50%, rgb(24, 44, 64)); }
+  .sam { background: radial-gradient(70% 90% at 100% 0%, rgba(160, 210, 255, 0.25), transparent 70%), linear-gradient(160deg, rgb(64, 100, 132), rgb(53, 84, 112) 50%, rgb(30, 48, 66)); }
+  .sce { background: radial-gradient(70% 90% at 100% 0%, rgba(200, 180, 255, 0.3), transparent 70%), linear-gradient(160deg, rgb(110, 84, 158), rgb(93, 68, 136) 50%, rgb(52, 36, 80)); }
+  .smsgt { background: radial-gradient(70% 90% at 100% 0%, rgba(150, 240, 180, 0.25), transparent 70%), linear-gradient(160deg, rgb(16, 122, 80), rgb(11, 101, 66) 50%, rgb(5, 56, 36)); }
+  .sss { background: radial-gradient(70% 90% at 100% 0%, rgba(180, 230, 200, 0.2), transparent 70%), linear-gradient(160deg, rgb(56, 96, 82), rgb(44, 77, 66) 50%, rgb(24, 44, 38)); }
+
+  /* SITE: a signal running across the traces now and then */
+  .sww { position: absolute; inset: 0; overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent 30%, black 65%); mask: linear-gradient(90deg, transparent 30%, black 65%); }
+  .sweep { left: -80px; top: 0; bottom: 0; width: 60px; opacity: 0; background: linear-gradient(90deg, transparent, rgba(245, 194, 66, 0.28), transparent);
+    animation: stsweep 8s 1.4s ease-in-out infinite; }
+  @keyframes stsweep { 0% { transform: translateX(0); opacity: 0; } 5% { opacity: 1; } 25% { opacity: 1; } 32%, 100% { transform: translateX(500px); opacity: 0; } }
+  /* SEOGI: embers rising from the flame */
+  .embers { left: 0; top: 0; width: 100%; height: calc(100% + 100px); background: url('../assets/lanyards/schools/seogi-embers.svg') 0 0 / 100px 100px;
+    -webkit-mask: radial-gradient(50% 80% at 87% 100%, black, transparent); mask: radial-gradient(50% 80% at 87% 100%, black, transparent); animation: seember 20s linear infinite; }
+  .sc:not(.wide) .embers { -webkit-mask: radial-gradient(50% 90% at 50% 100%, black, transparent); mask: radial-gradient(50% 90% at 50% 100%, black, transparent); }
+  @keyframes seember { to { transform: translateY(-100px); } }
+  /* KMA: the wheel far, the sea's lines swaying a little */
+  .waves { animation: kmwave 10s ease-in-out infinite alternate; }
+  @keyframes kmwave { from { transform: translateX(-5px); } to { transform: translateX(5px); } }
+
+  @media (prefers-reduced-motion: reduce) { .sweep, .embers, .waves { animation: none; } }
+  :global(html.lowfx) .sweep, :global(html.lowfx) .embers, :global(html.lowfx) .waves { animation: none; }
+</style>
