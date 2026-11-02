@@ -270,7 +270,10 @@
 
   <AppCard />
   <!-- last before the tail, so no block's stagger delay shifts -->
-  {#if set && List}<List bind:this={list} />{/if}
+  <!-- a failure inside the list shows itself instead of a blank page (Nov 2: Settings came up empty on phones) -->
+  {#if set && List}<svelte:boundary onerror={(e) => console.error(e)}><List bind:this={list} />
+    {#snippet failed(error, retry)}<p class="t-foot crash">{String((error as Error)?.message ?? error).slice(0, 300)} <button class="t-foot" onclick={retry}>↻</button></p>{/snippet}
+  </svelte:boundary>{/if}
   <div class="tail"></div>
 </div>
 
@@ -366,4 +369,5 @@
   .pi { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--accent-soft); color: var(--accent-text); }
 
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
+  .crash { padding: 16px; color: var(--danger-text); word-break: break-word; }
 </style>
