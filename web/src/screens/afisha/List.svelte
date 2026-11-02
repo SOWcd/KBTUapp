@@ -19,6 +19,9 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { onMount } from 'svelte';
   import type { ClassItem, EventCard } from '../../lib/api';
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { haptic } from '../../lib/tg';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -77,6 +80,9 @@
   const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
   const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
   const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
+
+  // which days' classes are open (folded by default: the events lead)
+  let folds = $state<Record<number, boolean>>({});
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -175,28 +181,53 @@
           <ChevronRight size={18} />
         </button>
       {/if}
-      <div class="list">
-        {#each day.items as it (it.key)}
-          {#if 'c' in it}
+      <!-- the day's classes folded into one line above its events (owner, Nov 3: classes between the events buried
+           them); the line says what matters now (on now, next within the hour), a tap opens the rows -->
+      {@const cls = day.items.filter((x) => 'c' in x)}
+      {@const evs = day.items.filter((x) => !('c' in x))}
+      {#if cls.length}
+        {@const first = cls[0] as Extract<Item, { c: ClassItem }>}
+        {@const last = cls[cls.length - 1] as Extract<Item, { c: ClassItem }>}
+        {@const nowCl = day.d === today ? cls.find((x) => x.key === live?.key || x.key === next?.key) as Extract<Item, { c: ClassItem }> | undefined : undefined}
+        <button class="fold" class:open={folds[day.d]} class:past={day.d === today && last.end < now} aria-expanded={!!folds[day.d]}
+                onclick={() => { haptic.tap(); folds[day.d] = !folds[day.d]; }}>
+          <span class="cl-t num"><b>{first.c.begins}</b>{last.c.ends}</span>
+          <span class="cl-s"><b class="ellipsis">{tn('list.classes', cls.length)}</b>
+            <small class="ellipsis">{#if nowCl && nowCl.key === live?.key && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span> · {subjectOf(nowCl.c)}
+              {:else if nowCl && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span> · {subjectOf(nowCl.c)}
+              {:else}{cls.map((x) => subjectOf((x as Extract<Item, { c: ClassItem }>).c)).join(' · ')}{/if}</small></span>
+          <ChevronRight class="chev" size={18} />
+        </button>
+        {#if folds[day.d]}
+          <div class="list cls" transition:slide={{ duration: 280, easing: cubicOut }}>
+            {#each cls as it (it.key)}
+              {#if 'c' in it}
             {@const hours = Math.round((it.end - it.at) / 3600)}
-            {@const k = lessonKind(it.c.kind)}
-            <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
-            {@const isLive = it.key === live?.key}
-            <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
-                 onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
-              <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
-              <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
-              <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
-                <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
-                  {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
-                  {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
-              {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
-              {#if floorOf(it.c.room) != null}<button class="cl-r on" onclick={() => sheets.map(it.c.room!)}><span class="ellipsis">{it.c.room}</span><MapIcon size={13} /></button>
-              {:else if atBldg2(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(BLDG2_2GIS)}><span class="ellipsis">{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</span><TwoGisMark size={14} /></button>
-              {:else if atDorm(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(DORM_2GIS)}>{t('list.dorm')}<TwoGisMark size={14} /></button>
-              {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
-            </div>
-          {:else}
+                  {@const k = lessonKind(it.c.kind)}
+                  <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
+                  {@const isLive = it.key === live?.key}
+                  <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
+                       onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
+                    <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
+                    <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
+                    <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
+                      <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
+                        {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
+                        {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
+                    {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
+                    {#if floorOf(it.c.room) != null}<button class="cl-r on" onclick={() => sheets.map(it.c.room!)}><span class="ellipsis">{it.c.room}</span><MapIcon size={13} /></button>
+                    {:else if atBldg2(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(BLDG2_2GIS)}><span class="ellipsis">{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</span><TwoGisMark size={14} /></button>
+                    {:else if atDorm(it.c.room)}<button class="cl-r on gis" title={it.c.room} onclick={() => openLink(DORM_2GIS)}>{t('list.dorm')}<TwoGisMark size={14} /></button>
+                    {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
+                  </div>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      {/if}
+      <div class="list">
+        {#each evs as it (it.key)}
+          {#if 'e' in it}
             {@const e = it.e}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
             <div class="row" class:cancelled={e.status === 'cancelled'}>
@@ -302,6 +333,13 @@
   .av :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
 
   /* a class: its times in the covers' column, the room at the row's end */
+  /* a day's classes in one line: the first start and the last end in the covers' column, a chevron that turns open */
+  .fold { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 8px 0; text-align: left; color: inherit; }
+  .fold.past { opacity: 0.5; }
+  .fold :global(.chev) { flex: none; color: var(--text-3); transition: transform var(--t-fast) var(--ease); }
+  .fold.open :global(.chev) { transform: rotate(90deg); }
+  .fold + .list:not(.cls) .row:first-child::before, .cls + .list .row:first-child::before { content: ''; position: absolute; top: 0; left: 90px; right: 0; height: 0.5px; background: var(--separator); }
+  .cls .row:first-child::before { content: ''; position: absolute; top: 0; left: 90px; right: 0; height: 0.5px; background: var(--separator); }
   .cl { min-height: 56px; padding: 8px 0; cursor: pointer; }
   .cl.past, .cl.skip { opacity: 0.5; }
   .cl.skip .cl-s b { text-decoration: line-through; }

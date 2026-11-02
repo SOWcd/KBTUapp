@@ -854,6 +854,7 @@ const kk: Dict = {
   'list.nowLeft': "Қазір · тағы {n} мин",
   'list.at': "{time}",
   'list.week': { one: "осы аптада {n}", other: "осы аптада {n}" },
+  'list.classes': { one: "{n} сабақ", other: "{n} сабақ" },
   'list.kind.lectureLong': "Дәріс",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Зертханалық",

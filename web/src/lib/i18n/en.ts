@@ -854,6 +854,7 @@ const en: Dict = {
   'list.nowLeft': "Now · {n} min left",
   'list.at': "at {time}",
   'list.week': { one: "{n} this week", other: "{n} this week" },
+  'list.classes': { one: "{n} class", other: "{n} classes" },
   'list.kind.lectureLong': "Lecture",
   'list.kind.practiceLong': "Practice",
   'list.kind.labLong': "Lab",
