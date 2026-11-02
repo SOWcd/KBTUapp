@@ -248,6 +248,8 @@ export interface Me {
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one. Owner, Oct 13:
    *  badges as skins; never picked, a new club's comes by itself. */
   skin: Id | 'sower' | null;
+  /** The frame over my photo on the lanyard (public/frames/<id>.svg), apart from the lanyard; null: none. */
+  frame: string | null;
   /** "Delete my account" asked: when it goes (a week later); null: not asked, or changed my mind. */
   deleteAt: Ts | null;
   city: { name: string; hidden: boolean } | null;  // from the club's roster (PLAN 95); hidden: off my profile
@@ -570,6 +572,7 @@ export interface PersonCard extends PersonRef {
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
   skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
+  frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
 }

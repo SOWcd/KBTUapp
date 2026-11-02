@@ -14,6 +14,7 @@
   import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Frame from '../../ui/Frame.svelte';
   import Founder from '../../ui/Founder.svelte';
   import LookMark from '../../ui/LookMark.svelte';
   import LanyardBand from '../../ui/LanyardBand.svelte';
@@ -77,7 +78,7 @@
       {#if banded(look)}<LanyardBand {look} />{/if}
       <span class="slot" aria-hidden="true"></span>
       <div class="who">
-        <span class="ph"><Avatar person={h.person} size={46} tappable={false} /></span>
+        <span class="ph"><Avatar person={h.person} size={46} tappable={false} /><Frame id={h.frame} /></span>
         <span class="tx">
           <b class="nm">{h.name}{#if h.status}<Founder size={17} />{/if}</b>
           <span class="role">{h.title}</span>
@@ -140,7 +141,7 @@
   .banded { padding-top: 0; } /* the art band on top (LanyardBand) */
   .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
-  .ph { flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }
+  .ph { position: relative; flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }
   .banded .ph, .studex .ph, .sower .ph { background: #fff; }
   .ph :global(.av), .ph :global(.av img), .ph :global(.ini) { border-radius: 13px; }
   .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }

@@ -65,6 +65,7 @@ export function shelfItem(p: PersonCard, key: string): ShelfItem | null {
 
 export interface HeroData {
   person: { id: Id; name: string; avatar: string | null; founder: boolean };
+  frame: string | null;    // drawn over the photo (ui/Frame)
   name: string;           // the real short name (a nick never hides it on the lanyard, owner Nov 2)
   nick: string | null;     // under it
   status: string | null;   // the one mark by the name (Creator for now; DMP comes with the status field)
@@ -105,6 +106,7 @@ export function hero(p: PersonCard): HeroData {
   const close = closest(p.awards.achievements);
   return {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
+    frame: p.frame ?? null,
     name: p.realName ?? p.name,
     nick: p.realName && p.nick ? p.nick : null,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,

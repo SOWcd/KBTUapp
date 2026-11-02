@@ -440,6 +440,7 @@ def me(con, v: Viewer) -> dict:
                      "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
+        "frame": u["frame"] if s and u["frame"] in FRAMES else None,
         "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
@@ -466,6 +467,11 @@ def _roster_mine(con, uid: int) -> dict | None:
     orgs = {o["id"]: org_ref(con, o) for o in rows(con, "SELECT * FROM orgs WHERE id IN (" + ",".join(
         str(int(x["org"])) for k in got for x in got[k]) + ")")}
     return {k: [{**x, "org": orgs[x["org"]]} for x in got[k] if x["org"] in orgs] for k in got}
+
+
+# the frames over a photo on the lanyard, anyone's to pick, apart from the lanyard (web: public/frames/<id>.svg)
+# ponytail: one list for everyone; a club's own frame for its members alone comes with the first club that draws one
+FRAMES = ("flowers", "space", "hearts")
 
 
 # the clubs with a badge of their own (web: awards.ts `skinned`)
@@ -596,6 +602,11 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
             sets.update(skin_pick="org", skin_org=val)
         else:
             raise ApiError("bad_input")
+    if "frame" in patch:  # a frame over my photo (FRAMES), null for none; combined with any lanyard
+        need_student(v)
+        if patch["frame"] is not None and patch["frame"] not in FRAMES:
+            raise ApiError("bad_input")
+        sets["frame"] = patch["frame"]
     if "avatarTg" in patch:  # off only with a photo of my own to show (the upload turns it off by itself)
         if not patch["avatarTg"] and not one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]:
             raise ApiError("bad_input")
@@ -945,7 +956,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
+            skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))

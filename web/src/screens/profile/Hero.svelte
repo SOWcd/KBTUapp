@@ -12,6 +12,7 @@
   import { hero, founderItem, ideaItem } from '../../lib/awards';
   import { glass } from '../../ui/glass';
   import Avatar from '../../ui/Avatar.svelte';
+  import Frame from '../../ui/Frame.svelte';
   import Founder from '../../ui/Founder.svelte';
   import Award from '../../ui/Award.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -127,8 +128,8 @@
         <button class="qr" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}>{#await encoder() then m}<m.default text={link} lazy tone={QR_LOOK[face]}><LookMark look={face} /></m.default>{/await}</button>
       {/if}
       <div class="top" class:mine>
-        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /></button>
-        {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /></span>{/if}
+        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} /></button>
+        {:else}<span class="photo"><Avatar person={h.person} size={mine ? 74 : 86} tappable={false} /><Frame id={h.frame} /></span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->

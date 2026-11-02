@@ -1093,6 +1093,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS events_by_start ON events(starts_at);"""),
     # (Nov 2) a club's member link for the whole team (logic.team_link): many join by it as plain members, 7 days, one per club
     (111, "ALTER TABLE org_invites ADD COLUMN multi INTEGER NOT NULL DEFAULT 0;"),
+    # (Nov 2) a frame drawn over my photo on the lanyard, picked apart from the lanyard itself (logic.FRAMES)
+    (112, "ALTER TABLE users ADD COLUMN frame TEXT;"),
 ]
 
 

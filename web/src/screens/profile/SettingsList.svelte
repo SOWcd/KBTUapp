@@ -66,6 +66,16 @@
     try { session.me = await api.updateMe({ skin: id }); } catch (e) { session.me = was; oops(e); } finally { busy = false; }
   }
 
+  // the frame: in place at once, back on a failure (as the lanyard)
+  const FRAMES = [null, 'flowers', 'space', 'hearts'] as const;
+  async function pickFrame(f: string | null) {
+    if (busy || !me || (me.frame ?? null) === f) return;
+    const was = me;
+    busy = true;
+    session.me = { ...me, frame: f };
+    try { session.me = await api.updateMe({ frame: f }); } catch (e) { session.me = was; oops(e); } finally { busy = false; }
+  }
+
   function oops(e: unknown) {
     haptic.error();
     say(e instanceof ApiErr && e.message === 'nick' ? t('look.badNick') : e instanceof ApiErr && e.message === 'not_an_image' ? t('look.badPhoto') : t('common.error'), 'warning_3d');
@@ -189,6 +199,16 @@
           {/each}
         </div>
       {/if}
+      <!-- a frame over the photo, apart from the lanyard: any frame with any lanyard (owner, Nov 2) -->
+      <h2 class="set-h">{t('look.frame')}</h2>
+      <div class="frames" role="radiogroup" aria-label={t('look.frame')}>
+        {#each FRAMES as f (f ?? 'none')}
+          <button class="fr" role="radio" aria-checked={(me.frame ?? null) === f} class:on={(me.frame ?? null) === f} onclick={() => { haptic.select(); void pickFrame(f); }}>
+            <span class="fb"><span class="fp"></span>{#if f}<img src="frames/{f}.svg" alt="" draggable="false" />{/if}</span>
+            <b class="ellipsis">{t(f ? `look.frame.${f}` : 'look.frameNone')}</b>
+          </button>
+        {/each}
+      </div>
     </div>
     <div data-unit>
       <div class="set-group">
@@ -262,6 +282,15 @@
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
   .skins::-webkit-scrollbar { display: none; }
+  .frames { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
+  .frames::-webkit-scrollbar { display: none; }
+  .fr { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 76px; color: var(--text-2); }
+  .fr b { max-width: 100%; font: 600 var(--fs-cap)/1.2 var(--font-text); }
+  .fb { position: relative; display: grid; place-items: center; width: 76px; height: 76px; border-radius: var(--r-l); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+  .fp { width: 40px; height: 40px; border-radius: var(--r-s); background: var(--grad-accent); opacity: 0.55; }
+  .fb img { position: absolute; left: 8px; top: 8px; width: 60px; height: 60px; }
+  .fr.on .fb { box-shadow: inset 0 0 0 2px var(--accent); }
+  .fr.on b { color: var(--text); }
   .ly .mini :global(*) { animation: none !important; } /* swatches stay still: many full lanyards at once */
   .ly .mini { --gx: 0; --gy: 0; } /* and flat: no depth layer (base.css .z) ever moves or gets its own layer here */
   .ly .mini :global(.z) { will-change: auto; }
