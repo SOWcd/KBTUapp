@@ -196,6 +196,8 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
     vice = False
     with tx(con):
         m = one(con, "SELECT role, role_id FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)
+        if not m and one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", oid, uid):
+            return False  # the club's ban outranks the sheet (a match, a claim, a yes on one): the row stays
         if m and promote and m["role"] == "member" and r["role"] != "member":
             m = None  # set below like a new one: a President's row where the club has one becomes Vice
         role = m["role"] if m else r["role"]
@@ -207,8 +209,10 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
             mine = one(con, "SELECT role_id FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)["role_id"]
             fixed = mine is None or one(con, "SELECT fixed FROM org_roles WHERE id = ?", mine)["fixed"]
             if fixed:  # a role name the club gave in the app stays
-                t = one(con, "SELECT id FROM org_roles WHERE org_id = ? AND lower(name) = lower(?)", oid, r["title"][:40])
-                if t and not trusted:  # a club's own role may carry rights: an unchecked claim never takes one (review)
+                t = one(con, "SELECT id, level FROM org_roles WHERE org_id = ? AND lower(name) = lower(?)", oid, r["title"][:40])
+                # a club's own role may carry rights: an unchecked claim never takes one (review), nor anyone one of
+                # another level than the row's (a member's row titled as the club's Vice-level "HR" got its rights)
+                if t and (not trusted or t["level"] != role):
                     t = None
                     tid = None
                 else:
@@ -245,14 +249,18 @@ def claim(con, uid: int, rid: int) -> None:
         raise ApiError("not_found")
     if r["claimed_by"]:  # another student's claim on it waits: never overwritten (review)
         raise ApiError("conflict")
+    if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
+        raise ApiError("forbidden", "banned")
     if r["role"] == "member":
         join(con, uid, r, trusted=False)
         return
     with tx(con):
+        # under the lock: two claims at once, the second finds it taken (it overwrote the first's, who then stayed in)
+        if not con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ? AND claimed_by IS NULL", (uid, rid)).rowcount:
+            raise ApiError("conflict")
         if not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
             set_role(con, None, uid, r["org_id"], "member", "roster")
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"rclaim:{rid}", str(uid)))  # the claim let me in: a no takes it back
-        con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ?", (uid, rid))
         for (aid,) in _approvers(con, r["org_id"]):
             notify(con, aid, "roster_claim", f"rq:{rid}:{uid}")
 

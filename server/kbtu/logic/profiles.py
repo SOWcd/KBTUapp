@@ -221,7 +221,9 @@ def use_grant_link(con, v: Viewer, token: str) -> dict:
     has it: fine, nothing more (a chat's link gets tapped twice)."""
     need_student(v)
     with tx(con):
-        r = one(con, "SELECT * FROM grant_links WHERE token = ? AND (multi = 1 OR used_by IS NULL) AND expires_at > ?", token, core.now())
+        # the maker still an admin: a demoted or banned one's links stop with the role
+        r = one(con, """SELECT g.* FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
+            WHERE g.token = ? AND (g.multi = 1 OR g.used_by IS NULL) AND g.expires_at > ?""", token, core.now())
         if not r:
             raise ApiError("closed")
         if not r["multi"]:
@@ -240,7 +242,7 @@ def claim_link(con, code: str, until: int, v: Viewer | None = None) -> str:
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
     if v is not None and (not owner or v.id != owner[0]):
         raise ApiError("forbidden")
-    if v is not None and code not in BADGE_OF:  # from the app: badges only (the CLI keeps the rest)
+    if v is not None and (type(code) is not str or code not in BADGE_OF):  # from the app: badges only (the CLI keeps the rest)
         raise ApiError("bad_input")
     if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
         raise ApiError("bad_input")

@@ -218,6 +218,9 @@ def delete_role(con, v: Viewer, oid: int, rid: int) -> dict:
         raise ApiError("not_found")
     if RANK[r["level"]] >= RANK[mine] or r["fixed"]:
         raise ApiError("forbidden")
+    # its holders fall back to the level's rights: never ones the editor hasn't (save_role's rule)
+    if not LEVEL_RIGHTS[r["level"]] <= rights_of(con, v.id, oid) and one(con, "SELECT 1 FROM org_members WHERE role_id = ?", rid):
+        raise ApiError("forbidden")
     con.execute("DELETE FROM org_roles WHERE id = ?", (rid,))
     return team_setup(con, v, oid)
 

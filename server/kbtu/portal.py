@@ -266,4 +266,6 @@ def same_person(shown: str | None, first: str, last: str) -> bool:
     if not full or not names or not set(full) & names:
         return False
     rest = names - set(full)
+    if rest and set(full) - names:
+        return False  # another whole first name where mine should be ("Testov Ali" for Bek Testov)
     return not initials or not rest or any(i and n.startswith(i) for i in initials for n in rest)

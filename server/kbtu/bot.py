@@ -756,7 +756,7 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
     root, peek = Path(cfg.db_path).resolve().parent / "media", {}
     try:
         logic.suggest_check(con, uid, url, tg_chat)
-        if gate and not logic._once(con, f"suggest_at:{uid}", str(now() // 10)):  # one look at t.me per 10 s per student
+        if gate and not await asyncio.to_thread(logic._once, con, f"suggest_at:{uid}", str(now() // 10)):  # one look at t.me per 10 s per student
             return "slow", "", ""
         peek = await media.chat_peek(http, url)
         if not peek["ok"]:
@@ -770,7 +770,7 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
             kind = "channel" if tg["type"] == "channel" else "forum" if tg.get("is_forum") else "group"
         else:
             kind = "channel" if (channel if channel is not None else peek.get("channel")) else "group"
-        title = logic.suggest_chat(con, uid, url, kind, tg_chat, peek)
+        title = await asyncio.to_thread(logic.suggest_chat, con, uid, url, kind, tg_chat, peek)  # writes: lock waits off the loop
         _drop_free(con, root, peek.get("photo"))  # a club's row took the suggestion: it keeps its own avatar
         return "sent", title, "invite" if "/+" in url else kind
     except logic.ApiError as exc:  # caught again inside the write (two at once): the saved avatar goes if nothing shows it
@@ -778,7 +778,7 @@ async def suggest(cfg: Config, http: httpx.AsyncClient | None, con, uid: int, ur
         if exc.code != "conflict":
             return "limit", "", ""
         if exc.message == "pending":
-            logic.chat_asked_too(con, uid, url, tg_chat)  # told too when it's approved
+            await asyncio.to_thread(logic.chat_asked_too, con, uid, url, tg_chat)  # told too when it's approved
         c = logic.known_chat(con, url, tg_chat)
         return ({"pending": "waiting", "org": "org"}.get(exc.message, "exists"), c["title"] if c else "",
                 ("invite" if "/+" in c["url"] else "forum" if c["forum"] else c["kind"]) if c else "")

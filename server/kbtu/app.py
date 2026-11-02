@@ -601,13 +601,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 peek["photo"] = (await _img(media.save, peek["image"], photos))["path"]
             except media.BadImage:
                 pass
-        try:
-            out, gone = logic.add_org_chat(con, v, oid, url, peek)
-        except logic.ApiError:
-            media.drop(photos, [peek["photo"]] if peek.get("photo") and logic.photo_free(con, peek["photo"]) else [])
-            raise
-        media.drop(photos, gone)
-        return out
+        def save() -> dict:
+            try:
+                out, gone = logic.add_org_chat(con, v, oid, url, peek)
+            except logic.ApiError:
+                media.drop(photos, [peek["photo"]] if peek.get("photo") and logic.photo_free(con, peek["photo"]) else [])
+                raise
+            media.drop(photos, gone)
+            return out
+        return await run_in_threadpool(save)
 
     @app.put("/api/orgs/{oid}/chats/{cid}/main")
     def main_org_chat(oid: int, cid: int, con: Con, v: Me):
@@ -1037,7 +1039,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not logic.organizes(con, v):  # before the work, not only after it
             raise ApiError("forbidden")
         saved = await _picture(media.save, data, photos)
-        return logic.add_photo(con, v, saved)
+        return await run_in_threadpool(logic.add_photo, con, v, saved)  # a write: its lock wait off the event loop
 
     # an event's video (video.py): the size first, then the file in pieces at their offsets, then "done"; a piece sent
     # again after a lost answer is told where the file stands instead of being added twice
@@ -1291,7 +1293,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not logic.can_add_album_photo(con, v, eid):  # before the work, not only after it
             raise ApiError("forbidden")
         saved = await _picture(media.save, data, photos)
-        return logic.add_album_photo(con, v, eid, saved)
+        return await run_in_threadpool(logic.add_album_photo, con, v, eid, saved)
 
     @app.delete("/api/events/{eid}/photos/{fid}")
     def remove_album_photo(eid: int, fid: int, con: Con, v: Me):
@@ -1626,7 +1628,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return found
         if await screen(found["name"]) is False:
             raise ApiError("bad_input", "ai")
-        return {"skill": logic.add_skill(con, v, found["name"])}
+        return {"skill": await run_in_threadpool(logic.add_skill, con, v, found["name"])}
 
     @app.patch("/api/forum/skills/{sid}")
     def forum_skill_mod(sid: int, con: Con, v: Forum, body: dict = Body(...)):
@@ -1639,7 +1641,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum/asks")
     async def forum_new_ask(con: Con, v: Forum, body: dict = Body(...)):
         verdict = await screen(f"{body.get('title') or ''}\n{body.get('body') or ''}")  # no answer: held for a moderator
-        return logic.create_ask(con, v, body, verdict)
+        return await run_in_threadpool(logic.create_ask, con, v, body, verdict)
 
     # ------------------------------------------------------------ the forum channel (logic/fchannel.py): posts from the app
     F = logic.fchannel

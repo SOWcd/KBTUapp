@@ -35,7 +35,7 @@ LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_]
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
 FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
 ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
-SIGNED = re.compile("^[\u2010-\u2015\u2212-]")  # a last line like a "- Name L." signature (the bot signed so until Nov 2; still reads as one) (read NFKC: fullwidth, small dashes fold)
+SIGNED = "\u2212\u2500\u2501\u2796\u30fc"  # with every dash (Pd), what reads as one: minus, box lines, heavy minus, the long vowel mark. A last line like a "- Name L." signature (the bot signed so until Nov 2; still reads as one) (read NFKC: fullwidth, small dashes fold)
 
 
 def _visible(c: str) -> bool:
@@ -54,7 +54,8 @@ def _clean(raw: object) -> str:
         raise ApiError("bad_input")
     if LINKY.search(unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)):
         raise ApiError("bad_input", "links")
-    if "\n" in s and SIGNED.match(unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1]).lstrip()):
+    last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1]).lstrip() if "\n" in s else ""
+    if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):
         raise ApiError("bad_input", "signature")
     return s
 
