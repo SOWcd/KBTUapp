@@ -107,10 +107,9 @@
   :global(html.lowfx) .scrim { --dim: rgba(3, 4, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
   /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
-     button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
+     button under it; no fade at its end (it ate the hint's last line on a short phone, Nov 2). Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
-    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px;
-    -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
+    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px; }
   .page::-webkit-scrollbar { display: none; }
   .page > :global(*) { pointer-events: auto; }
   .page > :global(:first-child) { margin-top: auto; }
