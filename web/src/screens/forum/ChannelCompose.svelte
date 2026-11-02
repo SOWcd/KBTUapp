@@ -2,10 +2,11 @@
   // A new post to the forum channel (the Forum tab's composer row): whose name it goes out under (my face and signature,
   // or the mask), the words, the rules, named or Anonymous and what that means, honestly. Publish closes the sheet at
   // once and the post stands at the top of the feed, "checking" while the AI looks; refused, the sheet comes back with
-  // the words.
+  // the words and why, standing above them until I edit (a toast went before it could be read, owner Nov 2).
   import { untrack } from 'svelte';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
+  import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
@@ -21,18 +22,18 @@
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
-  let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean } } = $props();
+  let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean; why?: string } } = $props();
   let body = $state(untrack(() => draft?.body ?? '')), anon = $state(untrack(() => draft?.anon ?? false));
+  const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
   const ready = $derived(body.trim().length >= 2);
   // the bot's signature, as the server makes it (fchannel.signature): the real first name and the last initial, a nick or
   // not (owner, Nov 2: the nick rule; the app's feed shows the nick)
   const s = $derived(session.me?.student);
   const sign = $derived(s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] : ''}`.trim() : session.me?.name ?? '');
 
-  function fail(e: unknown) {
-    haptic.error();
+  function reason(e: unknown): string {
     const why: Key = e instanceof ApiErr ? (e.code === 'rate_limited' ? 'fc.slow' : e.message === 'links' ? 'fc.links' : e.message === 'signature' ? 'fc.signature' : e.message === 'short' ? 'fc.short' : e.message === 'duplicate' ? 'fc.dup' : e.message === 'noise' ? 'fc.noise' : 'common.error') : 'common.error';
-    say(t(why), 'pleading_face_3d');
+    return t(why);
   }
 
   // as the channel signs an anonymous post (fchannel.anon_sign): "Anon" for any Cyrillic, else English
@@ -55,13 +56,14 @@
       else say(t('fc.heldSay'), 'thinking_face_3d');
     } catch (e) {
       channel.feed = (channel.feed ?? []).filter((x) => x.id !== temp.id);
-      fail(e); sheets.channelPost({ body: text, anon: was });
+      haptic.error(); sheets.channelPost({ body: text, anon: was, why: reason(e) });
     }
   }
 </script>
 
 <!-- the title is the capsule's, with the pen (a heading of its own said it twice) -->
 <Sheet {overlay} icon={SquarePen} title={t('fc.new')}>
+  {#if why}<p class="why" role="alert"><CircleAlert size={18} strokeWidth={2.2} />{why}</p>{/if}
   <Card>
     <div class="write">
       {#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
@@ -93,6 +95,9 @@
     font: 450 var(--fs-row)/1.4 var(--font-text); letter-spacing: -0.012em; }
   .text::placeholder { color: var(--text-3); }
   .text:focus { outline: none; }
+  .why { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-3); padding: var(--s-3); border-radius: var(--r-m);
+    background: var(--danger-soft); color: var(--text); font: 500 var(--fs-sub)/1.35 var(--font-text); }
+  .why :global(svg) { flex: none; margin-top: 1px; color: var(--danger); }
   .note { margin: var(--s-2) var(--s-2) var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .note.last { margin-bottom: 0; }
   .who { display: flex; width: 100%; }

@@ -187,6 +187,8 @@
               {:else if live && !p.mine}<button class="del" aria-label={t('common.more')} onclick={(e) => more(e, p)}><Ellipsis size={18} strokeWidth={2} /></button>{/if}
             </div>
             <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
+            <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
+            {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
             {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
             {#if live}
               <div class="acts">
@@ -270,6 +272,10 @@
   .when, .mk { flex: none; font: 400 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
   .mk { flex-shrink: 10; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* at 320 the mark gives way before the name */
   .mk::before { content: '·'; margin-right: 6px; color: var(--text-3); }
+  .chk { position: relative; height: 3px; margin-top: var(--s-2); border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
+  .chk span { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--accent); animation: chk 1.1s ease-in-out infinite; }
+  @keyframes chk { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
   .mk.accent { color: var(--accent-text); }
   .mk.warning { color: var(--warning-text); }
   .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */

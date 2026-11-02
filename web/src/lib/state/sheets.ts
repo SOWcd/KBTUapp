@@ -124,7 +124,7 @@ export const sheets = {
   forumSkills: (_onsaved?: () => void) => {},
   newAsk: (_onmade?: () => void) => {},
   /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
-  channelPost: (_draft?: { body: string; anon: boolean }) => {},
+  channelPost: (_draft?: { body: string; anon: boolean; why?: string }) => {},
   askPeople: (_ask: Id, _title: string) => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
