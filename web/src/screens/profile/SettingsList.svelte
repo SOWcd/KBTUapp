@@ -61,6 +61,14 @@
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
     ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !me?.founder && !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
+  // three rows, so schools and clubs don't mix (owner, Nov 2): mine (worn or wearable), then the schools', then the clubs'
+  const rows = $derived.by(() => {
+    const ours = swatches.filter((k) => typeof k.id !== 'number' || own.some((o) => o.id === k.id));  // SOWER, KBTU, mine
+    const rest = swatches.filter((k) => !ours.includes(k));
+    const kindOf = (k: (typeof swatches)[number]) => data.orgs.find((o) => o.id === k.id)?.kind;
+    return ([['look.gMine', ours], ['look.gSchools', rest.filter((k) => kindOf(k) === 'school')], ['look.gClubs', rest.filter((k) => kindOf(k) !== 'school')]] as const)
+      .filter(([, ks]) => ks.length);
+  });
 
   // a locked one can be tried on: the lanyard above wears it, the check then says it isn't mine (Me) and turns it back
   const worn = $derived(ui.tryOn?.id ?? me?.skin);
@@ -195,8 +203,10 @@
       <h2 class="set-h first" tabindex="-1">{t('look.skin')}</h2>
       {#if skins.length || me.founder}
         <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
-        <div class="skins" role="radiogroup" aria-label={t('look.skin')}>
-          {#each swatches as k (k.id ?? 'kbtu')}
+        {#each rows as [label, ks], r (label)}
+        {#if rows.length > 1}<h3 class="sub" class:first={r === 0}>{t(label)}</h3>{/if}
+        <div class="skins" role="radiogroup" aria-label={t(label)}>
+          {#each ks as k (k.id ?? 'kbtu')}
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
                     onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
@@ -207,6 +217,7 @@
             </button>
           {/each}
         </div>
+        {/each}
       {/if}
       <!-- a frame over the photo, apart from the lanyard: any frame with any lanyard (owner, Nov 2) -->
       <h2 class="set-h">{t('look.frame')}</h2>
@@ -289,6 +300,8 @@
   @media (prefers-reduced-motion: reduce) { .sm > :global(svg), .sm :global(path) { transition: none !important; } }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
+  .sub { margin: var(--s-3) 0 var(--s-2); font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .sub.first { margin-top: 0; }
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
   .skins::-webkit-scrollbar { display: none; }
   .frames { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
