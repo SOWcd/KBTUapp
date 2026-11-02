@@ -819,13 +819,17 @@ def _file(msg: dict) -> dict | None:
 
 
 SCHED_FILES = (".webarchive", ".mht", ".mhtml", ".html", ".htm")
+SCHED_MIMES = {"application/x-webarchive", "multipart/related", "message/rfc822", "text/html"}
 SCHED_MAX = 20 * 1024 * 1024  # what a bot may download (getFile); a saved schedule page is ~0.4-7 MB
 
 
 def _sched_file(msg: dict) -> dict | None:
     """The portal's schedule page saved on the phone: Safari's Web Archive, Chrome's .mht (or the page itself)."""
     d = msg.get("document") or {}
-    return d if str(d.get("file_name") or "").lower().endswith(SCHED_FILES) else None
+    name, mime = str(d.get("file_name") or "").lower(), str(d.get("mime_type") or "").lower()
+    # iOS sometimes sends "..._webarchive" (the dot turned into "_"), so the type and that spelling count too
+    return d if (name.endswith(SCHED_FILES) or name.endswith(tuple("_" + e[1:] for e in SCHED_FILES))
+                 or mime in SCHED_MIMES) else None
 
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:

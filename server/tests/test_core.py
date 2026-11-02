@@ -5292,7 +5292,9 @@ def test_portal_schedule(env, monkeypatch):
     assert send(50, "F3", "page.html") == texts.bot_message("ru", "sched_not")[0]
     assert send(50, "F1", size=30_000_000) == texts.bot_message("ru", "sched_big")[0]
     assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204                 # login()'s class gone: his first week
-    assert send(50, "F1") == texts.bot_message("ru", "sched_ok", n=5)[0]
+    assert send(50, "F1", "Schedule_webarchive") == texts.bot_message("ru", "sched_ok", n=5)[0]   # iOS: the dot came as "_"
+    assert bot._sched_file({"document": {"file_name": "x", "mime_type": "application/x-webarchive"}})  # or only its type
+    assert not bot._sched_file({"document": {"file_name": "receipt.pdf", "mime_type": "application/pdf"}})
     got = c.get("/api/me/schedule", headers=tma(50)).json()
     assert [(x["weekday"], x["begins"], x["subject"], x["kind"]) for x in got] == [(w[0], w[1], w[3], w[4]) for w in want]
     # the page sent again: its language, then what changed in the week; counts and language names only
