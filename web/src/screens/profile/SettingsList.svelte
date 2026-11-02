@@ -27,6 +27,9 @@
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
   import Smartphone from '@lucide/svelte/icons/smartphone';
   import Lock from '@lucide/svelte/icons/lock';
+  import IdCard from '@lucide/svelte/icons/id-card';
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import Info from '@lucide/svelte/icons/info';
   import { api, ApiErr, type Me, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
@@ -61,14 +64,18 @@
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
     ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !me?.founder && !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
-  // three rows, so schools and clubs don't mix (owner, Nov 2): mine (worn or wearable), then the schools', then the clubs'
+  // two rows (owner, Nov 2: three pushed the card off the screen): organisations (SOWER, mine, KBTU, the rest locked),
+  // then the schools (mine first)
+  const kindOf = (k: (typeof swatches)[number]) => data.orgs.find((o) => o.id === k.id)?.kind;
   const rows = $derived.by(() => {
-    const ours = swatches.filter((k) => typeof k.id !== 'number' || own.some((o) => o.id === k.id));  // SOWER, KBTU, mine
-    const rest = swatches.filter((k) => !ours.includes(k));
-    const kindOf = (k: (typeof swatches)[number]) => data.orgs.find((o) => o.id === k.id)?.kind;
-    return ([['look.gMine', ours], ['look.gSchools', rest.filter((k) => kindOf(k) === 'school')], ['look.gClubs', rest.filter((k) => kindOf(k) !== 'school')]] as const)
-      .filter(([, ks]) => ks.length);
+    const isMine = (k: (typeof swatches)[number]) => typeof k.id !== 'number' || own.some((o) => o.id === k.id);
+    const orgs = swatches.filter((k) => kindOf(k) !== 'school');
+    const sorted = [...orgs.filter((k) => isMine(k) && k.id !== null), ...orgs.filter((k) => k.id === null), ...orgs.filter((k) => !isMine(k))];
+    return ([['look.gClubs', sorted], ['look.gSchools', swatches.filter((k) => kindOf(k) === 'school')]] as const).filter(([, ks]) => ks.length);
   });
+  // the picker folds under one row (owner, Nov 2: opening Settings for the theme met a wall of lanyards)
+  let looks = $state(false);
+  const wornName = $derived(swatches.find((k) => k.id === (worn ?? null))?.name ?? 'KBTU');
 
   // a locked one can be tried on: the lanyard above wears it, the check then says it isn't mine (Me) and turns it back
   const worn = $derived(ui.tryOn?.id ?? me?.skin);
@@ -201,10 +208,17 @@
     <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
     <div data-unit>
       <h2 class="set-h first" tabindex="-1">{t('look.skin')}</h2>
+      <div class="set-group pick">
+        <button class="set-row" aria-expanded={looks} onclick={() => { haptic.tap(); looks = !looks; if (!looks) ui.tryOn = null; }}>
+          <span class="ic"><IdCard size={20} strokeWidth={2} /></span><span class="lb">{t('look.change')}</span><span class="val">{wornName}</span>
+          <ChevronRight class="chev fold" size={18} style="transform: rotate({looks ? 90 : 0}deg)" /></button>
+      </div>
+      {#if looks}
+      <div class="looks" transition:slide={{ duration: 320, easing: cubicOut }}>
       {#if skins.length || me.founder}
         <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
         {#each rows as [label, ks], r (label)}
-        {#if rows.length > 1}<h3 class="sub" class:first={r === 0}>{t(label)}</h3>{/if}
+        <h3 class="sub" class:first={r === 0}>{t(label)}</h3>
         <div class="skins" role="radiogroup" aria-label={t(label)}>
           {#each ks as k (k.id ?? 'kbtu')}
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
@@ -220,7 +234,7 @@
         {/each}
       {/if}
       <!-- a frame over the photo, apart from the lanyard: any frame with any lanyard (owner, Nov 2) -->
-      <h2 class="set-h">{t('look.frame')}</h2>
+      <h3 class="sub">{t('look.frame')}</h3>
       <div class="frames" role="radiogroup" aria-label={t('look.frame')}>
         {#each FRAMES as f (f ?? 'none')}
           <button class="fr" role="radio" aria-checked={(me.frame ?? null) === f} class:on={(me.frame ?? null) === f} onclick={() => { haptic.select(); void pickFrame(f); }}>
@@ -229,6 +243,8 @@
           </button>
         {/each}
       </div>
+      </div>
+      {/if}
     </div>
     <div data-unit>
       <div class="set-group">
@@ -300,6 +316,9 @@
   @media (prefers-reduced-motion: reduce) { .sm > :global(svg), .sm :global(path) { transition: none !important; } }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
+  .pick { margin-bottom: var(--s-4); }
+  .looks { margin-top: calc(-1 * var(--s-2)); padding-bottom: var(--s-2); }
+  .set-row :global(.fold) { transition: transform 240ms var(--ease-out, ease); }
   .sub { margin: var(--s-3) 0 var(--s-2); font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
   .sub.first { margin-top: 0; }
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }
