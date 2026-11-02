@@ -6,10 +6,12 @@
   // Playing, the words follow the song (lib/lyrics.ts, the times in lib/i18n/anthem.ts), as Apple Music's lyrics: the
   // emblem goes, the line being sung stays in the middle of the screen, bright and a little larger, its words lit one by
   // one (the one being sung filling from the left; the clock read each frame while it plays); the lines around it
-  // dimmer and softer the further they are; the page glides to each new line (one spring, the lines below a beat later);
+  // dimmer, smaller and softer the further they are; the page glides to each new line a moment before it is sung (one
+  // spring from rest, the lines below a beat later);
   // while only the music plays, three breathing dots where the next line comes. The big emblem gives way to a small chip
   // at the top with the verse's language. A hand scrolling the page wins for 3 s; a tap on any line plays from there.
   import { onMount, untrack } from 'svelte';
+  import { fade } from 'svelte/transition';
   import Music from '@lucide/svelte/icons/music';
   import Play from '@lucide/svelte/icons/play';
   import Pause from '@lucide/svelte/icons/pause';
@@ -112,11 +114,14 @@
   // the times are the voice's own (aligned, lib/i18n/anthem.ts) and the clock is read each frame: the words run only
   // LEAD ahead, as the eye reads
   const LEAD = 0.1;
+  // the page starts gliding GLIDE ahead of the next line's first word, so the line arrives as it is sung (Apple Music's
+  // feel); moving on with the word itself put most of the glide after the word had begun
+  const GLIDE = 0.3;
   const starts = SUNG.map((l) => l.t ?? 0), ends = SUNG.map((l) => l.end), len = lineLen(starts);
   const synced = $derived(on || cur > 0);
   const langOf = ANTHEM.flatMap((p) => p.lines.filter((l) => l.i >= 0).map(() => p.lang));
   // the line being sung and, in a pause, the next one: states, so they change only when the song moves on to another
-  let lit = $state(-1), gapAt = $state(-1);
+  let lit = $state(-1), gapAt = $state(-1), aim = $state(-1); // aim: the line the page centres (GLIDE ahead)
 
   // where the song is at t: the line lit, or a pause before line `gapAt`; in the lit line the word being sung (.on, --f
   // its fill) and the ones before it (.sung). Each frame while it plays, so: no state but the two lines (they change
@@ -125,15 +130,20 @@
   function sync(t = cur) {
     const p = synced ? lyricAt(starts, ends, t + LEAD, dur, len) : { line: -1, next: -1, p: 0 };
     lit = p.line; gapAt = p.next;
+    const q = synced ? lyricAt(starts, ends, t + GLIDE, dur, len) : p;
+    aim = q.line >= 0 ? q.line : q.next;
     if (p.next >= 0) words?.querySelector<HTMLElement>('.dots')?.style.setProperty('--g', String(p.p));
     let w = -1, f = 0;
     if (p.line >= 0) {
       const i = p.line, next = (starts[i + 1] ?? dur) - starts[i];
       ({ w, f } = wordAt(SUNG[i].o, t + LEAD - starts[i], Math.min(ends[i] != null ? ends[i]! - starts[i] : next > GAP ? len : next, next)));
     }
+    // a word filled to the end is sung: the line's last one too, so the line leaves lit whole (as .on it dropped to the
+    // dim under-colour the moment the line moved on, its lit copy gone)
+    if (f >= 1) { w++; f = 0; }
     if (p.line !== shownLine || w !== shownWord) {
       for (const el of shown) el.classList.remove('sung', 'on');
-      shown = p.line >= 0 ? [...(words?.querySelectorAll<HTMLElement>(`[data-i="${p.line}"] .w`) ?? [])] : [];
+      shown = p.line >= 0 ? [...(words?.querySelectorAll<HTMLElement>(`.ln[data-i="${p.line}"] .w`) ?? [])] : [];
       shown.forEach((el, k) => { if (k < w) el.classList.add('sung'); else if (k === w) el.classList.add('on'); });
       shownLine = p.line; shownWord = w;
     }
@@ -146,26 +156,29 @@
   // scrolling the page wins for 3 s, then it comes back.
   // The glide (FLIP): the page jumps to its new place at once and every line in sight starts back where it was, then
   // slides home with one CSS transition of `translate` (the compositor's, one per line, the lines after the sung one a
-  // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone (Nov 2)
+  // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone (Nov 2).
+  // A line still gliding starts from where it is (its live translate added), so a quick change never snaps
   let userAt = 0, back = 0;
-  const focus = $derived(lit >= 0 ? lit : gapAt);
+  const focus = $derived(aim);
   const lang = $derived(focus >= 0 ? langOf[focus] : null);
+  const yOf = (x: HTMLElement) => { const v = getComputedStyle(x).translate; return v === 'none' ? 0 : parseFloat(v.split(' ')[1] ?? '0') || 0; };
   function follow(i: number) {
-    const el = words.querySelector(`[data-i="${i}"]`), box = words.parentElement;
+    const el = words.querySelector(`.ln[data-i="${i}"]`), box = words.parentElement; // the line, not its pause's dots
     if (!el || !box || performance.now() - userAt < 3000) return;
     const r = el.getBoundingClientRect(), b = box.getBoundingClientRect(), was = box.scrollTop;
     const top = Math.max(0, was + r.top - b.top - (box.clientHeight - r.height) * 0.45);
     if (Math.abs(top - was) < 1) return;
     if (still() || Math.abs(top - was) > box.clientHeight) { box.scrollTop = top; return; } // far (a jump back): no glide
     const near = [...words.querySelectorAll<HTMLElement>('.fl')].filter((x) => { const q = x.getBoundingClientRect(); return q.bottom > b.top - 40 && q.top < b.bottom + 40; });
+    const now = near.map(yOf);
     box.scrollTop = top;
     const d = box.scrollTop - was;
     words.classList.add('snap');
-    for (const x of near) {
+    near.forEach((x, n) => {
       const k = Number(x.dataset.i ?? -1) - i;
-      x.style.setProperty('--lag', `${Math.min(4, Math.max(0, k)) * 32}ms`);
-      x.style.translate = `0 ${d}px`;
-    }
+      x.style.setProperty('--lag', `${Math.min(4, Math.max(0, k)) * 40}ms`);
+      x.style.translate = `0 ${d + now[n]}px`;
+    });
     void words.offsetHeight; // the start is laid down, then it slides
     words.classList.remove('snap');
     for (const x of near) x.style.translate = '';
@@ -208,9 +221,9 @@
       <div class="part" lang={part.lang}>
         {#each part.lines as line (line)}
           {#if line.i >= 0}
-            {#if line.i === gapAt}<span class="dots fl" data-i={line.i} aria-hidden="true"><i style:--k={0}></i><i style:--k={1}></i><i style:--k={2}></i></span>{/if}
+            {#if line.i === gapAt}<span class="dots fl" data-i={line.i} aria-hidden="true" transition:fade={{ duration: 320 }}><i style:--k={0}></i><i style:--k={1}></i><i style:--k={2}></i></span>{/if}
             {@const d = focus >= 0 ? Math.min(4, Math.abs(line.i - focus)) : 1}
-            <button class="ln fl" class:now={line.i === lit} class:by={line.i === lit} class:far={synced && d >= 2} data-i={line.i} aria-current={line.i === lit || undefined}
+            <button class="ln fl" class:now={line.i === lit} class:by={line.i === lit} data-i={line.i} aria-current={line.i === lit || undefined}
                     style:--d={d} onclick={() => jump(line.i)}
                     >{#each line.w as w, k (k)}{k ? ' ' : ''}<span class="w">{w}<span class="lit" aria-hidden="true">{w}</span></span>{/each}</button>
           {/if}
@@ -273,9 +286,17 @@
   @media (prefers-reduced-motion: reduce) { .aura i { animation: none; } }
 
   /* the glide (follow): `translate` slides home, the lines after the sung one a beat later (--lag); .snap lays the start
-     down without it. The scale and the fade run on their own (`transform`, `opacity`) */
-  .fl { transition: opacity 450ms var(--ease), transform 550ms var(--ease), translate 600ms cubic-bezier(.2, .9, .25, 1) var(--lag, 0ms); }
-  .words:global(.snap) .fl { transition-property: opacity, transform; }
+     down without it. The scale, the fade and the blur move with it, on the same curve: a spring from rest (critically
+     damped, 1-(1+wt)e^-wt): it eases in and settles long, where the old ease-out started at 4.5x its mean speed and read
+     as a kick at every line (measured, Nov 2); old WebViews without linear(): a curve that also starts at rest */
+  .words { --glide: cubic-bezier(.3, 0, .15, 1); }
+  @supports (transition-timing-function: linear(0, 1)) {
+    .words { --glide: linear(0, 0.022 3%, 0.075 6%, 0.173 10%, 0.283 14%, 0.417 19%, 0.559 25%, 0.692 32%, 0.801 40%, 0.888 50%, 0.939 60%, 0.971 72%, 0.987 85%, 1); }
+  }
+  .fl { transition: opacity 650ms var(--glide), transform 800ms var(--glide), translate 800ms var(--glide) var(--lag, 0ms),
+    color 650ms var(--glide), text-shadow 650ms var(--glide); }
+  .words:global(.snap) .fl { transition-property: opacity, transform, color, text-shadow; }
+  :global(html.lowfx) .fl { transition-property: opacity, transform, translate; } /* power saving: no blur redrawn each frame */
 
   /* the chip: where the emblem goes while it plays; at the top of the page, over the words */
   .chiprow { position: sticky; top: 10px; z-index: 2; height: 0; display: flex; justify-content: center; }
@@ -297,12 +318,16 @@
   .part { margin-bottom: 22px; }
   .ln { position: relative; display: block; width: 100%; padding: 3px 0; text-align: center; text-wrap: balance;
     font: 700 calc(var(--fs-card) * 1.3)/1.32 var(--font-text); letter-spacing: -0.016em; transform-origin: 50% 50%; }
-  /* playing: the line being sung bright and a little larger; the lines around it dimmer the further they are (--d, 0..4
-     lines away), and from two away soft: their glyphs drawn as their own shadow (a filter: blur left hairlines at its
-     edges on iPhone, Nov 2). Room below, so the last line too comes to the middle */
+  /* playing: the line being sung bright and a little larger; the lines around it dimmer, a little smaller and softer the
+     further they are (--d, 0..4 lines away): their glyphs drawn as their own shadow, sharp next to the sung line and
+     blurring from two away (a filter: blur left hairlines at its edges on iPhone, Nov 2). One formula for every line, so
+     a line changing its distance blurs or sharpens through a transition (a class for the far ones popped them at each
+     line, Nov 2). Room below, so the last line too comes to the middle */
   .words.synced { padding-bottom: 46vh; }
-  .synced .ln { opacity: calc(0.46 - 0.08 * var(--d)); }
-  .synced .ln.far { color: transparent; text-shadow: 0 0 calc((var(--d) - 1) * 1.6px) var(--text); }
+  .synced .ln { opacity: calc(0.46 - 0.08 * var(--d)); color: transparent; text-shadow: 0 0 calc(max(0, var(--d) - 1) * 1.8px) var(--text);
+    transform: scale(calc(1 - 0.014 * var(--d))); }
+  .synced .ln.by { text-shadow: 0 0 0 transparent; } /* its words carry their own colours */
+  .synced .ln:not(.by) .w { transition: color 650ms var(--glide); } /* the line just sung hands over to its shadow softly */
   /* the sung line on a layer of its own: its word repainted each frame redraws that line alone, not the soft lines
      around it sharing its tile (they are dear to draw) */
   .synced .ln.now { opacity: 1; transform: scale(1.04); will-change: transform; } /* 1.06 touched the edges at 320 px */
@@ -314,6 +339,9 @@
   .lit { display: none; }
   .ln.by .w { color: var(--text-3); }
   .ln.by .w:global(.sung) { color: var(--text); }
+  /* the dark: the sung words glow a little, as lit (light: a dark halo would read as dirt) */
+  :global(html:not([data-theme='light'])) .ln.by .w:global(.sung), :global(html:not([data-theme='light'])) .ln.by .w:global(.on) .lit {
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.28); }
   .ln.by .w:global(.on) .lit { display: block; position: absolute; inset: 0; color: var(--text); text-align: left; pointer-events: none;
     -webkit-clip-path: inset(-0.3em calc((1 - var(--f, 0)) * 100%) -0.3em -0.3em); clip-path: inset(-0.3em calc((1 - var(--f, 0)) * 100%) -0.3em -0.3em); }
   /* while only the music plays: three dots where the next line comes, one lighting after another as the pause goes
@@ -325,7 +353,7 @@
   @keyframes breathe { 50% { transform: scale(1.22); } }
   :global(html.lowfx) .dots i { animation: none; }
   @media (prefers-reduced-motion: reduce) {
-    .synced .ln.now, .hd.gone, .chip { transform: none; } .dots i { animation: none; }
+    .synced .ln, .synced .ln.now, .hd.gone, .chip { transform: none; } .dots i { animation: none; }
     .ln.by .w:global(.on) { color: var(--text); } .ln.by .w:global(.on) .lit { display: none; } /* a word lights whole */
   }
 
