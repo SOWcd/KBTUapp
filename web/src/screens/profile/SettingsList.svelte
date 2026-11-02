@@ -48,7 +48,8 @@
 
   // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
   // Oct 31: a club's lanyard is its members' alone; the server holds it too, `_skin_ok`), KBTU's last; SOWER first for the founder
-  const mine = $derived(me ? [...me.memberships].sort(byRank).map((m) => m.org).filter(skinned) : []);
+  // a school's lanyard is its students' alone, even for a member of its org (staff are): only my own school's (server: _skin_ok)
+  const mine = $derived(me ? [...me.memberships].sort(byRank).map((m) => m.org).filter((o) => skinned(o) && o.kind !== 'school') : []);
   // my school's lanyard: mine with no joining, nobody else's (the server holds it too: logic.school_slug); others' schools
   // aren't offered even under a lock
   const school = $derived(schoolOf(me?.student?.school));
