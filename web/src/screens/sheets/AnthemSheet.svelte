@@ -293,10 +293,10 @@
   @supports (transition-timing-function: linear(0, 1)) {
     .words { --glide: linear(0, 0.022 3%, 0.075 6%, 0.173 10%, 0.283 14%, 0.417 19%, 0.559 25%, 0.692 32%, 0.801 40%, 0.888 50%, 0.939 60%, 0.971 72%, 0.987 85%, 1); }
   }
-  .fl { transition: opacity 650ms var(--glide), transform 800ms var(--glide), translate 800ms var(--glide) var(--lag, 0ms),
-    color 650ms var(--glide), text-shadow 650ms var(--glide); }
-  .words:global(.snap) .fl { transition-property: opacity, transform, color, text-shadow; }
-  :global(html.lowfx) .fl { transition-property: opacity, transform, translate; } /* power saving: no blur redrawn each frame */
+  /* only what the compositor moves (the owner, Nov 2: the glide felt laggy): a blur or a colour in a transition
+     repainted every soft line each frame on the main thread, so a line's blur and colour change at once, under the glide */
+  .fl { transition: opacity 650ms var(--glide), transform 800ms var(--glide), translate 800ms var(--glide) var(--lag, 0ms); }
+  .words:global(.snap) .fl { transition-property: opacity, transform; }
 
   /* the chip: where the emblem goes while it plays; at the top of the page, over the words */
   .chiprow { position: sticky; top: 10px; z-index: 2; height: 0; display: flex; justify-content: center; }
@@ -327,7 +327,6 @@
   .synced .ln { opacity: calc(0.46 - 0.08 * var(--d)); color: transparent; text-shadow: 0 0 calc(max(0, var(--d) - 1) * 1.8px) var(--text);
     transform: scale(calc(1 - 0.014 * var(--d))); }
   .synced .ln.by { text-shadow: 0 0 0 transparent; } /* its words carry their own colours */
-  .synced .ln:not(.by) .w { transition: color 650ms var(--glide); } /* the line just sung hands over to its shadow softly */
   /* the sung line on a layer of its own: its word repainted each frame redraws that line alone, not the soft lines
      around it sharing its tile (they are dear to draw) */
   .synced .ln.now { opacity: 1; transform: scale(1.04); will-change: transform; } /* 1.06 touched the edges at 320 px */
