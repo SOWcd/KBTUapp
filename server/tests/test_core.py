@@ -5056,6 +5056,9 @@ def test_roster_load_and_join(env):
     c.patch("/api/me", headers=h(71), json={"cityHidden": True})
     assert c.get(f"/api/users/{ali['id']}", headers=tma(70)).json()["city"] is None
     assert c.patch("/api/me", headers=h(71), json={"city": None}).json()["city"] is None   # deleted
+    assert c.patch("/api/me", headers=h(71), json={"city": "  \u0422\u0430\u0440\u0430\u0437 "}).json()["city"]["name"] == "\u0422\u0430\u0440\u0430\u0437"  # mine to set (Nov 3)
+    for bad in ("", "x", "<b>", "http://a.kz", "1234", 5, "a" * 41):
+        assert c.patch("/api/me", headers=h(71), json={"city": bad}).status_code == 400, bad
 
     welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
     assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"

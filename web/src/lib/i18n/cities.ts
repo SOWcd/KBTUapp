@@ -1,0 +1,25 @@
+// the cities the picker offers (Settings → Privacy → City; owner, Nov 3): Kazakhstan's big ones, as each language writes
+// them; any other is typed in (the server takes letters, spaces, hyphens: account.CITY_RE)
+export const CITIES: Record<'ru' | 'kk' | 'en', string>[] = [
+  ['Алматы', 'Алматы', 'Almaty'],
+  ['Астана', 'Астана', 'Astana'],
+  ['Шымкент', 'Шымкент', 'Shymkent'],
+  ['Актобе', 'Ақтөбе', 'Aktobe'],
+  ['Актау', 'Ақтау', 'Aktau'],
+  ['Атырау', 'Атырау', 'Atyrau'],
+  ['Караганда', 'Қарағанды', 'Karaganda'],
+  ['Тараз', 'Тараз', 'Taraz'],
+  ['Уральск', 'Орал', 'Uralsk'],
+  ['Кызылорда', 'Қызылорда', 'Kyzylorda'],
+  ['Туркестан', 'Түркістан', 'Turkistan'],
+  ['Талдыкорган', 'Талдықорған', 'Taldykorgan'],
+  ['Конаев', 'Қонаев', 'Konaev'],
+  ['Усть-Каменогорск', 'Өскемен', 'Oskemen'],
+  ['Семей', 'Семей', 'Semey'],
+  ['Павлодар', 'Павлодар', 'Pavlodar'],
+  ['Костанай', 'Қостанай', 'Kostanay'],
+  ['Кокшетау', 'Көкшетау', 'Kokshetau'],
+  ['Петропавловск', 'Петропавл', 'Petropavl'],
+  ['Жезказган', 'Жезқазған', 'Zhezkazgan'],
+  ['Темиртау', 'Теміртау', 'Temirtau'],
+].map(([ru, kk, en]) => ({ ru, kk, en }));

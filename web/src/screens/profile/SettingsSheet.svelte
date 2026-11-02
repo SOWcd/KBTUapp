@@ -15,6 +15,7 @@
   import User from '@lucide/svelte/icons/user';
   import { schoolOf, shortOf } from '../../lib/short';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import { CITIES } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
@@ -118,6 +119,21 @@
     try { session.me = await api.updateMe({ cityHidden: on }); void loadMyCard(); haptic.select(); }
     catch { say(t('common.error'), 'warning_3d'); }
   }
+  // my city, picked or typed (owner, Nov 3: students set it themselves); optimistic, the card follows
+  let picking = $state(false);
+  async function setCity(name: string) {
+    const was = me;
+    if (!me || name === me.city?.name) { picking = false; return; }
+    haptic.select();
+    session.me = { ...me, city: { name, hidden: me.city?.hidden ?? false } };
+    picking = false;
+    try { session.me = await api.updateMe({ city: name }); void loadMyCard(); }
+    catch { session.me = was; haptic.error(); say(t('pd.cityBad'), 'warning_3d'); }
+  }
+  async function typeCity() {
+    const v = await sheets.askText({ title: t('pd.cityOther'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: t('pd.city'), max: 40, line: true });
+    if (v?.trim()) void setCity(v.trim());
+  }
   async function dropCity() {
     if (!(await sheets.ask({ title: t('pd.cityDelAsk'), ok: t('pd.del'), cancel: t('common.cancel'), danger: true }))) return;
     try { session.me = await api.updateMe({ city: null }); void loadMyCard(); say(t('pd.deleted'), 'sparkles_3d'); close(overlay.id); }
@@ -195,7 +211,7 @@
           {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val wide">{st.email}</span></div>{/if}
         {/if}
         {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
-        {#if me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me.city.name)}{/if}
+        {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me?.city?.name ?? t('pd.cityNone'))}{/if}
       </div>
       {#if me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
     {/if}
@@ -219,13 +235,24 @@
     <div class="set-group plain"><div class="set-row"><span class="lb big">{phone}</span></div></div>
     <p class="set-foot">{t('pd.note')}</p>
     <div class="set-group plain gap">{@render act(t('pd.phoneEdit'), editPhone)}{@render act(t('pd.phoneDel'), dropPhone, true)}</div>
-  {:else if kind === 'city' && me?.city}
+  {:else if kind === 'city' && me?.city && !picking}
     <div class="set-group plain sw-on">
       <div class="set-row"><span class="lb big">{me.city.name}</span></div>
       <label class="set-row"><span class="lb">{t('pd.cityHide')}</span><input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
     </div>
     <p class="set-foot">{t('pd.cityNote')}</p>
-    <div class="set-group plain gap">{@render act(t('pd.cityDel'), dropCity, true)}</div>
+    <div class="set-group plain gap">{@render act(t('pd.cityChange'), () => { haptic.tap(); picking = true; })}{@render act(t('pd.cityDel'), dropCity, true)}</div>
+  {:else if kind === 'city' && me}
+    <!-- the big cities in my language, any other typed in -->
+    <div class="set-group plain" role="radiogroup" aria-label={t('pd.city')}>
+      {#each CITIES as c (c.en)}
+        {@const name = c[i18n.lang]}
+        <button class="set-row" role="radio" aria-checked={me.city?.name === name} onclick={() => void setCity(name)}>
+          <span class="lb">{name}</span><span class="tick">{#if me.city?.name === name}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+      {/each}
+    </div>
+    <div class="set-group plain gap">{@render act(t('pd.cityOther'), () => void typeCity())}</div>
+    <p class="set-foot">{t('pd.cityNote')}</p>
   {:else if part && me?.student}
     {@const st = me.student}
     {@const [, cyr, lat, latKey] = part}

@@ -568,6 +568,8 @@ def _qr_code(con, uid: int, col: str = "qr_code") -> str:
 
 FIXABLE = {"studentId": "student_id", "lastName": "last_name", "firstName": "first_name", "middleName": "middle_name",
            "lastLat": "last_lat", "firstLat": "first_lat", "middleLat": "middle_lat"}
+# a city typed in: letters (Kazakh's too), spaces, hyphens, a slash for "Taraz/Sarykemer"; the picker offers the big ones
+CITY_RE = re.compile(r"[A-Za-z\u0400-\u04ff][A-Za-z\u0400-\u04ff ./-]{1,39}")
 ONCE = {**FIXABLE, "course": "course", "school": "school"}  # what My data lists as still mine to correct once (update_me)
 
 
@@ -753,10 +755,11 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if k in patch:
             need_student(v)
             fix_identity(con, v.id, col, patch[k])
-    if "city" in patch and patch["city"] is not None:
-        raise ApiError("bad_input")  # it came from the club's roster (PLAN 95): it can only be deleted
-    if "city" in patch:  # Settings → My data
-        sets["city"] = None
+    if "city" in patch:  # Settings → Privacy: mine to set (owner, Nov 3), change or delete; the roster's (PLAN 95) too
+        city = patch["city"]
+        if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
+            raise ApiError("bad_input")
+        sets["city"] = city
     if "cityHidden" in patch:  # off my profile, kept for me
         if not isinstance(patch["cityHidden"], bool):
             raise ApiError("bad_input")
