@@ -413,8 +413,8 @@ def me(con, v: Viewer) -> dict:
                     "phone": s["phone"], "course": s["course"], "courseMin": core.course_of(s["student_id"]), "school": s["school"], "program": s["program"], "syncedAt": s["synced_at"],
                     "ms": s["ms_oid"] is not None, "manual": bool(s["manual"]), "consent": s["consent_version"],
                     "freeFirst": core.first_year_free(con, v.id),  # the event sheet's "Go free" (_free_seat's rule)
-                    # what My data still lets me correct myself (fix_identity): nothing for staff
-                    "fixable": [k for k, c in FIXABLE.items() if c not in s["fixed"].split(",") and s["consent_version"] != "staff"]} if s else None,
+                    # what My data still lets me correct myself (fix_identity, _spend): for staff only the school
+                    "fixable": [k for k, c in ONCE.items() if c not in s["fixed"].split(",") and (c == "school" or s["consent_version"] != "staff")]} if s else None,
         # signed in with Microsoft, the student ID and year still to type: the form shows the account's names
         # prefill: the student ID an organizers' check-in list, or the freshmen list when the name matches, has for this KBTU mail (checkin.py)
         "msPending": {**{k: p[k] for k in ("first", "last", "email")}, "prefill": checkin.prefill(con, p["email"], p)}
@@ -517,6 +517,14 @@ def _qr_code(con, uid: int, col: str = "qr_code") -> str:
 
 FIXABLE = {"studentId": "student_id", "lastName": "last_name", "firstName": "first_name", "middleName": "middle_name",
            "lastLat": "last_lat", "firstLat": "first_lat", "middleLat": "middle_lat"}
+ONCE = {**FIXABLE, "course": "course", "school": "school"}  # what My data lists as still mine to correct once (update_me)
+
+
+class _Taken(ApiError):
+    """sid_taken, with the ID and its holder for the admins (update_me); never in the reply, which carries `extra`."""
+    def __init__(self, sid: str, holder: int | None):
+        super().__init__("conflict", "sid_taken")
+        self.sid, self.holder = sid, holder
 
 
 def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> None:
@@ -547,8 +555,18 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             raise ApiError("conflict", "fixed")
         if v == s[col]:
             return  # nothing changes: the once isn't spent
-        if col == "student_id" and not admin and v[:2] > s["student_id"][:2]:
-            raise ApiError("bad_input", "sid_year")  # a later intake year would make a 1st-year (free seats): support. An earlier one (26B typed for 25B) only loses that
+        # only year 1 earns anything (free seats, first_year_free): an ID that would make me a 1st-year bachelor when I'm
+        # not one is support's (review once-edit 2); any other year, earlier or later, is mine to correct once.
+        # ponytail: deleting the account and joining again starts a fresh row (no year rule at sign-up, `fixed` empty):
+        # a senior can come back a week later with a 1st-year's ID; MS_AGE_CUTOFF on closes it (review once-edit 7)
+        sid_moves = col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v)
+        if sid_moves and not admin and course == 1 and v[2] == "B" and not (s["course"] == 1 and s["student_id"][2:3] == "B"):
+            raise ApiError("bad_input", "sid_year")
+        # every ID tried counts, taken or not: 5 a day, or "taken" would tell anyone which IDs are registered (review 6)
+        if col == "student_id" and not admin and one(con, """SELECT COUNT(*) FROM audit_log WHERE actor_id = ? AND target = ? AND at > ?
+                AND (action = 'sid_try' OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""",
+                uid, f"user:{uid}", core.now() - 86400)[0] >= 5:
+            raise ApiError("rate_limited", "sid_tries")
         if col in ("first_name", "last_name", "first_lat", "last_lat") and not admin:
             # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
             # two of its words kept and none added, or one could rename into someone else ("Serikbayev Aidos" then
@@ -559,26 +577,47 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             new = " ".join(v if c == col else s[c] or s[c[:-4] + "_name"] for c in (("first_lat", "last_lat") if col in LAT_COLS else ("first_name", "last_name")))
             if not roster.same_person(new, *ref) or roster._words(new) - roster._words(" ".join(ref)):
                 raise ApiError("bad_input", "name_far")
-        # an ID is free when no student has it and the freshmen list doesn't keep it for another mail (that student's
-        # sign-up form would offer it, and the check-in CSV would match me to them)
+        # an ID is free when no student has it and no list keeps it for another mail: the freshmen list (that student's
+        # sign-up form would offer it) or a check-in's expected list (its CSV matches by ID: an absent friend would
+        # show as "came", review once-edit 5)
+        mail = (s["email"] or "").lower()
         held = col == "student_id" and (one(con, "SELECT user_id FROM students WHERE student_id = ? AND user_id != ?", v, uid)
-                                        or one(con, "SELECT NULL FROM prefill WHERE student_id = ? AND email != ?", v, (s["email"] or "").lower()))
+                                        or one(con, "SELECT NULL FROM prefill WHERE student_id = ? AND email != ?", v, mail)
+                                        or one(con, "SELECT NULL FROM qr_expected WHERE upper(student_id) = ? AND email != ?", v, mail))
         if held:
-            if held[0]:
-                id_clash(con, v, uid, held[0])  # the admins hear, as at sign-up; the once isn't spent
-        else:
-            con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
-                        (v, s["fixed"] if admin or col in LAT_COLS and s[col] is None  # an empty Latin one filled: not spent
-                         else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
-            # the course follows the year and degree letter only: a typo in the number keeps the stored one (a repeater's)
-            if col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v):
-                con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (course, core.academic_year(), uid))
-            log_action(con, None if admin else uid, "identity_fix", f"user:{uid}", json.dumps({"field": col, "old": s[col], "new": v}, ensure_ascii=False))
-    if held:
-        raise ApiError("conflict", "sid_taken")
+            raise _Taken(v, held[0])  # the once isn't spent; update_me counts the try and tells the admins
+        con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
+                    (v, s["fixed"] if admin or col in LAT_COLS and s[col] is None  # an empty Latin one filled: not spent
+                     else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))
+        # the course follows the year and degree letter only: a typo in the number keeps the stored one (a repeater's)
+        if sid_moves:
+            con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (course, core.academic_year(), uid))
+        log_action(con, None if admin else uid, "identity_fix", f"user:{uid}", json.dumps({"field": col, "old": s[col], "new": v}, ensure_ascii=False))
+
+
+def _spend(con, uid: int, s, col: str) -> None:
+    """Course and school: corrected once, then support (`kbtu.admin fix <user> reset`); an empty one filled is free."""
+    if col in s["fixed"].split(","):
+        raise ApiError("conflict", "fixed")
+    if s[col] is not None:
+        con.execute("UPDATE students SET fixed = ? WHERE user_id = ?", (",".join(filter(None, [*s["fixed"].split(","), col])), uid))
 
 
 def update_me(con, v: Viewer, patch: dict) -> dict:
+    """Settings' save, all or nothing (review once-edit 9): one transaction, so a refused field leaves the others unsaved."""
+    try:
+        with tx(con):
+            _update_me(con, v, patch)
+    except _Taken as e:  # rolled back, yet the try counts (fix_identity: 5 a day) and the admins hear, as at sign-up
+        with tx(con):
+            log_action(con, v.id, "sid_try", f"user:{v.id}")
+            if e.holder:
+                id_clash(con, e.sid, v.id, e.holder)
+        raise
+    return me(con, v)
+
+
+def _update_me(con, v: Viewer, patch: dict) -> None:
     sets: dict[str, object] = {}
     for k, col in SETTINGS.items():
         if k not in patch:
@@ -630,15 +669,22 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         o = val is not None and one(con, "SELECT name FROM orgs WHERE kind = 'school' AND status = 'active' AND name = ?", val if type(val) is str else None)
         if val is not None and not o:
             raise ApiError("bad_input")
-        con.execute("UPDATE students SET school = ? WHERE user_id = ?", (o[0] if o else None, v.id))
+        # once, as the ID (review once-edit 4: switched and back, another school's lanyard, chats and CSV lines);
+        # filling an empty one is free. The lanyard reads the school live: it follows by itself
+        s = one(con, "SELECT school, fixed FROM students WHERE user_id = ?", v.id)
+        if (o[0] if o else None) != s["school"]:
+            _spend(con, v.id, s, "school")
+            con.execute("UPDATE students SET school = ? WHERE user_id = ?", (o[0] if o else None, v.id))
     if "course" in patch:  # Settings → My data: a transfer's new ID says a year too low; up from the ID's year only, never
         need_student(v)  # below it (a lower one would take free 1st-year seats). course_year now: September moves it on
-        s = one(con, "SELECT student_id, consent_version FROM students WHERE user_id = ?", v.id)
+        s = one(con, "SELECT student_id, consent_version, course, fixed FROM students WHERE user_id = ?", v.id)
         lo, val = core.course_of(s["student_id"]), patch["course"]
         if s["consent_version"] == "staff":
             raise ApiError("forbidden")  # the ID is a placeholder
         if lo is None or type(val) is not int or not lo <= val <= 6:
             raise ApiError("bad_input")
+        if val != s["course"]:  # once (review once-edit 3: 2 to pass volunteers_senior, then 1 for a free seat); September's isn't one
+            _spend(con, v.id, s, "course")
         con.execute("UPDATE students SET course = ?, course_year = ? WHERE user_id = ?", (val, core.academic_year(), v.id))
     for k, col in FIXABLE.items():  # once each (fix_identity); the email isn't here: it's the Microsoft login
         if k in patch:
@@ -658,7 +704,6 @@ def update_me(con, v: Viewer, patch: dict) -> dict:
         con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND sent_at IS NULL", (v.id,))
         for e in rows(con, "SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.status = 'going'", v.id):
             _remind(con, v.id, e)
-    return me(con, v)
 
 
 def _drop_photo(con, fid: int | None) -> list[str]:

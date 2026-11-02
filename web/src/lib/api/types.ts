@@ -190,7 +190,7 @@ export interface Settings {
   hideFirstYear: boolean;
 }
 
-export type Fixable = 'studentId' | 'lastName' | 'firstName' | 'middleName' | 'lastLat' | 'firstLat' | 'middleLat';
+export type Fixable = 'studentId' | 'lastName' | 'firstName' | 'middleName' | 'lastLat' | 'firstLat' | 'middleLat' | 'course' | 'school';
 export interface StudentProfile {
   studentId: string;
   firstName: string;
