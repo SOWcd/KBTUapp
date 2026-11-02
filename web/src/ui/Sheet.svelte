@@ -5,7 +5,7 @@
   // is removed from the stack.
   import type { Component, Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { removeOverlay, close, hideChrome, type Overlay } from '../lib/state/ui.svelte';
+  import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
   import { haptic, inTelegram, tg } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
@@ -35,6 +35,9 @@
   let scrolled = $state(false);
   // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
   let rising = $state(tg.platform === 'android');
+  // another overlay over this one: nothing in it moves (its loops, the tilt light, a lanyard's depth and its card). Android
+  // re-blurs the top sheet's backdrop on every change under it: the event sheet over a friend's card shimmered (Nov 2)
+  const under = $derived(overlays.some((o) => o.id > overlay.id && !o.closing));
 
   // the rise, and any height change after it, on one spring. The panel sits on the bottom edge, so a taller one would
   // put its top edge higher in one frame (details arriving after it opened: a person's card, a club); instead an added
@@ -140,7 +143,7 @@
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:under bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
@@ -162,6 +165,7 @@
     border-radius: var(--r-xl) var(--r-xl) 0 0;
     will-change: transform;
   }
+  .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; animation-play-state: paused !important; }
   .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
   .sheet:focus { outline: none; }
