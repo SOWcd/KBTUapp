@@ -44,8 +44,10 @@
     el.value = '';
     if (!file) return;
     if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return; }
+    const cut = await sheets.cropPhoto(file); // framed in a circle first, as my own photo (a president asked, Nov 2)
+    if (!cut) return;
     uploading = true;
-    try { const m = await api.uploadPhoto(await shrink(file, 1200)); logo = { id: m.id, url: m.thumb }; haptic.ok(); }
+    try { const m = await api.uploadPhoto(await shrink(cut, 1200)); logo = { id: m.id, url: m.thumb }; haptic.ok(); }
     catch { haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d'); }
     finally { uploading = false; }
   }
