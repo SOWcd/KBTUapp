@@ -24,7 +24,7 @@
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
-  import { channel, loadChannel } from '../../lib/state/channel.svelte';
+  import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -122,7 +122,7 @@
   async function drop(p: ChannelFeedPost) {
     if (!(await sheets.ask({ title: t('fc.deleteAsk'), text: t('fc.deleteText'), ok: t('fc.delete'), cancel: t('common.cancel'), danger: true }))) return;
     const before = channel.feed;
-    channel.feed = (channel.feed ?? []).filter((x) => x.id !== p.id); haptic.ok();
+    channel.feed = (channel.feed ?? []).filter((x) => x.id !== p.id); haptic.ok(); touched();
     try { await api.deleteChannelPost(p.id); } catch (e) { channel.feed = before; fail(e); }
   }
 

@@ -474,9 +474,15 @@ def _roster_mine(con, uid: int) -> dict | None:
 FRAMES = ("flowers", "space", "hearts")
 
 
-# the clubs with a badge of their own (web: awards.ts `skinned`)
-SKINNED = ("o.official = 1 AND o.status = 'active' AND (lower(o.name) LIKE '%studex%' OR lower(o.name) LIKE '%cheer%'"
-           " OR lower(o.name) LIKE '%knight%' OR lower(o.name) LIKE '%moment%' OR lower(o.name) LIKE '%faces%')")
+# the clubs with a badge of their own, told by a word of their name (web: awards.ts SKINS, in this order); an official
+# club's rename can't gain or lose one (clubs._rename_ok: a Vice's "Cheer Physics" wore Cheerleading's)
+LANYARDS = ("studex", "cheer", "knight", "moment", "faces")
+SKINNED = "o.official = 1 AND o.status = 'active' AND (" + " OR ".join(f"lower(o.name) LIKE '%{w}%'" for w in LANYARDS) + ")"
+
+
+def lanyard(name: str) -> str | None:
+    """The lanyard a club's name tells (an official club's), as the web's skinOf picks it: the first word that matches."""
+    return next((w for w in LANYARDS if w in name.lower()), None)
 
 
 def _skin(con, uid: int) -> int | str | None:

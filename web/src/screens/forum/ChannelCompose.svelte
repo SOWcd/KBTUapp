@@ -8,7 +8,7 @@
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { channel, loadChannel } from '../../lib/state/channel.svelte';
+  import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, type Key } from '../../lib/i18n/index.svelte';
@@ -47,7 +47,7 @@
     try {
       const p = await api.newChannelPost(text, was);
       // a refresh may have brought the real one already (Channel's poll): then the stand-in just goes (no twin keys)
-      const feed = channel.feed ?? [];
+      const feed = channel.feed ?? []; touched();
       channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
         : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at } : x));
       haptic.ok();

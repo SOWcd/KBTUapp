@@ -5205,6 +5205,32 @@ def test_org_names(env):
     assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")  # an abbr sent with it wins
 
 
+
+def test_club_rename_review3(env):
+    """Review 3: a club's own "Club" survives the next start (fill_abbrs cut it again at every start); a rename takes
+    no other org's name in other letters or case, no KBTU alone or in look-alike letters, no check mark; an official
+    club's rename neither puts on another club's lanyard (told by the name) nor drops its own."""
+    c, cfg = env
+    pres = login(c, 21, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'phys', 'club', 'Physics', 'P', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Шахматы', 'C', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (3, 'go', 'club', 'Go', 'G', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (4, 'cheer', 'club', 'Cheerleading', 'C', 'laptop_3d', 1, 0)")
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0)", [(o, pres["id"]) for o in (1, 3, 4)])
+    rename = lambda oid, name: c.patch(f"/api/orgs/{oid}", headers=tma(21), json={"name": name})  # noqa: E731
+    assert rename(3, "Go Club").json()["name"] == "Go Club"
+    logic.fill_abbrs(con)                                                      # the next deploy's start
+    assert con.execute("SELECT name FROM orgs WHERE id = 3").fetchone()[0] == "Go Club"
+    for name in ("KBTU", "КВТУ Go", "ＫＢＴＵ Go", "K.B.T.U. Go", "Go ✅"):
+        assert rename(3, name).status_code == 400, name                       # KBTU look-alikes, a fake badge
+    for name in ("шахматы", "ШАХМАТЫ", "Рhysics", "physics."):
+        assert rename(3, name).json()["message"] == "taken", name             # another club's, in other case or letters
+    assert rename(1, "Cheer Physics").status_code == 403                       # Cheerleading's lanyard on Physics
+    assert rename(4, "Pom-pom Team").status_code == 403                        # nor the lanyard's own club off it
+    assert rename(4, "Cheerleading Club").status_code == 200 and rename(1, "Physics Lab").status_code == 200
+    assert rename(1, "Physics Lab").status_code == 200                        # unchanged: no check
+
 COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")
 
 

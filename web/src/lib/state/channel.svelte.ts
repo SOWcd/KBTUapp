@@ -5,8 +5,14 @@ import { api, type ChannelFeedPost } from '../api';
 
 export const channel = $state({ feed: null as ChannelFeedPost[] | null, focus: null as number | null });
 
+// bumped by a change of mine (a post, a delete): a refresh asked before it lands stale (the 30 s poll answering after my
+// delete brought the post back, after my post's answer took it away), so it's dropped; the next one is fresh
+let gen = 0;
+export const touched = () => { gen++; };
+
 export async function loadChannel(): Promise<void> {
   // a post of mine still on its way (a temporary id below 0, ChannelCompose) stays on top through a refresh
-  try { const got = await api.channelFeed(); channel.feed = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got]; }
+  const at = gen;
+  try { const got = await api.channelFeed(); if (at !== gen) return; channel.feed = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got]; }
   catch { if (!channel.feed) channel.feed = []; }
 }
