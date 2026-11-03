@@ -110,7 +110,7 @@ def card(con, ctx: object) -> tuple[str, int | None] | None:
     if ctx["kind"] == "event":
         e = one(con, """SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, e.place, e.place_url, e.price, e.status,
               e.first_year, e.external_url, e.reg_until, o.name AS org, c.name AS co FROM events e JOIN orgs o ON o.id = e.org_id
-              LEFT JOIN orgs c ON c.id = e.co_org_id AND c.status = 'active'
+              LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.status = 'accepted' LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
             WHERE e.id = ? AND e.status IN ('published', 'cancelled') AND e.visibility = 'public' AND e.hidden_at IS NULL
               AND o.status = 'active'""", ctx["id"])
         if not e:

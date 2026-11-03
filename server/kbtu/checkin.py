@@ -111,14 +111,16 @@ def _state(con, key: bytes, s) -> dict:
             "param": f"ci_{sid}_{slot}_{_sig(key, f'ci.{sid}.{slot}')}" if running else None, "next": SLOT - int(time.time()) % SLOT}
 
 
-def _runs(con, v: Viewer, s) -> bool:
-    """A session's organizers: the admin, or who runs events in its club (an admin-made session without a club: the admin)."""
-    return v.role == "admin" or bool(s["org_id"] and can(con, v, s["org_id"], "events"))
+def _runs(con, v: Viewer, s, cohost: bool = True) -> bool:
+    """A session's organizers: the admin, or who runs events in its club (an admin-made session without a club: the admin);
+    an event's session, its co-host's event team too, except for the CSV (cohost-review.md 3)."""
+    return v.role == "admin" or bool(s["org_id"] and can(con, v, s["org_id"], "events")) \
+        or bool(cohost and s["event_id"] and logic.co_runs(con, v, s["event_id"]))
 
 
-def _mine(con, v: Viewer, sid: int):
+def _mine(con, v: Viewer, sid: int, cohost: bool = True):
     s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-    if not s or not _runs(con, v, s):
+    if not s or not _runs(con, v, s, cohost):
         raise ApiError("forbidden", "screen")
     return s
 
@@ -132,9 +134,11 @@ def sessions(con, key: bytes, v: Viewer) -> list[dict]:
     run = [o for o, r in logic._rights(con, v).items() if "events" in r]  # my rights read once, not a query per session
     if v.role != "admin" and not run:
         return []
-    mine = "" if v.role == "admin" else f"AND org_id IN ({logic._qs(run)})"
+    # and the events we co-host (cohosts.py)
+    mine = "" if v.role == "admin" else f"""AND (org_id IN ({logic._qs(run)}) OR event_id IN (SELECT x.event_id FROM event_cohosts x
+        JOIN orgs o ON o.id = x.org_id WHERE x.status = 'accepted' AND o.status = 'active' AND x.org_id IN ({logic._qs(run)})))"""
     return [_row(con, key, s) for s in rows(con, f"SELECT * FROM qr_sessions WHERE (ended_at IS NULL OR ended_at > ?) {mine} ORDER BY id DESC",
-                                              now() - 86400, *([] if v.role == "admin" else run))]
+                                              now() - 86400, *([] if v.role == "admin" else run * 2))]
 
 
 def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
@@ -159,7 +163,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
-    s = _mine(con, v, sid)
+    s = _mine(con, v, sid, cohost=act == "start")  # a co-host starts it; finishing and unpairing (for good) stay the host's
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ? WHERE id = ? AND started_at IS NULL", (now(), sid))
     elif act == "finish":
@@ -177,7 +181,7 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
     """An event's own session (its organizer's "Check-in screen" in the app), made on first use: its title, its club. A
     paid event keeps its tickets at the door, a partner's has no door (Oct 29)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-    if not e or not can(con, v, e["org_id"], "events") and v.role != "admin":
+    if not e or not can(con, v, e["org_id"], "events") and not logic.co_runs(con, v, eid) and v.role != "admin":
         raise ApiError("forbidden", "screen")
     if e["status"] != "published" or e["price"] or e["guest_host"]:
         raise ApiError("closed", "screen")
@@ -206,7 +210,7 @@ def grant_all(con, v: Viewer, sid: int, code: object) -> dict:
 
 def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:
     """A link Telegram's downloadFile can open without our headers: signed, for CSV_TTL."""
-    _mine(con, v, sid)
+    _mine(con, v, sid, cohost=False)  # names, mails, phones: the host's
     log_action(con, v.id, "checkin_csv", f"qr:{sid}")  # names, mails, phones: who took the list is on record
     e = now() + CSV_TTL
     return {"url": f"/api/screen/{sid}/csv?e={e}&k={_sig(key, f'csv.{sid}.{e}')}", "name": f"checkin-{sid}.csv"}

@@ -53,6 +53,9 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     subs, members = count("subscriptions"), count("org_members")
     upcoming = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL
         AND starts_at > ? GROUP BY org_id""", *ids, core.now()))
+    for o, n in rows(con, f"""SELECT c.org_id, COUNT(*) FROM event_cohosts c JOIN events e ON e.id = c.event_id JOIN orgs o ON o.id = c.org_id AND o.status = 'active' WHERE c.org_id IN ({q})
+            AND c.status = 'accepted' AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ? GROUP BY c.org_id""", *ids, core.now()):
+        upcoming[o] = upcoming.get(o, 0) + n  # and the ones it co-hosts (cohosts.py)
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
     # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)
     live = {r["org_id"]: r for r in rows(con, f"SELECT id, org_id, closes_at FROM rounds WHERE org_id IN ({q}) AND status = 'open' AND closes_at > ?", *ids, core.now())}

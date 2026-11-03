@@ -364,7 +364,7 @@
     if (ref) keepRef(Number(ref[1]), ref[2]);
     const qr = p.match(/^u_(\d+_[A-Z2-7]{10})$/); // someone's profile QR (the invite sheet shows it too): noted for them as an invite
     if (qr) void api.refer(qr[1]).catch(() => {});
-    const m = p.match(/^(ev|tk|cl|jr|u|tm)_(\d+)(?:_[A-Z2-7]{10})?$/);
+    const m = p.match(/^(ev|tk|cl|jr|u|tm|st)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
     // (the Team once the Studio pane is open: two chunk loads at once, lazy() opens only the later one, and Team reads
     // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
@@ -372,7 +372,12 @@
       if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
       ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org }).then(() => sheets.team());
     };
-    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team })[m[1] as 'ev'](Number(m[2]));
+    // st_<club>: the bot's "host an event with us": that club's Studio, whose To do answers it
+    const studio = (org: number) => {
+      if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
+      ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org });
+    };
+    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team, st: studio })[m[1] as 'ev'](Number(m[2]));
     // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
     else if (p) say(t('link.unknown'), 'thinking_face_3d');
   }
