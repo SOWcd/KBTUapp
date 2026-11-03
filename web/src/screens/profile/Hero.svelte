@@ -351,12 +351,14 @@
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .club .id { text-shadow: var(--tsh); }
   .club .meta { color: var(--ink2); }
-  /* JCC's sakura, cut from their 1712 px card (.claude/reports/club-lanyards/cut-jcc-r5.py): placed by their mock's photo
-     (124..500 x 183..558) and strip (80..1610 x 738..868), at the strip's 28 px / 130 = 0.2154 px per art px */
+  /* JCC's sakura, cut from their 1712 px card (round 7: their corrected layer, .claude/reports/club-lanyards/cut-jcc-r7.py,
+     its colours as they are): placed by their mock's photo (124..500 x 183..558) and strip (80..1610 x 738..868), at the
+     strip's 28 px / 130 = 0.2154 px per art px. Pieces: the photo 0..640 x 60..690, the strip's left end 0..220 x
+     690..919, its right end 1380..1712 x 520..919 */
   .jt { position: absolute; z-index: 3; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
-  .jp { left: -33%; top: -30.05%; width: 164.9%; height: 162.2%; }
-  .jl { left: -10.8px; top: -2.8px; width: 34.5px; height: 36px; }
-  .jr { right: -17.2px; top: -35.1px; width: 58.2px; height: 71.1px; }
+  .jp { left: -32.98%; top: -32.8%; width: 170.2%; height: 168%; }
+  .jl { left: -17.2px; top: -10.3px; width: 47.4px; height: 49.3px; }
+  .jr { right: -22px; top: -47px; width: 71.5px; height: 85.9px; }
   .japanesecultureclub .id { position: relative; z-index: 2; } /* the name over the petals */
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
