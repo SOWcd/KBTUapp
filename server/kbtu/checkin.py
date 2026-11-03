@@ -163,7 +163,7 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
-    s = _mine(con, v, sid)
+    s = _mine(con, v, sid, cohost=act == "start")  # a co-host starts it; finishing and unpairing (for good) stay the host's
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
         con.execute("UPDATE qr_sessions SET started_at = ? WHERE id = ? AND started_at IS NULL", (now(), sid))
     elif act == "finish":

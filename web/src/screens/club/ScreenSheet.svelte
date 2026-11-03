@@ -31,8 +31,8 @@
   let pick = $state(false);   // an unpaired screen and several open sessions: which one
   let note = $state('');      // why there's nothing to do here
   let busy = $state(0);
-  // a co-hosted event's session: its co-host runs the screen, the CSV (names, mails) is the host's (server cohosts.py)
-  const csvOk = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
+  // a co-hosted event's session: its co-host starts the screen; the rest (finish, unpair, the CSV) is the host's (server cohosts.py)
+  const own = (s: ScreenSession) => { const ev = s.event ? eventById(s.event) : null; return !ev?.coHost || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'); };
 
   // from an event, only its session stays in view
   const refresh = () => api.screens().then((l) => { if (!pick) list = event ? l.filter((x) => x.event === event) : l; }).catch(() => {});
@@ -96,10 +96,10 @@
           <Button kind="primary" size="m" full onclick={() => bind(s.session)}>{t('scr.here')}</Button>
         {:else}
           {#if !s.started}<Button kind="primary" size="m" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={17} />{/snippet}{t('scr.start')}</Button>{/if}
-          {#if s.started && !s.ended}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
-          {#if s.started && !s.ended}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
-          {#if s.started && csvOk(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
-          {#if s.screens}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
+          {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')}>{#snippet icon()}{#if s.phase === 'out'}<LogIn size={17} />{:else}<LogOut size={17} />{/if}{/snippet}{t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')}</Button>{/if}
+          {#if s.started && !s.ended && own(s)}<Button kind="secondary" size="m" full loading={busy === s.session} onclick={() => act(s, 'finish')}>{#snippet icon()}<Square size={16} />{/snippet}{t('scr.finish')}</Button>{/if}
+          {#if s.started && own(s)}<Button kind="secondary" size="m" full onclick={() => csv(s)}>{#snippet icon()}<Download size={17} />{/snippet}{t('scr.csv')}</Button>{/if}
+          {#if s.screens && own(s)}<Button kind="plain" size="m" full onclick={() => act(s, 'unpair')}>{#snippet icon()}<Unplug size={17} />{/snippet}{t('scr.unpair')}</Button>{/if}
         {/if}
       </div>
     </div>

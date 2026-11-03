@@ -41,7 +41,7 @@
   // check in by name (no QR, §4.4) while the door is open: 3 h before the start until the end (or 6 h after the start)
   const ev = $derived(eventById(id));
   const price = $derived(ev?.price ?? 0);
-  // a co-host's event team reads the list without receipts and without the file (server cohosts.py): the host's
+  // a co-host's event team reads short names only: no receipts, no file, no profiles (server cohosts.py)
   const host = $derived(!ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
@@ -92,8 +92,8 @@
           {@const acts = !!a.receipt || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
           <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
           <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
-            {...(acts ? { trailing: end } : { detail: end, onclick: () => sheets.person(a.person.id) })}>
-            {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts} />{/snippet}
+            {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
+            {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts && host} />{/snippet}
           </Row>
           {#snippet end()}
             {#if a.receipt}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : 'gray'} label={t('rc.title')}

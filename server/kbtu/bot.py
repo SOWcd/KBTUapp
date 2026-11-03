@@ -341,7 +341,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         e = one(con, """SELECT e.*, h.name AS host, c.name AS org, x.status AS co FROM events e JOIN orgs h ON h.id = e.org_id JOIN orgs c ON c.id = ?
             LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.org_id = c.id WHERE e.id = ? AND e.status != 'cancelled' AND e.hidden_at IS NULL
             AND h.status = 'active' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", int(ref[2]), int(ref[1]), logic.NO_END, logic.now())
-        want = {"cohost_invite": "pending", "cohost_yes": "accepted", "cohost_no": "declined"}.get(kind)
+        want = {"cohost_invite": "pending", "cohost_yes": "accepted", "cohost_no": "declined", "cohost_changed": "accepted"}.get(kind)
         if not e or (e["co"] != want if want else e["co"] == "accepted"):
             return None
         # the invite opens our Studio (its To do answers it); the rest open the event
@@ -354,6 +354,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         kind += "_team"
     co = one(con, "SELECT o.name FROM event_cohosts x JOIN orgs o ON o.id = x.org_id WHERE x.event_id = ? AND x.status = 'accepted' AND o.status = 'active'",
              e["id"]) if kind == "new_event" else None  # a co-hosted event names both clubs
+    # queued for a co-host's follower (payload co): quiet once that club no longer co-hosts it
+    via = json.loads(m["payload"] or "{}").get("co") if kind == "new_event" else None
+    if via and not one(con, """SELECT 1 FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
+            WHERE x.event_id = ? AND x.org_id = ? AND x.status = 'accepted' AND o.status = 'active'""", e["id"], via):
+        return None
     text, button = texts.bot_message(lang, kind, org=e["org_name"] + (f" × {co[0]}" if co else ""), **ev(e))
     return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
 

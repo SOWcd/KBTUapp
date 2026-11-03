@@ -9,7 +9,7 @@ from ..db import tx
 
 from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
     _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
-    overseer, person_ref, role_in, rows, taken)
+    overseer, person_ref, role_in, rows, short_name, taken)
 
 
 # ---------------------------------------------------------------- Studio (own org)
@@ -35,8 +35,8 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
         raise ApiError("forbidden")
     head = can(con, v, oid, "events")
     # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for our event team (cohosts.py)
-    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR ? AND status != 'draft' AND id IN (SELECT event_id FROM event_cohosts
-        WHERE org_id = ? AND status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, head, oid)
+    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR ? AND status != 'draft' AND id IN (SELECT x.event_id FROM event_cohosts x
+        JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, head, oid)
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
@@ -396,6 +396,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
                 con.execute("UPDATE registrations SET status = 'going', hold_until = NULL, updated_at = ? WHERE event_id = ? AND user_id = ?", (core.now(), eid, uid))
                 _remind(con, uid, after)
         _changed(con, v, e, after)
+        cohost_changed(con, e, after)
         promote(con, after)
     return full(con, v, after)
 
@@ -593,7 +594,7 @@ def events_gone(con) -> tuple[list[str], list[str]]:
 
 
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    """The host's event team, and the co-host's without receipts (money is the host's; cohost-review.md 3)."""
+    """The host's event team; the co-host's sees short names only, no receipts or answers (cohost-review.md 3)."""
     e = _staff_event(con, v, eid, "events", cohost=True)
     paid = can(con, v, e["org_id"], "events")
     order = {"going": 0, "hold": 1, "waitlist": 2}
@@ -612,6 +613,8 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
             if p["rid"] and paid else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
+    if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
+        out = [{**a, "person": _door_ref(p), "fullName": short_name(p), "by": None, "byCame": False, "answers": None} for a, p in zip(out, found)]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
     return sorted(out, key=lambda a: (not flagged(a), order[a["status"]], a["fullName"]))  # §4.3: flagged receipts first
 
@@ -1044,7 +1047,7 @@ def link_door_guests(con, uid: int) -> None:
 from . import core  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
-from .cohosts import ACCEPTED, co_runs, runs, tell as cohost_tell  # noqa: E402
+from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402

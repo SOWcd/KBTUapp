@@ -48,7 +48,7 @@ def test_invite_accept_decline_leave(env):
     assert [t[0] for t in told] == [CO]  # its President (and Vices), not the Head or a Member
     row = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'cohost_invite'").fetchone()) | {"lang": "en"}
     text, _, start = bot._render(con, row)
-    assert "Crystal" in text and "JCC" in text and "Anime Quiz" in text and start == f"st_{co}"  # a template, our Studio
+    assert "Crystal" in text and "JCC" in text and "Anime Quiz" not in text and "Atrium" not in text and start == f"st_{co}"  # no words of the host's draft
     # the co-host's Head can't answer; its President sees it in Studio and declines
     assert c.get(f"/api/orgs/{co}/cohosts", headers=tma(CO_HEAD)).status_code == 403
     assert c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO_HEAD), json={"yes": True}).status_code == 404
@@ -65,7 +65,8 @@ def test_invite_accept_decline_leave(env):
     assert c.delete(f"/api/events/{eid}/cohost", headers=tma(CO_HEAD)).status_code == 403  # a Head can't leave for the club
     assert c.delete(f"/api/events/{eid}/cohost", headers=tma(CO)).status_code == 204
     assert c.get(f"/api/events/{eid}", headers=tma(OTHER)).json()["coHost"] is None
-    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'cohost_left'").fetchone()[0] == 1
+    left = con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'cohost_left'").fetchall()
+    assert [t[0] for t in left] == [HOST]  # the host club's leaders now
     assert invite().status_code == 200
     c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO), json={"yes": True})
     assert c.delete(f"/api/events/{eid}/cohost", headers=tma(HOST)).status_code == 204
@@ -115,6 +116,17 @@ def test_cohost_can_scan_but_not_run(env):
     assert c.post(f"/api/events/{eid}/screen", headers=tma(CO_HEAD)).status_code == 200  # /show
     sid = c.post(f"/api/events/{eid}/screen", headers=tma(HOST)).json()["session"]
     assert c.post(f"/api/screens/{sid}/csv", headers=tma(CO)).status_code == 403  # the session's names and mails: the host's
+    assert c.post(f"/api/screens/{sid}/start", headers=tma(CO)).status_code == 200  # the co-host starts it ...
+    for act in ("finish", "unpair"):  # ... ending it for good is the host's
+        assert c.post(f"/api/screens/{sid}/{act}", headers=tma(CO)).status_code == 403
+    # the list for the co-host: short names, no answers; a change of time tells its leaders once
+    a = c.get(f"/api/events/{eid}/attendees", headers=tma(CO)).json()[0]
+    assert a["fullName"] == "Other T" and a["answers"] is None and a["receipt"] is None
+    body = {**EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 7200}
+    assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json=body).status_code == 200
+    assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json={**body, "startsAt": body["startsAt"] + 60}).status_code == 200
+    told = con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'cohost_changed'").fetchall()
+    assert [t[0] for t in told] == [CO]
     assert c.post(f"/api/events/{eid}/attendees/export", headers=tma(CO)).status_code == 403
     body = {**EV, "title": "Taken over", "startsAt": logic.core.now() + 86400}
     for r in (c.patch(f"/api/events/{eid}", headers=tma(CO), json={**body, "price": 5000, "payToName": "Me", "payPhone": "87011234567"}),
@@ -185,6 +197,32 @@ def test_feed_dedupe_and_weekly_limit(env, monkeypatch):
     c.put(f"/api/events/{y['id']}/cohost", headers=tma(HOST), json={"orgId": co})
     c.post(f"/api/events/{y['id']}/cohost/answer", headers=tma(CO), json={"yes": True})
     assert heard(FAN) == 2 and heard(BOTH) == 2  # a new week: once each, not twice for the one who follows both
+
+
+def test_withdrawing_doesnt_reset_the_limit(env):
+    """Invite and take back, 15 times: refused after 10 (the count isn't the rows a withdrawal deletes)."""
+    c, cfg = env
+    con, host, co = _clubs(c, cfg)
+    eid = _event(c, host)["id"]
+    codes = []
+    for _ in range(15):
+        codes.append(c.put(f"/api/events/{eid}/cohost", headers=tma(HOST), json={"orgId": co}).status_code)
+        c.delete(f"/api/events/{eid}/cohost", headers=tma(HOST))
+    assert codes == [200] * 10 + [429] * 5
+
+
+def test_left_cohost_followers_hear_nothing(env):
+    """A follower of the co-host alone, queued when it accepted, hears nothing once it left before the message went."""
+    c, cfg = env
+    con, host, co = _clubs(c, cfg)
+    eid = _event(c, host)["id"]
+    c.put(f"/api/events/{eid}/cohost", headers=tma(HOST), json={"orgId": co})
+    c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO), json={"yes": True})
+    q = "SELECT b.* FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'new_event' AND u.tg_id = ?"
+    row = lambda: dict(con.execute(q, (FAN,)).fetchone()) | {"lang": "en"}  # noqa: E731
+    assert "JCC" in bot._render(con, row())[0]
+    c.delete(f"/api/events/{eid}/cohost", headers=tma(CO))
+    assert bot._render(con, row()) is None
 
 
 def test_invites_rate_limited_and_closed(env):

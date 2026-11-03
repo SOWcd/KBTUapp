@@ -7,6 +7,7 @@ it: the host removes, the co-host's Vice+ leaves. Not a partner's event (guest_h
 The review: .claude/reports/cohost-review.md."""
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from ..db import tx
@@ -82,9 +83,13 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
             raise ApiError("conflict", "cohost")  # ponytail: one co-host per event; more later
         if one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND org_id = ?", eid, oid):
             raise ApiError("conflict", "declined")  # they said no to this one: not asked again
-        if one(con, """SELECT COUNT(*) FROM event_cohosts x JOIN events e ON e.id = x.event_id WHERE e.org_id = ? AND x.created_at > ?""",
-               e["org_id"], core.now() - 86400)[0] >= COHOST_INVITES_A_DAY:
+        # counted apart from the rows, which a withdrawal deletes (second review): per host club and Almaty day
+        day = f"cohost_inv:{e['org_id']}:{(core.now() + 5 * 3600) // 86400}"
+        sent = one(con, "SELECT value FROM meta WHERE key = ?", day)
+        if sent and int(sent[0]) >= COHOST_INVITES_A_DAY:
             raise ApiError("rate_limited")
+        con.execute("DELETE FROM meta WHERE key LIKE 'cohost_inv:' || ? || ':%' AND key != ?", (e["org_id"], day))  # yesterday's
+        con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (day,))
         con.execute("INSERT INTO event_cohosts (event_id, org_id, invited_by, created_at) VALUES (?, ?, ?, ?)", (eid, oid, v.id, core.now()))
         for uid in _leaders(con, oid):
             notify(con, uid, "cohost_invite", f"ch:{eid}:{oid}")  # once per event and club (the outbox key)
@@ -97,7 +102,8 @@ def invites(con, v: Viewer, oid: int) -> list[dict]:
     if not at_least(role_in(con, v, oid), "vice"):
         raise ApiError("forbidden")
     found = rows(con, """SELECT e.*, x.created_at AS asked FROM event_cohosts x JOIN events e ON e.id = x.event_id
-        JOIN orgs h ON h.id = e.org_id WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled'
+        JOIN orgs h ON h.id = e.org_id JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
+        WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled'
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND h.status = 'active' ORDER BY e.starts_at""", oid, core.NO_END, core.now())
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in found))
     return [{"event": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], "place": e["place"], "status": e["status"]},
@@ -109,9 +115,10 @@ def answer(con, v: Viewer, eid: int, yes: object) -> list[dict]:
     if not isinstance(yes, bool):
         raise ApiError("bad_input")
     with tx(con):
-        x = one(con, "SELECT * FROM event_cohosts WHERE event_id = ? AND status != 'declined'", eid)
+        x = one(con, """SELECT x.* FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
+            WHERE x.event_id = ? AND x.status != 'declined'""", eid)
         if not x or not at_least(role_in(con, v, x["org_id"]), "vice"):
-            raise ApiError("not_found")  # someone else's invite says nothing
+            raise ApiError("not_found")  # someone else's invite says nothing; a hidden or archived club answers nothing
         if x["status"] != "pending":
             raise ApiError("conflict")  # another Vice answered first
         e = one(con, "SELECT * FROM events WHERE id = ?", eid)
@@ -142,9 +149,21 @@ def end(con, v: Viewer, eid: int) -> None:
         if x["status"] != "accepted":
             return  # an invite taken back: its message renders to nothing now (bot._render)
         _touch(con, eid)
-        for uid in (_leaders(con, x["org_id"]) if host else [x["invited_by"]] if x["invited_by"] else []):
+        for uid in _leaders(con, x["org_id"] if host else e["org_id"]):  # the other side's leaders now (the inviter may have left)
             if uid != v.id:
                 notify(con, uid, "cohost_removed" if host else "cohost_left", f"che:{eid}:{x['org_id']}")
+
+
+def changed(con, e: sqlite3.Row, after: sqlite3.Row) -> None:
+    """The host moved, re-priced or renamed an event we co-host: our leaders hear it once (a template, no words of the
+    host's), edits within 10 minutes in one message, as event_changed (organizing._changed)."""
+    x = one(con, ACCEPTED, e["id"])
+    if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title")):
+        return
+    for uid in _leaders(con, x["org_id"]):
+        if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'cohost_changed' AND ref LIKE ? AND sent_at IS NULL",
+                   uid, f"chc:{e['id']}:%"):
+            notify(con, uid, "cohost_changed", f"chc:{e['id']}:{x['org_id']}:{core.now()}", after=core.now() + 600)
 
 
 def tell(con, e: sqlite3.Row, actor: int) -> None:
@@ -159,7 +178,7 @@ def tell(con, e: sqlite3.Row, actor: int) -> None:
     told = rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
             WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", x["org_id"], actor)
     for (uid,) in told:
-        notify(con, uid, "new_event", f"event:{e['id']}")
+        notify(con, uid, "new_event", f"event:{e['id']}", json.dumps({"co": x["org_id"]}))  # the co-host's: checked again at send time (bot._render)
     # as the host's (publish_event): the week starts when someone heard
     con.execute(f"INSERT OR {'REPLACE' if told else 'IGNORE'} INTO meta (key, value) VALUES (?, ?)", (f"told:{x['org_id']}", str(core.now()) if told else "0"))
 

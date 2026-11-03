@@ -407,7 +407,8 @@
   let coQ = $state('');
   const co = $derived(saved ? saved.cohost ?? null : coWant ? { org: coWant, status: 'new' as const } : null);
   const coOk = $derived(!isMeeting && !f.teamOnly && !f.leaders && !f.partner && saved?.status !== 'cancelled' && (!!co || may(mine, 'events')));
-  const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: nameOf(co.org) }) : nameOf(co.org));
+  const coShort = (o: OrgRef) => (o.name.length > 12 && o.abbr) || nameOf(o); // the row's value has a third of 375 px: a long name by its abbreviation
+  const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: coShort(co.org) }) : coShort(co.org));
   const coFound = $derived.by(() => {
     const q = coQ.trim().toLowerCase();
     return data.orgs.filter((o) => o.kind === 'club' && o.id !== org && o.id !== co?.org.id && (!q || nameOf(o).toLowerCase().includes(q) || o.name.toLowerCase().includes(q))).slice(0, 8);
