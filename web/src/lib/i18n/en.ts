@@ -786,6 +786,7 @@ const en: Dict = {
 
   'person.write': "Message on Telegram",
   'person.writeShort': "Message",
+  'person.photo': "Photo",
   'person.addFriend': 'Add friend',
   'person.requestSent': 'Request sent',
   'person.friendsSince': 'Friends since {date}',

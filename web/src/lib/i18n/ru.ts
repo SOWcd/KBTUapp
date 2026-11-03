@@ -806,6 +806,7 @@ const ru = {
 
   'person.write': "Написать в Telegram",
   'person.writeShort': "Написать",
+  'person.photo': "Фото",
   'person.addFriend': 'Добавить в друзья',
   'person.requestSent': 'Запрос отправлен',
   'person.friendsSince': 'Вы друзья с {date}',

@@ -786,6 +786,7 @@ const kk: Dict = {
 
   'person.write': "Telegram-да жазу",
   'person.writeShort': "Жазу",
+  'person.photo': "Фото",
   'person.addFriend': 'Досқа қосу',
   'person.requestSent': 'Сұраныс жіберілді',
   'person.friendsSince': '{date} бастап доссыңдар',
