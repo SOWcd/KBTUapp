@@ -7,9 +7,11 @@
   import type { Look } from '../lib/awards';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
-  const SC = import.meta.glob('../assets/lanyards/schools/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  const SC = import.meta.glob('../assets/lanyards/schools/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  // the card's layers as pictures (tools/scene-rasters.mjs: decoded once off the main thread, not the SVG re-rasterised at 3x)
+  const CARD = import.meta.glob('../assets/lanyards/schools/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   const SH = import.meta.glob('../assets/lanyards/school-*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
-  const L = (n: string) => SC[`../assets/lanyards/schools/${n}-${wide ? 'card' : 'band'}.svg`];
+  const L = (n: string) => wide ? CARD[`../assets/lanyards/schools/${n}-card.webp`] : SC[`../assets/lanyards/schools/${n}-band.svg`];
   // each school's layers, far to near ('far' moves with the tilt); a layer drawn for one framing only is skipped in the other.
   // Round 5 (owner: the left was empty, SEPI and Law plain): every card's art runs its whole width, quieter under the text
   const LAYERS: Record<string, [string, string][]> = {

@@ -18,9 +18,11 @@
   import keys from '../assets/lanyards/scenes/ah-keys.svg?url';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
-  const SC = import.meta.glob('../assets/lanyards/scenes/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
-  // a layer in this framing: mk-near -> mk-near-card.svg / mk-near-band.svg
-  const L = (n: string) => SC[`../assets/lanyards/scenes/${n}-${wide ? 'card' : 'band'}.svg`];
+  const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  // the card's layers as pictures (tools/scene-rasters.mjs: decoded once off the main thread, not the SVG re-rasterised at 3x)
+  const CARD = import.meta.glob('../assets/lanyards/scenes/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
+  const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
 <div class="sc {look}" class:wide class:qr aria-hidden="true">

@@ -17,17 +17,17 @@
   import panther from '../assets/lanyards/panther.webp';
   import pantherEyes from '../assets/lanyards/panther-eyes.webp';
   import knights from '../assets/lanyards/knights-white.webp'; // round 7: their official logo, knocked out to white
-  import fcNeon from '../assets/lanyards/scenes/fc-neon-card.svg?url';
-  import knJersey from '../assets/lanyards/scenes/kn-jersey-card.svg?url';
-  import sxCap from '../assets/lanyards/scenes/sx-cap-card.svg?url';
+  import fcNeon from '../assets/lanyards/scenes/fc-neon-card.webp';
+  import knJersey from '../assets/lanyards/scenes/kn-jersey-card.webp';
+  import sxCap from '../assets/lanyards/scenes/sx-cap-card.webp';
   import moments from '../assets/lanyards/moments.webp';
   import lens from '../assets/lanyards/moments-lens.svg?url'; // round 5b: .claude/reports/club-lanyards/gen-moments-lens.py
   import faces from '../assets/lanyards/faces.webp';
   import hands from '../assets/lanyards/faces-hands.webp';
   import guilloche from '../assets/lanyards/kbtu-guilloche.svg?url';
   // the card's security print (round 5, .claude/reports/club-lanyards/gen-kbtu.py): a rosette round the photo, the colonnade engraved
-  import rosette from '../assets/lanyards/kbtu-rosette.svg?url';
-  import facade from '../assets/lanyards/kbtu-facade.svg?url';
+  import rosette from '../assets/lanyards/kbtu-rosette.webp'; // as pictures: tools/scene-rasters.mjs
+  import facade from '../assets/lanyards/kbtu-facade.webp';
   import KbtuMark from './KbtuMark.svelte';
   import ClubScene from './ClubScene.svelte';
   import SchoolScene from './SchoolScene.svelte';
