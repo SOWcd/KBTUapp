@@ -140,7 +140,8 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
-    assert tg.of("sendMessage")[0]["text"] == f"Secret confession here\n\n<i>— Anonymous</i>"
+    nick = texts.nick(*con.execute("SELECT nick_a, nick_n FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone())  # its random nick
+    assert tg.of("sendMessage")[0]["text"] == f"Secret confession here\n\n<i>— {nick}</i>"
     mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
     # the author deletes it: the words go at once, the channel message (and its copy in the group) in the bot's round
     con.executemany("INSERT INTO meta (key, value) VALUES (?, ?)", [('tgcpost:77', f"KBTUappForum {mid}"), (f"fchcopy:{mid}", '77')])
@@ -402,6 +403,8 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("ALTER TABLE fchan_posts DROP COLUMN nick_a")  # 121's
+    con.execute("ALTER TABLE fchan_posts DROP COLUMN nick_n")
     con.execute("ALTER TABLE events DROP COLUMN late_signup")  # 120's
     con.execute("DROP TABLE grant_link_uses")  # 118's
     con.execute("DROP INDEX grants_by_batch")
@@ -468,10 +471,12 @@ def test_post_feed(env, monkeypatch):
     feed = c.get("/api/forum-posts/feed", headers=C).json()
     assert [p["id"] for p in feed] == [held["id"], masked["id"], named["id"]]                   # newest first, my held one too
     assert feed[0]["status"] == "held" and feed[0]["mine"] and feed[0]["msg"] is None
-    assert feed[1]["sign"] in ("Anonymous", "\u0410\u043d\u043e\u043d\u0438\u043c") and not feed[1]["mine"] and feed[1]["msg"] > 0
+    nick = list(con.execute("SELECT nick_a, nick_n FROM fchan_posts WHERE id = ?", (masked["id"],)).fetchone())
+    assert feed[1]["sign"] == texts.nick(*nick) and feed[1]["nick"] == nick and not feed[1]["mine"] and feed[1]["msg"] > 0
+    assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}  # no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}  # no user id
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -480,7 +485,7 @@ def test_post_feed(env, monkeypatch):
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "human")} == {
-            "body": "A quiet confession", "status": "live", "anon": True, "sign": "Anonymous", "person": None, "mine": False,
+            "body": "A quiet confession", "status": "live", "anon": True, "nick": nick, "sign": texts.nick(*nick), "person": None, "mine": False,
             "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
@@ -778,7 +783,7 @@ def test_post_discussed(env, monkeypatch):
     con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
     assert busy in hot()
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}
     assert row["anon"] and row["person"] is None and row["hot"] is True
     con.close()
 
