@@ -17,6 +17,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say } from '../../lib/state/ui.svelte';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
+  import { nickName } from '../../lib/i18n/nicks';
   import { haptic, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import { withNick, roleName } from '../../lib/perms';
@@ -223,7 +224,7 @@
           <div class="card" class:hid={it.hidden} out:fold>
             {@render head(it, more(it))}
             <p class="text selectable">{p.body}</p>
-            <i class="meta">{p.anon ? t('fc.anon') : p.author?.name ?? ''}{p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</i>
+            <i class="meta">{p.anon ? nickName(p.nick) ?? t('fc.anon') : p.author?.name ?? ''}{p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</i>
             {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
               t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
           </div>
@@ -233,7 +234,7 @@
             {@render head(it, more(it))}
             <p class="quote">{r.postBody}</p>
             <p class="text selectable">{r.body}</p>
-            <i class="meta">{t('fc.anon')}{r.why && WHY[r.why] ? ' · ' + t(WHY[r.why]) : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</i>
+            <i class="meta">{nickName(r.nick) ?? t('fc.anon')}{r.why && WHY[r.why] ? ' · ' + t(WHY[r.why]) : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</i>
             {#if it.hidden && r.why === 'lost'}
               {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
             {:else if it.hidden}

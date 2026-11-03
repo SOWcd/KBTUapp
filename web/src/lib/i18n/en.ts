@@ -73,6 +73,7 @@ const en: Dict = {
   'fc.emptyText': "Write the first post — all of KBTU will see it.",
   'fc.checking': "Checking…",
   'fc.anonSign': "Anonymous student",
+  'fc.nickSoon': "Random nickname",
   'fc.live': "Published",
   'fc.human': "Waiting for a moderator",
   'fc.humanWhy': "The AI didn't publish it on its own: a human moderator will look at it",

@@ -1167,6 +1167,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
     # late sign-up (Nov 3): a free uncapped public event keeps "Going" open from its start until its end
     (120, "ALTER TABLE events ADD COLUMN late_signup INTEGER NOT NULL DEFAULT 0;"),
+    # an anonymous post's random nick (Nov 3, .claude/reports/anon-nicks-review.md): texts.NICK_ADJ / NICK_NOUN indexes,
+    # drawn with secrets at the reserve; NULL on posts from before (signed "Anon")
+    (121, """ALTER TABLE fchan_posts ADD COLUMN nick_a INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN nick_n INTEGER;"""),
 ]
 
 

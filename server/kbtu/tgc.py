@@ -355,11 +355,11 @@ async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
         elif not (r.get("ok") or _gone(r)):
             break  # the network, a flood wait: next round
         F.reply_dropped(con, rid)
-    for rid, body, to in F.replies_to_send(con):
+    for rid, body, to, sign in F.replies_to_send(con):
         if not F.reply_sending(con, rid):
             continue
         r = await _call(cfg, http, "sendMessage", {
-            "chat_id": cfg.tgc_chat, "text": f"{html.escape(body)}\n\n<i>— {html.escape(texts.FCH_REPLY_SIGN)}</i>", "parse_mode": "HTML",
+            "chat_id": cfg.tgc_chat, "text": f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>", "parse_mode": "HTML",
             "link_preview_options": {"is_disabled": True}, "reply_parameters": {"message_id": to}})
         if r.get("ok"):
             F.reply_sent(con, rid, r["result"]["message_id"])

@@ -43,13 +43,10 @@
     return t(why);
   }
 
-  // as the channel signs an anonymous post (fchannel.anon_sign): "Anon" for any Cyrillic, else English
-  const anonSign = (text: string) => (/[\u0400-\u04ff]/.test(text) ? '\u0410\u043d\u043e\u043d\u0438\u043c' : 'Anonymous');
-
   async function post() {
     if (!ready) return;
     const text = body.trim(), was = anon;
-    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, sign: was ? anonSign(text) : sign, mine: true,
+    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : sign, mine: true,
       person: !was && session.me ? { id: session.me.id, name: session.me.name, avatar: session.me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false };
     channel.feed = [temp, ...(channel.feed ?? [])]; haptic.select(); close(overlay.id);
     try {
@@ -57,7 +54,7 @@
       // a refresh may have brought the real one already (Channel's poll): then the stand-in just goes (no twin keys)
       const feed = channel.feed ?? []; touched();
       channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
-        : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at } : x));
+        : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick } : x));
       haptic.ok();
       if (p.status === 'live') { burst(); say(t('fc.postedSay'), 'party_popper_3d'); setTimeout(loadChannel, 5000); } // the bot sends it within seconds: its link then
       else say(t('fc.heldSay'), 'thinking_face_3d');
@@ -81,7 +78,7 @@
   <p class="note">{anon ? t('fc.asAnon') : t('fc.as', { name: sign })}</p>
   <Card>
     <div class="col">
-      <b class="ellipsis">{anon ? anonSign(body) : sign}</b>
+      <b class="ellipsis">{anon ? t('fc.nickSoon') : sign}</b>
       <textarea class="text" bind:value={body} maxlength={MAX} rows="3" placeholder={t('fc.ph')} aria-label={t('fc.ph')} aria-invalid={!!rule} use:grow={280}></textarea>
       <!-- the rule broken, at the spot (the server's words for it); the count once it's near the limit -->
       {#if rule || body.length > MAX - 100}<div class="foot">

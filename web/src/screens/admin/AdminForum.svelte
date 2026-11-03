@@ -6,6 +6,7 @@
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import { api, type ChannelMod, type ChannelModPost, type ChannelModReply } from '../../lib/api';
+  import { nickName } from '../../lib/i18n/nicks';
   import { session } from '../../lib/state/session.svelte';
   import { loadChannel } from '../../lib/state/channel.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -90,7 +91,7 @@
 {#snippet row(p: ChannelModPost, kind: 'held' | 'live' | 'removed')}
   <div class="mrow">
     <p class="mt selectable">{p.body}</p>
-    <span class="mm">{p.anon ? t('fc.anon') : p.author?.name ?? ''} · {ago(p.at)}{kind === 'held' && p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</span>
+    <span class="mm">{p.anon ? nickName(p.nick) ?? t('fc.anon') : p.author?.name ?? ''} · {ago(p.at)}{kind === 'held' && p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</span>
     <span class="mb">
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => decide(p, true, true)}>{t('fc.release')}</Button>{/if}
       {#if kind === 'removed'}<Button kind="tinted" size="s" onclick={() => restore(p)}>{t(p.undo ? 'fc.undo' : 'fc.restore')}</Button>
@@ -105,7 +106,7 @@
   <div class="mrow">
     <p class="mq">{r.postBody}</p>
     <p class="mt selectable">{r.body}</p>
-    <span class="mm">{t('fc.anon')} · {ago(r.at)}{kind === 'held' && r.why ? ' · ' + t(r.why === 'lost' ? 'fcr.whyLost' : WHY[r.why] ?? 'fc.whyCheck') : ''}{r.why === 'reports' ? ' · ' + t('fcr.whyReports') : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</span>
+    <span class="mm">{nickName(r.nick) ?? t('fc.anon')} · {ago(r.at)}{kind === 'held' && r.why ? ' · ' + t(r.why === 'lost' ? 'fcr.whyLost' : WHY[r.why] ?? 'fc.whyCheck') : ''}{r.why === 'reports' ? ' · ' + t('fcr.whyReports') : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</span>
     <span class="mb">
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => replyDecide(r, true, true)}>{t(r.why === 'lost' ? 'fcr.again' : 'fc.release')}</Button>{/if}
       {#if kind === 'live' && r.reports}<Button kind="tinted" size="s" onclick={() => replyDecide(r, true, false)}>{t('fcr.keep')}</Button>{/if}

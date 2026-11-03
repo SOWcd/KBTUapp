@@ -106,8 +106,13 @@ def _repeat(con, uid: int, text: str) -> bool:
         "SELECT body FROM fchan_posts WHERE user_id = ? AND status != 'gone' AND created_at > ? ORDER BY id DESC LIMIT 20", uid, _now() - SAME_DAYS * 86400))
 
 
+def _nick(p) -> list[int] | None:
+    """An anonymous post's nick as indexes (the app words it in its language); None for one from before nicks."""
+    return [p["nick_a"], p["nick_n"]] if p["anon"] and p["nick_a"] is not None else None
+
+
 def _shape(p) -> dict:
-    return {"id": p["id"], "body": p["body"], "anon": bool(p["anon"]), "status": p["status"], "at": p["created_at"]}
+    return {"id": p["id"], "body": p["body"], "anon": bool(p["anon"]), "nick": _nick(p), "status": p["status"], "at": p["created_at"]}
 
 
 def mine(con, v: Viewer) -> list[dict]:
@@ -137,8 +142,8 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
-        out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]),
-             "sign": anon_sign(p["body"]) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
+        out.append({"id": p["id"], "body": p["body"], "status": p["status"], "at": p["created_at"], "msg": p["tg_msg"] or None, "anon": bool(p["anon"]), "nick": _nick(p),
+             "sign": _anon_sign(p) if p["anon"] else p["sign"] or (short_name(a) if a else "?"), "person": person_ref(a) if a else None,
              "mine": p["user_id"] == v.id,
              # the comments: the students' count, and the bot's first comment (the link opens the thread there)
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
@@ -226,8 +231,20 @@ def reserve(con, v: Viewer, body: dict) -> int:
         if _repeat(con, v.id, text):
             raise ApiError("bad_input", "duplicate")
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
-        return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign) VALUES (?, ?, ?, 'held', 'check', ?, ?)",
-                           (v.id, text, int(anon), _now(), sign)).lastrowid
+        a, n = pick_nick(con) if anon else (None, None)
+        return con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
+                           (v.id, text, int(anon), _now(), sign, a, n)).lastrowid
+
+
+NICK_FRESH = 800  # a new nick is none of the last this many anonymous posts' (review: no false links, no drawing another's)
+
+
+def pick_nick(con) -> tuple[int, int]:
+    """A fresh random nick for an anonymous post (texts.NICK_*): secrets over the ones no recent anonymous post holds, the
+    same for every author; nothing of the person goes in. ponytail: past NICK_FRESH posts an old one's nick can return"""
+    taken = {(r[0], r[1]) for r in rows(con, "SELECT nick_a, nick_n FROM fchan_posts WHERE anon = 1 AND nick_a IS NOT NULL ORDER BY id DESC LIMIT ?", NICK_FRESH)}
+    free = [(a, n) for a in range(len(texts.NICK_ADJ)) for n in range(len(texts.NICK_NOUN)) if (a, n) not in taken]
+    return secrets.choice(free)
 
 
 def signature(p) -> str:
@@ -312,11 +329,16 @@ def anon_sign(body: str) -> str:
     return "\u0410\u043d\u043e\u043d\u0438\u043c" if re.search("[\u0400-\u04ff]", body or "") else "Anonymous"
 
 
+def _anon_sign(p) -> str:
+    """An anonymous post's signature: its nick (Russian, the channel's), or "Anon" for one from before nicks."""
+    return texts.nick(p["nick_a"], p["nick_n"]) if p["nick_a"] is not None else anon_sign(p["body"])
+
+
 def _sign(con, p) -> str:
     """The post's signature in the channel (its last line, after the dash): the one fixed when written, or the anonymous
     line (the channel speaks Russian). A post from before signatures were kept: the short name, as it was signed then."""
     if p["anon"]:
-        return anon_sign(p["body"])
+        return _anon_sign(p)
     if p["sign"]:
         return p["sign"]
     who = one(con, PERSON + " WHERE u.id = ?", p["user_id"])
@@ -745,8 +767,10 @@ def reply_answered(con, msg_id: int, tg: int) -> None:
 
 def replies_to_send(con) -> list:
     """Replies due now: live, their wait over, the post live in the channel, its author not banned: (id, words, the
-    message to answer: the comment or the post's copy in the group)."""
-    return [(r["id"], r["body"], r["comment_msg"] or int(r["root"])) for r in rows(con, """SELECT r.*, m.value AS root FROM fchan_replies r
+    message to answer: the comment or the post's copy in the group, the signature: the post's nick or the plain mark)."""
+    return [(r["id"], r["body"], r["comment_msg"] or int(r["root"]),
+             texts.FCH_REPLY_NICK.format(nick=texts.nick(r["nick_a"], r["nick_n"])) if r["nick_a"] is not None else texts.FCH_REPLY_SIGN)
+            for r in rows(con, """SELECT r.*, m.value AS root, p.nick_a, p.nick_n FROM fchan_replies r
         JOIN fchan_posts p ON p.id = r.post_id AND p.status = 'live' AND p.tg_msg > 0 JOIN users u ON u.id = p.user_id AND u.banned_at IS NULL
         JOIN meta m ON m.key = 'fchcopy:' || p.tg_msg WHERE r.status = 'live' AND r.tg_msg IS NULL AND r.send_at <= ? ORDER BY r.send_at LIMIT 5""", _now())]
 
@@ -800,13 +824,13 @@ def reply_drop_later(con, rid: int) -> None:
 # moderators (the Admin sheet): held replies, this week's live ones (reported first), this week's take-downs
 
 def _reply_mod_shape(r) -> dict:
-    return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]),
+    return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]), "nick": _nick(r),
             "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
 
 
 def reply_mod_queue(con) -> dict:
     """Shown as anonymous posts are: the words and the post they answer, never whose (the author is the post's)."""
-    q = """SELECT r.*, p.body AS pbody, p.anon, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
+    q = """SELECT r.*, p.body AS pbody, p.anon, p.nick_a, p.nick_n, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
         FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE """
     held = rows(con, q + "r.status = 'held' AND (r.why != 'check' OR r.created_at < ?) ORDER BY r.id", _now() - 60)
     # reported ones whatever their age (a report must reach someone), first; then this week's
