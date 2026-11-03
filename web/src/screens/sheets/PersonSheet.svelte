@@ -245,9 +245,10 @@
 </Sheet>
 
 <style>
-  .act { margin: 14px 0 4px; display: flex; flex-direction: column; align-items: center; gap: var(--s-1); }
+  /* a sheet's buttons stand apart (owner, Nov 3: "Write" over "Decline / Accept" looked cramped, as if overlapping) */
+  .act { margin: var(--s-5) 0 var(--s-1); display: flex; flex-direction: column; align-items: center; gap: var(--s-3); }
   .act > :global(.btn) { width: 100%; }
-  .two { display: flex; gap: var(--s-2); width: 100%; }
+  .two { display: flex; gap: var(--s-3); width: 100%; }
   .two :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }
   .two :global(.btn.full:first-child:not(:last-child)) { flex: 0 0 auto; }
   .quiet { --plain-ink: var(--text-3); }
