@@ -1,6 +1,7 @@
 """Telegram chats: KBTU's directory and an org's own chats."""
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 
@@ -36,12 +37,17 @@ def chats(con, v: Viewer) -> dict:
     aim = lambda c: (c["school"] is not None) * 2 + (c["course"] is not None)  # noqa: E731  — my school and course first, everyone's last
     mine = sorted((c for c in everything if st and fits(c)), key=lambda c: -aim(c))
     out = {"forYou": mine if st else [c for c in everything if c["school"] is None and c["course"] is None], "all": everything}
-    if v.role in ("admin", "moderator"):  # the suggestions waiting for a look, newest first
-        waiting = rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")
-        found = {c["org_id"] for c in waiting if c["org_id"]}
-        whose = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
-        out["pending"] = [{**_chat(c, set(), whose), "at": c["created_at"]} for c in waiting]  # whose it is, for the moderator
+    if v.role in ("admin", "moderator"):
+        out["pending"] = pending_chats(con)
     return out
+
+
+def pending_chats(con) -> list[dict]:
+    """The suggestions waiting for a look, newest first, with whose each is (for the moderator)."""
+    waiting = rows(con, "SELECT * FROM chats WHERE status = 'pending' ORDER BY id DESC")
+    found = {c["org_id"] for c in waiting if c["org_id"]}
+    whose = {o["id"]: org_ref(con, o) for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *found)} if found else {}
+    return [{**_chat(c, set(), whose), "at": c["created_at"]} for c in waiting]
 
 
 def chat_opened(con, v: Viewer, cid: int) -> None:
@@ -208,8 +214,9 @@ def approve_chat(con, v: Viewer, cid: int) -> dict:
     with tx(con):
         c = one(con, "SELECT * FROM chats WHERE id = ? AND status = 'pending'", cid)
         if not c:
-            raise ApiError("not_found")
+            raise core.decided(con, f"chat:{cid}")
         con.execute("UPDATE chats SET status = 'live' WHERE id = ?", (cid,))
+        log_action(con, v.id, "chat_approve", f"chat:{cid}", json.dumps({"title": c["title"]}))
         asked = {r[0] for r in rows(con, "SELECT user_id FROM chat_asks WHERE chat_id = ?", cid)} | ({c["added_by"]} if c["added_by"] else set())
         for uid in asked:
             notify(con, uid, "chat_approved", f"ca:{cid}")
@@ -253,17 +260,64 @@ def set_chat_section(con, v: Viewer, cid: int, section: object) -> dict:
     return _owned(con, cid)
 
 
-def delete_chat(con, v: Viewer, cid: int) -> str | None:
-    """A chat out of the catalog, or a suggestion declined; its avatar's path when nothing else shows it (to remove)."""
+def delete_chat(con, v: Viewer, cid: int) -> None:
+    """A chat out of the catalog, or a suggestion declined, with an Undo for CHAT_UNDO (Admin → Done): the row is kept
+    in meta (`chatdel:<id>`), its avatar stays on disk till then (chats_gone). Who suggested or asked for it isn't kept: declined,
+    nobody is told (quietly). A second decline of the same suggestion is a conflict."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
-    c = one(con, "SELECT photo, org_id FROM chats WHERE id = ?", cid)
-    con.execute("DELETE FROM chat_asks WHERE chat_id = ?", (cid,))  # declined: nobody is told (quietly)
-    if c and c["org_id"]:  # a club's chat leaves the catalog, not the club's page
-        con.execute("UPDATE chats SET status = 'org' WHERE id = ?", (cid,))
-        return None
-    con.execute("DELETE FROM chats WHERE id = ?", (cid,))
-    return c["photo"] if c and c["photo"] and photo_free(con, c["photo"]) else None
+    with tx(con):
+        c = one(con, "SELECT * FROM chats WHERE id = ? AND status IN ('live', 'pending')", cid)
+        if not c:
+            raise core.decided(con, f"chat:{cid}") if one(con, "SELECT 1 FROM chats WHERE id = ?", cid) or one(con, "SELECT 1 FROM meta WHERE key = ?", f"chatdel:{cid}") else ApiError("not_found")
+        con.execute("DELETE FROM chat_asks WHERE chat_id = ?", (cid,))
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"chatdel:{cid}", json.dumps({"at": core.now(), "row": {**dict(c), "added_by": None}})))
+        if c["org_id"]:  # a club's chat leaves the catalog, not the club's page
+            con.execute("UPDATE chats SET status = 'org' WHERE id = ?", (cid,))
+        else:
+            con.execute("DELETE FROM chats WHERE id = ?", (cid,))
+        log_action(con, v.id, "chat_decline" if c["status"] == "pending" else "chat_remove", f"chat:{cid}", json.dumps({"title": c["title"]}))
+
+
+CHAT_UNDO = 7 * 86400
+
+
+def undo_chat(con, v: Viewer, cid: int) -> None:
+    """A declined suggestion back in the waiting list, a removed chat back in the catalog, as they were (the opens and
+    the askers aside). Not when the same chat came back meanwhile."""
+    if v.role not in ("admin", "moderator"):
+        raise ApiError("forbidden")
+    with tx(con):
+        by = one(con, "SELECT actor_id FROM audit_log WHERE target = ? AND action IN ('chat_decline', 'chat_remove') ORDER BY id DESC LIMIT 1", f"chat:{cid}")
+        if by and by[0] != v.id and v.role != "admin":  # a moderator takes back his own; the admin anyone's
+            raise ApiError("forbidden")
+        k = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"chatdel:{cid}")
+        if not k:
+            raise ApiError("not_found")
+        row = json.loads(k[0])["row"]
+        now = one(con, "SELECT * FROM chats WHERE id = ?", cid)
+        if now and now["status"] == "org":  # a club's: only its catalog status comes back
+            con.execute("UPDATE chats SET status = ? WHERE id = ?", (row["status"], cid))
+        elif now or one(con, f"SELECT 1 FROM chats WHERE {SAME_CHAT}", row["url"], row["url"], row["tg_chat_id"]):
+            raise ApiError("conflict", "again")
+        else:
+            if row["org_id"] and not one(con, "SELECT 1 FROM orgs WHERE id = ?", row["org_id"]):
+                row["org_id"] = None
+            con.execute(f"INSERT INTO chats ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", tuple(row.values()))
+        log_action(con, v.id, "chat_undo", f"chat:{cid}")
+
+
+def chats_gone(con) -> list[str]:
+    """The bot's round: removed chats past their Undo; their avatars when nothing else shows them (to delete)."""
+    out = []
+    with tx(con):
+        for k, val in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'chatdel:%'"):
+            d = json.loads(val)
+            if d["at"] + CHAT_UNDO <= core.now():
+                con.execute("DELETE FROM meta WHERE key = ?", (k,))
+                if d["row"]["photo"]:
+                    out.append(d["row"]["photo"])
+    return [p for p in out if photo_free(con, p)]
 
 
 # ---------------------------------------------------------------- an org's own chats (PLAN 86)

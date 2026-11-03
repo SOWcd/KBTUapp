@@ -321,7 +321,7 @@ def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: obj
     with tx(con):  # all or nothing: never a club without its President, never two clubs from one application
         a = one(con, "SELECT * FROM club_applications WHERE id = ? AND status = 'pending'", aid)
         if not a:
-            raise ApiError("not_found")
+            raise core.decided(con, f"capp:{aid}") if one(con, "SELECT 1 FROM club_applications WHERE id = ?", aid) else ApiError("not_found")
         oid = None
         if approve:
             if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", a["name"]):
@@ -331,8 +331,28 @@ def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: obj
             oversight.set_role(con, v.id, a["user_id"], oid, "president", "club_application")
         con.execute("UPDATE club_applications SET status = ?, reason = ?, org_id = ?, decided_by = ?, decided_at = ? WHERE id = ?",
                     ("approved" if approve else "rejected", None if approve else why, oid, v.id, core.now(), aid))
-        notify(con, a["user_id"], "club_application_decided", f"cad:{aid}:{'yes' if approve else 'no'}")
+        # a refusal's message waits the Undo's minute
+        notify(con, a["user_id"], "club_application_decided", f"cad:{aid}:{'yes' if approve else 'no'}", after=None if approve else core.now() + UNDO_WAIT)
+        log_action(con, v.id, "capp_yes" if approve else "capp_no", f"capp:{aid}", json.dumps({"title": a["name"]}))
     return _club_app(con, one(con, "SELECT * FROM club_applications WHERE id = ?", aid), True)
+
+
+UNDO_WAIT = 60  # a staff decision's bot message waits this long: an Undo inside it leaves no trace
+
+
+def undo_club_refusal(con, v: Viewer, aid: int) -> None:
+    """A refusal taken back (Admin → Done): pending again, its message unsent if still waiting. Not once the student
+    has applied anew."""
+    _admin(v)
+    with tx(con):
+        a = one(con, "SELECT * FROM club_applications WHERE id = ? AND status = 'rejected'", aid)
+        if not a:
+            raise ApiError("not_found")
+        if one(con, "SELECT 1 FROM club_applications WHERE user_id = ? AND id > ?", a["user_id"], aid):
+            raise ApiError("conflict", "newer")
+        con.execute("UPDATE club_applications SET status = 'pending', reason = NULL, decided_by = NULL, decided_at = NULL WHERE id = ?", (aid,))
+        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'club_application_decided' AND ref = ? AND sent_at IS NULL", (a["user_id"], f"cad:{aid}:no"))
+        log_action(con, v.id, "capp_undo", f"capp:{aid}")
 
 
 

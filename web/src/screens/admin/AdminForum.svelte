@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Forum posts (owner, Nov 1: staff tools live in Admin alone; the Forum tab looks the same for everyone).
-  // The channel's posts waiting for a moderator (Publish / Remove), this week's live ones (Take down; Publish again for
+  // Admin → Forum channel (owner, Nov 1: staff tools live in Admin alone; the Forum tab looks the same for everyone).
+  // What waits for a moderator is in Admin → Inbox (Nov 3); here this week's live ones (Take down; Publish again for
   // one whose message someone deleted in Telegram by hand), and this week's
   // take-downs with Bring back (published anew); the owner alone reveals an anonymous author, each look audited.
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).
@@ -117,15 +117,12 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} full title={t('fc.modAdmin')} icon={MessagesSquare}>
+<Sheet {overlay} full title={t('adm.forumChannel')} icon={MessagesSquare}>
   {#if mod}
     <div class="col">
-      <Group caption={t('fc.modTitle')}>
-        {#each mod.held as p (p.id)}{@render row(p, 'held')}{:else}<p class="none">{t('fc.modEmpty')}</p>{/each}
-      </Group>
+      <!-- what waits for a decision is in Admin → Inbox; here what is out, and what was taken down -->
       {#if mod.live.length}<Group caption={t('fc.modLive')}>{#each mod.live as p (p.id)}{@render row(p, 'live')}{/each}</Group>{/if}
       {#if mod.removed.length}<Group caption={t('fc.modRemoved')}>{#each mod.removed as p (p.id)}{@render row(p, 'removed')}{/each}</Group>{/if}
-      {#if mod.replies.held.length}<Group caption={t('fcr.modHeld')}>{#each mod.replies.held as r (r.id)}{@render reply(r, 'held')}{/each}</Group>{/if}
       {#if mod.replies.live.length}<Group caption={t('fcr.modLive')}>{#each mod.replies.live as r (r.id)}{@render reply(r, 'live')}{/each}</Group>{/if}
       {#if mod.replies.removed.length}<Group caption={t('fcr.modRemoved')}>{#each mod.replies.removed as r (r.id)}{@render reply(r, 'removed')}{/each}</Group>{/if}
     </div>
@@ -142,5 +139,4 @@
   .mq { font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .mm { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .mb { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-  .none { padding: var(--s-3) var(--s-4); font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-3); }
 </style>

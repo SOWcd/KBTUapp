@@ -282,7 +282,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
     with tx(con):
         c = one(con, f"SELECT * FROM tgc_comments WHERE id = ? AND (status IN {LIVE} OR review = 1)", cid)
         if not c:
-            raise ApiError("not_found")
+            raise core.decided(con, f"tgc:{cid}") if one(con, "SELECT 1 FROM tgc_comments WHERE id = ?", cid) else ApiError("not_found")
         if _involved(con, v, c):
             raise ApiError("forbidden")
         if action == "remove":
@@ -306,7 +306,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
             for (uid,) in rows(con, """SELECT r.reporter_id FROM tgc_reports r WHERE r.comment_id = ? AND (SELECT COUNT(*) FROM tgc_reports w
                     WHERE w.reporter_id = r.reporter_id AND w.outcome = 'abuse' AND w.at > ?) >= ?""", cid, now() - KEEP, CLOSE_AT):
                 if con.execute("INSERT OR IGNORE INTO tgc_closed (user_id, at, by_id) VALUES (?, ?, ?)", (uid, now(), v.id)).rowcount:
-                    log_action(con, v.id, "tg_report_close", f"user:{uid}", f'{{"tgc": {cid}}}')
+                    log_action(con, v.id, "tg_report_close", f"tgreport:{uid}", f'{{"tgc": {cid}}}')
 
 
 def _clear(con, body: str) -> None:
@@ -368,7 +368,7 @@ def reopen(con, v: Viewer, uid: int) -> None:
         if not con.execute("DELETE FROM tgc_closed WHERE user_id = ?", (uid,)).rowcount:
             raise ApiError("not_found")
         con.execute("UPDATE tgc_reports SET outcome = NULL WHERE reporter_id = ? AND outcome IN ('overturned', 'abuse')", (uid,))
-        log_action(con, v.id, "tg_report_open", f"user:{uid}")
+        log_action(con, v.id, "tg_report_open", f"tgreport:{uid}")
 
 
 # ---- the bot's rounds

@@ -195,8 +195,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
             text, where = (e["title"], ("event", r["target_id"])) if e else (None, None)
         if _about(con, r["target"], r["target_id"]) == v.id:  # about me: another moderator decides (the notes could name the reporter)
             continue
-        if text is None:  # already gone: nothing to decide
-            con.execute("UPDATE reports SET status = 'actioned', resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'", (core.now(), r["target"], r["target_id"]))
+        if text is None:  # already gone: nothing to decide (close_gone closes its reports; a GET never writes)
             continue
         reasons = r["reasons"].split(",")
         # what the reporters wrote, newest first, never who wrote it
@@ -208,6 +207,18 @@ def report_queue(con, v: Viewer) -> list[dict]:
     return sorted(out + tgcomments.queue_items(con, v), key=lambda x: (not x.get("removed"), x["at"]))
 
 
+def close_gone(con) -> None:
+    """The bot's round: reports of what is gone by itself (its author deleted it, its event went) close quietly."""
+    gone = {"comment": "SELECT 1 FROM comments WHERE id = ? AND deleted_at IS NULL", "user": "SELECT 1 FROM users WHERE id = ?",
+            "photo": "SELECT 1 FROM event_photos WHERE file_id = ?", "ask": "SELECT 1 FROM asks WHERE id = ? AND status IN ('live', 'held')",
+            "fpost": "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live'", "post": "SELECT 1 FROM posts WHERE id = ? AND hidden_at IS NULL",
+            "event": "SELECT 1 FROM events WHERE id = ? AND hidden_at IS NULL"}
+    with tx(con):
+        for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"):
+            if t in gone and not one(con, gone[t], i):
+                con.execute("UPDATE reports SET status = 'actioned', resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'", (core.now(), t, i))
+
+
 def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[str]:
     """Take the thing down (a comment deleted, a post or an event hidden, an album photo out, a profile's own words and
     photo gone) or leave it; either way its reports close. A photo and a profile's words are kept 30 days for an undo
@@ -215,13 +226,17 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
     _mod(v)
     if _about(con, target, tid) == v.id:
         raise ApiError("forbidden")
-    if target == "fpost":  # the channel's own take-down (the minute's Undo, Admin → the channel's removed list), then its reports close
-        if remove:
-            fchannel.mod_decide(con, v, tid, False)
+    if not one(con, "SELECT 1 FROM reports WHERE target = ? AND target_id = ? AND status = 'open'", target, tid):
+        raise core.decided(con, f"{target}:{tid}")  # another moderator came first (or it went by itself)
+    if target == "fpost":  # the channel's own take-down (its audit line fchan_hide, the minute's Undo) and its reports close, as one
         with tx(con):
-            con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = 'fpost' AND target_id = ? AND status = 'open'",
-                        ("actioned" if remove else "dismissed", v.id, core.now(), tid))
-            log_action(con, v.id, "report_remove" if remove else "report_keep", f"fpost:{tid}")
+            if remove:
+                fchannel.mod_decide(con, v, tid, False)  # joins this transaction
+            if not con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = 'fpost' AND target_id = ? AND status = 'open'",
+                               ("actioned" if remove else "dismissed", v.id, core.now(), tid)).rowcount:
+                raise core.decided(con, f"fpost:{tid}")
+            if not remove:  # a take-down's line is fchan_hide's: one decision, one line
+                log_action(con, v.id, "report_keep", f"fpost:{tid}")
         return []
     photos: list[str] = []
     with tx(con):  # a take-down and its reports closing go together, or neither
@@ -244,8 +259,9 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
                 con.execute("UPDATE users SET nick = NULL, avatar_tg = 1, avatar_file_id = NULL, bio = '' WHERE id = ?", (tid,))
             else:
                 raise ApiError("bad_input")
-        con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'",
-                    ("actioned" if remove else "dismissed", v.id, core.now(), target, tid))
+        if not con.execute("UPDATE reports SET status = ?, resolved_by = ?, resolved_at = ? WHERE target = ? AND target_id = ? AND status = 'open'",
+                           ("actioned" if remove else "dismissed", v.id, core.now(), target, tid)).rowcount:
+            raise core.decided(con, f"{target}:{tid}")  # a moment ago, by someone else: the take-down rolls back
         log_action(con, v.id, "report_remove" if remove else "report_keep", f"{target}:{tid}")
     return photos
 
@@ -294,6 +310,8 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             AND at > ? AND NOT EXISTS (SELECT 1 FROM audit_log r WHERE r.action = 'restore' AND r.target = a.target AND r.at >= a.at)""",
             f"{target}:{tid}", core.now() - TAKEDOWN_KEEP):
         raise ApiError("not_found")
+    if target == "event" and one(con, "SELECT 1 FROM meta WHERE key = ?", f"evdel:{tid}"):
+        raise ApiError("conflict", "deleting")  # the admin's delete: its own Undo brings it back
     gone: list[str] = []
     with tx(con):
         if target == "comment":

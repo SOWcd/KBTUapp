@@ -404,7 +404,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/screens/{sid}/grant")
     def screen_grant(sid: int, con: Con, v: Me, body: dict = Body(...)):
-        return {"granted": qr.grant_all(con, v, sid, body.get("code"))}
+        return qr.grant_all(con, v, sid, body.get("code"))
 
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
@@ -870,6 +870,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.delete("/api/events/{eid}", status_code=204)
     def delete_event(eid: int, con: Con, v: Me):
+        if v.role == "admin":  # the app's admin: hidden now, gone in a day, audited, with its Undo (Admin → Done)
+            return logic.admin_delete_event(con, v, eid)
         gone, photo = logic.delete_event(con, v, eid)
         media.drop(receipts, gone)
         media.drop(photos, photo)
@@ -1406,7 +1408,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/admin/grants/scan")
     def grant_scan(con: Con, v: Me, body: dict = Body(...)):
-        return logic.grant_scan(con, v, body.get("qr"), body.get("code"))
+        return logic.grant_scan(con, v, body.get("qr"), body.get("code"), body.get("run"))
 
     @app.post("/api/grant-links/{token}")
     def use_grant_link(token: str, con: Con, v: Me):
@@ -1420,18 +1422,34 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def ungrant(gid: int, con: Con, v: Me):
         logic.ungrant(con, v, gid)
 
-    # Admin → Badges: a badge's variant to one student, or to everyone counted in a check-in session (the owner)
+    @app.post("/api/admin/grants/undo")
+    def undo_batch(con: Con, v: Me, body: dict = Body(...)):
+        return {"undone": logic.undo_batch(con, v, body.get("batch"))}
+
+    @app.get("/api/admin/grants/of/{uid}")
+    def awards_of(uid: int, con: Con, v: Me):
+        return logic.awards_of(con, v, uid)
+
+    @app.get("/api/admin/awards")
+    def award_counts(con: Con, v: Me):
+        return logic.award_counts(con, v)
+
+    @app.get("/api/admin/awards/{award}/people")
+    def award_people(award: str, con: Con, v: Me):
+        return logic.award_people(con, v, award)
+
+    @app.get("/api/admin/grant-links")
+    def my_links(con: Con, v: Me):
+        return logic.my_links(con, v)
+
+    @app.delete("/api/admin/grant-links/{token}", status_code=204)
+    def revoke_link(token: str, con: Con, v: Me):
+        logic.revoke_link(con, v, token)
+
+    # Admin → Awards: find a student with their awards; everyone counted in a check-in session (the owner)
     @app.get("/api/admin/badges/people")
     def badge_people(con: Con, v: Me, q: str = ""):
         return logic.badge_people(con, v, q)
-
-    @app.put("/api/admin/badges/{uid}/{code}")
-    def badge_give(uid: int, code: str, con: Con, v: Me):
-        return logic.badge_set(con, v, uid, code, True)
-
-    @app.delete("/api/admin/badges/{uid}/{code}")
-    def badge_take(uid: int, code: str, con: Con, v: Me):
-        return logic.badge_set(con, v, uid, code, False)
 
     @app.get("/api/admin/badges/sessions")
     def badge_sessions(con: Con, v: Me):
@@ -1485,7 +1503,29 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.delete("/api/admin/chats/{cid}", status_code=204)
     def delete_chat(cid: int, con: Con, v: Me):
-        media.drop(photos, [logic.delete_chat(con, v, cid)])
+        logic.delete_chat(con, v, cid)  # with an Undo: its avatar goes in the bot's round a week later (chats_gone)
+
+    # ------------------------------------------------------------ Admin → Inbox, Done, People (logic/inbox.py)
+
+    @app.get("/api/admin/inbox")
+    def admin_inbox(con: Con, v: Me):
+        return logic.inbox.inbox(con, v)
+
+    @app.post("/api/admin/done/{aid}/undo", status_code=204)
+    def admin_undo(aid: int, con: Con, v: Me):
+        media.drop(photos, logic.inbox.undo(con, v, aid))
+
+    @app.get("/api/admin/people")
+    def admin_people(con: Con, v: Me, q: str = ""):
+        return logic.find_people(con, v, q)
+
+    @app.delete("/api/admin/events/{eid}", status_code=204)
+    def admin_delete_event(eid: int, con: Con, v: Me):
+        logic.admin_delete_event(con, v, eid)  # hidden now, gone a day later (the Undo's day)
+
+    @app.post("/api/admin/events/{eid}/restore", status_code=204)
+    def admin_undelete_event(eid: int, con: Con, v: Me):
+        logic.undo_delete_event(con, v, eid)
 
     # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
 
@@ -1545,15 +1585,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
         elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
-            if kind == "gl":  # the admin's one-time award link (logic.grant_link)
-                code, many = body.get("code"), body.get("many") is True
-                until = logic.now() + 14 * 86400
-                # many: the owner's link for everyone a badge is meant for, passed on from hand to hand (logic.claim_link)
-                start = f"gl_{logic.claim_link(con, code, until, v) if many else logic.grant_link(con, v, code)}"
-                badge = code in logic.BADGE_OF  # a badge's variant (Admin → Badges): its own card, "Get it"
-                fields = {"award": texts.pick(texts.BADGE_TITLES if badge else texts.ACH_NAMES, lang)[code]}
-                if many:
-                    fields["until"] = texts.when(until, lang).split(",")[0]
+            if kind == "gl":  # the admin's award link (logic.grant_link): up to `uses` people (null: no cap) for `days`
+                code = body.get("code")
+                # an older app's "many": no cap, 14 days
+                uses, days = (None, 14) if body.get("many") is True else (body.get("uses", 1), body.get("days", 7))
+                token = logic.grant_link(con, v, code, uses, days)
+                start = f"gl_{token}"
+                fields = {"award": texts.pick(texts.BADGE_TITLES if code in logic.BADGE_OF else texts.ACH_NAMES, lang)[code],
+                          "until": texts.when(logic.one(con, "SELECT expires_at FROM grant_links WHERE token = ?", token)[0], lang).split(",")[0]}
+                # a badge's variant: its own card, "Get it"; for many, "pass it on"
+                kind = ("gb" if uses == 1 else "gm") if code in logic.BADGE_OF else "gl"
             elif kind == "rc":  # a club's open recruitment round (casting.py): anyone may pass it on
                 r = logic.one(con, "SELECT r.closes_at, o.name FROM rounds r JOIN orgs o ON o.id = r.org_id WHERE r.org_id = ? AND r.status = 'open' AND r.closes_at > ?",
                               ref, logic.now())
@@ -1574,7 +1615,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             else:  # a new club's one-time President link (§2), the admin; each card is a fresh link
                 start = f"pres_{ref}_{logic.president_link(con, v, ref)['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
-            title, text, button = texts.share_invite(("gm" if body.get("many") is True else "gb") if kind == "gl" and body.get("code") in logic.BADGE_OF else kind, lang, **fields)
+            title, text, button = texts.share_invite(kind, lang, **fields)
             result = {"type": "article", "id": f"{kind}-{ref}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}

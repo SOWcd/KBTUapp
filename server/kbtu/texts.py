@@ -35,17 +35,17 @@ SHARE_PRES = {  # the admin's one-time President link (§2): a new club's Presid
     "kk": ("Клуб президентін күтеді", "👑 Сені KBTU App-та <b>{club}</b> клубының президенті етіп тағайындайды. Аш та, KBTU арқылы кір — сілтеме бір реттік, 7 күн жұмыс істейді.", "Президент болу"),
     "en": ("A club awaits its President", "👑 You're becoming the President of <b>{club}</b> on KBTU App. Open it and sign in with KBTU — the link works once, for 7 days.", "Become President"),
 }
-SHARE_GRANT = {  # the creator's one-time award link (logic.grant_link)
-    "ru": ("Тебе награда", "🏅 Создатель KBTU App выдаёт тебе награду <b>{award}</b>. Спасибо! Ссылка одноразовая, работает 7 дней.", "🏅 Забрать награду"),
-    "kk": ("Саған марапат", "🏅 KBTU App авторы саған <b>{award}</b> марапатын береді. Рақмет! Сілтеме бір реттік, 7 күн жұмыс істейді.", "🏅 Марапатты алу"),
-    "en": ("An award for you", "🏅 The creator of KBTU App gives you the <b>{award}</b> award. Thank you! The link works once, for 7 days.", "🏅 Claim the award"),
+SHARE_GRANT = {  # Admin → Awards: an award link (logic.grant_link), from any admin
+    "ru": ("Тебе награда", "🏅 KBTU App выдаёт тебе награду <b>{award}</b>. Спасибо! Ссылка работает до {until}.", "🏅 Забрать награду"),
+    "kk": ("Саған марапат", "🏅 KBTU App саған <b>{award}</b> марапатын береді. Рақмет! Сілтеме {until} дейін жұмыс істейді.", "🏅 Марапатты алу"),
+    "en": ("An award for you", "🏅 KBTU App gives you the <b>{award}</b> award. Thank you! The link works until {until}.", "🏅 Claim the award"),
 }
-SHARE_BADGE = {  # Admin → Badges: a one-time link for a badge's variant (logic.grant_link)
-    "ru": ("Тебе значок", "🏅 Тебе значок <b>«{award}»</b>. Ссылка одноразовая, работает 7 дней.", "🏅 Получить"),
-    "kk": ("Саған белгіше", "🏅 Саған <b>«{award}»</b> белгішесі. Сілтеме бір реттік, 7 күн жұмыс істейді.", "🏅 Алу"),
-    "en": ("A badge for you", "🏅 A badge for you: <b>“{award}”</b>. The link works once, for 7 days.", "🏅 Get it"),
+SHARE_BADGE = {  # Admin → Awards: a one-person link for a badge's variant (logic.grant_link)
+    "ru": ("Тебе значок", "🏅 Тебе значок <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
+    "kk": ("Саған белгіше", "🏅 Саған <b>«{award}»</b> белгішесі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A badge for you", "🏅 A badge for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
 }
-SHARE_BADGE_MANY = {  # Admin → Badges, the owner's link for everyone (logic.claim_link): forwarded from hand to hand
+SHARE_BADGE_MANY = {  # Admin → Awards: a badge's link for many (logic.grant_link): forwarded from hand to hand
     "ru": ("Значок", "🏅 Значок <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
     "kk": ("Белгіше", "🏅 <b>«{award}»</b> белгішесі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
     "en": ("A badge", "🏅 The <b>“{award}”</b> badge. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),

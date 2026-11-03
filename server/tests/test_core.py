@@ -1057,7 +1057,7 @@ def test_invite_cards(env, monkeypatch):
     assert card["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=aw_bugs") and "· I" in card["input_message_content"]["message_text"]
     # Admin → Badges, a link for everyone: the owner's alone; many open it, each gets the badge once
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ali["id"],))
-    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 403  # an admin, not the owner
+    assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "creator_laugh"}).status_code == 403  # the creator's own: not an admin's
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
     assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 200
     token = sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("gl_")[1]
@@ -1267,7 +1267,7 @@ def test_album_reports(env):
     assert [(r["target"], r["id"], r["where"]) for r in q] == [("photo", ph["id"], {"kind": "event", "id": 1})] and q[0]["text"].endswith(".t.webp")
     # a moderator never judges their own photo: not in their queue, and refused
     con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 91")
-    assert c.get("/api/me", headers=A).json()["counters"]["reports"] == 0
+    assert c.get("/api/me", headers=A).json()["counters"]["inbox"] == 0
     assert c.get("/api/admin/reports", headers=A).json() == [] and c.post(f"/api/admin/reports/photo/{ph['id']}", headers=A, json={"remove": False}).status_code == 403
     con.execute("UPDATE users SET role = 'user' WHERE tg_id = 91")
     # kept: back for everyone, and two new reports hide it only for those two (a moderator's call holds)
@@ -1406,13 +1406,13 @@ def test_comments(env):
     mine = next(x["id"] for x in c.get("/api/events/1/comments", headers=Z).json()["items"] if x["mine"])
     assert c.post("/api/reports", headers=Z, json={"target": "comment", "id": mine, "reason": "spam"}).status_code == 404  # my own: delete it
     assert c.get("/api/admin/reports", headers=P).status_code == 403
-    assert c.get("/api/me", headers=B).json()["counters"]["reports"] == 1 and c.get("/api/me", headers=P).json()["counters"]["reports"] == 0
+    assert c.get("/api/me", headers=B).json()["counters"]["inbox"] == 1 and c.get("/api/me", headers=P).json()["counters"]["inbox"] == 0
     q = c.get("/api/admin/reports", headers=B).json()
     assert [(x["target"], x["id"], x["text"], x["count"], x["reasons"]) for x in q] == [("comment", first, "Where is the entrance?", 1, {"spam": 1})]
     assert [(n["reason"], n["note"]) for n in q[0]["notes"]] == [("spam", "Rude to the host")] and "reporter" not in str(q[0])
     assert c.delete(f"/api/comments/{first}", headers=Z).status_code == 403                             # not hers
     assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": True}).status_code == 204
-    assert c.get("/api/admin/reports", headers=B).json() == [] and c.get("/api/me", headers=B).json()["counters"]["reports"] == 0
+    assert c.get("/api/admin/reports", headers=B).json() == [] and c.get("/api/me", headers=B).json()["counters"]["inbox"] == 0
     assert first not in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
     # a wrong call undone (§2): the admin's take-downs of the last 30 days, and Restore
     assert c.get("/api/admin/taken-down", headers=P).status_code == 403
@@ -1534,6 +1534,8 @@ def test_nick_and_photo(env):
     me = c.get("/api/me", headers=A).json()
     assert (me["nick"], me["avatar"]) == ("Ali the Great", newer) and c.get("/api/admin/taken-down", headers=B).json() == []
     assert c.post(f"/api/admin/taken-down/user/{ali['id']}/restore", headers=B).status_code == 404   # once
+    assert c.post(f"/api/admin/reports/user/{ali['id']}", headers=B, json={"remove": True}).status_code == 409   # decided: no report open
+    c.post("/api/reports", headers=P, json={"target": "user", "id": ali["id"], "reason": "insult"})
     c.post(f"/api/admin/reports/user/{ali['id']}", headers=B, json={"remove": True})                  # down again, kept again
     assert con.execute("SELECT COUNT(*) FROM takedowns WHERE user_id = ?", (ali["id"],)).fetchone()[0] == 1
     c.patch("/api/me", headers=A, json={"nick": "Ali again"})
@@ -1777,19 +1779,25 @@ def test_grants(env):
     B, A = tma(60, "Boss"), tma(61, "Ali")
     give = lambda code, h=B: c.post("/api/admin/grants", headers=h, json={"userId": ali["id"], "code": code})
     assert give("bugs", A).status_code == 403 and give("first50").status_code == 400
+    prof = lambda: c.get(f"/api/users/{ali['id']}", headers=B).json()  # noqa: E731
     bugs = lambda p: next(a for a in p["awards"]["achievements"] if a["code"] == "bugs")
-    assert bugs(give("bugs").json())["level"] == 1
+    g = give("bugs").json()
+    assert g["code"] == "bugs" and g["person"]["id"] == ali["id"] and bugs(prof())["level"] == 1  # the item, undone by its id
     assert c.get("/api/me", headers=A).json()["unlocked"] == [{"code": "bugs", "level": 1}]
-    twice = bugs(give("bugs").json())
+    give("bugs")
+    twice = bugs(prof())
     assert twice["count"] == 2                                                                    # adds up
     assert twice["rarity"] == 0.5 and [x["rarity"] for x in twice["levels"]] == [0.5, 0, 0, 0]   # 1 of the 2 students has level 1
-    assert give("creator_laugh").status_code == 200 and give("creator_laugh").status_code == 409  # a secret one: once
+    assert give("creator_laugh").status_code == 403                                               # the creator's own: him alone
     con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
+    assert give("creator_laugh").status_code == 200 and give("creator_laugh").status_code == 409  # a secret one: once
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'grant'").fetchone()[0] == 3
     # one given by mistake comes back off the profile at any time, all of it at once; never "First 500"
     back = lambda code, h=B: c.post("/api/admin/grants/take-back", headers=h, json={"userId": ali["id"], "code": code})
     assert back("bugs", A).status_code == 403 and back("first50").status_code == 400
-    left = bugs(back("bugs").json())
+    assert back("bugs").json()["has"] == ["creator_laugh"]
+    left = bugs(prof())
     assert left["count"] == 0 and left["level"] == 0
     assert back("bugs").status_code == 404
     assert give("creator_laugh").status_code == 409 and back("creator_laugh").status_code == 200 and give("creator_laugh").status_code == 200
@@ -1804,22 +1812,28 @@ def test_grant_scanner(env):
     login(c, 60, "boss"); ali = login(c, 61, "ali")
     B, A = tma(60, "Boss"), tma(61, "Ali")
     qr = "https://t.me/kbtu_bot/app?startapp=u_" + c.get("/api/me", headers=A).json()["qr"]
-    scan = lambda code, raw=qr, h=B: c.post("/api/admin/grants/scan", headers=h, json={"qr": raw, "code": code})  # noqa: E731
-    assert scan("bugs", h=A).status_code == 403 and scan("bugs", raw=qr[:-1] + ("Q" if qr[-1] != "Q" else "R")).status_code == 404 and scan("first50").status_code == 400
-    one_ = scan("bugs").json()
-    assert one_["person"]["id"] == ali["id"] and scan("bugs").status_code == 200                 # one per scan
-    assert scan("creator_found").status_code == 200 and scan("creator_found").status_code == 409
+    scan = lambda code, raw=qr, h=B, run="r1": c.post("/api/admin/grants/scan", headers=h, json={"qr": raw, "code": code, "run": run})  # noqa: E731
+    assert scan("init26", h=A).status_code == 403 and scan("init26", raw=qr[:-1] + ("Q" if qr[-1] != "Q" else "R")).status_code == 404 and scan("first50").status_code == 400
+    assert scan("bugs").status_code == 400                                                       # adds up: never by a scan
+    assert scan("init26", run="no spaces").status_code == 400
+    assert scan("creator_found").status_code == 403                                              # the creator's own
     con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE tg_id = 60")
+    one_ = scan("init26").json()
+    assert one_["person"]["id"] == ali["id"] and one_["person"]["name"] and scan("init26").status_code == 409
+    assert scan("creator_found").status_code == 200 and scan("creator_found").status_code == 409
     assert c.delete(f"/api/admin/grants/{one_['id']}", headers=B).status_code == 204
     gave = c.get("/api/admin/grants", headers=B).json()
-    assert [g["code"] for g in gave] == ["creator_found", "bugs"] and gave[0]["person"]["id"] == ali["id"]
-    last = next(g for g in gave if g["code"] == "creator_found")
-    assert c.delete(f"/api/admin/grants/{last['id']}", headers=B).status_code == 204
+    assert [g["code"] for g in gave] == ["creator_found"] and gave[0]["person"]["id"] == ali["id"]
+    con.execute("UPDATE achievement_grants SET created_at = created_at - 3600")                  # undo has no clock: it's mine
+    assert c.delete(f"/api/admin/grants/{gave[0]['id']}", headers=B).status_code == 204
     assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'creator_found'", (ali["id"],)).fetchone()
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref LIKE 'ach:creator_found:%'", (ali["id"],)).fetchone()
-    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'bugs'", (ali["id"],)).fetchone()[0] == 1  # one bug left
-    con.execute("UPDATE achievement_grants SET created_at = created_at - 120")
-    assert c.delete(f"/api/admin/grants/{gave[1]['id']}", headers=B).status_code == 404       # too late to undo
+    # "Undo all from this run": one call, mine only
+    scan("init26p", run="r2"); scan("creator_laugh", run="r2"); scan("init26f", run="r3")
+    undo = lambda b, h=B: c.post("/api/admin/grants/undo", headers=h, json={"batch": b})  # noqa: E731
+    assert undo("s_r2", A).status_code == 403 and undo("s_r2").json() == {"undone": 2} and undo("s_r2").json() == {"undone": 0}
+    assert c.get(f"/api/admin/grants/of/{ali['id']}", headers=B).json()["has"] == ["init26f"]
 
 
 def test_badge_variants(env):
@@ -1831,8 +1845,9 @@ def test_badge_variants(env):
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
     login(c, 60, "boss"); ali = login(c, 61, "ali"); login(c, 62, "bea")
     B, A = tma(60, "Boss"), tma(61, "Ali")
-    put = lambda code, h=B: c.put(f"/api/admin/badges/{ali['id']}/{code}", headers=h)        # noqa: E731
-    drop = lambda code, h=B: c.delete(f"/api/admin/badges/{ali['id']}/{code}", headers=h)    # noqa: E731
+    put = lambda code, h=B: c.post("/api/admin/grants", headers=h, json={"userId": ali["id"], "code": code})          # noqa: E731
+    drop = lambda code, h=B: c.post("/api/admin/grants/take-back", headers=h, json={"userId": ali["id"], "code": code})  # noqa: E731
+    has = lambda: c.get(f"/api/admin/grants/of/{ali['id']}", headers=B).json()["has"]  # noqa: E731
     # not staff: no search, no grant, no take-back, no sessions
     assert c.get("/api/admin/badges/people?q=ali", headers=A).status_code == 403
     assert put("init26p", A).status_code == 403 and drop("init26p", A).status_code == 403
@@ -1843,11 +1858,10 @@ def test_badge_variants(env):
         assert [h["person"]["id"] for h in hits] == [ali["id"]], q
         assert "24Bali" not in str(hits)
     assert c.get("/api/admin/badges/people?q=a", headers=B).status_code == 400
-    assert put("bugs").status_code == 400 and put("first50").status_code == 400                 # badge variants only
-    assert c.put(f"/api/admin/badges/999999/init26p", headers=B).status_code == 404
-    # give: idempotent, audited once, celebrated once
-    assert put("init26p").json()["has"] == ["init26p"]
-    assert put("init26p").json()["has"] == ["init26p"]
+    assert put("first50").status_code == 400 and c.get("/api/admin/grants/of/999999", headers=B).status_code == 404
+    # give: once, audited once, celebrated once
+    assert put("init26p").status_code == 200 and has() == ["init26p"]
+    assert put("init26p").status_code == 409 and has() == ["init26p"]
     con = db.connect(cfg.db_path)
     log = lambda a: con.execute("SELECT COUNT(*) FROM audit_log WHERE action = ? AND target = ?", (a, f"user:{ali['id']}")).fetchone()[0]  # noqa: E731
     assert log("grant") == 1 and con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'init26p'", (ali["id"],)).fetchone()[0] == 1
@@ -1863,7 +1877,7 @@ def test_badge_variants(env):
     assert c.post("/api/me/unlocked", headers=A, json={"code": "init26", "level": 1}).json()["unlocked"] == []
     # take back: audited, the medal falls to the next variant; again: nothing to take
     assert drop("init26p").json()["has"] == ["init26f"] and log("ungrant") == 1
-    assert drop("init26p").json()["has"] == ["init26f"] and log("ungrant") == 1
+    assert drop("init26p").status_code == 404 and log("ungrant") == 1
     ini = next(a for a in c.get(f"/api/users/{ali['id']}", headers=A).json()["awards"]["achievements"] if a["code"] == "init26")
     assert ini["variant"] == "init26f" and ini["emoji"] == "medal_init26f_2"
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26p:1' AND sent_at IS NULL", (ali["id"],)).fetchone()
@@ -1882,7 +1896,7 @@ def test_badge_variants(env):
     token = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "init26p")
     bea = tma(62, "Bea")
     assert c.post(f"/api/grant-links/{token}", headers=bea).json() == {"code": "init26p"}
-    assert c.post(f"/api/grant-links/{token}", headers=bea).json()["error"] == "closed"
+    assert c.post(f"/api/grant-links/{token}", headers=bea).json() == {"code": "init26p"}         # again: fine, nothing more
     assert c.post(f"/api/grant-links/{token}", headers=A).json()["error"] == "closed"
     assert next(a for a in c.get("/api/me", headers=bea).json()["unlocked"] if a["code"] == "init26")
     acts = [r[0] for r in con.execute("SELECT action FROM audit_log WHERE target = ? ORDER BY id", (f"link:{token[:8]}",))]
@@ -1890,7 +1904,7 @@ def test_badge_variants(env):
     stale = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "init26")
     con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ?", (int(time.time()) - 1, stale))
     assert c.post(f"/api/grant-links/{stale}", headers=bea).json()["error"] == "closed"            # 7 days, then closed
-    title, text, button = texts.share_invite("gb", "en", award=texts.BADGE_TITLES["en"]["init26p"])
+    title, text, button = texts.share_invite("gb", "en", award=texts.BADGE_TITLES["en"]["init26p"], until="Nov 10")
     assert "Initiation 2026 · Performer" in text and button.endswith("Get it")
     con.close()
 
@@ -2043,7 +2057,7 @@ def test_club_applications(env, monkeypatch):
     con = db.connect(cfg.db_path)
     ping = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application'").fetchall()
     assert len(ping) == 1 and bot._render(con, ping[0])[2] == "capps"                               # the admin hears
-    assert c.get("/api/me", headers=B).json()["counters"]["clubApps"] == 1
+    assert c.get("/api/me", headers=B).json()["counters"]["inbox"] == 1
     assert c.get("/api/admin/club-applications", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
     real = logic.set_role
@@ -3385,8 +3399,10 @@ def test_grant_link(env):
     with pytest.raises(logic.ApiError):
         logic.grant_link(con, logic.Viewer(ali["id"], "user", True), "bugs")      # not the admin
     token = logic.grant_link(con, logic.Viewer(boss["id"], "admin", True), "bugs")
+    login(c, 62, "bea")
     assert c.post(f"/api/grant-links/{token}", headers=tma(61)).json() == {"code": "bugs"}
-    assert c.post(f"/api/grant-links/{token}", headers=tma(61)).json()["error"] == "closed"   # once
+    assert c.post(f"/api/grant-links/{token}", headers=tma(61)).json() == {"code": "bugs"}    # again: nothing more
+    assert c.post(f"/api/grant-links/{token}", headers=tma(62)).json()["error"] == "closed"   # one person
     assert con.execute("SELECT granted_by FROM achievement_grants WHERE user_id = ? AND code = 'bugs'", (ali["id"],)).fetchone()[0] == boss["id"]
 
 
@@ -4209,7 +4225,7 @@ def test_app_team(env):
     assert c.get("/api/admin/stats", headers=M).status_code == 403
     assert find(M, "user_x").status_code == 403 and c.get("/api/admin/club-applications", headers=M).status_code == 403   # clubs are the admin's
     assert c.post("/api/admin/feature", headers=M, json={"postId": 1, "days": 1}).status_code == 403
-    assert c.get("/api/me", headers=M).json()["counters"]["clubApps"] == 0
+    assert c.get("/api/me", headers=M).json()["counters"]["inbox"] == 0
     assert ban(A, "X", True, "testing an admin ban").status_code == 200 and ban(A, "X", False).status_code == 200   # an admin bans users
     assert c.post("/api/admin/ban", headers=O, json={"userId": ids["X"], "on": 1, "reason": "nope"}).status_code == 400   # a real bool
     assert ban(O, "X", True, "x" * 301).status_code == 400

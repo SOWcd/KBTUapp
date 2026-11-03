@@ -188,19 +188,20 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
         return _row(con, key, one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid))
 
 
-def grant_all(con, v: Viewer, sid: int, code: object) -> int:
-    """The owner gives a badge (a manual one, e.g. "init26") to everyone counted in a session, once each; how many got it."""
+def grant_all(con, v: Viewer, sid: int, code: object) -> dict:
+    """The owner gives a manual award (e.g. "init26") to everyone counted in a session, once each: how many got it and
+    the batch that undoes them all at once (logic.undo_batch)."""
     if not logic._owner(con, v):
         raise ApiError("forbidden")
     if code not in logic.GRANTABLE or code == "bugs" or not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
         raise ApiError("bad_input")
-    n = 0
+    n, batch = 0, f"q{sid}_{now()}"
     with tx(con):
         for (uid,) in rows(con, """SELECT m.user_id FROM qr_marks m JOIN students s ON s.user_id = m.user_id WHERE m.session_id = ?
                 AND m.done_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM achievement_grants g WHERE g.user_id = m.user_id AND g.code = ?)""", sid, code):
-            logic._grant(con, v.id, uid, str(code))
+            logic._grant(con, v.id, uid, str(code), batch)
             n += 1
-    return n
+    return {"granted": n, "batch": batch}
 
 
 def csv_link(con, key: bytes, v: Viewer, sid: int) -> dict:

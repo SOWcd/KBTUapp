@@ -35,24 +35,6 @@
   "hex": 2,
   "mix": 0
  },
- "screens/admin/AdminSheet.svelte": {
-  "font": 25,
-  "radius": 6,
-  "hex": 4,
-  "mix": 4
- },
- "screens/admin/AdminTeam.svelte": {
-  "font": 7,
-  "radius": 0,
-  "hex": 2,
-  "mix": 2
- },
- "screens/admin/GiveSheet.svelte": {
-  "font": 6,
-  "radius": 1,
-  "hex": 2,
-  "mix": 0
- },
  "screens/admin/MapFlaws.svelte": {
   "font": 1,
   "radius": 0,

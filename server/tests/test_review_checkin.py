@@ -32,7 +32,7 @@ def test_demoted_admins_link_stops_granting(env):
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (adm["id"],))
-    token = logic.grant_link(con, logic.Viewer(adm["id"], "admin", True), "creator_laugh")
+    token = logic.grant_link(con, logic.Viewer(adm["id"], "admin", True), "init26")
     assert c.post("/api/admin/staff", headers=tma(60), json={"userId": adm["id"], "role": "user"}).status_code == 200
     assert c.post(f"/api/grant-links/{token}", headers=tma(62)).json().get("error") == "closed"
     con.close()

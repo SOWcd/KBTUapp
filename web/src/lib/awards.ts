@@ -1,6 +1,6 @@
 // Awards as the profile shows them (SPEC §4.11): names, tiers, and the hero's data — one place for Me and the
 // person sheet.
-import type { Achievement, Badge, Id, OrgRef, PersonCard } from './api';
+import type { Achievement, Badge, GrantItem, Id, OrgRef, PersonCard } from './api';
 import { t, tn } from './i18n/index.svelte';
 import { RANK, roleName, titleOf } from './perms';
 import { dayMonth } from './time';
@@ -25,6 +25,27 @@ export const variantHow = (badge: string, code: string): string => t(`ach.${badg
 export const BADGES: { code: string; variants: { code: string; emoji: string }[] }[] = [
   { code: 'init26', variants: [{ code: 'init26p', emoji: 'medal_init26p_2' }, { code: 'init26', emoji: 'medal_init26_2' }, { code: 'init26f', emoji: 'medal_init26f_2' }] },
 ];
+/** the manual awards staff give, one entry per award (a badge's variants inside it, the highest first): `scan` false
+ *  for Bug hunter (it adds up, a QR seen twice would give it twice); `creator` ones the creator alone gives */
+export type Manual = { code: string; emoji: string; scan: boolean; creator?: boolean; variants?: { code: GrantItem['code']; emoji: string }[] };
+export const MANUAL: Manual[] = [
+  { code: 'creator_laugh', emoji: 'face_with_tears_of_joy_3d', scan: true, creator: true },
+  { code: 'creator_found', emoji: 'waving_hand_3d_default', scan: true, creator: true },
+  { code: 'bugs', emoji: 'lady_beetle_3d', scan: false },
+  ...BADGES.map((b) => ({ code: b.code, emoji: b.variants[0].emoji, scan: true, variants: b.variants as Manual['variants'] })),
+];
+/** a manual award (or one of its variants) drawn as a held medal (ui/Medal): Admin's rows, its award page, the chips */
+export const manualMedal = (code: string, emoji: string, held = true): Achievement =>
+  ({ code, emoji, secret: false, count: 0, level: held ? 1 : 0, levels: [{ need: 1, reached: held, rarity: 0 }], rarity: 0 });
+/** a manual award's display name: a badge by its own name, the rest as manualName */
+export const manualTitle = (a: Manual): string => (a.variants ? t(`ach.${a.code}.name` as 'ach.init26.name') : manualName(a.code));
+/** an award's grant codes: its variants, else itself */
+export const codesOf = (a: Manual): GrantItem['code'][] => a.variants?.map((v) => v.code) ?? [a.code as GrantItem['code']];
+/** the award a grant code belongs to */
+export const awardOf = (code: string): Manual => MANUAL.find((a) => codesOf(a).includes(code as GrantItem['code']))!;
+/** a manual award by name: a badge's variant with its badge ("Initiation 2026 · Performer"), or short (the variant alone) */
+export const manualName = (code: string, short = false): string =>
+  code.startsWith('init26') ? (short ? '' : t('ach.init26.name') + ' · ') + variantName('init26', code) : t(`ach.${code}.name` as 'ach.bugs.name');
 /** what it took: a badge's own variant says what I did there */
 /** a badge held in several variants as one entry per held variant, its own medal each; the rest as they are */
 export function splitVariants(list: Achievement[]): Achievement[] {

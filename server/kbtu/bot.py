@@ -209,8 +209,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
     if kind == "club_application_decided":  # cad:<id>:yes|no, to the applicant; a no's reason is read in the app (our words only here)
-        a = one(con, "SELECT name, org_id FROM club_applications WHERE id = ?", int(ref[1]))
-        if not a:
+        a = one(con, "SELECT name, org_id, status FROM club_applications WHERE id = ?", int(ref[1]))
+        if not a or a["status"] != ("approved" if ref[2] == "yes" else "rejected"):  # an Undo since: nothing to say
             return None
         return (*texts.bot_message(lang, "club_yes" if ref[2] == "yes" else "club_no", name=a["name"]), f"cl_{a['org_id']}" if ref[2] == "yes" and a["org_id"] else "newclub")
     if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic._hand_over)
@@ -222,7 +222,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "achievement":  # ach:<code>:<level>: a new level, once (→ aw_<code>: the card, Share there)
         code, level = ref[1], int(ref[2])
         a = next((x for x in logic.ACHIEVEMENTS if x[0] == code), None)
-        if not a:
+        # gone with an Undo or a take-back before it went out: nothing to say
+        if not a or not one(con, "SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = ? AND level >= ?", m["user_id"], code, level):
             return None
         tier = f" · {texts.tier_name(lang, level, len(a[2]))}" if len(a[2]) > 1 else ""
         return (*texts.bot_message(lang, kind, name=texts.pick(texts.ACH_NAMES, lang)[code], tier=tier), f"aw_{logic.BADGE_OF.get(code, code)}")  # a variant opens its badge
@@ -346,6 +347,9 @@ def purge(cfg: Config, con) -> None:
     receipts, photos = logic.delete_due(con)
     media.drop(home / "receipts", receipts)  # first: a failing step below mustn't leave the deleted accounts' receipts on disk
     photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
+    gone, pics = logic.events_gone(con)  # the admin's event deletes past their Undo's day
+    media.drop(home / "receipts", gone)
+    photos = photos + pics + logic.chats_gone(con)  # and chats removed from the catalog a week ago
     media.drop(home / "media", photos)
     media.drop(home / "media", [p for p in logic.wipe_hidden_posts(con) if logic.photo_free(con, p)])  # and the posts hidden 30 days ago
 
@@ -619,6 +623,7 @@ def _chores(cfg: Config, con) -> None:
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
     backup_day(cfg, con)  # a nightly copy of the database, 14 kept
     userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
+    logic.close_gone(con)  # reports of what went by itself (the queue, a GET, never writes)
     logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
     logic.fchannel.sweep(con)
 

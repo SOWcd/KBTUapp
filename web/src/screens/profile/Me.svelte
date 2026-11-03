@@ -62,7 +62,7 @@
   const SPOTS = [[36, 2, 27], [29, 39, 32], [26, 27, 1], [23, 28, 66], [21, 53, 68], [20, 6, 75], [18, 7, 2], [17, 55, 10], [17, 68, 50], [16, 68, 28], [15, 73, 8], [14, 76, 72], [14, 84, 38], [13, 86, 57], [12, 88, 21], [11, 88, 1], [11, 88, 86]];
   // which friends: shuffled once per app open (owner, Nov 2: not always the same A-names first), the ones with a photo first
   const faces = $derived(photosFirst(friends));
-  const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.reports + me.counters.clubApps : 0);
+  const asks = $derived(me?.role === 'admin' || me?.role === 'moderator' ? me.counters.inbox : 0);
 
   let page = $state<HTMLDivElement>();
 

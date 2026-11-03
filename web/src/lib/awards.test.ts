@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, layersOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS } from './awards';
+import { artOf, layersOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, awardOf, codesOf } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -53,4 +53,13 @@ it("every club's and school's lanyard QR ink reads on the white plate (>= 7:1)",
   };
   const low = [...Object.keys(CLUB_LOOKS), ...Object.keys(SCHOOL_LOOKS)].flatMap((k) => QR_LOOK[k as keyof typeof QR_LOOK]!.filter((c) => 1.05 / (lum(c) + 0.05) < 7).map((c) => `${k} ${c}`));
   expect(low).toEqual([]);
+});
+
+// Admin → Awards: one entry per award; a badge's grant codes are its variants, never the award's own code alone
+it('lists a badge once, its variants inside', () => {
+  expect(MANUAL.map((a) => a.code)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26']);
+  expect(codesOf(MANUAL[3])).toEqual(['init26p', 'init26', 'init26f']);
+  expect(codesOf(MANUAL[2])).toEqual(['bugs']);
+  for (const c of ['init26p', 'init26', 'init26f']) expect(awardOf(c).code).toBe('init26'); // a held Performer or Guest holds it
+  expect(MANUAL.flatMap(codesOf)).toEqual(['creator_laugh', 'creator_found', 'bugs', 'init26p', 'init26', 'init26f']);
 });

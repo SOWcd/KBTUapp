@@ -190,7 +190,7 @@ export interface Api {
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
   screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving
-  screenGrant(id: Id, code: string): Promise<{ granted: number }>;  // the owner: a badge variant to everyone counted (Admin → Badges)
+  screenGrant(id: Id, code: string): Promise<{ granted: number; batch: string }>;  // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
   eventScreen(event: Id): Promise<import('./types').ScreenSession>;                   // an event's own session, made on first use (organizers)
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download
   takenDown(): Promise<TakenDown[]>;                                                 // admin: the last 30 days' take-downs
@@ -204,19 +204,36 @@ export interface Api {
   clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
-  /** the owner's batch scanner: a badge QR is one grant; undo within a minute; what I gave */
-  grantScan(qr: string, code: GrantItem['code']): Promise<GrantItem>;
+  /** Admin → Awards: give a person a manual award (the bot sends them its card); undo: ungrant(its id) */
+  giveGrant(userId: Id, code: GrantItem['code']): Promise<GrantItem>;
+  /** the scanner: a person's card QR is one grant; `run` names this opening of the camera for undoBatch('s_' + run) */
+  grantScan(qr: string, code: GrantItem['code'], run?: string): Promise<GrantItem>;
+  /** undo one of my grants, at any time */
   ungrant(id: Id): Promise<void>;
-  /** a manual award back off a profile, at any time (a mistake): every grant of it */
-  takeBackGrant(userId: Id, code: GrantItem['code']): Promise<PersonCard>;
-  /** Admin → Badges: find a student, give or take a badge variant (giving twice is a no-op); the owner's check-in sessions */
+  /** undo a scanner run ('s_…'), a link's people ('l_' + token), a check-in session's (screenGrant's batch) */
+  undoBatch(batch: string): Promise<{ undone: number }>;
+  /** a manual award back off a person, at any time (a mistake): every grant of it */
+  takeBackGrant(userId: Id, code: GrantItem['code']): Promise<import('./types').BadgeHolder>;
+  /** Admin → Awards' rows: how many hold each award (a badge once a person); who holds one, newest first */
+  awardCounts(): Promise<Record<string, number>>;
+  awardPeople(award: string): Promise<GrantItem[]>;
+  /** one person's manual awards (the chips) */
+  awardsOf(userId: Id): Promise<import('./types').BadgeHolder>;
+  /** my award links of the last 30 days, live first, with who used each; revoke stops one now */
+  grantLinks(): Promise<import('./types').GrantLink[]>;
+  revokeLink(token: string): Promise<void>;
+  /** find a student with their manual awards; the owner's check-in sessions */
   badgePeople(q: string): Promise<import('./types').BadgeHolder[]>;
-  badgeSet(userId: Id, code: string, on: boolean): Promise<import('./types').BadgeHolder>;
   badgeSessions(): Promise<import('./types').BadgeSession[]>;
   useGrantLink(token: string): Promise<{ code: string }>;
   myGrants(): Promise<GrantItem[]>;
   staff(): Promise<Staff>;                                // admin: the app's team and the banned
   staffFind(username: string): Promise<StaffRow>;          // admin: anyone who opened the app, by @username
+  staffSearch(q: string): Promise<StaffRow[]>;                 // admin → People: by name, @username, student ID or id
+  inbox(): Promise<import('./types').Inbox>;               // staff: everything waiting, and what was done lately
+  undoDone(id: Id): Promise<void>;                         // a Done row taken back (each undo keeps its own rules)
+  adminDeleteEvent(id: Id): Promise<void>;                 // admin: hidden now, gone in a day (Undo till then)
+  adminRestoreEvent(id: Id): Promise<void>;
   setStaff(userId: Id, role: PlatformRole): Promise<Staff>; // admin role: the owner only
   ban(userId: Id, on: boolean, reason?: string): Promise<Staff>; // a reason to ban (he sees it)
   audit(): Promise<AuditRow[]>;                            // the owner: the last 200 actions done with power

@@ -435,12 +435,7 @@ def me(con, v: Viewer) -> dict:
                          **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {})} for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
-                     "reports": sum(_about(con, t, i) != v.id for t, i in rows(con, "SELECT DISTINCT target, target_id FROM reports WHERE status = 'open'"))
-                                + one(con, """SELECT COUNT(*) FROM tgc_comments c WHERE (c.status IN ('open', 'queued') OR c.review = 1)
-                                    AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)""",
-                                      v.id, v.id)[0]  # and the channel's comments in Telegram (tgcomments.queue_items' rule)
-                                if v.role in ("admin", "moderator") else 0,  # as the queue: not those about me
-                     "clubApps": one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0] if v.role == "admin" else 0},
+                     "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
         "frame": u["frame"] if s and u["frame"] in FRAMES else None,
@@ -1158,7 +1153,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
                     (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
         # his unsent invites in friends' queues; who he was in the role history
         con.execute("DELETE FROM bot_outbox WHERE kind = 'friend_invite' AND ref LIKE ? AND sent_at IS NULL", (f"fi:%:{v.id}",))
-        con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target = ?", (f"user:{v.id}",))
+        con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
         con.execute("UPDATE reports SET note = NULL WHERE (target = 'user' AND target_id = ?) OR reporter_id IS NULL", (v.id,))
         log_action(con, None, "delete_my_data", "user")
@@ -1302,7 +1297,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, fchannel, profiles  # noqa: E402
+from . import chatlist, core, fchannel, inbox, profiles  # noqa: E402
 from .clubs import TRANSLIT, orgs  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402

@@ -253,7 +253,7 @@ export interface Me {
   showcase: string[];
   settings: Settings;
   memberships: Membership[];
-  counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; reports: number /* admin: open reports */; clubApps: number /* admin: clubs waiting for the check */ };
+  counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one. Owner, Oct 13:
    *  badges as skins; never picked, a new club's comes by itself. */
   skin: Id | 'sower' | null;
@@ -552,7 +552,9 @@ export interface Achievement {
 }
 export interface BadgeVariant { code: string; emoji: string; have: boolean; rarity: number }
 /** Admin → Badges: a student found, with the badge variants they hold */
-export interface BadgeHolder { person: PersonRef; username: string | null; has: string[] }
+export interface BadgeHolder { person: PersonRef; username: string | null; has: GrantItem['code'][] }
+/** an award link (Admin → Awards): `max` people (null: no cap) until `until`; who used it, each undoable */
+export interface GrantLink { token: string; code: GrantItem['code']; at: Ts; until: Ts; max: number | null; people: GrantItem[] }
 export interface BadgeSession { id: Id; title: string; at: Ts; done: number }
 export interface Badge { eventId: Id; title: string; org: OrgRef; emoji: string; color: string; at: Ts }
 export interface Awards { achievements: Achievement[]; badges: Badge[] }
@@ -561,6 +563,15 @@ export interface Awards { achievements: Achievement[]; badges: Badge[] }
 export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
 /** "Yes, it's me" on a roster row under another name, for the club's President (or DMP) to confirm */
 export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
+
+/** Admin → Inbox (server logic/inbox.py): everything waiting for the staff, by role; hidden: already out of sight,
+ *  a person waits for the verdict. `flaws` is the map's open flaws as one card. */
+type InboxOf<K extends string, D> = { kind: K; key: string; at: Ts; hidden: boolean; data: D };
+export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'fpost', ChannelModPost>
+  | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest> | InboxOf<'flaws', { count: number }>;
+/** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
+export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
+export interface Inbox { items: InboxItem[]; done: DoneRow[] }
 
 export interface PersonCard extends PersonRef {
   forum?: ForumMe;              // their skills and "open to projects", for those who see the forum

@@ -475,8 +475,8 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
         raise ApiError("bad_input")
     with tx(con):
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status IN ('held', 'live')", pid)
-        if not p or p["status"] == "live" and ok:
-            raise ApiError("not_found")
+        if not p or p["status"] == "live" and ok:  # gone, or published meanwhile: by whom, when the log says
+            raise core.decided(con, f"fchan:{pid}") if one(con, "SELECT 1 FROM fchan_posts WHERE id = ?", pid) else ApiError("not_found")
         if p["user_id"] == v.id:  # their own: another moderator decides
             raise ApiError("forbidden")
         if ok:
@@ -762,7 +762,7 @@ def _mod_reply(con, v: Viewer, rid: int, where: str):
     _mod(v)
     r = one(con, "SELECT r.*, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND " + where, rid)
     if not r:
-        raise ApiError("not_found")
+        raise core.decided(con, f"fchanr:{rid}") if one(con, "SELECT 1 FROM fchan_replies WHERE id = ?", rid) else ApiError("not_found")
     if r["user_id"] == v.id:  # their own post's: another moderator decides
         raise ApiError("forbidden")
     return r

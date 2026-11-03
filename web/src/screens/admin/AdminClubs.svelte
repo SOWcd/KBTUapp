@@ -9,6 +9,7 @@
   import Search from '@lucide/svelte/icons/search';
   import Trash from '@lucide/svelte/icons/trash-2';
   import { sheets } from '../../lib/state/sheets';
+  import Registry from '../dmp/Registry.svelte';
   import { dayMonthShort } from '../../lib/time';
   import { api, ApiErr, type AdminEvent, type AdminOrg, type OrgRole } from '../../lib/api';
   import OrgLogo, { initials } from '../../ui/OrgLogo.svelte';
@@ -18,7 +19,7 @@
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { QR_TONE } from '../../lib/awards';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { loadAfisha, phrase } from '../../lib/state/data.svelte';
+  import { loadAfisha, loadInbox, phrase } from '../../lib/state/data.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { ROLE_NAME } from '../../lib/perms';
@@ -28,13 +29,20 @@
   import { TAB_ICON } from '../../ui/icons';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay }: { overlay: Overlay } = $props();
+  let { overlay, at }: { overlay: Overlay; at?: number } = $props();
   let orgs = $state<AdminOrg[] | null>(null);
-  $effect(() => { api.adminOrgs().then((l) => (orgs = l)).catch(() => (orgs = [])); });
+  $effect(() => {
+    api.adminOrgs().then((l) => {
+      orgs = l;
+      // from Admin's search: that one opened, alone in the list
+      const o = at != null ? l.find((x) => x.id === at) : undefined;
+      if (o) { kind = o.kind === 'school' ? 'school' : 'club'; q = o.name; card = o.id; }
+    }).catch(() => (orgs = []));
+  });
   let busy = $state(false);
   let q = $state('');
   // clubs and schools on their own tabs (the admin comes for clubs; the 11 schools are seeded and rarely touched)
-  let kind = $state<'club' | 'school'>('club');
+  let kind = $state<'club' | 'school' | 'registry'>('club');
   const ofKind = $derived((orgs ?? []).filter((o) => (o.kind === 'school') === (kind === 'school')));
   const schools = $derived((orgs ?? []).filter((o) => o.kind === 'school').length);
   const shown = $derived(ofKind.filter((o) => !q.trim() || o.name.toLowerCase().includes(q.trim().toLowerCase())));
@@ -88,7 +96,7 @@
     } catch { el.checked = o.official; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // ---- a club's events, any of them deletable by the admin only (owner, Oct 13: a club asks him to remove a test,
-  // test payments included). The confirm names what goes; payments or photos ask a second time, louder ----
+  // test payments included). The confirm names what goes; hidden at once, gone in a day: Undo in Admin → Done ----
   let evOf = $state<number | null>(null);
   let evs = $state<AdminEvent[] | null>(null);
   function showEvents(o: AdminOrg) {
@@ -98,14 +106,21 @@
   }
   async function dropEvent(x: AdminEvent) {
     const n = { people: x.people, came: x.came, paid: x.paid, photos: x.photos };
+    // people hold seats or paid: it's cancelled first (they hear it), then deleted
+    const live = x.status === 'published' && (x.startsAt ?? 0) * 1000 > Date.now() && (x.people > 0 || x.paid > 0);
+    if (live) {
+      if (!(await sheets.ask({ title: t('adm.cancelFirst', { title: x.title }), text: t('adm.cancelFirstText'), ok: t('adm.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
+      try { await api.cancelEvent(x.id); evs = evs!.map((y) => (y.id === x.id ? { ...y, status: 'cancelled' } : y)); void loadAfisha(); }
+      catch (e) { oops(e); return; }
+    }
     if (!(await sheets.ask({ title: t('adm.delAsk', { title: x.title }), text: t('adm.delText', n), ok: t('adm.delGo'), cancel: t('tk.keep'), danger: true }))) return;
-    if ((x.paid || x.photos) && !(await sheets.ask({ title: t('adm.delHard'), text: t('adm.delHardText'), ok: t('adm.delGo'), cancel: t('tk.keep'), danger: true }))) return;
+    const before = evs;
+    evs = evs!.filter((y) => y.id !== x.id);
     try {
-      await api.deleteEvent(x.id);
-      evs = evs!.filter((y) => y.id !== x.id);
-      haptic.warn(); say(t('adm.deleted'), 'waving_hand_3d_default');
-      void loadAfisha();
-    } catch (e) { oops(e); }
+      await api.adminDeleteEvent(x.id);
+      haptic.warn(); say(t('adm.evDeleted'), 'waving_hand_3d_default');
+      void loadAfisha(); void loadInbox(); // its Undo is in Done
+    } catch (e) { evs = before; oops(e); }
   }
   // a club's own short link: DMP takes any down (one leading somewhere it shouldn't)
   async function revoke(o: AdminOrg, slug: string) {
@@ -143,13 +158,16 @@
 </script>
 
 <Sheet {overlay} icon={TAB_ICON.club} full title={t('adm.clubs')}>
+  <!-- clubs, schools and DMP's registry of them: one place (owner, Nov 3: not three rows in More) -->
+  <div class="seg" role="tablist">
+    <button class:on={kind === 'club'} onclick={() => { kind = 'club'; card = null; }}>{t('clubs.clubs')}{orgs ? ` · ${orgs.length - schools}` : ''}</button>
+    {#if schools}<button class:on={kind === 'school'} onclick={() => { kind = 'school'; card = null; adding = false; }}>{t('clubs.schools')} · {schools}</button>{/if}
+    <button class:on={kind === 'registry'} onclick={() => { kind = 'registry'; card = null; adding = false; }}>{t('adm.registry')}</button>
+  </div>
+  {#if kind === 'registry'}
+    <Registry inSheet />
+  {:else}
   <p class="t-foot lead">{t('adm.lead')}</p>
-  {#if schools}
-    <div class="seg" role="tablist">
-      <button class:on={kind === 'club'} onclick={() => { kind = 'club'; card = null; }}>{t('clubs.clubs')} · {(orgs?.length ?? 0) - schools}</button>
-      <button class:on={kind === 'school'} onclick={() => { kind = 'school'; card = null; adding = false; }}>{t('clubs.schools')} · {schools}</button>
-    </div>
-  {/if}
   {#if adding && kind === 'club'}
     <form class="new" onsubmit={create} transition:fold>
       <label class="field"><span class="t-cap">{t('adm.name')}</span><input bind:value={nc.name} maxlength="60" enterkeyhint="next" /></label>
@@ -239,6 +257,7 @@
         <p class="t-foot none">{t(orgs.length ? 'adm.nothingFound' : 'adm.noClubs')}</p>
       {/each}
     </div>
+  {/if}
   {/if}
 </Sheet>
 

@@ -450,8 +450,12 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
 
 
 def cancel_event(con, v: Viewer, eid: int) -> dict:
+    """The club's Head+, or the admin (before deleting someone's event: Admin → Clubs; audited)."""
     with tx(con):
-        e = _staff_event(con, v, eid, "events")
+        e = one(con, "SELECT * FROM events WHERE id = ?", eid) if v.role == "admin" else None
+        if e and not can(con, v, e["org_id"], "events"):
+            log_action(con, v.id, "event_cancel", f"event:{eid}")
+        e = e or _staff_event(con, v, eid, "events")
         if e["status"] != "published":
             raise ApiError("conflict")
         con.execute("UPDATE events SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?", (core.now(), core.now(), eid))
@@ -473,7 +477,12 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             raise ApiError("conflict")
         if one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", eid):
             raise ApiError("conflict", "paid")
+    return _delete_event(con, eid)
+
+
+def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
     with tx(con):
+        con.execute("DELETE FROM meta WHERE key = ?", (f"evdel:{eid}",))
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
             WHERE r.event_id = ?""", eid)]
         pics = [r[0] for r in rows(con, """SELECT file_id FROM event_photos WHERE event_id = ?
@@ -491,6 +500,57 @@ def delete_event(con, v: Viewer, eid: int) -> tuple[list[str], list[str]]:
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{post[0]}", thread[0] if thread else ""))
         receipts = [p for f in paid for p in _drop_photo(con, f)]
         photos = [p for f in pics for p in _drop_unused(con, f)]
+    return receipts, photos
+
+
+EVENT_UNDO = 86400  # Admin's delete: hidden at once, gone for good a day later (Admin → Done has the Undo till then)
+
+
+def admin_delete_event(con, v: Viewer, eid: int) -> None:
+    """The admin deletes a club's event (a test, a mistake; paid and photographed too): hidden from everyone at once
+    (hidden_at), deleted with its receipts and photos by the bot's round after EVENT_UNDO (events_gone)."""
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    with tx(con):
+        e = one(con, "SELECT id, title, status, hidden_at, COALESCE(ends_at, starts_at, 0) > ? AS ahead FROM events WHERE id = ?", core.now(), eid)
+        if not e:
+            raise ApiError("not_found")
+        if one(con, "SELECT 1 FROM meta WHERE key = ?", f"evdel:{eid}"):
+            raise core.decided(con, f"event:{eid}")
+        # people hold seats or paid for one still ahead: it's cancelled first (they hear it, seats and receipts stay); then deleted
+        if e["status"] == "published" and e["ahead"] and one(con, """SELECT 1 FROM registrations WHERE event_id = ? AND status IN ('going', 'hold', 'waitlist')
+                UNION ALL SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?""", eid, eid):
+            raise ApiError("conflict", "cancel_first")
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"evdel:{eid}", json.dumps({"due": core.now() + EVENT_UNDO, "hidden": e["hidden_at"]})))
+        con.execute("UPDATE events SET hidden_at = COALESCE(hidden_at, ?) WHERE id = ?", (core.now(), eid))
+        log_action(con, v.id, "event_delete", f"event:{eid}", json.dumps({"title": e["title"]}))
+
+
+def undo_delete_event(con, v: Viewer, eid: int) -> None:
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    with tx(con):
+        k = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"evdel:{eid}")
+        if not k:
+            raise ApiError("not_found")
+        con.execute("UPDATE events SET hidden_at = ? WHERE id = ?", (json.loads(k[0])["hidden"], eid))
+        log_action(con, v.id, "event_undo", f"event:{eid}")
+
+
+def events_gone(con) -> tuple[list[str], list[str]]:
+    """The bot's round: the admin's deletes past their Undo, gone for good; their receipts and photos (to delete)."""
+    receipts: list[str] = []
+    photos: list[str] = []
+    for k, val in rows(con, "SELECT key, value FROM meta WHERE key LIKE 'evdel:%'"):
+        if json.loads(val)["due"] <= core.now():
+            con.execute("UPDATE events SET hidden_at = COALESCE(hidden_at, ?) WHERE id = ?", (core.now(), int(k[6:])))  # whatever undid the hide meanwhile
+            try:
+                r, p = _delete_event(con, int(k[6:]))
+            except ApiError:  # gone meanwhile (its club's own delete)
+                con.execute("DELETE FROM meta WHERE key = ?", (k,))
+                continue
+            receipts += r
+            photos += p
     return receipts, photos
 
 

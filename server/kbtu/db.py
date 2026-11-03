@@ -1147,6 +1147,24 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
     CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
     CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;"""),
+    # Admin → Awards (Nov 3): a grant's batch, undone at once: a scanner run ('s_…'), a link's people ('l_<token>'), a
+    # check-in session's ('q<sid>_<ts>'); a link's cap of people (NULL: no cap)
+    (118, """ALTER TABLE achievement_grants ADD COLUMN batch TEXT;
+    CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
+    ALTER TABLE grant_links ADD COLUMN max_uses INTEGER;
+    -- who used a link, once each: its cap counts these, so an undo or a deleted account never frees a slot (user_id
+    -- goes NULL with the account and the row stays)
+    CREATE TABLE grant_link_uses (
+      id      INTEGER PRIMARY KEY,
+      token   TEXT NOT NULL REFERENCES grant_links(token) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      at      INTEGER NOT NULL,
+      UNIQUE (token, user_id)
+    ) STRICT;
+    CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);"""),
+    # Admin → Inbox (Nov 3): decided() and Undo read a thing's newest line, Done the last 30 days
+    (119, """CREATE INDEX IF NOT EXISTS audit_by_target ON audit_log(target, id);
+    CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
 ]
 
 

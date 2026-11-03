@@ -119,7 +119,7 @@ def main(args: list[str]) -> None:
         owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
         if not owner:
             sys.exit("no owner (the founder admin) yet")
-        print(f"granted {args[3]} to {checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])} people")
+        print(f"granted {args[3]} to {checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])['granted']} people")
     elif cmd == "mapflaws":  # the map's open flaws for a map session: floor, the plan's units, the words
         for r in rows(con, "SELECT * FROM map_flaws WHERE done_at IS NULL ORDER BY floor, created_at"):
             at = f"plan {r['px']:.1f},{r['py']:.1f}" if r["px"] is not None else f"sheet {r['u']:.4f},{r['v']:.4f}"

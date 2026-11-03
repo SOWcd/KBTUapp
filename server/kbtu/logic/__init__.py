@@ -12,7 +12,7 @@ from __future__ import annotations
 from .core import (NAME, STUDENT_ID, ApiError, DOOR_EARLY, DOOR_LATE, GOV_SLUG, HOLD, LEVEL_RIGHTS, NO_END, PERSON, PERSON_COLS,
     PROFILE_QR, RANK, RIGHTS, SEASON_MONTHS, TWO_GIS, Viewer, _by_id, _door_ref, _event_cover, _free_seat, _may, _once,
     _org, _qs, _rights, _rights_from, _roles, academic_year, add_photo, at_least, avatar_of, can, card, cards,
-    clean_nick, course_cap, course_day, course_of, free_taken, friend_ids, full, log, log_action, media_shape,
+    clean_nick, course_cap, course_day, course_of, decided, free_taken, friend_ids, full, log, log_action, media_shape,
     need_student, now, one, org_ref, organizes, overseer, person_ref, photo, rights_of, role_in, rows, short_name,
     shown_name, taken)  # noqa: F401
 from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _ics_text, _receipt_flags,
@@ -32,35 +32,35 @@ from .account import (CONSENT, CONSENT_AI, agreed, ai_on, policy, CONSENT_BOARD,
 from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, REAPPLY, RESERVED,
     SCHOOLS, SCHOOLS_VERSION, SHORT, SLUG, TRANSLIT, _HEAD, _KB, _SEP, _TAIL, _acronym, _club_app, _keep_name,
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,
-    club_applications, create_org, decide_club_application, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
+    club_applications, create_org, decide_club_application, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
     people, seed_schools, slug_for, start_by_slug, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hide_post, post_shape, post_shapes, posts,
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
     add_chat, add_org_chat, approve_chat, bot_added, bot_left, chat_card, chat_handle, chat_input, chat_link,
-    chat_opened, chat_refreshed, chats, delete_chat, drop_org_chat, main_org_chat, may_chats,
+    chat_opened, chat_refreshed, chats, chats_gone, delete_chat, pending_chats, undo_chat, drop_org_chat, main_org_chat, may_chats,
     mirror_org_chat, org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, SECTIONS, chat_links, known_chat,
     set_chat_section, sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (DMP_COLS, QUIET_FOR, STAFF_ROLES, _STAFF, _admin, _admin_org, _dmp_person, _mod, _month,
     _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_org_events, admin_orgs,
-    admin_set_role, audit, ban_info, find_anyone, find_user, registry, registry_export, registry_memos,
+    admin_set_role, audit, ban_info, find_anyone, find_people, find_user, registry, registry_export, registry_memos,
     registry_roster, registry_search, set_ban, set_official, set_role, set_staff, staff)  # noqa: F401
 from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN_KEEP, _about, _moderates, _thread,
-    add_comment, comments, delete_comment, purge_takedowns, report, report_queue, resolve_report, restore,
+    add_comment, close_gone, comments, delete_comment, purge_takedowns, report, report_queue, resolve_report, restore,
     set_comments_on, taken_down)  # noqa: F401
-from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, GRANT_LINK_TTL, LINK_TTL, PROFILES_A_DAY,
+from .profiles import (ACHIEVEMENTS, FIRST_N, FRIEND_ASKS_A_DAY, GRANTABLE, CREATOR_ONLY, LINK_TTL, PROFILES_A_DAY,
     REASK_AFTER, _befriend, _came, _celebrate, _counts, _drop_grant, _friend_row, _grant, _levels, _season_start,
     _stranger_view, _streak, _student, _week, achievements, anthem_heard, answer_friend, ask_friend, attended, brought, card_no,
     find_student, first_fifty, link_card, add_by_link, friend_joined, friends, friendship, claim_link, grant, grant_link, grant_scan,
-    BADGES, BADGE_OF, badge_people, badge_sessions, badge_set, my_grants, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
+    BADGES, BADGE_OF, award_counts, award_people, awards_of, badge_people, badge_sessions, my_grants, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back, take_back_request, unfriend, ungrant, unlocked,
     use_friend_link, use_grant_link)  # noqa: F401
 from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MAX, GUEST_DAYS, GUEST_NAME,
     INVITES_A_DAY, LEAD_ROLES, PHOTO_REPORT_AT, RATE_FOR, RATE_SHOW, SLIDES, UNDO, UPDATES_A_DAY, _album_room,
     _album_view, _ask_rating, _asking, _changed, _cover, _expected, _focus, _guest, _invited_leaders, _meeting_ok,
     _norm_name, _pay, _rating_view, _slides, _staff_event, _team_door, _walk_in, add_album_photo, add_door_guest,
     attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
-    clean_event, create_event, decline, delete_event, delete_update, door, door_guests, event_invites, invite_friend,
+    admin_delete_event, clean_event, create_event, decline, delete_event, events_gone, undo_delete_event, delete_update, door, door_guests, event_invites, invite_friend,
     kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,
     remove_album_photo, screen_came, shade, undo_checkin, undo_door_guest, update_event)  # noqa: F401
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
@@ -75,5 +75,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     _skills_of, add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
-from . import assistant, fchannel, mapflaws, tgcomments  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import assistant, fchannel, inbox, mapflaws, tgcomments  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

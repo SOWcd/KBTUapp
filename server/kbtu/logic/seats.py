@@ -210,7 +210,7 @@ def _calendar(lines: list[str], *head: str) -> str:
 
 
 def event_ics(con, eid: int, link: str) -> str:
-    e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published'", eid)
+    e = one(con, "SELECT e.*, o.name AS org_name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND o.status != 'hidden'", eid)
     if not e or not e["starts_at"]:
         raise ApiError("not_found")
     return _calendar(_vevent(e, link))

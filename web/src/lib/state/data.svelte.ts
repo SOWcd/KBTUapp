@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type TeamMember } from '../api';
+import { api, ApiErr, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type TeamMember } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
@@ -25,6 +25,8 @@ export const data = $state({
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
+  inbox: null as Inbox | null,                // the staff's Admin → Inbox: loaded with the app, again each time Admin opens
+  adminStats: null as AdminStats | null,      // the admins' Admin → stats card: with the inbox (moderators never see it)
   error: false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
@@ -101,6 +103,17 @@ export async function loadAfisha(): Promise<void> {
     data.error = events.status === 'rejected';
   } catch { data.error = true; }
   data.eventsReady = true;
+}
+
+/** Admin → Inbox and Done, the staff's (one request); the shield's number catches up with it. withStats: the admin's
+ *  numbers too (the app's start and Admin opening; not after each decision) */
+export async function loadInbox(withStats = false): Promise<void> {
+  if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
+  if (withStats && session.me.role === 'admin') api.adminStats().then((s) => (data.adminStats = s)).catch(() => {});
+  try {
+    data.inbox = await api.inbox();
+    if (session.me && session.me.counters.inbox !== data.inbox.items.length) session.me.counters.inbox = data.inbox.items.length;
+  } catch { /* the list keeps what it had */ }
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again

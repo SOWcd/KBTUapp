@@ -78,6 +78,32 @@ def log_action(con, actor: int | None, action: str, target: str, data: str = "{}
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)", (actor, action, target, data, now()))
 
 
+# the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
+MOD_DONE = ("report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
+            "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "chat_approve", "chat_decline", "chat_remove")
+ADMIN_DONE = ("capp_yes", "capp_no", "roster_ok", "roster_no", "event_delete", "tg_report_close")
+UNDOES = ("restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "chat_undo", "event_undo",
+          "tg_report_open")
+DECISIONS = MOD_DONE + ADMIN_DONE + UNDOES
+
+
+def same_targets(target: str) -> tuple[str, ...]:
+    """One thing's audit targets: a forum channel post is fpost:N for its reports and fchan:N for its moderation."""
+    kind, _, ref = target.partition(":")
+    return (f"fpost:{ref}", f"fchan:{ref}") if kind in ("fpost", "fchan") else (target,)
+
+
+def decided(con, target: str) -> ApiError:
+    """Two staff on one item: the second decision is a conflict that names who came first, from the audit log's
+    decision lines only (never another kind of line: a look-up or a ban is nobody's business here). No line: the thing
+    went by itself, its author deleted it."""
+    ts = same_targets(target)
+    a = one(con, f"""SELECT actor_id, action, at FROM audit_log WHERE target IN ({','.join('?' * len(ts))})
+        AND action IN ({','.join('?' * len(DECISIONS))}) ORDER BY id DESC LIMIT 1""", *ts, *DECISIONS)
+    p = one(con, PERSON + " WHERE u.id = ?", a["actor_id"]) if a and a["actor_id"] else None
+    return ApiError("conflict", "decided", {"by": shown_name(p) if p else None, "action": a["action"] if a else None, "at": a["at"] if a else None})
+
+
 def need_student(v: Viewer) -> None:
     if not v.student:
         raise ApiError("need_student")

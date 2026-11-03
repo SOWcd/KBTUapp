@@ -8,7 +8,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
@@ -130,9 +130,8 @@
   sheets.academic = () => lazy(() => import('./screens/sheets/AcademicSheet.svelte'), {});
   sheets.anthem = () => lazy(() => import('./screens/sheets/AnthemSheet.svelte'), {});
   sheets.awards = () => lazy(() => import('./screens/profile/AwardsSheet.svelte'), {});
-  sheets.give = () => lazy(() => import('./screens/admin/GiveSheet.svelte'), {});
-  sheets.badges = () => lazy(() => import('./screens/admin/BadgesSheet.svelte'), {});
-  sheets.adminClubs = () => lazy(() => import('./screens/admin/AdminClubs.svelte'), {});
+  sheets.adminAwards = sheets.give = sheets.badges = () => lazy(() => import('./screens/admin/AdminAwards.svelte'), {});
+  sheets.adminClubs = (at) => lazy(() => import('./screens/admin/AdminClubs.svelte'), { at });
   sheets.adminChats = () => lazy(() => import('./screens/admin/AdminChats.svelte'), {});
   sheets.adminForum = () => lazy(() => import('./screens/admin/AdminForum.svelte'), {});
   sheets.schedHowTo = () => lazy(() => import('./screens/sheets/ScheduleHowTo.svelte'), {});
@@ -145,7 +144,6 @@
   sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
-  sheets.adminTeam = () => lazy(() => import('./screens/admin/AdminTeam.svelte'), {});
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});
   sheets.roster = (org, onofficial) => lazy(() => import('./screens/dmp/Roster.svelte'), { org, onofficial });
@@ -172,7 +170,7 @@
   const TAB_LABEL: Record<Tab, () => string> = { afisha: () => t('tab.afisha'), forum: () => t('tab.forum'), club: () => t('page.clubs'), profile: () => t('tab.profile') };
   const TAB_DOT: Record<Tab, () => boolean> = {
     afisha: () => (session.me?.counters.unreadBroadcasts ?? 0) > 0, forum: () => false, club: () => false,
-    profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.reports ?? 0) + (session.me?.counters.clubApps ?? 0) > 0,
+    profile: () => (session.me?.counters.friendRequests ?? 0) > 0 || (session.me?.counters.inbox ?? 0) > 0,
   };
   /** A club of mine: the Clubs tab with its Studio pushed over it. */
   function toClub(org: number) { ui.tab = 'club'; sheets.studio(org); }
@@ -435,6 +433,7 @@
       const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
       if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
       if (session.me?.oversee) void loadRegistry();
+      void loadInbox(true); // staff only (it checks)
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;

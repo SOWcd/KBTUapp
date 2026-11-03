@@ -14,6 +14,7 @@ The file never enters the repo: tools/roster_convert.py turns it into JSON besid
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
 import sqlite3
@@ -293,14 +294,19 @@ def requests(con, v, org: int | None = None) -> list[dict]:
 
 def decide(con, v, rid: int, ok: bool) -> None:
     """The President (or DMP) on a claim: it's them (joined with the row's data, a toast on their next open) or not
-    (the row stays for the right person, flagged)."""
-    from .logic import ApiError
-    r = one(con, "SELECT * FROM roster_pending WHERE id = ? AND claimed_by IS NOT NULL", rid)
-    if not r:
-        raise ApiError("not_found")
-    if not _approves(con, v, r["org_id"]):
-        raise ApiError("forbidden")
-    with tx(con):
+    (the row stays for the right person, flagged). Audited by the club, never the sheet's name."""
+    from .logic import ApiError, decided, log_action
+    with tx(con):  # read and decided in one: a second tap (or a second DMP person) finds it decided
+        r = one(con, "SELECT * FROM roster_pending WHERE id = ?", rid)
+        done = one(con, "SELECT data FROM audit_log WHERE target = ? AND action IN ('roster_ok', 'roster_no') ORDER BY id DESC LIMIT 1", f"roster:{rid}")
+        org = r["org_id"] if r else json.loads(done["data"]).get("org") if done else None
+        if org is None:
+            raise ApiError("not_found")
+        if not _approves(con, v, org):  # before saying who decided: that's only the club's own business
+            raise ApiError("forbidden")
+        if not r or r["claimed_by"] is None:  # confirmed (the row went) or turned down (unclaimed) a moment ago
+            raise decided(con, f"roster:{rid}") if done else ApiError("not_found")
+        log_action(con, v.id, "roster_ok" if ok else "roster_no", f"roster:{rid}", json.dumps({"org": org}))
         came = one(con, "SELECT value FROM meta WHERE key = ?", f"rclaim:{rid}")
         con.execute("DELETE FROM meta WHERE key = ?", (f"rclaim:{rid}",))
         if ok:

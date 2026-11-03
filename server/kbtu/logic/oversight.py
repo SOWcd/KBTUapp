@@ -204,6 +204,24 @@ def find_anyone(con, v: Viewer, username: str) -> dict:
     return {**_staff_row(p), "banned": one(con, "SELECT banned_at FROM users WHERE id = ?", p["id"])["banned_at"] is not None}
 
 
+def find_people(con, v: Viewer, q: object) -> list[dict]:
+    """Admin → People: anyone who opened the app by exact @username or app id, students also by name or student ID
+    (which only matches, never comes back). The team's own row shape, the ban with it."""
+    _admin(v)
+    q = str(q or "").strip().lstrip("@")
+    if not (2 <= len(q) or q.isdigit()) or len(q) > 64:
+        raise ApiError("bad_input")
+    like = "%" + re.sub(r"([\\%_])", r"\\\1", q) + "%"
+    found = rows(con, _STAFF.replace("SELECT ", "SELECT u.banned_at, ", 1) + r""" WHERE u.tg_id > 0 AND (lower(u.tg_username) = lower(?) OR u.id = ?
+            OR s.user_id IS NOT NULL AND (upper(s.student_id) = upper(?)
+            OR s.first_name || ' ' || s.last_name LIKE ? ESCAPE '\' OR s.last_name || ' ' || s.first_name LIKE ? ESCAPE '\'
+            OR coalesce(s.first_lat, '') || ' ' || coalesce(s.last_lat, '') LIKE ? ESCAPE '\'
+            OR coalesce(s.last_lat, '') || ' ' || coalesce(s.first_lat, '') LIKE ? ESCAPE '\' OR u.nick LIKE ? ESCAPE '\'))
+        ORDER BY lower(u.tg_username) = lower(?) DESC, s.last_name, s.first_name LIMIT 20""",
+                 q, int(q) if q.isdigit() else -1, q, *[like] * 5, q)
+    return [{**_staff_row(p), "banned": p["banned_at"] is not None} for p in found]
+
+
 def _touchable(con, v: Viewer, uid) -> sqlite3.Row:
     _admin(v)
     if not isinstance(uid, int) or isinstance(uid, bool):
@@ -344,7 +362,8 @@ def admin_org_events(con, v: Viewer, oid: int) -> list[dict]:
         (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND checked_in_at IS NOT NULL) AS came,
         (SELECT COUNT(*) FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = e.id) AS paid,
         (SELECT COUNT(*) FROM event_photos WHERE event_id = e.id) AS photos
-        FROM events e WHERE e.org_id = ? ORDER BY COALESCE(e.starts_at, 0) DESC, e.id DESC""", oid)]
+        FROM events e WHERE e.org_id = ? AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || e.id)
+        ORDER BY COALESCE(e.starts_at, 0) DESC, e.id DESC""", oid)]
 
 
 def admin_create_org(con, v: Viewer, body: dict) -> dict:

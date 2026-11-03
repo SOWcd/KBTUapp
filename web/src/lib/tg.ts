@@ -172,7 +172,7 @@ export function shareMessage(preparedId: string): Promise<boolean> {
  *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
  *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */
 /** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
-export async function shareCard(card: Record<string, string | boolean>, link: string, text: string, ready?: () => void): Promise<boolean> {
+export async function shareCard(card: Record<string, string | number | boolean | null>, link: string, text: string, ready?: () => void): Promise<boolean> {
   if (inTelegram && can('8.0') && W?.shareMessage) {
     // the server reads initData from the header like every API call; the dev server still reads it from the body
     const r = await fetch('/api/share', { method: 'POST', headers: { Authorization: `tma ${W.initData}`, 'Content-Type': 'application/json' },

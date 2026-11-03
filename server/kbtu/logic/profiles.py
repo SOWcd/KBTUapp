@@ -108,13 +108,13 @@ def _came(con, e: sqlite3.Row, uid: int, write) -> None:
         _celebrate(con, p, before[p])
 
 
-def _celebrate(con, uid: int, before: dict[str, int]) -> None:
-    """Every level above `before` gets its date, the bot's card (once) and the app's unlock moment."""
+def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) -> None:
+    """Every level above `before` gets its date, the bot's card (once; at `after`) and the app's unlock moment."""
     for code, level in _levels(con, uid).items():
         if level > before[code]:
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at""", (uid, code, level, core.now()))
-            notify(con, uid, "achievement", f"ach:{code}:{level}")
+            notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
 
 def sync_levels(con) -> None:
@@ -162,112 +162,176 @@ BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, g
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
 GRANTABLE = ("bugs", "creator_laugh", "creator_found", "init26", "init26f", "init26p")  # the manual ones (§4.11); "First 500" is given at verification
+CREATOR_ONLY = ("creator_laugh", "creator_found")  # about the creator himself: he alone gives them (owner, Nov 3)
+BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
+LINK_DAYS = (1, 3, 7, 14)
+CARD_WAIT = 45  # a manual award's bot card waits this long, so an Undo stops it before it goes
+
+
+def _giver(con, v: Viewer, code: object) -> str:
+    """Who may give `code`: an admin; the creator's own two only the creator."""
+    _admin(v)
+    if type(code) is not str or code not in GRANTABLE:
+        raise ApiError("bad_input")
+    if code in CREATOR_ONLY and not _owner(con, v):
+        raise ApiError("forbidden")
+    return code
+
+
+def _item(con, gid: int) -> dict:
+    g = one(con, f"""SELECT g.id AS gid, g.code, g.created_at, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
+        LEFT JOIN students s ON s.user_id = u.id WHERE g.id = ?""", gid)
+    return {"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
 
 
 def grant(con, v: Viewer, uid: object, code: object) -> dict:
-    """The admin gives a manual achievement: "Bug hunter" one more time, or a secret one (once). Celebrated like any
-    new level; written to the audit log."""
-    _admin(v)
-    if code not in GRANTABLE or not isinstance(uid, int) or isinstance(uid, bool) or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
+    """The admin gives a manual award to a person picked in the app: "Bug hunter" one more time, the rest once.
+    Celebrated like any new level (the bot's card with a button, the unlock moment); audited. Undo: ungrant(id)."""
+    code = _giver(con, v, code)
+    if not isinstance(uid, int) or isinstance(uid, bool) or not one(con, "SELECT 1 FROM students WHERE user_id = ?", uid):
         raise ApiError("bad_input")
     with tx(con):
-        _grant(con, v.id, uid, str(code))
-    return person(con, v, uid)
+        gid = _grant(con, v.id, uid, code)
+    return _item(con, gid)
 
 
-def _grant(con, by: int, uid: int, code: str) -> int:
+def _grant(con, by: int, uid: int, code: str, batch: str | None = None, log: bool = True) -> int:
     if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", uid, code):
         raise ApiError("conflict")
     before = _levels(con, uid)
-    gid = con.execute("INSERT INTO achievement_grants (user_id, code, granted_by, created_at) VALUES (?, ?, ?, ?)", (uid, code, by, core.now())).lastrowid
-    log_action(con, by, "grant", f"user:{uid}", json.dumps({"code": code}))
-    _celebrate(con, uid, before)
+    gid = con.execute("INSERT INTO achievement_grants (user_id, code, granted_by, created_at, batch) VALUES (?, ?, ?, ?, ?)",
+                      (uid, code, by, core.now(), batch)).lastrowid
+    if log:  # a link's use is logged as that (use_grant_link), not as the maker's own grant
+        log_action(con, by, "grant", f"user:{uid}", json.dumps({"code": code, **({"batch": batch} if batch else {})}))
+    _celebrate(con, uid, before, core.now() + CARD_WAIT)
     return gid
 
 
-def grant_scan(con, v: Viewer, raw: object, code: object) -> dict:
-    """The owner's batch scanner on the Awards page (PLAN "Creator awards"): a badge QR is one grant of `code`; the app
-    keeps the camera open for the next one and offers a 5-second undo."""
-    _admin(v)
+def grant_scan(con, v: Viewer, raw: object, code: object, run: object = None) -> dict:
+    """Admin → Awards' scanner: a person's own card QR is one grant of `code`; the app keeps the camera open for the
+    next one. `run`: the app's id for this opening of the camera, so "Undo all from this run" is one call. Not Bug
+    hunter: it adds up, so a QR seen twice would give it twice."""
+    code = _giver(con, v, code)
     b = PROFILE_QR.search(str(raw or ""))
-    if code not in GRANTABLE:
+    if code == "bugs" or (run is not None and not (type(run) is str and BATCH.fullmatch(run))):
         raise ApiError("bad_input")
     if not b or not one(con, "SELECT 1 FROM users u JOIN students s ON s.user_id = u.id WHERE u.id = ? AND u.qr_code = ?", int(b[1]), b[2]):
         raise ApiError("not_found")
     with tx(con):
-        gid = _grant(con, v.id, int(b[1]), str(code))
-    return {"id": gid, "code": code, "at": core.now(), "person": person_ref(one(con, PERSON + " WHERE u.id = ?", int(b[1])))}
+        gid = _grant(con, v.id, int(b[1]), code, f"s_{run}" if run else None)
+    return _item(con, gid)
 
 
-GRANT_LINK_TTL = 7 * 86400
-
-
-def grant_link(con, v: Viewer, code: object) -> str:
-    """The admin's one-time award link ("Bug hunter" is earned in a chat, so it goes as a link there;
-    the face-to-face ones stay on the badge QR): one student, once, within 7 days."""
-    _admin(v)
-    if code not in GRANTABLE:
+def grant_link(con, v: Viewer, code: object, uses: object = 1, days: object = 7) -> str:
+    """An award link for people the admin can't pick in the app (a bug report in a chat, a crowd on stage): up to
+    `uses` people (None: no cap), each once, for `days`. Made when the share card is sent (app.py /api/share)."""
+    code = _giver(con, v, code)
+    if type(days) is not int or days not in LINK_DAYS or uses is not None and (type(uses) is not int or not 1 <= uses <= 1000):
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
-    con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-                (token, code, v.id, core.now(), core.now() + GRANT_LINK_TTL))
-    log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code}))  # who made it; its use: "grant_link_used"
+    con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi, max_uses) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                (token, code, v.id, core.now(), core.now() + days * 86400, uses))
+    log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code, "uses": uses, "days": days}))  # its uses: "grant_link_used"
     return token
 
 
 def use_grant_link(con, v: Viewer, token: str) -> dict:
-    """A student opened an award link: theirs, celebrated like any new level. A used or old link is 'closed'. A link
-    for many (`multi`, admin claim new) gives each student the award once until it expires; opened again by one who
-    has it: fine, nothing more (a chat's link gets tapped twice)."""
+    """A student opened an award link: theirs, celebrated like any new level. Each person once per link; opened again
+    by one who got it here: fine, nothing more (a chat's link gets tapped twice). Held already some other way:
+    'conflict', and the use stays for whom it was meant. Expired, revoked or full: 'closed'."""
     need_student(v)
     with tx(con):
-        # the maker still an admin: a demoted or banned one's links stop with the role
-        r = one(con, """SELECT g.* FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
-            WHERE g.token = ? AND (g.multi = 1 OR g.used_by IS NULL) AND g.expires_at > ?""", token, core.now())
-        if not r:
+        # the maker still an admin (a demoted or banned one's links stop with the role); the creator's own awards only
+        # from his links (an admin's from before they became his alone: closed). multi = 0: an older one-time link,
+        # closed once used (used_at: used_by goes NULL with the user's account)
+        r = one(con, """SELECT g.*, u.is_founder, (SELECT COUNT(*) FROM grant_link_uses x WHERE x.token = g.token) AS used
+            FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
+            WHERE g.token = ? AND (g.multi = 1 OR g.used_at IS NULL) AND g.expires_at > ?""", token, core.now())
+        if not r or (r["code"] in CREATOR_ONLY and not r["is_founder"]):
             raise ApiError("closed")
+        if one(con, "SELECT 1 FROM grant_link_uses WHERE token = ? AND user_id = ?", token, v.id):
+            return {"code": r["code"]}  # mine already: nothing more, even if it was taken back since
+        cap = r["max_uses"] if r["multi"] else 1
+        if cap is None and r["code"] != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
+            return {"code": r["code"]}  # a link with no cap held some other way (an older one, tapped again): quietly nothing
+        if cap is not None and r["used"] >= cap:
+            raise ApiError("closed")
+        _grant(con, r["created_by"], v.id, r["code"], f"l_{token}", log=False)
+        con.execute("INSERT INTO grant_link_uses (token, user_id, at) VALUES (?, ?, ?)", (token, v.id, core.now()))
         if not r["multi"]:
-            _grant(con, r["created_by"], v.id, r["code"])
             con.execute("UPDATE grant_links SET used_by = ?, used_at = ? WHERE token = ?", (v.id, core.now(), token))
-            log_action(con, v.id, "grant_link_used", f"link:{token[:8]}", json.dumps({"code": r["code"], "by": r["created_by"]}))
-        elif not one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
-            _grant(con, r["created_by"], v.id, r["code"])
+        log_action(con, v.id, "grant_link_used", f"link:{token[:8]}", json.dumps({"code": r["code"], "by": r["created_by"]}))
     return {"code": r["code"]}
 
 
-def claim_link(con, code: str, until: int, v: Viewer | None = None) -> str:
-    """admin claim new, or the owner's "Link for everyone" in Admin → Badges (v): a link many students open for `code`
-    (not Bug hunter: that one is earned one by one), given by the owner, until `until`. Signed-in KBTU students only, one
-    award each; forwarded beyond those it's meant for: accepted (owner, Nov 2: too many performers to give one by one)."""
+def claim_link(con, code: str, until: int) -> str:
+    """admin claim new (the CLI): a link many students open for `code` (not Bug hunter), given by the owner, until
+    `until`, no cap. The app's links are grant_link's."""
     owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
-    if v is not None and (not owner or v.id != owner[0]):
-        raise ApiError("forbidden")
-    if v is not None and (type(code) is not str or code not in BADGE_OF):  # from the app: badges only (the CLI keeps the rest)
-        raise ApiError("bad_input")
     if not owner or code not in GRANTABLE or code == "bugs" or until <= core.now():
         raise ApiError("bad_input")
     token = secrets.token_hex(12)
     con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi) VALUES (?, ?, ?, ?, ?, 1)",
                 (token, code, owner[0], core.now(), until))
-    if v is not None:
-        log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code, "many": True}))
     return token
 
 
-def ungrant(con, v: Viewer, gid: int) -> None:
-    """Undo a grant of mine within a minute (the scanner's undo): the level goes back, its unsent bot card goes."""
+def my_links(con, v: Viewer) -> list[dict]:
+    """Admin → Awards' links: mine from the last 30 days (the owner's: everyone's), live first, with who used each."""
     _admin(v)
-    g = one(con, "SELECT * FROM achievement_grants WHERE id = ? AND granted_by = ? AND created_at >= ?", gid, v.id, core.now() - 60)
-    if not g:
+    mine = _owner(con, v)
+    links = rows(con, """SELECT * FROM grant_links WHERE multi = 1 AND created_at > ? AND (? OR created_by = ?)
+        ORDER BY expires_at > ? DESC, created_at DESC, rowid DESC LIMIT 40""", core.now() - 30 * 86400, mine, v.id, core.now())
+    people: dict[str, list] = {}
+    for g in rows(con, f"""SELECT g.id AS gid, g.code, g.created_at, g.batch, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
+            LEFT JOIN students s ON s.user_id = u.id WHERE g.batch IN ({','.join('?' * len(links)) or "''"}) ORDER BY g.id DESC""",
+                  *(f"l_{x['token']}" for x in links)):
+        people.setdefault(g["batch"], []).append({"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)})
+    return [{"token": x["token"], "code": x["code"], "at": x["created_at"], "until": x["expires_at"], "max": x["max_uses"],
+             "people": people.get(f"l_{x['token']}", [])} for x in links]
+
+
+def revoke_link(con, v: Viewer, token: str) -> None:
+    """A link stops now (its people keep what they got: take that back on its card)."""
+    _admin(v)
+    if not con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ? AND expires_at > ? AND (? OR created_by = ?)",
+                       (core.now(), token, core.now(), _owner(con, v), v.id)).rowcount:
+        raise ApiError("not_found")
+    log_action(con, v.id, "grant_link_revoked", f"link:{token[:8]}")
+
+
+def ungrant(con, v: Viewer, gid: int) -> None:
+    """Undo one grant: the giver's own (a scan, a tap, a link's use), at any time; the owner any. The level goes back,
+    its unsent bot card goes."""
+    _admin(v)
+    owner = _owner(con, v)
+    g = one(con, "SELECT * FROM achievement_grants WHERE id = ? AND code IN ({}) AND (granted_by = ? OR ?)".format(','.join('?' * len(GRANTABLE))),
+            gid, *GRANTABLE, v.id, owner)
+    if not g or (g["code"] in CREATOR_ONLY and not owner):
         raise ApiError("not_found")
     _drop_grant(con, v, g)
 
 
-def take_back(con, v: Viewer, uid: object, code: object) -> dict:
-    """The admin takes back a manual award from a profile at any time (Bug hunter given to a friend
-    by mistake while testing, ten times over): every grant of it, by a person or a link; never the sign-in's "First 500"."""
+def undo_batch(con, v: Viewer, batch: object) -> int:
+    """Undo many at once: a scanner run ('s_…'), a link's people ('l_…'), a check-in session's ('q…'). Mine only
+    (the owner: anyone's). How many went back."""
     _admin(v)
-    if code not in GRANTABLE or not isinstance(uid, int) or isinstance(uid, bool):
+    if type(batch) is not str or not 0 < len(batch) <= 64:
+        raise ApiError("bad_input")
+    owner = _owner(con, v)
+    with tx(con):  # read and dropped under one write lock
+        gs = [g for g in rows(con, "SELECT * FROM achievement_grants WHERE batch = ? AND (granted_by = ? OR ?)", batch, v.id, owner)
+              if owner or g["code"] not in CREATOR_ONLY]
+        for g in gs:
+            _drop_grant(con, v, g)
+    return len(gs)
+
+
+def take_back(con, v: Viewer, uid: object, code: object) -> dict:
+    """The admin takes back a manual award from a person at any time (Bug hunter given to a friend by mistake while
+    testing, ten times over): every grant of it, by a person or a link; never the sign-in's "First 500"."""
+    code = _giver(con, v, code)
+    if not isinstance(uid, int) or isinstance(uid, bool):
         raise ApiError("bad_input")
     gs = rows(con, "SELECT * FROM achievement_grants WHERE user_id = ? AND code = ? ORDER BY id DESC", uid, code)
     if not gs:
@@ -275,7 +339,7 @@ def take_back(con, v: Viewer, uid: object, code: object) -> dict:
     with tx(con):
         for g in gs:
             _drop_grant(con, v, g)
-    return person(con, v, uid)
+    return awards_of(con, v, uid)
 
 
 def _drop_grant(con, v: Viewer, g) -> None:
@@ -292,23 +356,61 @@ def _drop_grant(con, v: Viewer, g) -> None:
 
 
 def my_grants(con, v: Viewer) -> list[dict]:
-    """"You gave: N" on the Awards page: the owner's grants, newest first."""
+    """What I gave, newest first: the Awards sheet's recent people."""
     _admin(v)
     return [{"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
             for g in rows(con, f"""SELECT g.id AS gid, g.code, g.created_at, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
                 LEFT JOIN students s ON s.user_id = u.id WHERE g.granted_by = ? AND g.code IN ({','.join('?' * len(GRANTABLE))})
                 ORDER BY g.created_at DESC, g.id DESC LIMIT 300""", v.id, *GRANTABLE)]
 
+# ---------------------------------------------------------------- Admin → Awards: a person's manual awards
 
-# ---------------------------------------------------------------- Admin → Badges: a badge variant by hand
+SHOWN = (*CREATOR_ONLY, "bugs", *BADGES["init26"])  # as the chips go; a badge's highest variant first
+
 
 def _badge_row(con, p) -> dict:
-    has = sorted((r[0] for r in rows(con, f"SELECT DISTINCT code FROM achievement_grants WHERE user_id = ? AND code IN ({','.join('?' * len(BADGE_OF))})", p["id"], *BADGE_OF)), key=list(BADGE_OF).index)  # the highest variant first
+    has = sorted((r[0] for r in rows(con, f"SELECT DISTINCT code FROM achievement_grants WHERE user_id = ? AND code IN ({','.join('?' * len(GRANTABLE))})", p["id"], *GRANTABLE)), key=SHOWN.index)
     return {"person": person_ref(p), "username": p["tg_username"], "has": has}
 
 
+def _codes(award: object) -> tuple[str, ...]:
+    """An award's grant codes: a badge's variants, else itself."""
+    if award in BADGES:
+        return BADGES[award]
+    if award in GRANTABLE and award not in BADGE_OF:
+        return (award,)
+    raise ApiError("bad_input")
+
+
+def award_counts(con, v: Viewer) -> dict:
+    """Admin → Awards' rows: how many people hold each manual award (a badge once, whatever its variants)."""
+    _admin(v)
+    have = dict(rows(con, f"""SELECT COALESCE(CASE {' '.join(f"WHEN code IN ({','.join(repr(c) for c in vs)}) THEN '{b}'" for b, vs in BADGES.items())} END, code),
+        COUNT(DISTINCT user_id) FROM achievement_grants WHERE code IN ({','.join('?' * len(GRANTABLE))}) GROUP BY 1""", *GRANTABLE))
+    return {a: have.get(a, 0) for a in (*CREATOR_ONLY, "bugs", *BADGES)}
+
+
+def award_people(con, v: Viewer, award: object) -> list[dict]:
+    """Who has an award, newest first: each person's latest grant of it (a badge: their variant), to take back."""
+    _admin(v)
+    codes = _codes(award)
+    return [{"id": g["gid"], "code": g["code"], "at": g["created_at"], "person": person_ref(g)}
+            for g in rows(con, f"""SELECT g.id AS gid, g.code, g.created_at, {PERSON_COLS} FROM achievement_grants g JOIN users u ON u.id = g.user_id
+                LEFT JOIN students s ON s.user_id = u.id WHERE g.id IN (SELECT MAX(id) FROM achievement_grants WHERE code IN ({','.join('?' * len(codes))}) GROUP BY user_id, code)
+                ORDER BY g.created_at DESC, g.id DESC LIMIT 500""", *codes)]
+
+
+def awards_of(con, v: Viewer, uid: object) -> dict:
+    """One person's manual awards for the admin's chips (Admin → People, Awards)."""
+    _admin(v)
+    p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + " WHERE u.id = ? AND s.user_id IS NOT NULL", uid) if type(uid) is int else None
+    if not p:
+        raise ApiError("not_found")
+    return _badge_row(con, p)
+
+
 def badge_people(con, v: Viewer, q: object) -> list[dict]:
-    """Students by name, @username, student ID or app id (the admin's search), each with the badge variants they hold.
+    """Students by name, @username, student ID or app id (the admin's search), each with the manual awards they hold.
     The student ID only matches, it is never sent back."""
     _admin(v)
     q = str(q or "").strip().lstrip("@")
@@ -323,24 +425,6 @@ def badge_people(con, v: Viewer, q: object) -> list[dict]:
             OR coalesce(s.last_lat, '') || ' ' || coalesce(s.first_lat, '') LIKE ? ESCAPE '\' OR u.nick LIKE ? ESCAPE '\')
         ORDER BY s.last_name, s.first_name LIMIT 20""", q, q, int(q) if q.isdigit() else -1, *[like] * 5)
     return [_badge_row(con, p) for p in found]
-
-
-def badge_set(con, v: Viewer, uid: int, code: str, on: bool) -> dict:
-    """Give a badge variant (idempotent: held already, nothing more) or take it back (every grant of it). Both audited
-    and celebrated or undone as any manual award; the variants' undo is the other call."""
-    _admin(v)
-    if code not in BADGE_OF:
-        raise ApiError("bad_input")
-    p = one(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + " WHERE u.id = ? AND s.user_id IS NOT NULL", uid)
-    if not p:
-        raise ApiError("not_found")
-    with tx(con):
-        held = rows(con, "SELECT * FROM achievement_grants WHERE user_id = ? AND code = ? ORDER BY id DESC", uid, code)
-        if on and not held:
-            _grant(con, v.id, uid, code)
-        for g in held if not on else ():
-            _drop_grant(con, v, g)
-    return _badge_row(con, p)
 
 
 def badge_sessions(con, v: Viewer) -> list[dict]:

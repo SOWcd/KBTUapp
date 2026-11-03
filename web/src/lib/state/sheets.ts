@@ -105,11 +105,13 @@ export const sheets = {
   anthem: () => {},
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
   awards: () => {},
-  /** the creator's own awards (the admin panel): a QR scanner each, "Bug hunter" a one-time link */
+  /** Admin → Awards: give a manual award to a person, by the scanner, by a link, to a check-in's people */
+  adminAwards: () => {},
+  /** the two older award sheets' names: both open Admin → Awards now */
   give: () => {},
-  /** Admin → Badges: a badge's variant (the initiation's guest, volunteer, performer) to a student, or to a check-in's people */
   badges: () => {},
-  adminClubs: () => {},
+  /** Admin → Clubs and schools; at: that club opened in the list (Admin's search) */
+  adminClubs: (_at?: Id) => {},
   adminChats: () => {},
   /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */
   adminForum: () => {},
@@ -132,8 +134,7 @@ export const sheets = {
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work */
   adminAi: () => {},
-  /** the app's team: roles and bans (admin); the audit log */
-  adminTeam: () => {},
+  /** the owner's audit log */
   adminAudit: () => {},
   /** suggest any chat for the catalog: paste @name or a link */
   suggestChat: () => {},
