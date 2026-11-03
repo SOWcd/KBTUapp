@@ -120,6 +120,7 @@
         <!-- the stub: torn off at the notches along the perforation -->
         <div class="stub">
           <i class="perf" aria-hidden="true"></i>
+          {#if skin === 'japanesecultureclub'}<i class="petals" aria-hidden="true"></i>{/if}<!-- their petals fall past the tear too (owner, Nov 3) -->
           {#if valid && my?.ticketCode}
             <div class="qrbox" class:used={!!my.checkedInAt}>
               <Qr text={'KBTU' + my.ticketCode} minVersion={4} tone={skin ? QR_LOOK[skin] : undefined}>{#if skin}<LookMark look={skin} />{:else}<OrgLogo org={e.org} />{/if}</Qr>
@@ -237,6 +238,12 @@
   .facts i { font: 650 var(--fs-tab)/1.2 var(--font-text); font-style: normal; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
   .facts b { font: 640 var(--fs-body)/1.3 var(--font-text); }
   .foot { margin-top: 14px; }
+  /* JCC: the same drifting petals as their scene (ui/ClubScene), under the QR and the text */
+  .petals { position: absolute; z-index: -1; left: -120px; top: -120px; width: calc(100% + 240px); height: calc(100% + 240px); pointer-events: none;
+    background: url('../../assets/lanyards/scenes/jcc-petals.svg') 0 0 / 120px 120px; opacity: 0.85; animation: tkpetal 24s linear infinite; }
+  @keyframes tkpetal { to { transform: translate(120px, 120px); } }
+  @media (prefers-reduced-motion: reduce) { .petals { animation: none; } }
+  :global(html.lowfx) .petals { animation: none; }
   .code { text-align: right; }
   .code b { letter-spacing: 0.08em; }
 
