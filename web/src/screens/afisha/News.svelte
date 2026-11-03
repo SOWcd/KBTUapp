@@ -30,6 +30,12 @@
   import { compact } from '../../lib/chats';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Section from '../../ui/Section.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import { menu } from '../../ui/menu';
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
   import { theme } from '../../lib/state/theme.svelte';
@@ -100,11 +106,18 @@
       haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default');
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // the ⋯ menu open on this post (featuring one on top of List is in Admin)
-  let menu = $state<number | null>(null);
+  // the ⋯ menu on a post, the shared one at the button (featuring one on top of List is in Admin)
+  function more(e: MouseEvent, p: Post) {
+    menu(e.currentTarget as Element, [
+      ...(p.canEdit ? [{ label: t('news.edit'), onselect: () => sheets.composer(p.org.id, p) },
+        { label: p.pinned ? t('news.unpin') : t('news.pin'), onselect: () => void pin(p) }] : []),
+      // anyone but its own club's writers: the one report sheet
+      ...(!p.canEdit && session.me?.student ? [{ label: t('cm.report'), onselect: () => sheets.report('post', p.id, p.title) }] : []),
+      ...(p.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown(p) }] : []),
+    ], 'end');
+  }
   // the club's Head+: one pinned post per club, on top of its news; the lists reload in the server's order
   async function pin(p: Post) {
-    menu = null;
     try { await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d'); void loadNews(); void loadAll(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
@@ -119,30 +132,19 @@
     <header class="ph">
       <OrgLogo org={p.org} size={36} />
       <span class="who"><b class="ellipsis">{nameOf(p.org)}</b><i><span class="when">{#if !cast}{why(p)}{/if}{ago(p.createdAt)}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</span>{#if p.pinned}<span class="pinned"><Pin size={12} />{t('news.pinned')}</span>{/if}</i></span>
-      {#if cast && !p.read}<span class="new">{t('news.new')}</span>{/if}
+      {#if cast && !p.read}<Tag tone="accent">{t('news.new')}</Tag>{/if}
       {#if p.tag}<Tag tone={p.tag === 'important' ? 'warning' : 'accent'}>{tagName(p.tag)}</Tag>{/if}
-      {#if p.canEdit || p.canDelete || session.me?.student}<button class="more" aria-label={t('common.more')} aria-expanded={menu === p.id} onclick={() => (menu = menu === p.id ? null : p.id)}><Ellipsis size={18} /></button>{/if}
+      {#if p.canEdit || p.canDelete || session.me?.student}<span class="more"><IconButton icon={Ellipsis} kind="plain" size="s" label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
     </header>
-    {#if menu === p.id}
-      <div class="pmenu">
-        {#if p.canEdit}
-          <button onclick={() => { menu = null; sheets.composer(p.org.id, p); }}>{t('news.edit')}</button>
-          <button onclick={() => pin(p)}>{p.pinned ? t('news.unpin') : t('news.pin')}</button>
-        {/if}
-        {#if p.canDelete}<button class="danger" onclick={() => { menu = null; void takeDown(p); }}>{t('news.hide')}</button>{/if}
-        <!-- anyone but its own club's writers: the one report sheet -->
-        {#if !p.canEdit && session.me?.student}<button onclick={() => { menu = null; sheets.report('post', p.id, p.title); }}>{t('cm.report')}</button>{/if}
-      </div>
-    {/if}
     <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{p.title}</h3>
     {#if p.body}
       <p class="bd" class:fold={long(p) && !open.has(p.id)}><Linked text={p.body} /></p>
-      {#if long(p) && !open.has(p.id)}<button class="unfold" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</button>{/if}
+      {#if long(p) && !open.has(p.id)}<span class="unfold"><Button kind="plain" size="s" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</Button></span>{/if}
     {/if}
-    <div class="vl">{#each videoLinks(p.body) as l (l.url)}<button class="tgm" onclick={() => openLink(l.url)}><SocialIcon kind={l.kind} size={16} />{l.label}</button>{/each}</div>
+    <div class="vl">{#each videoLinks(p.body) as l (l.url)}<Button kind="tinted" size="s" onclick={() => openLink(l.url)}>{#snippet icon()}<SocialIcon kind={l.kind} size={16} />{/snippet}{l.label}</Button>{/each}</div>
     {#if p.tg}
       <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
       {@const tg = p.tg}
@@ -155,19 +157,19 @@
       {:else if tg.media === 'video' && v}
         <iframe class="tgw" src={embed(tg.url)} title={p.title} use:fit allow="fullscreen; picture-in-picture" referrerpolicy="no-referrer"
           sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation"></iframe>
-      {:else if tg.media === 'video'}<button class="tgm" onclick={() => watch(p.id)}><Play size={16} />{t('tg.video')}</button>
-      {:else if tg.media}<button class="tgm" onclick={() => openLink(tg.url)}><Play size={16} />{t('tg.file')}</button>{/if}
+      {:else if tg.media === 'video'}<span class="tgm"><Button kind="tinted" size="s" onclick={() => watch(p.id)}>{#snippet icon()}<Play size={16} />{/snippet}{t('tg.video')}</Button></span>
+      {:else if tg.media}<span class="tgm"><Button kind="tinted" size="s" onclick={() => openLink(tg.url)}>{#snippet icon()}<Play size={16} />{/snippet}{t('tg.file')}</Button></span>{/if}
       <footer class="re tgf">
-        {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}
+        {#each tg.reactions.slice(0, 2) as [e, n] (e)}<Button kind="gray" size="s" onclick={() => openLink(tg.url)}>{#snippet icon()}<span class="tge">{e}</span>{/snippet}<span class="num">{compact(n)}</span></Button>{/each}
         {#if tg.views}<span class="tgv"><Eye size={15} />{compact(tg.views)}</span>{/if}
-        <button class="cm" onclick={() => openLink(tg.url)}><TelegramMark size={16} /><b>{t('tg.open')}</b></button>
+        <span class="cm"><Button kind="gray" size="s" onclick={() => openLink(tg.url)}>{#snippet icon()}<TelegramMark size={16} />{/snippet}{t('tg.open')}</Button></span>
       </footer>
     {:else}
     <footer class="re">
-      <button class:on={p.mine.fire} onclick={() => react(p, 'fire')} aria-pressed={p.mine.fire}><span class="ej"><Emoji name="fire_3d" size={20} /></span><b class="num">{p.reactions.fire}</b></button>
-      <button class:on={p.mine.heart} onclick={() => react(p, 'heart')} aria-pressed={p.mine.heart}><span class="ej"><Emoji name="blue_heart_3d" size={20} /></span><b class="num">{p.reactions.heart}</b></button>
+      <Button kind="gray" size="s" on={p.mine.fire} onclick={() => react(p, 'fire')}>{#snippet icon()}<span class="ej"><Emoji name="fire_3d" size={20} /></span>{/snippet}<span class="num">{p.reactions.fire}</span></Button>
+      <Button kind="gray" size="s" on={p.mine.heart} onclick={() => react(p, 'heart')}>{#snippet icon()}<span class="ej"><Emoji name="blue_heart_3d" size={20} /></span>{/snippet}<span class="num">{p.reactions.heart}</span></Button>
       {#if p.commentsOn || p.comments}
-        <button class="cm" onclick={() => sheets.comments('post', p.id, p.title, (n) => (p.comments = n))} aria-label={t('cm.title')}><MessageCircle size={18} /><b class="num">{p.comments || ''}</b></button>
+        <span class="cm"><Button kind="gray" size="s" round={!p.comments} label={t('cm.title')} onclick={() => sheets.comments('post', p.id, p.title, (n) => (p.comments = n))}>{#snippet icon()}<MessageCircle size={18} />{/snippet}{#if p.comments}<span class="num">{p.comments}</span>{/if}</Button></span>
       {/if}
     </footer>
     {/if}
@@ -182,33 +184,26 @@
 
   {#if casts && posts}
     {#if casts.length}
-      <h2 class="sh">{t('news.broadcasts', { dmp: t('tab.dmp') })}</h2>
-      <div class="list">{#each casts as p, i (p.id)}<div class="in" style="--i:{i}">{@render card(p, true)}</div>{/each}</div>
+      <Section title={t('news.broadcasts', { dmp: t('tab.dmp') })}>
+        <div class="list">{#each casts as p, i (p.id)}<div class="in" style="--i:{i}">{@render card(p, true)}</div>{/each}</div>
+      </Section>
     {/if}
     {#if feed?.length}
-      {#if casts.length}<h2 class="sh">{t('news.clubs')}</h2>{/if}
-      <div class="list">{#each feed as p, i (p.id)}<div class="in" style="--i:{i + (casts.length ? 2 : 0)}">{@render card(p, false)}</div>{/each}</div>
+      {#snippet clubs()}<div class="list">{#each feed as p, i (p.id)}<div class="in" style="--i:{i + (casts.length ? 2 : 0)}">{@render card(p, false)}</div>{/each}</div>{/snippet}
+      {#if casts.length}<Section title={t('news.clubs')}>{@render clubs()}</Section>{:else}{@render clubs()}{/if}
     {:else if !casts.length}
-      <section class="empty">
-        <Emoji name="sparkles_3d" size={64} />
-        <h2 class="t-h2">{t('news.emptyTitle')}</h2>
-        <p class="t-callout">{t('news.emptyText')}</p>
-      </section>
+      <EmptyState icon={Newspaper} title={t('news.emptyTitle')} text={t('news.emptyText')} />
     {/if}
   {:else}
-    <div class="skel"><span></span><span class="tall"></span><span></span></div>
+    <Skeleton kind="cards" n={3} />
   {/if}
 </div>
 </Sheet>
 
 <style>
-  .pmenu { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
-  .pmenu button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); color: var(--text); }
-  .pmenu .danger { color: var(--danger-text); background: var(--danger-soft); }
-  .news { display: flex; flex-direction: column; gap: 12px; }
+  .news { display: flex; flex-direction: column; gap: var(--s-3); }
   .news > :global(*) { flex-shrink: 0; }
-  .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 2px; }
-  .sh { font: 750 19px/1.2 var(--font-display); letter-spacing: -0.025em; margin-top: 6px; }
+  .hd { margin-bottom: 2px; }
   .list { display: flex; flex-direction: column; gap: 10px; }
   .in { animation: rise 440ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 60ms); }
 
@@ -217,57 +212,40 @@
   .post.cast { background: radial-gradient(120% 70% at 0% 0%, rgba(124, 77, 255, 0.12), transparent 60%), var(--surface); box-shadow: none; }
   .post.cast::before { content: ''; position: absolute; inset: 0; padding: 1.5px; border-radius: inherit; pointer-events: none;
     background: linear-gradient(135deg, rgba(59, 107, 255, 0.85), rgba(124, 77, 255, 0.6) 40%, var(--line) 70%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude; }
   .ph { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .who b { font: 650 14.5px/1.2 var(--font-text); }
+  .who b { font: 600 var(--fs-body)/1.2 var(--font-text); }
   /* when · edited, then the pin: on a narrow phone the pin takes the next line whole */
-  .who i { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .when { white-space: nowrap; }
+  .who i { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font: 500 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .when { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a narrow phone: "…", never under the tag */
   .pinned { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; color: var(--accent-text); }
-  .new { flex: none; padding: 4px 8px; border-radius: var(--r-full); background: var(--accent); color: #fff; font: 700 10.5px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase;
-    box-shadow: 0 0 0 4px var(--accent-soft); animation: glow 2s ease-in-out infinite; }
-  @keyframes glow { 50% { box-shadow: 0 0 0 7px transparent; } }
-  :global(html.lowfx) .new { animation: none; } /* power saving: a box-shadow glow repaints every frame */
-  .more { flex: none; display: flex; padding: 4px; margin: -4px -6px -4px 0; color: var(--text-3); }
-  .pic { display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 16px; background: var(--surface-2); }
+  .more { flex: none; display: flex; margin: -4px -6px -4px 0; --plain-ink: var(--text-3); }
+  .pic { display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: var(--r-m); background: var(--surface-2); }
   .pic img { width: 100%; height: 100%; object-fit: cover; }
-  .tt { font: 720 17px/1.25 var(--font-display); letter-spacing: -0.015em; }
-  .bd { font: 450 15px/1.45 var(--font-text); color: var(--text-2); white-space: pre-line; overflow-wrap: anywhere; }
+  .tt { font: 700 var(--fs-card)/1.25 var(--font-display); letter-spacing: -0.015em; }
+  .bd { font: 450 var(--fs-body)/1.45 var(--font-text); color: var(--text-2); white-space: pre-line; overflow-wrap: anywhere; }
   .bd.fold { display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-  .unfold { align-self: flex-start; margin-top: -4px; font: 650 14px/1 var(--font-text); color: var(--accent-text); padding: 2px 0; }
-  .re { display: flex; gap: 6px; margin-top: 2px; }
-  .re button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 8px; border-radius: var(--r-full); background: var(--surface-2);
-    transition: background-color var(--t-base) var(--ease), transform var(--t-fast) var(--ease); }
-  .re button:active { transform: scale(0.94); }
-  .re button.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
-  .re b { font: 680 13.5px/1 var(--font-text); }
-  .re .cm { margin-left: auto; padding: 0 12px; color: var(--text-2); }
-  .re .cm b:empty { display: none; }
+  .unfold { align-self: flex-start; margin: -6px 0 0 calc(-1 * var(--s-2)); }
+  .re { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  /* my reaction: Button's calm "on" with the count in the accent */
+  .re :global(.btn[aria-pressed='true'] .lbl) { color: var(--accent-text); }
+  .re .cm { display: flex; margin-left: auto; }
   .tgf { flex-wrap: wrap; row-gap: 6px; }
-  .tgf .cm b { white-space: nowrap; }
-  .tge { font-size: 17px; line-height: 1; }
-  .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 13px/1 var(--font-text); color: var(--text-3); }
+  .tge { font-size: var(--fs-card); line-height: 1; }
+  .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
   /* the widget draws the channel's card around the video: its own height (fit), our corners */
   .tgw { display: block; width: 100%; height: 360px; margin: 2px 0 6px; border: 0; border-radius: var(--r-m); background: var(--surface-2); color-scheme: normal; }
   /* our own player: the card's width, the video's own shape (a tall one stops at most of the screen), our corners */
   .tgplay { display: block; width: 100%; max-height: 70vh; margin: 2px 0 6px; border-radius: var(--r-m); background: var(--surface-2); object-fit: contain; }
   .tgv-wait { aspect-ratio: 16 / 9; margin: 2px 0 6px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
-  .vl { display: flex; gap: 8px; } .vl:empty { display: none; }
-  .tgm { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; height: 34px; margin: 2px 0 8px; padding: 0 13px 0 10px; border-radius: var(--r-full);
-    background: var(--surface-2); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
-  .re button.on b { color: var(--accent-text); }
+  .vl { display: flex; flex-wrap: wrap; gap: 8px; } .vl:empty { display: none; }
+  .tgm { display: flex; align-self: flex-start; margin: 2px 0 8px; }
   .ej { display: flex; }
-  .re button.on .ej { animation: boop 420ms cubic-bezier(.2, 1.6, .4, 1); }
+  .re :global(.btn[aria-pressed='true'] .ej) { animation: boop 420ms cubic-bezier(.2, 1.6, .4, 1); }
   @keyframes boop { 30% { transform: scale(1.45) rotate(-8deg); } }
 
-  .empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 18px 18px; margin-top: 6px; text-align: center; border-radius: var(--r-xl);
-    background: radial-gradient(80% 60% at 50% 0%, var(--accent-soft), transparent 70%), var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-  .empty p { color: var(--text-2); max-width: 32ch; }
-  .skel { display: flex; flex-direction: column; gap: 10px; }
-  .skel span { height: 120px; border-radius: var(--r-l); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
-  .skel .tall { height: 280px; }
   @keyframes pulse { 50% { opacity: 0.5; } }
   @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
 </style>
