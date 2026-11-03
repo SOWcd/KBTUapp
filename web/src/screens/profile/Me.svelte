@@ -66,6 +66,17 @@
 
   let page = $state<HTMLDivElement>();
 
+  // built in two steps: the badge (and the gears) in the first task, the blocks under it in the next one, or, built
+  // while the tab is away, in the next idle moment. Unseen either way: those blocks fade in on the page's stagger, from
+  // 80 ms after the badge.
+  let rest = $state(false);
+  onMount(() => {
+    if (ui.tab !== 'profile' && 'requestIdleCallback' in window) { const h = requestIdleCallback(() => (rest = true), { timeout: 1000 }); return () => cancelIdleCallback(h); }
+    let k = 0;
+    const f = requestAnimationFrame(() => (k = setTimeout(() => (rest = true)) as unknown as number));
+    return () => { cancelAnimationFrame(f); clearTimeout(k); };
+  });
+
   // ---- settings in place (the motion: settings-spec-final.md). Phases run on timers, never on onfinish (a hidden
   // webview stalls it); WAAPI with transform and opacity only (iOS 15) ----
   const listChunk = () => import('./SettingsList.svelte'); // warmed with the app (App.svelte warmPages)
@@ -200,7 +211,7 @@
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
       onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on') list?.photoMenu(el); }} /></div>{/if}
     <!-- two squares (owner, Nov 1): my friends as a cluster of faces, and my invite -->
-    <div class="duo" data-away>
+    {#if rest}<div class="duo" data-away>
       <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
         {#if friends.length}
           <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
@@ -210,7 +221,7 @@
         <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
       </button>
       {#if me.referrals}<Invite r={me.referrals} ach={card?.awards.achievements.find((a) => a.code === 'referral')} />{/if}
-    </div>
+    </div>{/if}
   {:else if session.failed}
     <!-- the app couldn't reach us (a bad network at start): not the guest card, which reads as being signed out -->
     <section class="failed surface" data-away>
@@ -225,6 +236,7 @@
       <Button kind="primary" size="l" full onclick={() => sheets.login()}>{t('guest.button')}</Button>
     </section>
   {/if}
+  {#if rest}
   {#if me?.student && !me.student.ms}
     <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings -->
     <button class="confirm surface" data-away onclick={() => { haptic.tap(); sheets.login(); }}>
@@ -269,6 +281,7 @@
   </div>
 
   <AppCard />
+  {/if}
   <!-- last before the tail, so no block's stagger delay shifts -->
   <!-- a failure inside the list shows itself instead of a blank page (Nov 2: Settings came up empty on phones) -->
   {#if set && List}<svelte:boundary onerror={(e) => console.error(e)}><List bind:this={list} />
