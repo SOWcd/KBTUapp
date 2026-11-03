@@ -124,33 +124,41 @@
   // turn always lands face on or back on, never edge-on (53a0929's lesson).
   let flipped = $state(false), side = $state(false), card: HTMLDivElement, bshade = $state<HTMLElement>(), strap: HTMLDivElement, clipEl: HTMLDivElement; // the back is mine only
   const DARK = 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))', LIGHT = 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.24))';
+  // one curve for the whole turn, with its own small overshoot (owner, Nov 3: the turn was jerky: four keyframes joined at
+  // corners, and the sides swapped by a timer that ran late on a busy phone). The lift is the `scale` property, apart
+  // from the turn's transform; the sides swap on the turn's own clock at the moment it stands edge-on (EDGE)
+  const FLIP_MS = 760, EASE: [number, number, number, number] = [0.3, 1.16, 0.42, 1];
+  const EDGE = (() => {
+    const [x1, y1, x2, y2] = EASE, at = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; if (at(y1, y2, m) < 0.5) lo = m; else hi = m; }
+    return at(x1, x2, lo);
+  })();
   function flip(to: boolean) {
     if (spinning || flipped === to) return;
     haptic.soft();
     flipped = to;
-    // which side is drawn: switched at the edge-on moment (45% in), when neither shows
-    clearTimeout(sideAt);
-    if (still()) { side = to; return; }
-    sideAt = setTimeout(() => (side = to), 720 * 0.45);
+    side = to; // the class at rest; while turning, the animations below hold each side's visibility until EDGE
+    if (still()) return;
     spinning = true;
-    const from = to ? 0 : 180, end = to ? 180 : 0;
+    const from = to ? 0 : 180, end = to ? 180 : 0, o = { duration: FLIP_MS };
     card.style.willChange = 'transform';
-    // a little past the end and back, as a badge on a strap settles (owner, Nov 3: the turn wants finishing); the strap
-    // and the clip twist with it, edge-on at the half turn (they hung still while the card turned under them)
-    const over = to ? 8 : -8;
-    const turn = card.animate([{ transform: `rotateY(${from}deg)` }, { transform: `translateZ(46px) rotateY(${(from + end) / 2}deg) scale(1.02)`, offset: 0.45 },
-      { transform: `rotateY(${end + over}deg)`, offset: 0.8 }, { transform: `rotateY(${end}deg)` }], { duration: 720, easing: 'cubic-bezier(.45, .05, .25, 1)' });
-    for (const el of [strap, clipEl]) el.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0.12)', offset: 0.45 }, { transform: 'scaleX(1)', offset: 0.8 }, { transform: 'scaleX(1)' }],
-      { duration: 720, easing: 'cubic-bezier(.45, .05, .25, 1)' });
+    const turn = card.animate([{ transform: `rotateY(${from}deg)` }, { transform: `rotateY(${end}deg)` }], { ...o, easing: `cubic-bezier(${EASE})` });
+    card.animate([{ scale: '1' }, { scale: '1.045', offset: EDGE }, { scale: '1' }], { ...o, easing: 'ease-in-out' });
+    const show = (el: HTMLElement, a: string, b: string) => el.animate([{ visibility: a }, { visibility: a, offset: EDGE }, { visibility: b, offset: EDGE }, { visibility: b }], o);
+    const badge = card.querySelector<HTMLElement>('.badge'), back = card.querySelector<HTMLElement>('.back');
+    if (badge) show(badge, to ? 'visible' : 'hidden', to ? 'hidden' : 'visible');
+    if (back) show(back, to ? 'hidden' : 'visible', to ? 'visible' : 'hidden');
+    // the strap and the clip twist with it: edge-on at the same moment, eased in and out of it
+    for (const el of [strap, clipEl]) el.animate([{ transform: 'scaleX(1)', easing: 'ease-in' }, { transform: 'scaleX(0.14)', offset: EDGE, easing: 'ease-out' }, { transform: 'scaleX(1)' }], o);
     const [gone, come] = to ? [shade, bshade!] : [bshade!, shade];
-    gone.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.45 }, { opacity: 0.6 }], { duration: 720, easing: 'ease-in' });
-    come.animate([{ opacity: 0.6, background: DARK }, { opacity: 0.6, background: DARK, offset: 0.45 }, { opacity: 0.5, background: LIGHT, offset: 0.7 },
-      { opacity: 0, background: LIGHT }], { duration: 720 });
-    const done = () => { card.style.willChange = ''; spinning = false; clearTimeout(sideAt); side = flipped; };
+    gone.animate([{ opacity: 0 }, { opacity: 0.55, offset: EDGE }, { opacity: 0.55 }], { ...o, easing: 'ease-in' });
+    come.animate([{ opacity: 0.55, background: DARK }, { opacity: 0.55, background: DARK, offset: EDGE }, { opacity: 0.45, background: LIGHT, offset: Math.min(0.9, EDGE + 0.25) },
+      { opacity: 0, background: LIGHT }], o);
+    const done = () => { card.style.willChange = ''; spinning = false; };
     turn.onfinish = done;
     turn.oncancel = done;
   }
-  let sideAt: ReturnType<typeof setTimeout> | undefined;
   const toBack = () => flip(true);
   function cardTap(e: MouseEvent) {
     if (!(e.target as Element).closest('button')) toBack(); // the photo, the seal and the medallion have their own
@@ -165,7 +173,7 @@
     backTo.fn = f;
     return () => { if (backTo.fn === f) backTo.fn = null; };
   });
-  $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations().forEach((x) => x.cancel()); flipped = side = false; } }); });
+  $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations({ subtree: true }).forEach((x) => x.cancel()); flipped = side = false; } }); });
   $effect(() => {
     if (look === untrack(() => face) || spinning) return;
     if (still()) face = look;
