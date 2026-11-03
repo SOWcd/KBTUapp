@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { artOf, layersOf, hero, splitVariants, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, awardOf, codesOf } from './awards';
+import { artOf, isMedal, layersOf, hero, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, awardOf, codesOf } from './awards';
 import type { PersonCard } from './api';
 
 const card = (attended: number): PersonCard => ({ id: 7, name: 'Ali T.', avatar: null, founder: false, no: 6, course: 2, school: 'SITE', bio: '', attended, past: [],
@@ -35,8 +35,22 @@ it("Recruiter's medal is drawn per level", () => {
   const of = (level: number) => artOf({ code: 'referral', emoji: 'megaphone_3d', level, levels: lv as never });
   expect([0, 1, 4, 9].map(of)).toEqual(['layer_rc1', 'layer_rc1', 'layer_rc4', 'layer_rc9']);
   expect(layersOf(of(4))?.map(([n]) => n)).toEqual(['rc-field-s', 'rc-net-4', 'rc-core-s', 'rc-rim-s']);
-  expect(layersOf(artOf({ code: 'anthem', emoji: 'headphone_3d', level: 1, levels: lv.slice(0, 1) as never }))?.[0][0]).toBe('an-field');
-  expect(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never })).toBe('raising_hands_3d_default');
+  // the others: one picture, the rim the level's metal; the one-time ones are pins, not medals
+  expect(layersOf(artOf({ code: 'soul', emoji: 'raising_hands_3d_default', level: 2, levels: lv.slice(0, 4) as never }))?.map(([n]) => n))
+    .toEqual(['so-field', 'so-art', 'so-near', 'rc-rim-s']);
+  expect(artOf({ code: 'critic', emoji: 'x', level: 7, levels: lv.slice(0, 7) as never })).toBe('layer_cr_l');
+  expect(isMedal({ code: 'anthem', levels: lv.slice(0, 1) as never })).toBe(false);
+  expect(isMedal({ code: 'bugs', levels: lv.slice(0, 1) as never })).toBe(true); // Admin's row of a manual one
+});
+
+it('every medal layer and pin glyph is drawn', async () => {
+  const fs = await import('node:fs' as string);
+  const has = (n: string) => fs.existsSync(new URL(`../../public/medals/${n}.svg`, import.meta.url));
+  const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
+  for (const code of ['regular', 'streak', 'first_in', 'soul', 'team', 'season', 'bugs', 'critic', 'referral'])
+    for (const n of [1, 4, 7]) expect(layersOf(artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }))!.every(([f]) => has(f))).toBe(true);
+  for (const z of Object.values(ZNAKI)) expect(has(`zn-${z.glyph}`) && has(`zn-frame-${z.metal}`)).toBe(true);
+  for (const m of 'bsgl') expect(has(`ribbon-${m}`)).toBe(true);
 });
 
 it('a badge held in two variants shows both', () => {
