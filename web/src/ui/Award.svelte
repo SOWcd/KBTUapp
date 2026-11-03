@@ -4,7 +4,8 @@
   import Medal from './Medal.svelte';
   import Pin from './Pin.svelte';
   import Founder from './Founder.svelte';
+  import Shield from './Shield.svelte';
   let { it, size = 56 }: { it: ShelfItem; size?: number } = $props();
 </script>
 
-{#if it.founder || it.idea}<Founder {size} idea={it.idea} />{:else if it.ach}<Medal a={it.ach} {size} />{:else if it.badge}<Pin emoji={it.badge.emoji} color={it.badge.color} {size} />{/if}
+{#if it.founder || it.idea}<Founder {size} idea={it.idea} />{:else if it.staff}<Shield role={it.staff} {size} />{:else if it.ach}<Medal a={it.ach} {size} />{:else if it.badge}<Pin emoji={it.badge.emoji} color={it.badge.color} {size} />{/if}

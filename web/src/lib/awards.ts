@@ -92,7 +92,7 @@ export function tierName(a: Achievement): string {
 /** The profile QR's ink: KBTU blue into violet, both dark enough for any camera on white. */
 export const QR_TONE: [string, string] = ['#1D3CB8', '#5B2BC0'];
 
-export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; founder?: boolean; idea?: boolean; name: string; sub: string }
+export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; founder?: boolean; idea?: boolean; staff?: 'admin' | 'moderator'; name: string; sub: string }
 
 export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + achKey(a), ach: a, name: achName(a), sub: tierName(a) });
 export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) });
@@ -100,6 +100,8 @@ export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge
 export const founderItem = (): ShelfItem => ({ key: 'founder', founder: true, name: t('person.founder'), sub: '' });
 /** the idea author's blue seal */
 export const ideaItem = (): ShelfItem => ({ key: 'idea', idea: true, name: t('person.idea'), sub: '' });
+/** the app's moderator's or admin's shield (ui/Shield): what the role is, never an action */
+export const staffItem = (role: 'admin' | 'moderator'): ShelfItem => ({ key: 'staff', staff: role, name: t(role === 'admin' ? 'seal.admin' : 'seal.moderator'), sub: '' });
 /** A showcase key (an achievement code, or b<event id> for a badge) as an item of this person's, if they have it. */
 export function shelfItem(p: PersonCard, key: string): ShelfItem | null {
   const b = /^b\d+$/.test(key) ? p.awards.badges.find((x) => 'b' + x.eventId === key) : undefined;
