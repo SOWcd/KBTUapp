@@ -35,10 +35,23 @@ function preloads(): Plugin {
   };
 }
 
+// The sheets a tap opens anywhere are chunks fetched ahead (App.svelte). V8 compiles a function only on its first call,
+// so the first open of each paid for compiling the whole sheet inside the tap (~40 ms at 4x CPU of a ~140 ms task).
+// Chrome's explicit compile hint has them compiled as the chunk loads, ahead of the tap; other engines ignore the line.
+function compileHints(names: RegExp): Plugin {
+  return {
+    name: 'kb-compile-hints',
+    apply: 'build',
+    generateBundle(_o, bundle) {
+      for (const c of Object.values(bundle)) if (c.type === 'chunk' && names.test(c.name)) c.code = '//# allFunctionsCalledOnLoad\n' + c.code;
+    },
+  };
+}
+
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [svelte(), preloads()],
+  plugins: [svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet)$/)],
   server: { host: true, port: 5180 },
   build: {
     outDir: 'dist',

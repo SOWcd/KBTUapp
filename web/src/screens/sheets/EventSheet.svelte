@@ -73,8 +73,11 @@
   let hero = $state<HTMLDivElement>();
   let land = () => {};
   onMount(() => { if (from && hero) land = fly(from, hero, e?.cover?.focus); return () => land(); });
-  let later = $state(false);
-  onMount(() => { const f = requestAnimationFrame(() => setTimeout(() => (later = true))); return () => cancelAnimationFrame(f); });
+  let soon = $state(false), later = $state(false);
+  // each a task after a frame was drawn (a frame's own requestAnimationFrame runs before that same frame is drawn when
+  // the tap was a touch): the header first, the first screen next, then what is below it
+  const after = (fn: () => void) => { let f = requestAnimationFrame(() => (f = setTimeout(fn) as unknown as number)); return () => { cancelAnimationFrame(f); clearTimeout(f); }; };
+  onMount(() => { let stop = after(() => { soon = true; stop = after(() => (later = true)); }); return () => stop(); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
@@ -270,6 +273,10 @@
     <h2 class="t-h2 title" class:strike={cancelled}>{e.title}</h2>
     {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
     {#if e.guestHost}<p class="t-foot">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
+
+    <!-- the rest of the first screen and the bar a frame later: in the tap's frame the sheet is still below the screen
+         (its rise starts there), only the header shows, flying in from the poster -->
+    {#if soon}
 
     {#if detail && (detail.canRate || detail.myRating != null)}
       <section class="rate">
@@ -490,10 +497,11 @@
     <!-- the one report sheet: anyone but the event's own crew -->
     {#if !may(mem, 'door') && !preview && session.me?.student}<button class="rep" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</button>{/if}
     {/if}
+    {/if}
   {/if}
 
   {#snippet footer()}
-    {#if e}
+    {#if e && soon}
       <div class="actions btns" inert={!!preview}>
         <button class="ib" class:on={e.saved} onclick={() => toggleSaved(id)} aria-label={e.saved ? t('event.saved') : t('event.save')}>
           <Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />
