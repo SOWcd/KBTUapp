@@ -227,7 +227,7 @@ export const CLUB_LOOKS = {
     straps: ['#B8403B', '#D5544E', '#FFF4F2'], holo: ['#D5544E', '#AE3833', '#FFF4F2'], role: '#B23A35', qr: ['#9E2E2A', '#5E1A18'], plate: ['#FBF1F0', '#F3E0E0'],
     mark: oteMark, ink: ['#2B1212', 'rgba(43, 18, 18, 0.66)'] },
   // the anime club (new3, their own art): ink wash and red spider lilies, black ink on its light mist
-  klubanimeshnikov: { strap: 'ANIME', short: 'ANIME', strip: '\u041a\u043b\u0443\u0431 \u0410\u043d\u0438\u043c\u0435\u0448\u043d\u0438\u043a\u043e\u0432', bg: ['#C9C9CC', '#A9A9AE', '#7C7C83'],
+  klubanimeshnikov: { strap: 'ANIME', short: 'ANIME', strip: '\u0410\u043d\u0438\u043c\u0435\u0448\u043d\u0438\u043a\u0438', bg: ['#C9C9CC', '#A9A9AE', '#7C7C83'],
     // r2 (owner: the glossy red bar fought the ink wash): the strip charcoal glass with a red hairline (LanyardHolo), the
     // photo's frame their red and ink
     straps: ['#7E1418', '#C0262D', '#FFFFFF'], holo: ['#2A2A2E', '#141416', '#F6F2F0'], role: '#A3141C', qr: ['#8E1A20', '#1A1A1C'], plate: ['#FFFFFF', '#F1F1F2'],
