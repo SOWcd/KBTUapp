@@ -2,12 +2,11 @@
   // News as stories (PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
-  // The post's own tools sit here now that the News page is gone: reactions, comments, and in ⋯ edit, pin, show on
+  // No reactions or comments on a club's own post (owner, Nov 4: two reactions were thin; talk lives in the forum). In ⋯: edit, pin, show on
   // List, take down, report. A club's new event is a story of its own: its cover, when and where, and a tap to open it.
   import { onMount } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
-  import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Pin from '@lucide/svelte/icons/pin';
   import Eye from '@lucide/svelte/icons/eye';
   import Newspaper from '@lucide/svelte/icons/newspaper';
@@ -25,7 +24,6 @@
   import { focusPos } from '../../lib/photo';
   import { tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
   import Linked from '../../ui/Linked.svelte';
   import { linkButtons } from '../../lib/social';
@@ -88,14 +86,7 @@
   function move(e: PointerEvent) { if (!dragging) return; const d = e.clientY - y0; if (d > 8) moved = true; pull = Math.max(0, d); }
   function up() { if (!dragging) return; dragging = false; if (pull > 110) close(overlay.id); else pull = 0; setTimeout(() => (moved = false)); }
 
-  async function react(kind: 'fire' | 'heart') {
-    if (!p) return;
-    const q = p, on = !q.mine[kind];
-    q.mine[kind] = on; q.reactions[kind] += on ? 1 : -1;
-    haptic.select();
-    try { Object.assign(q, await api.react(q.id, kind, on)); if (on) say(phrase(kind === 'fire' ? 'say.fire' : 'say.heart'), kind === 'fire' ? 'fire_3d' : 'smiling_face_with_heart_eyes_3d'); }
-    catch { q.mine[kind] = !on; q.reactions[kind] += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
-  }
+
   async function pin() {
     if (!p) return;
     try {
@@ -194,14 +185,6 @@
         {#if tg.views}<span class="tgv"><Eye size={16} />{compact(tg.views)}</span>{/if}
         <button class="tgo" onclick={() => openLink(tg.url)}><TelegramMark size={17} />{t(tg.media === 'video' ? 'tg.video' : tg.media === 'file' ? 'tg.file' : 'tg.open')}</button>
       </div>
-    {:else}
-    <div class="acts">
-      <button class:on={p.mine.fire} onclick={() => react('fire')} aria-pressed={p.mine.fire}><Emoji name="fire_3d" size={20} /><b class="num">{p.reactions.fire}</b></button>
-      <button class:on={p.mine.heart} onclick={() => react('heart')} aria-pressed={p.mine.heart}><Emoji name="blue_heart_3d" size={20} /><b class="num">{p.reactions.heart}</b></button>
-      {#if p.commentsOn || p.comments}
-        <button onclick={() => sheets.comments('post', p.id, p.title, (n) => (p.comments = n))} aria-label={t('cm.title')}><MessageCircle size={19} /><b class="num">{p.comments || ''}</b></button>
-      {/if}
-    </div>
     {/if}
   {/if}
 </div>
@@ -242,7 +225,6 @@
   .txt.card p { max-height: 30vh; color: rgba(255, 255, 255, 0.92); }
   .acts { position: absolute; left: 14px; right: 14px; bottom: calc(var(--safe-bottom) + 22px); display: flex; gap: 8px; }
   .acts button { height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.12); color: #fff; font: 650 14px/1 var(--font-text); }
-  .acts button.on { background: rgba(255, 255, 255, 0.26); }
   .acts button:active { transform: scale(0.95); }
   .tge { font-size: 18px; line-height: 1; }
   .tgv { display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; font: 650 14px/1 var(--font-text); color: rgba(255, 255, 255, 0.75); }
