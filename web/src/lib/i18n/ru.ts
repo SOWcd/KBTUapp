@@ -1451,7 +1451,7 @@ const ru = {
   'clubs.memberOf': "Состою",
   'clubs.mineTitle': "Мои клубы",
   'role.president': "Президент",
-  'role.vice': "Вице-президент",
+  'role.vice': "Вице",
   'role.head': "Руководитель",
   'role.member': "Участник",
   'clubs.recruiting': "набор открыт",

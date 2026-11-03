@@ -78,10 +78,11 @@
   });
   const openMine = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
   // 3+ (owner, Nov 3: a carousel of cards lost the ones past the edge): the clubs I run as rows, the rest as circles
-  const led = $derived(mine.filter((x) => x.lead));
-  const rest = $derived(mine.filter((x) => !x.lead));
+  const inMine = $derived(mine.filter((x) => x.role)); // the clubs I follow stay in the lists below, bell on
+  const led = $derived(inMine.filter((x) => x.lead));
+  const rest = $derived(inMine.filter((x) => !x.lead));
   const mineLine = (x: Mine) => [x.role, next.get(x.org.id) ?? t('clubs.nothingSoon')].filter(Boolean).join(' · ');
-  const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: mineLine(x) }))); };
+  const allMine = () => { haptic.tap(); sheets.myClubs(inMine.map((x) => ({ org: x.org, role: x.role, sub: mineLine(x) }))); };
   // a circle's name: the short one when the full one runs past the circle (StoryRow's rule), measured once each
   const tight = new SvelteSet<number>();
   let pen: CanvasRenderingContext2D | null = null;
@@ -90,7 +91,7 @@
     pen ??= document.createElement('canvas').getContext('2d');
     if (!pen) return;
     pen.font = getComputedStyle(node).font;
-    if (pen.measureText(nameOf(o)).width > 66) tight.add(o.id);
+    if (pen.measureText(nameOf(o)).width > (matchMedia('(max-width: 360px)').matches ? 58 : 66)) tight.add(o.id);
   }
 
   // Recommended: open recruitment only, not my own clubs: official clubs and schools first, then student initiatives;
@@ -122,7 +123,7 @@
 {/snippet}
 
 <div class="page scroll stagger">
-  {#if mine.length > 2 && !searching}
+  {#if inMine.length > 2 && !searching}
     {#if led.length}
       <Section title={t('clubs.lead')}>
         <div class="led"><Group>
@@ -269,6 +270,12 @@
   .ring { display: block; box-sizing: border-box; width: 64px; height: 64px; padding: 2px; border-radius: 50%; background: var(--line-2); transition: transform var(--t-fast) var(--ease); }
   .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
   .all { background: var(--surface-2); color: var(--text-2); }
+  /* a narrow phone: the fifth circle peeks at the edge, so the row reads as one that scrolls */
+  @media (max-width: 360px) {
+    .circles { gap: var(--s-2); }
+    .s { width: 58px; }
+    .ring { width: 56px; height: 56px; }
+  }
   .s b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
 
   /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */

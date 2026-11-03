@@ -1431,7 +1431,7 @@ const kk: Dict = {
   'clubs.memberOf': "Мүшемін",
   'clubs.mineTitle': "Менің клубтарым",
   'role.president': "Президент",
-  'role.vice': "Вице-президент",
+  'role.vice': "Вице",
   'role.head': "Жетекші",
   'role.member': "Мүше",
   'clubs.recruiting': "қабылдау ашық",
