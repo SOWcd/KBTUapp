@@ -31,24 +31,24 @@ SHARE_REFER = {  # my one invite link (Nov 2): a tap on its landing makes us fri
     "en": ("Be my friend", "👋 <b>{name}</b> wants to be friends!\n\n👀 See who's going where\n🎟 All KBTU events and clubs", "🤝 Add friend"),
 }
 SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
-    "ru": ("Клуб ждёт президента", "👑 Тебя назначают президентом <b>{club}</b> в KBTU App. Открой и войди через KBTU — ссылка одноразовая, работает 7 дней.", "Стать президентом"),
-    "kk": ("Клуб президентін күтеді", "👑 Сені KBTU App-та <b>{club}</b> клубының президенті етіп тағайындайды. Аш та, KBTU арқылы кір — сілтеме бір реттік, 7 күн жұмыс істейді.", "Президент болу"),
-    "en": ("A club awaits its President", "👑 You're becoming the President of <b>{club}</b> on KBTU App. Open it and sign in with KBTU — the link works once, for 7 days.", "Become President"),
+    "ru": ("Клуб ждёт президента", "👑 <b>Президент клуба {club}</b>\nТебя назначают в KBTU App\n\n🔐 Войди через KBTU\n🔒 Одноразовая · ⏳ 7 дней", "Стать президентом"),
+    "kk": ("Клуб президентін күтеді", "👑 <b>{club} клубының президенті</b>\nСені KBTU App-та тағайындайды\n\n🔐 KBTU арқылы кір\n🔒 Бір реттік · ⏳ 7 күн", "Президент болу"),
+    "en": ("A club awaits its President", "👑 <b>President of {club}</b>\nYou're being appointed on KBTU App\n\n🔐 Sign in with KBTU\n🔒 One use · ⏳ 7 days", "Become President"),
 }
 SHARE_GRANT = {  # Admin → Awards: an award link (logic.grant_link), from any admin
-    "ru": ("Тебе награда", "🏅 KBTU App выдаёт тебе награду <b>{award}</b>. Спасибо! Ссылка работает до {until}.", "🏅 Забрать награду"),
-    "kk": ("Саған марапат", "🏅 KBTU App саған <b>{award}</b> марапатын береді. Рақмет! Сілтеме {until} дейін жұмыс істейді.", "🏅 Марапатты алу"),
-    "en": ("An award for you", "🏅 KBTU App gives you the <b>{award}</b> award. Thank you! The link works until {until}.", "🏅 Claim the award"),
+    "ru": ("Тебе награда", "🏅 <b>{award}</b>\nНаграда от KBTU App. Спасибо!\n\n⏳ До {until}", "🏅 Забрать награду"),
+    "kk": ("Саған марапат", "🏅 <b>{award}</b>\nKBTU App-тан марапат. Рақмет!\n\n⏳ {until} дейін", "🏅 Марапатты алу"),
+    "en": ("An award for you", "🏅 <b>{award}</b>\nAn award from KBTU App. Thank you!\n\n⏳ Until {until}", "🏅 Claim the award"),
 }
 SHARE_BADGE = {  # Admin → Awards: a one-person link for a badge's variant (logic.grant_link)
-    "ru": ("Тебе знак", "🏅 Тебе знак <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
-    "kk": ("Саған белгі", "🏅 Саған <b>«{award}»</b> белгісі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A pin for you", "🏅 A pin for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
+    "ru": ("Тебе знак", "🎖 <b>{award}</b>\nЗнак для тебя\n\n🔒 Одноразовая · ⏳ до {until}", "🏅 Получить"),
+    "kk": ("Саған белгі", "🎖 <b>{award}</b>\nСаған арналған белгі\n\n🔒 Бір реттік · ⏳ {until} дейін", "🏅 Алу"),
+    "en": ("A pin for you", "🎖 <b>{award}</b>\nA pin for you\n\n🔒 One use · ⏳ until {until}", "🏅 Get it"),
 }
 SHARE_BADGE_MANY = {  # Admin → Awards: a badge's link for many (logic.grant_link): forwarded from hand to hand
-    "ru": ("Знак", "🏅 Знак <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
-    "kk": ("Белгі", "🏅 <b>«{award}»</b> белгісі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A pin", "🏅 The <b>“{award}”</b> pin. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
+    "ru": ("Знак", "🎖 <b>{award}</b>\n👉 Забери и перешли тем, кому он положен\n\n⏳ До {until}", "🏅 Получить"),
+    "kk": ("Белгі", "🎖 <b>{award}</b>\n👉 Ал да, оған лайық басқаларға жібер\n\n⏳ {until} дейін", "🏅 Алу"),
+    "en": ("A pin", "🎖 <b>{award}</b>\n👉 Get yours and pass it to those it's meant for\n\n⏳ Until {until}", "🏅 Get it"),
 }
 BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Admin → Badges says it (web ach.<badge>.v.<code>)
     "ru": {"init26f": "Посвящение 2026 · Гость", "init26": "Посвящение 2026 · Волонтёр", "init26p": "Посвящение 2026 · Выступающий"},
@@ -56,28 +56,28 @@ BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Adm
     "en": {"init26f": "Initiation 2026 · Guest", "init26": "Initiation 2026 · Volunteer", "init26p": "Initiation 2026 · Performer"},
 }
 SHARE_ROUND = {  # a club's open recruitment round (casting.py)
-    "ru": ("Набор в клуб", "📣 <b>{club}</b> набирает людей до {until}. Заявка — минута, всё остальное клуб уже знает из KBTU.", "📝 Подать заявку"),
-    "kk": ("Клубқа қабылдау", "📣 <b>{club}</b> {until} дейін адам қабылдайды. Өтінім — бір минут, қалғанын клуб KBTU-дан біледі.", "📝 Өтінім беру"),
-    "en": ("Club recruiting", "📣 <b>{club}</b> is recruiting until {until}. Applying takes a minute: the club knows the rest from KBTU.", "📝 Apply"),
+    "ru": ("Набор в клуб", "📣 <b>{club}</b> набирает людей\n⚡ Заявка за минуту\n\n⏳ До {until}", "📝 Подать заявку"),
+    "kk": ("Клубқа қабылдау", "📣 <b>{club}</b> адам қабылдайды\n⚡ Өтінім бір минутта\n\n⏳ {until} дейін", "📝 Өтінім беру"),
+    "en": ("Club recruiting", "📣 <b>{club}</b> is recruiting\n⚡ Applying takes a minute\n\n⏳ Until {until}", "📝 Apply"),
 }
 SHARE_JOIN_MANY = {  # Studio → Team, the link for the whole team (logic.team_link): one card for the club's chat
-    "ru": ("Вступай в команду", "🎉 Ссылка для всей команды <b>{club}</b> в KBTU App: открой и вступай. Работает до {until}.", "Вступить в команду"),
-    "kk": ("Командаға қосыл", "🎉 KBTU App-тағы <b>{club}</b> командасының бәріне арналған сілтеме: аш та, қосыл. {until} дейін жұмыс істейді.", "Командаға қосылу"),
-    "en": ("Join the team", "🎉 A link for the whole <b>{club}</b> team on KBTU App: open it to join. Works until {until}.", "Join the team"),
+    "ru": ("Вступай в команду", "🎉 <b>Команда {club}</b>\nОткрой и вступай в KBTU App\n\n⏳ До {until}", "Вступить в команду"),
+    "kk": ("Командаға қосыл", "🎉 <b>{club} командасы</b>\nKBTU App-та аш та, қосыл\n\n⏳ {until} дейін", "Командаға қосылу"),
+    "en": ("Join the team", "🎉 <b>The {club} team</b>\nOpen it to join on KBTU App\n\n⏳ Until {until}", "Join the team"),
 }
 SHARE_JOIN = {
-    "ru": ("Вступай в клуб", "🎉 Тебя зовут в <b>{club}</b> в KBTU App — вступай в команду.", "Вступить в клуб"),
-    "kk": ("Клубқа қосыл", "🎉 Сені KBTU App-та <b>{club}</b> клубына шақырады — командаға қосыл.", "Клубқа қосылу"),
-    "en": ("Join the club", "🎉 You're invited to <b>{club}</b> on KBTU App — join the team.", "Join the club"),
+    "ru": ("Вступай в клуб", "🎉 <b>{club}</b> зовёт тебя в команду\n\n🤝 Вступай в KBTU App", "Вступить в клуб"),
+    "kk": ("Клубқа қосыл", "🎉 <b>{club}</b> сені командаға шақырады\n\n🤝 KBTU App-та қосыл", "Клубқа қосылу"),
+    "en": ("Join the club", "🎉 <b>{club}</b> invites you to the team\n\n🤝 Join on KBTU App", "Join the club"),
 }
 
 
 # An achievement shared from its card (§4.11): first person (the user sends it), its name and tier as the app names them
 # (web i18n ach.<code>.name / ach.tier.N), how rare it is; the button opens the reader's own progress toward it.
 SHARE_AWARD = {
-    "ru": ("Моя награда в KBTU App", "🏅 Моя новая награда в KBTU App: <b>{name}</b>{tier}\nТакая есть у {p}% студентов. Получится так же?", "🏅 Посмотреть награду"),
-    "kk": ("KBTU App-тағы марапатым", "🏅 KBTU App-тағы жаңа марапатым: <b>{name}</b>{tier}\nОл студенттердің {p}%-ында бар. Сен де аласың ба?", "🏅 Марапатты көру"),
-    "en": ("My award on KBTU App", "🏅 My new award on KBTU App: <b>{name}</b>{tier}\n{p}% of students have it. Can you get one too?", "🏅 See the award"),
+    "ru": ("Моя награда в KBTU App", "🏅 <b>{name}</b>{tier}\nМоя новая награда в KBTU App\n\n💎 Есть у {p}% студентов. Получится так же?", "🏅 Посмотреть награду"),
+    "kk": ("KBTU App-тағы марапатым", "🏅 <b>{name}</b>{tier}\nKBTU App-тағы жаңа марапатым\n\n💎 Студенттердің {p}%-ында бар. Сен де аласың ба?", "🏅 Марапатты көру"),
+    "en": ("My award on KBTU App", "🏅 <b>{name}</b>{tier}\nMy new award on KBTU App\n\n💎 {p}% of students have it. Can you get one too?", "🏅 See the award"),
 }
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",

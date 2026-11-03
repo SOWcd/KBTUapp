@@ -1063,7 +1063,7 @@ def test_invite_cards(env, monkeypatch):
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ali["id"],))
     assert c.post("/api/share", headers=A, json={"kind": "gl", "code": "init26p", "many": True}).status_code == 200
     token = sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("gl_")[1]
-    assert "\u0434\u043e" in sent[-1]["result"]["input_message_content"]["message_text"]                   # "until" its day
+    assert "\u0434\u043e" in sent[-1]["result"]["input_message_content"]["message_text"].lower()                   # "until" its day
     login(c, 63, "zed")
     assert c.post(f"/api/grant-links/{token}", headers=tma(62)).json() == c.post(f"/api/grant-links/{token}", headers=tma(63)).json() == {"code": "init26p"}
     assert con.execute("SELECT COUNT(*) FROM achievement_grants WHERE code = 'init26p'").fetchone()[0] == 2
