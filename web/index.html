@@ -30,6 +30,11 @@
 })();
 </script>
 <script>
+// V8 sets up ICU on a page's first Intl.DateTimeFormat: ~90 ms at 4x CPU, and it fell inside the task before the first
+// paint (the Afisha's date line); here it runs in a task of its own while the bundle downloads (later ones take <1 ms)
+setTimeout(function () { try { new Intl.DateTimeFormat('ru-RU', { weekday: 'long', timeZone: 'UTC' }).format(0); } catch (e) {} });
+</script>
+<script>
 // A blank screen is the worst failure: nobody can tell whether the app arrived at all.
 // Errors before and during start are printed right on the page.
 (function () {
