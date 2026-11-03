@@ -4,7 +4,7 @@
   // member and their clubs; CSV sends every roster into my chat with the bot. A sheet, from Studio (DMP) and the Admin panel.
   import Search from '@lucide/svelte/icons/search';
   import FileDown from '@lucide/svelte/icons/file-down';
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import OfficialMark from '../../ui/OfficialMark.svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import { api, ApiErr, type RegistryHit, type RegistryOrg, type SentMemo } from '../../lib/api';
@@ -102,7 +102,7 @@
         <button class="org surface" onclick={() => sheets.roster(o.org, (on) => (o.org = { ...o.org, official: on }))}>
           <OrgLogo org={o.org} size={44} />
           <span class="tx">
-            <b class="ellipsis">{nameOf(o.org)}{#if o.org.official}<BadgeCheck size={15} />{/if}</b>
+            <b class="ellipsis">{nameOf(o.org)}{#if o.org.official}<OfficialMark size={15} />{/if}</b>
             <i class="ellipsis">{o.president ? t('reg.president', { name: o.president.fullName }) : t('reg.noPresident')}</i>
             <span class="nums"><span><b class="num">{o.members}</b>{tn('reg.members', o.members)}</span><span><b class="num">{o.month.events}</b>{tn('reg.events', o.month.events)}</span>
               <span><b class="num">{o.month.registrations}</b>{tn('reg.regs', o.month.registrations)}</span><span><b class="num">{o.month.came}</b>{tn('reg.came', o.month.came)}</span></span>

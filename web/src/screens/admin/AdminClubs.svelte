@@ -4,7 +4,7 @@
   // events (any deletable here only). A new club on top (schools come from the site).
   import { fold } from '../../ui/fold';
   import Plus from '@lucide/svelte/icons/plus';
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import OfficialMark from '../../ui/OfficialMark.svelte';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Search from '@lucide/svelte/icons/search';
   import Trash from '@lucide/svelte/icons/trash-2';
@@ -173,7 +173,7 @@
         <article class="org" class:out={card === o.id}>
           <button class="top" aria-expanded={card === o.id} onclick={() => { haptic.select(); card = card === o.id ? null : o.id; open = null; evOf = null; qrOf = null; }}>
             <OrgLogo org={o} size={40} />
-            <span class="tx"><b class="ellipsis">{o.name}{#if o.official}<span class="ok"><BadgeCheck size={16} /></span>{/if}</b>
+            <span class="tx"><b class="ellipsis">{o.name}{#if o.official}<span class="ok"><OfficialMark size={16} /></span>{/if}</b>
               <i class="t-foot ellipsis">{o.hidden ? t('adm.hiddenTag') + ' · ' : ''}{o.kind === 'school' ? t('adm.kindSchool') + ' · ' : ''}{tn('adm.members', o.members)}{pres ? ' · ' + (pres.username ? '@' + pres.username : pres.name) : ' · ' + t('adm.noPres')}</i></span>
             <span class="chev"><ChevronRight size={18} /></span>
           </button>

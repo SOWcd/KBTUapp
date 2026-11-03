@@ -3,7 +3,7 @@
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
   // club that closed applications can still be written to: its Telegram, else its first link (§4.5). Its Vice+ change
   // the logo and the rest by tapping the logo (testers looked for it here, not in Studio).
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import OfficialMark from '../../ui/OfficialMark.svelte';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import TelegramMark from '../../ui/TelegramMark.svelte';
@@ -77,7 +77,7 @@
       {#if o.myRights?.includes('profile')}
         <button class="lg" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /><span class="cam"><Camera size={16} /></span></button>
       {:else}<OrgLogo org={o} size={84} />{/if}
-      <h2 class="t-h2 name">{o.name}{#if o.official}<span class="ok"><BadgeCheck size={20} /></span>{/if}</h2>
+      <h2 class="t-h2 name">{o.name}{#if o.official}<span class="ok"><OfficialMark size={21} /></span>{/if}</h2>
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
     </div>

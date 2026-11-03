@@ -2,7 +2,7 @@
   // A club or school as one compact row (the Clubs tab's lists and "All clubs"): its mark, its name with
   // the ✓ and the Student Government mark, one line under it, and the bell (or what the list puts there instead).
   import type { Snippet } from 'svelte';
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import OfficialMark from './OfficialMark.svelte';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import type { Org } from '../lib/api';
@@ -19,7 +19,7 @@
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
   <OrgLogo org={o} size={40} />
   <span class="txt">
-    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official}<span class="ok" title={t('clubs.official')}><BadgeCheck size={14} /></span>{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
+    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
     {#if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
   </span>
   <span class="end">
@@ -41,7 +41,6 @@
   .nm b { font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
   /* a narrow phone with a button at the end: the name takes two lines rather than "Open ..." (320 px, Oct 30) */
   @media (max-width: 360px) { .nm b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } }
-  .ok { display: inline-flex; flex: none; color: var(--accent-text); }
   small { display: block; max-width: 100%; font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-3); }
   small.hot { font-weight: 650; color: var(--accent-text); }
   small.hot i { display: inline-block; width: 6px; height: 6px; margin: 0 6px 1px 0; border-radius: 50%; background: #46D6FF; vertical-align: middle; }
