@@ -114,7 +114,7 @@ def poster_jpg(color: str, emoji: Path) -> bytes:
 
 
 _OG = re.compile(r'<meta property="og:(title|image|description)" content="([^"]*)"')
-_EXTRA = re.compile(r'class="tgme_page_extra">\s*([\d\s]+)\s+(subscribers?|members?)')
+_EXTRA = re.compile(r'class="tgme_page_extra">\s*([\d\s]+|no)\s+(subscribers?|members?)')  # "no members": a group that hides its count
 
 
 async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
@@ -130,7 +130,7 @@ async def chat_peek(http: httpx.AsyncClient, url: str) -> dict:
         # the chat's own line; Telegram's stock "You can view and join ... right away" when it has none
         out["about"] = og.get("description") if og.get("description") and not re.match(r"You can (view|contact)", og["description"]) else None
         if m := _EXTRA.search(page):
-            out["members"] = int(re.sub(r"\D", "", m.group(1)))
+            out["members"] = int(re.sub(r"\D", "", m.group(1)) or 0)
             out["channel"] = m.group(2).startswith("subscriber")  # a channel counts subscribers, a group members
         img = og.get("image", "")
         # Telegram's own placeholder (a chat without a picture) is its logo from telegram.org: not an avatar

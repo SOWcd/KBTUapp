@@ -1752,6 +1752,7 @@ def test_chats_directory(env, monkeypatch):
     monkeypatch.setattr(media, "chat_peek", peek)
     page = '<meta property="og:title" content="KBTU app Topics&#33;">\n<div class="tgme_page_extra">15 members, 9 online</div>'
     assert media._OG.findall(page) == [("title", "KBTU app Topics&#33;")] and media._EXTRA.search(page).group(1) == "15"
+    assert media._EXTRA.search('<div class="tgme_page_extra">no members</div>').group(1) == "no"  # a hidden count is still a group
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
     login(c, 60, "boss"), login(c, 61, "ali")
     B, A = tma(60, "Boss"), tma(61, "Ali")
