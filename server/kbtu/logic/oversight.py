@@ -137,8 +137,8 @@ def set_official(con, v: Viewer, oid: int, on: object) -> dict:
         with tx(con):
             con.execute("UPDATE orgs SET official = ? WHERE id = ?", (int(on), oid))
             log_action(con, v.id, "official", f"org:{oid}", json.dumps({"on": on}))
-            for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", oid) if on else []:
-                notify(con, uid, "club_official", f"off:{oid}")
+            for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", oid):
+                notify(con, uid, "club_official" if on else "club_unofficial", f"off:{oid}")  # once each
     return org_ref(con, _org(con, oid))
 
 

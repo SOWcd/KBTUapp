@@ -216,9 +216,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic._hand_over)
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
-    if kind == "club_official":  # off:<org>, to the club's President: DMP gave the ✓ (said only while it still has it)
+    if kind in ("club_official", "club_unofficial"):  # off:<org>, to the club's President: DMP gave the ✓ or took it (said only while still so)
         o = one(con, "SELECT name, official FROM orgs WHERE id = ?", int(ref[1]))
-        return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o and o["official"] else None
+        return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o and bool(o["official"]) == (kind == "club_official") else None
     if kind == "achievement":  # ach:<code>:<level>: a new level, once (→ aw_<code>: the card, Share there)
         code, level = ref[1], int(ref[2])
         a = next((x for x in logic.ACHIEVEMENTS if x[0] == code), None)

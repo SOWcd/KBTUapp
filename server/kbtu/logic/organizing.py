@@ -259,7 +259,7 @@ def kz_phone(raw: object) -> str | None:
 
 
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
-    """The price and where students send it (§4.3): only an official club's Vice+ set them, and they are fixed once the
+    """The price and where students send it (§4.3): only an official club's Vice+ set them (any club's Vice+ makes it free), and they are fixed once the
     first receipt is in. Absent keeps them; a null price makes the event free. The phone is kept as +7XXXXXXXXXX.
     freeFirst: how many 1st-year students come free (the first ones to register); it can change any time.
     ponytail: a raised freeFirst doesn't turn 1st-years already holding a seat free; they pay or let it go."""
@@ -278,7 +278,7 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:
         return {}
-    if not org["official"] or not can(con, v, org["id"], "money"):
+    if not (org["official"] or price is None) or not can(con, v, org["id"], "money"):  # a club that lost the ✓ may still go free
         raise ApiError("forbidden", "price")
     if e and any(new[k] != old[k] for k in ("price", "pay_to_name", "pay_phone")) \
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
@@ -306,7 +306,7 @@ def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:
         return {}
-    if not (org["official"] or overseer(con, v)):
+    if not (org["official"] or overseer(con, v) or host is None):  # off again needs no ✓ (a club that lost it)
         raise ApiError("forbidden", "partner")
     if host and e and one(con, "SELECT 1 FROM registrations WHERE event_id = ?", e["id"]):
         raise ApiError("conflict", "taken")
@@ -442,11 +442,33 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
             for uid in _expected(con, e):
                 if uid != v.id:
                     notify(con, uid, "meeting_invite", f"mi:{eid}")
+        told = None
         if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
-            for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
-                WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id):
-                notify(con, r[0], "new_event", f"event:{eid}")
-    return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
+            after = _tell_after(con, e)
+            told = after is None
+            if told:
+                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"told:{e['org_id']}", str(core.now())))
+                for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
+                    WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id):
+                    notify(con, r[0], "new_event", f"event:{eid}")
+    out = full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
+    # Studio's toast says whether the followers heard, and if not, from when a next event may tell them
+    return out if told is None else {**out, "told": told, "tellAfter": after}
+
+
+TELL_EVERY = 7 * 86400  # a student initiative's followers hear of a new event once a week at most; an official club's of each
+
+
+def _tell_after(con, e: sqlite3.Row) -> int | None:
+    """None: an event published now may tell the club's followers; else when the next one may. A club without the ✓:
+    once per rolling week, from the last time they were told (meta told:<org>, so deleting a cancelled event buys no
+    other), or before that was kept, its last public event published (cancelled ones too)."""
+    if one(con, "SELECT official FROM orgs WHERE id = ?", e["org_id"])[0]:
+        return None
+    t = one(con, """SELECT COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?), (SELECT MAX(published_at) FROM events
+        WHERE org_id = ? AND id != ? AND visibility = 'public' AND guest_host IS NULL AND status != 'draft'))""",
+            f"told:{e['org_id']}", e["org_id"], e["id"])[0]
+    return t + TELL_EVERY if t and t + TELL_EVERY > core.now() else None
 
 
 def cancel_event(con, v: Viewer, eid: int) -> dict:
