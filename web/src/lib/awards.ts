@@ -87,7 +87,7 @@ export function layersOf(art: string): [string, number][] | null {
   const rc = /^layer_rc(\d)$/.exec(art);
   if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
-  return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art`, 0.5], [`${o[1]}-near`, 1], [`rc-rim-${o[2]}`, 0]] : null;
+  return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`rc-rim-${o[2]}`, 0]] : null;
 }
 /** a medal's metal letter at its level (its ribbon's): b, s, g, l */
 export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];

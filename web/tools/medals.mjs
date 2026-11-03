@@ -1,13 +1,19 @@
 // The drawn achievement medals, in layers (public/medals/*.svg): vector, so crisp at any size and pixel ratio, and
 // layered, so the field, the art and the near art float with the phone's tilt under a still rim (ui/Medal.svelte,
 // lib/awards.ts layersOf). Every layer is the same 512 box centred on the medal; the field overscans under the rim.
+// One look for all of them, the owner's struck coins (First 500, the 2026 initiation): a polished metal rim with a
+// rolled bevel, a deep enamel field with an engine-turned guilloche, and the picture struck in relief in the level's
+// metal, enamel laid into it where a colour tells it apart. The relief is real light, not paint: SVG lighting filters
+// (relief() below) bevel every part from its own outline, so each part catches the light on its upper left, shades on
+// its lower right and throws a shadow on what lies under it (owner, Nov 3: the flat pictures read childish).
 //   Recruiter (rc-*): a constellation. I am the star in the middle; each level one more friend lights up on the
 //     orbit, tied to me and to each other. The rim is the level's metal (bronze I-III, silver IV-VI, gold VII-VIII,
 //     legend IX); gold grows laurels, legend a full wreath, an iridescent bezel and a crown star.
-//   The others (rg, st, fi, so, tm, se, bg, cr): one picture each on its own enamel field under the rc rims; the
-//     ribbons; the pins (zn-*): the shield frames and their glyphs (the anthem keeps its colonnade there).
+//   The others (rg, st, fi, so, tm, se, bg, cr): <p>-field (its enamel), <p>-art-<metal> and <p>-near-<metal> (the
+//     relief in the level's metal) under the rc rims; the ribbons; the pins (zn-*): the shield frames, the enamel's
+//     guilloche, and the glyphs in the frame's metal (zn-<glyph>-<metal>).
 // usage: node tools/medals.mjs   (from web/)
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 const out = new URL('../public/medals/', import.meta.url);
 mkdirSync(out, { recursive: true });
 const C = 256, FIELD = 212, f = (n) => +n.toFixed(2);
@@ -15,76 +21,114 @@ const pt = (r, deg) => [f(C + r * Math.sin((deg * Math.PI) / 180)), f(C - r * Ma
 const svg = (defs, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs>${defs}</defs>${body}</svg>\n`;
 // a stop's colour, #RRGGBBAA as its colour and opacity (stop-color takes no alpha in older WebKit)
 const stops = (cs) => cs.map((c, i) => `<stop offset="${f(i / (cs.length - 1))}" stop-color="${c.slice(0, 7)}"${c.length === 9 ? ` stop-opacity="${f(parseInt(c.slice(7), 16) / 255)}"` : ''}/>`).join('');
-
-const METAL = {
-  b: { rim: ['#FFE0C2', '#E9A36A', '#9A5524', '#5E2C0E', '#D88E52'], lit: '#FFD9B3', glow: '#FF9D57', field: ['#1F4E6E', '#0C2438', '#04101C'] },
-  s: { rim: ['#FFFFFF', '#DCE3F0', '#8B96AE', '#4A5368', '#C9D2E4'], lit: '#F2F6FF', glow: '#9CC4FF', field: ['#2C55D6', '#142A85', '#070F3C'] },
-  g: { rim: ['#FFF6CC', '#FFD45E', '#C98A0E', '#6E4304', '#F5C040'], lit: '#FFF0B8', glow: '#FFC94A', field: ['#3A2A8C', '#1A1050', '#08051F'] },
-  l: { rim: ['#FFF6CC', '#FFD45E', '#C98A0E', '#6E4304', '#F5C040'], iri: ['#FF6BD6', '#7C4DFF', '#35D0FF', '#2FD3A0', '#FFD23F', '#FF6BD6'], lit: '#FFFFFF', glow: '#E59BFF', field: ['#7A3BE0', '#3A1290', '#12043A'] },
-};
-const metalOf = (l) => (l === 9 ? 'l' : l >= 7 ? 'g' : l >= 4 ? 's' : 'b');
-
-// a four-point sparkle
-const star = (x, y, r, w, fill) =>
-  `<path d="M${x} ${f(y - r)}Q${f(x + w)} ${f(y - w)} ${f(x + r)} ${y}Q${f(x + w)} ${f(y + w)} ${x} ${f(y + r)}Q${f(x - w)} ${f(y + w)} ${f(x - r)} ${y}Q${f(x - w)} ${f(y - w)} ${x} ${f(y - r)}z" fill="${fill}"/>`;
+const lin = (id, cs, x2 = 0, y2 = 1, x1 = 0, y1 = 0) => `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops(cs)}</linearGradient>`;
+const rad = (id, cs, cx = 0.38, cy = 0.3, r = 0.75) => `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops(cs)}</radialGradient>`;
 const rng = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
+// polished metal, as a struck face reflects a room: bright, a band of its body colour, a second highlight, its shade
+const FACE = {
+  g: ['#FFF7D6', '#F7D774', '#D29C2C', '#FFEDAE', '#C2861A', '#7A4C08'],
+  s: ['#FFFFFF', '#E8EDF6', '#A8B1C4', '#F8FAFE', '#8E98AE', '#535C72'],
+  b: ['#FFE8D2', '#EEB07A', '#B26A3C', '#F9D2AC', '#9C5828', '#5E2E12'],
+  r: ['#FFEFE6', '#F5C3AE', '#BE7862', '#FCDACC', '#A8624C', '#64301F'],
+};
+FACE.l = FACE.g;
+const METAL = {
+  b: { rim: FACE.b, lit: '#FFD9B3', glow: '#FF9D57' },
+  s: { rim: FACE.s, lit: '#F2F6FF', glow: '#9CC4FF' },
+  g: { rim: FACE.g, lit: '#FFF0B8', glow: '#FFC94A' },
+  l: { rim: FACE.g, iri: ['#FF6BD6', '#7C4DFF', '#35D0FF', '#2FD3A0', '#FFD23F', '#FF6BD6'], lit: '#FFFFFF', glow: '#E59BFF' },
+};
+// the Recruiter's enamel per metal (its constellation glows on it)
+const RC_FIELD = { b: ['#1F4E6E', '#0C2438', '#04101C'], s: ['#2C55D6', '#142A85', '#070F3C'], g: ['#3A2A8C', '#1A1050', '#08051F'], l: ['#7A3BE0', '#3A1290', '#12043A'] };
+const metalOf = (l) => (l === 9 ? 'l' : l >= 7 ? 'g' : l >= 4 ? 's' : 'b');
+
+// Struck relief: the part's own outline blurred is its height; a distant light from the upper left shades it (diffuse,
+// multiplied into the metal) and glints on its slopes (specular, added); then its shadow falls down and right.
+// blur: how round the bevel; depth: how high; sh: the shadow's reach (0: none)
+const relief = (id, blur, depth, sh = 1) => `<filter id="${id}" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="${blur}" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="${depth}" diffuseConstant="1" lighting-color="#FFFFFF" result="d"><feDistantLight azimuth="235" elevation="52"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" result="l"/>
+<feSpecularLighting in="h" surfaceScale="${depth}" specularConstant="1.15" specularExponent="22" lighting-color="#FFFFFF" result="s"><feDistantLight azimuth="235" elevation="38"/></feSpecularLighting>
+<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+<feComposite in="l" in2="s2" operator="arithmetic" k2="1" k3=".85" result="m"/>
+<feComposite in="m" in2="SourceAlpha" operator="in" result="o"/>${sh ? `
+<feGaussianBlur in="SourceAlpha" stdDeviation="${f(sh * 5)}"/><feOffset dx="${f(sh * 3)}" dy="${f(sh * 7)}"/><feComponentTransfer><feFuncA type="linear" slope=".62"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="o"/></feMerge>` : ''}</filter>`;
+// three heights: a main part, a raised detail, a fine one
+const RELIEFS = relief('r1', 6, 7) + relief('r2', 3.5, 5, 0.6) + relief('r3', 1.8, 3, 0.35);
+// the metal's fills: across the part, the other way, and a sphere's
+const metals = (k) => lin('mg', FACE[k], 1, 1) + lin('mh', [FACE[k][3], FACE[k][1], FACE[k][2], FACE[k][0], FACE[k][4]], 0, 1, 1, 0) + rad('ms', [FACE[k][0], FACE[k][1], FACE[k][2], FACE[k][5]], 0.36, 0.3, 0.8);
+const part = (filter, fill, body) => `<g filter="url(#${filter})" fill="url(#${fill})">${body}</g>`;
+// a line cut into the metal: its upper left wall in shadow, its lower right one catching the light
+const cut = (d, w = 5, k = 'g') => `<path d="${d}" fill="none" stroke="${FACE[k][5]}" stroke-opacity=".75" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="${f(w * 0.4)}" stroke-linecap="round" stroke-linejoin="round" transform="translate(${f(w * 0.3)} ${f(w * 0.3)})"/>`;
+// enamel laid into a cell of the metal: its glossy colour, the cell's wall shading its top edge, the glaze's light
+const enamel = (d, fill, extra = '') => `<path d="${d}" fill="url(#${fill})"/><path d="${d}" fill="none" stroke="#000" stroke-opacity=".4" stroke-width="3" transform="translate(-1 -1.5)"/>${extra}`;
+// a glint of light off the polish: a thin four-point flare in a soft halo
+const star4 = (x, y, r, w, fill) =>
+  `<path d="M${x} ${f(y - r)}Q${f(x + w)} ${f(y - w)} ${f(x + r)} ${y}Q${f(x + w)} ${f(y + w)} ${x} ${f(y + r)}Q${f(x - w)} ${f(y + w)} ${f(x - r)} ${y}Q${f(x - w)} ${f(y - w)} ${x} ${f(y - r)}z" fill="${fill}"/>`;
+const GLINT = rad('gh', ['#FFFFFFCC', '#FFFFFF00'], 0.5, 0.5, 0.5);
+const glint = (x, y, r) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.7)}" fill="url(#gh)"/>${star4(x, y, r, r / 9, '#FFFFFF')}`;
+const star5 = (x, y, R, r = R * 0.45, rot = 0) => 'M' + Array.from({ length: 10 }, (_, i) => { const a = ((i * 36 + rot) * Math.PI) / 180, k = i % 2 ? r : R; return `${f(x + k * Math.sin(a))} ${f(y - k * Math.cos(a))}`; }).join('L') + 'z';
+
 // a laurel branch inside the rim, from the bottom up one side: paired leaves leaning along the growth
-function laurel(side, span, stem) {
+function laurel(side, span) {
   let s = '';
   const R = 194, n = Math.round(span / 11);
   for (let i = 0; i < n; i++) {
     const a = 180 + side * (14 + i * 11), r = (a * Math.PI) / 180;
     const [x, y] = pt(R, a), th = (Math.atan2(side * Math.cos(r), -side * Math.sin(r)) * 180) / Math.PI, k = 1 - i * 0.025;
-    for (const lean of [-40, 40]) s += `<path d="M0 0Q10 -15 0 -31Q-10 -15 0 0z" transform="translate(${x} ${y}) rotate(${f(th + lean)}) scale(${f(k)})" fill="url(#leaf)" stroke="${stem}" stroke-width="1" stroke-opacity=".6"/>`;
+    for (const lean of [-40, 40]) s += `<path d="M0 0Q11 -15 0 -32Q-11 -15 0 0z" transform="translate(${x} ${y}) rotate(${f(th + lean)}) scale(${f(k)})"/>`;
   }
   const [x0, y0] = pt(R, 180 + side * 6), [x1, y1] = pt(R, 180 + side * (14 + (n - 1) * 11));
-  return `<path d="M${x0} ${y0}A${R} ${R} 0 0 ${side > 0 ? 1 : 0} ${x1} ${y1}" fill="none" stroke="${stem}" stroke-width="3.5" stroke-linecap="round"/>` + s;
+  return `<path d="M${x0} ${y0}A${R} ${R} 0 0 ${side > 0 ? 1 : 0} ${x1} ${y1}" fill="none" stroke="url(#mg)" stroke-width="5" stroke-linecap="round"/>` + s;
 }
 
-// the rim: a ring round the field's hole (milled edge, bevels, a bead row), the field's sunk edge, a static gloss
-function rim(m, extra = '') {
-  let knurl = '', beads = '';
-  for (let i = 0; i < 144; i++) { const [a, b] = pt(250, i * 2.5), [c, d] = pt(240, i * 2.5); knurl += `M${a} ${b}L${c} ${d}`; }
-  for (let i = 0; i < 60; i++) { const [x, y] = pt(226, i * 6); beads += `<circle cx="${x}" cy="${y}" r="2.1"/>`; }
-  return svg(`<linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">${stops(m.rim)}</linearGradient>
-<linearGradient id="rimIn" x1="1" y1="1" x2="0" y2="0">${stops(m.rim)}</linearGradient>
-<linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">${stops(m.rim.slice(0, 3))}</linearGradient>
-<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".24"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+// the rim: a milled outer edge, a broad polished band rolled at both edges, a thin raised lip, a step down into
+// the field; the field's sunk edge shadowed under it, the glaze's gloss across the enamel
+function rim(k, extra = '') {
+  const m = METAL[k];
+  let knurl = '';
+  for (let i = 0; i < 160; i++) { const [a, b] = pt(253, i * 2.25), [c, d] = pt(242, i * 2.25); knurl += `M${a} ${b}L${c} ${d}`; }
+  const ring = (r0, r1) => `<path fill-rule="evenodd" d="M${C - r1} ${C}a${r1} ${r1} 0 1 0 ${2 * r1} 0a${r1} ${r1} 0 1 0 ${-2 * r1} 0zM${C - r0} ${C}a${r0} ${r0} 0 1 0 ${2 * r0} 0a${r0} ${r0} 0 1 0 ${-2 * r0} 0z"/>`;
+  return svg(`${metals(k)}${relief('rr', 10, 11, 0.5)}${relief('re', 3, 6, 0)}${RELIEFS}
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".2"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
 <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>
-${m.iri ? `<linearGradient id="iri" x1="0" y1="0" x2="1" y2="1">${stops(m.iri)}</linearGradient>` : ''}
-<radialGradient id="sink" cx=".5" cy=".5" r=".5"><stop offset=".9" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>
-<mask id="hole"><circle cx="${C}" cy="${C}" r="256" fill="#fff"/><circle cx="${C}" cy="${C}" r="${FIELD}" fill="#000"/></mask>`,
+${m.iri ? lin('iri', m.iri, 1, 1) : ''}
+<radialGradient id="sink" cx=".5" cy=".5" r=".5"><stop offset=".88" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>`,
   `<circle cx="${C}" cy="${C}" r="${FIELD + 1}" fill="url(#sink)"/>
 <path d="M${C - 200} ${C - 30}A${FIELD} ${FIELD} 0 0 1 ${C + 170} ${C - 120}Q${C} ${C - 120} ${C - 200} ${C - 30}z" fill="url(#gloss)"/>
-<g mask="url(#hole)"><circle cx="${C}" cy="${C}" r="252" fill="url(#rim)"/>
-<path d="${knurl}" stroke="${m.rim[3]}" stroke-width="1.6" opacity=".45"/>
-<circle cx="${C}" cy="${C}" r="238" fill="url(#rimIn)"/><circle cx="${C}" cy="${C}" r="232" fill="url(#rim)"/>
-<g fill="${m.rim[3]}" opacity=".55">${beads}</g>
-<circle cx="${C}" cy="${C}" r="216" fill="url(#rimIn)"/>
-${m.iri ? `<circle cx="${C}" cy="${C}" r="226" fill="none" stroke="url(#iri)" stroke-width="12"/>` : ''}</g>
-<circle cx="${C}" cy="${C}" r="${FIELD}" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="3"/>
-<path d="M${C - 236} ${C - 40}A240 240 0 0 1 ${C + 120} ${C - 207}" fill="none" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="3" stroke-linecap="round"/>
+${part('re', 'mh', ring(238, 255))}
+<path d="${knurl}" stroke="${m.rim[5]}" stroke-width="1.6" opacity=".5"/>
+${part('rr', 'mg', ring(220, 240))}
+${m.iri ? `<circle cx="${C}" cy="${C}" r="226" fill="none" stroke="url(#iri)" stroke-width="13" opacity=".9"/>` : ''}
+${part('r3', 'mh', ring(FIELD, 221))}
+<circle cx="${C}" cy="${C}" r="${FIELD}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.5"/>
 ${extra}`);
 }
 
-// the field: enamel, the banknote guilloche the KBTU lanyard uses, rays from a light, far stars; r 236: it overscans
-function field(colors, lit, seed, light = [C, C], rayAlpha = 0.38) {
-  let rays = '', guil = '', dust = '';
+// the field: deep enamel over an engine-turned ground (a fine sunburst and the banknote rosette the KBTU lanyard uses),
+// a soft light in it, darker to its edge; r 236: it overscans under the rim. `dust`: the Recruiter's far stars
+function field(colors, seed, light = [C, C], rayAlpha = 0.3, dust = false) {
+  let rays = '', guil = '', fine = '', specks = '';
   for (let i = 0; i < 32; i++) {
-    const a = (i * 11.25 * Math.PI) / 180, b = 0.028;
+    const a = (i * 11.25 * Math.PI) / 180, b = 0.026;
     rays += `M${light[0]} ${light[1]}L${f(light[0] + 330 * Math.sin(a - b))} ${f(light[1] - 330 * Math.cos(a - b))}L${f(light[0] + 330 * Math.sin(a + b))} ${f(light[1] - 330 * Math.cos(a + b))}z`;
   }
-  for (let i = 0; i < 24; i++) guil += `<ellipse cx="${C}" cy="${C}" rx="210" ry="78" transform="rotate(${f(i * 7.5)} ${C} ${C})"/>`;
-  const rnd = rng(seed);
-  for (let i = 0; i < 52; i++) { const [x, y] = pt(50 + rnd() * 180, rnd() * 360); dust += `<circle cx="${x}" cy="${y}" r="${f(0.8 + rnd() * 1.6)}" opacity="${f(0.25 + rnd() * 0.5)}"/>`; }
+  for (let i = 0; i < 180; i++) { const [a, b] = pt(236, i * 2), [c, d] = pt(30, i * 2); fine += `M${c} ${d}L${a} ${b}`; }
+  for (let i = 0; i < 24; i++) guil += `<ellipse cx="${C}" cy="${C}" rx="212" ry="80" transform="rotate(${f(i * 7.5)} ${C} ${C})"/>`;
+  if (dust) { const rnd = rng(seed); for (let i = 0; i < 52; i++) { const [x, y] = pt(50 + rnd() * 180, rnd() * 360); specks += `<circle cx="${x}" cy="${y}" r="${f(0.8 + rnd() * 1.6)}" opacity="${f(0.25 + rnd() * 0.5)}"/>`; } }
   return svg(`<radialGradient id="field" cx=".42" cy=".34" r=".75">${stops(colors)}</radialGradient>
-<radialGradient id="rays" cx="${f(light[0] / 512)}" cy="${f(light[1] / 512)}" r=".5"><stop offset="0" stop-color="${lit}" stop-opacity=".5"/><stop offset="1" stop-color="${lit}" stop-opacity="0"/></radialGradient>
+<radialGradient id="rays" cx="${f(light[0] / 512)}" cy="${f(light[1] / 512)}" r=".5"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".5"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+<radialGradient id="vig" cx=".5" cy=".5" r=".5"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>
 <clipPath id="in"><circle cx="${C}" cy="${C}" r="236"/></clipPath>`,
   `<circle cx="${C}" cy="${C}" r="236" fill="url(#field)"/><g clip-path="url(#in)">
-<g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".07">${guil}</g>
+<path d="${fine}" stroke="#FFFFFF" stroke-width="1" opacity=".06"/>
+<g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".08">${guil}</g>
 <path d="${rays}" fill="url(#rays)" opacity="${rayAlpha}"/>
-<g fill="#FFFFFF">${dust}</g></g>`);
+<g fill="#FFFFFF">${specks}</g>
+<circle cx="${C}" cy="${C}" r="236" fill="url(#vig)"/></g>`);
 }
 
 // ---- Recruiter
@@ -94,226 +138,225 @@ function nodes(level) {
   return Array.from({ length: level }, (_, i) => [146, start + (i * 360) / level, 19]);
 }
 const bust = (x, y, s, fill) =>
-  `<g fill="${fill}" opacity=".55"><circle cx="${x}" cy="${f(y - s * 0.28)}" r="${f(s * 0.26)}"/><path d="M${f(x - s * 0.5)} ${f(y + s * 0.5)}a${f(s * 0.5)} ${f(s * 0.46)} 0 0 1 ${f(s)} 0z"/></g>`;
+  `<g fill="${fill}" opacity=".85"><circle cx="${x}" cy="${f(y - s * 0.28)}" r="${f(s * 0.26)}"/><path d="M${f(x - s * 0.5)} ${f(y + s * 0.5)}a${f(s * 0.5)} ${f(s * 0.46)} 0 0 1 ${f(s)} 0z"/></g>`;
 
 function net(level) {
-  const m = METAL[metalOf(level)], ns = nodes(level), pos = ns.map(([r, a, s]) => [...pt(r, a), s, r]);
+  const k = metalOf(level), m = METAL[k], ns = nodes(level), pos = ns.map(([r, a, s]) => [...pt(r, a), s, r]);
   let ties = '', web = '';
   for (const [x, y] of pos) ties += `M${C} ${C}L${x} ${y}`;
   const ring = (list) => { for (let i = 0; i < list.length && list.length > 1; i++) { if (list.length === 2 && i === 1) break; const [x, y] = list[i], [u, v] = list[(i + 1) % list.length]; web += `M${x} ${y}L${u} ${v}`; } };
   ring(pos.filter((p) => p[3] === pos[0][3])); ring(pos.filter((p) => p[3] !== pos[0][3]));
   if (level === 9) for (let i = 0; i < 4; i++) for (const j of [0, 1, 2]) { const a = pos[i], b = pos[4 + ((i * 2 + j) % 8)]; web += `M${a[0]} ${a[1]}L${b[0]} ${b[1]}`; }
+  // the friends are struck metal studs now (their busts cut in), the ties light
   return svg(`<linearGradient id="tie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></linearGradient>
-<radialGradient id="orb" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></radialGradient>
-<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
+<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>${metals(k)}${RELIEFS}`,
   `${[...new Set(ns.map((n) => n[0]))].map((r) => `<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="${m.lit}" stroke-width="1.6" stroke-dasharray="2 7" stroke-linecap="round" opacity=".45"/>`).join('')}
 <path d="${web}" stroke="${m.lit}" stroke-width="3" stroke-linecap="round" opacity=".35" fill="none"/>
 <path d="${ties}" stroke="url(#tie)" stroke-width="9" stroke-linecap="round" opacity=".18" fill="none"/>
 <path d="${ties}" stroke="${m.lit}" stroke-width="3.2" stroke-linecap="round" opacity=".85" fill="none"/>
 ${pos.map(([x, y, s]) => `<circle cx="${x}" cy="${y}" r="${f(s * 2)}" fill="url(#halo)"/>`).join('')}
-${pos.map(([x, y, s]) => `<circle cx="${x}" cy="${y}" r="${s}" fill="url(#orb)"/>${bust(x, y + 1, s * 1.15, m.field[1])}<circle cx="${x}" cy="${y}" r="${s}" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1.5"/>`).join('')}`);
+${part('r2', 'ms', pos.map(([x, y, s]) => `<circle cx="${x}" cy="${y}" r="${s}"/>`).join(''))}
+${pos.map(([x, y, s]) => bust(x, y + 1, s * 1.15, FACE[k][5])).join('')}`);
 }
 
 const core = (m) => svg(`<radialGradient id="core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="${m.lit}"/><stop offset=".7" stop-color="${m.glow}" stop-opacity=".55"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
-  `<circle cx="${C}" cy="${C}" r="96" fill="url(#core)"/>${star(C, C, 70, 9, m.lit)}${star(C, C, 46, 5, '#FFFFFF')}<g transform="rotate(45 ${C} ${C})" opacity=".8">${star(C, C, 30, 4, '#FFFFFF')}</g><circle cx="${C}" cy="${C}" r="11" fill="#FFFFFF"/>`);
+  `<circle cx="${C}" cy="${C}" r="96" fill="url(#core)"/>${star4(C, C, 70, 9, m.lit)}${star4(C, C, 46, 5, '#FFFFFF')}<g transform="rotate(45 ${C} ${C})" opacity=".8">${star4(C, C, 30, 4, '#FFFFFF')}</g><circle cx="${C}" cy="${C}" r="11" fill="#FFFFFF"/>`);
 
 const files = {};
 for (const k of 'bsgl') {
   const m = METAL[k];
-  files[`rc-field-${k}`] = field(m.field, m.lit, 'bsgl'.indexOf(k) * 97 + 13);
+  files[`rc-field-${k}`] = field(RC_FIELD[k], 'bsgl'.indexOf(k) * 97 + 13, [C, C], 0.38, true);
   files[`rc-core-${k}`] = core(m);
-  const wreath = k === 'g' || k === 'l' ? laurel(1, k === 'l' ? 140 : 66, m.rim[3]) + laurel(-1, k === 'l' ? 140 : 66, m.rim[3]) : '';
-  files[`rc-rim-${k}`] = rim(m, wreath + (k === 'l' ? `<circle cx="${C}" cy="26" r="34" fill="url(#halo)"/>${star(C, 26, 30, 5, '#FFFFFF')}<circle cx="${C}" cy="26" r="5" fill="#FFFFFF"/>` : ''));
+  const wreath = k === 'g' || k === 'l' ? part('r3', 'mg', laurel(1, k === 'l' ? 140 : 66) + laurel(-1, k === 'l' ? 140 : 66)) : '';
+  files[`rc-rim-${k}`] = rim(k, wreath + (k === 'l' ? `<circle cx="${C}" cy="26" r="34" fill="url(#halo)"/>${star4(C, 26, 30, 5, '#FFFFFF')}<circle cx="${C}" cy="26" r="5" fill="#FFFFFF"/>` : ''));
 }
 for (let l = 1; l <= 9; l++) files[`rc-net-${l}`] = net(l);
 
 
-// ---- the other medals (awards plan, Nov 3): one picture each on its own enamel field, under the shared rim of the
-// level's metal (rc-rim-*): <p>-field (far), <p>-art (the picture), <p>-near (its nearest part, floats most). Every
-// picture keeps inside r 165 above the laurels (gold and legend rims grow them low on both sides) and casts a soft shadow.
-const SHADOW = '<filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur in="SourceAlpha" stdDeviation="7"/><feOffset dy="9"/><feComponentTransfer><feFuncA type="linear" slope=".5"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-const lin = (id, cs, x2 = 0, y2 = 1, x1 = 0, y1 = 0) => `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops(cs)}</linearGradient>`;
-const rad = (id, cs, cx = 0.38, cy = 0.3, r = 0.75) => `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${stops(cs)}</radialGradient>`;
-const GOLDS = ['#FFF6CC', '#FFD45E', '#C98A0E'];
-const sparks = (list) => list.map(([x, y, r]) => star(x, y, r, r / 6, '#FFFFFF')).join('');
-const star5 = (x, y, R, r = R * 0.45, rot = 0) => 'M' + Array.from({ length: 10 }, (_, i) => { const a = ((i * 36 + rot) * Math.PI) / 180, k = i % 2 ? r : R; return `${f(x + k * Math.sin(a))} ${f(y - k * Math.cos(a))}`; }).join('L') + 'z';
-const pic = (p, fieldColors, light, art, near = null, rays = 0.3) => {
-  files[`${p}-field`] = field(fieldColors, '#FFFFFF', p.charCodeAt(0) * 31 + p.charCodeAt(1), light, rays);
-  files[`${p}-art`] = svg(SHADOW + art[0], `<g filter="url(#sh)">${art[1]}</g>`);
-  if (near) files[`${p}-near`] = svg(SHADOW + near[0], `<g filter="url(#sh)">${near[1]}</g>`);
+// ---- the other medals (awards plan, Nov 3): one subject each, struck in the level's metal on its own enamel, under
+// the shared rim of that metal (rc-rim-*): <p>-field (far), <p>-art-<m> (the subject), <p>-near-<m> (its nearest part,
+// floats most). Every subject keeps inside r 165 above the laurels (gold and legend rims grow them low on both sides).
+// The enamels laid into the metal are the subject's own colour (the ticket's red star, the flame's heart, the room's
+// light...), the same at every level: the metal tells the level, the enamel and the shape tell the medal.
+const ENAMELS = lin('er', ['#FF7A6A', '#D6283A', '#8A0E22'], 0.3, 1) + lin('eo', ['#FFE08A', '#FF9A2A', '#E0441C', '#9E1420'], 0, 1)
+  + lin('ew', ['#FFFFF4', '#FFF0B8', '#FFC864'], 0, 1) + lin('ek', ['#3A3448', '#141019'], 0, 1) + lin('ey', ['#FFF6B0', '#FFD23A', '#F09A1A'], 0, 1)
+  + lin('ec', ['#FF9C80', '#E2573A', '#A8341E'], 0, 1) + lin('eb', ['#B8E6FF', '#4AA8F0', '#1A5EB8'], 0, 1) + lin('esn', ['#FFFFFF', '#E4ECFA', '#9FB4E2', '#6E86C4'], 0.4, 1);
+const pic = (p, fieldColors, light, art, near, rays = 0.3) => {
+  files[`${p}-field`] = field(fieldColors, p.charCodeAt(0) * 31 + p.charCodeAt(1), light, rays);
+  for (const k of 'bsgl') {
+    const head = metals(k) + RELIEFS + ENAMELS + GLINT;
+    files[`${p}-art-${k}`] = svg(head, art(k));
+    files[`${p}-near-${k}`] = svg(head, near(k));
+  }
 };
 
-// Regular: a golden ticket, a star punched in it, the stub torn along its perforation
-pic('rg', ['#B4284E', '#5E0C2A', '#22030F'], [C, 250], [
-  lin('tk', GOLDS, 1, 1) + lin('tk2', ['#FFE9A0', '#E2A72A'], 0, 1) + '<mask id="cut"><rect width="512" height="512" fill="#fff"/><circle cx="118" cy="256" r="22" fill="#000"/><circle cx="394" cy="256" r="22" fill="#000"/><circle cx="318" cy="180" r="11" fill="#000"/><circle cx="318" cy="332" r="11" fill="#000"/></mask>',
-  `<g transform="rotate(-14 256 256)"><g mask="url(#cut)"><rect x="118" y="180" width="276" height="152" rx="18" fill="url(#tk)"/>
-<rect x="134" y="196" width="244" height="120" rx="10" fill="none" stroke="#8A5606" stroke-opacity=".5" stroke-width="3"/></g>
-<path d="M318 196V316" stroke="#8A5606" stroke-opacity=".55" stroke-width="4" stroke-dasharray="2 9" stroke-linecap="round"/>
-<path d="${star5(222, 258, 46, 20)}" fill="#7A1030"/><path d="${star5(222, 254, 40, 17)}" fill="#B4284E"/>
-<path d="M342 226h30M342 246h30M342 266h22M342 286h30" stroke="#8A5606" stroke-opacity=".55" stroke-width="6" stroke-linecap="round"/>
-<path d="M136 192Q250 182 384 194" stroke="#FFFFFF" stroke-opacity=".65" stroke-width="3" fill="none" stroke-linecap="round"/></g>`],
-  ['', sparks([[392, 150, 20], [138, 352, 14], [370, 372, 10]])]);
+// Regular: an admission ticket, its notches and perforation, the star punched through it raised in red enamel
+const TICKET = 'M136 180H376Q394 180 394 198V234A22 22 0 0 0 394 278V314Q394 332 376 332H136Q118 332 118 314V278A22 22 0 0 0 118 234V198Q118 180 136 180z';
+pic('rg', ['#8E1F3E', '#4A0A20', '#1C030C'], [C, 250],
+  (k) => `<g transform="rotate(-14 256 256)">${part('r1', 'mg', `<path d="${TICKET}"/>`)}
+${cut('M150 204Q150 196 158 196H366Q378 196 378 204V308Q378 316 370 316H158Q150 316 150 308z', 3, k)}
+<g fill="${FACE[k][5]}" opacity=".8">${[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => `<circle cx="318" cy="${200 + i * 14}" r="3.2"/>`).join('')}</g>
+${cut('M340 226h26M340 246h26M340 266h18M340 286h26', 5, k)}</g>`,
+  (k) => `<g transform="rotate(-14 256 256)">${part('r2', 'mg', `<path d="${star5(226, 258, 54, 25)}"/>`)}
+${enamel(star5(226, 258, 36, 16), 'er')}</g>${glint(368, 176, 22)}`);
 
-// Streak: a flame burning on, tongue in tongue, sparks flying off it
-pic('st', ['#4A2296', '#200C52', '#0A0420'], [C, 340], [
-  lin('f1', ['#FFB23A', '#FF5A1F', '#C21A2A'], 0, 1) + lin('f2', ['#FFF2A8', '#FFC23A', '#FF7A1F'], 0, 1) + lin('f3', ['#FFFFFF', '#FFF2B8'], 0, 1) + rad('fg', ['#FF9A3A', '#FF9A3A00'], 0.5, 0.62, 0.5),
-  `<circle cx="256" cy="300" r="150" fill="url(#fg)" opacity=".55"/>
-<path d="M262 92C276 150 352 180 360 268C368 350 316 404 256 404C190 404 146 356 152 288C156 240 184 214 196 172C206 206 214 222 232 234C230 184 236 136 262 92z" fill="url(#f1)"/>
-<path d="M266 176C276 222 326 246 326 306C326 356 296 384 256 384C214 384 186 354 188 314C190 282 208 262 218 236C226 260 236 270 248 276C246 240 250 206 266 176z" fill="url(#f2)"/>
-<path d="M260 262C268 290 296 306 294 340C292 366 276 380 256 380C234 380 220 364 220 342C220 316 240 300 248 280C252 290 256 294 260 296z" fill="url(#f3)"/>`],
-  ['', `<g fill="#FFD27A">${[[356, 170, 7], [384, 214, 5], [140, 196, 6], [168, 146, 4.5], [330, 120, 4]].map(([x, y, r]) => `<path d="M${x} ${y - r * 1.6}L${x + r} ${y}L${x} ${y + r * 1.6}L${x - r} ${y}z"/>`).join('')}</g>`]);
+// Streak: a flame burning on, tongue in tongue: the metal flame, its heart in fire enamel, the white-hot core raised
+pic('st', ['#4A2296', '#200C52', '#0A0420'], [C, 340],
+  (k) => `${part('r1', 'mg', '<path d="M262 92C276 150 352 180 360 268C368 350 316 404 256 404C190 404 146 356 152 288C156 240 184 214 196 172C206 206 214 222 232 234C230 184 236 136 262 92z"/>')}
+${enamel('M266 176C276 222 326 246 326 306C326 356 296 384 256 384C214 384 186 354 188 314C190 282 208 262 218 236C226 260 236 270 248 276C246 240 250 206 266 176z', 'eo')}`,
+  (k) => `${part('r2', 'ms', '<path d="M260 266C268 294 296 310 294 342C292 368 276 382 256 382C234 382 220 366 220 344C220 318 240 302 248 282C252 292 256 296 260 298z"/>')}
+${part('r3', 'mg', [[358, 168, 9], [388, 214, 6], [140, 196, 7], [168, 146, 5]].map(([x, y, r]) => `<path d="M${x} ${y - r * 1.6}L${x + r} ${y}L${x} ${y + r * 1.6}L${x - r} ${y}z"/>`).join(''))}`);
 
-// First in: an open door with the light of the room spilling out of it, a star over it
-pic('fi', ['#2A4FA8', '#11245C', '#050C24'], [C, 236], [
-  lin('lt', ['#FFFBEA', '#FFE7A6', '#FFC45A'], 0, 1) + lin('fr', GOLDS, 1, 1) + lin('dr', ['#E2A72A', '#8A5606'], 1, 0) + lin('fl', ['#FFE7A6', '#FFE7A600'], 0, 1),
-  `<path d="M150 404L196 340H316L362 404z" fill="url(#fl)" opacity=".85"/>
-<path d="M178 340V196Q178 130 256 130Q334 130 334 196V340z" fill="url(#fr)"/>
-<path d="M196 340V200Q196 148 256 148Q316 148 316 200V340z" fill="url(#lt)"/>
-<path d="M196 340V200Q196 158 214 150L150 176Q140 182 140 196V372Q140 382 150 380z" fill="url(#dr)"/>
-<circle cx="158" cy="272" r="6" fill="#FFF6CC"/>
-<path d="M164 342H348" stroke="#FFF6CC" stroke-width="6" stroke-linecap="round"/>`],
-  ['', `${star(332, 128, 34, 6, '#FFFFFF')}<circle cx="332" cy="128" r="5" fill="#FFFFFF"/>${sparks([[384, 196, 12]])}`], 0.45);
+// First in: an arched doorway, the room's light in it, the door swung open, a star over it
+pic('fi', ['#2346A8', '#0F2260', '#050B26'], [C, 236],
+  (k) => `<path d="M150 404L192 360H320L362 404z" fill="#FFE7A6" opacity=".22"/>
+${enamel('M192 356V202Q192 144 256 144Q320 144 320 202V356z', 'ew')}
+${part('r1', 'mg', '<path fill-rule="evenodd" d="M168 356V196Q168 120 256 120Q344 120 344 196V356zM192 356V202Q192 144 256 144Q320 144 320 202V356z"/>')}
+${part('r2', 'mh', '<rect x="148" y="352" width="216" height="20" rx="5"/>')}
+${part('r2', 'mh', '<path d="M192 352V202Q192 166 206 154L144 182Q134 188 134 202V376Q134 388 146 384z"/>')}
+${cut('M150 214L178 200V262L150 274zM150 300L178 290V344L150 356z', 3, k)}
+${part('r3', 'ms', '<circle cx="176" cy="282" r="7"/>')}`,
+  (k) => `${part('r2', 'mg', `<path d="${star5(352, 124, 36, 16)}"/>`)}${glint(352, 124, 30)}${glint(398, 196, 13)}`, 0.42);
 
-// Life of the party: a mirror ball on its string throwing light round the room
-const ball = (() => {
-  const cx = 256, cy = 236, R = 98, rnd = rng(77);
-  const tones = ['#FFFFFF', '#E6ECFA', '#B9C3E0', '#8C97BC', '#FFC2EC', '#A6ECFF', '#6B7499'];
-  let tiles = '';
-  for (let lat = -80; lat < 80; lat += 16) {
-    const y0 = cy + R * Math.sin((lat * Math.PI) / 180), y1 = cy + R * Math.sin(((lat + 16) * Math.PI) / 180);
-    const w = R * Math.cos(((lat + 8) * Math.PI) / 180), n = Math.max(4, Math.round((2 * w) / 19));
+// Life of the party: a mirror ball on its chain: each facet its own small plate of metal, a few flashing white
+const ball = (k) => {
+  const cx = 256, cy = 244, R = 104, rnd = rng(77);
+  let tiles = '', lights = '';
+  for (let lat = -84; lat < 84; lat += 14) {
+    const y0 = cy + R * Math.sin((lat * Math.PI) / 180), y1 = cy + R * Math.sin(((lat + 14) * Math.PI) / 180);
+    const w = R * Math.cos(((lat + 7) * Math.PI) / 180), n = Math.max(4, Math.round((2 * w) / 20));
     for (let i = 0; i < n; i++) {
-      const x0 = cx - w + (2 * w * i) / n, ww = (2 * w) / n, lit = (x0 - cx) / R * -0.5 + (y0 - cy) / R * -0.6;
-      const tone = tones[Math.min(tones.length - 1, Math.max(0, Math.floor(3 - lit * 3 + rnd() * 2.2)))];
-      tiles += `<rect x="${f(x0 + 1)}" y="${f(y0 + 1)}" width="${f(ww - 2)}" height="${f(y1 - y0 - 2)}" rx="2" fill="${rnd() < 0.08 ? (rnd() < 0.5 ? '#FFC2EC' : '#A6ECFF') : tone}"/>`;
+      const x0 = cx - w + (2 * w * i) / n, ww = (2 * w) / n, r = rnd();
+      tiles += `<rect x="${f(x0 + 1.4)}" y="${f(y0 + 1.4)}" width="${f(ww - 2.8)}" height="${f(y1 - y0 - 2.8)}" rx="1.5"/>`;
+      if (r < 0.07) lights += `<rect x="${f(x0 + 1.4)}" y="${f(y0 + 1.4)}" width="${f(ww - 2.8)}" height="${f(y1 - y0 - 2.8)}" rx="1.5" fill="#FFFFFF" opacity=".55"/>`;
     }
   }
-  return [rad('bl', ['#FFFFFF', '#AEB8D8', '#3A4268'], 0.36, 0.3, 0.8) + `<clipPath id="bc"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath>` + rad('gl', ['#FFFFFF', '#FFFFFF00'], 0.5, 0.5, 0.5),
-    `<path d="M256 52V140" stroke="#E6ECFA" stroke-width="4"/><rect x="246" y="128" width="20" height="14" rx="3" fill="#C9D2E4"/>
-<circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bl)"/><g clip-path="url(#bc)">${tiles}<circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bl)" opacity=".25"/></g>
-<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#2A2F4A" stroke-opacity=".5" stroke-width="2"/>`];
-})();
-pic('so', ['#C0308C', '#5E0F52', '#22041E'], [C, 236], ball,
-  ['', `${star(214, 190, 30, 4, '#FFFFFF')}<circle cx="214" cy="190" r="5" fill="#FFFFFF"/>${sparks([[372, 300, 18], [140, 316, 14], [362, 150, 11], [150, 140, 9]])}
-<g stroke="#FFC2EC" stroke-width="3" stroke-linecap="round" opacity=".8"><path d="M176 372l-14 18M336 372l14 18M256 388v22"/></g>`], 0.5);
+  return `${part('r3', 'mh', '<rect x="252" y="54" width="8" height="86" rx="4"/>')}${part('r2', 'mg', '<rect x="238" y="126" width="36" height="20" rx="5"/>')}
+${part('r1', 'ms', `<circle cx="${cx}" cy="${cy}" r="${R}"/>`)}
+<g fill="${FACE[k][5]}" opacity=".55"><circle cx="${cx}" cy="${cy}" r="${R - 1}"/></g>
+<radialGradient id="mb" gradientUnits="userSpaceOnUse" cx="${cx - 38}" cy="${cy - 44}" r="${R * 1.6}">${stops([FACE[k][0], FACE[k][3], FACE[k][1], FACE[k][2], FACE[k][5]])}</radialGradient>
+<clipPath id="bc"><circle cx="${cx}" cy="${cy}" r="${R - 2}"/></clipPath><g clip-path="url(#bc)">${part('r3', 'mb', tiles)}${lights}</g>`;
+};
+pic('so', ['#8A1F78', '#45093E', '#1A0318'], [C, 236], ball,
+  (k) => `${glint(212, 196, 34)}${glint(300, 290, 16)}${part('r3', 'mg', `<path d="${star5(372, 316, 18, 7)}"/><path d="${star5(138, 330, 14, 6)}"/><path d="${star5(368, 150, 11, 5)}"/>`)}`, 0.5);
 
-// Teambuilding thunder: a storm cloud with its rain and the bolt out of it
-pic('tm', ['#3E6AB8', '#1A3366', '#08142C'], [C, 220], [
-  lin('cl', ['#FFFFFF', '#DCE4F6', '#9AA9CC'], 0, 1) + lin('cd', ['#8E9CC4', '#5C6A94'], 0, 1),
-  `<g stroke="#9CC4FF" stroke-width="7" stroke-linecap="round" opacity=".75"><path d="M178 322l-14 34M218 330l-14 34M298 330l-14 34M338 322l-14 34"/></g>
-<path d="M150 300Q114 300 114 264Q114 230 150 226Q152 186 196 182Q216 136 266 136Q322 136 336 188Q394 188 398 244Q400 300 344 300z" fill="url(#cd)" transform="translate(0 14)"/>
-<path d="M150 300Q114 300 114 264Q114 230 150 226Q152 186 196 182Q216 136 266 136Q322 136 336 188Q394 188 398 244Q400 300 344 300z" fill="url(#cl)"/>
-<path d="M196 182Q216 136 266 136Q306 136 324 170Q300 152 266 156Q226 156 210 190z" fill="#FFFFFF" opacity=".8"/>`],
-  [lin('bo', ['#FFF6B8', '#FFD23A', '#FF9A1F'], 0, 1),
-   `<path d="M270 262L222 352H260L238 432L318 324H276L302 262z" fill="url(#bo)" stroke="#FFF6CC" stroke-width="3" stroke-linejoin="round"/>`]);
+// Teambuilding thunder: a storm cloud, its rain, the bolt out of it
+const CLOUD = 'M150 300Q114 300 114 264Q114 230 150 226Q152 186 196 182Q216 136 266 136Q322 136 336 188Q394 188 398 244Q400 300 344 300z';
+pic('tm', ['#1F5C8A', '#0C2C4C', '#04121F'], [C, 220],
+  (k) => `${part('r3', 'mh', '<path d="M178 326l-14 34M218 334l-14 34M298 334l-14 34M338 326l-14 34" fill="none" stroke="url(#mh)" stroke-width="9" stroke-linecap="round"/>')}
+${part('r1', 'mg', `<path d="${CLOUD}"/>`)}
+${cut('M196 182Q216 136 266 136Q306 136 324 170M150 226Q170 222 186 236M336 188Q318 192 308 210', 4, k)}`,
+  (k) => `${part('r1', 'mh', '<path d="M272 258L220 354H260L236 440L322 322H278L306 258z"/>')}
+${enamel('M276 270L236 342H272L258 396L304 334H264L286 270z', 'ey')}`);
 
-// Season: a desk calendar, a term's days ticked off in it
-pic('se', ['#E07A2A', '#8A3A0E', '#341404'], [C, 240], [
-  lin('pg', ['#FFFFFF', '#F4ECDC'], 0, 1) + lin('hd', ['#FF7A62', '#D23A2C'], 0, 1) + lin('rg', GOLDS, 1, 0),
-  (() => {
-    let cells = '';
+// Season: a desk calendar, a term's days ticked off in red enamel, an autumn leaf against it
+pic('se', ['#9A4A16', '#4E1F06', '#1E0A02'], [C, 240],
+  (k) => {
+    let cells = '', ticks = '';
     const on = [0, 1, 2, 4, 5, 7, 8, 10, 11, 12, 14];
     for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) {
       const i = r * 5 + c, x = 172 + c * 36, y = 236 + r * 34;
-      cells += on.includes(i) ? `<circle cx="${x + 12}" cy="${y + 12}" r="13" fill="#D23A2C"/><path d="M${x + 6} ${y + 12}l5 5l9 -10" stroke="#FFFFFF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
-        : `<rect x="${x + 2}" y="${y + 2}" width="20" height="20" rx="5" fill="#E2D6C0"/>`;
+      if (on.includes(i)) { cells += `<path d="M${x + 12} ${y}a12 12 0 1 0 0.01 0z"/>`; ticks += `<path d="M${x + 6} ${y + 12}l5 5l9 -10"/>`; }
+      else cells += '';
     }
-    return `<rect x="150" y="146" width="212" height="232" rx="24" fill="url(#pg)"/>
-<path d="M150 170Q150 146 174 146H338Q362 146 362 170V212H150z" fill="url(#hd)"/>
-${cells}
-<rect x="196" y="122" width="16" height="46" rx="8" fill="url(#rg)"/><rect x="300" y="122" width="16" height="46" rx="8" fill="url(#rg)"/>`;
-  })()],
-  [lin('lf', ['#FFD45E', '#E2672A'], 1, 1),
-   `<g transform="rotate(-28 372 340)"><path d="M372 292Q412 318 372 392Q332 318 372 292z" fill="url(#lf)"/><path d="M372 300V386" stroke="#9A3A0E" stroke-width="3" opacity=".6"/></g>`]);
+    const grid = Array.from({ length: 20 }, (_, i) => (on.includes(i) ? '' : `M${174 + (i % 5) * 36} ${238 + Math.floor(i / 5) * 34}h20v20h-20z`)).join('');
+    return `${part('r1', 'mg', '<rect x="150" y="146" width="212" height="232" rx="24"/>')}
+${enamel('M174 160H338Q348 160 348 170V208H164V170Q164 160 174 160z', 'er')}
+${cut(grid, 2.5, k)}
+<g fill="url(#er)">${cells}</g><g fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">${ticks}</g>
+${part('r2', 'mh', '<rect x="196" y="122" width="16" height="48" rx="8"/><rect x="300" y="122" width="16" height="48" rx="8"/>')}`;
+  },
+  (k) => `<g transform="rotate(-28 372 340)">${part('r2', 'mg', '<path d="M372 288Q416 318 372 396Q328 318 372 288z"/>')}${cut('M372 300V386M372 330l14 -10M372 354l-14 -10', 3, k)}</g>`);
 
-// Bug hunter: a ladybird on its leaf
-pic('bg', ['#3C9A48', '#185226', '#06200C'], [C, 230], [
-  lin('lv', ['#9AE07A', '#3E9A3A', '#1E6624'], 1, 1),
-  `<path d="M120 380Q130 200 300 130Q400 100 404 116Q414 240 300 330Q220 392 120 380z" fill="url(#lv)"/>
-<path d="M126 374Q250 260 396 124" stroke="#1A5A20" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/>
-<g stroke="#1A5A20" stroke-width="3" fill="none" opacity=".45">${[[180, 316, 150, 270], [230, 270, 196, 214], [280, 224, 262, 168], [210, 292, 252, 330], [262, 246, 312, 280], [312, 200, 352, 226]].map(([a, b, c, d]) => `<path d="M${a} ${b}Q${(a + c) / 2 + 8} ${(b + d) / 2} ${c} ${d}"/>`).join('')}</g>`],
-  [lin('el', ['#FF7A5A', '#E3242B', '#9E0E16'], 1, 1),
-   `<g transform="rotate(-24 262 262)">
-<g stroke="#1A1416" stroke-width="7" stroke-linecap="round" fill="none"><path d="M206 236l-30 -14M200 270l-34 2M208 304l-28 18M318 236l30 -14M324 270l34 2M316 304l28 18"/><path d="M246 168Q236 140 214 134M278 168Q288 140 310 134"/></g>
-<circle cx="213" cy="133" r="8" fill="#1A1416"/><circle cx="311" cy="133" r="8" fill="#1A1416"/>
-<path d="M222 186Q262 140 302 186z" fill="#1A1416"/><ellipse cx="262" cy="186" rx="44" ry="30" fill="#1A1416"/>
-<circle cx="244" cy="180" r="7" fill="#FFFFFF"/><circle cx="280" cy="180" r="7" fill="#FFFFFF"/>
-<ellipse cx="262" cy="270" rx="78" ry="90" fill="url(#el)"/>
-<path d="M262 186V360" stroke="#1A1416" stroke-width="5"/>
-<g fill="#1A1416"><circle cx="226" cy="236" r="15"/><circle cx="298" cy="236" r="15"/><circle cx="214" cy="292" r="13"/><circle cx="310" cy="292" r="13"/><circle cx="240" cy="334" r="11"/><circle cx="284" cy="334" r="11"/></g>
-<ellipse cx="226" cy="214" rx="20" ry="10" fill="#FFFFFF" opacity=".55" transform="rotate(-30 226 214)"/></g>`]);
+// Bug hunter: a ladybird on its leaf: the leaf struck in metal, the bird's wing cases red enamel, its spots black
+pic('bg', ['#1F7A44', '#0B3D22', '#03170C'], [C, 230],
+  (k) => `${part('r1', 'mg', '<path d="M120 380Q130 200 300 130Q400 100 404 116Q414 240 300 330Q220 392 120 380z"/>')}
+${cut('M126 374Q250 260 396 124', 5, k)}
+${cut([[180, 316, 150, 270], [230, 270, 196, 214], [280, 224, 262, 168], [210, 292, 252, 330], [262, 246, 312, 280], [312, 200, 352, 226]].map(([a, b, c, d]) => `M${a} ${b}Q${(a + c) / 2 + 8} ${(b + d) / 2} ${c} ${d}`).join(''), 3, k)}`,
+  (k) => `<g transform="rotate(-24 262 262)">
+${part('r3', 'mh', '<path d="M206 236l-30 -14M200 270l-34 2M208 304l-28 18M318 236l30 -14M324 270l34 2M316 304l28 18M246 168Q236 140 214 134M278 168Q288 140 310 134" fill="none" stroke="url(#mh)" stroke-width="8" stroke-linecap="round"/><circle cx="213" cy="133" r="9"/><circle cx="311" cy="133" r="9"/>')}
+${part('r2', 'ms', '<ellipse cx="262" cy="186" rx="46" ry="32"/>')}
+${part('r1', 'mg', '<ellipse cx="262" cy="272" rx="84" ry="96"/>')}
+${enamel('M256 186Q190 192 186 268Q186 340 256 362z', 'er')}${enamel('M268 186Q334 192 338 268Q338 340 268 362z', 'er')}
+<g fill="url(#ek)"><circle cx="226" cy="236" r="15"/><circle cx="298" cy="236" r="15"/><circle cx="214" cy="292" r="13"/><circle cx="310" cy="292" r="13"/><circle cx="238" cy="334" r="10"/><circle cx="286" cy="334" r="10"/></g>
+<ellipse cx="222" cy="220" rx="20" ry="9" fill="#FFFFFF" opacity=".5" transform="rotate(-36 222 220)"/></g>`);
 
-// Couch critic: an armchair-deep sofa, a speech bubble over it with its three dots
-pic('cr', ['#1E8C92', '#0A4A52', '#021E22'], [C, 200], [
-  lin('sb', ['#FF9A78', '#E2573A', '#A8341E'], 0, 1) + lin('ss', ['#FFB49A', '#F0704E'], 0, 1) + lin('sa', ['#F07A5A', '#B8432C'], 1, 0),
-  `<rect x="150" y="226" width="212" height="88" rx="30" fill="url(#sb)"/>
-<rect x="170" y="290" width="172" height="52" rx="16" fill="url(#ss)"/><path d="M256 296V340" stroke="#B8432C" stroke-width="4" opacity=".6"/>
-<rect x="118" y="262" width="58" height="104" rx="26" fill="url(#sa)"/><rect x="336" y="262" width="58" height="104" rx="26" fill="url(#sa)" transform="scale(-1 1) translate(-730 0)"/>
-<rect x="128" y="350" width="256" height="24" rx="10" fill="#8A2E1A"/>
-<g fill="#5A2412"><rect x="146" y="372" width="14" height="22" rx="4"/><rect x="352" y="372" width="14" height="22" rx="4"/></g>
-<path d="M164 236Q256 222 348 236" stroke="#FFFFFF" stroke-opacity=".5" stroke-width="4" fill="none" stroke-linecap="round"/>`],
-  [lin('bb', ['#FFFFFF', '#E2EAF6'], 0, 1),
-   `<path d="M196 104H316Q344 104 344 132V170Q344 198 316 198H284L262 222L256 198H196Q168 198 168 170V132Q168 104 196 104z" fill="url(#bb)"/>
-<g fill="#0A4A52"><circle cx="220" cy="151" r="11"/><circle cx="256" cy="151" r="11"/><circle cx="292" cy="151" r="11"/></g>`]);
+// Couch critic: a deep sofa in coral upholstery set in its metal frame, a speech bubble over it with its three dots
+pic('cr', ['#167A80', '#0A3E44', '#021A1D'], [C, 200],
+  (k) => `${part('r3', 'mh', '<rect x="146" y="368" width="16" height="26" rx="4"/><rect x="350" y="368" width="16" height="26" rx="4"/>')}
+${part('r1', 'mg', '<rect x="146" y="222" width="220" height="96" rx="30"/>')}
+${enamel('M176 238H336Q350 238 350 252V300H162V252Q162 238 176 238z', 'ec')}
+${part('r2', 'mh', '<rect x="128" y="344" width="256" height="30" rx="10"/>')}
+${part('r2', 'mg', '<rect x="164" y="290" width="184" height="62" rx="18"/>')}
+${enamel('M182 302H330Q338 302 338 310V336Q338 342 330 342H182Q174 342 174 336V310Q174 302 182 302z', 'ec')}${cut('M256 304V340', 3, k)}
+${part('r2', 'mg', '<rect x="112" y="258" width="62" height="114" rx="28"/><rect x="338" y="258" width="62" height="114" rx="28"/>')}`,
+  (k) => `${part('r1', 'mh', '<path d="M196 98H316Q346 98 346 128V170Q346 200 316 200H286L262 228L254 200H196Q166 200 166 170V128Q166 98 196 98z"/>')}
+<g fill="url(#ek)"><circle cx="218" cy="149" r="12"/><circle cx="256" cy="149" r="12"/><circle cx="294" cy="149" r="12"/></g>`);
 
-// a medal's ribbon at 96 px and up (ui/Medal): two tails behind the disc, the rim's metal with a darker band, cut in a V
+// a medal's ribbon at 96 px and up (ui/Medal): two tails behind the disc, cut in a V: dark navy grosgrain, the level's
+// metal woven in as two stripes (legend: the iridescent one), shaded where it folds behind the disc
 for (const k of 'bsgl') {
   const m = METAL[k], tail = (side) => `<g transform="translate(256 360) rotate(${side * 24})"><path d="M-62 0H62V240L0 200L-62 240z" fill="url(#rb)"/>
-<path d="M-20 0H20V214L0 200L-20 214z" fill="${k === 'l' ? 'url(#iri)' : m.rim[3]}" opacity="${k === 'l' ? 0.9 : 0.55}"/><path d="M-62 0H62V24H-62z" fill="#000" opacity=".25"/></g>`;
-  files[`ribbon-${k}`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 640"><defs>${lin('rb', [m.rim[1], m.rim[0], m.rim[2]], 1, 0)}${m.iri ? lin('iri', m.iri, 0, 1) : ''}</defs>${tail(-1)}${tail(1)}</svg>\n`;
+<path d="M-40 0H-28V226L-40 233zM28 0H40V233L28 226z" fill="url(#st)"/>
+<path d="M-8 0H8V205L0 200L-8 205z" fill="${k === 'l' ? 'url(#iri)' : 'url(#st)'}" opacity="${k === 'l' ? 0.95 : 0.6}"/>
+<path d="M-62 0H62V40H-62z" fill="url(#fold)"/></g>`;
+  files[`ribbon-${k}`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 640"><defs>${lin('rb', ['#0C1438', '#22306E', '#2E3E86', '#1A2558', '#0A1030'], 1, 0)}${lin('st', [m.rim[0], m.rim[1], m.rim[2]], 1, 0)}${lin('fold', ['#000000AA', '#00000000'], 0, 1)}${m.iri ? lin('iri', m.iri, 0, 1) : ''}</defs>${tail(-1)}${tail(1)}</svg>\n`;
 }
 
-// ---- pins: the one-time awards are enamel shields (ui/Pin): a flat enamel field (Pin fills SHIELD with the colour),
-// one glyph over it (zn-<glyph>, floats with the tilt), a thin metal frame with the enamel's gloss on top (zn-frame-<metal>,
-// still). SHIELD is lib/awards.ts SHIELD: the two must stay equal.
+// ---- pins: the one-time awards are enamel shields (ui/Pin): the enamel (Pin fills SHIELD with the colour), its
+// guilloche (zn-enamel, over the colour), one glyph struck in the frame's metal (zn-<glyph>-<metal>, floats with the
+// tilt), the bevelled metal frame on top (zn-frame-<metal>, still). SHIELD is lib/awards.ts SHIELD: the two stay equal.
 const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
-const ROSE = ['#FFE4D6', '#F0B49C', '#A8604A', '#5E2C1E', '#D8907A'];
-for (const [k, rimc] of [['g', METAL.g.rim], ['s', METAL.s.rim], ['r', ROSE]]) {
-  files[`zn-frame-${k}`] = svg(lin('fr', rimc, 1, 1) + lin('gl', ['#FFFFFF66', '#FFFFFF00'], 0.6, 1) + `<clipPath id="in"><path d="${SHIELD}"/></clipPath>`,
-    `<g clip-path="url(#in)"><path d="M60 40H460V150Q300 120 60 260z" fill="url(#gl)"/></g>
-<path d="${SHIELD}" fill="none" stroke="url(#fr)" stroke-width="26" stroke-linejoin="round"/>
-<path d="${SHIELD}" fill="none" stroke="${rimc[3]}" stroke-opacity=".6" stroke-width="3" transform="translate(256 262) scale(.9) translate(-256 -262)"/>
-<path d="M104 70Q256 36 408 70" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="3" stroke-linecap="round"/>`);
+files['zn-enamel'] = (() => {
+  let fine = '', guil = '';
+  for (let i = 0; i < 180; i++) { const a = (i * 2 * Math.PI) / 180; fine += `M256 250L${f(256 + 300 * Math.sin(a))} ${f(250 - 300 * Math.cos(a))}`; }
+  for (let i = 0; i < 24; i++) guil += `<ellipse cx="256" cy="250" rx="190" ry="72" transform="rotate(${f(i * 7.5)} 256 250)"/>`;
+  return svg(`<clipPath id="in"><path d="${SHIELD}"/></clipPath>${rad('lt', ['#FFFFFF33', '#FFFFFF00'], 0.42, 0.32, 0.6)}<radialGradient id="vig" cx=".5" cy=".46" r=".6"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>`,
+    `<g clip-path="url(#in)"><path d="${fine}" stroke="#FFFFFF" stroke-width="1" opacity=".07"/><g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".09">${guil}</g>
+<rect width="512" height="512" fill="url(#lt)"/><rect width="512" height="512" fill="url(#vig)"/></g>`);
+})();
+for (const k of 'gsr') {
+  files[`zn-frame-${k}`] = svg(metals(k) + relief('rr', 6, 8, 0.4) + lin('gl', ['#FFFFFF40', '#FFFFFF00'], 0.6, 1) + `<clipPath id="in"><path d="${SHIELD}"/></clipPath>`,
+    `<g clip-path="url(#in)"><path d="M60 40H460V130Q300 104 60 230z" fill="url(#gl)"/></g>
+<g filter="url(#rr)"><path d="${SHIELD}" fill="none" stroke="url(#mg)" stroke-width="30" stroke-linejoin="round"/></g>
+<path d="${SHIELD}" fill="none" stroke="#000" stroke-opacity=".4" stroke-width="2.5" transform="translate(256 262) scale(.928) translate(-256 -262)"/>`);
 }
-const glyph = (name, defs, body) => (files[`zn-${name}`] = svg(SHADOW.replace('stdDeviation="7"', 'stdDeviation="4"').replace('dy="9"', 'dy="5"') + defs, `<g filter="url(#sh)">${body}</g>`));
-// First 500: the number struck in gold
-glyph('500', lin('gd', GOLDS, 0, 1), (() => {
+const glyph = (name, body) => { for (const k of 'gsr') files[`zn-${name}-${k}`] = svg(metals(k) + RELIEFS + ENAMELS + GLINT, body(k)); };
+// First 500: the number struck big
+glyph('500', (k) => {
   const five = (x, y) => `M${x + 58} ${y}H${x + 12}L${x + 8} ${y + 52}C${x + 30} ${y + 40} ${x + 70} ${y + 46} ${x + 70} ${y + 84}C${x + 70} ${y + 122} ${x + 22} ${y + 126} ${x + 4} ${y + 104}`;
-  const d = `${five(132, 182)}M${248 - 0} 240m-30 0a30 56 0 1 0 60 0a30 56 0 1 0 -60 0M${336} 240m-30 0a30 56 0 1 0 60 0a30 56 0 1 0 -60 0`;
-  return `<path d="${d}" fill="none" stroke="#5E3A04" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="url(#gd)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-${star(256, 352, 18, 3, '#FFE9A0')}${star(200, 356, 9, 1.6, '#FFE9A0')}${star(312, 356, 9, 1.6, '#FFE9A0')}`;
-})());
-// the 2026 initiation: the mountains and the dome it was held under
-glyph('init26', lin('gd', GOLDS, 0, 1) + lin('sn', ['#FFFFFF', '#C8D6F2'], 0, 1),
-  `<path d="M108 250L168 176L204 214L262 132L322 206L352 180L404 250z" fill="#8FA8E6"/>
-<path d="M168 176L186 198L174 196L160 210zM262 132L290 172L270 166L254 186L242 162zM352 180L366 198L350 196z" fill="url(#sn)"/>
-<path d="M146 300Q146 224 256 214Q366 224 366 300z" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>
-<path d="M164 270Q256 246 348 270M190 238Q256 226 322 238" fill="none" stroke="#8A5606" stroke-width="4" opacity=".7"/>
-<rect x="136" y="298" width="240" height="56" rx="6" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>
-<g fill="#8A5606" opacity=".75">${[0, 1, 2, 3, 4, 5, 6].map((i) => `<rect x="${154 + i * 30}" y="310" width="14" height="34" rx="3"/>`).join('')}</g>
-<rect x="120" y="352" width="272" height="16" rx="5" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>`);
+  const d = `${five(130, 176)}M248 236m-30 0a30 58 0 1 0 60 0a30 58 0 1 0 -60 0M338 236m-30 0a30 58 0 1 0 60 0a30 58 0 1 0 -60 0`;
+  return `${part('r1', 'mg', `<path d="${d}" fill="none" stroke="url(#mg)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>`)}
+${part('r3', 'mh', `<path d="${star5(256, 350, 18, 8)}"/><path d="${star5(204, 354, 9, 4)}"/><path d="${star5(308, 354, 9, 4)}"/>`)}`;
+});
+// the 2026 initiation: the Alatau's snow over the dome it was held under
+glyph('init26', (k) => `${part('r2', 'esn', '<path d="M104 252L166 174L202 212L262 128L324 204L354 176L408 252z"/>')}
+<path d="M166 174L186 200L172 196L158 212zM262 128L292 172L270 166L254 188L240 162zM354 176L370 198L352 196z" fill="#6E86C4" opacity=".45" transform="translate(10 4)"/>
+${part('r1', 'mg', '<path d="M146 300Q146 222 256 212Q366 222 366 300z"/>')}
+${cut('M164 272Q256 248 348 272M188 240Q256 228 324 240', 4, k)}
+${part('r1', 'mh', '<rect x="134" y="296" width="244" height="58" rx="6"/>')}
+<g fill="${FACE[k][5]}" opacity=".7">${[0, 1, 2, 3, 4, 5, 6].map((i) => `<rect x="${152 + i * 31}" y="308" width="15" height="36" rx="3"/>`).join('')}</g>
+${part('r2', 'mg', '<rect x="118" y="350" width="276" height="18" rx="5"/>')}`);
 // Anthem: KBTU's colonnade, two notes over it
-glyph('anthem', lin('gd', GOLDS, 0, 1),
-  `<path d="M150 214L256 160L362 214z" fill="url(#gd)" stroke="#8A5606" stroke-width="4" stroke-linejoin="round"/>
-<rect x="140" y="212" width="232" height="18" rx="4" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>
-${[0, 1, 2, 3].map((i) => `<rect x="${164 + i * 52}" y="236" width="28" height="100" rx="3" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>`).join('')}
-<rect x="132" y="338" width="248" height="16" rx="4" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/><rect x="116" y="356" width="280" height="16" rx="4" fill="url(#gd)" stroke="#8A5606" stroke-width="4"/>
-<g fill="#FFFFFF"><ellipse cx="330" cy="140" rx="15" ry="11" transform="rotate(-22 330 140)"/><ellipse cx="380" cy="126" rx="15" ry="11" transform="rotate(-22 380 126)"/>
-<path d="M342 136V84L392 70V122" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round"/><path d="M342 84L392 70V86L342 100z"/></g>`);
+glyph('anthem', (k) => `${part('r2', 'mg', '<path d="M150 214L256 160L362 214z"/>')}${part('r2', 'mh', '<rect x="140" y="212" width="232" height="20" rx="4"/>')}
+${part('r1', 'mg', [0, 1, 2, 3].map((i) => `<rect x="${164 + i * 52}" y="236" width="30" height="100" rx="3"/>`).join(''))}
+${cut([0, 1, 2, 3].map((i) => `M${174 + i * 52} 246V326M${184 + i * 52} 246V326`).join(''), 2, k)}
+${part('r2', 'mh', '<rect x="132" y="338" width="248" height="16" rx="4"/><rect x="116" y="356" width="280" height="16" rx="4"/>')}
+${part('r2', 'ms', '<ellipse cx="330" cy="140" rx="16" ry="12" transform="rotate(-22 330 140)"/><ellipse cx="380" cy="126" rx="16" ry="12" transform="rotate(-22 380 126)"/><path d="M338 138V82L396 66V124H388V84L346 96V138z"/>')}`);
 // Made the creator laugh: a face laughing to tears
-glyph('laugh', rad('fc', ['#FFF2A8', '#FFD23A', '#F0A01E'], 0.4, 0.3, 0.8),
-  `<circle cx="256" cy="250" r="104" fill="url(#fc)" stroke="#8A5606" stroke-width="5"/>
-<path d="M196 226Q214 204 232 226M280 226Q298 204 316 226" fill="none" stroke="#5A3A10" stroke-width="10" stroke-linecap="round"/>
-<path d="M186 262Q256 274 326 262Q320 330 256 334Q192 330 186 262z" fill="#5A1E14"/><path d="M220 314Q256 296 292 314Q276 332 256 332Q236 332 220 314z" fill="#F0606A"/><path d="M196 266Q256 276 316 266L312 280Q256 288 200 280z" fill="#FFFFFF"/>
-<g fill="#5AC8FF" stroke="#FFFFFF" stroke-width="3"><path d="M168 230Q130 262 150 290Q172 300 176 268z"/><path d="M344 230Q382 262 362 290Q340 300 336 268z"/></g>`);
+glyph('laugh', (k) => `${part('r1', 'ms', '<circle cx="256" cy="250" r="106"/>')}
+${cut('M196 226Q214 204 232 226M280 226Q298 204 316 226', 9, k)}
+${enamel('M186 262Q256 274 326 262Q320 332 256 336Q192 332 186 262z', 'ek')}
+${part('r3', 'mh', '<path d="M196 266Q256 276 316 266L312 282Q256 290 200 282z"/>')}
+${part('r3', 'mg', '<path d="M168 230Q128 262 150 292Q174 302 178 268z"/><path d="M344 230Q384 262 362 292Q338 302 334 268z"/>')}
+${enamel('M164 244Q138 266 152 286Q168 292 170 268z', 'eb')}${enamel('M348 244Q374 266 360 286Q344 292 342 268z', 'eb')}`);
 // Found the creator: a hand waving hello
-glyph('wave', lin('hd', ['#FFE08A', '#FFC23A', '#E8961E'], 1, 1),
-  `<g transform="rotate(-16 256 270)" fill="url(#hd)" stroke="#8A5606" stroke-width="5" stroke-linejoin="round">
-<rect x="178" y="236" width="150" height="140" rx="56"/>
-${[[184, 140, 150], [222, 112, 170], [260, 118, 166], [296, 146, 140]].map(([x, y, h]) => `<rect x="${x}" y="${y}" width="34" height="${h}" rx="17"/>`).join('')}
-<rect x="300" y="250" width="34" height="104" rx="17" transform="rotate(42 318 300)"/>
-<path d="M190 300Q256 330 324 296" fill="none" stroke-width="0"/></g>
-<g fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity=".9"><path d="M120 170Q108 210 122 248"/><path d="M146 150Q130 200 146 246" opacity=".6"/><path d="M394 170Q406 210 392 248"/><path d="M368 150Q384 200 368 246" opacity=".6"/></g>`);
+glyph('wave', (k) => `<g transform="rotate(-16 256 270)">${part('r1', 'mg', '<rect x="178" y="236" width="150" height="140" rx="56"/>')}
+${part('r2', 'mh', [[184, 140, 150], [222, 112, 170], [260, 118, 166], [296, 146, 140]].map(([x, y, h]) => `<rect x="${x}" y="${y}" width="34" height="${h}" rx="17"/>`).join(''))}
+${part('r2', 'mg', '<rect x="300" y="250" width="34" height="104" rx="17" transform="rotate(42 318 300)"/>')}</g>
+${part('r3', 'mh', '<path d="M120 170Q108 210 122 248M394 170Q406 210 392 248M146 150Q130 200 146 246M368 150Q384 200 368 246" fill="none" stroke="url(#mh)" stroke-width="8" stroke-linecap="round"/>')}`);
 
+// the files this tool owns are rewritten whole: drop the ones a rename left behind
+for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));
 for (const [n, s] of Object.entries(files)) writeFileSync(new URL(`${n}.svg`, out), s);
 console.log(Object.keys(files).length, 'files');

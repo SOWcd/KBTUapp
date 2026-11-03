@@ -1,7 +1,7 @@
 <script lang="ts">
   // A pin (awards plan, Nov 3): a one-time award for a moment, an upright enamel shield in a thin metal frame, so it
-  // never reads as a medal (round, levels) or a status (the seal by the name). Flat enamel, one glyph (a drawn one,
-  // public/medals/zn-*, or an event's emoji), the year small from 64 px. Layered like the medals: the glyph floats with
+  // never reads as a medal (round, levels) or a status (the seal by the name). Enamel over an engine-turned ground (zn-enamel),
+  // one glyph (struck in the frame's metal, public/medals/zn-<glyph>-<metal>, or an event's emoji), the year small from 64 px. Layered like the medals: the glyph floats with
   // the tilt (base.css .z) between the enamel and the still frame.
   import Emoji from './Emoji.svelte';
   import { SHIELD } from '../lib/awards';
@@ -11,8 +11,9 @@
 
 <span class="pin {metal}" class:off style="width:{size}px;height:{size}px">
   <svg viewBox="0 0 512 512" aria-hidden="true"><path d={SHIELD} fill={color} /></svg>
+  <img src="medals/zn-enamel.svg" alt="" draggable="false" />
   {#if hidden}<span class="q" style:font-size="{Math.round(size * 0.4)}px">?</span>
-  {:else if glyph}<img class="z" style:--z={(size * 0.03).toFixed(1)} src={`medals/zn-${glyph}.svg`} alt="" draggable="false" />
+  {:else if glyph}<img class="z" style:--z={(size * 0.03).toFixed(1)} src={`medals/zn-${glyph}-${metal}.svg`} alt="" draggable="false" />
   {:else}<span class="glyph z" style:--z={(size * 0.03).toFixed(1)}><Emoji name={emoji} size={Math.round(size * 0.4)} /></span>{/if}
   <img src={`medals/zn-frame-${metal}.svg`} alt="" draggable="false" />
   {#if year && size >= 64 && !hidden}<span class="yr num" style:font-size="{Math.max(8, Math.round(size * 0.075))}px">{year}</span>{/if}
