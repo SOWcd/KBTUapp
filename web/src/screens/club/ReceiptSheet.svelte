@@ -3,7 +3,6 @@
   // compare with the club's Kaspi history. "Reject": the ticket stops working, the seat goes to the waitlist and the bot
   // asks the student to talk to the club (money goes back outside the app). A flagged one can be passed.
   import { onDestroy } from 'svelte';
-  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { api, type AttendeeReceipt } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -13,6 +12,9 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Receipt from '@lucide/svelte/icons/receipt';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Notice from '../../ui/Notice.svelte';
 
   let { overlay, receipt, name, ondone }: { overlay: Overlay; receipt: AttendeeReceipt; name: string; ondone?: () => void } = $props();
 
@@ -38,16 +40,16 @@
 
 <Sheet {overlay} icon={Receipt} tall title={t('rc.title')}>
   <h2 class="t-h2 hd">{name}</h2>
-  <p class="t-foot">{t('rc.title')} · {ago(receipt.at)}</p>
-  {#if flagged}{#each receipt.flags as f (f)}<p class="flag"><TriangleAlert size={16} />{f === 'recipient_mismatch'
-    ? t('rc.flag.recipient_mismatch', { name: receipt.recipient ?? '' }) : t(`rc.flag.${f}` as 'rc.flag.duplicate')}</p>{/each}{/if}
+  <p class="t-foot ttl">{t('rc.title')} · {ago(receipt.at)}</p>
+  {#if flagged}{#each receipt.flags as f (f)}<Notice tone="warning" text={f === 'recipient_mismatch'
+    ? t('rc.flag.recipient_mismatch', { name: receipt.recipient ?? '' }) : t(`rc.flag.${f}` as 'rc.flag.duplicate')} />{/each}{/if}
   {#if receipt.amount || receipt.sender || receipt.paidAt}
-    <div class="read surface">
-      {#if receipt.amount}<div class="row"><i>{t('rc.amount')}</i><b class="num">{money(receipt.amount)}</b></div>{/if}
-      {#if receipt.sender}<div class="row"><i>{t('rc.sender')}</i><b>{receipt.sender}</b></div>{/if}
-      {#if receipt.paidAt}<div class="row"><i>{t('rc.paidAt')}</i><b>{whenLine(receipt.paidAt)}</b></div>{/if}
-      {#if receipt.no}<div class="row"><i>{t('rc.no')}</i><b class="num no selectable">{receipt.no}</b></div>{/if}
-    </div>
+    <Group>
+      {#if receipt.amount}<Row title={t('rc.amount')} value={money(receipt.amount)} />{/if}
+      {#if receipt.sender}<Row title={t('rc.sender')} value={receipt.sender} />{/if}
+      {#if receipt.paidAt}<Row title={t('rc.paidAt')} value={whenLine(receipt.paidAt)} />{/if}
+      {#if receipt.no}<Row title={t('rc.no')}>{#snippet detail()}<span class="no num selectable">{receipt.no}</span>{/snippet}</Row>{/if}
+    </Group>
   {/if}
   <p class="t-foot hint">{t('rc.compare')}</p>
   <div class="img surface">
@@ -57,26 +59,20 @@
   {#snippet footer()}
     <div class="acts btns">
       {#if flagged}<Button kind="secondary" size="l" full loading={busy === 'ok'} onclick={() => review(false)}>{t('rc.ok')}</Button>{/if}
-      <Button kind="danger" size="l" full loading={busy === 'no'} onclick={() => review(true)}>{t('rc.reject')}</Button>
+      <Button kind="destructive" size="l" full loading={busy === 'no'} onclick={() => review(true)}>{t('rc.reject')}</Button>
     </div>
   {/snippet}
 </Sheet>
 
 <style>
   .hd { margin: 4px 0 2px; }
-  .flag { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 12px; border-radius: var(--r-m); background: var(--warning-soft);
-    color: var(--warning-text); font: 650 14px/1.3 var(--font-text); }
-  .read { display: flex; flex-direction: column; margin-top: 12px; padding: 2px 14px; }
-  .row { display: flex; align-items: center; gap: 10px; min-height: 44px; }
-  .row + .row { border-top: 1px solid var(--line); }
-  .row i { flex: none; width: 104px; font: 550 13px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .row b { flex: 1; min-width: 0; font: 650 15px/1.3 var(--font-text); overflow-wrap: anywhere; }
+  .ttl ~ :global(.ntc), .ttl ~ :global(.grp) { margin-top: var(--s-3); }
+  .no { color: var(--text-3); font: 450 var(--fs-body)/1.3 var(--font-text); letter-spacing: 0.01em; overflow-wrap: anywhere; }
   .num { font-variant-numeric: tabular-nums; }
-  .no { font-size: 13.5px; letter-spacing: 0.01em; }
-  .hint { margin: 10px 2px; }
+  .hint { margin: var(--s-3) var(--s-1); }
   .img { display: flex; align-items: center; justify-content: center; min-height: 240px; padding: 6px; overflow: hidden; }
   .img img { display: block; max-width: 100%; height: auto; border-radius: var(--r-m); }
   .wait { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .acts { display: flex; gap: 8px; }
+  .acts { display: flex; gap: var(--s-2); }
 </style>
