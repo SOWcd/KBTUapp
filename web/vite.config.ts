@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -48,10 +49,22 @@ function compileHints(names: RegExp): Plugin {
   };
 }
 
+// every lucide icon renders through our ui/LucideIcon.svelte: the same SVG, a third of a tab's build time less
+function lucideIcon(): Plugin {
+  const to = fileURLToPath(new URL('./src/ui/LucideIcon.svelte', import.meta.url));
+  return {
+    name: 'kb-lucide-icon',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === '../Icon.svelte' && importer && /[\\/]@lucide[\\/]svelte[\\/]dist[\\/]icons[\\/]/.test(importer)) return to;
+    },
+  };
+}
+
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet)$/)],
+  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet)$/)],
   server: { host: true, port: 5180 },
   build: {
     outDir: 'dist',
