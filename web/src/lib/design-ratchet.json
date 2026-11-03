@@ -7,14 +7,6 @@
   "weight": 1,
   "legacy": 0
  },
- "screens/ConsentGate.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
  "screens/Screen.svelte": {
   "font": 7,
   "radius": 2,
@@ -117,14 +109,6 @@
   "hex": 0,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
- },
- "screens/assistant/Assistant.svelte": {
-  "font": 4,
-  "radius": 2,
-  "hex": 2,
-  "mix": 2,
-  "weight": 4,
   "legacy": 0
  },
  "screens/club/Attendees.svelte": {
@@ -326,70 +310,6 @@
   "mix": 0,
   "weight": 3,
   "legacy": 2
- },
- "screens/forum/Channel.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
- "screens/forum/ChannelCompose.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 1
- },
- "screens/forum/ChannelReply.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
- "screens/forum/Forum.svelte": {
-  "font": 9,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
-  "legacy": 3
- },
- "screens/forum/ForumMod.svelte": {
-  "font": 7,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 4,
-  "legacy": 2
- },
- "screens/forum/NewAsk.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 4
- },
- "screens/forum/PersonCards.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
- "screens/forum/SkillPicker.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 0
  },
  "screens/lab/Directions.svelte": {
   "font": 0,

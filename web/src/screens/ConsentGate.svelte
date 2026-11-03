@@ -15,6 +15,8 @@
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import type { Component } from 'svelte';
   import Button from '../ui/Button.svelte';
+  import Group from '../ui/Group.svelte';
+  import Row from '../ui/Row.svelte';
   import { glass } from '../ui/glass';
   import { burst } from '../ui/burst';
   import { api } from '../lib/api';
@@ -74,20 +76,19 @@
       <span class="seal glass" bind:this={seal} use:glass><ShieldCheck size={40} strokeWidth={1.6} /></span>
     </div>
     <h1 id="cg-t" class="t-h1 rise" style="--i:1">{t('consent.title')}</h1>
+    <!-- one group per section asked, its lines as Settings' rows with their soft marks -->
     {#each groups as items, g (g)}
-      <div class="card glass glass-sheet rise" style="--i:{g + 2}" use:glass>
-        <span class="sweep"></span>
-        {#each items as it, i (i)}
-          <div class="item rise" style="--i:{g + i + 3}">
-            <span class="tile {it.tone}"><it.icon size={18} strokeWidth={2} /></span>
-            <p class="t-callout">{it.text}</p>
-          </div>
-        {/each}
+      <div class="grp rise" style="--i:{g + 2}">
+        <Group>
+          {#each items as it, i (i)}
+            <Row title={it.text}>{#snippet lead()}<span class="tile {it.tone}"><it.icon size={18} strokeWidth={2} /></span>{/snippet}</Row>
+          {/each}
+        </Group>
       </div>
     {/each}
-    <button class="lnk rise" style="--i:{count + 3}" onclick={() => { haptic.tap(); openLink(`${location.origin}/privacy?lang=${i18n.lang}`); }}>
-      <span class="t-callout">{t('login.consentLink')}</span><ArrowUpRight size={16} />
-    </button>
+    <span class="lnk rise" style="--i:{count + 3}">
+      <Button kind="plain" size="m" onclick={() => openLink(`${location.origin}/privacy?lang=${i18n.lang}`)}>{t('login.consentLink')}<ArrowUpRight size={16} /></Button>
+    </span>
   </div>
   <!-- a button, not a panel (owner, Nov 1): its own width, centred, the list fading out above it -->
   <div class="foot" style="--i:{count + 4}">
@@ -135,21 +136,15 @@
   @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
   h1 { text-align: center; text-wrap: balance; }
 
-  .card { position: relative; width: 100%; border-radius: var(--r-xl); padding: 6px 16px; display: flex; flex-direction: column; }
-  /* one pass of light over the card once it has landed */
-  .sweep { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
-  .sweep::after { content: ''; position: absolute; inset: -20% -60%; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.14) 50%, transparent 60%);
-    transform: translateX(-70%); animation: pass 1.6s 0.9s cubic-bezier(0.4, 0, 0.2, 1) both; }
-  @keyframes pass { to { transform: translateX(70%); } }
-  .item { position: relative; display: flex; align-items: flex-start; gap: 14px; padding: 13px 0; text-align: left; }
-  .item + .item { border-top: 0.5px solid var(--separator); }
-  .item p { flex: 1; color: var(--text); padding-top: 3px; }
-  .tile { flex: none; width: 32px; height: 32px; border-radius: var(--r-xs); display: grid; place-items: center; }
+  .grp { width: 100%; }
+  .grp :global(.lead) { align-self: flex-start; padding-top: 10px; } /* the mark on the first line of a long one */
+  .tile { flex: none; width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; }
   .accent { background: var(--accent-soft); color: var(--accent-text); }
   .success { background: var(--success-soft); color: var(--success-text); }
   .warning { background: var(--warning-soft); color: var(--warning-text); }
   .danger { background: var(--danger-soft); color: var(--danger-text); }
-  .lnk { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); font-weight: 620; padding: 4px 8px; }
+  .lnk { display: flex; }
+  .lnk :global(.lbl) { display: inline-flex; align-items: center; gap: 4px; }
 
   /* the button floats over the list, no band of its own behind it (owner, Nov 1): the list scrolls under it */
   .foot { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 16px); display: flex; justify-content: center; pointer-events: none; }
@@ -164,6 +159,6 @@
   @keyframes fade { from { opacity: 0; } }
   :global(html.lowfx) .ring, :global(html.lowfx) .halo { animation: none; }
   :global(html.lowfx) .blob { animation: none; filter: none; opacity: 0.12; }
-  @media (prefers-reduced-motion: reduce) { .blob, .ring, .halo, .sweep::after, .foot { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .blob, .ring, .halo, .foot { animation: none; }
     .seal :global(svg path) { animation: none; stroke-dashoffset: 0; } }
 </style>
