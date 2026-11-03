@@ -107,7 +107,7 @@
          footlights, a heavy valance with fringe and tassels, the side curtain tied back, the microphone's chrome and cast
          shadow, confetti in and out of focus -->
     {#if wide}<img class="l z far" src={L('ote-far')} alt="" /><img class="l" src={L('ote-ground')} alt="" /><img class="l z near" src={L('ote-arch')} alt="" />
-      <img class="l z near" src={L('ote-mic')} alt="" />
+      <img class="l z near otm" src={L('ote-mic')} alt="" />
     {:else}<img class="l" src={L('ote-stage')} alt="" /><img class="word otw" src={oteWord} alt="" />{/if}
     <i class="fall"></i>
   {:else if look === 'klubanimeshnikov'}
@@ -302,6 +302,10 @@
   /* ---- óte: their blush, lit from the top right ---- */
   .teentertainmentkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.55), transparent 70%), linear-gradient(165deg, rgb(248, 235, 234), rgb(243, 224, 224) 55%, rgb(236, 206, 205)); }
   .otw { top: 26px; height: 60px; }
+  /* round 5 (owner): the microphone and its spot stand in the card's middle, between the text and the medallion; a 320 px
+     card has no middle to spare (its text runs to the medallion), so there they stand smaller under the medallion */
+  .teentertainmentkbtu.wide { container-type: inline-size; }
+  @container (max-width: 310px) { .otm { translate: 53px 0; scale: 0.62; transform-origin: calc(100% - 93px) calc(100% - 42px); } }
   /* confetti falling, a tile per period, kept off the text (to the right on the card) */
   .fall { left: 0; top: -120px; width: 100%; height: calc(100% + 120px); background: url('../assets/lanyards/scenes/ote-fall.svg') 0 0 / 120px 120px; opacity: 0.8;
     -webkit-mask: linear-gradient(90deg, transparent 45%, black 75%); mask: linear-gradient(90deg, transparent 45%, black 75%); animation: otfall 30s linear infinite; }
