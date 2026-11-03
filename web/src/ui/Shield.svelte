@@ -1,7 +1,7 @@
 <script lang="ts">
   // The app's staff seal by the name (Hero only: never in rows or lists, review Nov 3), Founder's craft in a shield:
-  // a struck metal rim, a field, a check struck in it. 'moderator': steel blue in silver; 'admin': the same shield in
-  // gold, the check struck in black (Founder's gold coin). A tap by the name opens what it is (AwardSheet).
+  // a struck metal rim, a field, a five-point star struck in it. 'moderator': steel blue in silver; 'admin': the same shield in
+  // gold, the star struck in black (Founder's gold coin). A tap by the name opens what it is (AwardSheet).
   let { size = 16, role }: { size?: number; role: 'admin' | 'moderator' } = $props();
   const gold = $derived(role === 'admin');
   const field = $derived(gold ? ['rgb(255, 243, 200)', 'rgb(216, 167, 67)', 'rgb(122, 82, 16)'] : ['rgb(120, 156, 204)', 'rgb(46, 78, 128)', 'rgb(16, 30, 58)']);
@@ -24,7 +24,9 @@
     <path d={SHIELD} fill="url(#{id}f)" />
     <path d={SHIELD} fill="none" stroke={gold ? 'rgb(90, 60, 6)' : 'rgb(8, 16, 34)'} stroke-opacity="0.55" stroke-width="0.6" />
   </g>
-  <path d="M10.6 15.6 14.6 19.6 21.6 11.8" fill="none" stroke="url(#{id}m)" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- a star, not a check: a check reads as "verified account" (owner, Nov 3) -->
+  <path d="M16 8.6 17.7 13.25 22.66 13.44 18.76 16.5 20.11 21.26 16 18.5 11.89 21.26 13.24 16.5 9.34 13.44 14.3 13.25Z" fill="url(#{id}m)"
+    stroke={gold ? 'rgb(20, 13, 2)' : 'rgb(8, 16, 34)'} stroke-opacity="0.35" stroke-width="0.5" stroke-linejoin="round" />
   <!-- the light on polished metal, kept inside the shield -->
   <g clip-path="url(#{id}c)"><ellipse cx="11" cy="7.4" rx="7" ry="2.8" transform="rotate(-24 11 7.4)" fill="rgb(255, 255, 255)" fill-opacity={gold ? 0.22 : 0.16} /></g>
 </svg>

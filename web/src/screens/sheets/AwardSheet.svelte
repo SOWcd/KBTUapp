@@ -28,7 +28,7 @@
   import Crown from '@lucide/svelte/icons/crown';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import ShieldIcon from '@lucide/svelte/icons/shield'; // plain: a check reads as "verified"
 
   let { overlay, it, mine = false }: { overlay: Overlay; it: ShelfItem; mine?: boolean } = $props();
   let sharing = $state(false);
@@ -164,7 +164,7 @@
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
   $effect(() => { overlay.title = it.ach ? t('cap.achievement') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : it.staff ? t('cap.staff') : t('cap.badge');
-    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : it.staff ? ShieldCheck : BadgeCheck; });
+    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : it.staff ? ShieldIcon : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
   // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
