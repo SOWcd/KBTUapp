@@ -42,7 +42,8 @@
   import { haptic, openLink, on } from '../../lib/tg';
   import { menu, type MenuItem } from '../../ui/menu';
   import { skinOf, skinned, STRAP, banded, clubLook, lookVars, type Look } from '../../lib/awards';
-  import LanyardBand from '../../ui/LanyardBand.svelte';
+  // each lanyard's card art at the swatch's size, one small picture (tools/scene-rasters.mjs draws them from LanyardBand)
+  const MINI = import.meta.glob('../../assets/lanyards/minis/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   import { byRank } from '../../lib/perms';
 
   const me = $derived(session.me);
@@ -224,8 +225,9 @@
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={worn === k.id} class:on={worn === k.id} class:locked={'locked' in k && k.locked}
                     onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: kindOf(k) === 'school' }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
-              <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2) -->
-              <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<span class="mini"><LanyardBand look={k.kind as Look} wide /></span>{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
+              <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2);
+                   now a picture each (perf round 3), the locked ones keep their plain colours as before -->
+              <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<img class="mini" src={MINI[`../../assets/lanyards/minis/${k.kind}.webp`]} alt="" loading="lazy" decoding="async" />{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
               {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
               <b>{k.name}</b>
             </button>
@@ -332,9 +334,6 @@
   .fb img { position: absolute; left: 8px; top: 8px; width: 60px; height: 60px; }
   .fr.on .fb { box-shadow: inset 0 0 0 2px var(--accent); }
   .fr.on b { color: var(--text); }
-  .ly .mini :global(*) { animation: none !important; } /* swatches stay still: many full lanyards at once */
-  .ly .mini { --gx: 0; --gy: 0; } /* and flat: no depth layer (base.css .z) ever moves or gets its own layer here */
-  .ly .mini :global(.z) { will-change: auto; }
   .ly { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; padding: 8px 6px 8px; border-radius: 16px; background: var(--surface);
     box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--t-fast), transform var(--t-fast) var(--ease); }
   .ly:active { transform: scale(0.95); }
@@ -355,8 +354,8 @@
   .ly b { max-width: 100%; margin-top: 7px; font: 620 12px/1.2 var(--font-text); text-align: center; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }  /* whole names on two lines (owner: "Big City Lig..." cut) */
   .ly .ph { z-index: 1; }
   .ly .ln, .ly .hl { position: relative; z-index: 1; }
-  /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch: 340 px wide -> 74 */
-  .mini { position: absolute; left: 0; top: 0; width: 340px; height: 221px; transform: scale(0.2176); transform-origin: 0 0; pointer-events: none; }
+  /* the club's real card art, the profile's (LanyardBand wide) shrunk to the swatch, still and flat: its picture */
+  .mini { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .ly.studex .st { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
   .ly.studex .hl { background: #fff; }
   .ly.cheer .st { background: linear-gradient(90deg, rgb(20, 22, 44), rgb(46, 50, 88) 50%, rgb(20, 22, 44)); }
