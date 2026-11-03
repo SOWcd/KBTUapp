@@ -4,7 +4,7 @@ import './ui/base.css';
 import { mount, unmount } from 'svelte';
 import App from './App.svelte';
 import { boot, hapticTaps, tg } from './lib/tg';
-import { i18n, loadLang, LANGS } from './lib/i18n/index.svelte';
+import { i18n, loadLang } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
 import './lib/state/power.svelte'; // power saving's look before the first paint
 
@@ -62,7 +62,5 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
       void unmount(gate); mount(App, { target: app });
     } } });
   }
-  window.__kbStarted = true;
-  // the other languages when idle, so a switch in Settings is as instant as before
-  setTimeout(() => { for (const l of LANGS) void loadLang(l).catch(() => {}); }, 3000);
+  window.__kbStarted = true; // (the other languages load with Settings: profile/SettingsList.svelte)
 });
