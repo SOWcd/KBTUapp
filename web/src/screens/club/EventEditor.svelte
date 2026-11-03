@@ -93,6 +93,10 @@
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
+  // a new event named like a casting, by someone who may open the club's recruitment: say that's the better tool
+  // ponytail: a word list; the AI event check can tell it from the description once it runs on every event
+  const castLike = $derived(!id && /\u043a\u0430\u0441\u0442\u0438\u043d\u0433|\u043d\u0430\u0431\u043e\u0440 \u0432|recruit|casting|\u0456\u0440\u0456\u043a\u0442\u0435\u0443/i.test(f.title)
+    && may(session.me?.memberships?.find((x) => x.org.id === org), 'casting'));
   let base = $state(JSON.stringify(blank)); // the form with nothing to lose
   // only after a touch of mine (owner, Oct 13: an untouched new event asked "Leave without saving?"; iOS rewrites a
   // date or time input's value as it renders, so the form differed from its blank by itself): the first touch takes the
@@ -497,6 +501,10 @@
 
     <textarea class="name" class:bad={tried && err.title} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} enterkeyhint="done"></textarea>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
+    {#if castLike}
+      <!-- a casting made as an event (JCC, Nov 3): the club's recruitment does it properly -->
+      <div class="cast"><p>{t('ed.castHint')}</p><button onclick={() => { close(overlay.id); sheets.roundSetup(org); }}>{t('ed.castOpen')}</button></div>
+    {/if}
 
     <div class="pill when" class:bad={tried && err.when}>
       <i class="line" aria-hidden="true"></i>
@@ -772,6 +780,9 @@
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
   .tail { height: calc(var(--safe-bottom) + 24px); }
   .ph { color: var(--text-3); }
+  .cast { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); margin: 0 var(--s-4); padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-m); background: var(--accent-soft); font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text); }
+  .cast button { font: 650 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
   .err { margin: -6px var(--s-4) 0; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
   .hint { margin: 0 var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
   .bad { box-shadow: inset 0 0 0 1.5px var(--danger); }

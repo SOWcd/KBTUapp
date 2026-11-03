@@ -2023,6 +2023,8 @@ const en: Dict = {
   'ed.needsPhoneHint': "Asked at sign-up if we don't have it yet. It goes into this event's guest list file",
   'ed.preview': "Preview",
   'ed.fill': "Fill from an announcement",
+  'ed.castHint': "Looks like recruiting to the team. Recruitment has applications, questions for candidates and decisions",
+  'ed.castOpen': "Open recruitment",
   'ed.fillSub': "Paste the text you wrote: the AI puts it into the fields",
   'ed.fillTitle': "The event's announcement",
   'ed.fillText': "Paste the text you already wrote for a channel or chat. What it doesn't say stays empty.",
