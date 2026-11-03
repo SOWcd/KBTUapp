@@ -32,9 +32,9 @@
 <!-- removed after reports: under review, then the moderator's verdict (the rule it broke, or a mistake: post it again) -->
 <Sheet {overlay} title={c.verdict === 'restored' ? t('tgc.restoredTitle') : c.removed ? t('tgc.removedTitle') : t('tgc.title')}
   icon={c.removed && c.verdict !== 'restored' ? ShieldAlert : MessageSquareText}>
-  <p class="t-callout hint">{c.verdict === 'confirmed' ? t('tgc.confirmedText', { rule: t(`tgc.rule.${c.rule ?? 'other'}`) })
+  <p class="fs-body dim hint">{c.verdict === 'confirmed' ? t('tgc.confirmedText', { rule: t(`tgc.rule.${c.rule ?? 'other'}`) })
     : c.verdict === 'restored' ? t('tgc.restoredText') : c.removed ? t('tgc.removedText') : c.student ? t('tgc.text') : t('tgc.guest')}</p>
-  <blockquote class="body surface selectable t-body">{c.body}</blockquote>
+  <blockquote class="body surface selectable fs-body">{c.body}</blockquote>
   {#snippet footer()}
     <div class="acts">
       {#if c.link}
@@ -48,7 +48,7 @@
 </Sheet>
 
 <style>
-  .hint { color: var(--text-2); margin: 2px 0 12px; }
-  .body { margin: 0; padding: 14px 16px; border-radius: var(--r-m); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
-  .acts { display: flex; flex-direction: column; gap: 8px; }
+  .hint { margin: 2px var(--s-1) var(--s-3); }
+  .body { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--r-group); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }
+  .acts { display: flex; flex-direction: column; gap: var(--s-2); }
 </style>

@@ -5,7 +5,6 @@
   // comment swiped left, as in Telegram (no "Reply" button), makes mine a reply (testers, Oct 5: "why
   // can't I reply"): their words quoted above it, and the bot tells them. No nested threads: a reply sits in time order.
   import { untrack } from 'svelte';
-  import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import X from '@lucide/svelte/icons/x';
   import Reply from '@lucide/svelte/icons/reply';
@@ -22,7 +21,15 @@
   import Avatar from '../../ui/Avatar.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { nameOf } from '../../lib/short';
-  import { grow } from '../../ui/grow';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Composer from '../../ui/Composer.svelte';
+  import { menu as openMenu, type MenuItem } from '../../ui/menu';
 
   let { overlay, kind, id, title, onchange }: { overlay: Overlay; kind: 'post' | 'event'; id: Id; title: string; onchange?: (n: number) => void } = $props();
 
@@ -31,9 +38,8 @@
   let asClub = $state(false);
   let sending = $state(false);
   let replying = $state<Comment | null>(null); // the comment mine answers
-  let menu = $state<Id | null>(null);      // the comment whose actions are open
   let list = $state<HTMLDivElement>();
-  let field = $state<HTMLTextAreaElement>();
+  let compose = $state<HTMLDivElement>();
 
   $effect(() => {
     api.comments(kind, id).then((x) => {
@@ -62,18 +68,17 @@
   }
   async function remove(c: Comment) {
     if (!(await sheets.ask({ title: t('cm.deleteAsk'), ok: t('cm.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; menu = null; haptic.soft(); say(t('say.cmDeleted'), 'waving_hand_3d_default'); }
+    try { await api.deleteComment(c.id); if (th) th = { ...th, items: th.items.filter((x) => x.id !== c.id) }; haptic.soft(); say(t('say.cmDeleted'), 'waving_hand_3d_default'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  const report = (c: Comment) => { menu = null; sheets.report('comment', c.id, c.body); };
-  async function toggle(ev: Event) {
-    const on = (ev.currentTarget as HTMLInputElement).checked;
+  const report = (c: Comment) => { sheets.report('comment', c.id, c.body); };
+  async function toggle(on: boolean) {
     try { th = await api.setComments(kind, id, on); haptic.select(); say(on ? phrase('say.cmOn') : t('say.cmOff'), on ? 'speech_balloon_3d' : 'locked_3d'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   function reply(c: Comment) {
-    replying = c; menu = null; haptic.select();
-    requestAnimationFrame(() => field?.focus());
+    replying = c; haptic.select();
+    requestAnimationFrame(() => compose?.querySelector('textarea')?.focus());
   }
   /** Telegram's swipe: the comment follows the finger left, the arrow at the right grows; past 56 px it ticks and gives,
    *  and let go there it replies. A drag that starts more down than sideways is the list's scroll. */
@@ -117,22 +122,26 @@
   }
   // a tap on a quote brings up the comment it answers
   const jump = (to: Id) => list?.querySelector(`[data-c="${to}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  const open = (c: Comment) => { menu = menu === c.id ? null : c.id; };
-  // the field grows with the text, up to five lines; Enter sends, Shift+Enter breaks the line
-  const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void send(); } };
+  // ⋯ on a comment: the shared menu at it (take it down, report)
+  function open(ev: MouseEvent, c: Comment) {
+    const items: MenuItem[] = [];
+    if (!c.mine) items.push({ label: t('cm.report'), onselect: () => report(c) });
+    if (c.canDelete) items.push({ label: t('cm.delete'), destructive: true, onselect: () => remove(c) });
+    if (items.length) openMenu(ev.currentTarget as Element, items, 'end');
+  }
 </script>
 
 <Sheet {overlay} icon={MessageCircle} tall title={kind === 'event' ? t('cm.titleEvent') : t('cm.title')}>
-  <p class="t-foot sub ellipsis">{title}</p>
+  <p class="fs-sub dim sub ellipsis">{title}</p>
 
   {#if th?.canModerate}
-    <label class="switch onoff"><span><b>{t('cm.on')}</b><i class="t-foot">{t('cm.onNote')}</i></span><input type="checkbox" role="switch" checked={th.on} onchange={toggle} /></label>
+    <div class="onoff"><Group footnote={t('cm.onNote')}><Row title={t('cm.on')} accessory="switch" checked={th.on} onchange={toggle} /></Group></div>
   {/if}
 
   {#if th === null}
-    <div class="wait" aria-hidden="true"><span></span><span></span></div>
+    <Skeleton kind="rows" n={2} />
   {:else if !th.items.length}
-    <p class="empty">{kind === 'event' ? t('cm.emptyEvent') : t('cm.empty')}</p>
+    <EmptyState icon={MessageCircle} title={kind === 'event' ? t('cm.emptyEvent') : t('cm.empty')} />
   {:else}
     <div class="list" bind:this={list}>
       {#each th.items as c (c.id)}
@@ -142,17 +151,11 @@
           {#if c.org}<OrgLogo org={c.org} size={34} />{:else if c.person}<Avatar person={c.person} size={34} />{/if}
           <div class="cb">
             <span class="ch">
-              <b class="ellipsis">{c.org ? nameOf(c.org) : c.person?.name}</b>{#if c.org}<span class="tag">{t('cm.club')}</span>{/if}<i>{ago(c.at)}</i>
-              <button class="more" onclick={() => open(c)} aria-label={t('common.more')} aria-expanded={menu === c.id}><Ellipsis size={16} /></button>
+              <b class="ellipsis">{c.org ? nameOf(c.org) : c.person?.name}</b>{#if c.org}<Tag tone="accent">{t('cm.club')}</Tag>{/if}<i>{ago(c.at)}</i>
+              {#if c.canDelete || !c.mine}<span class="more"><IconButton icon={Ellipsis} kind="plain" size="s" label={t('common.more')} onclick={(ev) => open(ev, c)} /></span>{/if}
             </span>
             {#if c.replyTo}<button class="quote" onclick={() => jump(c.replyTo!.id)}><b>{c.replyTo.name}</b><span class="ellipsis">{c.replyTo.body}</span></button>{/if}
             <p class="selectable">{c.body}</p>
-            {#if menu === c.id}
-              <div class="acts">
-                {#if c.canDelete}<button class="danger" onclick={() => remove(c)}>{t('cm.delete')}</button>{/if}
-                {#if !c.mine}<button onclick={() => report(c)}>{t('cm.report')}</button>{/if}
-              </div>
-            {/if}
           </div>
         </div>
         </div>
@@ -162,70 +165,48 @@
 
   {#snippet footer()}
     {#if th?.on}
-      <div class="compose">
+      <div class="compose" bind:this={compose}>
         {#if th.asOrg}
-          <button class="as" class:on={asClub} onclick={() => { asClub = !asClub; haptic.select(); }} aria-pressed={asClub}>
-            <OrgLogo org={th.asOrg} size={18} />{asClub ? t('cm.asClub') : t('cm.asMe')}
-          </button>
+          <span class="as"><Chip selected={asClub} onclick={() => { asClub = !asClub; haptic.select(); }}><OrgLogo org={th.asOrg} size={18} />{asClub ? t('cm.asClub') : t('cm.asMe')}</Chip></span>
         {/if}
         {#if replying}
           <div class="to"><span class="quote"><b>{t('cm.replyTo', { name: replying.org ? nameOf(replying.org) : replying.person?.name ?? '' })}</b><span class="ellipsis">{replying.body}</span></span>
-            <button class="x" onclick={() => (replying = null)} aria-label={t('common.cancel')}><X size={16} /></button></div>
+            <IconButton icon={X} kind="plain" size="s" label={t('common.cancel')} onclick={() => (replying = null)} /></div>
         {/if}
-        <div class="row">
-          <textarea bind:value={draft} rows="1" maxlength="500" bind:this={field} placeholder={kind === 'event' && !th.asOrg ? t('cm.askPh') : t('cm.ph')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
-          <button class="send" disabled={!draft.trim() || sending} onclick={send} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
-        </div>
+        <Composer bind:value={draft} placeholder={kind === 'event' && !th.asOrg ? t('cm.askPh') : t('cm.ph')} maxlength={500} {sending} label={t('cm.send')} onsend={send} />
       </div>
     {:else if th}
-      <p class="off">{t('cm.off')}</p>
+      <p class="fs-body dim off">{t('cm.off')}</p>
     {/if}
   {/snippet}
 </Sheet>
 
 <style>
-  .sub { margin-bottom: 14px; }
-  .onoff { margin-bottom: 14px; }
-  .empty { padding: 22px 12px; text-align: center; color: var(--text-2); font: 500 14.5px/1.45 var(--font-text); text-wrap: balance; }
-  .list { display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; }
-  .c { display: flex; gap: 10px; align-items: flex-start; animation: c-in 320ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  .sub { margin: 0 var(--s-1) var(--s-4); }
+  .onoff { margin-bottom: var(--s-5); }
+  .list { display: flex; flex-direction: column; gap: var(--s-4); padding-bottom: var(--s-2); }
+  /* a comment: chat-like content, not a list row (an avatar, the name and time, the words) */
+  .c { display: flex; gap: 10px; align-items: flex-start; animation: c-in 320ms var(--ease) backwards; }
   @keyframes c-in { from { opacity: 0; transform: translateY(6px); } }
   .cb { flex: 1; min-width: 0; }
-  .ch { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .ch b { font: 650 14px/1.3 var(--font-text); min-width: 0; }
-  .ch i { flex: none; font: 500 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
-  .tag { flex: none; padding: 3px 7px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 700 10.5px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; }
-  .more { margin-left: auto; flex: none; width: 30px; height: 26px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-  .more:active { background: var(--surface-2); }
-  .cb p { margin-top: 3px; font: 450 15px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .club .cb p { padding: 8px 12px; margin-top: 5px; border-radius: 4px 16px 16px 16px; background: var(--accent-soft); }
-  .quote { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; margin-top: 4px; padding: 5px 10px; border-left: 2.5px solid var(--accent);
-    border-radius: 4px 10px 10px 4px; background: var(--surface-2); text-align: left; font: 500 13px/1.3 var(--font-text); color: var(--text-2); }
-  .quote b { font: 650 12.5px/1.2 var(--font-text); color: var(--accent-text); }
+  .ch { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px; }
+  .ch b { font: 600 var(--fs-body)/1.3 var(--font-text); min-width: 0; }
+  .ch i { flex: none; font: 450 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
+  .ch :global(.chip) { height: 20px; padding: 0 7px; font-size: var(--fs-micro); }
+  /* the 36 px button inside a 26 px line: its hit area reaches past it */
+  .more { margin: -5px -8px -5px auto; flex: none; color: var(--text-3); --plain-ink: var(--text-3); }
+  .cb p { margin-top: 3px; font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .club .cb p { padding: var(--s-2) var(--s-3); margin-top: 5px; border-radius: var(--r-xs) var(--r-m) var(--r-m) var(--r-m); background: var(--accent-soft); }
+  .quote { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; margin-top: var(--s-1); padding: 5px 10px; border-left: 2.5px solid var(--accent);
+    border-radius: var(--r-xs); background: var(--fill); text-align: left; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .quote b { font: 600 var(--fs-cap)/1.2 var(--font-text); color: var(--accent-text); }
   .to { display: flex; align-items: center; gap: 6px; }
   .to .quote { flex: 1; margin-top: 0; }
-  .x { flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-3); }
   .cw { position: relative; touch-action: pan-y; }
-  .sw { position: absolute; right: 2px; top: 50%; margin-top: -16px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; background: var(--surface-2); color: var(--text-2); opacity: 0; transform: scale(0.5); pointer-events: none; }
-  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; animation: c-in 220ms ease-out backwards; }
-  .acts button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 620 13px/1 var(--font-text); color: var(--text); }
-  .acts .danger { color: var(--danger-text); background: var(--danger-soft); }
+  .sw { position: absolute; right: 2px; top: 50%; margin-top: -16px; width: 32px; height: 32px; border-radius: var(--r-full); display: flex; align-items: center;
+    justify-content: center; background: var(--fill); color: var(--text-2); opacity: 0; transform: scale(0.5); pointer-events: none; }
 
-  .compose { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-  .as { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 5px; border-radius: var(--r-full);
-    background: var(--surface-2); color: var(--text-2); font: 620 12.5px/1 var(--font-text); }
-  .as.on { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent); }
-  .row { display: flex; align-items: flex-end; gap: 8px; }
-  .row textarea { flex: 1; min-width: 0; min-height: 44px; padding: 11px 14px; border-radius: 22px; resize: none; background: var(--surface-2); color: var(--text);
-    font: 450 16px/1.4 var(--font-text); }
-  .row textarea::placeholder { color: var(--text-3); }
-  .send { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff;
-    transition: opacity var(--t-fast), transform var(--t-fast); }
-  .send:disabled { opacity: 0.35; }
-  .send:not(:disabled):active { transform: scale(0.92); }
-  .off { width: 100%; padding: 12px; text-align: center; color: var(--text-2); font: 550 14px/1.3 var(--font-text); }
-  .wait { display: flex; flex-direction: column; gap: 14px; }
-  .wait span { height: 54px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  .compose { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; }
+  .as { align-self: flex-start; }
+  .off { width: 100%; padding: var(--s-3); text-align: center; }
 </style>

@@ -399,14 +399,6 @@
   "weight": 0,
   "legacy": 51
  },
- "screens/sheets/AnswersSheet.svelte": {
-  "font": 2,
-  "radius": 2,
-  "hex": 1,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
  "screens/sheets/AwardSheet.svelte": {
   "font": 5,
   "radius": 2,
@@ -415,52 +407,12 @@
   "weight": 7,
   "legacy": 0
  },
- "screens/sheets/CommentsSheet.svelte": {
-  "font": 11,
-  "radius": 4,
-  "hex": 1,
-  "mix": 1,
-  "weight": 5,
-  "legacy": 1
- },
- "screens/sheets/EventSheet.svelte": {
-  "font": 36,
-  "radius": 13,
-  "hex": 5,
-  "mix": 0,
-  "weight": 23,
-  "legacy": 1
- },
- "screens/sheets/InviteSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 0
- },
- "screens/sheets/InviteToSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
  "screens/sheets/LoginSheet.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 6,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
- },
- "screens/sheets/PaySheet.svelte": {
-  "font": 6,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
   "legacy": 0
  },
  "screens/sheets/PcSheet.svelte": {
@@ -475,14 +427,6 @@
   "font": 2,
   "radius": 0,
   "hex": 4,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
- "screens/sheets/ReportSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
   "mix": 0,
   "weight": 1,
   "legacy": 0
