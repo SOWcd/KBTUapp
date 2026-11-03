@@ -2,7 +2,8 @@
   // The Clubs tab: one feed for everyone, an App Store-like showcase (round 5, Nov 2: the "My club | All clubs" switch
   // went, segmented controls inside screens are out app-wide). No large title (the capsule names the tab). Top down:
   //   Mine      my clubs in a row, what's next at each; a club I'm in opens its Studio pushed from the right, one I
-  //             follow its page (each of my clubs its own Studio: no picker)
+  //             follow its page (each of my clubs its own Studio: no picker); 3+ of them: the ones I run as rows,
+  //             the rest as circles with "All" at the end (owner, Nov 3)
   //   search    sticks under the capsule once Mine scrolls away (a catalogue of 50-100 clubs needs it); typing turns
   //             the feed into the results
   //   Recommended  clubs with an open recruitment round (or taking applications), Apply at the row's end
@@ -32,7 +33,9 @@
   import { session } from '../../lib/state/session.svelte';
   import { openChat, compact, suggestChat } from '../../lib/chats';
   import { byWeight, hit } from '../../lib/clubs';
-  import { byRank, roleName, titleOf } from '../../lib/perms';
+  import { byRank, roleLabel } from '../../lib/perms';
+  import { SvelteSet } from 'svelte/reactivity';
+  import Row from '../../ui/Row.svelte';
   import { nameOf, shortOf } from '../../lib/short';
   import { haptic } from '../../lib/tg';
   import ClubRow from '../../ui/ClubRow.svelte';
@@ -64,15 +67,31 @@
   });
 
   // Mine: the clubs I'm in (by my rank, each opens its Studio), then the ones I follow (their page)
-  type Mine = { org: OrgRef; full: Org | undefined; role: string | null };
+  // lead: President or Vice there
+  type Mine = { org: OrgRef; full: Org | undefined; role: string | null; lead: boolean };
   const byId = $derived(new Map(data.orgs.map((o) => [o.id, o])));
   const mine = $derived.by<Mine[]>(() => {
     const ms = [...(session.me?.memberships ?? [])].sort(byRank);
     const inIds = new Set(ms.map((m) => m.org.id));
-    return [...ms.map((m) => ({ org: m.org, full: byId.get(m.org.id), role: roleName(m.role, titleOf(m)) })),
-      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, full: o, role: null }))];
+    return [...ms.map((m) => ({ org: m.org, full: byId.get(m.org.id), role: roleLabel(m), lead: m.role === 'president' || m.role === 'vice' })),
+      ...clubsOnly.filter((o) => o.subscribed && !inIds.has(o.id)).sort(byWeight).map((o) => ({ org: o, full: o, role: null, lead: false }))];
   });
-  const openMine = (x: Mine) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  const openMine = (x: { org: OrgRef; role: string | null }) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
+  // 3+ (owner, Nov 3: a carousel of cards lost the ones past the edge): the clubs I run as rows, the rest as circles
+  const led = $derived(mine.filter((x) => x.lead));
+  const rest = $derived(mine.filter((x) => !x.lead));
+  const mineLine = (x: Mine) => [x.role, next.get(x.org.id) ?? t('clubs.nothingSoon')].filter(Boolean).join(' · ');
+  const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: mineLine(x) }))); };
+  // a circle's name: the short one when the full one runs past the circle (StoryRow's rule), measured once each
+  const tight = new SvelteSet<number>();
+  let pen: CanvasRenderingContext2D | null = null;
+  function fit(node: HTMLElement, o: OrgRef) {
+    if (!o.abbr) return;
+    pen ??= document.createElement('canvas').getContext('2d');
+    if (!pen) return;
+    pen.font = getComputedStyle(node).font;
+    if (pen.measureText(nameOf(o)).width > 66) tight.add(o.id);
+  }
 
   // Recommended: open recruitment only, not my own clubs: official clubs and schools first, then student initiatives;
   // in each the student government first, then a round by its deadline, then any-time applications
@@ -103,7 +122,35 @@
 {/snippet}
 
 <div class="page scroll stagger">
-  {#if mine.length && !searching}
+  {#if mine.length > 2 && !searching}
+    {#if led.length}
+      <Section title={t('clubs.lead')}>
+        <div class="led"><Group>
+          {#each led as x (x.org.id)}
+            <Row dense title={shortOf(x.org)} subtitle={mineLine(x)} accessory="chevron" onclick={() => openMine(x)}>
+              {#snippet lead()}<OrgLogo org={x.org} size={40} />{/snippet}
+            </Row>
+          {/each}
+        </Group></div>
+      </Section>
+    {/if}
+    {#if rest.length}
+      <Section title={t('clubs.memberOf')}>
+        <div class="circles hscroll">
+          {#each rest as x (x.org.id)}
+            <button class="s" onclick={() => openMine(x)}>
+              <span class="ring"><span class="in"><OrgLogo org={x.org} size={54} /></span></span>
+              <b class="ellipsis" use:fit={x.org}>{tight.has(x.org.id) ? x.org.abbr : nameOf(x.org)}</b>
+            </button>
+          {/each}
+          <button class="s" onclick={allMine}>
+            <span class="ring"><span class="in all"><ChevronRight size={26} strokeWidth={2.2} /></span></span>
+            <b class="ellipsis">{t('common.all')}</b>
+          </button>
+        </div>
+      </Section>
+    {/if}
+  {:else if mine.length && !searching}
     <Section title={t('clubs.mineShort')}>
       <div class="mine hscroll">
         {#each mine as x (x.org.id)}
@@ -213,6 +260,16 @@
   .nx i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-text); }
   .nx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bell { position: relative; z-index: 2; display: flex; }
+
+  /* 3+: the clubs I run, one line under each ("Vice · Sat 17:00 · Nightm…"); the rest as circles (StoryRow's) */
+  .led :global(.st) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .circles { gap: var(--s-3); margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter); }
+  .s { flex: none; width: 66px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .s:active .ring { transform: scale(0.94); }
+  .ring { display: block; box-sizing: border-box; width: 64px; height: 64px; padding: 2px; border-radius: 50%; background: var(--line-2); transition: transform var(--t-fast) var(--ease); }
+  .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
+  .all { background: var(--surface-2); color: var(--text-2); }
+  .s b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
 
   /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */
   .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-3) calc(-1 * var(--gutter)) 0;
