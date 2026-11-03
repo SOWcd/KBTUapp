@@ -8,8 +8,8 @@
   // mark (the owner picked this look from four). Error correction Q (25 %) keeps it readable with the middle
   // (≤ 11 % of the modules) covered; H made the badge's link a busy 41×41, Q draws it 37×37 with bigger dots that also
   // read from further away (checked with zbarimg). All dots are one path: a single DOM node.
-  import qrcode from 'qrcode-generator';
   import type { Snippet } from 'svelte';
+  import { qr, loadQr } from '../lib/qr.svelte';
 
   // tone: two dark colours for a gradient across the code (both keep ≥ 7:1 against the white plate); lazy: a code that
   // isn't encoded yet comes when the page is idle (the profile card's: encoding held up the tab's first frame)
@@ -19,7 +19,7 @@
   function make(text: string): Code {
     const had = made.get(text);
     if (had) return had;
-    const q = qrcode(0, 'Q');
+    const q = qr.enc!(0, 'Q');
     q.addData(text, /^[0-9A-Z $%*+\-./:]*$/.test(text) ? 'Alphanumeric' : 'Byte');
     q.make();
     const n = q.getModuleCount(), mid = Math.floor(n / 2), h = n > 29 ? 4 : 3;
@@ -33,12 +33,14 @@
     made.set(text, c);
     return c;
   }
-  const now = $derived(lazy && !made.has(text) ? null : make(text));
+  // (a code shown at once has the encoder already: its screen imports lib/qrnow.ts)
+  const now = $derived((lazy && !made.has(text)) || !qr.enc ? null : make(text));
   let late = $state<Code | null>(null);
   $effect(() => {
     if (now) return;
+    if (!lazy) { void loadQr().catch(() => {}); return; }
     const tx = text, idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 60));
-    const h = idle(() => (late = make(tx)), { timeout: 500 });
+    const h = idle(() => void loadQr().then(() => (late = make(tx))).catch(() => {}), { timeout: 500 });
     return () => (window.cancelIdleCallback ?? clearTimeout)(h);
   });
   const code = $derived(now ?? (late?.text === text ? late : null));

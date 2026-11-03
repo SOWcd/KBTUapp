@@ -14,6 +14,7 @@
   import OrgLogo, { initials } from '../../ui/OrgLogo.svelte';
   import { shareCard, haptic, openLink } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { QR_TONE } from '../../lib/awards';
   import { say, type Overlay } from '../../lib/state/ui.svelte';

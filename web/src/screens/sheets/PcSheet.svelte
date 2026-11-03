@@ -10,6 +10,7 @@
   import Button from '../../ui/Button.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import Qr from '../../ui/Qr.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../../ui/KbtuMark.svelte';
 
   let { overlay, ok }: { overlay: Overlay; ok: () => void } = $props();

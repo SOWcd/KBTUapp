@@ -3,7 +3,6 @@ import './ui/tokens.css';
 import './ui/base.css';
 import { mount, unmount } from 'svelte';
 import App from './App.svelte';
-import Screen from './screens/Screen.svelte';
 import { boot, hapticTaps, tg } from './lib/tg';
 import { i18n, loadLang, LANGS } from './lib/i18n/index.svelte';
 import { applyTheme, initialTheme } from './lib/state/theme.svelte';
@@ -50,7 +49,8 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   const app = document.getElementById('app')!;
   // /show (owner, Oct 29; /screen, the first name, still works): the organizer's big screen on a laptop (server
   // checkin.py), the app otherwise (the screen into the body: #app is a phone-wide column on a computer)
-  if (/^\/(show|screen)\/?$/.test(location.pathname)) mount(Screen, { target: document.body });
+  // (its own chunk: the app's first chunk doesn't carry it, nor the QR encoder it draws with)
+  if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await import('./screens/Screen.svelte')).default, { target: document.body });
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
   // a production build drops this branch and the chunk with it
   else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) mount((await import('./screens/lab/Lab.svelte')).default, { target: app });

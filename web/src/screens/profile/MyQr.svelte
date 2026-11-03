@@ -14,6 +14,7 @@
   import { haptic } from '../../lib/tg';
   import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import Avatar from '../../ui/Avatar.svelte';
   import Frame from '../../ui/Frame.svelte';
   import Founder from '../../ui/Founder.svelte';

@@ -18,6 +18,7 @@
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import Button from '../../ui/Button.svelte';
   import Qr from '../../ui/Qr.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import Avatar from '../../ui/Avatar.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { schoolShort } from '../../lib/short';

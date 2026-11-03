@@ -20,6 +20,7 @@
   import Bell from '@lucide/svelte/icons/bell';
   import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { nameOf } from '../../lib/short';
 
