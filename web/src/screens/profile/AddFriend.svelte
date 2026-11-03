@@ -20,6 +20,9 @@
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import Avatar from '../../ui/Avatar.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { schoolShort } from '../../lib/short';
 
@@ -105,22 +108,18 @@
     <Button kind="primary" size="l" full onclick={send}>{#snippet icon()}<TelegramMark size={18} />{/snippet}{t('fr.send')}</Button>
   </div>
 
-  <p class="or"><span>{t('fr.orUsername')}</span></p>
+  <!-- engine: Field has no autocapitalize / spellcheck (a username wants both off) -->
   <form class="find" onsubmit={find}>
-    <label class="uname"><span class="at">@</span><input bind:value={q} placeholder="username" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="search" maxlength="33" aria-label="@username" /></label>
+    <span class="fl"><Field label={t('fr.orUsername')} bind:value={q} placeholder="@username" autocomplete="off" enterkeyhint="search" maxlength={33} error={miss || undefined} /></span>
     <Button kind="secondary" size="m" type="submit" loading={looking} disabled={!q.trim()}>{t('fr.find')}</Button>
   </form>
-  {#if miss}<p class="miss">{miss}</p>{/if}
   {#if found}
-    <div class="hit">
-      <Avatar person={found.person} size={44} />
-      <span class="tx"><b class="ellipsis">{found.person.name}</b><i class="ellipsis">{line}</i></span>
-      {#if found.me}<span class="st">{t('fr.isMe')}</span>
-      {:else if found.friendship === 'friends'}<span class="st ok">{t('fr.already')}</span>
-      {:else if found.friendship === 'requested'}<span class="st">{t('person.requestSent')}</span>
-      {:else if found.closed}<span class="st">{t('fr.closed')}</span>
-      {:else}<Button kind="primary" size="s" loading={asking} onclick={ask}>{found.friendship === 'incoming' ? t('fr.accept') : t('fr.add')}</Button>{/if}
-    </div>
+    {@const st = found.me ? t('fr.isMe') : found.friendship === 'friends' ? t('fr.already') : found.friendship === 'requested' ? t('person.requestSent') : found.closed ? t('fr.closed') : ''}
+    <div class="hit"><Group>
+      {#if st}<Row dense title={found.person.name} subtitle={line} value={st}>{#snippet lead()}<Avatar person={found!.person} size={40} />{/snippet}</Row>
+      {:else}<Row dense title={found.person.name} subtitle={line}>{#snippet lead()}<Avatar person={found!.person} size={40} />{/snippet}
+        {#snippet trailing()}<Button kind="primary" size="s" loading={asking} onclick={ask}>{found!.friendship === 'incoming' ? t('fr.accept') : t('fr.add')}</Button>{/snippet}</Row>{/if}
+    </Group></div>
   {/if}
 </Sheet>
 
@@ -136,26 +135,18 @@
   @keyframes turn { from { opacity: 0; transform: perspective(600px) rotateY(-80deg) scale(0.9); } }
   .wait { width: 100%; height: 100%; border-radius: 12px; background: #EEF1F8; animation: pulse 1.1s ease-in-out infinite; }
   .joined { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #0B1433; text-align: center; animation: pop 560ms cubic-bezier(.2, 1.4, .4, 1) backwards; }
-  .joined b { font: 760 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
-  .joined i { font: 600 13px/1.25 var(--font-text); font-style: normal; color: #13884A; }
+  .joined b { font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
+  .joined i { font: 600 var(--fs-sub)/1.25 var(--font-text); font-style: normal; color: #13884A; }
   @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
   @keyframes pulse { 50% { opacity: 0.55; } }
-  .cap { margin-top: 8px; font: 650 15px/1.3 var(--font-text); text-align: center; text-wrap: balance; }
+  .cap { margin-top: 8px; font: 600 var(--fs-body)/1.3 var(--font-text); text-align: center; text-wrap: balance; }
 
   .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .acts :global(.btn.full) { flex: 1 1 140px; width: auto; min-width: 0; } /* side by side, stacked on a 320-px phone */
 
-  .or { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; color: var(--text-3); font: 600 12.5px/1 var(--font-text); }
-  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line-2); }
-  .find { display: flex; gap: 8px; }
-  .uname { flex: 1; min-width: 0; display: flex; align-items: center; height: 44px; padding: 0 12px; border-radius: var(--r-m); background: var(--surface-2); }
-  .at { color: var(--text-3); font: 650 16px/1 var(--font-text); }
-  .uname input { flex: 1; min-width: 0; height: 100%; padding-left: 2px; background: none; color: var(--text); font: 560 16px/1 var(--font-text); }
-  .miss { margin-top: 8px; font: 550 13.5px/1.3 var(--font-text); color: var(--text-2); }
-  .hit { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 10px 10px 12px; border-radius: var(--r-l); background: var(--surface-2); animation: pop 420ms cubic-bezier(.2, 1.2, .4, 1) backwards; }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 650 15px/1.25 var(--font-text); }
-  .tx i { font: 500 12.5px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
-  .st { flex: none; font: 620 13px/1 var(--font-text); color: var(--text-2); }
-  .st.ok { color: var(--success-text); }
+  /* the field and its button on one line, the button level with the box (the label sits above) */
+  .find { display: flex; align-items: flex-end; gap: var(--s-2); margin-top: var(--s-6); }
+  .fl { flex: 1; min-width: 0; }
+  .find > :global(.btn) { margin-bottom: 3px; }
+  .hit { margin-top: var(--s-3); }
 </style>
