@@ -5,10 +5,15 @@
   // (its gates for guests), with more dates and times; DMP's own things to provide; a promo over several days; the studio.
   import Plus from '@lucide/svelte/icons/plus';
   import X from '@lucide/svelte/icons/x';
-  import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import type { MemoAsks } from '../../lib/api';
+  import type { MemoAsks, MemoSide } from '../../lib/api';
   import { haptic } from '../../lib/tg';
   import { fold } from '../../ui/fold';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import { t } from '../../lib/i18n/index.svelte';
 
   let { memo = $bindable(), seats, date, only, flat = false }: { memo: MemoAsks; seats: string; date: string; only?: keyof MemoAsks; flat?: boolean } = $props();
@@ -32,7 +37,6 @@
     if (k === 'gear') memo.gear = { items: '', outDate: date, outTime: '', inDate: '', inTime: '', location: '', side: 'kazybek' };
     if (k === 'print') memo.print = { items: [{ name: '', count: 1, format: 'A4', bw: false, note: '' }] };
   }
-  const sw = (k: keyof MemoAsks) => (ev: Event) => toggle(k, (ev.currentTarget as HTMLInputElement).checked);
   // the guests' entrance follows the place: KBTU's three or the dorm's two gates
   $effect(() => {
     const g = memo.guests;
@@ -40,134 +44,154 @@
   });
   // an older promo had one date: now a list of days
   $effect(() => { const p = memo.promo; if (p && !p.dates) { p.dates = p.date ? [p.date] : [date]; delete p.date; } });
-  const num = (set: (n: number | null) => void) => (e: Event) => { const v = +(e.currentTarget as HTMLInputElement).value; set(v > 0 ? v : null); };
+  // a count field: empty or 0 is none (a number input hands Field a number or null)
+  const num = (v: unknown) => (+String(v) > 0 ? +String(v) : null);
+  const str = (n: number | null | undefined) => (n == null ? '' : String(n));
+  const DENSITY = ['70-100', '110-150', '200-250'];
 </script>
+
+<!-- engine: Field has no date type: the dates by hand, in Field's look (.fl) -->
+{#snippet ask(k: (typeof ASKS)[number])}
+  {#if !bare}<Group><Row title={t(`memo.${k}`)} accessory="switch" checked={!!memo[k]} onchange={(on) => toggle(k, on)} /></Group>{/if}
+{/snippet}
 
 <section class="memo" class:bare>
   <!-- folded by default (six switches crowd the editor); the row says what is asked, so a closed one
        hides nothing -->
-  {#if !bare && !flat}<button class="head surface" aria-expanded={open} onclick={() => { haptic.tap(); open = !open; }}>
-    <span class="tx"><b>{t('memo.fold')}</b><i>{asked.length ? asked.map((k) => t(`memo.${k}`)).join(', ') : t('memo.none')}</i></span>
-    <ChevronDown size={18} class={open ? 'up' : ''} /></button>{/if}
+  {#if !bare && !flat}
+    <Group><Row title={t('memo.fold')} subtitle={asked.length ? asked.map((k) => t(`memo.${k}`)).join(', ') : t('memo.none')} accessory="disclosure" {open}
+      onclick={() => { haptic.tap(); open = !open; }} /></Group>
+  {/if}
   {#if open || bare || flat}
   <div class="body" transition:fold>
   {#if !bare}<p class="hint">{t('memo.blockHint')}</p>{/if}
 
-  <label class="switch"><span><b>{t('memo.room')}</b></span><input type="checkbox" role="switch" checked={!!memo.room} onchange={sw('room')} /></label>
+  {@render ask('room')}
   {#if memo.room}
     <div class="sub">
-      <div class="seg wide"><button class:on={!memo.room.dorm} onclick={() => (memo.room!.dorm = false)}>{t('memo.atKbtu')}</button>
-        <button class:on={memo.room.dorm} onclick={() => (memo.room!.dorm = true)}>{t('memo.atDorm')}</button></div>
+      <Segmented items={[{ value: 'kbtu', label: t('memo.atKbtu') }, { value: 'dorm', label: t('memo.atDorm') }]} value={memo.room.dorm ? 'dorm' : 'kbtu'}
+        label={t('memo.room')} onchange={(v) => (memo.room!.dorm = v === 'dorm')} />
       {#if memo.room.dorm}
-        <label class="field"><span class="t-cap">{t('memo.dormPlace')}</span><input bind:value={memo.room.dormPlace} maxlength="120" placeholder={t('memo.dormPh')} /></label>
+        <Field label={t('memo.dormPlace')} bind:value={memo.room.dormPlace} maxlength={120} placeholder={t('memo.dormPh')} />
       {:else}
-        <label class="chk"><input type="checkbox" bind:checked={memo.room.any} />{t('memo.roomAny')}</label>
-        <label class="chk"><input type="checkbox" bind:checked={memo.room.projector} />{t('memo.projector')}</label>
-        <label class="chk"><input type="checkbox" bind:checked={memo.room.board} />{t('memo.board')}</label>
-        <label class="field"><span class="t-cap">{t('memo.capacity')}</span>
-          <input type="number" inputmode="numeric" min="1" placeholder={seats || '50'} value={memo.room.capacity ?? ''} oninput={num((n) => (memo.room!.capacity = n))} /></label>
+        <Group>
+          <Row title={t('memo.roomAny')} accessory="switch" checked={!!memo.room.any} onchange={(on) => (memo.room!.any = on)} />
+          <Row title={t('memo.projector')} accessory="switch" checked={!!memo.room.projector} onchange={(on) => (memo.room!.projector = on)} />
+          <Row title={t('memo.board')} accessory="switch" checked={!!memo.room.board} onchange={(on) => (memo.room!.board = on)} />
+        </Group>
+        <Field label={t('memo.capacity')} type="number" inputmode="numeric" placeholder={seats || '50'}
+          bind:value={() => str(memo.room!.capacity), (v) => (memo.room!.capacity = num(v))} />
       {/if}
       {#each memo.room.slots ?? [] as sl, i (i)}
-        <label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={sl.date} /></label>
+        <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={sl.date} /></label>
         <div class="two">
-          <label class="field"><span class="t-cap">{t('ed.start')}</span><input type="time" bind:value={sl.from} /></label>
-          <label class="field"><span class="t-cap">{t('ed.end')}</span><input type="time" bind:value={sl.to} /></label>
+          <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={sl.from} /></label>
+          <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={sl.to} /></label>
         </div>
-        <button class="drop" onclick={() => memo.room!.slots!.splice(i, 1)}><X size={15} />{t('memo.drop')}</button>
+        <span class="lone"><Button kind="plain" size="s" onclick={() => memo.room!.slots!.splice(i, 1)}>{#snippet icon()}<X size={15} />{/snippet}{t('memo.drop')}</Button></span>
       {/each}
-      {#if (memo.room.slots?.length ?? 0) < 10}<button class="more" onclick={() => (memo.room!.slots = [...(memo.room!.slots ?? []), { date, from: '', to: '' }])}><Plus size={16} />{t('memo.addSlot')}</button>{/if}
+      {#if (memo.room.slots?.length ?? 0) < 10}<span class="lone"><Button kind="tinted" size="s" onclick={() => (memo.room!.slots = [...(memo.room!.slots ?? []), { date, from: '', to: '' }])}>
+        {#snippet icon()}<Plus size={16} />{/snippet}{t('memo.addSlot')}</Button></span>{/if}
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.guests')}</b></span><input type="checkbox" role="switch" checked={!!memo.guests} onchange={sw('guests')} /></label>
+  {@render ask('guests')}
   {#if memo.guests}
     <div class="sub">
-      <label class="field"><span class="t-cap">{t('memo.guestList')}</span>
-        <textarea bind:value={memo.guests.list} rows="3" maxlength="1500" placeholder={t('memo.guestPh')}></textarea></label>
-      <div class="seg wide">{#each memo.room?.dorm ? GATES : SIDES as s (s)}<button class:on={memo.guests.side === s} onclick={() => (memo.guests!.side = s)}>{t(`memo.side.${s}`)}</button>{/each}</div>
+      <Field label={t('memo.guestList')} multiline rows={3} bind:value={memo.guests.list} maxlength={1500} placeholder={t('memo.guestPh')} />
+      <Segmented items={(memo.room?.dorm ? GATES : SIDES).map((s) => ({ value: s as string, label: t(`memo.side.${s}`) }))} value={memo.guests.side ?? ''}
+        label={t('memo.guests')} onchange={(v) => (memo.guests!.side = v as MemoSide)} />
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.provide')}</b></span><input type="checkbox" role="switch" checked={!!memo.provide} onchange={sw('provide')} /></label>
+  {@render ask('provide')}
   {#if memo.provide}
     <div class="sub">
-      <label class="chk"><input type="checkbox" bind:checked={memo.provide.jbl} />{t('memo.jbl')}</label>
-      <label class="chk"><input type="checkbox" bind:checked={memo.provide.mixer} />{t('memo.mixer')}</label>
+      <Group>
+        <Row title={t('memo.jbl')} accessory="switch" checked={!!memo.provide.jbl} onchange={(on) => (memo.provide!.jbl = on)} />
+        <Row title={t('memo.mixer')} accessory="switch" checked={!!memo.provide.mixer} onchange={(on) => (memo.provide!.mixer = on)} />
+      </Group>
       <div class="three">
-        <label class="field"><span class="t-cap">{t('memo.tables')}</span><input type="number" inputmode="numeric" min="1" value={memo.provide.tables ?? ''} oninput={num((n) => (memo.provide!.tables = n))} /></label>
-        <label class="field"><span class="t-cap">{t('memo.chairs')}</span><input type="number" inputmode="numeric" min="1" value={memo.provide.chairs ?? ''} oninput={num((n) => (memo.provide!.chairs = n))} /></label>
-        <label class="field"><span class="t-cap">{t('memo.cooler')}</span><input type="number" inputmode="numeric" min="1" placeholder={t('memo.cups')} value={memo.provide.cooler ?? ''} oninput={num((n) => (memo.provide!.cooler = n))} /></label>
+        <Field label={t('memo.tables')} type="number" inputmode="numeric" bind:value={() => str(memo.provide!.tables), (v) => (memo.provide!.tables = num(v))} />
+        <Field label={t('memo.chairs')} type="number" inputmode="numeric" bind:value={() => str(memo.provide!.chairs), (v) => (memo.provide!.chairs = num(v))} />
+        <Field label={t('memo.cooler')} type="number" inputmode="numeric" placeholder={t('memo.cups')} bind:value={() => str(memo.provide!.cooler), (v) => (memo.provide!.cooler = num(v))} />
       </div>
-      <label class="field"><span class="t-cap">{t('memo.other')}</span><input bind:value={memo.provide.other} maxlength="200" placeholder={t('memo.otherPh')} /></label>
+      <Field label={t('memo.other')} bind:value={memo.provide.other} maxlength={200} placeholder={t('memo.otherPh')} />
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.promo')}</b></span><input type="checkbox" role="switch" checked={!!memo.promo} onchange={sw('promo')} /></label>
+  {@render ask('promo')}
   {#if memo.promo}
     <div class="sub">
-      <label class="field"><span class="t-cap">{t('memo.where')}</span><input bind:value={memo.promo.place} maxlength="120" placeholder={t('memo.promoPh')} /></label>
+      <Field label={t('memo.where')} bind:value={memo.promo.place} maxlength={120} placeholder={t('memo.promoPh')} />
       {#each memo.promo.dates ?? [] as _, i (i)}
-        <div class="day"><label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={memo.promo.dates![i]} /></label>
-          {#if (memo.promo.dates?.length ?? 0) > 1}<button class="x" aria-label={t('memo.drop')} onclick={() => memo.promo!.dates!.splice(i, 1)}><X size={16} /></button>{/if}</div>
+        <div class="day"><label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={memo.promo.dates![i]} /></label>
+          {#if (memo.promo.dates?.length ?? 0) > 1}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => memo.promo!.dates!.splice(i, 1)} />{/if}</div>
       {/each}
-      {#if (memo.promo.dates?.length ?? 0) < 31}<button class="more" onclick={() => memo.promo!.dates!.push(memo.promo!.dates!.at(-1) ?? date)}><Plus size={16} />{t('memo.addDay')}</button>{/if}
+      {#if (memo.promo.dates?.length ?? 0) < 31}<span class="lone"><Button kind="tinted" size="s" onclick={() => memo.promo!.dates!.push(memo.promo!.dates!.at(-1) ?? date)}>
+        {#snippet icon()}<Plus size={16} />{/snippet}{t('memo.addDay')}</Button></span>{/if}
       <div class="two">
-        <label class="field"><span class="t-cap">{t('ed.start')}</span><input type="time" bind:value={memo.promo.from} /></label>
-        <label class="field"><span class="t-cap">{t('ed.end')}</span><input type="time" bind:value={memo.promo.to} /></label>
+        <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={memo.promo.from} /></label>
+        <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={memo.promo.to} /></label>
       </div>
-      <label class="field"><span class="t-cap">{t('memo.extras')}</span><input bind:value={memo.promo.extras} maxlength="200" placeholder={t('memo.extrasPh')} /></label>
+      <Field label={t('memo.extras')} bind:value={memo.promo.extras} maxlength={200} placeholder={t('memo.extrasPh')} />
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.gear')}</b></span><input type="checkbox" role="switch" checked={!!memo.gear} onchange={sw('gear')} /></label>
+  {@render ask('gear')}
   {#if memo.gear}
     <div class="sub">
-      <label class="field"><span class="t-cap">{t('memo.gearList')}</span>
-        <textarea bind:value={memo.gear.items} rows="3" maxlength="1500" placeholder={t('memo.gearPh')}></textarea></label>
+      <Field label={t('memo.gearList')} multiline rows={3} bind:value={memo.gear.items} maxlength={1500} placeholder={t('memo.gearPh')} />
       <div class="two">
-        <label class="field"><span class="t-cap">{t('memo.outDate')}</span><input type="date" bind:value={memo.gear.outDate} /></label>
-        <label class="field"><span class="t-cap">{t('memo.outTime')}</span><input bind:value={memo.gear.outTime} maxlength="20" placeholder="17:00-17:30" /></label>
+        <label class="fl"><span>{t('memo.outDate')}</span><input type="date" bind:value={memo.gear.outDate} /></label>
+        <Field label={t('memo.outTime')} bind:value={memo.gear.outTime} maxlength={20} placeholder="17:00-17:30" />
       </div>
       <div class="two">
-        <label class="field"><span class="t-cap">{t('memo.inDate')}</span><input type="date" bind:value={memo.gear.inDate} /></label>
-        <label class="field"><span class="t-cap">{t('memo.inTime')}</span><input bind:value={memo.gear.inTime} maxlength="20" placeholder="10:00-10:30" /></label>
+        <label class="fl"><span>{t('memo.inDate')}</span><input type="date" bind:value={memo.gear.inDate} /></label>
+        <Field label={t('memo.inTime')} bind:value={memo.gear.inTime} maxlength={20} placeholder="10:00-10:30" />
       </div>
-      <label class="field"><span class="t-cap">{t('memo.gearWhere')}</span><input bind:value={memo.gear.location} maxlength="120" /></label>
-      <div class="seg wide">{#each SIDES as s (s)}<button class:on={memo.gear.side === s} onclick={() => (memo.gear!.side = s)}>{t(`memo.side.${s}`)}</button>{/each}</div>
+      <Field label={t('memo.gearWhere')} bind:value={memo.gear.location} maxlength={120} />
+      <Segmented items={SIDES.map((s) => ({ value: s as string, label: t(`memo.side.${s}`) }))} value={memo.gear.side ?? ''} label={t('memo.gear')}
+        onchange={(v) => (memo.gear!.side = v as MemoSide)} />
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.print')}</b></span><input type="checkbox" role="switch" checked={!!memo.print} onchange={sw('print')} /></label>
+  {@render ask('print')}
   {#if memo.print}
     <div class="sub">
       {#each memo.print.items ?? [] as it, i (i)}
         <div class="item">
           <div class="two">
-            <label class="field"><span class="t-cap">{t('memo.printName')}</span><input bind:value={it.name} maxlength="60" placeholder={t('memo.printPh')} /></label>
-            <label class="field"><span class="t-cap">{t('memo.count')}</span><input type="number" inputmode="numeric" min="1" bind:value={it.count} /></label>
+            <Field label={t('memo.printName')} bind:value={it.name} maxlength={60} placeholder={t('memo.printPh')} />
+            <Field label={t('memo.count')} type="number" inputmode="numeric" bind:value={() => str(it.count), (v) => (it.count = num(v) ?? 1)} />
           </div>
-          <div class="segs"><div class="seg">{#each ['A5', 'A4', 'A3'] as fm (fm)}<button class:on={it.format === fm} onclick={() => (it.format = fm)}>{fm}</button>{/each}</div>
-            <div class="seg"><button class:on={!it.bw} onclick={() => (it.bw = false)}>{t('memo.color')}</button><button class:on={it.bw} onclick={() => (it.bw = true)}>{t('memo.bw')}</button></div></div>
-          <span class="t-cap">{t('memo.density')}</span>
-          <div class="seg wide">{#each ['70-100', '110-150', '200-250'] as d, k (d)}<button class:on={(it.density ?? 0) === k} onclick={() => (it.density = k as 0 | 1 | 2)}>{d}</button>{/each}</div>
-          <label class="field"><span class="t-cap">{t('memo.note')}</span><input bind:value={it.note} maxlength="120" placeholder={t('memo.notePh')} /></label>
-          {#if (memo.print.items?.length ?? 0) > 1}<button class="drop" onclick={() => memo.print!.items!.splice(i, 1)}><X size={15} />{t('memo.drop')}</button>{/if}
+          <div class="two">
+            <Segmented items={['A5', 'A4', 'A3'].map((fm) => ({ value: fm, label: fm }))} value={it.format ?? 'A4'} onchange={(v) => (it.format = v)} label={t('memo.print')} />
+            <Segmented items={[{ value: 'color', label: t('memo.color') }, { value: 'bw', label: t('memo.bw') }]} value={it.bw ? 'bw' : 'color'} label={t('memo.print')}
+              onchange={(v) => (it.bw = v === 'bw')} />
+          </div>
+          <span class="lbl">{t('memo.density')}</span>
+          <Segmented items={DENSITY.map((d, k) => ({ value: k, label: d }))} value={it.density ?? 0} label={t('memo.density')} onchange={(k) => (it.density = k as 0 | 1 | 2)} />
+          <Field label={t('memo.note')} bind:value={it.note} maxlength={120} placeholder={t('memo.notePh')} />
+          {#if (memo.print.items?.length ?? 0) > 1}<span class="lone"><Button kind="plain" size="s" onclick={() => memo.print!.items!.splice(i, 1)}>
+            {#snippet icon()}<X size={15} />{/snippet}{t('memo.drop')}</Button></span>{/if}
         </div>
       {/each}
-      {#if (memo.print.items?.length ?? 0) < 5}<button class="more" onclick={() => memo.print!.items!.push({ name: '', count: 1, format: 'A4', bw: false, note: '' })}><Plus size={16} />{t('memo.more')}</button>{/if}
+      {#if (memo.print.items?.length ?? 0) < 5}<span class="lone"><Button kind="tinted" size="s" onclick={() => memo.print!.items!.push({ name: '', count: 1, format: 'A4', bw: false, note: '' })}>
+        {#snippet icon()}<Plus size={16} />{/snippet}{t('memo.more')}</Button></span>{/if}
       <p class="hint">{t('memo.printHint')}</p>
     </div>
   {/if}
 
-  <label class="switch"><span><b>{t('memo.film')}</b></span><input type="checkbox" role="switch" checked={!!memo.film} onchange={sw('film')} /></label>
+  {@render ask('film')}
   {#if memo.film}
     <div class="sub">
-      <label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={memo.film.date} /></label>
+      <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={memo.film.date} /></label>
       <div class="two">
-        <label class="field"><span class="t-cap">{t('ed.start')}</span><input type="time" bind:value={memo.film.from} /></label>
-        <label class="field"><span class="t-cap">{t('ed.end')}</span><input type="time" bind:value={memo.film.to} /></label>
+        <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={memo.film.from} /></label>
+        <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={memo.film.to} /></label>
       </div>
-      <label class="field"><span class="t-cap">{t('memo.note')}</span><input bind:value={memo.film.note} maxlength="200" placeholder={t('memo.filmPh')} /></label>
+      <Field label={t('memo.note')} bind:value={memo.film.note} maxlength={200} placeholder={t('memo.filmPh')} />
     </div>
   {/if}
   </div>
@@ -175,31 +199,23 @@
 </section>
 
 <style>
-  .bare .switch { display: none; }
-  .memo { display: flex; flex-direction: column; gap: 10px; }
-  .body { display: flex; flex-direction: column; gap: 10px; }
-  .head { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px; text-align: left; color: var(--text-3); margin-top: 6px; }
-  .head:active { transform: scale(0.99); }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .tx b { font: 650 15.5px/1.2 var(--font-text); color: var(--text); }
-  .tx i { font: 500 13px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
-  .head :global(svg) { transition: transform var(--t-fast) var(--ease); }
-  .head :global(svg.up) { transform: rotate(180deg); }
-  .hint { margin: -4px 4px 0; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
-  .sub { display: flex; flex-direction: column; gap: 8px; margin: -2px 0 4px 12px; padding-left: 12px; border-left: 2px solid var(--line-2); }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .three input { min-width: 0; width: 100%; }
-  .day { display: flex; align-items: flex-end; gap: 8px; }
-  .day .field { flex: 1; }
-  .x { flex: none; width: 40px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-  .seg.wide { display: flex; }
-  .seg.wide button { flex: 1; padding: 0 6px; }
-  .segs { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px; font: 550 15px/1.3 var(--font-text); }
-  .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
-  .item { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
-  .item + .item { border-top: 1px solid var(--line); padding-top: 8px; }
-  .drop, .more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 6px 4px; font: 620 14px/1 var(--font-text); color: var(--text-2); }
-  .more { color: var(--accent-text); }
+  .memo, .body { display: flex; flex-direction: column; gap: var(--s-3); }
+  .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  /* a request's fields, under its switch */
+  .sub { display: flex; flex-direction: column; gap: var(--s-3); margin: 0 0 var(--s-2) var(--s-3); padding-left: var(--s-3); border-left: 2px solid var(--line-2); }
+  .bare .sub { margin: 0; padding: 0; border: 0; } /* one request alone: nothing to hang under */
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); align-items: end; }
+  .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); align-items: end; }
+  .day { display: flex; align-items: flex-end; gap: var(--s-1); }
+  .day .fl { flex: 1; }
+  .day > :global(:last-child:not(.fl)) { margin-bottom: 7px; }
+  .lone { align-self: flex-start; }
+  .lbl { margin: 0 var(--s-4) -6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .item { display: flex; flex-direction: column; gap: var(--s-3); }
+  .item + .item { padding-top: var(--s-3); border-top: 0.5px solid var(--separator); }
+  /* Field's look for the date and time inputs it can't take yet */
+  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+    font: 450 var(--fs-row)/1.35 var(--font-text); }
 </style>
