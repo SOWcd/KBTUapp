@@ -15,14 +15,15 @@
   import PenLine from '@lucide/svelte/icons/pen-line';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import X from '@lucide/svelte/icons/x';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
-  import { api, type EventCard, type Id, type Round } from '../../lib/api';
+  import { api, type CohostInvite, type EventCard, type Id, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
   import MapPin from '@lucide/svelte/icons/map-pin';
-  import { data, loadStudio } from '../../lib/state/data.svelte';
+  import { data, loadStudio, studioChanged } from '../../lib/state/data.svelte';
   import { tick, untrack } from 'svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
@@ -82,6 +83,20 @@
     if (org && vice) api.teamSetup(org).then((x) => { if (m?.org.id === org) removals = x.removals?.length ?? 0; }).catch(() => {});
     else removals = 0;
   });
+  // Vice+: another club asks us to host its event together (server cohosts.py): yes or no right in To do
+  let coAsks = $state<CohostInvite[]>([]);
+  $effect(() => {
+    const org = m?.org.id;
+    void data.rev;
+    if (org && vice) api.cohostInvites(org).then((l) => { if (m?.org.id === org) coAsks = l; }).catch(() => {});
+    else coAsks = [];
+  });
+  async function coAnswer(x: CohostInvite, yes: boolean) {
+    haptic.tap();
+    coAsks = coAsks.filter((y) => y !== x); // at once; back if the server says no
+    try { await api.cohostAnswer(x.event.id, yes); haptic.ok(); say(t(yes ? 'co.saidYes' : 'co.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); if (yes) studioChanged(); }
+    catch { coAsks = [x, ...coAsks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   const recruiting = $derived(data.orgs.find((x) => x.id === m?.org.id)?.recruiting ?? true);
   const members = $derived(data.orgs.find((x) => x.id === m?.org.id)?.members ?? 0);
   // the Team row's faces, from the roster the app loads with it; a dozen is more than a 430 px row holds
@@ -117,12 +132,14 @@
 
   // questions under our events that wait for the club's answer (Head+ see the count), the soonest first
   const asking = $derived(events.filter((e) => (e.questions ?? 0) > 0 && e.status === 'published' && !over(e)));
-  const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id) : staff ? sheets.manage(e.id) : sheets.event(e.id));
+  // a club's own events open its organizer's screen; one we co-host opens as a student sees it, with our door tools (cohosts.py)
+  const ours = (e: EventCard) => e.org.id === m?.org.id;
+  const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id) : staff && ours(e) ? sheets.manage(e.id) : sheets.event(e.id));
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
   // the week the coming Wednesday's memo to DMP covers (from Thursday on, the week after next; as the server's _next_week)
   const dayNow = $derived(dayNo(nowTs()));
-  const nextWeek = $derived.by(() => { const mon = dayNow + (((2 - ((dayNow + 3) % 7)) % 7) + 7) % 7 + 5; return events.filter((e) => e.status !== 'cancelled' && dayNo(e.startsAt) >= mon && dayNo(e.startsAt) < mon + 7).length; });
+  const nextWeek = $derived.by(() => { const mon = dayNow + (((2 - ((dayNow + 3) % 7)) % 7) + 7) % 7 + 5; return events.filter((e) => ours(e) && e.status !== 'cancelled' && dayNo(e.startsAt) >= mon && dayNo(e.startsAt) < mon + 7).length; });
   const wednesday = $derived((dayNow + 3) % 7 === 2 && (nowTs() + 5 * 3600) % 86400 < 18 * 3600);
   const memoDue = $derived(may(m, 'memo') && nextWeek > 0 && ((dayNow + 3) % 7 === 1 || wednesday));
   const fresh = $derived(waiting + (round?.counts?.new ?? 0));
@@ -133,7 +150,7 @@
   let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
-  const todo = $derived(claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
+  const todo = $derived(coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
   // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -198,6 +215,13 @@
 
     {#if todo}
       <Group caption={t('studio.todo')}>
+        {#each coAsks as x (x.event.id)}
+          <Row title={x.event.title} subtitle={t('co.ask', { club: nameOf(x.host) })}>
+            {#snippet lead()}<OrgLogo org={x.host} size={30} />{/snippet}
+            {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('co.no')} onclick={() => coAnswer(x, false)} />
+              <Button kind="tinted" size="s" onclick={() => coAnswer(x, true)}>{t('co.yes')}</Button></span>{/snippet}
+          </Row>
+        {/each}
         {#if claims}<Row icon={UsersRound} title={t('ro.reqTitle')} count={claims} accessory="chevron" onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)} />{/if}
         {#if alone}
           <Row icon={Crown} title={t('studio.todoPres')} subtitle={t('studio.todoPresHint')} accessory="chevron" onclick={() => shareInvite(m.org)} />
@@ -243,7 +267,7 @@
             {#if !next.guestHost}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
             {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
           </div>
-          {#if staff && today && !next.placeUrl}
+          {#if staff && ours(next) && today && !next.placeUrl}
             {#if !moving}
               <Button kind="plain" size="s" full onclick={startMove}>{#snippet icon()}<MapPin size={16} />{/snippet}{t('studio.move')}</Button>
             {:else}
@@ -322,6 +346,7 @@
   .bar { height: 6px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
   .acts { display: flex; gap: var(--s-2); }
+  .yn { display: flex; align-items: center; gap: var(--s-2); }
   /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */
   @media (max-width: 359px) { .acts :global(.btn.full) { flex-basis: auto; padding-inline: var(--s-3); gap: 6px; } }
   .moving { display: flex; align-items: flex-end; gap: var(--s-2); }

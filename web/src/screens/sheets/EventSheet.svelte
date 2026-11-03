@@ -17,6 +17,7 @@
   import UserCheck from '@lucide/svelte/icons/user-check';
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Pencil from '@lucide/svelte/icons/pencil';
   import BookOpen from '@lucide/svelte/icons/book-open';
@@ -48,7 +49,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, goingBusy, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
-  import { may, withNick, inner } from '../../lib/perms';
+  import { may, withNick, inner, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -118,6 +119,19 @@
   const role = $derived(mem?.role ?? null);
   const crew = $derived(!preview && !!e && e.status === 'published' && may(mem, 'door'));
   const head = $derived(may(mem, 'events'));
+  // a co-hosted event's other club (server cohosts.py): its event team works the door and reads the list; its Vice+
+  // may leave. Editing, price and seats stay the host's
+  const coMem = $derived(e?.coHost ? session.me?.memberships.find((m) => m.org.id === e.coHost!.id) ?? null : null);
+  const coCrew = $derived(!preview && !!e && e.status === 'published' && !crew && may(coMem, 'events'));
+  const coLead = $derived(!preview && !!coMem && RANK[coMem.role] >= RANK.vice);
+  async function leaveCohost() {
+    if (!e?.coHost || !(await sheets.ask({ title: t('co.leaveAsk', { club: nameOf(e.org) }), text: t('co.leaveText'), ok: t('co.leave'), cancel: t('common.cancel'), danger: true }))) return;
+    const was = e.coHost, card = eventById(id);
+    if (card) card.coHost = null; // at once; back if the server says no
+    if (detail) detail = { ...detail, coHost: null };
+    try { await api.cohostEnd(id); haptic.soft(); studioChanged(); }
+    catch { if (card) card.coHost = was; if (detail) detail = { ...detail, coHost: was }; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   // volunteering: a short "why", then the organizers answer
   let volWriting = $state(false), volNote = $state('');
   async function volApply() {
@@ -240,7 +254,7 @@
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
   // the team's tools group has a row to show (a guest host's event leaves a Member nothing)
-  const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink));
+  const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink || coCrew || coLead));
   function shareMine() {
     if (!e) return;
     haptic.tap();
@@ -269,7 +283,8 @@
       {:else}
         <Poster item={e} big play radius={22} dim={cancelled} />
       {/if}
-      <button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>
+      {#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
+      {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
       {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
     </div>
 
@@ -447,7 +462,13 @@
             <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {/if}
         {/if}
+        {#if coCrew}
+          <Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />
+          <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          {#if !e.price && !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+        {/if}
         {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
+        {#if coLead}<Row tone="destructive" title={t('co.leave')} onclick={leaveCohost} />{/if}
       </Group>
     {/if}
 
@@ -495,7 +516,7 @@
     {/if}
     {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
     <!-- the one report sheet: anyone but the event's own crew -->
-    {#if !may(mem, 'door') && !preview && session.me?.student}<div class="rep"><Button kind="plain" size="s" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</Button></div>{/if}
+    {#if !may(mem, 'door') && !coMem && !preview && session.me?.student}<div class="rep"><Button kind="plain" size="s" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</Button></div>{/if}
     {/if}
     </div>
     {/if}

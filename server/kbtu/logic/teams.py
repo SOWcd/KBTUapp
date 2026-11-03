@@ -151,7 +151,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
         asks = rows(con, f"""SELECT q.*, m.role, {PERSON_COLS} FROM removal_requests q JOIN org_members m ON m.org_id = q.org_id AND m.user_id = q.user_id
             JOIN users u ON u.id = q.user_id JOIN students s ON s.user_id = u.id WHERE q.org_id = ? AND q.status = 'pending' ORDER BY q.id""", oid)
         by = {b["id"]: b for b in rows(con, PERSON + f" WHERE u.id IN ({','.join('?' * len(asks))})", *[a["by_id"] for a in asks])} if asks else {}
-        out["removals"] = [{"id": a["id"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(),
+        out["removals"] = [{"id": a["id"], "person": {**person_ref(a), "id": a["user_id"]},  # q.* first: "id" is the request's "fullName": f"{a['last_name']} {a['first_name']}".strip(),
                             "by": person_ref(by[a["by_id"]]) if a["by_id"] in by else None, "ban": bool(a["ban"]), "note": a["note"],
                             "at": a["created_at"], "canDecide": RANK[mine] > RANK[a["role"]]} for a in asks]
         out["bans"] = [{"person": person_ref(b), "fullName": f"{b['last_name'] or ''} {b['first_name'] or ''}".strip() or short_name(b), "at": b["created_at"]}

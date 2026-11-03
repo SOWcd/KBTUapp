@@ -450,14 +450,16 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
     free = dict(rows(con, f"SELECT event_id, COUNT(*) FROM registrations WHERE event_id IN ({_qs(paid)}) AND status = 'going' AND free = 1 GROUP BY event_id",
                      *paid)) if paid else {}
     orgs = _by_id(con, "orgs", (e["org_id"] for e in evs))
+    co = cohosts_of(con, ids)  # the accepted co-host club, shown beside the host ("Crystal × JCC")
     slides: dict[int, list] = {}
     for r in rows(con, f"SELECT event_id, file_id FROM event_slides WHERE event_id IN ({q}) ORDER BY pos", *ids):
         slides.setdefault(r["event_id"], []).append(r["file_id"])
-    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in orgs.values()),
+    files = _by_id(con, "files", [*(e["cover_file_id"] for e in evs), *(o["logo_file_id"] for o in [*orgs.values(), *co.values()]),
                                   *(i for s in slides.values() for i in s)])
     videos = _by_id(con, "videos", (e["video_id"] for e in evs))
     return {e["id"]: {
-        "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "status": e["status"], "title": e["title"],
+        "id": e["id"], "org": org_ref(con, orgs[e["org_id"]], files), "coHost": org_ref(con, co[e["id"]], files) if e["id"] in co else None,
+        "status": e["status"], "title": e["title"],
         "startsAt": e["starts_at"], "endsAt": e["ends_at"], "publishedAt": e["published_at"], "place": e["place"], "placeUrl": e["place_url"],
         "cover": _event_cover(con, e, files),
         "slides": [media_shape(files[i]) for i in slides.get(e["id"], []) if i in files],
@@ -480,7 +482,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     pay = head or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
     return {**c, **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"],
             "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"],
-            "memo": json.loads(e["memo"]) if head and e["memo"] else None,
+            "memo": json.loads(e["memo"]) if head and e["memo"] else None, "cohost": cohost_view(con, e) if head else None,
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (the talk is there)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
@@ -496,6 +498,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from .clubs import org, orgs  # noqa: E402
+from .cohosts import cohost_view, cohosts_of  # noqa: E402
 from .organizing import _album_view, _rating_view  # noqa: E402
 from .oversight import staff  # noqa: E402
 from .profiles import friends  # noqa: E402

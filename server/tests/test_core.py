@@ -3161,6 +3161,7 @@ def test_casting(env):
     assert c.get(f"/api/rounds/{rid}/apps", headers=tma(10)).status_code == 403
     apps = {a["fullName"]: a for a in c.get(f"/api/rounds/{rid}/apps", headers=tma(21)).json()}
     ann, bob = apps["Testov Ann"], apps["Testov Bob"]
+    assert ann["person"]["id"] == c.get("/api/me", headers=tma(10)).json()["id"]                  # the student, not the application's id
     assert ann["answers"][q["Portfolio"]] == "behance.net/ann" and ann["came"] == 0 and not ann["before"]
     assert c.post(f"/api/round-apps/{ann['id']}/vote", headers=tma(21), json={"verdict": "next", "stars": 4, "note": "Strong reels"}).json()["stage"] == "next"
     c.post(f"/api/round-apps/{bob['id']}/vote", headers=tma(20), json={"verdict": "no"})

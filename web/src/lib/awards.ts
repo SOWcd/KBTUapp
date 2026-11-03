@@ -166,15 +166,17 @@ export function leftLine(a: Achievement): string {
   return a.levels.length > 1 ? t('awp.left', { n: left, tier: tierLabel(a.levels.indexOf(n) + 1, a.levels.length) }) : t('awp.leftOne', { n: left });
 }
 
-export function hero(p: PersonCard): HeroData {
-  const earned = p.awards.achievements.filter((a) => a.level > 0);
+export function hero(p: PersonCard, mine = false): HeroData {
+  // my own card leaves Recruiter to its Invite tile below (owner, Nov 4: the same medal twice); others' cards show it
+  const own = (a: Achievement) => !(mine && a.code === 'referral');
+  const earned = p.awards.achievements.filter((a) => a.level > 0 && own(a));
   // the lanyard's line: the most important team first, DMP, then the Student Government, then clubs; within one tier the
   // higher role (owner, Oct 31: a minister read "Head of Events · Choice"). A role only to the club's own team
   const weight = (c: PersonCard['clubs'][number]) => (c.role ? 100 : 0) + (c.org.kind === 'office' ? 20 : c.org.gov ? 10 : 0) + (c.role ? RANK[c.role] : 0);
   // ...unless I wear one of my clubs' lanyards: then its line is that club's (Nov 3: a student wanted his other club's
   // role on the card and found no setting; the lanyard I pick is the setting)
   const top = p.clubs.find((c) => c.org.id === p.skin) ?? [...p.clubs].sort((a, b) => weight(b) - weight(a))[0];
-  const close = closest(p.awards.achievements);
+  const close = closest(p.awards.achievements.filter(own));
   return {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
     frame: p.frame ?? null,
@@ -193,7 +195,7 @@ export function hero(p: PersonCard): HeroData {
     next: close ? `${achName(close)}: ${leftLine(close).replace(/^./, (c) => c.toLowerCase())}` : null,
     // the picked ones first, then the rest in their free places: a new award shows at once (owner, Nov 1)
     shelf: [...new Map([...(p.shelf ?? []).map((k) => shelfItem(p, k)), ...earned.map(achItem), ...p.awards.badges.map(badgeItem)]
-      .filter((x): x is ShelfItem => !!x).map((x) => [x.key, x])).values()].slice(0, 6),
+      .filter((x): x is ShelfItem => !!x && !(x.ach && !own(x.ach))).map((x) => [x.key, x])).values()].slice(0, 6),
   };
 }
 

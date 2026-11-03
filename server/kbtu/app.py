@@ -886,6 +886,23 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         media.drop(receipts, gone)
         media.drop(photos, photo)
 
+    # a co-host club (logic/cohosts.py): the host invites one, its Vice+ answers in Studio, either side ends it
+    @app.put("/api/events/{eid}/cohost")
+    def cohost_invite(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.cohosts.invite(con, v, eid, body.get("orgId"))
+
+    @app.delete("/api/events/{eid}/cohost", status_code=204)
+    def cohost_end(eid: int, con: Con, v: Me):
+        logic.cohosts.end(con, v, eid)
+
+    @app.post("/api/events/{eid}/cohost/answer")
+    def cohost_answer(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.cohosts.answer(con, v, eid, body.get("yes"))
+
+    @app.get("/api/orgs/{oid}/cohosts")
+    def cohost_invites(oid: int, con: Con, v: Me):
+        return logic.cohosts.invites(con, v, oid)
+
     @app.get("/api/events/{eid}/attendees")
     def attendees(eid: int, con: Con, v: Me):
         return logic.attendees(con, v, eid)

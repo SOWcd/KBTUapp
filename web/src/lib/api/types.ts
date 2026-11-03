@@ -288,11 +288,15 @@ export interface MyRegistration {
   note?: string | null;         // "Can't make it": why (a club meeting asks)
 }
 
+/** A co-host invite waiting for my club's answer (its Vice+, Studio's To do): the host's event as it stands */
+export interface CohostInvite { event: { id: Id; title: string; startsAt: Ts; place: string; status: EventCard['status'] }; host: OrgRef; at: Ts }
+
 export interface EventCard {
   /** the other languages (ai.py), applied by api/client.ts; `orig`: the text as typed */
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; description?: string }>>; orig?: Record<string, string>;
   id: Id;
   org: OrgRef;
+  coHost?: OrgRef | null;       // a club of the app hosting it with `org` ("Crystal × JCC"): once its Vice+ said yes
   status: 'draft' | 'published' | 'cancelled';
   title: string;
   startsAt: Ts;
@@ -341,6 +345,7 @@ export interface EventFull extends EventCard {
   payToName: string | null;
   payPhone: string | null;
   memo?: MemoAsks | null;       // the club's Head+: what this event asks DMP for in the weekly memo
+  cohost?: { org: OrgRef; status: 'pending' | 'accepted' | 'declined' } | null;  // the host's Head+: the invited club
   badgeName: string | null;
   photos: AlbumPhoto[];          // the guests' album (students only), in the order added
   wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)

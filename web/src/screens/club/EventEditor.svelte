@@ -34,6 +34,7 @@
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Handshake from '@lucide/svelte/icons/handshake';
+  import Blend from '@lucide/svelte/icons/blend';
   import Mail from '@lucide/svelte/icons/mail';
   import Plus from '@lucide/svelte/icons/plus';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
@@ -46,7 +47,10 @@
   import IconButton from '../../ui/IconButton.svelte';
   import type { MenuItem } from '../../ui/menu';
   import { check, type Finding } from '../../lib/eventCheck';
-  import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
+  import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type OrgRef, type Video } from '../../lib/api';
+  import OrgLogo from '../../ui/OrgLogo.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
+  import { nameOf } from '../../lib/short';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, studioChanged, phrase } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -343,7 +347,7 @@
       ...i, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, org: o, status: 'published', title: i.title || '—', place: i.place || '—',
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
       cover: f.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
-      my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
+      coHost: saved?.coHost ?? null, my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
     });
   }
 
@@ -355,6 +359,7 @@
     busy = kind;
     try {
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
+      if (!saved && coWant && coOk) await api.cohostInvite(e.id, coWant.id).catch(coSay); // the event is saved: the invite can go again from here
       const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
       if (pub) e = pub;
       const moved = live && e.taken > 0 && (saved!.startsAt !== e.startsAt || saved!.place !== e.place);
@@ -369,7 +374,7 @@
       haptic.error();
       say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
         : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
-        : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
+        : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
 
@@ -396,11 +401,42 @@
   }
 
   // the focused panel at the bottom: '' none, else which one
-  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'partner' | 'memo' | 'check';
+  // "Invite a club" (server cohosts.py): one club of the app hosts it with us once its Vice+ says yes. A saved event
+  // invites at once; a new one after its first save. Only an open event (not the team's, a meeting, a partner's)
+  let coWant = $state<OrgRef | null>(null);
+  let coQ = $state('');
+  const co = $derived(saved ? saved.cohost ?? null : coWant ? { org: coWant, status: 'new' as const } : null);
+  const coOk = $derived(!isMeeting && !f.teamOnly && !f.leaders && !f.partner && saved?.status !== 'cancelled' && (!!co || may(mine, 'events')));
+  const coShort = (o: OrgRef) => (o.name.length > 12 && o.abbr) || nameOf(o); // the row's value has a third of 375 px: a long name by its abbreviation
+  const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: coShort(co.org) }) : coShort(co.org));
+  const coFound = $derived.by(() => {
+    const q = coQ.trim().toLowerCase();
+    return data.orgs.filter((o) => o.kind === 'club' && o.id !== org && o.id !== co?.org.id && (!q || nameOf(o).toLowerCase().includes(q) || o.name.toLowerCase().includes(q))).slice(0, 8);
+  });
+  const coSay = (x: unknown) => say(t(x instanceof ApiErr && x.message === 'declined' ? 'co.declinedOnce' : x instanceof ApiErr && x.code === 'rate_limited' ? 'co.limit'
+    : x instanceof ApiErr && x.message === 'cohost' ? 'co.bad' : 'common.error'), 'pleading_face_3d');
+  async function pickCo(o: OrgRef) {
+    haptic.tap(); coQ = '';
+    if (!saved) { coWant = o; return; }
+    const was = saved.cohost ?? null;
+    saved = { ...saved, cohost: { org: o, status: 'pending' } }; // at once; back if the server says no
+    try { const r = await api.cohostInvite(saved.id, o.id); saved = { ...saved, cohost: r.cohost ?? null }; haptic.ok(); say(t('co.sent'), 'party_popper_3d'); }
+    catch (x) { saved = { ...saved, cohost: was }; haptic.error(); coSay(x); }
+  }
+  async function dropCo() {
+    if (!saved) { coWant = null; haptic.soft(); return; }
+    const was = saved.cohost ?? null;
+    if (was?.status === 'accepted' && !(await sheets.ask({ title: t('co.removeAsk', { club: nameOf(was.org) }), text: t('co.removeText'), ok: t('co.remove'), cancel: t('common.cancel'), danger: true }))) return;
+    saved = { ...saved, cohost: null };
+    try { await api.cohostEnd(saved.id); haptic.soft(); if (was?.status === 'accepted') studioChanged(); }
+    catch { saved = { ...saved, cohost: was }; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+
+  type Panel = '' | 'cover' | 'place' | 'about' | 'price' | 'seats' | 'reg' | 'video' | 'form' | 'vol' | 'partner' | 'cohost' | 'memo' | 'check';
   let pick = $state<Panel>('');
   const open = (p: Panel) => { haptic.tap(); pick = p; };
   const PANEL: Record<Exclude<Panel, ''>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
-    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', partner: 'ed.partner', memo: 'studio.memoShort', check: 'ex.checkTitle' };
+    reg: 'ex.regUntil', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
 
   // the rows' values
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
@@ -563,6 +599,7 @@
       <Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />
       {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
       {#if tickets}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+      {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
       {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
         invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
       {#if !f.placeUrl && !f.leaders}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
@@ -738,6 +775,24 @@
           {#if f.partner}
             <Field label={t('ed.partnerHost')} bind:value={f.host} maxlength={60} placeholder={t('ed.partnerHostPh')} error={tried && err.host ? err.host : undefined} />
             <Field label={t('ed.partnerLink')} bind:value={f.link} type="url" inputmode="url" maxlength={500} placeholder="https://" error={tried && err.link ? err.link : undefined} />
+          {/if}
+
+        {:else if pick === 'cohost'}
+          {#if co && co.status !== 'declined'}
+            <Group footnote={t('co.hint')}>
+              <Row title={nameOf(co.org)} subtitle={t(co.status === 'accepted' ? 'co.accepted' : co.status === 'pending' ? 'co.pending' : 'co.afterSave')}>
+                {#snippet lead()}<OrgLogo org={co.org} size={30} />{/snippet}
+                {#snippet trailing()}<IconButton icon={X} kind="gray" size="s" label={t('co.remove')} onclick={dropCo} />{/snippet}
+              </Row>
+            </Group>
+          {:else}
+            {#if co}<p class="hint">{t('co.declined', { club: nameOf(co.org) })}</p>{/if}
+            <SearchField bind:value={coQ} placeholder={t('co.search')} />
+            <Group footnote={t('co.hint')}>
+              {#each coFound as o (o.id)}
+                <Row dense title={nameOf(o)} onclick={() => pickCo(o)}>{#snippet lead()}<OrgLogo org={o} size={30} />{/snippet}</Row>
+              {:else}<Row dense title={t('co.none')} />{/each}
+            </Group>
           {/if}
 
         {:else if pick === 'memo'}
