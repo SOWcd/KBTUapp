@@ -47,7 +47,7 @@
   {#if st}
     <div class="page stagger">
       <div class="tiles">
-        {#each [['st.users', st.users], ['st.students', st.students], ['st.newToday', st.newToday]] as [string, number][] as [k, n] (k)}
+        {#each [['st.students', st.students], ['st.newToday', st.studentsToday], ['st.users', st.users]] as [string, number][] as [k, n] (k)}
           <span class="tile"><b class="num">{n}</b><i>{t(k as 'st.day')}</i></span>
         {/each}
       </div>

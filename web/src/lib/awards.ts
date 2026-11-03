@@ -208,7 +208,7 @@ export const CLUB_LOOKS = {
     straps: ['#C2412A', '#F08A3A', '#FFFFFF'], holo: ['#FFF4DC', '#FFD27A', '#8E1F4F'], role: '#FFE3A3', qr: ['#A3203F', '#6B1640'], plate: ['#FFFFFF', '#FFFFFF'], mark: qairymColor },
   shadekbtu: { strap: 'SHADE', strip: 'SHADE', bg: ['#F6EEE2', '#EDE0CC', '#E4D4BC'],
     straps: ['#A60000', '#D3110F', '#F6EEE2'], holo: ['#C80000', '#9E0000', '#F6EEE2'], role: '#B00000', qr: ['#B00000', '#5E0000'], plate: ['#FBF6EE', '#EEE3D2'],
-    mark: shadeBrush, ring: '#FFFFFF', ink: ['#1F1612', 'rgba(31, 22, 18, 0.68)'] },
+    mark: shadeBrush, ink: ['#1F1612', 'rgba(31, 22, 18, 0.68)'] },
   // Japanese Culture (Nov 2, from their own layers): sakura on pink, their shanyrak; their motto on the strip as they
   // asked it, the strap and the role line just JCC (round 5)
   japanesecultureclub: { strap: 'JCC', short: 'JCC', strip: 'JCC \u00b7 \u0411\u0456\u0440 \u0448\u0430\u04a3\u044b\u0440\u0430\u049b!',
@@ -270,7 +270,7 @@ export function lookVars(look: Look): string {
   if (!c) return '';
   const lines = c.strap.split('\n'), long = Math.max(...lines.map((l) => l.length));
   return [['c1', c.bg[0]], ['c2', c.bg[1]], ['c3', c.bg[2]], ['s1', c.straps[0]], ['s2', c.straps[1]], ['s3', c.straps[2]],
-    ['h1', c.holo[0]], ['h2', c.holo[1]], ['h3', c.holo[2]], ['role', c.role], ['ring', c.ring ?? 'white'], ['p1', c.plate[0]], ['p2', c.plate[1]],
+    ['h1', c.holo[0]], ['h2', c.holo[1]], ['h3', c.holo[2]], ['role', c.role], ['ring', c.ring ?? `linear-gradient(135deg, ${c.holo[0]}, ${c.holo[1]} 50%, ${c.holo[0]})`] /* the photo's frame in the strip's colours (owner, Nov 3) */, ['p1', c.plate[0]], ['p2', c.plate[1]],
     // the strap: two lines set tight (as their own mock does), a long word a size smaller, else as the others
     ['sf', lines.length > 1 ? '5.6px' : long > 9 ? '5.2px' : long > 7 ? '6.5px' : long <= 3 ? '11px' : '7.5px'], ['sfw', long <= 3 ? '900' : '800'], ['sl', lines.length > 1 || long > 7 ? '0.06em' : long <= 3 ? '0.02em' : '0.12em'],
     ['slh', lines.length > 1 ? '7.5px' : '26px'],
