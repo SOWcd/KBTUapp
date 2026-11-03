@@ -767,10 +767,11 @@ def test_post_discussed(env, monkeypatch):
     late = post(); say(late, 2, 3); say(late, 4, age=90000)                                    # a comment over a day old
     old = post(age=90000); say(old, 2, 3, 4, 5)                                                # an older post, talked about today
     more, four = post(), post(); say(more, 2, 3, 4); say(four, 2, 3, 4, 5)
-    assert hot() == {three, five, old, more, four}                                             # no cap
+    mask = post(anon=1); say(mask, 1, 2, 3)          # an anonymous post: its author counts like anyone (else the label tells whose)
+    assert hot() == {three, five, old, more, four, mask}                                       # no cap
     held = post(author=7, status="held"); say(held, 2, 3, 4, 5, 6)
     hidden = post(author=7, status="hidden"); say(hidden, 2, 3, 4, 5, 6)
-    assert hot(7) == {three, five, old, more, four}                                            # mine, held or removed: never
+    assert hot(7) == {three, five, old, more, four, mask}                                            # mine, held or removed: never
     busy = post(); say(busy, *[2] * logic.fchannel.HOT)                                        # a busy hour, one person: still
     con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
     assert busy in hot()
@@ -839,6 +840,12 @@ def test_post_author_told(env, monkeypatch):
     assert bot._render(con, d) == (*texts.bot_message("ru", "fch_declined"), f"fp_{q['id']}")
     assert c.post(f"/api/forum-posts/{q['id']}/restore", headers=tma(3)).status_code == 204
     assert bot._render(con, d) is None                                                         # undone: not said
+    tick(cfg, tg, con)                                                                         # out after all: told so
+    assert bot._render(con, told("fch_posted")[1]) and len(told("fch_posted")) == 2
+    assert c.post(f"/api/forum-posts/{q['id']}/mod", headers=tma(3), json={"ok": False}).status_code == 204
+    assert bot._render(con, d) is None                                                         # taken down after it went out: no "declined"
+    assert c.delete(f"/api/forum-posts/{p['id']}", headers=tma(1)).status_code == 204
+    assert [m["ref"] for m in told("fch_posted")] == [f"fp:{q['id']}"]                          # deleted: its note leaves the outbox
     con.close()
 
 

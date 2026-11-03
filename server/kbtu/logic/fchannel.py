@@ -34,14 +34,19 @@ _CYR_TLD = "\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d
 LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_][\w-]*)*\.(?:[a-z]{2,}|" + _CYR_TLD + r")\b|@\w{3,}"
                    r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b)")
 DIGITS = re.compile(r"\d(?:[\s-]?\d){9,}")  # ten digits or more, one space or dash between any two
-SUM = re.compile(r"\d{1,3}(?:\s\d{3})*\s\d00")  # a sum in thousands, round to the hundred ("15 000", "12 500", "1 500 000")
+SUM = re.compile(r"[1-9]\d{0,2}(?:\s\d{3})*\s\d00")  # a sum in thousands, round to the hundred ("15 000", "12 500", "1 500 000")
+MONEY = re.compile(r"\s*(?:\u20b8|\u0442\u0433|\u0442\u0435\u043d\u0433|tg\b|kzt\b)", re.I)  # tenge right after it
 
 
 def _long_number(s: str) -> bool:
-    """A phone or a card: ten digits or more in a run, unless every part of it between dashes is a round sum under ten
-    digits ("10 000-15 000 \u0442\u0433" is a price range, not a phone; Nov 3). Round: a phone can't pass as "7 071-234 567".
-    A date's dots and a time's colons break a run anyway."""
-    return any(not all(SUM.fullmatch(x) and sum(c.isdigit() for c in x) < 10 for x in m[0].split("-")) for m in DIGITS.finditer(s))
+    """A phone or a card: ten digits or more in a run, unless it is a price: one round sum or a range of two ("10 000-15 000
+    \u0442\u0433", Nov 3), each under ten digits, twelve at most in all (a card is 16), with the tenge right after. A date's dots and a time's colons break a run anyway.
+    ponytail: a phone shaped as such a range with tenge after it ("8 700-1 234 500 \u0442\u0433") still passes; the AI looks too"""
+    for m in DIGITS.finditer(s):
+        parts = m[0].split("-")
+        if not (len(parts) <= 2 and sum(c.isdigit() for c in m[0]) <= 12 and all(SUM.fullmatch(x) and sum(c.isdigit() for c in x) < 10 for x in parts) and MONEY.match(s, m.end())):
+            return True
+    return False
 
 
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
@@ -67,7 +72,7 @@ def _clean(raw: object) -> str:
     seen = unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)
     if LINKY.search(seen) or _long_number(seen):
         raise ApiError("bad_input", "links")
-    last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1]).lstrip() if "\n" in s else ""
+    last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1].replace(ZWJ, "")).lstrip() if "\n" in s else ""
     if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):
         raise ApiError("bad_input", "signature")
     return s
@@ -158,11 +163,13 @@ TALK_MIN, TALK_AGE = 3, 86400  # "being discussed" over the day too: TALK_MIN pe
 
 def _talked(con, ids: list[int]) -> set[int]:
     """The posts TALK_MIN or more distinct people commented on in the last day, one query for all of them: comments still
-    up, the author's own left out (it takes others; an anonymous author can't pad it, nor show which comments are theirs)."""
+    up; a signed post's author left out (it takes others). An anonymous one counts everyone: leaving its author out
+    would tell, by the label, whether a commenter is the author (review, Nov 3). ponytail: so its author can pad it by
+    one; fine for a hint"""
     if not ids:
         return set()
     return {r[0] for r in rows(con, f"""SELECT p.id FROM fchan_posts p JOIN fchan_comments c ON c.post_id = p.id
-        WHERE p.id IN ({','.join('?' * len(ids))}) AND c.gone = 0 AND c.at > ? AND c.user_id != p.user_id
+        WHERE p.id IN ({','.join('?' * len(ids))}) AND c.gone = 0 AND c.at > ? AND (p.anon = 1 OR c.user_id != p.user_id)
         GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ?""", *ids, _now() - TALK_AGE, TALK_MIN)}
 
 
@@ -262,6 +269,13 @@ def delete(con, v: Viewer, pid: int) -> None:
         _unpost(con, p, "author")
         _post_off(con, pid)
         con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
+        _notes_off(con, pid)
+
+
+def _notes_off(con, pid: int) -> None:
+    """The bot's notes to the author about this post (fch_posted, fch_declined): out of the outbox with it, so no row ties
+    them to a removed post (a sent one's time would match the channel's)."""
+    con.execute("DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined') AND ref IN (?, ?)", (f"fp:{pid}", f"fd:{pid}"))
 
 
 def resigns(con) -> list:
@@ -437,6 +451,8 @@ def sweep(con) -> None:
         return
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 30 * 86400))
+    con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
+        AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
     con.execute("DELETE FROM fchan_replies WHERE status IN ('gone', 'hidden', 'held') AND tg_msg IS NULL AND created_at < ?", (_now() - 30 * 86400,))
 
