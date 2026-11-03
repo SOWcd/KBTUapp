@@ -14,12 +14,14 @@ from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE
 
 # ---------------------------------------------------------------- Studio (own org)
 
-def _staff_event(con, v: Viewer, eid: int, right: str) -> sqlite3.Row:
-    """The event, if I have this right in its club: "events" to run it, "door" to check people in."""
+def _staff_event(con, v: Viewer, eid: int, right: str, cohost: bool = False) -> sqlite3.Row:
+    """The event, if I have this right in its club: "events" to run it, "door" to check people in. cohost: the door and
+    the attendee list, which the co-host's event team has too (cohosts.py); every other right stays the host's."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e:
         raise ApiError("not_found")
-    _may(con, v, e["org_id"], right)
+    if not (cohost and co_runs(con, v, eid)):
+        _may(con, v, e["org_id"], right)
     if right == "door" and e["guest_host"]:
         raise ApiError("closed")  # a partner's event has no door: people sign up on the host's site
     return e
@@ -32,16 +34,18 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     if not at_least(role, "member"):
         raise ApiError("forbidden")
     head = can(con, v, oid, "events")
-    found = rows(con, "SELECT * FROM events WHERE org_id = ? AND memo_only = 0 ORDER BY starts_at", oid)  # Oct 15's requests without an event: left, hidden
+    # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for our event team (cohosts.py)
+    found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR ? AND status != 'draft' AND id IN (SELECT event_id FROM event_cohosts
+        WHERE org_id = ? AND status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, head, oid)
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
         WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL GROUP BY r.event_id""", oid)) if head else {}
-    saved = dict(rows(con, f"SELECT event_id, COUNT(*) FROM saved_events WHERE event_id IN ({_qs([e['id'] for e in found])}) GROUP BY event_id",
-                      *[e["id"] for e in found])) if head and found else {}
+    own = [e["id"] for e in found if e["org_id"] == oid]  # a co-hosted event's counts are its host's
+    saved = dict(rows(con, f"SELECT event_id, COUNT(*) FROM saved_events WHERE event_id IN ({_qs(own)}) GROUP BY event_id", *own)) if head and own else {}
     asked = dict(rows(con, """SELECT x.event_id, COUNT(*) FROM volunteers x JOIN events e ON e.id = x.event_id
         WHERE e.org_id = ? AND x.status = 'asked' GROUP BY x.event_id""", oid)) if head else {}  # volunteers waiting for an answer
-    return [{**c, "questions": len(_asking(con, e["id"], v.id)) if head else 0, "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
+    return [{**c, "questions": len(_asking(con, e["id"], v.id)) if head and e["org_id"] == oid else 0, "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
              "volunteersAsked": asked.get(e["id"], 0)}
             for e, c in zip(found, cards(con, v, found))]
 
@@ -370,6 +374,10 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
             raise ApiError("closed")
         f |= _pay(con, v, body, org, e) | _partner(con, v, body, org, e)
         _partner_ok(f, e)
+        get = lambda k: f[k] if k in f else e[k]  # noqa: E731
+        if (get("visibility") != "public" or get("meeting") or get("guest_host")) \
+                and one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND status != 'declined'", eid):
+            raise ApiError("bad_input", "cohost")  # a co-host only on a public event (cohosts.py): remove it first
         _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"]))
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
@@ -458,6 +466,7 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
             # the week starts when someone heard: nobody did, the key still says so (over the fallback to past events)
             if told:
                 con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '0')", (f"told:{e['org_id']}",))
+        cohost_tell(con, one(con, "SELECT * FROM events WHERE id = ?", eid), v.id)  # an accepted co-host's followers, by its own week
     out = full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
     # Studio's toast says whether the followers heard, and if not, from when a next event may tell them
     return out if told is None else {**out, "told": told, "tellAfter": after}
@@ -584,7 +593,9 @@ def events_gone(con) -> tuple[list[str], list[str]]:
 
 
 def attendees(con, v: Viewer, eid: int) -> list[dict]:
-    _staff_event(con, v, eid, "events")
+    """The host's event team, and the co-host's without receipts (money is the host's; cohost-review.md 3)."""
+    e = _staff_event(con, v, eid, "events", cohost=True)
+    paid = can(con, v, e["org_id"], "events")
     order = {"going": 0, "hold": 1, "waitlist": 2}
     found = rows(con, f"""SELECT {PERSON_COLS}, r.status, r.checked_in_at, r.walk_in, r.checkin_manual, r.created_at AS at, r.free, r.invited_by, r.checked_in_by, r.answers,
             c.id AS rid, c.flags, c.reviewed_at, c.created_at AS sent_at, c.amount, c.receipt_no, c.sender_name, c.recipient_name, c.paid_at
@@ -600,7 +611,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
-            if p["rid"] else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
+            if p["rid"] and paid else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
     return sorted(out, key=lambda a: (not flagged(a), order[a["status"]], a["fullName"]))  # §4.3: flagged receipts first
 
@@ -670,7 +681,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> None:
 def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
     """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer."""
     with tx(con):
-        e = _staff_event(con, v, eid, "door")
+        e = _staff_event(con, v, eid, "door", cohost=True)
         t = core.now()
         if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             return {"result": "closed"}
@@ -688,7 +699,7 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
                 return {"result": "other_event"}
             if r["status"] != "going":
                 return {"result": "cancelled"}
-        if r["user_id"] == v.id and not can(con, v, e["org_id"], "events"):  # as checkin_by_name (a walk-in rolls back)
+        if r["user_id"] == v.id and not runs(con, v, e):  # as checkin_by_name (a walk-in rolls back)
             raise ApiError("forbidden")
         if not r["checked_in_at"]:
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
@@ -803,7 +814,8 @@ def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
     """How many more photos I may add to this event's album now."""
     if not v.student or e["status"] != "published" or not e["starts_at"] <= core.now() <= end_of(e) + ALBUM_FOR:
         return 0
-    team = at_least(role_in(con, v, e["org_id"]), "member") or bool(e["co_org_id"] and at_least(role_in(con, v, e["co_org_id"]), "member"))
+    co = one(con, ACCEPTED, e["id"])
+    team = at_least(role_in(con, v, e["org_id"]), "member") or bool(co and at_least(role_in(con, v, co["org_id"]), "member"))
     if not team and (not e["album_open"] or not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id)):
         return 0
     mine = one(con, "SELECT COUNT(*) AS n FROM event_photos WHERE event_id = ? AND added_by = ?", e["id"], v.id)["n"]
@@ -876,7 +888,7 @@ UNDO = 600  # a check-in by name can be taken back this long (a wrong tap at the
 def door(con, v: Viewer, eid: int) -> list[dict]:
     """The door list for check-in by name (Member+, like the scanner; §3: a Member sees short names only): who is going,
     the ones still to come first."""
-    e = _staff_event(con, v, eid, "door")
+    e = _staff_event(con, v, eid, "door", cohost=True)
     found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual FROM registrations r
         JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id WHERE r.event_id = ? AND r.status = 'going'""", eid)
     out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"])} for p in found]
@@ -891,8 +903,8 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
     """No QR (a dead phone): a person going to the event is checked in by hand from the door list (§4.4). The same answer
     as the scanner; marked "by hand" for the organizer and the CSV."""
     with tx(con):
-        e = _staff_event(con, v, eid, "door")
-        if uid == v.id and not can(con, v, e["org_id"], "events"):
+        e = _staff_event(con, v, eid, "door", cohost=True)
+        if uid == v.id and not runs(con, v, e):
             raise ApiError("forbidden")  # the door is every member's: marking myself as came is for whoever runs the event
         t = core.now()
         if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
@@ -923,7 +935,7 @@ def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
     """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
     that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left
     linked would keep saying they came (PLAN A19 "left")."""
-    _staff_event(con, v, eid, "door")
+    _staff_event(con, v, eid, "door", cohost=True)
     with tx(con):
         cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?
             WHERE event_id = ? AND user_id = ? AND checkin_manual = 1 AND checked_in_at > ?""", (core.now(), eid, uid, core.now() - UNDO))
@@ -951,8 +963,8 @@ def _guest(g: sqlite3.Row, full: bool, me: int) -> dict:
 
 def door_guests(con, v: Viewer, eid: int) -> list[dict]:
     """The walk-ins by name, newest first: full names for Head+ (like the attendees), short ones for the door (§3)."""
-    e = _staff_event(con, v, eid, "door")
-    full = can(con, v, e["org_id"], "events")
+    e = _staff_event(con, v, eid, "door", cohost=True)
+    full = runs(con, v, e)
     return [_guest(g, full, v.id) for g in rows(con, "SELECT * FROM door_guests WHERE event_id = ? ORDER BY created_at DESC, id DESC", eid)]
 
 
@@ -963,7 +975,7 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
     if not (3 <= len(full) <= 80 and GUEST_NAME.fullmatch(full)):
         raise ApiError("bad_input")
     with tx(con):
-        e = _staff_event(con, v, eid, "door")
+        e = _staff_event(con, v, eid, "door", cohost=True)
         t = core.now()
         if e["status"] != "published" or t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             raise ApiError("conflict", "closed")
@@ -979,12 +991,12 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
             raise ApiError("rate_limited")
         gid = con.execute("INSERT INTO door_guests (event_id, full_name, norm, added_by, created_at) VALUES (?, ?, ?, ?, ?)",
                           (eid, full, norm, v.id, t)).lastrowid
-        return _guest(one(con, "SELECT * FROM door_guests WHERE id = ?", gid), can(con, v, e["org_id"], "events"), v.id)
+        return _guest(one(con, "SELECT * FROM door_guests WHERE id = ?", gid), runs(con, v, e), v.id)
 
 
 def undo_door_guest(con, v: Viewer, eid: int, gid: int) -> None:
     """A wrong name taken back by whoever typed it, in the first 10 minutes, while nobody is linked to it."""
-    _staff_event(con, v, eid, "door")
+    _staff_event(con, v, eid, "door", cohost=True)
     if not con.execute("DELETE FROM door_guests WHERE id = ? AND event_id = ? AND added_by = ? AND user_id IS NULL AND created_at > ?",
                        (gid, eid, v.id, core.now() - UNDO)).rowcount:
         raise ApiError("conflict")
@@ -1032,6 +1044,7 @@ def link_door_guests(con, uid: int) -> None:
 from . import core  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
+from .cohosts import ACCEPTED, co_runs, runs, tell as cohost_tell  # noqa: E402
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402

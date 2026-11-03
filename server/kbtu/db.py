@@ -1167,6 +1167,21 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
     # late sign-up (Nov 3): a free uncapped public event keeps "Going" open from its start until its end
     (120, "ALTER TABLE events ADD COLUMN late_signup INTEGER NOT NULL DEFAULT 0;"),
+    # co-hosted events (Nov 3, "Crystal & JCC do an Anime Quiz together"): one other club of the app, invited by the
+    # host, shown once its Vice+ accepts (logic/cohosts.py; events.co_org_id was never written and stays unused).
+    # A declined row stays, so the same club isn't asked twice for one event; ending one deletes it.
+    (121, """CREATE TABLE event_cohosts (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+      invited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      PRIMARY KEY (event_id, org_id)
+    ) STRICT;
+    CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';  -- ponytail: one co-host, more later
+    CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);"""),
 ]
 
 

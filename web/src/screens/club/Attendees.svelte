@@ -10,6 +10,8 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
   import { eventById } from '../../lib/state/data.svelte';
+  import { session } from '../../lib/state/session.svelte';
+  import { may } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
   import { time } from '../../lib/time';
@@ -39,6 +41,8 @@
   // check in by name (no QR, §4.4) while the door is open: 3 h before the start until the end (or 6 h after the start)
   const ev = $derived(eventById(id));
   const price = $derived(ev?.price ?? 0);
+  // a co-host's event team reads the list without receipts and without the file (server cohosts.py): the host's
+  const host = $derived(!ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
   const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
@@ -75,7 +79,7 @@
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
   {#if list}<div class="col">
     <div class="bar"><p class="stats">{t('att.stats', { going, came })}</p>
-      {#if list.length}<Button kind="secondary" size="s" loading={sending} onclick={exportList}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('att.export')}</Button>{/if}</div>
+      {#if list.length && host}<Button kind="secondary" size="s" loading={sending} onclick={exportList}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('att.export')}</Button>{/if}</div>
     {#if price && paid}
       <Notice tone={read && read < paid * price ? 'warning' : 'neutral'} icon={ReceiptIcon} text={t('att.expected', { sum: money(paid * price), n: paid, price: money(price) })}>
         {#if read}<p class="by">{t('att.byReceipts', { sum: money(read) })}</p>{/if}

@@ -300,7 +300,8 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     sql = "SELECT * FROM events WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
     args: list = [core.now() - 366 * 86400, NO_END, core.now()]
     if org is not None:
-        sql += " AND org_id = ?"; args.append(org)
+        # a club's page: its own and the ones it co-hosts (accepted, cohosts.py)
+        sql += " AND (org_id = ? OR id IN (SELECT event_id FROM event_cohosts WHERE org_id = ? AND status = 'accepted'))"; args += [org, org]
     if frm is not None:
         sql += " AND starts_at >= ?"; args.append(frm)
     if to is not None:

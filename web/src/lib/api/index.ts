@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -113,7 +113,13 @@ export interface Api {
   publishEvent(id: Id): Promise<EventFull & { told?: boolean; tellAfter?: number | null }>;  // told: the followers heard (a public event); else from when they may
   cancelEvent(id: Id): Promise<EventFull>;
   deleteEvent(id: Id): Promise<void>;                            // drafts only
-  attendees(id: Id): Promise<Attendee[]>;
+  attendees(id: Id): Promise<Attendee[]>;                         // the co-host's event team too, without receipts
+  /** a co-host club (server logic/cohosts.py): the host's Head+ invites one or ends it; the co-host's Vice+ answers in
+   *  Studio (its invites) or leaves */
+  cohostInvite(id: Id, org: Id): Promise<EventFull>;
+  cohostEnd(id: Id): Promise<void>;
+  cohostAnswer(id: Id, yes: boolean): Promise<CohostInvite[]>;
+  cohostInvites(org: Id): Promise<CohostInvite[]>;
   /** volunteers: I apply (a short "why") or take it back; the organizers list them and say yes or no */
   /** "Create chat": Telegram's add-the-bot-to-a-group link for this event */
   chatStart(id: Id): Promise<string>;

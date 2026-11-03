@@ -53,7 +53,7 @@
     sheets.stories([{ org: posts[0].org, items: list.map((post) => ({ post })), unread: list.some((x) => !x.read), cast: false }], 0, list.indexOf(p));
   }
   // the afisha already holds the club's upcoming events (the server's list is the same filter): they show at once
-  const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id) : null));
+  const events = $derived(fetchedEvents ?? (data.eventsReady ? data.events.filter((e) => e.org.id === id || e.coHost?.id === id) : null)); // and the ones it co-hosts
   // the catalog's copy when there is one, so the bell here and in Clubs is the same state
   const o = $derived(data.orgs.find((x) => x.id === id) ?? fetched);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
