@@ -6,7 +6,8 @@
   // holds one, results) with the club's own "what's next" under them, before and after sending. One department or none:
   // nothing to pick. Opened from the
   // club's sheet, the Join page, a shared card or the bot (rc_<club>).
-  import Check from '@lucide/svelte/icons/check';
+  import CircleCheck from '@lucide/svelte/icons/circle-check';
+  import Circle from '@lucide/svelte/icons/circle';
   import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
   import { social } from '../../lib/social';
   import { placeOf } from '../../lib/i18n/index.svelte';
@@ -22,6 +23,11 @@
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import { schoolShort } from '../../lib/short';
 
   let { overlay, org, source = 'club' }: { overlay: Overlay; org: Id; source?: string } = $props();
@@ -145,97 +151,102 @@
 
 <Sheet {overlay} icon={ClipboardPen} tall title={club?.name ?? t('cast.title')} hold={changed} onhold={askLeave}>
   {#if gone}
-    <p class="t-callout dim">{t('cast.closed')}</p>
+    <EmptyState icon={ClipboardPen} title={t('cast.closed')} />
   {:else if r}
-    <h2 class="t-h2">{r.title}</h2>
-    <p class="t-foot sub">{club?.name} · {t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) })}</p>
-
-    <!-- the steps, done as they pass; the club's own "what's next" under them (shown like its description) -->
     {@const final = r.mine?.stage === 'yes' || r.mine?.stage === 'no'}
     {@const steps = [[t('cast.stepSent'), sent], [t('cast.stepReview'), !!r.mine?.invited || final], ...(r.interviews ? [[t('cast.stepAudition'), final]] : []),
       [r.resultsBy ? t('cast.stepResultsBy', { when: dayMonth(r.resultsBy) }) : t('cast.stepResults'), final]] as [string, boolean][]}
-    <ol class="steps">
-      {#each steps as [label, done] (label)}<li class:done>{#if done}<Check size={15} />{:else}<i class="dot"></i>{/if}{label}</li>{/each}
-    </ol>
-    {#if r.nextText}<p class="t-body nexttx selectable">{r.nextText}</p>{/if}
-    {#if sent}
-      {#if r.status === 'done' && r.declineText}<p class="t-callout decl">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
-    {/if}
+    <h2 class="t-h2">{r.title}</h2>
+    <p class="t-foot sub">{club?.name} · {t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) })}</p>
+
+    <div class="body">
+    <!-- the steps, done as they pass; the club's own "what's next" under them (shown like its description) -->
+    <div>
+      <Group>
+        {#each steps as [label, done] (label)}<Row icon={done ? CircleCheck : Circle} title={label} />{/each}
+      </Group>
+      {#if r.nextText}<p class="t-body nexttx selectable">{r.nextText}</p>{/if}
+      {#if sent}
+        {#if r.status === 'done' && r.declineText}<p class="t-callout nexttx">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
+      {/if}
+    </div>
 
     {#if r.mine?.invited}
       <!-- the interview: the time to pick, or mine -->
-      <section class="iv surface">
-        <span class="t-cap">{t('cast.ivTitle')}</span>
-        {#if r.mine.slot && !picking}
-          <p class="ivmine"><b>{dayMonth(r.mine.slot.startsAt)}, {time(r.mine.slot.startsAt)}</b><span>{placeOf(r.mine.slot.place)}</span></p>
-          <button class="ivlink" onclick={() => (picking = true)}>{t('cast.ivChange')}</button>
-        {:else}
-          <p class="t-foot">{t('cast.ivPick')}</p>
+      {#if r.mine.slot && !picking}
+        <Group caption={t('cast.ivTitle')}>
+          <Row title="{dayMonth(r.mine.slot.startsAt)}, {time(r.mine.slot.startsAt)}" subtitle={placeOf(r.mine.slot.place)} />
+          <Row tone="action" title={t('cast.ivChange')} onclick={() => (picking = true)} />
+        </Group>
+      {:else}
+        <Group caption={t('cast.ivTitle')} footnote={days.length ? t('cast.ivPick') : t('cast.ivNone')}>
           {#each days as [day, list] (day)}
-            <span class="ivday">{day}</span>
-            <div class="ivtimes">{#each list as s (s.id)}<button class:on={s.mine} onclick={() => take(s)}>{time(s.startsAt)}{s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</button>{/each}</div>
-          {:else}<p class="t-foot">{t('cast.ivNone')}</p>{/each}
-          <button class="ivlink" onclick={nothingFits}>{t('cast.ivNothing')}</button>
-          {#if r.mine.slot}<button class="ivlink" onclick={() => take(null)}>{t('cast.ivDrop')}</button>{/if}
-        {/if}
-      </section>
+            <!-- engine: ui/Row could hold a wrapping row of Chips under its title (a day's free times) -->
+            <div class="kb-row ivday"><span class="dl">{day}</span>
+              <div class="chips">{#each list as s (s.id)}<Chip selected={s.mine} onclick={() => take(s)}>{time(s.startsAt)}{s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</Chip>{/each}</div></div>
+          {/each}
+          <Row tone="action" title={t('cast.ivNothing')} onclick={nothingFits} />
+          {#if r.mine.slot}<Row tone="action" title={t('cast.ivDrop')} onclick={() => take(null)} />{/if}
+        </Group>
+      {/if}
     {/if}
 
     {#if !sent || editing}
-    <section class="known surface">
-      <span class="t-cap">{t('cast.known')}</span>
-      <div class="me">
-        {#if me}<Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={44} tappable={false} />{/if}
-        <span class="tx"><b>{me?.student ? `${me.student.lastName} ${me.student.firstName}` : me?.name}</b>
-          <i>{[me?.student?.course ? t('person.course', { n: me.student.course }) : '', schoolShort(me?.student?.school)].filter(Boolean).join(' · ')}</i>
-          <i>{[me?.student?.email, me?.tg.username ? '@' + me.tg.username : ''].filter(Boolean).join(' · ')}</i></span>
-      </div>
-    </section>
+    <fieldset disabled={!r.open}>
+    <Group caption={t('cast.known')}>
+      <Row title={me?.student ? `${me.student.lastName} ${me.student.firstName}` : me?.name ?? ''}
+        subtitle={[me?.student?.course ? t('person.course', { n: me.student.course }) : '', schoolShort(me?.student?.school), me?.student?.email, me?.tg.username ? '@' + me.tg.username : ''].filter(Boolean).join(' · ')}>
+        {#snippet lead()}{#if me}<Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={40} tappable={false} />{/if}{/snippet}
+      </Row>
+    </Group>
 
     {#if r.departments.length > 1}
-    <h3 class="t-cap sec">{r.picks > 1 ? t('cast.picksMany', { n: r.picks }) : t('cast.picksOne')}</h3>
-    <div class="deps">
-      {#each r.departments as d (d.tagId)}
-        {@const n = picks.indexOf(d.tagId)}
-        <button class="dep surface" class:on={n >= 0} style="--c:{d.color}" onclick={() => pick(d.tagId)} disabled={!r.open}>
-          <span class="mark">{#if n >= 0}{r.picks > 1 ? n + 1 : '✓'}{/if}</span>
-          <span class="tx"><b>{d.name}</b>{#if d.about}<i>{d.about}</i>{/if}</span>
-        </button>
-      {/each}
+    <div>
+      <Group caption={r.picks > 1 ? t('cast.picksMany', { n: r.picks }) : t('cast.picksOne')}>
+        {#each r.departments as d (d.tagId)}
+          {@const n = picks.indexOf(d.tagId)}
+          <Row title={d.name} subtitle={d.about || undefined} accessory="check" checked={n >= 0} onclick={() => pick(d.tagId)}>
+            <!-- the department's colour, and the wish's place when there are several -->
+            {#snippet lead()}<span class="mark" class:on={n >= 0} style="--c:{d.color}">{#if n >= 0 && r!.picks > 1}{n + 1}{/if}</span>{/snippet}
+          </Row>
+        {/each}
+      </Group>
+      {#if tried && !picks.length}<p class="err">{t('cast.pickOne')}</p>{/if}
     </div>
-    {#if tried && !picks.length}<p class="err">{t('cast.pickOne')}</p>{/if}
     {/if}
 
     {#each shown as q (q.id)}
-      <div class="q">
-        <span class="t-cap">{q.text}{q.required ? '' : ' · ' + t('cast.optional')}</span>
-        {#if q.kind === 'long'}
-          <label class="field" class:bad={tried && missing(q)}><textarea rows="4" maxlength="2000" bind:value={answers[q.id]} disabled={!r.open}></textarea></label>
-        {:else if q.kind === 'one' || q.kind === 'many'}
+      {@const label = q.text + (q.required ? '' : ' · ' + t('cast.optional'))}
+      {@const error = tried && missing(q) ? t('ed.need') : undefined}
+      {#if q.kind === 'one' || q.kind === 'many'}
+        <div class="q">
+          <span class="lab">{label}</span>
           <div class="opts">
             {#each q.options ?? [] as o (o)}
               {@const on = q.kind === 'one' ? answers[q.id] === o : ((answers[q.id] as string[] | undefined) ?? []).includes(o)}
-              <button class:on disabled={!r.open} onclick={() => { haptic.select(); if (q.kind === 'one') answers[q.id] = o; else toggleMany(q.id, o); }}>{o}</button>
+              <Chip selected={on} onclick={() => { haptic.select(); if (q.kind === 'one') answers[q.id] = o; else toggleMany(q.id, o); }}>{o}</Chip>
             {/each}
           </div>
-        {:else}
-          <label class="field" class:bad={tried && missing(q)}><input bind:value={answers[q.id]} maxlength={q.kind === 'link' ? 300 : 200} disabled={!r.open}
-            type={q.kind === 'link' ? 'url' : 'text'} inputmode={q.kind === 'link' ? 'url' : 'text'} placeholder={q.kind === 'link' ? 'https://' : ''} /></label>
-        {/if}
-        {#if tried && missing(q)}<p class="err">{t('ed.need')}</p>{/if}
-      </div>
+          {#if error}<p class="err">{error}</p>{/if}
+        </div>
+      {:else}
+        <Field {label} {error} multiline={q.kind === 'long'} rows={4} maxlength={q.kind === 'long' ? 2000 : q.kind === 'link' ? 300 : 200}
+          type={q.kind === 'link' ? 'url' : 'text'} inputmode={q.kind === 'link' ? 'url' : 'text'} placeholder={q.kind === 'link' ? 'https://' : ''}
+          bind:value={() => String(answers[q.id] ?? ''), (v) => (answers[q.id] = v)} />
+      {/if}
     {/each}
-
+    </fieldset>
     {/if}
 
-    {#if sent && r.open && !editing}<button class="wd" onclick={withdraw}>{t('join.withdraw')}</button>{/if}
+    {#if sent && r.open && !editing}<Group><Row tone="destructive" title={t('join.withdraw')} onclick={withdraw} /></Group>{/if}
+    </div>
   {/if}
 
   {#snippet footer()}
     {#if r?.open && !sent}
       <Button kind="primary" size="l" full loading={busy} onclick={send}>{t('cast.send')}</Button>
     {:else if r?.open && editing}
-      <div class="row">
+      <div class="btns">
         <Button kind="neutral" size="l" onclick={cancelEdit}>{t('common.cancel')}</Button>
         <Button kind="primary" size="l" full loading={busy} disabled={snap === saved} onclick={send}>{t('cast.save')}</Button>
       </div>
@@ -247,43 +258,22 @@
 
 <style>
   .sub { margin-top: 2px; }
-  .dim { color: var(--text-2); }
-  .steps { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 4px; padding: 12px 14px; border-radius: var(--r-l); background: var(--accent-soft); list-style: none; }
-  .steps li { display: flex; align-items: center; gap: 8px; font: 600 14.5px/1.3 var(--font-text); color: var(--text-2); }
-  .steps li.done { color: var(--text); }
-  .dot { flex: none; width: 15px; height: 15px; display: grid; place-items: center; }
-  .dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.6; }
-  .note { margin: 6px 4px 0; }
-  .nexttx { margin: 10px 4px 0; white-space: pre-line; overflow-wrap: anywhere; }
-  .decl { margin: var(--s-3) 4px 0; white-space: pre-line; overflow-wrap: anywhere; }
-  .iv { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; padding: 12px 14px; box-shadow: inset 0 0 0 2px var(--accent); }
-  .ivmine { display: flex; flex-direction: column; gap: 2px; }
-  .ivmine b { font: 750 20px/1.2 var(--font-display); }
-  .ivmine span { font: 550 14px/1.3 var(--font-text); color: var(--text-2); }
-  .ivday { margin-top: 4px; font: 650 13px/1 var(--font-text); color: var(--text-2); }
-  .ivtimes { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ivtimes button { height: 36px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 650 14px/1 var(--font-text); }
-  .ivtimes button.on { background: var(--accent); color: var(--on-accent); }
-  .ivlink { align-self: flex-start; padding: 4px 0; font: 620 14px/1.2 var(--font-text); color: var(--accent-text); }
-  .known { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding: 12px 14px; }
-  .me { display: flex; align-items: center; gap: 12px; }
-  .tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
-  .tx b { font: 650 15px/1.25 var(--font-text); }
-  .tx i { font: 500 13px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
-  .sec { margin: 20px 2px 8px; }
-  .deps { display: flex; flex-direction: column; gap: 8px; }
-  .dep { display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; transition: transform var(--t-fast) var(--ease); }
-  .dep:active { transform: scale(0.98); }
-  .dep.on { box-shadow: inset 0 0 0 2px var(--c); }
-  .mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    box-shadow: inset 0 0 0 2px var(--line-2); font: 750 14px/1 var(--font-text); color: #fff; }
-  .dep.on .mark { background: var(--c); box-shadow: none; }
-  .q { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
-  .q > .t-cap { margin: 0 4px; text-transform: none; letter-spacing: 0; font: 650 14.5px/1.3 var(--font-text); color: var(--text); }
-  .opts { display: flex; flex-wrap: wrap; gap: 6px; }
-  .opts button { height: 38px; padding: 0 14px; border-radius: var(--r-full); background: var(--surface-2); font: 600 14px/1 var(--font-text); color: var(--text-2); }
-  .opts button.on { background: var(--text); color: var(--bg); }
-  .err { margin: 2px 4px 0; font: 600 12.5px/1.3 var(--font-text); color: var(--danger-text); }
-  .row { display: flex; gap: 8px; }
-  .wd { display: block; margin: 18px auto 4px; padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--text-2); }
+  .body { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-4); }
+  fieldset { display: flex; flex-direction: column; gap: var(--gap-group); min-width: 0; margin: 0; padding: 0; border: 0; }
+  .note { margin: var(--s-2) var(--s-4) 0; }
+  .nexttx { margin: var(--s-3) var(--s-1) 0; white-space: pre-line; overflow-wrap: anywhere; }
+  /* a day's free times: a plain row of the group (kb-row draws the line above the next row) */
+  .ivday { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+  .ivday + .ivday::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
+  .dl { font: 600 var(--fs-body)/1.3 var(--font-text); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
+  .mark { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 0 2px var(--c); font: 700 var(--fs-body)/1 var(--font-text); color: var(--on-accent); }
+  .mark.on { background: var(--c); box-shadow: none; }
+  .q { display: flex; flex-direction: column; gap: 6px; }
+  .lab { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); } /* ui/Field's label */
+  .opts { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
+  /* engine: ui/Chip could wrap a long label (a question's options are sentences sometimes) */
+  .opts :global(.fc) { max-width: 100%; height: auto; min-height: var(--ctl-s); padding-block: var(--s-2); white-space: normal; line-height: 1.25; text-align: left; }
+  .err { margin-top: 6px; padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--danger-text); }
 </style>

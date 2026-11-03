@@ -9,7 +9,6 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Camera from '@lucide/svelte/icons/camera';
   import Users from '@lucide/svelte/icons/users';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Lock from '@lucide/svelte/icons/lock';
   import FolderPlus from '@lucide/svelte/icons/folder-plus';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
@@ -21,6 +20,13 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Card from '../../ui/Card.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
   import { api, translated, type EventCard, type Id, type Org, type Post } from '../../lib/api';
   import { ago } from '../../lib/time';
@@ -80,91 +86,99 @@
       <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} /></span>{/if}</h2>
       <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
+      {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleName(o.myRole, inLang(o.myTitle, o.myTitleKk, o.myTitleEn)) })}</Tag></span>
+      {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>{/if}
     </div>
 
-    {#if o.myRole}<p class="role">{t('club.myRole', { role: roleName(o.myRole, inLang(o.myTitle, o.myTitleKk, o.myTitleEn)) })}</p>{/if}
-    {#if o.description}<p class="t-body about selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
-      {#if translated(o, 'description')}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}{/if}
-    {#if o.round && !o.myRole}<p class="rnd">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</p>
-    {:else if joinable && !o.myRole && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t('join.closed')}</p>{/if}
-
-    {#if o.links.length}
-      <div class="links">
-        {#each o.links as url (url)}
-          {@const s = social(url)}
-          <button class="link" onclick={() => openLink(url)}><SocialIcon kind={s.kind} size={19} /><span class="ellipsis">{s.label}</span></button>
-        {/each}
-      </div>
-    {/if}
-    <AskAi ctx={{ kind: 'club', id: o.id, title: o.name }} hint={t('as.askClub')} />
-
-    {#if chats.length || o.kind === 'app'}
-      <h3 class="t-cap sec">{t('oc.title')}</h3>
-      {#if main}
-        <div class="mc surface">
-          <div class="mh"><ChatAvatar title={main.title} photo={main.photo} kind={main.kind} size={52} />
-            <span><b class="ellipsis">{main.title}</b><small>{main.members ? tn('clubs.subscribers', main.members).replace(String(main.members), compact(main.members)) : t('chats.channel')}</small></span></div>
-          {#if main.about}<p class="t-foot ab clamp-2">{main.about}</p>{/if}
-          <Button kind="primary" size="m" full icon={send} onclick={() => tap(main.url!)}>{t('oc.subscribe')}</Button>
+    <div class="body">
+      {#if o.description || (joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest)}
+        <div>
+          {#if o.description}<p class="t-body selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
+            {#if translated(o, 'description')}<span class="trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}{/if}
+          {#if joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t('join.closed')}</p>{/if}
         </div>
       {/if}
-      {#if rest.length || o.kind === 'app'}
-        <div class="posts" class:gap={!!main}>
-          {#each rest as c (c.id)}
-            {@const line = [c.closed ? t('oc.closed') : t(`chats.${c.kind}`), c.members ? tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ')}
-            {#if c.url}
-              <button class="pst" onclick={() => tap(c.url!)}><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
-                <span><b class="ellipsis">{c.title}</b><small>{line}</small></span></button>
-            {:else}
-              <!-- closed: shown, but nobody gets in from here -->
-              <div class="pst shut"><ChatAvatar title={c.title} photo={c.photo} kind={c.kind} />
-                <span><b class="ellipsis">{c.title}</b><small>{line}</small></span><Lock size={17} /></div>
-            {/if}
+
+      {#if o.links.length}
+        <Group>
+          {#each o.links as url (url)}
+            {@const s = social(url)}
+            <Row title={s.label} accessory="external" onclick={() => openLink(url)}>{#snippet lead()}<span class="si"><SocialIcon kind={s.kind} size={20} /></span>{/snippet}</Row>
           {/each}
-          {#if o.kind === 'app'}
-            <button class="pst fold" onclick={() => tap(APP_FOLDER)}><span class="fi"><FolderPlus size={20} /></span><span><b>{t('oc.folder')}</b></span><ChevronRight size={18} /></button>
-          {/if}
-        </div>
+        </Group>
       {/if}
-    {:else if fetched && o.myRights?.includes('profile')}
-      <!-- none yet: shown to the club's own team, who can link them (the app's admin does it in Admin) -->
-      <h3 class="t-cap sec">{t('oc.title')}</h3>
-      <div class="nochat surface"><p class="t-foot">{t('oc.emptyHint')}</p>
-        <Button kind="secondary" size="m" full onclick={() => sheets.clubEdit(o.id, 'chats')}>{t('oc.linkChat')}</Button></div>
-    {/if}
+      <div class="ask"><AskAi ctx={{ kind: 'club', id: o.id, title: o.name }} hint={t('as.askClub')} /></div>
 
-    {#if leaders.length}
-      <h3 class="t-cap sec">{t('club.lead')}</h3>
-      <div class="posts">
-        {#each leaders as m (m.person.id)}
-          <button class="pst" onclick={() => sheets.person(m.person.id)}>
-            <Avatar person={m.person} size={44} tappable={false} />
-            <span><b class="ellipsis">{m.person.name}</b><small>{roleName(m.role, titleOf(m))}</small></span>
-          </button>
-        {/each}
-        {#if (fetched?.members ?? o.members) > leaders.length && (!o.membersHidden || o.myRole)}
-          <button class="pst all" onclick={() => sheets.people(o.id, o.name)}><Users size={20} /><span><b>{t('club.everyone')}</b></span><small>{fetched?.members ?? o.members}</small><ChevronRight size={18} /></button>
+      {#if chats.length || o.kind === 'app'}
+        <Section title={t('oc.title')}>
+          {#if main}
+            <Card>
+              <div class="mc">
+                <div class="mh"><ChatAvatar title={main.title} photo={main.photo} kind={main.kind} size={52} />
+                  <span><b class="ellipsis">{main.title}</b><small>{main.members ? tn('clubs.subscribers', main.members).replace(String(main.members), compact(main.members)) : t('chats.channel')}</small></span></div>
+                {#if main.about}<p class="t-foot ab clamp-2">{main.about}</p>{/if}
+                <Button kind="primary" size="m" full icon={send} onclick={() => tap(main.url!)}>{t('oc.subscribe')}</Button>
+              </div>
+            </Card>
+          {/if}
+          {#if rest.length || o.kind === 'app'}
+            <Group>
+              {#each rest as c (c.id)}
+                {@const line = [c.closed ? t('oc.closed') : t(`chats.${c.kind}`), c.members ? tn('chats.members', c.members).replace(String(c.members), compact(c.members)) : ''].filter(Boolean).join(' · ')}
+                <!-- closed (no url): shown, but nobody gets in from here -->
+                <Row dense title={c.title} subtitle={line} accessory={c.url ? 'external' : 'none'} onclick={c.url ? () => tap(c.url!) : undefined}>
+                  {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
+                  {#snippet detail()}{#if !c.url}<span class="lock"><Lock size={17} /></span>{/if}{/snippet}
+                </Row>
+              {/each}
+              {#if o.kind === 'app'}<Row icon={FolderPlus} title={t('oc.folder')} accessory="external" onclick={() => tap(APP_FOLDER)} />{/if}
+            </Group>
+          {/if}
+        </Section>
+      {:else if fetched && o.myRights?.includes('profile')}
+        <!-- none yet: shown to the club's own team, who can link them (the app's admin does it in Admin) -->
+        <Section title={t('oc.title')}>
+          <Notice text={t('oc.emptyHint')} action={{ label: t('oc.linkChat'), onclick: () => sheets.clubEdit(o.id, 'chats') }} />
+        </Section>
+      {/if}
+
+      {#if leaders.length}
+        <Section title={t('club.lead')}>
+          <Group>
+            {#each leaders as m (m.person.id)}
+              <Row dense title={m.person.name} subtitle={roleName(m.role, titleOf(m))} accessory="chevron" onclick={() => sheets.person(m.person.id)}>
+                {#snippet lead()}<Avatar person={m.person} size={36} tappable={false} />{/snippet}
+              </Row>
+            {/each}
+            {#if (fetched?.members ?? o.members) > leaders.length && (!o.membersHidden || o.myRole)}
+              <Row icon={Users} title={t('club.everyone')} value={String(fetched?.members ?? o.members)} accessory="chevron" onclick={() => sheets.people(o.id, o.name)} />
+            {/if}
+          </Group>
+        </Section>
+      {/if}
+
+      <Section title={t('club.upcoming')}>
+        {#if events?.length}
+          <div class="list">{#each events as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
+        {:else if events}
+          <Group><EmptyState inline text={t('club.noEvents')} /></Group>
         {/if}
-      </div>
-    {/if}
-
-    <h3 class="t-cap sec">{t('club.upcoming')}</h3>
-    {#if events?.length}
-      <div class="list">{#each events as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
-    {:else if events}
-      <p class="t-foot none">{t('club.noEvents')}</p>
-    {/if}
-    {#if posts?.length}
-      <h3 class="t-cap sec">{t('page.news')}</h3>
-      <div class="posts">
-        {#each posts.slice(0, 6) as p (p.id)}
-          <button class="pst" onclick={() => play(p)}>
-            {#if p.photo}<img src={p.photo.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
-            <span><b class="clamp-2">{p.title}</b><small>{ago(p.createdAt)}</small></span>
-          </button>
-        {/each}
-      </div>
-    {/if}
+      </Section>
+      {#if posts?.length}
+        <Section title={t('page.news')}>
+          <Group>
+            {#each posts.slice(0, 6) as p (p.id)}
+              {#if p.photo}
+                {@const ph = p.photo}
+                <Row dense title={p.title} subtitle={ago(p.createdAt)} onclick={() => play(p)}>
+                  {#snippet lead()}<img class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
+                </Row>
+              {:else}<Row dense title={p.title} subtitle={ago(p.createdAt)} onclick={() => play(p)} />{/if}
+            {/each}
+          </Group>
+        </Section>
+      {/if}
+    </div>
   {/if}
 
   {#snippet footer()}
@@ -192,55 +206,31 @@
 </Sheet>
 
 <style>
-  .trn { margin-top: 6px; padding: 2px 0; font: 600 12.5px/1.2 var(--font-text); color: var(--text-3); }
-  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 8px 0 4px; }
+  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: var(--s-2) 0 var(--s-1); }
   .lg { position: relative; transition: transform var(--t-fast) var(--ease); }
   .lg:active { transform: scale(0.95); }
   .cam { position: absolute; right: -4px; bottom: -4px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--accent); color: #fff; box-shadow: 0 0 0 3px var(--bg-raised); }
-  .name { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 3px var(--bg-raised); }
+  .name { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--s-2); }
   .ok { color: var(--accent); display: inline-flex; }
   .stats { color: var(--text-2); }
-  .role { align-self: center; margin: 10px auto 0; width: fit-content; padding: 6px 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 630 13px/1.2 var(--font-text); }
-  .about { margin-top: 14px; color: var(--text); }
-  .closed { margin-top: 8px; }
-  .rnd { align-self: center; margin: 10px auto 0; width: fit-content; padding: 7px 12px; border-radius: var(--r-full); background: var(--success-soft);
-    color: var(--success-text); font: 650 13.5px/1.2 var(--font-text); }
-  .acts { display: flex; gap: 8px; }
+  .tag { margin-top: var(--s-2); max-width: 100%; }
+  .tag :global(.chip) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .body { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-4); }
+  .trn { display: block; margin: var(--s-1) 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-3); }
+  .closed { margin-top: var(--s-2); }
+  .acts { display: flex; gap: var(--s-2); }
   .acts :global(.btn:not(.full)) { width: var(--ctl-l); padding: 0; }
   .acts :global(.btn:not(.full) .ic) { margin: 0; }
-  .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .link { display: inline-flex; align-items: center; gap: 8px; height: 40px; max-width: 100%; padding: 0 14px 0 12px; border-radius: var(--r-full);
-    background: var(--surface-2); color: var(--text); font: 620 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
-  .link:active { transform: scale(0.96); }
-  .sec { margin: 22px 2px 8px; }
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  .none { padding: 4px 2px; }
-  .posts { display: flex; flex-direction: column; border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
-  .pst { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 14px; text-align: left; }
-  .pst + .pst { box-shadow: inset 0 1px 0 var(--line); }
-  .pst:active { background: var(--surface-2); }
-  .pst img { width: 44px; height: 44px; flex: none; border-radius: 10px; object-fit: cover; }
-  .pst span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .pst b { font: 620 15px/1.25 var(--font-text); color: var(--text); }
-  .pst small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
-  .all { color: var(--accent-text); }
-  .mc { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
-  .mh { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .ask :global(.ai) { margin: 0; } /* the column's gap spaces it */
+  .si { width: 24px; display: grid; place-items: center; }
+  .list { display: flex; flex-direction: column; gap: var(--s-2); }
+  .ph { width: 40px; height: 40px; border-radius: var(--r-xs); object-fit: cover; }
+  .lock { display: inline-flex; color: var(--text-3); }
+  .mc { display: flex; flex-direction: column; gap: var(--s-3); }
+  .mh { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
   .mh > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .mh b { font: 680 16px/1.25 var(--font-text); }
-  .mh small { font: 500 12.5px/1 var(--font-text); color: var(--text-3); }
-  .ab { margin: -2px 2px 0; color: var(--text-2); }
-  .gap { margin-top: 10px; }
-  .pst > span { flex: 1; }
-  .shut :global(svg) { flex: none; color: var(--text-3); }
-  .shut:active { background: none; }
-  .fold, .fold b { color: var(--text-2); font-weight: 560; }
-  .fi { flex: none !important; width: 44px; height: 44px; display: grid !important; place-items: center; border-radius: 50%; background: var(--surface-2); }
-  .fold :global(svg) { flex: none; }
-  .all span { flex: 1; }
-  .all b { color: var(--accent-text); }
-  .all :global(svg) { flex: none; }
-  .nochat { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-l); }
+  .mh b { font: 600 var(--fs-card)/1.25 var(--font-text); }
+  .mh small { font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .ab { color: var(--text-2); }
 </style>

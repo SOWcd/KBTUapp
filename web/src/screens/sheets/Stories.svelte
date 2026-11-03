@@ -28,13 +28,13 @@
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
   import Linked from '../../ui/Linked.svelte';
+  import { menu } from '../../ui/menu';
 
   // at: open on that post of the first club (a club page's news list), else its first unread
   let { overlay, groups, start = 0, at }: { overlay: Overlay; groups: StoryGroup[]; start?: number; at?: number } = $props();
 
   let gi = $state(0);
   let pi = $state(0);
-  let menu = $state(false);
   const g = $derived(groups[gi]);
   const p = $derived(g?.items[pi]?.post);
   const ev = $derived(g?.items[pi]?.ev);
@@ -72,7 +72,6 @@
   $effect(() => () => { clearTimeout(timer); if (!gone && read.size) api.readPosts([...read]).catch(() => {}); });
 
   function step(d: 1 | -1) {
-    menu = false;
     if (d > 0 ? pi < g.items.length - 1 : pi > 0) { pi += d; haptic.select(); return; }
     if (d > 0 ? gi < groups.length - 1 : gi > 0) { gi += d; pi = d > 0 ? storyStart(groups[gi], seenEv) : groups[gi].items.length - 1; haptic.select(); return; }
     if (d > 0) close(overlay.id);
@@ -98,7 +97,6 @@
   }
   async function pin() {
     if (!p) return;
-    menu = false;
     try {
       await api.updatePost(p.id, { pinned: !p.pinned }); haptic.ok(); say(phrase(p.pinned ? 'news.unpinSay' : 'news.pinSay'), 'sparkles_3d');
       p.pinned = !p.pinned;
@@ -117,13 +115,23 @@
   }
   async function takeDown() {
     if (!p) return;
-    menu = false;
     const q = p;
     if (!(await sheets.ask({ title: t('news.hideAsk'), text: t('news.hideText'), ok: t('news.hide'), cancel: t('common.cancel'), danger: true }))) return;
     try { await api.hidePost(q.id); haptic.ok(); say(t('news.hidden'), 'waving_hand_3d_default'); drop(q); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  function report() { if (!p) return; menu = false; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
+  // ⋯: the shared menu at the button (a tap outside, Escape or Back closes it, never the stories)
+  function more(e: MouseEvent) {
+    if (!p) return;
+    const q = p;
+    menu(e.currentTarget as Element, [
+      ...(q.canEdit ? [{ label: t('news.edit'), onselect: () => sheets.composer(q.org.id, q) },
+        { label: q.pinned ? t('news.unpin') : t('news.pin'), onselect: () => void pin() }] : []),
+      ...(!q.canEdit && session.me?.student ? [{ label: t('cm.report'), onselect: report }] : []),
+      ...(q.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown() }] : []),
+    ], 'end');
+  }
+  function report() { if (!p) return; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
 </script>
 
 <div class="st" bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
@@ -159,19 +167,9 @@
         <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} />
           <span><small>{ago(p.createdAt)}{#if p.tag}{' · ' + tagName(p.tag)}{/if}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</small></span></button>
         {#if p.pinned}<span class="pinned" aria-label={t('news.pinned')}><Pin size={15} /></span>{/if}
-        {#if p.canEdit || p.canDelete || session.me?.student}<button class="ib" onclick={() => (menu = !menu)} aria-label={t('common.more')} aria-expanded={menu}><Ellipsis size={20} /></button>{/if}
+        {#if p.canEdit || p.canDelete || session.me?.student}<button class="ib" onclick={more} aria-label={t('common.more')} aria-haspopup="menu"><Ellipsis size={20} /></button>{/if}
         <button class="ib" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} /></button>
       </div>
-      {#if menu}
-        <div class="menu">
-          {#if p.canEdit}
-            <button onclick={() => { menu = false; sheets.composer(p.org.id, p); }}>{t('news.edit')}</button>
-            <button onclick={pin}>{p.pinned ? t('news.unpin') : t('news.pin')}</button>
-          {/if}
-            {#if p.canDelete}<button class="danger" onclick={takeDown}>{t('news.hide')}</button>{/if}
-          {#if !p.canEdit && session.me?.student}<button onclick={report}>{t('cm.report')}</button>{/if}
-        </div>
-      {/if}
     </div>
 
     {#key p.id}
@@ -223,9 +221,6 @@
   .pinned { display: inline-flex; color: rgba(255, 255, 255, 0.7); }
   .ib { position: relative; width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(255, 255, 255, 0.12); }
   .ib:active { transform: scale(0.92); }
-  .menu { position: relative; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-  .menu button { height: 34px; padding: 0 14px; border-radius: var(--r-full); background: rgba(30, 32, 40, 0.92); color: #fff; font: 620 13px/1 var(--font-text); }
-  .menu .danger { color: #FF8A84; }
   .txt { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 84px); display: flex; flex-direction: column; gap: 10px; pointer-events: none; animation: in 240ms ease-out both; }
   .txt h2 { margin: 0; font: 760 26px/1.12 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   .txt p { margin: 0; max-height: 34vh; overflow-y: auto; pointer-events: auto; white-space: pre-line; font: 450 15.5px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.88); touch-action: pan-y; }

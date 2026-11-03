@@ -17,6 +17,10 @@
   import SearchField from '../../ui/SearchField.svelte';
   import { data, toggleSub, toggleJoin, loadChats, chatsFor } from '../../lib/state/data.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Group from '../../ui/Group.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth, dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
@@ -93,10 +97,14 @@
   const tint = (title: string) => COVERS[[...title].reduce((h, c) => h + c.charCodeAt(0), 0) % COVERS.length];
 </script>
 
+<!-- follow / following: the S round button at a card's or a row's end -->
+{#snippet bell(o: Org)}
+  <IconButton icon={o.subscribed ? BellCheck : Bell} size="s" on={o.subscribed} onclick={() => toggleSub(o.id)} label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} />
+{/snippet}
+
 <div class="page scroll stagger">
   {#if mine.length && !searching}
-    <section>
-      <div class="sec"><h2>{t('clubs.mineShort')}</h2></div>
+    <Section title={t('clubs.mineShort')}>
       <div class="mine hscroll">
         {#each mine as x (x.org.id)}
           {@const nx = next.get(x.org.id)}
@@ -105,8 +113,7 @@
             <span class="top">
               <OrgLogo org={x.org} size={44} />
               {#if x.full && !x.role}
-                <button class="bell" class:on={x.full.subscribed} onclick={() => toggleSub(x.org.id)} aria-label={t(x.full.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={x.full.subscribed}>
-                  {#if x.full.subscribed}<BellCheck size={16} />{:else}<Bell size={16} />{/if}</button>
+                <span class="bell">{@render bell(x.full)}</span>
               {:else if x.role}<span class="go" aria-hidden="true"><ChevronRight size={18} /></span>{/if}
             </span>
             <span class="nm"><b class="clamp-2">{nameOf(x.org)}</b>{#if x.full?.gov}<GovMark size={14} />{/if}</span>
@@ -115,7 +122,7 @@
           </div>
         {/each}
       </div>
-    </section>
+    </Section>
   {/if}
 
   <!-- the search sticks under the capsule: the catalogue is long -->
@@ -123,32 +130,32 @@
   <div class="find" class:stuck><SearchField bind:value={q} placeholder={t('clubs.search')} /></div>
 
   {#if searching}
-    <div class="sec"><h2>{t('clubs.found')}</h2><span>{found.length}</span></div>
-    <div class="rows surface">
-      {#each found as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.kind === 'school' && o.abbr ? o.name : sub(o)} hot={next.has(o.id)} />
-      {:else}<p class="t-foot empty">{t('clubs.nothing')}</p>{/each}
-    </div>
+    <Section title={t('clubs.found')} count={found.length}>
+      <Group>
+        {#each found as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.kind === 'school' && o.abbr ? o.name : sub(o)} hot={next.has(o.id)} />
+        {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
+      </Group>
+    </Section>
   {:else}
     {#if recruit.length}
-      <div class="sec"><h2>{t('clubs.recommend')}</h2></div>
-      <div class="rows surface">
+      <Section title={t('clubs.recommend')}>
+      <Group>
         {#each recruit as o (o.id)}
           <ClubRow org={o} sub={recruitLine(o)}>
             {#snippet end()}
               {#if canApply(o) && o.round}<Button kind={o.round.applied ? 'neutral' : 'primary'} size="s" onclick={() => sheets.roundApply(o.id, 'join')}>{o.round.applied ? t('cast.applied') : t('join.apply')}</Button>
               {:else if canApply(o) && o.myRequest === 'rejected'}<Button kind="neutral" size="s" disabled>{t('join.notNow')}</Button>
               {:else if canApply(o)}<Button kind={o.myRequest ? 'neutral' : 'primary'} size="s" onclick={() => toggleJoin(o.id)}>{o.myRequest ? t('join.sent') : t('join.apply')}</Button>
-              {:else}<button class="bell" class:on={o.subscribed} onclick={() => toggleSub(o.id)} aria-label={t(o.subscribed ? 'clubs.subscribed' : 'clubs.subscribe')} aria-pressed={o.subscribed}>
-                {#if o.subscribed}<BellCheck size={17} />{:else}<Bell size={17} />{/if}</button>{/if}
+              {:else}{@render bell(o)}{/if}
             {/snippet}
           </ClubRow>
         {/each}
-      </div>
+      </Group>
+      </Section>
     {/if}
 
     {#if chats && (chats.all.length || session.me?.student)}
-      <section>
-        <div class="sec"><h2>{t('chats.title')}</h2>{#if chats.all.length}<button class="all" onclick={() => sheets.chats(chats!.all)}>{t('chats.all', { n: chats.all.length })}</button>{/if}</div>
+      <Section title={t('chats.title')} onmore={chats.all.length ? () => sheets.chats(chats!.all) : undefined} moreLabel={t('chats.all', { n: chats.all.length })}>
         <div class="ch-row hscroll">
           <!-- any student brings a chat in: the bot opens Telegram's own chat picker -->
           <button class="chat add" onclick={suggestChat}><span class="cav"><Plus size={26} /></span><b>{t('chats.suggestShort')}</b></button>
@@ -164,22 +171,19 @@
             </button>
           {/each}
         </div>
-      </section>
+      </Section>
     {/if}
 
     {#if all.length}
-      <div class="sec"><h2>{t('clubs.allTitle')}</h2><span>{all.length}</span></div>
-      <div class="rows surface">{#each all as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</div>
+      <Section title={t('clubs.allTitle')} count={all.length}><Group>{#each all as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</Group></Section>
     {/if}
 
     {#if schools.length}
-      <div class="sec"><h2>{t('clubs.schoolsOffices')}</h2><span>{schools.length}</span></div>
-      <div class="rows surface">{#each schools as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)} />{/each}</div>
+      <Section title={t('clubs.schoolsOffices')} count={schools.length}><Group>{#each schools as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)} />{/each}</Group></Section>
     {/if}
 
     {#if unofficial.length}
-      <div class="sec"><h2>{t('clubs.studentMade')}</h2><span>{unofficial.length}</span></div>
-      <div class="rows surface">{#each unofficial as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</div>
+      <Section title={t('clubs.studentMade')} count={unofficial.length}><Group>{#each unofficial as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</Group></Section>
     {/if}
   {/if}
   <div class="cta"><CreateClubCard /></div>
@@ -188,36 +192,31 @@
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
-  .sec { display: flex; align-items: baseline; justify-content: space-between; margin: var(--s-7) var(--s-1) var(--s-3); }
-  section:first-child .sec { margin-top: var(--s-1); }
-  .sec h2 { font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .sec > span, .sec .all { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); font-variant-numeric: tabular-nums; }
-  .sec .all { color: var(--accent-text); }
+  /* the sections a screen's section apart (28), the first right under the capsule */
+  .page > :global(.sec) { margin-top: var(--s-7); }
+  .page > :global(.sec:first-child) { margin-top: var(--s-1); }
 
   /* Mine: cards in a row, the page's edges bled; the club, who I am there (or its followers), what's next */
   .mine { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) var(--s-2); scroll-snap-type: x mandatory; scroll-padding: 0 var(--gutter); }
   .card { position: relative; flex: none; width: 164px; display: flex; flex-direction: column; gap: 3px; padding: var(--s-3); border-radius: var(--r-l);
     scroll-snap-align: start; transition: transform 420ms var(--ease-bounce); }
-  .card:active:not(:has(.bell:active)) { transform: scale(0.97); transition-duration: 80ms; }
+  .card:active:not(:has(.bell :active)) { transform: scale(0.97); transition-duration: 80ms; }
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-2); }
   .go { display: grid; place-items: center; width: 28px; height: 28px; color: var(--text-3); }
   .nm { display: flex; align-items: flex-start; gap: 4px; min-width: 0; min-height: 2.4em; }
-  .nm b { font: 680 var(--fs-body)/1.2 var(--font-text); letter-spacing: -0.01em; }
+  .nm b { font: 600 var(--fs-body)/1.2 var(--font-text); letter-spacing: -0.01em; }
   .card small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
   .nx { display: flex; align-items: center; gap: 6px; margin-top: var(--s-2); padding-top: var(--s-2); box-shadow: inset 0 0.5px 0 var(--line-2);
-    font: 650 var(--fs-cap)/1.25 var(--font-text); font-style: normal; color: var(--accent-text); min-width: 0; }
+    font: 600 var(--fs-cap)/1.25 var(--font-text); font-style: normal; color: var(--accent-text); min-width: 0; }
   .nx.none { color: var(--text-3); font-weight: 500; }
-  .nx i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #46D6FF; }
+  .nx i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-text); }
   .nx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bell { position: relative; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
-  .bell::after { content: ''; position: absolute; inset: -5px; } /* a 44 px target, the circle stays 34 */
-  .bell.on { background: var(--success-soft); color: var(--success-text); }
+  .bell { position: relative; z-index: 2; display: flex; }
 
   /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */
-  .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-4) calc(-1 * var(--gutter)) 0;
+  .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-3) calc(-1 * var(--gutter)) 0;
     padding: 0 var(--gutter) var(--s-2); background: var(--bg); }
-  section + .sent + .find { margin-top: var(--s-3); }
   .page > .sent:first-child + .find { margin-top: 0; }
   .sent { display: block; height: 0; }
   .find::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(var(--head-bottom) + var(--s-2)); background: var(--bg);
@@ -228,22 +227,18 @@
   /* chats: the chat's own picture (or its letters), a small mark for what it is (mockup v16) */
   .ch-row { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 6px; }
   .chat { flex: none; width: 82px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-  .chat > b { width: 100%; font: 620 var(--fs-cap)/1.2 var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chat .who { max-width: 100%; margin-top: -3px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-micro)/1.4 var(--font-text); font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat > b { width: 100%; font: 600 var(--fs-cap)/1.2 var(--font-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat .who { max-width: 100%; margin-top: -3px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 600 var(--fs-micro)/1.4 var(--font-text); font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat small { display: flex; align-items: center; gap: 3px; margin-top: -3px; font: 600 var(--fs-micro)/1 var(--font-text); color: var(--text-3); }
-  .cav { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--surface-2);
+  .cav { position: relative; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); background: var(--surface-2);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 10px 20px -12px rgba(0, 0, 0, 0.7); }
   .cav.sq { border-radius: 30%; } /* a topics group is a squircle, as Telegram draws it */
   .cav img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
-  .cav em { font: 800 21px/1 var(--font-display); font-style: normal; letter-spacing: -0.02em; }
+  .cav em { font: 800 var(--fs-t3)/1 var(--font-display); font-style: normal; letter-spacing: -0.02em; }
   .add .cav { background: none; color: var(--text-2); box-shadow: inset 0 0 0 1.5px var(--line-2); }
   .kind { position: absolute; right: -3px; bottom: -3px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--bg); }
   .sq .kind { border-radius: 32%; }
 
-  /* plain rows (Recommended, All clubs, the schools, a search): ClubRow */
-  .rows { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .rows .empty { padding: 20px 14px; }
-  .rows .bell { position: relative; }
   .cta { margin-top: var(--s-6); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

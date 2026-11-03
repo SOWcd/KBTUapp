@@ -24,6 +24,8 @@
   import Avatar from '../../ui/Avatar.svelte';
   import { feedTint } from '../../ui/chrome';
   import IconFeed from '../../ui/IconFeed.svelte';
+  import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import { say, overlays, close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -35,7 +37,8 @@
 
   // nav and capsule over the Feed take the tint of the slide on screen ('#RRGGBB' → 'r g b')
   $effect(() => {
-    const hex = cur >= list.length ? '#1A1440' : list[cur]?.tint; // the last slide ("that's all") has its own: its violet glow on the dark
+    if (cur >= list.length) { feedTint('26 20 64'); return; } // the last slide ("that's all") has its own: its violet glow on the dark
+    const hex = list[cur]?.tint;
     if (!hex) return;
     const n = parseInt(hex.slice(1, 7), 16);
     feedTint(`${n >> 16} ${(n >> 8) & 255} ${n & 255}`);
@@ -158,24 +161,23 @@
       <span class="endart"><Emoji name="sparkles_3d" size={96} /></span>
       <b>{t('feed.end')}</b>
       <p>{t('feed.endText')}</p>
-      <span class="endacts"><button onclick={() => close(overlay.id)}>{t('feed.back')}</button></span>
+      <!-- the Feed is dark in both themes: its buttons take the dark tokens --><span class="endacts theme-dark"><Button kind="glass" onclick={() => close(overlay.id)}>{t('feed.back')}</Button></span>
     </div>
   {/if}
 </div>
 <!-- no Back button in a browser: the only way out but the last slide -->
-{#if !inTelegram && !overlay.closing}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}
+{#if !inTelegram && !overlay.closing}<span class="x theme-dark"><IconButton icon={X} kind="glass" label={t('common.close')} onclick={() => close(overlay.id, true)} /></span>{/if}
 </div>
 
 <style>
   .box { position: absolute; inset: 0; z-index: var(--z-sheet); }
   .box:focus { outline: none; }
-  .feed { position: absolute; inset: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: #000; }
+  .feed { position: absolute; inset: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; background: black; }
   .feed::-webkit-scrollbar { display: none; }
-  .x { position: absolute; top: calc(var(--safe-top) + 12px); left: 12px; width: 38px; height: 38px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); color: #fff; }
+  .x { position: absolute; top: calc(var(--safe-top) + var(--s-3)); left: var(--s-3); display: flex; }
   /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
      whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
-  .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: #fff; background: var(--tint); transform: none; opacity: 1; }
+  .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: var(--on-accent); background: var(--tint); transform: none; opacity: 1; }
   .bg { position: absolute; inset: 0; }
   .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); }
   .bg video, .bg .still { width: 100%; height: 100%; object-fit: cover; transform: none; }
@@ -185,7 +187,7 @@
   .strip img { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; transform: none; }
   .dots { display: flex; gap: 5px; align-self: center; }
   .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.45); transition: background-color var(--t-fast), transform var(--t-fast); }
-  .dots i.on { background: #fff; transform: scale(1.25); }
+  .dots i.on { background: var(--on-accent); transform: scale(1.25); }
   .art { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-bottom: 18vh;
     background: radial-gradient(90% 60% at 50% 30%, rgba(255, 255, 255, 0.22), transparent 60%), var(--tint); }
   .cur .art :global(img) { animation: float 5s ease-in-out infinite alternate; }
@@ -194,36 +196,33 @@
   /* no tab bar under it: the thumb's room only */
   .info { position: absolute; left: var(--gutter); right: 84px; bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 8px; }
   .org { align-self: flex-start; display: flex; max-width: 100%; }
-  .title { font: 800 29px/1.04 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35); }
-  .meta { font: 550 14px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.86); }
-  .fr { display: flex; align-items: center; gap: 8px; font: 600 13.5px/1.3 var(--font-text); }
+  .title { font: 800 var(--fs-t1)/1.04 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35); }
+  .meta { font: 500 var(--fs-body)/1.35 var(--font-text); color: rgba(255, 255, 255, 0.86); }
+  .fr { display: flex; align-items: center; gap: 8px; font: 600 var(--fs-sub)/1.3 var(--font-text); }
   .stack { display: flex; }
   .stack :global(.av + .av) { margin-left: -7px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5); }
 
   .side { position: absolute; right: 12px; bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: #fff; }
+  .act { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--on-accent); }
   /* a press on a ring never pans the Feed (B3, video); the labels still swipe (the whole column was dead) */
   .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
   .ring.sm { width: 48px; height: 48px; }
   .act:active .ring { transform: scale(0.9); }
   .go .ring { background: var(--accent); box-shadow: 0 10px 26px -8px rgba(59, 107, 255, 0.9); }
-  .go.on .ring { background: #fff; color: var(--accent); }
+  .go.on .ring { background: var(--on-accent); color: var(--accent); }
   .go.wait .ring { background: rgba(20, 22, 32, 0.42); }
   .go.busy .ring { transform: scale(0.9); animation: busy 0.9s var(--ease) infinite alternate; } /* waits for the server: pressed */
-  .act b { font: 700 12.5px/1 var(--font-text); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
-  .saved .ring { color: #FFD23F; }
+  .act b { font: 700 var(--fs-cap)/1 var(--font-text); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+  .saved .ring { color: var(--gold); }
 
   .end { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 32px calc(var(--safe-bottom) + 56px); text-align: center;
-    background: radial-gradient(80% 50% at 50% 35%, rgba(124, 77, 255, 0.35), transparent 70%), #07080F; }
-  .end b { font: 800 26px/1.1 var(--font-display); letter-spacing: -0.03em; }
-  .end p { font: 500 15px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.72); text-wrap: balance; }
+    background: radial-gradient(80% 50% at 50% 35%, rgba(124, 77, 255, 0.35), transparent 70%), black; }
+  .end b { font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }
+  .end p { font: 500 var(--fs-body)/1.45 var(--font-text); color: rgba(255, 255, 255, 0.72); text-wrap: balance; }
   .endart { margin-bottom: 6px; }
   .cur .endart :global(img) { animation: float 5s ease-in-out infinite alternate; }
   .endacts { display: flex; gap: 10px; margin-top: 10px; }
-  .endacts button { height: 44px; padding: 0 20px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.12); color: #fff; font: 650 15px/1 var(--font-text);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
-  .endacts button:active { transform: scale(0.96); }
   .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.7); padding: 40px; text-align: center; }
   :global(html.lowfx) .cur .bg img, :global(html.lowfx) .cur .art :global(img), :global(html.lowfx) .cur .endart :global(img) { animation: none; } /* power saving */
   @keyframes busy { to { opacity: 0.55; } }

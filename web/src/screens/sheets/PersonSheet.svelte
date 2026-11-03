@@ -9,6 +9,12 @@
   import Medal from '../../ui/Medal.svelte';
   import Pin from '../../ui/Pin.svelte';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import EventRow from '../../ui/EventRow.svelte';
   import { api, ApiErr, type Friendship, type Id, type LinkCard, type PersonCard } from '../../lib/api';
@@ -151,7 +157,7 @@
           <Button kind="primary" size="l" full loading={acting} onclick={addByLink}>{t('person.addFriend')}</Button>
         {:else if shown.friendship === 'requested'}
           <Button kind="neutral" size="l" full disabled>{t('person.requestSent')}</Button>
-          <button class="quiet" disabled={acting} onclick={takeBack}>{t('fr.takeBackReq')}</button>
+          <span class="quiet"><Button kind="plain" size="s" disabled={acting} onclick={takeBack}>{t('fr.takeBackReq')}</Button></span>
         {:else if shown.friendship === 'incoming'}
           <div class="two">
             <Button kind="neutral" size="l" full disabled={acting} onclick={decline}>{t('fr.decline')}</Button>
@@ -168,60 +174,68 @@
     {#if !p && failed}
       <p class="t-body dim pad">{failed}</p>
     {:else if !p || !below}
-      <div class="skel" aria-hidden="true"><span class="s2"></span><span class="s3"></span></div>
+      <div class="below"><Skeleton kind="rows" n={2} /></div>
     {:else}
     <!-- everything they have earned, right under the card: achievements with their level, then badges; what they haven't earned yet stays on their own Awards page -->
     {@const earned = showcaseFirst(p.awards.achievements.filter((a) => a.level > 0), (a) => a.code)}
     {@const badges = showcaseFirst(p.awards.badges, (b) => 'b' + b.eventId)}
-    {#if p.going.length}
-      <h3 class="sec">{t('person.goes')}</h3>
-      <div class="going">{#each p.going as e (e.id)}<EventRow {e} />{/each}</div>
-    {/if}
-    <h3 class="sec">{t('person.awards')}{earned.length + badges.length ? ' · ' + (earned.length + badges.length) : ''}</h3>
-    {#if earned.length + badges.length}
-      <div class="grid">
-        {#each earned as a (achKey(a))}
-          <button class="cell" onclick={() => sheets.award({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) }, me)}><Medal {a} size={52} /><i>{achName(a)}{#if tierName(a)}<br />{tierName(a)}{/if}</i></button>
-        {/each}
-        {#each badges as b (b.eventId)}
-          <button class="cell" onclick={() => sheets.award({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) })}><Pin emoji={b.emoji} color={b.color} size={52} /><i>{b.title}</i></button>
-        {/each}
-      </div>
-    {:else}
-      <p class="t-foot none">{t('person.noAwards')}</p>
-    {/if}
-    {#if p.clubs.length}
-      <h3 class="sec">{t('person.clubs')}</h3>
-      <div class="clubs">
-        {#each p.clubs as m (m.org.id)}
-          <span class="club"><OrgLogo org={m.org} size={20} /><b>{nameOf(m.org)}</b>{#if m.role}<i>{roleName(m.role, titleOf(m))}</i>{/if}</span>
-        {/each}
-      </div>
-    {/if}
-    {#if p.limited}<p class="t-foot none lim">{t('person.limited')}</p>{/if}
-    {#if p.past?.length}
-      <!-- where they were before, written down by itself -->
-      <h3 class="sec">{t('person.past')}</h3>
-      <div class="past">
-        {#each p.past as h, i (i)}
-          <div class="was"><OrgLogo org={h.org} size={28} /><span class="tx"><b class="ellipsis">{nameOf(h.org)}</b>
-            <i>{h.role ? ROLE_NAME[h.role] + ' · ' : ''}{monthYear(h.since)}{monthYear(h.since) === monthYear(h.until) ? '' : ' – ' + monthYear(h.until)}</i></span></div>
-        {/each}
-      </div>
-    {/if}
+    <div class="below">
+      {#if p.going.length}
+        <Section title={t('person.goes')}>
+          <div class="going">{#each p.going as e (e.id)}<EventRow {e} />{/each}</div>
+        </Section>
+      {/if}
+      <Section title={t('person.awards')} count={earned.length + badges.length}>
+        {#if earned.length + badges.length}
+          <div class="grid">
+            {#each earned as a (achKey(a))}
+              <button class="cell" onclick={() => sheets.award({ key: 'a' + a.code, ach: a, name: achName(a), sub: tierName(a) }, me)}><Medal {a} size={52} /><i>{achName(a)}{#if tierName(a)}<br />{tierName(a)}{/if}</i></button>
+            {/each}
+            {#each badges as b (b.eventId)}
+              <button class="cell" onclick={() => sheets.award({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) })}><Pin emoji={b.emoji} color={b.color} size={52} /><i>{b.title}</i></button>
+            {/each}
+          </div>
+        {:else}
+          <Group><EmptyState inline text={t('person.noAwards')} /></Group>
+        {/if}
+      </Section>
+      {#if p.clubs.length}
+        <Section title={t('person.clubs')}>
+          <Group>
+            {#each p.clubs as m (m.org.id)}
+              <Row dense title={nameOf(m.org)} value={m.role ? roleName(m.role, titleOf(m)) : undefined}>{#snippet lead()}<OrgLogo org={m.org} size={28} />{/snippet}</Row>
+            {/each}
+          </Group>
+        </Section>
+      {/if}
+      {#if p.limited}<p class="t-foot lim">{t('person.limited')}</p>{/if}
+      {#if p.past?.length}
+        <!-- where they were before, written down by itself -->
+        <Section title={t('person.past')}>
+          <Group>
+            {#each p.past as h, i (i)}
+              <Row dense title={nameOf(h.org)} subtitle={(h.role ? ROLE_NAME[h.role] + ' · ' : '') + monthYear(h.since) + (monthYear(h.since) === monthYear(h.until) ? '' : ' – ' + monthYear(h.until))}>
+                {#snippet lead()}<OrgLogo org={h.org} size={28} />{/snippet}
+              </Row>
+            {/each}
+          </Group>
+        </Section>
+      {/if}
 
-    {#if p.forum?.skills.length}
-      <h3 class="sec">{t('fo.skillsOf')}</h3>
-      <div class="skills">{#each p.forum.skills as s (s.id)}<span class="chip">{s.name}</span>{/each}{#if p.forum.open}<span class="chip open">{t('fo.open')}</span>{/if}</div>
-    {/if}
+      {#if p.forum?.skills.length}
+        <Section title={t('fo.skillsOf')}>
+          <div class="skills">{#each p.forum.skills as s (s.id)}<Tag>{s.name}</Tag>{/each}{#if p.forum.open}<Tag tone="success">{t('fo.open')}</Tag>{/if}</div>
+        </Section>
+      {/if}
 
-    {#if !me && session.me?.student}
-      <!-- a nick, an own photo or "about me" that shouldn't be there: to the admin's queue -->
-      <div class="rep">
-        <button class="quiet" onclick={() => sheets.report('user', id, shown.name)}>{t('person.report')}</button>
-        {#if shown.friendship === 'friends'}<button class="quiet" disabled={acting} onclick={unfriend}>{t('fr.remove')}</button>{/if}
-      </div>
-    {/if}
+      {#if !me && session.me?.student}
+        <!-- a nick, an own photo or "about me" that shouldn't be there: to the admin's queue -->
+        <div class="rep quiet">
+          <Button kind="plain" size="s" onclick={() => sheets.report('user', id, shown.name)}>{t('person.report')}</Button>
+          {#if shown.friendship === 'friends'}<Button kind="plain" size="s" disabled={acting} onclick={unfriend}>{t('fr.remove')}</Button>{/if}
+        </div>
+      {/if}
+    </div>
     {/if}
   {:else if failed}
     <p class="t-body dim pad">{failed}</p>
@@ -231,46 +245,31 @@
 </Sheet>
 
 <style>
-
-
-
-  .act { margin: 14px 0 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .act { margin: 14px 0 4px; display: flex; flex-direction: column; align-items: center; gap: var(--s-1); }
   .act > :global(.btn) { width: 100%; }
-  .two { display: flex; gap: 8px; width: 100%; }
+  .two { display: flex; gap: var(--s-2); width: 100%; }
   .two :global(.btn.full) { flex: 1 1 auto; width: auto; min-width: 0; }
   .two :global(.btn.full:first-child:not(:last-child)) { flex: 0 0 auto; }
-  .quiet { padding: 8px 10px; font: 600 13.5px/1 var(--font-text); color: var(--text-3); }
-  .rep { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; text-align: center; }
+  .quiet { --plain-ink: var(--text-3); }
+  .rep { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); text-align: center; }
   .friends { text-align: center; color: var(--text-2); }
-  /* section titles in the type scale of mockup v24 (sentence case, not the old caps caption) */
+  .below { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-6); }
   .skills { display: flex; flex-wrap: wrap; gap: 6px; }
-  .skills .chip { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2); font: 600 13px/1 var(--font-text); }
-  .skills .open { background: var(--success-soft); color: var(--success-text); }
-  .sec { margin: 26px 2px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; text-transform: none; color: var(--text); }
-  .clubs { display: flex; flex-wrap: wrap; gap: 6px; }
-  .club { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: var(--r-full); background: var(--surface-2); }
-  .club b { font: 620 13px/1 var(--font-text); }
-  .club i { font: 600 11px/1 var(--font-text); font-style: normal; color: var(--text-3); }
-  .going { display: flex; flex-direction: column; gap: 8px; }
-  .past { display: flex; flex-direction: column; gap: 10px; }
-  .was { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .was .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .was b { font: 620 14px/1.2 var(--font-text); }
-  .was i { font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
+  .going { display: flex; flex-direction: column; gap: var(--s-2); }
+  .lim { margin: 0 var(--s-1); }
 
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 6px; }
+  /* the medals and pins: their art, in a grid of four */
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s-3) 6px; }
   .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; transition: transform var(--t-fast) var(--ease); }
   .cell:active { transform: scale(0.94); }
-  .none { margin: 0 4px; }
-  .lim { margin-top: 18px; }
-  .cell i { font: 550 10.5px/1.2 var(--font-text); font-style: normal; color: var(--text-2); text-align: center; }
+  .cell i { font: 500 var(--fs-micro)/1.2 var(--font-text); font-style: normal; color: var(--text-2); text-align: center; }
 
-
-  .pad { padding: 20px 0; }
-  .skel { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 0 40px; }
-  .skel span { display: block; border-radius: 12px; background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
-  .s1 { width: 92px; height: 92px; border-radius: 50% !important; }
+  .pad { padding: var(--s-5) 0; }
+  /* the hero's shape while the card loads (ui/Skeleton has no avatar-and-name shape) */
+  .skel { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-6) 0 var(--s-10); }
+  .skel span { display: block; border-radius: var(--r-full); background: var(--fill); animation: pulse 1.4s ease-in-out infinite alternate; }
+  .s1 { width: 92px; height: 92px; }
   .s2 { width: 160px; height: 22px; }
   .s3 { width: 110px; height: 14px; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  @keyframes pulse { to { opacity: 0.45; } }
 </style>

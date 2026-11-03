@@ -10,6 +10,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question';
   import Button from '../../ui/Button.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
 
   let { overlay, title, questions, done }: { overlay: Overlay; title: string; questions: Question[]; done: (a: { q: string; a: string }[] | null) => void } = $props();
   let answers = $state<string[]>(untrack(() => questions.map(() => ''))); // the sheet asks one fixed list
@@ -26,39 +28,41 @@
 </script>
 
 <Sheet {overlay} icon={MessageCircleQuestion} title={title}>
-  <h2 class="t-h2 hd">{t('qs.title')}</h2>
-  <p class="t-foot sub">{t('qs.sub')}</p>
-  {#each questions as q, i (i)}
-    <div class="q" class:bad={tried && missing(i)}>
-      <span class="t-cap lb">{q.label}{#if q.required}<i> *</i>{/if}</span>
+  <div class="page">
+    <div class="hd">
+      <h2 class="fs-sec">{t('qs.title')}</h2>
+      <p class="fs-sub dim">{t('qs.sub')}</p>
+    </div>
+    {#each questions as q, i (i)}
+      {@const bad = tried && missing(i)}
       {#if q.kind === 'choice'}
-        <div class="opts">
-          {#each q.options ?? [] as o (o)}
-            <button class:on={answers[i] === o} aria-pressed={answers[i] === o} onclick={() => { answers[i] = answers[i] === o ? '' : o; haptic.select(); }}>{o}</button>
-          {/each}
+        <div class="q" class:bad role="group" aria-label={q.label}>
+          <span class="lb">{q.label}{#if q.required}<i> *</i>{/if}</span>
+          <div class="opts">
+            {#each q.options ?? [] as o (o)}
+              <Chip selected={answers[i] === o} onclick={() => { answers[i] = answers[i] === o ? '' : o; haptic.select(); }}>{o}</Chip>
+            {/each}
+          </div>
+          {#if bad}<p class="err">{t('ed.need')}</p>{/if}
         </div>
       {:else}
-        <input bind:value={answers[i]} maxlength="200" enterkeyhint={i === questions.length - 1 ? 'done' : 'next'} />
+        <Field label={q.label + (q.required ? ' *' : '')} bind:value={answers[i]} maxlength={200} error={bad ? t('ed.need') : undefined}
+          enterkeyhint={i === questions.length - 1 ? 'done' : 'next'} />
       {/if}
-    </div>
-  {/each}
+    {/each}
+  </div>
   {#snippet footer()}
     <Button kind="primary" size="l" full onclick={go}>{t('event.go')}</Button>
   {/snippet}
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
-  .sub { margin-bottom: 14px; }
-  .q { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-  .lb { margin-left: 2px; }
+  .page { display: flex; flex-direction: column; gap: var(--s-5); }
+  .hd { display: flex; flex-direction: column; gap: var(--s-1); padding: 0 var(--s-1); }
+  /* a choice question: Field's label and error line around a row of chips */
+  .q { display: flex; flex-direction: column; gap: 6px; }
+  .lb, .err { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .lb i { color: var(--danger-text); font-style: normal; }
-  .q input { height: 46px; padding: 0 14px; border-radius: 14px; background: var(--surface-2); color: var(--text); font: 450 16px/1 var(--font-text);
-    box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow var(--t-base) var(--ease); }
-  .q.bad input, .q.bad .opts { box-shadow: inset 0 0 0 1.5px var(--danger); border-radius: 14px; }
-  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
-  .opts button { height: 38px; padding: 0 16px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 620 14.5px/1 var(--font-text);
-    transition: background-color var(--t-base) var(--ease), color var(--t-base) var(--ease), transform var(--t-fast) var(--ease); }
-  .opts button:active { transform: scale(0.95); }
-  .opts button.on { background: var(--accent); color: #fff; }
+  .err { color: var(--danger-text); }
+  .opts { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: var(--s-1) 0; }
 </style>

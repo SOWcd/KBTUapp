@@ -5,6 +5,10 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Avatar from '../../ui/Avatar.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Button from '../../ui/Button.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { cards }: { cards: ForumCard[] } = $props();
   let sent = $state<Set<Id>>(new Set());
@@ -14,26 +18,13 @@
   }
 </script>
 
-<div class="list surface">
+<Group>
   {#each cards as c (c.person.id)}
-    <div class="row">
-      <Avatar person={c.person} size={40} />
-      <span class="tx"><b class="ellipsis">{c.name}{c.course ? ` · ${t('fo.course', { n: c.course })}` : ''}</b><i class="ellipsis">{c.skills.map((s) => s.name).join(', ')}</i></span>
-      <button class="go" class:done={sent.has(c.person.id)} disabled={sent.has(c.person.id)} onclick={() => touch(c.person.id)}>{t(sent.has(c.person.id) ? 'fo.sent' : 'fo.touch')}</button>
-    </div>
+    <Row dense title={`${c.name}${c.course ? ` · ${t('fo.course', { n: c.course })}` : ''}`} subtitle={c.skills.map((s) => s.name).join(', ') || undefined}>
+      {#snippet lead()}<Avatar person={c.person} size={40} />{/snippet}
+      {#snippet trailing()}<Button kind="tinted" size="s" disabled={sent.has(c.person.id)} onclick={() => touch(c.person.id)}>{t(sent.has(c.person.id) ? 'fo.sent' : 'fo.touch')}</Button>{/snippet}
+    </Row>
   {:else}
-    <p class="t-foot empty">{t('fo.nobody')}</p>
+    <EmptyState inline text={t('fo.nobody')} />
   {/each}
-</div>
-
-<style>
-  .list { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
-  .row + .row { border-top: 1px solid var(--line); }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 640 15px/1.25 var(--font-text); }
-  .tx i { font: 500 12.5px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
-  .go { flex: none; height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
-  .go.done { background: var(--surface-2); color: var(--text-3); }
-  .empty { padding: 18px 14px; }
-</style>
+</Group>

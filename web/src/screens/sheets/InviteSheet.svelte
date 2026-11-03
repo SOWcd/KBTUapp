@@ -13,6 +13,10 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay, id, title }: { overlay: Overlay; id: Id; title: string } = $props();
   let list = $state<FriendInvite[] | null>(null);
@@ -31,42 +35,28 @@
 </script>
 
 <Sheet {overlay} icon={TelegramMark} title={t('inv.title')}>
-  <p class="t-foot sub">{t('inv.sub', { title, award: t('ach.soul.name') })}</p>
+  <p class="fs-sub dim sub">{t('inv.sub', { title, award: t('ach.soul.name') })}</p>
   {#if list === null}
-    <div class="wait" aria-hidden="true"><span></span><span></span><span></span></div>
+    <Skeleton kind="rows" n={3} />
   {:else if !list.length}
-    <div class="empty">
-      <p class="t-body">{t('inv.empty')}</p>
-      <Button kind="primary" size="m" onclick={addFriends}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('inv.addFriends')}</Button>
-    </div>
+    <EmptyState icon={UserPlus} title={t('inv.empty')} action={{ label: t('inv.addFriends'), onclick: addFriends }} />
   {:else}
-    <div class="list">
+    <Group>
       {#each list as f (f.person.id)}
-        <div class="fr">
-          <Avatar person={f.person} size={44} />
-          <b class="ellipsis">{f.person.name}</b>
-          {#if f.state === 'going'}<span class="st ok">{t('inv.going')}</span>
-          {:else if f.state === 'invited'}<span class="st">{t('inv.invited')}</span>
-          {:else}<Button kind="primary" size="s" loading={busy === f.person.id} onclick={() => invite(f)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/if}
-        </div>
+        {#if f.state === 'going' || f.state === 'invited'}
+          <Row dense title={f.person.name} value={f.state === 'going' ? t('inv.going') : t('inv.invited')}>{#snippet lead()}<Avatar person={f.person} size={36} />{/snippet}</Row>
+        {:else}
+          <Row dense title={f.person.name}>
+            {#snippet lead()}<Avatar person={f.person} size={36} />{/snippet}
+            {#snippet trailing()}<Button kind="tinted" size="s" loading={busy === f.person.id} onclick={() => invite(f)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/snippet}
+          </Row>
+        {/if}
       {/each}
-    </div>
-    <button class="more" onclick={addFriends}><UserPlus size={16} />{t('inv.addFriends')}</button>
+      <Row tone="add" title={t('inv.addFriends')} onclick={addFriends} />
+    </Group>
   {/if}
 </Sheet>
 
 <style>
-  .sub { margin-bottom: 14px; text-wrap: pretty; }
-  .list { display: flex; flex-direction: column; gap: 2px; }
-  .fr { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; }
-  .fr b { flex: 1; min-width: 0; font: 640 15.5px/1.25 var(--font-text); }
-  .st { flex: none; font: 620 13.5px/1 var(--font-text); color: var(--text-2); }
-  .st.ok { color: var(--success-text); }
-  .empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 8px 8px; text-align: center; color: var(--text-2); }
-  .more { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; margin-top: 10px; border-radius: var(--r-m);
-    background: var(--surface-2); color: var(--text-2); font: 620 14px/1 var(--font-text); }
-  .more:active { transform: scale(0.98); }
-  .wait { display: flex; flex-direction: column; gap: 10px; }
-  .wait span { height: 52px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  .sub { margin: 0 var(--s-1) var(--s-4); text-wrap: pretty; }
 </style>

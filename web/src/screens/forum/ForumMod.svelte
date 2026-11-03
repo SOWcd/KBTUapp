@@ -8,6 +8,13 @@
   import { nowTs, duration } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import SearchField from '../../ui/SearchField.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import Button from '../../ui/Button.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { changed, round = 0 }: { changed: () => void; round?: number } = $props();
   let mod = $state<ForumMod | null>(null);
@@ -31,70 +38,64 @@
 </script>
 
 {#if mod}
-  {#if mod.held.length}
-    <h3 class="t-cap cap">{t('fo.mod.waiting')}</h3>
-    {#each mod.held as a (a.id)}
-      <article class="ask surface">
-        <div class="ah"><span class="why">{t(`fo.mod.why.${a.why}`)}</span><span class="t-foot" class:late={a.dueAt <= nowTs()}>{due(a)}</span></div>
-        <b class="at">{a.title}</b>
-        {#if a.body}<p class="ab">{a.body}</p>{/if}
-        <span class="t-foot">{a.author.name}{a.skills.length ? ` · ${a.skills.map((s) => s.name).join(', ')}` : ''}</span>
-        <div class="acts">
-          {#if a.status === 'held'}<button class="go" onclick={() => decide(a, true)}>{t('fo.mod.release')}</button>{/if}
-          <button class="no" onclick={() => decide(a, false)}>{t('fo.mod.hide')}</button>
-        </div>
-      </article>
-    {/each}
-  {/if}
+  <div class="col">
+    {#if mod.held.length}
+      <!-- a request: the words, whose, why and when it's due, the two answers (AdminForum's post rows) -->
+      <Group caption={t('fo.mod.waiting')}>
+        {#each mod.held as a (a.id)}
+          <div class="mrow">
+            <div class="ah"><span class="why">{t(`fo.mod.why.${a.why}`)}</span><span class="mm" class:late={a.dueAt <= nowTs()}>{due(a)}</span></div>
+            <b class="at">{a.title}</b>
+            {#if a.body}<p class="ab">{a.body}</p>{/if}
+            <span class="mm">{a.author.name}{a.skills.length ? ` · ${a.skills.map((s) => s.name).join(', ')}` : ''}</span>
+            <span class="mb">
+              {#if a.status === 'held'}<Button kind="tinted" size="s" onclick={() => decide(a, true)}>{t('fo.mod.release')}</Button>{/if}
+              <Button kind="gray" size="s" onclick={() => decide(a, false)}>{t('fo.mod.hide')}</Button>
+            </span>
+          </div>
+        {/each}
+      </Group>
+    {/if}
 
-  <h3 class="t-cap cap">{t('fo.mod.catalog')}</h3>
-  <SearchField legacy bind:value={q} placeholder={t('fo.mod.catalogPh')} />
-  <div class="list surface">
-    {#each shown as s (s.id)}
-      <button class="row" onclick={() => pick(s)}>
-        <b class="ellipsis">{s.name}</b><span class="t-foot">{s.public ? '' : `${t('fo.mod.new')} · `}{t('fo.mod.people', { n: s.people ?? 0 })}</span>
-      </button>
-      {#if open?.id === s.id}
-        <div class="edit">
-          <div class="acts">
-            <input class="field" bind:value={name} maxlength="24" aria-label={t('fo.mod.rename')} />
-            <button class="go" disabled={!name.trim() || name.trim() === s.name} onclick={() => change(s, { name })}>{t('fo.mod.rename')}</button>
-          </div>
-          <input class="field" bind:value={into} placeholder={t('fo.mod.mergePh')} />
-          {#if targets.length}<div class="sk">{#each targets as x (x.id)}<button class="chip" onclick={() => change(s, { into: x.id })}>→ {x.name}</button>{/each}</div>{/if}
-          <div class="acts">
-            {#if !s.public}<button class="go" onclick={() => change(s, { approve: true })}>{t('fo.mod.approve')}</button>{/if}
-            <button class="no" onclick={() => change(s, { delete: true })}>{t('fo.mod.delete')}</button>
-          </div>
-        </div>
-      {/if}
-    {:else}
-      <p class="t-foot empty">{t(q.trim() ? 'fo.mod.noneFound' : 'fo.mod.noneNew')}</p>
-    {/each}
+    <Section title={t('fo.mod.catalog')}>
+      <SearchField bind:value={q} placeholder={t('fo.mod.catalogPh')} />
+      <Group>
+        {#each shown as s (s.id)}
+          <Row dense title={s.name} value={`${s.public ? '' : `${t('fo.mod.new')} · `}${t('fo.mod.people', { n: s.people ?? 0 })}`}
+            accessory="disclosure" open={open?.id === s.id} onclick={() => pick(s)} />
+          {#if open?.id === s.id}
+            <div class="edit">
+              <Field label={t('fo.mod.rename')} bind:value={name} maxlength={24} />
+              <Button kind="tinted" size="s" disabled={!name.trim() || name.trim() === s.name} onclick={() => change(s, { name })}>{t('fo.mod.rename')}</Button>
+              <Field label={t('fo.mod.mergePh')} bind:value={into} />
+              {#if targets.length}<div class="sk">{#each targets as x (x.id)}<Chip selected={false} onclick={() => change(s, { into: x.id })}>→ {x.name}</Chip>{/each}</div>{/if}
+              <span class="mb">
+                {#if !s.public}<Button kind="tinted" size="s" onclick={() => change(s, { approve: true })}>{t('fo.mod.approve')}</Button>{/if}
+                <Button kind="destructive" size="s" onclick={() => change(s, { delete: true })}>{t('fo.mod.delete')}</Button>
+              </span>
+            </div>
+          {/if}
+        {:else}
+          <EmptyState inline text={t(q.trim() ? 'fo.mod.noneFound' : 'fo.mod.noneNew')} />
+        {/each}
+      </Group>
+    </Section>
   </div>
 {/if}
 
 <style>
-  .cap { margin: 22px 4px 10px; }
-  .ask { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-l); margin-bottom: 10px; }
-  .ah { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .why { font: 700 11px/1 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning-text, var(--text-2)); }
-  .late { color: var(--danger, var(--text)); font-weight: 650; }
-  .at { font: 680 16px/1.25 var(--font-text); }
-  .ab { font: 450 14px/1.4 var(--font-text); color: var(--text-2); white-space: pre-line; }
-  .acts { display: flex; gap: 8px; align-items: center; }
-  .go, .no { flex: none; height: 32px; padding: 0 12px; border-radius: var(--r-full); font: 650 13px/1 var(--font-text); }
-  .go { background: var(--accent-soft); color: var(--accent-text); }
-  .go:disabled { background: var(--surface-2); color: var(--text-3); }
-  .no { background: var(--surface-2); color: var(--text-2); }
-  .list { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; margin-top: 10px; }
-  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 12px 14px; text-align: left; }
-  .row + .row, .edit + .row { border-top: 1px solid var(--line); }
-  .row b { font: 620 15px/1.25 var(--font-text); min-width: 0; }
-  .edit { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 12px; }
-  .field { min-width: 0; height: 36px; padding: 0 12px; border-radius: var(--r-m, 10px); background: var(--surface-2); color: var(--text); font: 500 14px/1 var(--font-text); }
-  .acts .field { flex: 1; }
-  .sk { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 600 13px/1 var(--font-text); }
-  .empty { padding: 12px 14px; }
+  .col { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--gap-group); }
+  .mrow { position: relative; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); }
+  .mrow + .mrow::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
+  .ah { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); }
+  .why { font: 600 var(--fs-cap)/1.2 var(--font-text); color: var(--warning-text); }
+  .mm { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .late { color: var(--danger-text); font-weight: 600; }
+  .at { font: 600 var(--fs-body)/1.3 var(--font-text); }
+  .ab { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); white-space: pre-line; }
+  .mb { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+  /* a skill opened in place: rename, merge into another, approve or delete, under its row */
+  .edit { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); }
+  .edit > :global(.fld) { align-self: stretch; }
+  .sk { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 4px 0; }
 </style>

@@ -8,7 +8,6 @@
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import Link2 from '@lucide/svelte/icons/link-2';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import { api, ApiErr, type ChannelReply, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -19,6 +18,9 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Card from '../../ui/Card.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Group from '../../ui/Group.svelte';
 
   let { overlay, post }: { overlay: Overlay; post: { id: Id; body: string } } = $props();
   const pid = untrack(() => post.id);
@@ -74,7 +76,7 @@
 <Sheet {overlay} icon={VenetianMask} title={t('fcr.entry')}>
   <!-- what I'm answering under: my post, quietly -->
   <p class="post">{post.body}</p>
-  {#if why}<p class="why" role="alert"><CircleAlert size={18} strokeWidth={2.2} />{why}</p>{/if}
+  {#if why}<div class="why"><Notice tone="danger" text={why} /></div>{/if}
   <Card>
     <div class="write">
       <span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
@@ -92,24 +94,26 @@
   <p class="note warn">{t('fcr.warn')}</p>
 
   {#if mine?.length}
-    <h3 class="cap">{t('fcr.mine')}</h3>
-    <div class="list">
-      {#each mine as r (r.id)}
-        <div class="row">
-          <div class="main">
-            <p class="rb">{r.body || '—'}</p>
-            <span class="meta">{t(r.comment == null ? 'fcr.toThread' : 'fcr.toComment')} · <i class={tone(r)}>{t(`fcr.st.${r.state}` as Key)}</i> · {ago(r.at)}</span>
+    <!-- my replies and where each stands: content rows in a Group (AdminForum's grammar), the bin at the end -->
+    <div class="mine">
+      <Group caption={t('fcr.mine')}>
+        {#each mine as r (r.id)}
+          <div class="row">
+            <div class="main">
+              <p class="rb">{r.body || '—'}</p>
+              <span class="meta">{t(r.comment == null ? 'fcr.toThread' : 'fcr.toComment')} · <i class={tone(r)}>{t(`fcr.st.${r.state}` as Key)}</i> · {ago(r.at)}</span>
+            </div>
+            {#if r.id > 0 && r.state !== 'missing'}<IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(r)} />{/if}
           </div>
-          {#if r.id > 0 && r.state !== 'missing'}<button class="del" aria-label={t('fc.delete')} onclick={() => drop(r)}><Trash2 size={16} strokeWidth={2} /></button>{/if}
-        </div>
-      {/each}
+        {/each}
+      </Group>
     </div>
   {/if}
   {#snippet footer()}<Button kind="filled" size="l" full disabled={!ready} onclick={send}>{t('fcr.send')}</Button>{/snippet}
 </Sheet>
 
 <style>
-  .post { margin: 0 var(--s-2) var(--s-3); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); white-space: pre-line;
+  .post { margin: 0 var(--s-4) var(--s-3); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); white-space: pre-line;
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .write { display: flex; gap: var(--s-3); align-items: flex-start; }
   .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill-2); color: var(--text); }
@@ -124,22 +128,18 @@
   .link::before { content: ''; position: absolute; top: 0; left: calc(36px + var(--s-3)); right: 0; height: 0.5px; background: var(--separator); }
   .link :global(svg) { flex: none; width: 36px; }
   .link input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; background: none; color: var(--text); font: 450 var(--fs-sub)/1.3 var(--font-text); text-overflow: ellipsis; }
-  .why { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-3); padding: var(--s-3); border-radius: var(--r-m);
-    background: var(--danger-soft); color: var(--text); font: 500 var(--fs-sub)/1.35 var(--font-text); }
-  .why :global(svg) { flex: none; margin-top: 1px; color: var(--danger); }
-  .note { margin: var(--s-2) var(--s-2) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .why { margin-bottom: var(--s-3); }
+  .note { margin: var(--s-2) var(--s-4) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .note.warn { color: var(--warning-text); }
-  .cap { margin: var(--s-6) var(--s-2) var(--s-2); font: 600 var(--fs-cap)/1.2 var(--font-text); letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-3); }
-  .list { display: flex; flex-direction: column; }
-  .row { position: relative; display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) var(--s-2); }
-  .row + .row::before { content: ''; position: absolute; top: 0; left: var(--s-2); right: 0; height: 0.5px; background: var(--separator); }
+  .mine { margin-top: var(--gap-group); }
+  .row { position: relative; display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) var(--s-2) var(--s-3) var(--s-4); }
+  .row + .row::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
   .main { flex: 1; min-width: 0; }
   .rb { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text); white-space: pre-line; overflow-wrap: break-word;
     display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .meta { display: block; margin-top: 2px; font: 400 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .meta { display: block; margin-top: 2px; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .meta i { font-style: normal; }
   .meta .accent { color: var(--accent-text); }
   .meta .warning { color: var(--warning-text); }
-  .del { flex: none; margin: -10px -10px -10px 0; width: 44px; height: 44px; display: grid; place-items: center; color: var(--text-3); border-radius: 50%; }
-  .del:active { color: var(--danger-text); }
+  .row > :global(.ib) { margin: -4px 0; }
 </style>

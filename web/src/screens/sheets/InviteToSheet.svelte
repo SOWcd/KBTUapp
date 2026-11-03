@@ -12,6 +12,10 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
 
   let { overlay, id, name }: { overlay: Overlay; id: Id; name: string } = $props();
   const mine = $derived(data.events.filter((e) => e.status === 'published' && e.startsAt > nowTs() && (e.visibility ?? 'public') === 'public'
@@ -34,34 +38,28 @@
 </script>
 
 <Sheet {overlay} icon={TelegramMark} title={t('inv.toTitle', { name })}>
-  <h2 class="t-h2 hd">{t('inv.toTitle', { name })}</h2>
+  <h2 class="fs-sec hd">{t('inv.toTitle', { name })}</h2>
   {#if mine.length}
-    <p class="t-foot sub">{t('inv.toSub')}</p>
-    <div class="list">
+    <p class="fs-sub dim sub">{t('inv.toSub')}</p>
+    <Group>
       {#each mine as e (e.id)}
-        <div class="row">
-          <Poster item={e} size={52} radius={14} />
-          <span class="tx"><b class="clamp-2">{e.title}</b><i>{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}</i></span>
-          {#if sent[e.id] === 'going'}<span class="st ok">{t('inv.going')}</span>
-          {:else if sent[e.id] === 'invited'}<span class="st">{t('inv.invited')}</span>
-          {:else}<Button kind="primary" size="s" loading={busy === e.id} onclick={() => invite(e.id)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/if}
-        </div>
+        {@const when = `${relDay(e.startsAt)}, ${time(e.startsAt)} · ${placeOf(e.place)}`}
+        {#if sent[e.id]}
+          <Row dense title={e.title} subtitle={when} value={sent[e.id] === 'going' ? t('inv.going') : t('inv.invited')}>{#snippet lead()}<Poster item={e} size={44} radius={10} />{/snippet}</Row>
+        {:else}
+          <Row dense title={e.title} subtitle={when}>
+            {#snippet lead()}<Poster item={e} size={44} radius={10} />{/snippet}
+            {#snippet trailing()}<Button kind="tinted" size="s" loading={busy === e.id} onclick={() => invite(e.id)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/snippet}
+          </Row>
+        {/if}
       {/each}
-    </div>
+    </Group>
   {:else}
-    <div class="empty"><p class="t-body">{t('inv.toEmpty')}</p><Button kind="primary" size="m" onclick={toEvents}>{t('inv.toEvents')}</Button></div>
+    <EmptyState icon={CalendarHeart} title={t('inv.toEmpty')} action={{ label: t('inv.toEvents'), onclick: toEvents }} />
   {/if}
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 4px; }
-  .sub { margin-bottom: 12px; }
-  .list { display: flex; flex-direction: column; gap: 4px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .tx b { font: 650 14.5px/1.25 var(--font-text); }
-  .tx i { font: 500 12.5px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
-  .st { flex: none; font: 620 13.5px/1 var(--font-text); color: var(--text-2); }
-  .st.ok { color: var(--success-text); }
-  .empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 8px 8px; text-align: center; color: var(--text-2); }
+  .hd { margin: var(--s-1) var(--s-1); }
+  .sub { margin: 0 var(--s-1) var(--s-3); }
 </style>

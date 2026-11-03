@@ -39,6 +39,6 @@
   .new .ring { padding: 2.5px; background: conic-gradient(from 200deg, var(--accent), var(--accent-2), var(--accent)); }
   .in { box-sizing: border-box; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2.5px solid var(--bg); overflow: hidden; }
   .all { background: var(--surface-2); color: var(--text-2); }
-  b { max-width: 100%; font: 600 11.5px/1.2 var(--font-text); color: var(--text-2); }
+  b { max-width: 100%; font: 600 var(--fs-micro)/1.2 var(--font-text); color: var(--text-2); }
   .new b { color: var(--text); }
 </style>

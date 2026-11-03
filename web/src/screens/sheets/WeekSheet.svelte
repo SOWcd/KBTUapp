@@ -12,6 +12,9 @@
   import { lessonKind } from '../../lib/i18n/subjects';
   import { weekday } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import ScheduleHowTo from './ScheduleHowTo.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -33,44 +36,30 @@
 </script>
 
 <Sheet {overlay} tall title={t('sched.weekTitle')} icon={CalendarDays}>
-  {#each days as d (d.wd)}
-    <h3 class="t-cap cap">{dayName(d.wd)}</h3>
-    <div class="list surface">
-      {#each d.list as c, i (i)}
-        {@const lk = lessonKind(c.kind)}
-        <div class="row">
-          <span class="tm num"><b>{c.begins}</b><small>{c.ends}</small></span>
-          <span class="tx"><b class="clamp-2">{subjectOf(c)}</b>
-            <small class="ellipsis">{[lk ? t(`list.kind.${lk}Long`) : c.kind, c.room, c.teacher].filter(Boolean).join(' · ')}</small></span>
-        </div>
-      {/each}
-    </div>
-  {:else}
-    <p class="t-foot none">{t('sched.none')}</p>
-  {/each}
-  {#if days.length}
-    <div class="langs">{#if langs.length}<span class="t-foot">{t('sched.langs', { langs: langs.map((l) => LANG_FULL[l]).join(', ') })}</span>{/if}
-      {#if langs.length < LANGS.length}<button class="add" onclick={() => open(ScheduleHowTo, { addLang: true })}>{t('sched.addLang')}</button>{/if}</div>
-  {/if}
-  <button class="upd" onclick={() => sheets.schedHowTo()}>{t('sched.update')}</button>
-  {#if days.length}<button class="upd red" onclick={drop}>{t('sched.del')}</button>{/if}
+  <div class="week">
+    {#each days as d (d.wd)}
+      <Group caption={dayName(d.wd)}>
+        {#each d.list as c, i (i)}
+          {@const lk = lessonKind(c.kind)}
+          <Row dense title={subjectOf(c)} subtitle={[lk ? t(`list.kind.${lk}Long`) : c.kind, c.room, c.teacher].filter(Boolean).join(' · ')}>
+            {#snippet lead()}<span class="tm num"><b>{c.begins}</b><small>{c.ends}</small></span>{/snippet}
+          </Row>
+        {/each}
+      </Group>
+    {:else}
+      <EmptyState icon={CalendarDays} text={t('sched.none')} />
+    {/each}
+    <Group footnote={days.length && langs.length ? t('sched.langs', { langs: langs.map((l) => LANG_FULL[l]).join(', ') }) : undefined}>
+      {#if days.length && langs.length < LANGS.length}<Row tone="action" title={t('sched.addLang')} onclick={() => open(ScheduleHowTo, { addLang: true })} />{/if}
+      <Row tone="action" title={t('sched.update')} onclick={() => sheets.schedHowTo()} />
+    </Group>
+    {#if days.length}<Group><Row tone="destructive" title={t('sched.del')} onclick={drop} /></Group>{/if}
+  </div>
 </Sheet>
 
 <style>
-  .cap { margin: 16px 4px 8px; }
-  .list { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
-  .row { display: flex; align-items: flex-start; gap: 14px; padding: 11px 14px; }
-  .row + .row { border-top: 1px solid var(--line); }
-  .tm { flex: none; width: 46px; display: flex; flex-direction: column; gap: 2px; }
-  .tm b { font: 700 15px/1.2 var(--font-text); }
-  .tm small { font: 500 12.5px/1.2 var(--font-text); color: var(--text-3); }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .tx b { font: 640 15px/1.25 var(--font-text); }
-  .tx small { font: 500 12.5px/1.25 var(--font-text); color: var(--text-2); }
-  .none { padding: 20px 4px; }
-  /* a quiet line: the languages in grey, the action at its end */
-  .langs { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; margin: 8px 4px -8px; }
-  .add { flex: none; min-height: 44px; margin-left: auto; color: var(--accent-text); font: 620 var(--fs-sub)/1.2 var(--font-text); }
-  .upd { display: block; width: 100%; height: 44px; margin-top: 16px; border-radius: var(--r-m); background: var(--surface-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); text-align: center; }
-  .upd.red { margin-top: 8px; color: var(--danger-text); }
+  .week { display: flex; flex-direction: column; gap: var(--gap-group); }
+  .tm { width: 46px; display: flex; flex-direction: column; gap: 2px; }
+  .tm b { font: 700 var(--fs-body)/1.2 var(--font-text); }
+  .tm small { font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
 </style>

@@ -6,7 +6,6 @@
   import { untrack } from 'svelte';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
-  import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
@@ -21,6 +20,8 @@
   import Card from '../../ui/Card.svelte';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
 
   let { overlay, draft }: { overlay: Overlay; draft?: { body: string; anon: boolean; why?: string } } = $props();
   let body = $state(untrack(() => draft?.body ?? '')), anon = $state(untrack(() => draft?.anon ?? false));
@@ -63,7 +64,7 @@
 
 <!-- the title is the capsule's, with the pen (a heading of its own said it twice) -->
 <Sheet {overlay} icon={SquarePen} title={t('fc.new')}>
-  {#if why}<p class="why" role="alert"><CircleAlert size={18} strokeWidth={2.2} />{why}</p>{/if}
+  {#if why}<div class="why"><Notice tone="danger" text={why} /></div>{/if}
   <Card>
     <div class="write">
       {#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
@@ -76,10 +77,8 @@
   </Card>
   <p class="note">{t('fc.rules')}</p>
   <!-- who signs it: two buttons, not a switch (owner, Nov 1); under them what that means -->
-  <div class="seg wide who" role="radiogroup" aria-label={t('fc.anon')}>
-    <button type="button" role="radio" aria-checked={!anon} class:on={!anon} onclick={() => { anon = false; haptic.select(); }}>{t('fc.named')}</button>
-    <button type="button" role="radio" aria-checked={anon} class:on={anon} onclick={() => { anon = true; haptic.select(); }}><VenetianMask size={15} />{t('fc.anon')}</button>
-  </div>
+  <Segmented items={[{ value: 'named', label: t('fc.named') }, { value: 'anon', label: t('fc.anon') }]} value={anon ? 'anon' : 'named'} label={t('fc.anon')}
+    onchange={(v) => { anon = v === 'anon'; haptic.select(); }} />
   <p class="note last">{anon ? t('fc.asAnon') : t('fc.as', { name: sign })}</p>
   {#snippet footer()}<Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>{/snippet}
 </Sheet>
@@ -95,11 +94,7 @@
     font: 450 var(--fs-row)/1.4 var(--font-text); letter-spacing: -0.012em; }
   .text::placeholder { color: var(--text-3); }
   .text:focus { outline: none; }
-  .why { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-3); padding: var(--s-3); border-radius: var(--r-m);
-    background: var(--danger-soft); color: var(--text); font: 500 var(--fs-sub)/1.35 var(--font-text); }
-  .why :global(svg) { flex: none; margin-top: 1px; color: var(--danger); }
-  .note { margin: var(--s-2) var(--s-2) var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .why { margin-bottom: var(--s-3); }
+  .note { margin: var(--s-2) var(--s-4) var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .note.last { margin-bottom: 0; }
-  .who { display: flex; width: 100%; }
-  .who button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; font-size: var(--fs-body); }
 </style>

@@ -32,15 +32,15 @@
     <p class="t-foot">{nameOf(row.org)} · {row.title || roleName(row.role, null)}{row.dept ? ' · ' + row.dept : ''}</p>
   </div>
   <p class="t-callout text">{t('ro.askText', { org: nameOf(row.org) })}</p>
-  <button class="sup" onclick={() => writeSupport(t('ro.draft', { org: row.org.name }))}>{t('ro.support')}</button>
+  <div class="sup"><Button kind="plain" size="s" onclick={() => writeSupport(t('ro.draft', { org: row.org.name }))}>{t('ro.support')}</Button></div>
   {#snippet footer()}
     <Button kind="primary" size="l" full loading={busy} onclick={yes}>{t('ro.yes')}</Button>
   {/snippet}
 </Sheet>
 
 <style>
-  .top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 6px 0 4px; }
+  .top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 6px 0 var(--s-1); }
   .top h2 { margin-top: 6px; }
-  .text { margin-top: 12px; color: var(--text-2); text-align: center; }
-  .sup { display: block; margin: 14px auto 0; padding: 6px 10px; font: 560 13.5px/1.2 var(--font-text); color: var(--text-3); }
+  .text { margin-top: var(--s-3); color: var(--text-2); text-align: center; }
+  .sup { display: flex; justify-content: center; margin-top: var(--s-3); --plain-ink: var(--text-3); }
 </style>

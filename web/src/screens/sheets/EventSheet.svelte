@@ -13,7 +13,6 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
   import ExternalLink from '@lucide/svelte/icons/external-link';
-  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Ticket from '@lucide/svelte/icons/ticket';
   import UserCheck from '@lucide/svelte/icons/user-check';
   import Check from '@lucide/svelte/icons/check';
@@ -26,7 +25,6 @@
   import Camera from '@lucide/svelte/icons/camera';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Link from '@lucide/svelte/icons/link';
   import { shrink } from '../../lib/photo';
   import { FACES } from '../../lib/faces';
@@ -54,12 +52,16 @@
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import X from '@lucide/svelte/icons/x';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets } from '../../lib/state/sheets';
   import { focusPos } from '../../lib/photo';
   import { nameOf } from '../../lib/short';
-  import { grow } from '../../ui/grow';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Field from '../../ui/Field.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   let { overlay, id, preview, from }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null } = $props();
@@ -83,7 +85,6 @@
   let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
   const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
   const st = $derived(e?.my?.status);
-  const route = $derived(t('event.route').split(' ')); // the ↗ sticks to the last word, never wraps alone
   const going = $derived(st === 'going');
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
@@ -229,8 +230,7 @@
   }
 
   function share() {
-    if (!e) return;
-    haptic.tap();
+    if (!e) return; // the Button gives the tap
     // absolute date: the card is read later, when "tomorrow" is wrong
     shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place), img: e.cover?.url ?? e.video?.poster?.url ?? '' },
       'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
@@ -238,6 +238,8 @@
   }
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
+  // the team's tools group has a row to show (a guest host's event leaves a Member nothing)
+  const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink));
   function shareMine() {
     if (!e) return;
     haptic.tap();
@@ -249,7 +251,7 @@
 
 <Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : t('cap.event')} tint={e?.tint}>
   {#if e}
-    {#if preview}<p class="pv"><Eye size={15} />{t('event.preview')}</p>{/if}
+    {#if preview}<p class="pv"><Tag tone="accent"><Eye size={15} />{t('event.preview')}</Tag></p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>
       <!-- the header (PLAN 32/33): the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
       {#if wide}
@@ -270,13 +272,16 @@
       {#if e.meeting}<span class="tag"><Tag tone="onphoto">{t('event.meeting')}</Tag></span>{:else if e.visibility === 'members'}<span class="tag"><Tag tone="onphoto">{t('event.teamOnly')}</Tag></span>{:else if e.visibility === 'leaders'}<span class="tag"><Tag tone="onphoto">{t('event.leaders')}</Tag></span>{:else if e.firstYear}<span class="tag"><Tag tone="warning">{t('event.firstYear')}</Tag></span>{/if}
     </div>
 
-    <h2 class="t-h2 title" class:strike={cancelled}>{e.title}</h2>
-    {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
-    {#if e.guestHost}<p class="t-foot">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
+    <div class="head">
+      <h2 class="fs-sec" class:strike={cancelled}>{e.title}</h2>
+      {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
+      {#if e.guestHost}<p class="fs-sub dim">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
+    </div>
 
     <!-- the rest of the first screen and the bar a frame later: in the tap's frame the sheet is still below the screen
          (its rise starts there), only the header shows, flying in from the poster -->
     {#if soon}
+    <div class="page">
 
     {#if detail && (detail.canRate || detail.myRating != null)}
       <section class="rate">
@@ -285,17 +290,20 @@
           {#each FACES as f, i (i)}<button class:on={rated === i + 1} class:dim={!!rated && rated !== i + 1} disabled={!detail.canRate} onclick={() => rateIt(i + 1, note.trim() || undefined)} aria-label={String(i + 1)}><Emoji name={f} size={34} /></button>{/each}
         </div>
         {#if rated && detail.canRate && !noted}
-          <div class="rnote"><input bind:value={note} maxlength="300" placeholder={t('rate.comment')} enterkeyhint="send" onkeydown={(ev) => { if (ev.key === 'Enter' && note.trim()) void rateIt(rated!, note.trim()); }} />
-            <Button kind="secondary" size="s" disabled={!note.trim()} onclick={() => rateIt(rated!, note.trim())}>{t('rate.add')}</Button></div>
+          <!-- Enter sends too: the form's submit (the button is disabled, so is Enter, while the field is empty) -->
+          <form class="rin" onsubmit={(ev) => { ev.preventDefault(); if (note.trim()) void rateIt(rated!, note.trim()); }}>
+            <Field label={t('rate.comment')} bind:value={note} maxlength={300} enterkeyhint="send" />
+            <Button kind="secondary" size="s" type="submit" disabled={!note.trim()}>{t('rate.add')}</Button>
+          </form>
         {/if}
-        <p class="t-foot">{t('rate.anon')}</p>
+        <p class="fs-sub faint">{t('rate.anon')}</p>
       </section>
     {/if}
 
     {#if detail?.ratings}
       {@const r = detail.ratings}
       <section class="rsum">
-        <div class="rs-top">{#if r.avg != null}<span class="avg num">{fmtNum(r.avg)}</span>{/if}<span><b>{t('rate.title')}</b><i class="t-foot">{tn('rate.count', r.count)}{r.avg == null ? ' · ' + t('rate.few') : ''}</i></span></div>
+        <div class="rs-top">{#if r.avg != null}<span class="avg num">{fmtNum(r.avg)}</span>{/if}<span><b>{t('rate.title')}</b><i class="fs-sub dim">{tn('rate.count', r.count)}{r.avg == null ? ' · ' + t('rate.few') : ''}</i></span></div>
         {#each [...r.dist].reverse() as n, i (i)}
           <div class="rs-row"><span class="rf"><Emoji name={FACES[4 - i]} size={18} /></span><span class="rbar"><span style="width:{r.count ? (n / r.count) * 100 : 0}%"></span></span><span class="rn num">{n}</span></div>
         {/each}
@@ -305,8 +313,9 @@
 
     {#if detail && !e.meeting && (photos.length || detail.canAddPhotos)}
       <section class="album">
-        <div class="al-h"><b>{t('album.title')}</b>{#if photos.length}<span class="t-foot num">{photos.length}</span>{/if}
-          {#if detail.canAddPhotos}<button class="al-add" disabled={adding > 0} onclick={() => picker?.click()}><ImagePlus size={16} />{t('album.add')}</button>{/if}</div>
+        <!-- engine: Section could take a trailing action (here "Add"); its header in Group's caption size -->
+        <div class="al-h"><h3 class="fs-t3">{t('album.title')}{#if photos.length}<span class="n num">{photos.length}</span>{/if}</h3>
+          {#if detail.canAddPhotos}<Button kind="tinted" size="s" disabled={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<ImagePlus size={16} />{/snippet}{t('album.add')}</Button>{/if}</div>
         {#if shown || adding}
           <div class="mosaic n{Math.min(shown, 3)}">
             {#each photos.slice(0, shown) as p, i (p.id)}
@@ -318,78 +327,73 @@
             {#each { length: adding } as _, i (i)}<span class="ph wait"></span>{/each}
           </div>
         {:else}
-          <p class="t-foot al-empty">{t('album.empty')}</p>
+          <EmptyState inline text={t('album.empty')} />
         {/if}
         <input type="file" accept="image/*" multiple hidden bind:this={picker} onchange={addPhotos} />
       </section>
     {/if}
 
     {#if e.visibility === 'leaders' && head && crew && answers}
-      <section class="lead">
-        <h3 class="t-cap sec">{t('lead.answers')} · {answers.reduce((n, a) => n + a.people.filter((p) => p.answer === 'yes').length, 0)} / {answers.reduce((n, a) => n + a.people.length, 0)}</h3>
+      <Group caption="{t('lead.answers')} · {answers.reduce((n, a) => n + a.people.filter((p) => p.answer === 'yes').length, 0)} / {answers.reduce((n, a) => n + a.people.length, 0)}">
         {#each answers as a (a.org.id)}
-          <div class="lc"><span class="ln"><OrgLogo org={a.org} size={20} /><b class="ellipsis">{nameOf(a.org)}</b></span>
-            <span class="lp">{#each a.people as p (p.person.id)}<span class="pa {p.answer}">{p.answer === 'yes' ? '✓' : p.answer === 'no' ? '✕' : '…'} {p.fullName}</span>{/each}</span></div>
+          <Row dense title={nameOf(a.org)} subtitle={a.people.map((p) => `${p.answer === 'yes' ? '✓' : p.answer === 'no' ? '✕' : '…'} ${p.fullName}`).join(' · ')}>
+            {#snippet lead()}<OrgLogo org={a.org} size={28} />{/snippet}
+          </Row>
         {/each}
-      </section>
+      </Group>
     {/if}
 
     {#if ups.length || (head && crew)}
-      <section class="ups">
+      <!-- the organizer's updates: the newest under the title in the accent, the rest one tap away -->
+      <div class="ups">
         {#each allUps ? ups : ups.slice(0, 1) as u, i (u.id)}
-          <div class="up" class:older={i > 0}>
-            <span class="up-h"><Megaphone size={14} strokeWidth={2.2} />{t('upd.title')} · {ago(u.at)}
-              {#if u.canDelete}<button class="up-x" onclick={() => removeUpdate(u)} aria-label={t('upd.delete')}><X size={14} /></button>{/if}</span>
-            <p>{u.body}</p>
-          </div>
+          <Notice tone={i > 0 ? 'neutral' : 'accent'} icon={Megaphone} title="{t('upd.title')} · {ago(u.at)}"
+            action={u.canDelete ? { label: t('upd.delete'), onclick: () => removeUpdate(u) } : undefined}><p class="fs-body up-b">{u.body}</p></Notice>
         {/each}
-        {#if ups.length > 1 && !allUps}<button class="up-more" onclick={() => (allUps = true)}>{t('upd.more', { n: ups.length - 1 })}</button>{/if}
+        {#if ups.length > 1 && !allUps}<span class="lnk"><Button kind="plain" size="s" onclick={() => (allUps = true)}>{t('upd.more', { n: ups.length - 1 })}</Button></span>{/if}
         {#if head && crew}
           {#if writing}
-            <div class="up-new">
-              <textarea bind:value={draft} maxlength="300" rows="2" placeholder={t('upd.placeholder')} use:grow></textarea>
-              <div class="up-acts"><span class="t-foot">{t('upd.note')}</span>
-                <Button kind="primary" size="s" loading={sending} disabled={draft.trim().length < 2} onclick={sendUpdate}>{t('upd.send')}</Button></div>
-            </div>
+            <Field label={t('upd.write')} bind:value={draft} multiline rows={2} maxlength={300} placeholder={t('upd.placeholder')} />
+            <div class="up-acts"><span class="fs-sub faint">{t('upd.note')}</span>
+              <Button kind="primary" size="s" loading={sending} disabled={draft.trim().length < 2} onclick={sendUpdate}>{t('upd.send')}</Button></div>
           {:else}
-            <button class="up-add" onclick={() => (writing = true)}><Megaphone size={16} />{t('upd.write')}</button>
+            <span class="lnk"><Button kind="tinted" size="s" onclick={() => (writing = true)}>{#snippet icon()}<Megaphone size={16} />{/snippet}{t('upd.write')}</Button></span>
           {/if}
-        {/if}
-      </section>
-    {/if}
-
-    <div class="facts">
-      <div class="fact"><span class="fi"><CalendarClock size={18} /></span>
-        <span><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}</b><i>{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}</i></span></div>
-      {#if e.placeUrl}
-        <button class="fact gis" onclick={() => openLink(e.placeUrl!)}><span class="fi"><TwoGisMark size={22} /></span><span><b>{e.place}</b><i class="go">{route.slice(0, -1).join(' ')} <span class="nw">{route.at(-1)}<ArrowUpRight size={14} strokeWidth={2.4} /></span></i></span></button>
-      {:else if floorOf(e.place) != null}
-        <button class="fact" onclick={() => sheets.map(e.place)}><span class="fi"><MapIcon size={18} /></span><span><b>{e.place}</b><i class="go">{floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')}</i></span></button>
-      {:else}
-        <div class="fact"><span class="fi"><MapPin size={18} /></span><span><b class:tba={!e.place}>{placeOf(e.place)}</b><i>{e.price ? money(e.price) : e.guestHost ? '' : t('event.free')}</i></span></div>
-      {/if}
-    </div>
-
-    {#if (e.meeting || e.visibility === 'leaders') && st === 'cancelled' && e.my?.cancelReason === 'self' && !started}
-      <p class="rnote">{e.my.note ? t('meet.yourNo', { why: e.my.note }) : t('meet.yourNoBare')}</p>{/if}
-    {#if e.my?.status === 'cancelled' && (e.my.cancelReason === 'receipt_rejected' || e.my.cancelReason === 'hold_expired') && !over}
-      <p class="paynote">{t(e.my.cancelReason === 'receipt_rejected' ? 'pay.rejected' : 'pay.holdGone')}</p>
-    {/if}
-    {#if e.seats && !cancelled && !over}
-      <div class="seats">
-        <div class="bar"><span style="width:{pct}%" class:full={pct >= 100}></span></div>
-        <div class="t-foot row"><span>{tn('event.going', e.taken)}</span><span class:red={full}>{full ? t('event.full') : tn('event.seatsLeft', Math.max(0, e.seats - e.taken))}</span></div>
-        {#if head && crew && !started && e.taken >= e.seats}
-          <div class="addseats"><span class="t-foot">{t('seats.add')}</span>{#each [5, 10, 20] as n (n)}<button disabled={adding2} onclick={() => addSeats(n)}>+{n}</button>{/each}</div>
         {/if}
       </div>
     {/if}
 
-    {#if e.regUntil && !cancelled && !started}
-      <p class="rnote" class:shut={e.regUntil <= nowTs()}><Clock size={15} />{e.regUntil <= nowTs() ? t('event.regClosed') : t('event.regUntil', { when: relDay(e.regUntil) + ', ' + time(e.regUntil) })}</p>
+    <Group>
+      <Row icon={CalendarClock} title={multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)} subtitle="{time(e.startsAt)}{e.endsAt ? ' – ' + time(e.endsAt) : ''}" />
+      {#if e.placeUrl}
+        <!-- off campus: the place opens in 2GIS, so it wears their mark -->
+        <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(e.placeUrl!)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
+      {:else if floorOf(e.place) != null}
+        <Row icon={MapIcon} title={e.place} subtitle={floorOf(e.place) ? t('map.onFloor', { n: floorOf(e.place)! }) : t('map.onBasement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
+      {:else}
+        <Row icon={MapPin} title={placeOf(e.place)} subtitle={e.price ? money(e.price) : e.guestHost ? undefined : t('event.free')} />
+      {/if}
+      {#if e.regUntil && !cancelled && !started}
+        <Row icon={Clock} title={e.regUntil <= nowTs() ? t('event.regClosed') : t('event.regUntil', { when: relDay(e.regUntil) + ', ' + time(e.regUntil) })} />
+      {/if}
+      {#if e.price && e.freeFirst && !cancelled && !started}
+        <Row icon={GraduationCap} title={e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')} />
+      {/if}
+    </Group>
+
+    {#if (e.meeting || e.visibility === 'leaders') && st === 'cancelled' && e.my?.cancelReason === 'self' && !started}
+      <p class="fs-sub dim note">{e.my.note ? t('meet.yourNo', { why: e.my.note }) : t('meet.yourNoBare')}</p>{/if}
+    {#if e.my?.status === 'cancelled' && (e.my.cancelReason === 'receipt_rejected' || e.my.cancelReason === 'hold_expired') && !over}
+      <Notice tone="warning" text={t(e.my.cancelReason === 'receipt_rejected' ? 'pay.rejected' : 'pay.holdGone')} />
     {/if}
-    {#if e.price && e.freeFirst && !cancelled && !started}
-      <p class="rnote"><GraduationCap size={15} />{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>
+    {#if e.seats && !cancelled && !over}
+      <div class="seats">
+        <div class="bar"><span style="width:{pct}%" class:full={pct >= 100}></span></div>
+        <div class="fs-sub dim sr"><span>{tn('event.going', e.taken)}</span><span class:red={full}>{full ? t('event.full') : tn('event.seatsLeft', Math.max(0, e.seats - e.taken))}</span></div>
+        {#if head && crew && !started && e.taken >= e.seats}
+          <div class="addseats"><span class="fs-sub dim">{t('seats.add')}</span>{#each [5, 10, 20] as n (n)}<Button kind="tinted" size="s" disabled={adding2} onclick={() => addSeats(n)}>+{n}</Button>{/each}</div>
+        {/if}
+      </div>
     {/if}
 
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
@@ -397,116 +401,111 @@
     <!-- volunteers: a student applies with a short "why", the organizers answer; the team sees the count -->
     {#if detail?.volunteers && !preview && !cancelled && !started}
       {@const vo = detail.volunteers}
-      <div class="vol surface">
-        <div class="vh"><HandHeart size={20} /><span><b>{t('vol.title')}</b><i class="t-foot">{t('vol.left', { n: Math.max(0, vo.need - vo.taken), of: vo.need })}{vo.senior ? ' · ' + t('vol.senior') : ''}</i></span></div>
+      {@const canAsk = !crew && vo.mine !== 'asked' && vo.mine !== 'yes' && vo.mine !== 'no' && vo.taken < vo.need}
+      <Group>
+        <Row icon={HandHeart} title={t('vol.title')} subtitle="{t('vol.left', { n: Math.max(0, vo.need - vo.taken), of: vo.need })}{vo.senior ? ' · ' + t('vol.senior') : ''}" />
         {#if head && crew}
-          <Button kind="secondary" size="m" full onclick={() => sheets.volunteers(id, vo.need)}>{t('vol.open')}{vo.asked ? ` · ${vo.asked}` : ''}</Button>
+          <Row title={t('vol.open')} value={vo.asked ? String(vo.asked) : undefined} accessory="chevron" onclick={() => sheets.volunteers(id, vo.need)} />
         {:else if !crew}
           {#if vo.mine === 'asked'}
-            <div class="vs"><span class="t-foot">{t('vol.sent')}</span><button class="vx" onclick={volLeave}>{t('vol.leave')}</button></div>
+            <Row dense title={t('vol.sent')}>{#snippet trailing()}<Button kind="gray" size="s" onclick={volLeave}>{t('vol.leave')}</Button>{/snippet}</Row>
           {:else if vo.mine === 'yes'}
-            <div class="vs"><b class="ok">{t('vol.youAre')}</b><button class="vx" onclick={volLeave}>{t('vol.stepDown')}</button></div>
+            <Row dense title={t('vol.youAre')}>{#snippet trailing()}<Button kind="gray" size="s" onclick={volLeave}>{t('vol.stepDown')}</Button>{/snippet}</Row>
           {:else if vo.mine === 'no'}
-            <p class="t-foot">{t('vol.notThisTime')}</p>
-          {:else if vo.taken < vo.need}
-            {#if volWriting}
-              <label class="field"><textarea bind:value={volNote} rows="2" maxlength="300" placeholder={t('vol.whyPh')}></textarea></label>
-              <Button kind="primary" size="m" full onclick={volApply}>{t('vol.send')}</Button>
-            {:else}
-              <Button kind="primary" size="m" full onclick={() => { haptic.tap(); volWriting = true; }}>{t('vol.want')}</Button>
-            {/if}
+            <Row dense title={t('vol.notThisTime')} />
+          {:else if canAsk && !volWriting}
+            <Row tone="action" title={t('vol.want')} onclick={() => { haptic.tap(); volWriting = true; }} />
           {/if}
         {/if}
-      </div>
+      </Group>
+      {#if canAsk && volWriting}
+        <Field label={t('vol.whyPh')} bind:value={volNote} multiline rows={2} maxlength={300} />
+        <Button kind="primary" size="m" full onclick={volApply}>{t('vol.send')}</Button>
+      {/if}
     {/if}
 
     {#if detail?.chat && !preview && !cancelled && !over}
-      <div class="chatrow"><Button kind="secondary" size="m" full onclick={() => openLink(detail!.chat!)}>{#snippet icon()}<MessagesSquare size={18} />{/snippet}{t('chat.open')}</Button></div>
+      <Button kind="secondary" size="m" full onclick={() => openLink(detail!.chat!)}>{#snippet icon()}<MessagesSquare size={18} />{/snippet}{t('chat.open')}</Button>
     {/if}
 
     {#if day && !cancelled && !over}
-      <div class="day">
-        <span class="t-cap dh"><BookOpen size={14} strokeWidth={2.2} />{t('day.title')}</span>
-        {#if day.before}<p>{t('day.before', { subject: subjectOf(day.before.c), end: day.before.c.ends, gap: duration(e.startsAt - day.before.en) })}</p>{/if}
-        {#each day.clash as x (x.c.begins + x.c.subject)}<p class="warn">{t('day.clash', { subject: subjectOf(x.c), from: x.c.begins, to: x.c.ends })}</p>{/each}
-        {#if day.after}<p>{e.endsAt ? t('day.after', { subject: subjectOf(day.after.c), from: day.after.c.begins, gap: duration(day.after.b - e.endsAt) }) : t('day.afterOpen', { subject: subjectOf(day.after.c), from: day.after.c.begins })}</p>{/if}
-      </div>
+      <Notice tone={day.clash.length ? 'warning' : 'neutral'} icon={BookOpen} title={t('day.title')}>
+        {#if day.before}<p class="fs-body">{t('day.before', { subject: subjectOf(day.before.c), end: day.before.c.ends, gap: duration(e.startsAt - day.before.en) })}</p>{/if}
+        {#each day.clash as x (x.c.begins + x.c.subject)}<p class="fs-body warn">{t('day.clash', { subject: subjectOf(x.c), from: x.c.begins, to: x.c.ends })}</p>{/each}
+        {#if day.after}<p class="fs-body">{e.endsAt ? t('day.after', { subject: subjectOf(day.after.c), from: day.after.c.begins, gap: duration(day.after.b - e.endsAt) }) : t('day.afterOpen', { subject: subjectOf(day.after.c), from: day.after.c.begins })}</p>{/if}
+      </Notice>
     {/if}
 
-    {#if crew}
-      <div class="tools">
-        {#if e.guestHost}{:else if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={18} />{t('studio.marks')}</button>
-        {:else}<button onclick={() => sheets.scanner(id)}><ScanLine size={18} />{t('studio.scanner')}</button>{/if}
-        {#if head}
-          {#if !e.guestHost}<button onclick={() => sheets.attendees(id)}><UsersRound size={18} />{t('studio.attendees')}</button>{/if}
-          <button onclick={() => sheets.editor(e.org.id, id)}><Pencil size={18} />{t('studio.edit')}</button>
+    {#if tooled}
+      <Group>
+        {#if crew}
+          {#if e.guestHost}{:else if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
+          {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
+          {#if head}
+            {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+            <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
+          {/if}
         {/if}
-      </div>
+        {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
+      </Group>
     {/if}
-    {#if myLink}<div class="tools"><button onclick={shareMine}><Link size={18} />{t('event.myLink')}</button></div>{/if}
 
     {#if e.meeting && head && crew && meet}
-      <section class="lead">
-        <h3 class="t-cap sec">{over ? t('meet.after') : t('meet.answers')} · {meet.filter((a) => (over ? a.came : a.answer === 'yes')).length} / {meet.length}</h3>
+      <Section title="{over ? t('meet.after') : t('meet.answers')} · {meet.filter((a) => (over ? a.came : a.answer === 'yes')).length} / {meet.length}">
         {#each meetGroups as [title, list] (title)}
-          <div class="mg"><b class="t-foot">{t(title)} · {list.length}</b>
+          <Group caption="{t(title)} · {list.length}">
             {#each list as a (a.person.id)}
-              <div class="mp"><span class="mn"><b class="ellipsis">{withNick(a.fullName, a.person)}</b>
-                {#if a.answer === 'no'}<i>{a.note ?? t('meet.noWhy')}</i>{/if}</span>
-              </div>
+              <Row dense title={withNick(a.fullName, a.person)} subtitle={a.answer === 'no' ? (a.note ?? t('meet.noWhy')) : undefined} />
             {/each}
-          </div>
+          </Group>
         {/each}
-      </section>
+      </Section>
     {/if}
 
     {#if !cancelled && (e.friends.length || canInvite)}
-      <div class="friends">
-        {#if e.friends.length}
-          <span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>
-          <span class="t-callout fl">{friendsLine(e.friends.map((f) => f.name), over)}</span>
-        {:else}<span class="t-callout fl dim">{t('inv.nudge')}</span>{/if}
-        {#if canInvite}<button class="inv" onclick={() => sheets.invite(id, e.title)}><UserPlus size={16} strokeWidth={2.3} />{t('inv.button')}</button>{/if}
-      </div>
+      <Group>
+        <Row dense icon={e.friends.length ? undefined : UsersRound} title={e.friends.length ? friendsLine(e.friends.map((f) => f.name), over) : t('inv.nudge')}>
+          {#snippet lead()}<span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>{/snippet}
+          {#snippet trailing()}{#if canInvite}<Button kind="tinted" size="s" onclick={() => sheets.invite(id, e.title)}>{#snippet icon()}<UserPlus size={16} strokeWidth={2.3} />{/snippet}{t('inv.button')}</Button>{/if}{/snippet}
+        </Row>
+      </Group>
     {/if}
 
     {#if about}
-      <h3 class="t-cap sec">{t('event.about')}</h3>
-      <p class="t-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
-      {#if aiAbout}<button class="trn" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</button>{/if}
+      <Section title={t('event.about')}>
+        <p class="fs-body desc selectable">{aiAbout && raw ? detail?.orig?.description : about}</p>
+        {#if aiAbout}<span class="lnk trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}>{#snippet icon()}<AiBadge />{/snippet}{raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}
+      </Section>
     {/if}
     <!-- the server reads only a public, published event's facts: no row where it would know nothing -->
     {#if !preview && e.status !== 'draft' && (e.visibility ?? 'public') === 'public'}<AskAi ctx={{ kind: 'event', id, title: e.title }} hint={t('as.askEvent')} />{/if}
-    {#if detail?.discuss && !preview && !cancelled}
-      <!-- the talk lives under the channel post, with Telegram's replies and reactions -->
-      <button class="talk" onclick={() => openLink(detail!.discuss!)}>
-        <span class="fi"><MessageCircle size={18} /></span>
-        <span class="tk"><b>{t('cm.titleEvent')}</b><i>{t('cm.inTelegram')}</i></span>
-        <ArrowUpRight size={18} />
-      </button>
-    {/if}
+    {@const talkTg = !!detail?.discuss && !preview && !cancelled}
     <!-- what was asked here before the Telegram talk stays readable -->
-    {#if detail && !preview && !cancelled && ((detail.commentsOn && !detail.discuss) || detail.comments)}
-      <button class="talk" onclick={() => (session.me?.student ? sheets.comments('event', id, e.title, (n) => { if (detail) detail = { ...detail, comments: n }; }) : sheets.login())}>
-        <span class="fi"><MessageCircle size={18} /></span>
-        <span class="tk"><b>{t('cm.titleEvent')}</b><i>{detail.comments ? tn('cm.count', detail.comments) : t('cm.askNudge')}</i></span>
-        <ChevronRight size={18} />
-      </button>
+    {@const talkOld = !!detail && !preview && !cancelled && ((detail.commentsOn && !detail.discuss) || !!detail.comments)}
+    {#if talkTg || talkOld}
+      <Group>
+        <!-- the talk lives under the channel post, with Telegram's replies and reactions -->
+        {#if talkTg}<Row icon={MessageCircle} title={t('cm.titleEvent')} subtitle={t('cm.inTelegram')} accessory="external" onclick={() => openLink(detail!.discuss!)} />{/if}
+        {#if talkOld}
+          <Row icon={MessageCircle} title={t('cm.titleEvent')} subtitle={detail?.comments ? tn('cm.count', detail.comments) : t('cm.askNudge')} accessory="chevron"
+            onclick={() => (session.me?.student ? sheets.comments('event', id, e.title, (n) => { if (detail) detail = { ...detail, comments: n }; }) : sheets.login())} />
+        {/if}
+      </Group>
     {/if}
     {#if crew && head && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
     <!-- the one report sheet: anyone but the event's own crew -->
-    {#if !may(mem, 'door') && !preview && session.me?.student}<button class="rep" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</button>{/if}
+    {#if !may(mem, 'door') && !preview && session.me?.student}<div class="rep"><Button kind="plain" size="s" onclick={() => sheets.report('event', id, e.title)}>{t('cm.report')}</Button></div>{/if}
     {/if}
+    </div>
     {/if}
   {/if}
 
   {#snippet footer()}
     {#if e && soon}
       <div class="actions btns" inert={!!preview}>
-        <button class="ib" class:on={e.saved} onclick={() => toggleSaved(id)} aria-label={e.saved ? t('event.saved') : t('event.save')}>
-          <Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />
-        </button>
-        <button class="ib" onclick={share} aria-label={t('event.share')}><Share size={20} /></button>
+        <span class="sv" class:on={e.saved}><Button kind="gray" size="l" round on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)}>
+          {#snippet icon()}<Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />{/snippet}</Button></span>
+        <Button kind="gray" size="l" round label={t('event.share')} onclick={share}>{#snippet icon()}<Share size={20} />{/snippet}</Button>
         {#if cancelled}
           <Button kind="neutral" size="l" full disabled>{t('event.cancelledLong')}</Button>
         {:else if e.visibility === 'leaders' && !crew && !going && !started}
@@ -556,25 +555,40 @@
 </Sheet>
 
 <style>
-  .trn { align-self: flex-start; margin-top: 6px; padding: 2px 0; font: 600 12.5px/1.2 var(--font-text); color: var(--text-3); }
-  .rnote { display: flex; align-items: center; gap: 7px; margin: 10px 2px 0; font: 600 13.5px/1.3 var(--font-text); color: var(--text-2); }
-  .mg { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .mg > b { color: var(--text-2); }
-  .mp { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-m); background: var(--surface-2); }
-  .mn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font: 600 14.5px/1.3 var(--font-text); }
-  .mn i { font: 500 13px/1.3 var(--font-text); color: var(--text-2); font-style: normal; }
-  .rnote :global(svg) { flex: none; color: var(--text-3); }
-  .rnote.shut, .rnote.shut :global(svg) { color: var(--danger-text); }
-  .paynote { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--r-m); background: var(--warning-soft); color: var(--warning-text); font: 600 14px/1.35 var(--font-text); }
-  .album { margin: 14px 0 4px; }
-  .al-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .al-h b { font: 720 17px/1.2 var(--font-display); letter-spacing: -0.015em; }
-  .al-add { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 640 13.5px/1 var(--font-text); }
-  .al-add:active { transform: scale(0.96); }
-  .al-empty { padding: 4px 2px; }
-  /* the mosaic: the first photo big, two beside it, three under (whole blocks only) */
-  .mosaic { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: 18px; overflow: hidden; }
+  /* the stack under the header: one gap between blocks, Groups like Settings */
+  .page { display: flex; flex-direction: column; gap: var(--s-5); }
+  .head { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-5); padding: 0 var(--s-1); }
+  .strike { text-decoration: line-through; color: var(--text-2); }
+  .cancel { font: 600 var(--fs-body)/1.35 var(--font-text); color: var(--danger-text); }
+  .pv { display: flex; justify-content: center; margin: 0 0 10px; }
+  .note { padding: 0 var(--s-4); }
+  .lnk { align-self: flex-start; }
+  .trn { margin: -6px 0 0 -8px; --plain-ink: var(--text-3); }
+  .warn { color: var(--warning-text); font-weight: 600; }
+  .desc { color: var(--text); white-space: pre-line; padding: 0 var(--s-1); }
+  .kill { margin-top: var(--s-1); }
+  .rep { display: flex; justify-content: center; --plain-ink: var(--text-3); }
+  .gis { width: 24px; display: grid; place-items: center; }
+
+  /* the header: art (the poster, the photos swiped sideways, the clip) */
+  .hero { position: relative; height: 210px; margin: 4px 0 16px; border-radius: var(--r-l); overflow: hidden; }
+  .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .pic { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+  .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
+  .dots i.on { background: var(--on-accent); transform: scale(1.25); }
+  .org { position: absolute; left: 12px; top: 12px; }
+  .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: var(--fs-cap); gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .tag { position: absolute; right: 12px; top: 12px; }
+
+  /* the guests' album: the first photo big, two beside it, three under (whole blocks only) */
+  .album { display: flex; flex-direction: column; gap: 10px; }
+  .al-h { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 0 var(--s-1); }
+  .al-h .n { margin-left: var(--s-2); font-weight: 450; color: var(--text-3); }
+  .mosaic { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: var(--r-l); overflow: hidden; }
   .mosaic.n1 { grid-template-columns: 1fr; }
   .mosaic.n2 { grid-template-columns: 1fr 1fr; }
   .ph { position: relative; aspect-ratio: 1; overflow: hidden; display: block; background-size: cover; }
@@ -582,142 +596,61 @@
   .mosaic.n3 .ph:first-child { grid-column: span 2; grid-row: span 2; }
   .ph img { width: 100%; height: 100%; object-fit: cover; display: block; animation: ph-in 420ms ease-out backwards; }
   @keyframes ph-in { from { opacity: 0; } }
-  .ph:active img { transform: scale(0.97); transition: transform 120ms; }
-  .more { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(8, 10, 20, 0.5);
-    font: 760 22px/1 var(--font-display); }
+  .ph:active img { transform: scale(0.97); transition: transform var(--t-fast); }
+  .more { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--on-accent); background: rgba(8, 10, 20, 0.5);
+    font: 700 var(--fs-sec)/1 var(--font-display); }
   .ph.wait { background: var(--surface-2); animation: ph-wait 1.1s ease-in-out infinite; }
   @keyframes ph-wait { 50% { opacity: 0.5; } }
-  .pv { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; margin: 0 auto 10px; padding: 6px 12px;
-    border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 630 13px/1.2 var(--font-text); }
-  .hero { position: relative; height: 210px; margin: 4px 0 16px; border-radius: 22px; overflow: hidden; }
-  .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
-  .strip::-webkit-scrollbar { display: none; }
-  .pic { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
-  .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
-  .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
-  .dots i.on { background: #fff; transform: scale(1.25); }
-  .org { position: absolute; left: 12px; top: 12px; }
-  .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: 12.5px; gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-  .tag { position: absolute; right: 12px; top: 12px; }
-  .title { margin-bottom: 6px; }
-  .strike { text-decoration: line-through; color: var(--text-2); }
-  .cancel { color: var(--danger-text); font-weight: 600; margin-bottom: 8px; }
 
-  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0; }
-  .fact { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: var(--r-m); background: var(--surface-2); min-width: 0; text-align: left; }
-  /* off campus: the place opens in 2GIS, so it wears their mark and green */
-  .gis { --gis: #19AA1E; background: linear-gradient(rgba(25, 170, 30, 0.14), rgba(25, 170, 30, 0.14)), var(--surface-2); box-shadow: inset 0 0 0 1px rgba(25, 170, 30, 0.4); transition: transform var(--t-fast) var(--ease); }
-  :global(:root[data-theme='light']) .gis { --gis: #0F7A14; }
-  .gis:active { transform: scale(0.97); }
-  .fact .go { color: var(--gis, var(--accent-text)); font-weight: 650; }
-  .go :global(svg) { display: inline; vertical-align: -2px; margin-left: 1px; }
-  .nw { white-space: nowrap; }
-  .fi { color: var(--accent-text); display: flex; margin-top: 1px; }
-  .fact > span:last-child { display: flex; flex-direction: column; min-width: 0; }
-  .fact b { font: 640 14px/1.3 var(--font-text); }
-  .fact i { font: 500 13px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
-
-  .seats { margin: 4px 0 14px; }
-  .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-  .bar span { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width var(--t-slow) var(--ease); }
+  /* seats: a thin bar, how many are going and how many are left */
+  .seats { display: flex; flex-direction: column; gap: 7px; padding: 0 var(--s-1); }
+  .bar { height: 6px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: var(--r-full); background: var(--accent); transition: width var(--t-slow) var(--ease); }
   .bar span.full { background: var(--danger); }
-  .row { display: flex; justify-content: space-between; margin-top: 7px; }
+  .sr { display: flex; justify-content: space-between; }
   .red { color: var(--danger-text); }
+  .addseats { display: flex; align-items: center; gap: 6px; margin-top: var(--s-1); }
+  .addseats .fs-sub { margin-right: auto; }
 
-  .friends { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); margin-bottom: 14px; }
+  .ups { display: flex; flex-direction: column; gap: var(--s-2); }
+  .up-b { white-space: pre-line; overflow-wrap: anywhere; }
+  .up-acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-left: var(--s-4); }
+
   .stack { display: flex; }
-  .addseats { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-  .addseats .t-foot { margin-right: auto; }
-  .addseats button { height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 700 13px/1 var(--font-text); }
-  .addseats button:active { transform: scale(0.94); }
-  .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
-  .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; border-radius: var(--r-full);
-    background: var(--success-soft); color: var(--success-text); font: 650 16px/1 var(--font-text); }
-  .lead { margin: 4px 0 12px; }
-  .lc { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin-bottom: 6px; border-radius: var(--r-m); background: var(--surface-2); }
-  .ln { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .ln b { font: 650 14px/1.2 var(--font-text); }
-  .lp { display: flex; flex-wrap: wrap; gap: 4px 10px; }
-  .pa { font: 550 12.5px/1.3 var(--font-text); color: var(--text-3); }
-  .pa.yes { color: var(--success-text); }
-  .pa.no { color: var(--danger-text); }
-  .talk { display: flex; align-items: center; gap: 12px; width: 100%; margin: 16px 0 4px; padding: 12px 12px 12px 10px; border-radius: var(--r-m); background: var(--surface-2); text-align: left; color: var(--text-3); }
-  .talk:active { transform: scale(0.99); }
-  .tk { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tk b { font: 650 15px/1.25 var(--font-text); color: var(--text); }
-  .tk i { font: 500 13px/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
-  .fl { flex: 1; min-width: 0; }
-  .fl.dim { color: var(--text-2); }
-  .inv { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent); color: #fff; font: 650 13.5px/1 var(--font-text); }
-  .inv:active { transform: scale(0.95); }
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  .day { display: flex; flex-direction: column; gap: 5px; padding: 11px 12px; margin: -2px 0 14px; border-radius: var(--r-m); background: var(--surface-2); }
-  .day .dh { display: flex; align-items: center; gap: 6px; margin-bottom: 1px; }
-  .day p { font: 550 14px/1.35 var(--font-text); }
-  .day .warn { color: var(--warning-text); font-weight: 620; }
-  .tools { display: flex; gap: 8px; margin: 0 0 14px; }
-  .tools button { flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 12px;
-    background: var(--accent-soft); color: var(--accent-text); font: 630 13.5px/1 var(--font-text); white-space: nowrap; }
-  .tools button:active { transform: scale(0.96); }
-  .kill { margin: 20px 0 4px; }
-  .rep { display: block; margin: 22px auto 4px; padding: 8px 10px; font: 600 13.5px/1 var(--font-text); color: var(--text-3); }
-  .sec { margin: 8px 0 8px; }
-  .desc { color: var(--text); white-space: pre-line; }
-
+  /* the footer: save and share, then the one primary action */
   .actions { display: flex; gap: 8px; align-items: center; }
-  .ib { width: var(--ctl-l); height: var(--ctl-l); flex: none; border-radius: 16px; background: var(--surface-2); color: var(--text); display: flex; align-items: center; justify-content: center; transition: transform var(--t-fast) var(--ease), color var(--t-base); }
-  .ib:active { transform: scale(0.94); }
-  .ib.on { color: var(--warning); }
-  /* the organizer's updates: an accent note pinned under the title */
-  .ups { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 2px; }
-  .up { padding: 10px 12px; border-radius: 16px; background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); animation: upIn 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; }
-  .up.older { background: var(--surface-2); box-shadow: none; }
-  .up-h { display: flex; align-items: center; gap: 6px; font: 650 12px/1.2 var(--font-text); color: var(--accent-text); }
-  .up.older .up-h { color: var(--text-3); }
-  .up-x { margin-left: auto; display: flex; padding: 2px; color: var(--text-3); }
-  .up p { margin-top: 4px; font: 500 15px/1.4 var(--font-text); white-space: pre-line; overflow-wrap: anywhere; }
-  .up-more, .up-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; font: 640 14px/1 var(--font-text); color: var(--accent-text); }
-  .up-new { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 16px; background: var(--surface-2); }
-  .up-new textarea { width: 100%; resize: none; background: none; color: var(--text); font: 500 15px/1.4 var(--font-text); }
-  .up-acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  @keyframes upIn { from { opacity: 0; transform: translateY(6px); } }
-  /* one tap after the event */
-  .rate { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 4px; padding: 14px; border-radius: 20px;
-    background: radial-gradient(90% 120% at 50% 0%, rgba(124, 77, 255, 0.18), transparent 65%), var(--surface-2); text-align: center; }
-  .rq { font: 720 17px/1.2 var(--font-display); letter-spacing: -0.015em; }
+  .sv.on :global(.btn) { color: var(--warning); }
+  .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
+  .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; border-radius: var(--r-full);
+    background: var(--success-soft); color: var(--success-text); font: 600 var(--fs-body)/1 var(--font-text); }
+
+  /* one tap after the event: bespoke (the faces), on a group's surface */
+  .rate { display: flex; flex-direction: column; gap: 10px; padding: var(--s-4); border-radius: var(--r-group); background: var(--surface); text-align: center; }
+  .rq { font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.015em; }
   .faces { display: flex; justify-content: space-between; gap: 6px; }
-  .faces button { flex: 1; aspect-ratio: 1; max-width: 62px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: var(--surface);
-    font-size: 30px; line-height: 1; transition: transform 260ms cubic-bezier(.2, 1.6, .4, 1), opacity var(--t-base), background-color var(--t-base); }
+  .faces button { flex: 1; aspect-ratio: 1; max-width: 62px; border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; background: var(--fill);
+    line-height: 1; transition: transform 260ms cubic-bezier(.2, 1.6, .4, 1), opacity var(--t-base), background-color var(--t-base); }
   .faces button:active { transform: scale(0.9); }
   .faces button.on { transform: scale(1.12); background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
   .faces button.on :global(.emoji) { animation: hop 520ms cubic-bezier(.2, 1.6, .4, 1); }
   @keyframes hop { 30% { transform: translateY(-9px) scale(1.25) rotate(-8deg); } 60% { transform: translateY(0) scale(0.95); } }
   .faces button.dim { opacity: 0.4; }
-  .rnote { display: flex; gap: 8px; align-items: center; }
-  .rnote input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-m); background: var(--surface); color: var(--text); font: 500 15px/1 var(--font-text); }
-  .rsum { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 4px; padding: 14px; border-radius: 20px; background: var(--surface-2); }
+  .rin { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-2); text-align: left; }
+  .rin > :global(*:first-child) { align-self: stretch; }
+  .rsum { display: flex; flex-direction: column; gap: 6px; padding: var(--s-4); border-radius: var(--r-group); background: var(--surface); }
   .rs-top { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
-  .avg { font: 780 34px/1 var(--font-display); letter-spacing: -0.03em; }
+  .avg { font: 800 var(--fs-title)/1 var(--font-display); letter-spacing: -0.03em; }
   .rs-top span:last-child { display: flex; flex-direction: column; gap: 2px; }
-  .rs-top b { font: 680 15px/1.2 var(--font-text); }
+  .rs-top b { font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .rs-top i { font-style: normal; }
   .rs-row { display: flex; align-items: center; gap: 8px; }
   .rf { width: 22px; display: flex; justify-content: center; }
-  .rbar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-  .rbar > span { display: block; height: 100%; border-radius: 3px; background: var(--grad-accent); }
-  .rn { width: 24px; text-align: right; font: 650 12.5px/1 var(--font-text); color: var(--text-2); }
-  .rc { display: flex; gap: 8px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--line); font: 500 14px/1.4 var(--font-text); }
+  .rbar { flex: 1; height: 6px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
+  .rbar > span { display: block; height: 100%; border-radius: var(--r-full); background: var(--grad-accent); }
+  .rn { width: 24px; text-align: right; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-2); }
+  .rc { display: flex; gap: 8px; padding-top: 8px; margin-top: 2px; border-top: 0.5px solid var(--separator); font: 450 var(--fs-body)/1.4 var(--font-text); }
   .rc :global(.emoji) { flex: none; }
-  .chatrow { margin-top: 12px; }
-  .vol { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding: 14px; }
-  .vh { display: flex; align-items: center; gap: 12px; color: var(--accent-text); }
-  .vh span { display: flex; flex-direction: column; gap: 2px; }
-  .vh b { color: var(--text); font: 650 15.5px/1.25 var(--font-text); }
-  .vs { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .vs .ok { color: var(--success-text, var(--accent-text)); font: 650 15px/1.2 var(--font-text); }
-  .vx { height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 620 13px/1 var(--font-text); }
 </style>

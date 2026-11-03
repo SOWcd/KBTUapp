@@ -18,9 +18,11 @@
   import Sheet from '../../ui/Sheet.svelte';
   import CirclePlus from '@lucide/svelte/icons/circle-plus';
   import Button from '../../ui/Button.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import OrgLogo, { COVERS, initials } from '../../ui/OrgLogo.svelte';
   import { linkUrl, type LinkDraft } from '../../lib/social';
-  import { grow } from '../../ui/grow';
 
   let { overlay }: { overlay: Overlay } = $props();
 
@@ -57,9 +59,9 @@
 
 <Sheet {overlay} icon={CirclePlus} full title={t('nc.title')}>
   {#if mine === undefined}
-    <div class="wait" aria-hidden="true"><span></span><span></span></div>
+    <Skeleton n={2} />
   {:else if mine && mine.status !== 'rejected' && !again}
-    <div class="status" class:ok={mine.status === 'approved'}>
+    <div class="status">
       <OrgLogo org={{ id: 0, slug: '', name: mine.name, short: mine.short, emoji: mine.emoji, cover: mine.cover, kind: 'club', official: false }} size={72} />
       <b>{mine.name}</b>
       <p>{mine.status === 'pending' ? t('nc.pending') : t('nc.approved')}</p>
@@ -67,20 +69,29 @@
         <Button kind="secondary" size="l" full onclick={() => (again = true)}>{t('nc.another')}</Button>{/if}
     </div>
   {:else}
-    {#if mine?.status === 'rejected'}
-      <div class="no"><b>{t('nc.rejected', { name: mine.name })}</b><p class="selectable">{mine.reason}</p>
-        {#if waiting}<p class="t-foot">{t('nc.reapply', { date: dayMonth(mine.reapplyAt!) })}</p>{/if}</div>
-    {/if}
-    {#if form}
-      <p class="lead">{t('nc.lead', { dmp: t('tab.dmp') })}{#if again}<br /><br />{t('nc.anotherNote')}{/if}</p>
-      <div class="pv"><OrgLogo org={preview} size={64} /><b class="ellipsis" class:ph={!f.name.trim()}>{f.name || example}</b></div>
-      <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" placeholder={example} /></label>
-      <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={f.cover} colors={COVERS} size={26} /></div>
-      <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="4" placeholder={t('nc.aboutPh')} use:grow></textarea>
-        {#if f.description.trim().length < 10}<i class="need">{t('nc.whyNeed', { n: 10 - f.description.trim().length })}</i>{/if}</label>
-      <h3 class="t-cap cap">{t('ce.links')}</h3>
-      <LinksEdit bind:links={f.links} />
-    {/if}
+    <div class="form">
+      {#if mine?.status === 'rejected'}
+        <Notice tone="danger" title={t('nc.rejected', { name: mine.name })}>
+          <p class="nt selectable">{mine.reason}</p>
+          {#if waiting}<p class="t-foot">{t('nc.reapply', { date: dayMonth(mine.reapplyAt!) })}</p>{/if}
+        </Notice>
+      {/if}
+      {#if form}
+        <Notice tone="accent" text={t('nc.lead', { dmp: t('tab.dmp') })}>{#if again}<p class="nt more">{t('nc.anotherNote')}</p>{/if}</Notice>
+        <div class="pv"><OrgLogo org={preview} size={64} /><b class="ellipsis" class:ph={!f.name.trim()}>{f.name || example}</b></div>
+        <Field label={t('nc.name')} bind:value={f.name} maxlength={60} placeholder={example} />
+        <LookPick bind:emoji={f.emoji} bind:color={f.cover} colors={COVERS} size={26} />
+        <div>
+          <Field label={t('nc.about')} multiline rows={4} bind:value={f.description} maxlength={600} placeholder={t('nc.aboutPh')} />
+          <!-- engine: ui/Field could take a grey count line ("10 more letters"); its rule is no hint lines -->
+          {#if f.description.trim().length < 10}<p class="need">{t('nc.whyNeed', { n: 10 - f.description.trim().length })}</p>{/if}
+        </div>
+        <div class="links">
+          <span class="lab">{t('ce.links')}</span>
+          <LinksEdit bind:links={f.links} />
+        </div>
+      {/if}
+    </div>
   {/if}
 
   {#snippet footer()}
@@ -89,22 +100,17 @@
 </Sheet>
 
 <style>
-  .ep { margin-bottom: 14px; }
-  .lead { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r-m); background: var(--accent-soft); color: var(--accent-text); font: 550 14px/1.4 var(--font-text); }
-  .pv { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .pv b { min-width: 0; font: 720 18px/1.2 var(--font-display); }
+  .form { display: flex; flex-direction: column; gap: var(--s-4); }
+  .nt { font: 450 var(--fs-body)/1.35 var(--font-text); }
+  .more { margin-top: var(--s-2); }
+  .pv { display: flex; align-items: center; gap: var(--s-3); }
+  .pv b { min-width: 0; font: 700 var(--fs-t3)/1.2 var(--font-display); }
   .pv b.ph { color: var(--text-3); }
-  .cap { margin: 6px 2px 8px; }
-  .field { margin-bottom: 12px; }
-  .field textarea { min-height: 0; color: var(--text); }
-  .need { font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .status { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 8px; text-align: center; }
-  .status b { font: 760 22px/1.2 var(--font-display); }
-  .status p { color: var(--text-2); font: 500 15px/1.45 var(--font-text); text-wrap: balance; }
-  .no { margin-bottom: 14px; padding: 12px 14px; border-radius: var(--r-m); background: var(--danger-soft); }
-  .no b { font: 650 14.5px/1.3 var(--font-text); }
-  .no p { margin-top: 4px; font: 500 14px/1.4 var(--font-text); }
-  .wait { display: flex; flex-direction: column; gap: 12px; }
-  .wait span { height: 60px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  /* the same label as ui/Field's, over the links */
+  .links { display: flex; flex-direction: column; gap: 6px; }
+  .lab { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .need { margin-top: 6px; padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .status { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px var(--s-2); text-align: center; }
+  .status b { font: 700 var(--fs-sec)/1.2 var(--font-display); }
+  .status p { color: var(--text-2); font: 450 var(--fs-body)/1.45 var(--font-text); text-wrap: balance; }
 </style>

@@ -14,10 +14,10 @@
 </script>
 
 <Sheet {overlay} icon={UsersRound} tall title={t('fo.people')}>
-  <p class="t-foot sub">{title}</p>
+  <p class="sub">{title}</p>
   <PersonCards cards={list ?? []} />
 </Sheet>
 
 <style>
-  .sub { margin-bottom: 12px; }
+  .sub { margin: 0 var(--s-4) var(--s-3); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
 </style>
