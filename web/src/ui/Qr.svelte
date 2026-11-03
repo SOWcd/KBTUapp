@@ -22,7 +22,9 @@
     const q = qrcode(0, 'Q');
     q.addData(text, /^[0-9A-Z $%*+\-./:]*$/.test(text) ? 'Alphanumeric' : 'Byte');
     q.make();
-    const n = q.getModuleCount(), mid = Math.floor(n / 2), h = n > 29 ? 4 : 3;
+    // the middle's size follows the code's: a ticket's short code is a 21×21, where a 7×7 hole lost too much to read
+    // (zbarimg: none of five tickets read, all with 5×5; owner, Nov 3)
+    const n = q.getModuleCount(), mid = Math.floor(n / 2), h = n > 29 ? 4 : n > 21 ? 3 : 2;
     const eye = (x: number, y: number) => (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
     let dots = '';
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
