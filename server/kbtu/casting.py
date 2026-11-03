@@ -239,7 +239,8 @@ def apps(con, v: Viewer, rid: int) -> list[dict]:
                 friends[me] = friends.get(me, 0) + 1
     before = {x[0] for x in rows(con, f"""SELECT a.user_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE r.org_id = ? AND r.id != ?
         AND a.user_id IN ({_qs(uids)}) UNION SELECT user_id FROM join_requests WHERE org_id = ? AND user_id IN ({_qs(uids)})""", oid, rid, *uids, oid, *uids)}
-    return [{"id": a["id"], "person": person_ref(a), "fullName": f"{a['last_name']} {a['first_name']}".strip(), "course": a["course"], "school": a["school"],
+    # person_ref by the user's id: a.* comes first, so a row's "id" is the application's (a tap opened another student)
+    return [{"id": a["id"], "person": {**person_ref(a), "id": a["user_id"]}, "fullName": f"{a['last_name']} {a['first_name']}".strip(), "course": a["course"], "school": a["school"],
              "email": a["email"], "username": a["tg_username"], "departments": json.loads(a["departments"]), "answers": json.loads(a["answers"]),
              "stage": a["stage"], "takenTag": a["taken_tag"], "at": a["created_at"], "source": a["source"], "votes": votes.get(a["id"], []),
              "came": came.get(a["user_id"], (0, None))[0], "lastEvent": came.get(a["user_id"], (0, None))[1], "friends": friends.get(a["user_id"], 0),
