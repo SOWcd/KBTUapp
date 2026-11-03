@@ -469,7 +469,7 @@ def _roster_mine(con, uid: int) -> dict | None:
 
 # the frames over a photo on the lanyard, anyone's to pick, apart from the lanyard (web: public/frames/<id>.svg)
 # ponytail: one list for everyone; a club's own frame for its members alone comes with the first club that draws one
-FRAMES = ("flowers", "space", "hearts")
+FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", "notes", "neon", "blossom", "gold")  # web: SettingsList FRAMES, public/frames/<id>.svg (test_frames)
 
 
 # the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
