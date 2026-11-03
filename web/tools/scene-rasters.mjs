@@ -30,7 +30,14 @@ const files = [...['scenes', 'schools'].flatMap((d) => readdirSync(new URL(d + '
 // SOWER's rosette is a mask (ui/SowerArt) the tilt moved, re-rasterised on every frame: 1200 px holds its biggest crisp
 // use (330 css px at 3x); the far copy, 580 px at a third of the opacity, takes it a little soft
 const SIZE = { 'sower-rosette.svg': 1200 / 400 };
-const scale = (f) => SIZE[f] ?? 3 * (OVERSCAN[f] ?? ZS);
+// perf round 4: each layer at the lowest quality, and a smooth one (sky, glow, gradient) at a smaller size, that keeps it
+// within a quarter of an 8-bit step of the q .85 picture on average and its 99.9th percentile within 6 (12 at least) of
+// it, both against the lossless render at the shown size: 2715 -> 2167 KB. q .65 for most; [quality, size] here.
+const ENC = { 'schools/ise-earth-card.svg': [0.75, 1], 'schools/smsgt-field-card.svg': [0.75, 1], 'scenes/ch-crest-card.svg': [Q, 1],
+  'scenes/kn-jersey-card.svg': [Q, 1], 'sower-rosette.svg': [Q, 1], 'scenes/bcl-bokeh-card.svg': [Q, 0.67], 'schools/seogi-dusk-card.svg': [Q, 0.75],
+  ...Object.fromEntries(['scenes/cr-spectrum', 'schools/kma-moon', 'schools/law-shelf', 'schools/sce-sky', 'schools/sss-sky'].map((n) => [`${n}-card.svg`, [0.75, 0.75]])) };
+const [quality, less] = [(f) => ENC[f]?.[0] ?? 0.65, (f) => ENC[f]?.[1] ?? 1];
+const scale = (f) => (SIZE[f] ?? 3 * (OVERSCAN[f] ?? ZS)) * less(f);
 const old = (() => { try { return JSON.parse(readFileSync(MANIFEST, 'utf8')); } catch { return {}; } })();
 const sha = (b) => createHash('sha1').update(b).digest('hex').slice(0, 12);
 const b = await chromium.launch();
@@ -50,7 +57,7 @@ for (const f of files) {
     c.getContext('2d').drawImage(img, 0, 0, W, H);
     const blob = await new Promise((r) => c.toBlob(r, 'image/webp', Q));
     return [...new Uint8Array(await blob.arrayBuffer())];
-  }, { svg: src.toString('base64'), W: Math.round(w * scale(f)), H: Math.round(h * scale(f)), Q });
+  }, { svg: src.toString('base64'), W: Math.round(w * scale(f)), H: Math.round(h * scale(f)), Q: quality(f) });
   writeFileSync(new URL(f.replace(/\.svg$/, '.webp'), ROOT), Buffer.from(data));
   console.log(f, (src.length / 1024).toFixed(1), 'KB svg ->', (data.length / 1024).toFixed(1), 'KB webp');
 }
