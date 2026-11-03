@@ -20,13 +20,14 @@
     // BS a gold king on a board under the risen chart, SMSGT a solar field at dawn, SSS the theatre's colonnade against
     // the sun; then (7b) ISE a ring of light round the globe and the sunrise on its limb; (7d, owner: one card from the
     // variants) SITE the opened chip in front of a server aisle's light, fibre feeding it, SCE a distillation column at
-    // night after rain (.claude/reports/club-lanyards/round7/gen-schools-r7.py)
+    // night after rain; Law (owner: the portico "scanty, childish") a gavel on a leather-bound book in a lamp's light,
+    // the library out of focus behind (.claude/reports/club-lanyards/round7/gen-schools-r7.py)
     site: [['site-traces', 'far'], ['site-aisle', 'far'], ['site-chip', 'near'], ['site-feed', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
     geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
     business: [['bs-chart', 'far'], ['bs-board', ''], ['bs-king', 'near']],
     ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-ring-back', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near'], ['ise-ring-front', 'near']],
     kma: [['kma-moon', 'far'], ['kma-waves', 'waves'], ['kma-ship', 'near ship']],
-    law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
+    law: [['law-portico', 'far'], ['law-shelf', 'far'], ['law-desk', ''], ['law-book', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
     sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-sky', 'far'], ['sce-plant', 'near']],
     smsgt: [['smsgt-comb', 'far'], ['smsgt-dawn', 'far'], ['smsgt-field', 'near']], sss: [['sss-book', 'far'], ['sss-sky', 'far'], ['sss-theatre', 'near']],
   };
@@ -54,7 +55,7 @@
   /* a narrow card (320 px phones) keeps its width for the text: round 7's subjects stand smaller in their corner instead of
      sliding under the name (scale composes with .z's transform) */
   .sc.wide { container-type: inline-size; }
-  @container (max-width: 310px) { :is(.sss, .sce, .ise, .business, .site, .smsgt) .l { scale: 0.78; transform-origin: 100% 85%; } }
+  @container (max-width: 310px) { :is(.sss, .sce, .ise, .business, .site, .smsgt, .law) .l { scale: 0.78; transform-origin: 100% 85%; } }
   .near { --z: 3; --zs: 1.03; }
 
   /* the badge's band: the shield whole, in the middle */
