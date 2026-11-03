@@ -158,7 +158,7 @@
   // slides home with one CSS transition of `translate` (the compositor's, one per line, the lines after the sung one a
   // beat later, as Apple Music's); scrollTo's own smooth scroll ran on the main thread and stuttered on iPhone (Nov 2).
   // A line still gliding starts from where it is (its live translate added), so a quick change never snaps
-  let userAt = 0, back = 0;
+  let userAt = 0, back = 0, free = $state(false);
   const focus = $derived(aim);
   const lang = $derived(focus >= 0 ? langOf[focus] : null);
   const yOf = (x: HTMLElement) => { const v = getComputedStyle(x).translate; return v === 'none' ? 0 : parseFloat(v.split(' ')[1] ?? '0') || 0; };
@@ -195,7 +195,9 @@
   $effect(() => { if (overlay.closing) audio?.pause(); });
   onMount(() => {
     const box = words.parentElement!;
-    const hand = () => { userAt = performance.now(); clearTimeout(back); back = window.setTimeout(() => { if (on) follow(focus); }, 3100); };
+    // while a hand scrolls, every line is sharp and readable (owner, Nov 3: the words stayed blurred, so why scroll);
+    // 3 s after it lets go, the song takes the page back and the soft lines with it
+    const hand = () => { userAt = performance.now(); free = true; clearTimeout(back); back = window.setTimeout(() => { free = false; if (on) follow(focus); }, 3100); };
     box.addEventListener('touchmove', hand, { passive: true });
     box.addEventListener('wheel', hand, { passive: true });
     return () => {
@@ -209,7 +211,7 @@
 </script>
 
 <Sheet {overlay} tall title={t('anthem.title')} icon={Music}>
-  <div class="words" class:synced bind:this={words}>
+  <div class="words" class:synced class:free bind:this={words}>
     <!-- playing: the emblem shrinks into this chip, with the verse's language -->
     <div class="chiprow" aria-hidden="true"><span class="chip" class:shown={synced}><span class="mini"><KbtuMark size={13} /></span><b>{t('anthem.title')}</b>{#if lang}<i>{LANG_FULL[lang]}</i>{/if}</span></div>
     <header class="hd fl" class:gone={synced}>
@@ -327,6 +329,8 @@
   .synced .ln { opacity: calc(0.46 - 0.08 * var(--d)); color: transparent; text-shadow: 0 0 calc(max(0, var(--d) - 1) * 1.8px) var(--text);
     transform: scale(calc(1 - 0.014 * var(--d))); }
   .synced .ln.by { text-shadow: 0 0 0 transparent; } /* its words carry their own colours */
+  .synced.free .ln { opacity: 0.85; text-shadow: 0 0 0 var(--text); transform: none; }
+  .synced.free .ln.by { text-shadow: 0 0 0 transparent; }
   /* the sung line on a layer of its own: its word repainted each frame redraws that line alone, not the soft lines
      around it sharing its tile (they are dear to draw) */
   .synced .ln.now { opacity: 1; transform: scale(1.04); will-change: transform; } /* 1.06 touched the edges at 320 px */
