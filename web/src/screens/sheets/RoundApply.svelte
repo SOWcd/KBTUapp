@@ -12,7 +12,6 @@
   import { social } from '../../lib/social';
   import { placeOf } from '../../lib/i18n/index.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
   import { data, loadAfisha } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -22,18 +21,15 @@
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
   import Button from '../../ui/Button.svelte';
-  import Avatar from '../../ui/Avatar.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Field from '../../ui/Field.svelte';
   import Chip from '../../ui/Chip.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import { schoolShort } from '../../lib/short';
 
   let { overlay, org, source = 'club' }: { overlay: Overlay; org: Id; source?: string } = $props();
 
   const club = $derived(data.orgs.find((o) => o.id === org));
-  const me = $derived(session.me);
   let r = $state<Round | null>(null);
   let gone = $state(false);
   let picks = $state<Id[]>([]);
@@ -162,9 +158,10 @@
     <div class="body">
     <!-- the steps, done as they pass; the club's own "what's next" under them (shown like its description) -->
     <div>
-      <Group>
+      <!-- the steps once it's sent (before: one line on what the club gets, over the button; owner, Nov 3) -->
+      {#if sent}<Group>
         {#each steps as [label, done] (label)}<Row icon={done ? CircleCheck : Circle} title={label} />{/each}
-      </Group>
+      </Group>{/if}
       {#if r.nextText}<p class="t-body nexttx selectable">{r.nextText}</p>{/if}
       {#if sent}
         {#if r.status === 'done' && r.declineText}<p class="t-callout nexttx">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
@@ -193,12 +190,6 @@
 
     {#if !sent || editing}
     <fieldset disabled={!r.open}>
-    <Group caption={t('cast.known')}>
-      <Row title={me?.student ? `${me.student.lastName} ${me.student.firstName}` : me?.name ?? ''}
-        subtitle={[me?.student?.course ? t('person.course', { n: me.student.course }) : '', schoolShort(me?.student?.school), me?.student?.email, me?.tg.username ? '@' + me.tg.username : ''].filter(Boolean).join(' · ')}>
-        {#snippet lead()}{#if me}<Avatar person={{ id: me.id, name: me.name, avatar: me.avatar }} size={40} tappable={false} />{/if}{/snippet}
-      </Row>
-    </Group>
 
     {#if r.departments.length > 1}
     <div>
@@ -244,6 +235,7 @@
 
   {#snippet footer()}
     {#if r?.open && !sent}
+      <p class="t-foot shares">{t('cast.shares')}</p>
       <Button kind="primary" size="l" full loading={busy} onclick={send}>{t('cast.send')}</Button>
     {:else if r?.open && editing}
       <div class="btns">
@@ -258,6 +250,7 @@
 
 <style>
   .sub { margin-top: 2px; }
+  .shares { margin: 0 var(--s-4) var(--s-2); text-align: center; }
   .body { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-4); }
   fieldset { display: flex; flex-direction: column; gap: var(--gap-group); min-width: 0; margin: 0; padding: 0; border: 0; }
   .note { margin: var(--s-2) var(--s-4) 0; }

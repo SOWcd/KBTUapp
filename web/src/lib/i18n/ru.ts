@@ -318,6 +318,8 @@ const ru = {
   'cast.title': "Набор",
   'cast.until': "до {when}",
   'cast.closed': "Набор закрыт",
+  'cast.quickAsk': "Отправить заявку в {club}?",
+  'cast.shares': "Клуб увидит твоё имя, курс, школу, почту KBTU и @ник в Telegram.",
   'cast.known': "Это клуб уже знает из KBTU",
   'cast.picksOne': "Куда хочешь",
   'cast.picksMany': "Куда хочешь: до {n}, по порядку",

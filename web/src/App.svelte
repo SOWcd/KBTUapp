@@ -16,7 +16,7 @@
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
   import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg } from './lib/tg';
-  import { api, ApiErr, localize } from './lib/api';
+  import { api, ApiErr, localize, type Id } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
@@ -110,7 +110,20 @@
   sheets.memoItem = (org, kind, from, oninsert) => lazy(() => import('./screens/club/MemoItemSheet.svelte'), { org, kind, from, oninsert });
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
   // in a whole application before the server said no)
-  sheets.roundApply = (org, source) => asStudent(() => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source }), `rc_${org}`);
+  sheets.roundApply = (org, source) => asStudent(() => void quickApply(org, source), `rc_${org}`);
+  // a round with nothing to answer or pick: one confirm that says what the club gets, and it's sent (owner, Nov 3: the
+  // sheet of steps was too much for one tap); anything else, or a sent one, opens the sheet
+  async function quickApply(org: Id, source = 'club') {
+    const sheet = () => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source });
+    const r = await api.round(org).catch(() => null);
+    if (!r || !r.open || r.mine || r.questions.length || r.departments.length > 1) return sheet();
+    const club = data.orgs.find((o) => o.id === org)?.name ?? r.title;
+    if (!(await sheets.ask({ title: t('cast.quickAsk', { club }), text: t('cast.shares'), ok: t('cast.send'), cancel: t('common.cancel') }))) return;
+    try {
+      await api.applyRound(r.id, { departments: r.departments.map((d) => d.tagId), answers: {}, source });
+      haptic.ok(); burst(); say(t('cast.sent'), 'party_popper_3d'); void loadAfisha();
+    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'closed' ? t('cast.closed') : t('common.error'), 'warning_3d'); }
+  }
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });

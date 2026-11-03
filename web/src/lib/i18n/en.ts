@@ -318,6 +318,8 @@ const en: Dict = {
   'cast.title': "Recruiting",
   'cast.until': "until {when}",
   'cast.closed': "Recruiting is closed",
+  'cast.quickAsk': "Send your application to {club}?",
+  'cast.shares': "The club will see your name, year, school, KBTU email and Telegram @username.",
   'cast.known': "The club knows this from KBTU already",
   'cast.picksOne': "Where you'd like to be",
   'cast.picksMany': "Where you'd like to be: up to {n}, in order",

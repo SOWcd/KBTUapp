@@ -318,6 +318,8 @@ const kk: Dict = {
   'cast.title': "Қабылдау",
   'cast.until': "{when} дейін",
   'cast.closed': "Қабылдау жабық",
+  'cast.quickAsk': "{club} клубына өтінім жіберу керек пе?",
+  'cast.shares': "Клуб сенің атыңды, курсыңды, мектебіңді, KBTU поштаңды және Telegram-дағы @никіңді көреді.",
   'cast.known': "Мұны клуб KBTU-дан біледі",
   'cast.picksOne': "Қайда барғың келеді",
   'cast.picksMany': "Қайда барғың келеді: {n} дейін, рет бойынша",
