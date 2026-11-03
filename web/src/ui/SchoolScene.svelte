@@ -16,14 +16,16 @@
     // round 5b (owner, Nov 3: Geology and KMA are the bar): one subject each under the medallion, with depth and its own
     // light (.claude/reports/school-lanyards/gen-r5b.py, card files only; the band keeps round 4's). Round 6 (owner, on
     // 5b): SITE a wafer, Business round 5's chart finished, ISE's left a world chart, SCE a molecule in 3D, SMSGT a wind
-    // turbine at dawn, SSS an amphitheatre (.claude/reports/club-lanyards/gen-r6.py)
+    // turbine at dawn, SSS an amphitheatre (.claude/reports/club-lanyards/gen-r6.py). Round 7 (owner, on 6: richer, "wow"):
+    // SMSGT a solar field at dawn, SSS the theatre's colonnade against the sun, ISE a ring of light round the globe and
+    // the sunrise on its limb (.claude/reports/club-lanyards/round7/gen-schools-r7.py)
     site: [['site-traces', 'far'], ['site-board', 'far'], ['site-wafer', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
     geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
-    business: [['bs-chart', 'far'], ['bs-trend', 'near']], ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near']],
+    business: [['bs-chart', 'far'], ['bs-trend', 'near']], ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-ring-back', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near'], ['ise-ring-front', 'near']],
     kma: [['kma-moon', 'far'], ['kma-waves', 'waves'], ['kma-ship', 'near ship']],
     law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
     sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-bokeh', 'far'], ['sce-mol', 'near']],
-    smsgt: [['smsgt-comb', 'far'], ['smsgt-dawn', 'far'], ['smsgt-wind', 'near']], sss: [['sss-book', 'far'], ['sss-theatre', 'near']],
+    smsgt: [['smsgt-comb', 'far'], ['smsgt-dawn', 'far'], ['smsgt-field', 'near']], sss: [['sss-book', 'far'], ['sss-sky', 'far'], ['sss-theatre', 'near']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
 </script>
@@ -46,6 +48,10 @@
   .l { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; }
   .sc:not(.wide) .l { object-position: 50% 100%; }
   .far { --z: -2; --zs: 1.03; }
+  /* a narrow card (320 px phones) keeps its width for the text: round 7's subjects stand smaller in their corner instead of
+     sliding under the name (scale composes with .z's transform) */
+  .sc.wide { container-type: inline-size; }
+  @container (max-width: 310px) { :is(.sss, .sce, .ise, .business, .site, .smsgt) .l { scale: 0.78; transform-origin: 100% 85%; } }
   .near { --z: 3; --zs: 1.03; }
 
   /* the badge's band: the shield whole, in the middle */
