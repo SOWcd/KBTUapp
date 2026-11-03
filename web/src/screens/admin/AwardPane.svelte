@@ -6,7 +6,7 @@
   // checked in", and who has it (a tap: their profile, or take it back).
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type BadgeSession, type GrantItem, type GrantLink } from '../../lib/api';
   import { codesOf, manualMedal, manualName, manualTitle, variantHow, type Manual } from '../../lib/awards';
   import { say, overlays, type Overlay } from '../../lib/state/ui.svelte';
@@ -192,7 +192,7 @@
         {/if}
         <div class="btns">
           {#if a.scan}<Button kind="filled" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
-          <Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<Send size={17} />{/snippet}{t('aw.link')}</Button>
+          <Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>
         </div>
         {#if mode === 'link'}
           <div class="form" transition:fold>

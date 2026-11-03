@@ -8,7 +8,7 @@
   import MedalIcon from '@lucide/svelte/icons/medal';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import ScrollText from '@lucide/svelte/icons/scroll-text';
-  import Send from '@lucide/svelte/icons/send';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Users from '@lucide/svelte/icons/users';
   import { untrack, type Component } from 'svelte';
   import { api, type StaffRow } from '../../lib/api';
@@ -109,7 +109,7 @@
         {@render place(MedalIcon, t('adm.awards'), () => open(AdminAwards, {}))}
         {@render place(Building, t('adm.clubs'), () => sheets.adminClubs())}
       {/if}
-      {@render place(Send, t('adm.chats'), () => sheets.adminChats())}
+      {@render place(TelegramMark, t('adm.chats'), () => sheets.adminChats())}
       {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
