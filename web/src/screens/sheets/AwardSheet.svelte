@@ -198,7 +198,7 @@
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
     {#if lit}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
     {#if lit}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 132} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 132} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
