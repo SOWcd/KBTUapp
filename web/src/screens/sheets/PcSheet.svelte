@@ -30,7 +30,8 @@
 </Sheet>
 
 <style>
-  .pc { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 4px 4px 8px; text-align: center; }
+  .pc { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: var(--s-1) var(--s-1) var(--s-2); text-align: center; }
   .pc p { text-wrap: pretty; }
-  .qr { width: 168px; height: 168px; margin: 6px 0 2px; padding: 10px; border-radius: 20px; background: #fff; }
+  /* a code reads only on white, in both themes (its quiet zone) */
+  .qr { width: 168px; height: 168px; margin: 6px 0 2px; padding: 10px; border-radius: var(--r-l); background: #fff; }
 </style>
