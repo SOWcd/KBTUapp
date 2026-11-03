@@ -177,8 +177,9 @@ def decide_join(con, v: Viewer, rid: int, accept: bool) -> None:
 def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     """The club's own profile and settings (Vice+, §2): whether it takes applications, and what students see on its
     sheet — the name and its short one, its logo (an upload of the editor's; null: the emoji on its cover again), emoji
-    and cover, about, up to 6 links. Only what is sent changes, all or nothing. DMP may set any club's short name."""
-    if body.keys() != {"abbr"} or not overseer(con, v):
+    and cover, about, up to 6 links. Only what is sent changes, all or nothing. DMP may set any club's short name and its name (an official club's name is DMP's alone)."""
+    # DMP: any club's abbr, and an official club's name (the club's own Vice+ renames a student initiative)
+    if not (body and body.keys() <= {"abbr", "name"} and ("name" not in body or _org(con, oid)["official"]) and overseer(con, v)):
         _may(con, v, oid, "profile")
     bad, sets = object(), {}
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
@@ -228,7 +229,12 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
                 sets[k] = before[k]
         with tx(con):  # the name checked and taken at once
             if sets.get("name", before["name"]) != before["name"]:
-                _rename_ok(con, before, sets["name"])
+                if before["official"] and not overseer(con, v):  # the ✓ was given to this name: DMP renames an official club
+                    raise ApiError("forbidden", "name")
+                _rename_ok(con, oid, sets["name"])
+            for k in ("abbr", "short"):
+                if sets.get(k, before[k]) != before[k]:
+                    _looks_ok(sets[k])
             if sets.get("slug", before["slug"]) != before["slug"]:  # the old short link stays this club's
                 if not _slug_free(con, sets["slug"], oid):
                     raise ApiError("conflict", "taken")
@@ -295,8 +301,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
             raise ApiError("conflict", "pending")
         if last and last["status"] == "rejected" and last["decided_at"] + CLUB_REAPPLY > core.now():
             raise ApiError("rate_limited")
-        if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", org_name(name)[0]):  # as it'll be named
-            raise ApiError("conflict", "taken")
+        _new_club_ok(con, name, short)
         aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, links, why, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, json.dumps(links), why, core.now())).lastrowid
         for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
@@ -324,8 +329,7 @@ def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: obj
             raise core.decided(con, f"capp:{aid}") if one(con, "SELECT 1 FROM club_applications WHERE id = ?", aid) else ApiError("not_found")
         oid = None
         if approve:
-            if one(con, "SELECT 1 FROM orgs WHERE lower(name) = lower(?) AND status != 'archived'", a["name"]):
-                raise ApiError("conflict", "taken")
+            _new_club_ok(con, a["name"], a["short"])  # the same check as when applying: a club named since may have taken it
             oid = create_org(con, v.id, a["name"], a["short"], a["emoji"], False)
             con.execute("UPDATE orgs SET cover = ?, description = ?, links = ? WHERE id = ?", (a["cover"], a["description"], a["links"], oid))
             oversight.set_role(con, v.id, a["user_id"], oid, "president", "club_application")
@@ -475,15 +479,28 @@ def _skeleton(name: str) -> str:
     return "".join(c for c in s if c.isalnum() or c in "+#&")
 
 
-def _rename_ok(con, before, name: str) -> None:
-    """A club's new name (update_org; the admin's create_org is the admin's): not another org's in any letters or case,
-    no KBTU in look-alike letters (org_name took the plain one off its ends), no check mark posing as the official one
-    (lanyards go by slug: a rename neither gains nor loses one)."""
+def _looks_ok(name: str) -> None:
+    """No KBTU in look-alike letters (org_name took the plain one off a name's ends), no check mark posing as the
+    official one: a club's name, short name and abbr."""
     if re.search("kbt[uy]", _skeleton(name)) or _TICKS & set(name):
         raise ApiError("bad_input", "name")
+
+
+def _rename_ok(con, oid: int | None, name: str) -> None:
+    """A club's name, at application, approval and rename (the admin's create_org is the admin's): _looks_ok, and not
+    another org's in any letters or case (oid: the club itself, None before it exists). Lanyards go by slug: a rename
+    neither gains nor loses one."""
+    _looks_ok(name)
     skel = _skeleton(name)
-    if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id != ?", before["id"])):
+    if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id IS NOT ?", oid)):
         raise ApiError("conflict", "taken")
+
+
+def _new_club_ok(con, name: str, short: str) -> None:
+    """An application's name as the club will be named (org_name), its short name and the abbr it would get."""
+    _rename_ok(con, None, org_name(name)[0])
+    _looks_ok(short)
+    _looks_ok(guess_abbr(name))
 
 
 def guess_abbr(name: str) -> str:
