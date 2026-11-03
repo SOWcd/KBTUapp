@@ -162,7 +162,7 @@ export interface Org extends OrgRef {
   leaders?: Member[];           // President and Vice, from api.org only
   chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
-  round?: { id: Id; closesAt: Ts; applied: boolean } | null; // a recruitment round taking applications (casting) and whether I applied
+  round?: { id: Id; closesAt: Ts; applied: boolean; quick?: boolean } | null; // a recruitment round taking applications (casting), whether I applied; quick: nothing to answer or pick
   subscribed: boolean;
   myRole: OrgRole | null;
   myTitle?: string | null;      // the club's own name for my role (§2b)

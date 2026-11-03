@@ -5,6 +5,8 @@
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { t } from '../../lib/i18n/index.svelte';
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
+  import type { OrgRef } from '../../lib/api';
   import { data, loadNews } from '../../lib/state/data.svelte';
   import { ui } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -15,6 +17,17 @@
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha') void untrack(loadNews); });
+  // a club whose full name runs past its circle ("Club Fem...") goes by its short name (owner, Nov 3); measured, once each
+  const tight = new SvelteSet<number>();
+  // (by the text's own width, so a row laid out on a hidden tab measures right too; 66: the circle's width, .s)
+  let pen: CanvasRenderingContext2D | null = null;
+  function fit(node: HTMLElement, o: OrgRef) {
+    if (!o.abbr) return;
+    pen ??= document.createElement('canvas').getContext('2d');
+    if (!pen) return;
+    pen.font = getComputedStyle(node).font;
+    if (pen.measureText(nameOf(o)).width > 66) tight.add(o.id);
+  }
   const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events, seenEv));
 </script>
 
@@ -22,7 +35,7 @@
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
       <span class="ring"><span class="in"><OrgLogo org={g.org} size={54} /></span></span>
-      <b class="ellipsis">{nameOf(g.org)}</b>
+      <b class="ellipsis" use:fit={g.org}>{tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
     </button>
   {/each}
   <button class="s" onclick={() => sheets.news()}>

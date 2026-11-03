@@ -24,8 +24,9 @@
   // title: null = the live status speaks; neither: the capsule fades away (an empty glass pill between Telegram's buttons
   // looked broken). mark: the icon alone (a sheet that names itself in its own header)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type Props = { live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean; mark?: boolean };
-  let { live = null, title = null, icon = null, spin = false, mark = false }: Props = $props();
+  // tint: the page on top is tinted (the event editor's overlay.tint): in power saving the solid glass takes its colour
+  type Props = { live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean; mark?: boolean; tint?: string | null };
+  let { live = null, title = null, icon = null, spin = false, mark = false, tint = null }: Props = $props();
 
   const BOOT_MS = 2550; // from the webview opening; matched to Telegram's «KBTU App» → «Close» on iPhone
   const phone = inTelegram && /^(ios|android)$/.test(tg.platform);
@@ -82,7 +83,7 @@
   });
 </script>
 
-<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} use:glass={{ bloom: true }} use:chrome>
+<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} style:--cap-tint={tint} use:glass={{ bloom: true }} use:chrome>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <!-- live status -->
   <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live?.title}>
@@ -109,6 +110,10 @@
   .cap.boot { width: min(152px, calc(100vw - 230px)); }
   .cap > .tone-base { background: var(--glass-clear); }
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
+  /* power saving: no blur, so no colour comes through the glass; a solid fill takes it instead (owner, Nov 3: a flat
+     grey capsule on a tinted page). The page's own mix (its tint under the ground's veil), a step lighter (--fill) */
+  :global(html.lowfx) .cap.tinted > .tone-base { background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--cap-tint); }
+  :global(html.lowfx) .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.9); } /* the Feed's slide, near solid */
   /* over the Feed (chrome.ts): dark glass tinted by the slide, the dark palette past the halfway point */
   .cap:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; }
   /* over a sheet or a full-screen view it says that view's title and takes no taps */

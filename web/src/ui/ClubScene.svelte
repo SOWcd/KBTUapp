@@ -16,6 +16,9 @@
   import chEmblem from '../assets/lanyards/choice-emblem.webp'; // their logo cut off its navy (round 5b)
   import jccBack from '../assets/lanyards/jcc-back.webp';
   import keys from '../assets/lanyards/scenes/ah-keys.svg?url';
+  import oteWord from '../assets/lanyards/ote-word.webp';
+  import animeBack from '../assets/lanyards/anime-back.webp'; // their own art, the mock's frame painted out (new3/cut-new3.py)
+  import magWord from '../assets/lanyards/kbtumag-mark.webp';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -94,6 +97,33 @@
          sakura is the card's top layer, over the photo and the strip (Hero). The badge's band (MyQr) as they asked: no
          logo in the middle, no sakura -->
     <img class="l z far jb" src={jccBack} alt="" /><i class="petals"></i>
+  {:else if look === 'teentertainmentkbtu'}
+    <!-- óte entertainment (new3 r2, owner: in the grammar of SITE, Shade, KMA, Geology; .claude/reports/club-lanyards/new3/
+         gen-r2.py): their blush lit from the top right, the house curtain's folds as fine coral lines far, fading toward
+         the name; the stage's boards in layers under the strip; a vintage microphone standing on them in a follow-spot,
+         its pool of light, a few flecks of confetti in the beam, some falling. The badge's band: the curtain, the spot on
+         their wordmark. Round 3 (owner: "not enough detail, not enough volume"): the same stage in depth, the back wall's
+         light and the house curtain's lit folds, the beam in haze and bokeh, the floor in perspective with its sheen and
+         footlights, a heavy valance with fringe and tassels, the side curtain tied back, the microphone's chrome and cast
+         shadow, confetti in and out of focus -->
+    {#if wide}<img class="l z far" src={L('ote-far')} alt="" /><img class="l" src={L('ote-ground')} alt="" /><img class="l z near" src={L('ote-arch')} alt="" />
+      <img class="l z near otm" src={L('ote-mic')} alt="" />
+    {:else}<img class="l" src={L('ote-stage')} alt="" /><img class="word otw" src={oteWord} alt="" />{/if}
+    <i class="fall"></i>
+  {:else if look === 'klubanimeshnikov'}
+    <!-- the anime club (new3): their own ink-wash art with its red spider lilies at the edges, a lighter mist behind the
+         name; red embers drifting up -->
+    <img class="l z far anb" src={animeBack} alt="" /><i class="mist"></i><i class="ash"></i>
+  {:else if look === 'kbtumag'}
+    <!-- kbtu.mag (new3 r2, the same grammar): cream paper lit from the top right, a halftone screen far fading toward the
+         name, the desk in layers under the strip; two issues leaning on each other (the cover a halftone portrait under
+         their masthead) and an inkwell with its fountain pen. The badge's band: the screen, their wordmark. Round 3 (owner:
+         the left and the middle empty): a page faint behind the name (justified columns and their rule, a pull-quote
+         mark, the running head and folio, crop marks, the screen going on softly), a pencil and a coffee ring low on the
+         desk -->
+    <i class="paper"></i>
+    {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
+    {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -269,10 +299,44 @@
   @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam; raspberry as their drawn petals, the pale ones melted into the pink (club, Nov 3) */
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
 
+  /* ---- óte: their blush, lit from the top right ---- */
+  .teentertainmentkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.55), transparent 70%), linear-gradient(165deg, rgb(248, 235, 234), rgb(243, 224, 224) 55%, rgb(236, 206, 205)); }
+  .otw { top: 26px; height: 60px; }
+  /* round 5 (owner): the microphone and its spot stand in the card's middle, between the text and the medallion; a 320 px
+     card has no middle to spare (its text runs to the medallion), so there they stand smaller under the medallion */
+  .teentertainmentkbtu.wide { container-type: inline-size; }
+  @container (max-width: 310px) { .otm { translate: 53px 0; scale: 0.62; transform-origin: calc(100% - 93px) calc(100% - 42px); } }
+  /* confetti falling, a tile per period, kept off the text (to the right on the card) */
+  .fall { left: 0; top: -120px; width: 100%; height: calc(100% + 120px); background: url('../assets/lanyards/scenes/ote-fall.svg') 0 0 / 120px 120px; opacity: 0.8;
+    -webkit-mask: linear-gradient(90deg, transparent 45%, black 75%); mask: linear-gradient(90deg, transparent 45%, black 75%); animation: otfall 30s linear infinite; }
+  .sc:not(.wide) .fall { -webkit-mask: linear-gradient(90deg, black, transparent 32% 68%, black); mask: linear-gradient(90deg, black, transparent 32% 68%, black); }
+  @keyframes otfall { to { transform: translateY(120px); } }
+  .teentertainmentkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.4), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(150, 50, 45, 0.12); }
+
+  /* ---- the anime club: their art; the band shows its top, the lily at the left and the swirl ---- */
+  .klubanimeshnikov { background: rgb(150, 150, 154); }
+  .sc:not(.wide) .anb { object-position: 50% 0%; } /* above the painted-out strip's reflection */
+  .mist { inset: 0; background: radial-gradient(42% 60% at 40% 38%, rgba(236, 236, 238, 0.5), transparent 75%); }
+  .sc:not(.wide) .mist { display: none; }
+  /* embers: their red specks rising and drifting, a tile per period */
+  .ash { left: 0; top: 0; width: calc(100% + 90px); height: calc(100% + 90px); opacity: 0.8; animation: anash 20s linear infinite;
+    background: radial-gradient(circle at 18% 22%, rgba(214, 40, 48, 0.9) 0 0.9px, transparent 1.5px), radial-gradient(circle at 62% 70%, rgba(192, 38, 45, 0.8) 0 1.2px, transparent 1.8px),
+      radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.8) 0 0.8px, transparent 1.4px), radial-gradient(circle at 40% 88%, rgba(214, 40, 48, 0.7) 0 0.7px, transparent 1.3px);
+    background-size: 90px 90px;
+    -webkit-mask: linear-gradient(90deg, black, transparent 30% 55%, black); mask: linear-gradient(90deg, black, transparent 30% 55%, black); }
+  @keyframes anash { to { transform: translate(-90px, -90px); } }
+  .klubanimeshnikov .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.18); }
+
+  /* ---- kbtu.mag: cream paper, lit from the top left ---- */
+  .kbtumag { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 250, 240, 0.7), transparent 70%), linear-gradient(160deg, rgb(243, 233, 219), rgb(234, 220, 203) 55%, rgb(224, 206, 184)); }
+  .kbtumag .paper { opacity: 0.3; }
+  .mgw { top: 24px; height: 62px; }
+  .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
+
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals, .fall, .ash { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, :global(html.lowfx) .win,
-  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals { animation: none; }
+  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash { animation: none; }
   :global(html.lowfx) .win { opacity: 0.6; }
   :global(html.lowfx) .spark { display: none; }
 </style>

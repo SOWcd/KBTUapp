@@ -51,7 +51,9 @@ export function goTab(tab: Tab): void {
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
 /** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
  *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean }
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
+  /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
+  tint?: string | null }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
@@ -92,13 +94,13 @@ export function removeOverlay(id: number): void {
 }
 
 // ---- toasts: live phrases with a 3D emoji ----
-export const toast = $state({ text: '', emoji: 'party_popper_3d', id: 0 });
+export const toast = $state<{ text: string; emoji: string; id: number; undo?: (() => void) | null }>({ text: '', emoji: 'party_popper_3d', id: 0 });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function say(text: string, emoji = 'sparkles_3d'): void {
+export function say(text: string, emoji = 'sparkles_3d', undo?: () => void): void {
   // a toast born mid-switch came solid and cleared up after (owner, Oct 31): it waits for the switch to end
   const vt = switching();
-  if (vt) { vt.then(() => say(text, emoji)); return; }
-  toast.text = text; toast.emoji = emoji; toast.id++;
+  if (vt) { vt.then(() => say(text, emoji, undo)); return; }
+  toast.text = text; toast.emoji = emoji; toast.undo = undo ?? null; toast.id++;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.text = ''), 2600);
+  toastTimer = setTimeout(() => (toast.text = ''), undo ? 5000 : 2600); // an Undo stays long enough to reach
 }

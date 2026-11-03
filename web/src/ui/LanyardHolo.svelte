@@ -81,5 +81,13 @@
     linear-gradient(100deg, var(--h1), var(--h2) 50%, var(--h1)); color: var(--h3);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 -1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .club span { font-variant-numeric: tabular-nums; }
+  /* new3 r2 (owner: the anime club's glossy red bar fought the ink wash): charcoal glass over their art, a fine red
+     hairline at its edge and a red ink stroke under their name, the number in their red */
+  .klubanimeshnikov { color: rgba(246, 242, 240, 0.95); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: radial-gradient(38% 140% at 0% 50%, rgba(192, 38, 45, 0.5), transparent 70%), linear-gradient(180deg, rgba(30, 30, 33, 0.72), rgba(10, 10, 12, 0.82));
+    box-shadow: inset 0 0 0 0.75px rgba(192, 38, 45, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px -6px rgba(0, 0, 0, 0.6); }
+  .klubanimeshnikov > span { color: rgb(236, 92, 98); }
+  /* óte and kbtu.mag: their colours, matte (the specular dimmed, no white rim) */
+  .teentertainmentkbtu, .kbtumag { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
   .club .ch { white-space: nowrap; }
 </style>

@@ -48,6 +48,11 @@
   const mine = $derived(!!qr);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
+  // someone's photo full screen (owner, Nov 3), our biggest copy (media's 1600 px .webp beside the 480 px .t.webp)
+  function bigPhoto() {
+    const small = h.person.avatar!;
+    sheets.photos([{ id: -1, url: small.replace(/\.t\.webp$/, '.webp'), thumb: small, w: 0, h: 0, blur: '', by: null, mine: true, canDelete: false }], 0);
+  }
 
   // a damped pendulum from the strap's top, like a badge let go (WAAPI frames from the formula, not keyframes by hand)
   const frames = Array.from({ length: 41 }, (_, f) => {
@@ -235,6 +240,7 @@
       {:else}<span class="medal"><OrgMedal look={face} logo={medalLogo} /></span>{/if}
       <div class="top" class:mine>
         {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
+        {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
         {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
           <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>

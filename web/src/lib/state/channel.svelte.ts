@@ -12,6 +12,9 @@ export const channel = $state({ feed: null as ChannelFeedPost[] | null, focus: n
 let gen = 0;
 export const touched = () => { gen++; };
 
+// the channel's order (owner, Nov 3): a post by its message in the channel; mine not out yet above them all
+const key = (p: { msg?: number | null }) => p.msg ?? Number.MAX_SAFE_INTEGER;
+
 export async function loadChannel(): Promise<void> {
   // a post of mine still on its way (a temporary id below 0, ChannelCompose) stays on top through a refresh; the older
   // pages I opened stay under the fresh first one. ponytail: those aren't refreshed (a post deleted there stays till the
@@ -19,8 +22,8 @@ export async function loadChannel(): Promise<void> {
   const at = gen;
   try {
     const got = await api.channelFeed(); if (at !== gen) return;
-    const floor = got.length ? got[got.length - 1].id : 0;
-    const older = (channel.feed ?? []).filter((p) => p.id > 0 && p.id < floor);
+    const floor = got.length ? key(got[got.length - 1]) : 0;
+    const older = (channel.feed ?? []).filter((p) => p.id > 0 && key(p) < floor);
     channel.feed = [...(channel.feed ?? []).filter((p) => p.id < 0), ...got, ...older];
     if (!older.length) channel.more = got.length >= PAGE;
   } catch { if (!channel.feed) channel.feed = []; }
@@ -28,7 +31,7 @@ export async function loadChannel(): Promise<void> {
 
 /** The next page under the last post shown; the ids it added. */
 export async function loadOlder(): Promise<number[]> {
-  const last = Math.min(...(channel.feed ?? []).filter((p) => p.id > 0).map((p) => p.id));
+  const last = Math.min(...(channel.feed ?? []).filter((p) => p.id > 0 && p.msg).map(key));
   const got = await api.channelFeed(last);
   const have = new Set((channel.feed ?? []).map((p) => p.id)), add = got.filter((p) => !have.has(p.id));
   channel.feed = [...(channel.feed ?? []), ...add];

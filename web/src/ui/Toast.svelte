@@ -7,6 +7,7 @@
   import { toast } from '../lib/state/ui.svelte';
   import Emoji from './Emoji.svelte';
   import { glass } from './glass';
+  import { t } from '../lib/i18n/index.svelte';
   // read once per showing, not live: a sheet closing right after say() must not move the toast mid-way;
   // the map's bottom holds its place card, so there it drops under the floors (it covered the card)
   const atTop = () => { const d = document.documentElement.dataset; return 'sheet' in d || 'map' in d; };
@@ -74,6 +75,7 @@
     {#key toast.id}
       <span class="em" in:come={{ first: fresh }} out:leave><span class:bounce={fresh}><Emoji name={toast.emoji} size={26} /></span></span>
       <span class="tx" in:come={{ first: fresh }} out:leave>{toast.text}</span>
+      {#if toast.undo}{@const undo = toast.undo}<button class="undo" in:come={{ first: fresh }} out:leave onclick={() => { toast.text = ''; undo(); }}>{t('fc.undo')}</button>{/if}
     {/key}
   </div>
 {/if}
@@ -91,6 +93,8 @@
   .toast.top { bottom: auto; top: calc(var(--safe-top) + max(var(--tg-head), 46px) + 8px); animation-name: drop; }
   :global(html[data-map]) .toast.top { top: calc(max(48px, var(--top)) + 70px); } /* under the map's floor row */
   .em { display: flex; flex: none; }
+  /* the one tap a toast takes: Undo, the accent's ink, its own 44 px of height to hit */
+  .undo { flex: none; align-self: stretch; margin: -9px -8px -9px 2px; padding: 0 var(--s-2); color: var(--accent); font: inherit; font-weight: 700; pointer-events: auto; }
   /* a long line wraps between words, two lines at most (a name never cut in the middle; a third line ends in …) */
   .tx { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .bounce { display: flex; animation: bounce 560ms cubic-bezier(.3, 1.6, .5, 1) 60ms both; }

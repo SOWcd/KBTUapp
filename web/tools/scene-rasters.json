@@ -13,10 +13,18 @@
  "scenes/cr-spectrum-card.svg": "8f7c141afce5",
  "scenes/fc-neon-card.svg": "0dfc1e649bea",
  "scenes/kn-jersey-card.svg": "309e71d2855a",
+ "scenes/mag-detail-card.svg": "601f9c34e0c9",
+ "scenes/mag-far-card.svg": "3c87de0467b1",
+ "scenes/mag-ground-card.svg": "828c8104256a",
+ "scenes/mag-issue-card.svg": "854578330505",
  "scenes/mk-far-card.svg": "7381b7d5f7a0",
  "scenes/mk-mid-card.svg": "f057f5468362",
  "scenes/mk-near-card.svg": "023b44523b46",
  "scenes/mk-sky-card.svg": "424c3d0bb1b0",
+ "scenes/ote-arch-card.svg": "13ae758443c1",
+ "scenes/ote-far-card.svg": "f14d87af46f4",
+ "scenes/ote-ground-card.svg": "74a21ecf3437",
+ "scenes/ote-mic-card.svg": "1573cb379fe4",
  "scenes/qa-hill-card.svg": "70e676402d00",
  "scenes/qa-sun-card.svg": "52f9ca03ebf6",
  "scenes/sh-strokes-card.svg": "b65e6245b0e5",
@@ -55,5 +63,5 @@
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
  "sower-rosette.svg": "94f0a7baa83c",
- "minis": "37f3598113a4"
+ "minis": "cc1845346dc1"
 }

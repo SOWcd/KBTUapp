@@ -469,14 +469,15 @@ def _roster_mine(con, uid: int) -> dict | None:
 
 # the frames over a photo on the lanyard, anyone's to pick, apart from the lanyard (web: public/frames/<id>.svg)
 # ponytail: one list for everyone; a club's own frame for its members alone comes with the first club that draws one
-FRAMES = ("flowers", "space", "hearts")
+FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", "notes", "neon", "blossom", "gold")  # web: SettingsList FRAMES, public/frames/<id>.svg (test_frames)
 
 
 # the clubs with a lanyard of their own, by slug (stable, the same in prod and tests); any club may have one, official or
 # not (owner, Nov 2). The web's list is awards.ts `SKINS` + `CLUB_LOOKS`: tests/test_lanyards.py holds the two equal
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
             "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
-            "choice")
+            "choice", "teentertainmentkbtu", "klubanimeshnikov",
+            "kbtumag")  # ponytail: kbtumag is a placeholder slug until kbtu.mag's org is in prod: rename here and in the web
 SKINNED = "o.status = 'active' AND o.slug IN (" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 
 
