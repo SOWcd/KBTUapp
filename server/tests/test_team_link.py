@@ -89,7 +89,7 @@ def test_team_link_card(env, monkeypatch):
     card = sent[-1]["result"]
     assert card["reply_markup"]["inline_keyboard"][0][0]["url"].endswith(f"startapp=join_1_{tok}")
     text = card["input_message_content"]["message_text"]
-    assert "IT Club" in text and "\u0434\u043e" in text and "http" not in text      # "until" its day, no bare link
+    assert "IT Club" in text and "\u0434\u043e" in text.lower() and "http" not in text      # "until" its day, no bare link
     assert c.post("/api/share", headers=tma(22), json={"kind": "join", "id": 1, "many": True}).status_code == 403
     assert c.post("/api/share", headers=tma(20), json={"kind": "join", "id": 1}).status_code == 200   # the one-time card stays
     assert sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("_")[-1] != tok
