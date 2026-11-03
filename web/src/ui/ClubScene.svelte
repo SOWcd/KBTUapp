@@ -102,8 +102,12 @@
          gen-r2.py): their blush lit from the top right, the house curtain's folds as fine coral lines far, fading toward
          the name; the stage's boards in layers under the strip; a vintage microphone standing on them in a follow-spot,
          its pool of light, a few flecks of confetti in the beam, some falling. The badge's band: the curtain, the spot on
-         their wordmark -->
-    {#if wide}<img class="l z far" src={L('ote-far')} alt="" /><img class="l" src={L('ote-ground')} alt="" /><img class="l z near" src={L('ote-mic')} alt="" />
+         their wordmark. Round 3 (owner: "not enough detail, not enough volume"): the same stage in depth, the back wall's
+         light and the house curtain's lit folds, the beam in haze and bokeh, the floor in perspective with its sheen and
+         footlights, a heavy valance with fringe and tassels, the side curtain tied back, the microphone's chrome and cast
+         shadow, confetti in and out of focus -->
+    {#if wide}<img class="l z far" src={L('ote-far')} alt="" /><img class="l" src={L('ote-ground')} alt="" /><img class="l z near" src={L('ote-arch')} alt="" />
+      <img class="l z near" src={L('ote-mic')} alt="" />
     {:else}<img class="l" src={L('ote-stage')} alt="" /><img class="word otw" src={oteWord} alt="" />{/if}
     <i class="fall"></i>
   {:else if look === 'klubanimeshnikov'}
@@ -113,9 +117,12 @@
   {:else if look === 'kbtumag'}
     <!-- kbtu.mag (new3 r2, the same grammar): cream paper lit from the top right, a halftone screen far fading toward the
          name, the desk in layers under the strip; two issues leaning on each other (the cover a halftone portrait under
-         their masthead) and an inkwell with its fountain pen. The badge's band: the screen, their wordmark -->
+         their masthead) and an inkwell with its fountain pen. The badge's band: the screen, their wordmark. Round 3 (owner:
+         the left and the middle empty): a page faint behind the name (justified columns and their rule, a pull-quote
+         mark, the running head and folio, crop marks, the screen going on softly), a pencil and a coffee ring low on the
+         desk -->
     <i class="paper"></i>
-    {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
+    {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
