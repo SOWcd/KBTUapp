@@ -6,5 +6,6 @@ import type qrcode from 'qrcode-generator';
 export type Encoder = typeof qrcode;
 export const qr = $state<{ enc: Encoder | null }>({ enc: null });
 let loading: Promise<unknown> | null = null;
-export const loadQr = () => (loading ??= import('qrcode-generator').then((m) => (qr.enc = m.default)));
+// a failed fetch (offline, a deploy in between) is tried again on the next need, not kept
+export const loadQr = () => (loading ??= import('qrcode-generator').then((m) => (qr.enc = m.default), (e) => { loading = null; throw e; }));
 export function setQr(enc: Encoder): void { qr.enc = enc; }

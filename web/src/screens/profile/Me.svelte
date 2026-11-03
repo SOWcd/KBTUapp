@@ -113,6 +113,7 @@
     const r = ++run, q = calm();
     haptic.tap();
     phase = 'entering'; hold = true; pending = false;
+    if (!rest) { rest = true; flushSync(); } // the blocks under the badge, if still to come, are there to fade out with the rest
     tok = open(SettingsMode, { onclose: leave });
     icons(true, q);
     if (shield) fade(shield, false, { duration: 120 });

@@ -76,7 +76,7 @@
   let soon = $state(false), later = $state(false);
   // each a task after a frame was drawn (a frame's own requestAnimationFrame runs before that same frame is drawn when
   // the tap was a touch): the header first, the first screen next, then what is below it
-  const after = (fn: () => void) => { let f = requestAnimationFrame(() => (f = setTimeout(fn) as unknown as number)); return () => { cancelAnimationFrame(f); clearTimeout(f); }; };
+  const after = (fn: () => void) => { let k = 0; const f = requestAnimationFrame(() => (k = setTimeout(fn) as unknown as number)); return () => { cancelAnimationFrame(f); clearTimeout(k); }; };
   onMount(() => { let stop = after(() => { soon = true; stop = after(() => (later = true)); }); return () => stop(); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
