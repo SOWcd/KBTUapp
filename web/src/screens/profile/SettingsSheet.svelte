@@ -10,6 +10,9 @@
   import MapPin from '@lucide/svelte/icons/map-pin';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import User from '@lucide/svelte/icons/user';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
+  import Copy from '@lucide/svelte/icons/copy';
+  import Button from '../../ui/Button.svelte';
   import { schoolOf, shortOf } from '../../lib/short';
   import { CITIES } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
@@ -31,11 +34,11 @@
 
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about';
+  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
-    sees: ['set.whoSees', Lock], about: ['set.about', Info] };
+    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
   // where "‹ Back" goes: Privacy for its own pages, else Settings
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
@@ -161,6 +164,15 @@
   const SEES = [['set.portal', 'set.portalText'], ['set.allSee', 'set.allSeeText'], ['set.orgSee', 'set.orgSeeText'],
     ['set.teamSee', 'set.teamSeeText'], ['set.youSee', 'set.youSeeText'], ['set.never', 'set.neverText']] as const;
   const page = (path: string) => openLink(`${location.origin}/${path}?lang=${i18n.lang}`);
+  // Support the app (owner, Nov 3): a gift, never a purchase. The number is copied and nothing else: no Kaspi link (none
+  // is public, and a payment link breaks Telegram's rules), no amounts, and nothing recorded, so no badge, status or
+  // thanks can ever depend on it (.claude/reports/donate-review.md)
+  const donate = $derived(me?.donate ? fmtPhone(me.donate) : '');
+  async function copyDonate() {
+    // the plain digits ("+77001234567"): Kaspi's search takes it as is
+    try { await navigator.clipboard.writeText(me?.donate ?? ''); haptic.ok(); say(t('pay.copied'), 'sparkles_3d'); }
+    catch { haptic.error(); } // the number is selectable too
+  }
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
@@ -296,6 +308,19 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
+  {:else if kind === 'donate' && donate}
+    <!-- the big line first: not a purchase; then the number to copy; a neutral mark, never Kaspi's logo -->
+    <div class="don">
+      <span class="mark"><HandHeart size={28} /></span>
+      <h2 class="fs-t1">{t('don.head')}</h2>
+      <p class="fs-body dim">{t('don.text')}</p>
+    </div>
+    <div class="num-card">
+      <p class="fs-sub faint">{t('don.bank')}</p>
+      <p class="fs-t1 num selectable">{donate}</p>
+      <Button kind="secondary" size="m" onclick={copyDonate}>{#snippet icon()}<Copy size={18} />{/snippet}{t('pay.copy')}</Button>
+    </div>
+    <p class="foot always">{t('don.safe')}</p>
   {/if}
 </Pane>
 
@@ -310,5 +335,10 @@
   .two > .sub { font-size: var(--fs-sub); }
   /* a school's short name stays whole; its long name wraps beside it */
   .short { color: var(--text-3); }
+  .don { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4) 0; text-align: center; }
+  .mark { display: grid; place-items: center; width: var(--s-10); height: var(--s-10); border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+  .num-card { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); margin-top: var(--s-6); padding: var(--s-5) var(--s-4);
+    border-radius: var(--r-l); background: var(--surface); }
+  .num-card .num { white-space: nowrap; }
   .wide { max-width: 60vw; color: var(--text-3); overflow-wrap: anywhere; text-align: right; }
 </style>

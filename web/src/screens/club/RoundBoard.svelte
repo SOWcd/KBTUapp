@@ -325,6 +325,8 @@
   .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
   /* the chips' rows scroll sideways (4 px of block padding keeps their 44 px hit areas) */
   .chips { display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none; padding-block: var(--s-1); max-width: 100%; }
+  /* the stages wrap, never scroll: "Accepted" sat past the edge and a Vice couldn't find who she took (Nov 3) */
+  .chips.stages { flex-wrap: wrap; overflow-x: visible; }
   .stages.fr { mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent); }
   .stages.fl { mask-image: linear-gradient(90deg, transparent, black 28px); }
   .stages.fl.fr { mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent); }

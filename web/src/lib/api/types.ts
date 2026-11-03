@@ -239,6 +239,7 @@ export interface Me {
   consentNow?: string; // GET /api/me only: the policy version in force
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
+  donate?: string;     // GET /api/me only: the creator's Kaspi number for "Support the app" (DONATE_PHONE); absent: no row
   tgComment?: boolean; // GET /api/me only: a comment of mine the bot deleted in the channel's Telegram group waits for me
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
