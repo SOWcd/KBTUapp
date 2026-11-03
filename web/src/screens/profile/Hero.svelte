@@ -408,7 +408,8 @@
      (their 312,370; art 0..900 x 0..690), the strip's ends at the strip (their 80..1610 x 738..868; the right 1100..1712 x
      300..919, the left 0..400 x 690..919). Px, not the photo's %: a bigger photo no longer swells the flowers round it */
   .jt { position: absolute; z-index: 3; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
-  .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; }
+  .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; transform: scale(0.8); transform-origin: 62.4px 74.1px; } /* drawn in to the photo: they ran onto the name (club, Nov 3) */
+  .badge :global(.petals) { display: none; } /* no falling petals on the face, only on the back and the badge (club, Nov 3) */
   .jl { left: -16px; top: -9.6px; width: 80px; height: 45.8px; }
   .jr { right: -20.4px; top: -87.6px; width: 122.4px; height: 123.8px; }
   /* the name over the petals, a halo of the card's pink round its letters so a flower behind them steps back */

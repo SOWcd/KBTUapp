@@ -266,7 +266,7 @@
   .sc:not(.wide) .jb { object-position: 100% 30%; }
   .petals { left: -120px; top: -120px; width: calc(100% + 240px); height: calc(100% + 240px); background: url('../assets/lanyards/scenes/jcc-petals.svg') 0 0 / 120px 120px;
     opacity: 0.85; animation: jcpetal 24s linear infinite; }
-  @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam */
+  @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam; raspberry as their drawn petals, the pale ones melted into the pink (club, Nov 3) */
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */

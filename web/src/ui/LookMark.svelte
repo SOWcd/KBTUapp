@@ -34,6 +34,6 @@
   .moments img { width: 66%; height: 66%; }
   .faces { background: #000; }
   .faces img { width: 100%; height: 100%; }
-  .japanesecultureclub img { width: 100%; height: 100%; } /* their sakura alone (the loose petal cut off), edge to edge of the plate (club, Nov 3; the plate itself is the QR's hole, no bigger) */
+  .japanesecultureclub img { width: 70%; height: 70%; } /* their sakura alone (the loose petal cut off), a middle size: edge to edge was too much (club, Nov 3) */
   .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
 </style>
