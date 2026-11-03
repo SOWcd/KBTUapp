@@ -19,7 +19,7 @@
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
   <OrgLogo org={o} size={40} />
   <span class="txt">
-    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
+    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
     {#if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
   </span>
   <span class="end">
