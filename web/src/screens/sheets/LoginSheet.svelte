@@ -102,7 +102,7 @@
         <div {@attach caps('words')}><Field label={t('login.lastName')} bind:value={m.lastName} autocomplete="family-name" enterkeyhint="next" maxlength={40} /></div>
         <div {@attach caps('words')}><Field label={t('login.firstName')} bind:value={m.firstName} autocomplete="given-name" enterkeyhint="next" maxlength={40} /></div>
       {/if}
-      <div class="sid" {@attach caps('characters')}><Field label={t('login.sid')} bind:value={m.studentId} placeholder={sidEx} autocomplete="off" enterkeyhint="done" maxlength={12} /></div>
+      <div class="sid" {@attach caps('characters')}><Field label={t('login.sid')} bind:value={m.studentId} placeholder={t('login.sidEg', { sid: sidEx })} autocomplete="off" enterkeyhint="done" maxlength={12} /></div>
       <p class="t-foot dim">{t('login.manualNote')}</p>
       {#if error}<Notice tone="danger" text={error} />{/if}
       <Button kind="primary" size="l" full type="submit" disabled={!mReady} loading={busy}>{t('login.submit')}</Button>

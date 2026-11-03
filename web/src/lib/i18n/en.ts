@@ -992,6 +992,7 @@ const en: Dict = {
   'login.firstName': "First name",
   'login.sid': "Student ID",
   'login.manualNote': "The ID as on your student card: organizers see it at the door.",
+  'login.sidEg': "e.g. {sid}",
   'login.badManual': "Check your name and student ID — like {sid}",
   'login.sidTaken': "This student ID is already taken. We told the admin, they'll get in touch.",
   'me.settings': "Settings",
