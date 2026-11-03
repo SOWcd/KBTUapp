@@ -87,8 +87,13 @@ export function layersOf(art: string): [string, number][] | null {
   const rc = /^layer_rc(\d)$/.exec(art);
   if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
-  return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`rc-rim-${o[2]}`, 0]] : null;
+  return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
 }
+/** the 2026 initiation's three drawn coins (owner, Nov 3: "everyone is used to them"): they stay exactly as they were,
+ *  a round picture (public/emoji/medal_init26*_2) and the 3D coin in the award view, among the pins in Awards */
+export const isCoin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji.startsWith('medal_init26');
+/** the full-size medal's engraved name round its band (ui/Medal from 160 px), for the round medals but Recruiter */
+export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o ? `${o[1]}-legend-${o[2]}` : null; };
 /** a medal's metal letter at its level (its ribbon's): b, s, g, l */
 export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];
 /** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
@@ -97,9 +102,6 @@ export const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q
  *  frame's metal (g gold, s silver, r rose gold), and the year of its moment if it has one */
 export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 's' | 'r'; year?: number }> = {
   medal_first500: { field: '#1E2A7A', glyph: '500', metal: 'g', year: 2026 },
-  medal_init26_2: { field: '#2140B8', glyph: 'init26', metal: 'g', year: 2026 },
-  medal_init26f_2: { field: '#2140B8', glyph: 'init26', metal: 's', year: 2026 },
-  medal_init26p_2: { field: '#5A2296', glyph: 'init26', metal: 'r', year: 2026 },
   headphone_3d: { field: '#3A2A9A', glyph: 'anthem', metal: 'g' },
   face_with_tears_of_joy_3d: { field: '#0E7A86', glyph: 'laugh', metal: 'g' },
   waving_hand_3d_default: { field: '#D2483A', glyph: 'wave', metal: 'g' },

@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, artOf, isMedal, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, artOf, isCoin, isMedal, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -88,7 +88,7 @@
     medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
-  const round = $derived(a ? isMedal(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
+  const round = $derived(a ? isMedal(a) || isCoin(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
   const glow = $derived(it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
@@ -139,8 +139,7 @@
   // a drawn medal is a real 3D coin (WebGL, three.js in its own lazy chunk; owner, Nov 1: the CSS layers read cheap).
   // The flat art shows until the first frame is drawn, and stays when there is no WebGL, under power saving or reduced
   // motion. ponytail: the tier medals and seals keep the CSS coin; a canvas-painted face for them is the upgrade
-  // ponytail: since the awards plan (Nov 3) the drawn 2026 coins (medal_*) are pins, shields, so nothing reaches the 3D
-  // coin; kept until the owner has seen the shields: `round &&` dropped brings it back for them, else delete coin3d.ts
+  // The 2026 initiation's coins (isCoin) are the ones that reach it: First 500 is a pin, a shield (awards plan, Nov 3)
   const art = $derived(round && a && a.level && artOf(a).startsWith('medal_') ? artOf(a) : '');
   let gl = $state<'' | 'wait' | 'on'>('');
   let landed = $state(true); // the 3D entrance: the light behind fades up as the medal arrives
@@ -162,7 +161,7 @@
   const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : va?.level && tiers ? t('aw.level', { tier: tierOf(va.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
-  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) ? 'cap.achievement' : 'cap.badge') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
+  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) || isCoin(it.ach) ? 'cap.achievement' : 'cap.badge') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
     overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
@@ -210,7 +209,7 @@
       <div class="vars up">
         {#each a.variants as x (x.code)}
           <button class="var" class:have={x.have} class:mine={x.code === a.variant} class:on={x.code === (seen ?? a.variant)} onclick={() => { haptic.select(); seen = x.code === a.variant ? null : x.code; }}>
-            <MedalArt a={{ ...a, emoji: x.emoji, level: 1 }} size={56} />
+            <img src={`emoji/${x.emoji}.webp`} alt="" draggable="false" />
             <span>{variantName(a.code, x.code)}</span>
           </button>
         {/each}
@@ -357,10 +356,10 @@
   .vars { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
   .var { flex: 0 1 104px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px 8px; border-radius: var(--r-m);
     font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); transition: background-color .2s; }
-  .var > :global(.pin) { filter: grayscale(1) brightness(0.7); opacity: 0.4; transition: filter .2s, opacity .2s; }
+  .var img { width: 56px; height: 56px; object-fit: contain; filter: grayscale(1) brightness(0.7); opacity: 0.4; transition: filter .2s, opacity .2s; }
   .var span { max-width: 100%; text-align: center; }
-  .var.have > :global(.pin) { filter: grayscale(0.6) brightness(0.85); opacity: 0.7; }
-  .var.mine > :global(.pin) { filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5)); opacity: 1; }
+  .var.have img { filter: grayscale(0.6) brightness(0.85); opacity: 0.7; }
+  .var.mine img { filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5)); opacity: 1; }
   .var.mine { color: var(--text); }
   .var.on { background: rgba(255, 255, 255, 0.08); }
   .var:active { transform: scale(0.96); }
