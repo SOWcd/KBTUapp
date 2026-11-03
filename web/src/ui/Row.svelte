@@ -11,8 +11,11 @@
   //              events, people), 44 high without a tile. It wraps, never "…"
   //   subtitle   a second grey line: CONTENT only (a person's course, an event's time), never a hint
   //   value      grey, before the end mark ("Russian", "2/3")
-  //   icon+tile  a 30 px tile of one flat colour with a white glyph;  lead: anything else at the start (an avatar, a
-  //              content emoji, a club's logo)
+  //   icon       a plain grey line glyph, Settings' row exactly (base.css: 20 px icon in 24, 50 high, the line from
+  //              the label); the default for forms and lists;  with tile: a 30 px tile of one flat colour with a white glyph (Settings' top level only);
+  //              lead: anything else at the start (an avatar, a content emoji, a club's logo)
+  //   placeholder  shown grey while the title is empty (a field-like row: "Place" until one is picked)
+  //   invalid    the value turns red ("Needed" when there is none): a required row left empty
   //   detail     a snippet before the end (a few faces);  count: a red badge there. Both combine with the end mark
   //   accessory  chevron › (pushes a page or opens a sheet; never expands in place) | external ↗ (leaves the app) |
   //              check (a pick: `checked`) | disclosure (a chevron-down that turns with `open`: expands in place) |
@@ -31,19 +34,21 @@
   import Plus from '@lucide/svelte/icons/plus';
   import Badge from './Badge.svelte';
   import { menu as openMenu, type MenuItem } from './menu';
+  import { t } from '../lib/i18n/index.svelte';
 
   type Props = {
     title: string; subtitle?: string; value?: string; dense?: boolean;
-    icon?: Component<any>; tile?: Tile; lead?: Snippet; detail?: Snippet; count?: number;
+    icon?: Component<any>; tile?: Tile; placeholder?: string; invalid?: boolean; lead?: Snippet; detail?: Snippet; count?: number;
     accessory?: 'chevron' | 'external' | 'check' | 'switch' | 'disclosure' | 'none';
     checked?: boolean; open?: boolean; menu?: MenuItem[]; trailing?: Snippet;
     tone?: 'action' | 'add' | 'destructive'; disabled?: boolean;
     onclick?: (e: MouseEvent) => void; onchange?: (on: boolean) => void;
   };
-  let { title, subtitle, value, dense = false, icon: Icon, tile = 'gray', lead, detail, count = 0, accessory = 'none', checked = false, open = false,
+  let { title, subtitle, value, dense = false, icon: Icon, tile, placeholder, invalid = false, lead, detail, count = 0, accessory = 'none', checked = false, open = false,
     menu, trailing, tone, disabled = false, onclick, onchange }: Props = $props();
 
   const id = `row${++seq}`;
+  const shown = $derived(invalid && !value ? t('ed.need') : value);
   const still = $derived(accessory === 'switch' || !!trailing || (!onclick && !menu)); // a plain row: no button around it
   let end = $state<HTMLElement>();
   function tap(e: MouseEvent) {
@@ -54,15 +59,16 @@
 
 {#snippet inner()}
   {#if tone === 'add'}<span class="plus"><Plus size={22} strokeWidth={2.2} /></span>
-  {:else if Icon}<span class="tile" style:background="var(--tile-{tile})"><Icon size={18} strokeWidth={2.2} /></span>
+  {:else if Icon && tile}<span class="tile" style:background="var(--tile-{tile})"><Icon size={18} strokeWidth={2.2} /></span>
+  {:else if Icon}<span class="li"><Icon size={20} strokeWidth={2} /></span>
   {:else if lead}<span class="lead">{@render lead()}</span>{/if}
-  <span class="body" class:hv={!!value || !!menu}>
-    <span class="txt"><span class="tt" {id}>{title}</span>{#if subtitle}<span class="st">{subtitle}</span>{/if}</span>
+  <span class="body" class:hv={!!shown || !!menu}>
+    <span class="txt"><span class="tt" class:ph={!title} {id}>{title || placeholder}</span>{#if subtitle}<span class="st">{subtitle}</span>{/if}</span>
     {#if detail}<span class="end">{@render detail()}</span>{/if}
     {#if menu}
-      <span class="end menu" bind:this={end}>{#if value}<span class="val">{value}</span>{/if}<ChevronsUpDown size={16} /></span>
+      <span class="end menu" bind:this={end}>{#if shown}<span class="val">{shown}</span>{/if}<ChevronsUpDown size={16} /></span>
     {:else}
-      {#if value}<span class="val">{value}</span>{/if}
+      {#if shown}<span class="val">{shown}</span>{/if}
       {#if count > 0}<Badge n={count} />{/if}
       {#if trailing}<span class="end">{@render trailing()}</span>
       {:else if accessory === 'chevron'}<span class="mk"><ChevronRight size={18} /></span>
@@ -76,16 +82,17 @@
 {/snippet}
 
 {#if still}
-  <div class="row kb-row {tone ?? ''}" class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} class:off={disabled}>{@render inner()}</div>
+  <div class="row kb-row {tone ?? ''}" class:lined={!!Icon && !tile} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} class:off={disabled}>{@render inner()}</div>
 {:else}
-  <button class="row kb-row tap {tone ?? ''}" class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} {disabled}
+  <button class="row kb-row tap {tone ?? ''}" class:lined={!!Icon && !tile} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} {disabled}
     aria-pressed={accessory === 'check' ? checked : undefined} aria-expanded={accessory === 'disclosure' ? open : undefined}
     aria-haspopup={menu ? 'menu' : undefined} onclick={tap}>{@render inner()}</button>
 {/if}
 
 <style>
   .row { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: var(--row-h); padding-left: var(--s-4);
-    text-align: left; color: var(--text); font: 450 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
+    text-align: left; color: var(--text); font: var(--fw-row) var(--fs-row)/1.25 var(--font-text); }
+  .row.lined .body { padding-block: 10px; gap: var(--s-3); } /* Settings' padding: a two-line label stands as tall as in Settings */
   .row.two { min-height: var(--row-h2); }
   .row.dense { font: 600 var(--fs-body)/1.3 var(--font-text); letter-spacing: -0.008em; }
   .row.dense.lone { min-height: var(--row-dense); }
@@ -105,6 +112,9 @@
   .dense .st { font: 450 var(--fs-sub)/1.3 var(--font-text); letter-spacing: 0; }
   .val { flex: 0 1 auto; min-width: 0; margin-left: auto; color: var(--text-3); font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile { flex: none; width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--on-accent); }
+  .li { flex: none; width: 24px; display: grid; place-items: center; color: var(--text-2); }
+  .ph { color: var(--text-3); }
+  .invalid .val { color: var(--danger-text); }
   .plus { flex: none; width: 30px; display: grid; place-items: center; color: var(--accent-text); }
   .lead { flex: none; display: inline-flex; }
   .mk { flex: none; display: inline-flex; margin-right: -4px; color: var(--text-3); opacity: 0.6; }

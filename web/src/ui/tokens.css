@@ -28,6 +28,7 @@
      (a data row without a tile) */
   --ctl-l: 50px; --ctl-m: 44px; --ctl-s: 36px;
   --row-h: 50px; --row-h2: 60px; --row-dense: 44px;
+  --fw-row: 450; /* a row's title, every row system (Row, .set-row) */
 
   /* row icon tiles: one flat iOS colour each, a white glyph (Settings' palette) */
   --tile-gray: #8E8E93; --tile-indigo: #5856D6; --tile-red: #FF3B30; --tile-orange: #FF9500; --tile-green: #34C759;
@@ -129,6 +130,12 @@
   --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3);
   --scrim: rgba(3, 4, 10, 0.62);
   --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day (owner, Oct 24) */
+  /* the button family's glass (ui/Button): rim arcs, a top sheen, the bevel with the pink/blue fringes, the lift */
+  --lg-rim-hi: rgba(255, 255, 255, 0.8); --lg-rim-lo: rgba(255, 255, 255, 0.32); --lg-rim-base: rgba(255, 255, 255, 0.08);
+  --lg-spot: rgba(255, 255, 255, 0.14); --lg-sheen: rgba(255, 255, 255, 0.07);
+  --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.16), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.3),
+    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.32), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.36);
+  --lg-lift: 0 8px 18px -10px rgba(0, 0, 0, 0.7);
 }
 
 :root[data-theme='light'],
@@ -180,4 +187,11 @@
   --shadow-thumb: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
   --scrim: rgba(11, 20, 51, 0.32);
   --glow: none;
+  /* white rims vanish on white cards: here the glass shows by its edge (base.css's light pill: an ink rim the bright arc
+     breaks like glare, stronger fringes, a navy lift) */
+  --lg-rim-hi: #fff; --lg-rim-lo: rgba(11, 20, 51, 0.3); --lg-rim-base: rgba(11, 20, 51, 0.12);
+  --lg-spot: rgba(255, 255, 255, 0.9); --lg-sheen: rgba(255, 255, 255, 0.7);
+  --lg-bevel: inset 0 1.5px 1px #fff, inset 0 -10px 16px -10px rgba(11, 20, 51, 0.14),
+    inset 3px 0 3px -1px rgba(255, 110, 190, 0.45), inset -3px 0 3px -1px rgba(70, 170, 255, 0.5);
+  --lg-lift: 0 6px 14px -8px rgba(24, 36, 90, 0.32), 0 1px 2px rgba(24, 36, 90, 0.08);
 }

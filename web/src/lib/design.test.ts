@@ -5,10 +5,14 @@ import ceilings from './design-ratchet.json';
 // down, and so may color-mix() (iOS before 16.2 drops the whole declaration: Telegram still runs there). Each file's
 // count today is its ceiling (design-ratchet.json); a screen moved onto the tokens lowers its own.
 // After lowering on purpose: UPDATE_RATCHET=1 npx vitest run src/lib/design.test.ts, then review the JSON's diff.
+// Two more since Nov 3 (ui-engine-audit.md §4): `weight`, font weights off the scale 450 / 500 (--fw-row's) / 600 /
+// 700 / 800; `legacy`, uses of base.css's old classes (.set-row / .set-group / .set-cap / .set-foot, .field, .switch,
+// .seg) that ui/Row, Group, Field and Segmented replace: both may only go down as the screens move.
 // ponytail: regex counts, not a CSS parser; a false hit only makes a ceiling one higher than it needs to be
 
-type Count = { font: number; radius: number; hex: number; mix: number };
-const KEYS = ['font', 'radius', 'hex', 'mix'] as const;
+type Count = { font: number; radius: number; hex: number; mix: number; weight: number; legacy: number };
+const KEYS = ['font', 'radius', 'hex', 'mix', 'weight', 'legacy'] as const;
+const SCALE = new Set(['450', '500', '600', '700', '800']);
 const SOURCES = import.meta.glob('/src/**/*.svelte', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 export function count(src: string): Count {
@@ -17,13 +21,18 @@ export function count(src: string): Count {
     .filter((d) => /(^|[^\d.])[1-9][\d.]*px/.test(d.replace(/var\([^)]*\)/g, ''))).length;
   const hex = (src.match(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])/g) ?? []).length;
   const mix = (src.match(/color-mix\(/g) ?? []).length;
-  return { font, radius, hex, mix };
+  const weight = [...src.matchAll(/font(?:-weight)?:\s*(\d{3})\b/g)].filter((m) => !SCALE.has(m[1])).length;
+  const legacy = (src.match(/(?<![\w-])set-(?:row|group|cap|foot)(?![\w-])/g) ?? []).length
+    + [...src.matchAll(/class="([^"]*)"/g)].filter((m) => /(?<![\w-])(?:field|switch|seg)(?![\w-])/.test(m[1])).length;
+  return { font, radius, hex, mix, weight, legacy };
 }
 
 describe('design ratchet', () => {
   it('counts raw values the way the ratchet means', () => {
-    expect(count('.a { font: 650 14px/1 var(--font-text); font-size: 12.5px; }')).toEqual({ font: 2, radius: 0, hex: 0, mix: 0 });
-    expect(count('.a { font: 600 var(--fs-body)/1.3 var(--font-text); border-radius: var(--r-l); }')).toEqual({ font: 0, radius: 0, hex: 0, mix: 0 });
+    expect(count('.a { font: 650 14px/1 var(--font-text); font-size: 12.5px; }')).toEqual({ font: 2, radius: 0, hex: 0, mix: 0, weight: 1, legacy: 0 });
+    expect(count('.a { font: 600 var(--fs-body)/1.3 var(--font-text); border-radius: var(--r-l); }')).toEqual({ font: 0, radius: 0, hex: 0, mix: 0, weight: 0, legacy: 0 });
+    expect(count('<div class="set-group"><button class="set-row x">a</button></div><label class="switch">').legacy).toBe(3);
+    expect(count('<p class="field-x">').legacy + count('font-weight: 500; font: 620 13px/1 x').weight).toBe(1);
     expect(count('background: color-mix(in srgb, var(--danger) 16%, transparent)').mix).toBe(1);
     expect(count('.a { border-radius: 12px; } .b { border-radius: 50%; } .c { border-radius: 0; } .d { border-radius: var(--r-s, 10px); }').radius).toBe(1);
     expect(count('color: #fff; background: #3B6BFF; id="#app"').hex).toBe(2);
@@ -33,7 +42,7 @@ describe('design ratchet', () => {
     const now: Record<string, Count> = {};
     for (const [file, src] of Object.entries(SOURCES)) {
       const c = count(src);
-      if (c.font || c.radius || c.hex || c.mix) now[file.slice('/src/'.length)] = c;
+      if (KEYS.some((k) => c[k])) now[file.slice('/src/'.length)] = c;
     }
     if ((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.UPDATE_RATCHET) {
       const fs = await import('node:fs' as string);
@@ -42,7 +51,7 @@ describe('design ratchet', () => {
     }
     const ceil = ceilings as Record<string, Count>;
     const over = Object.entries(now).flatMap(([f, c]) => KEYS.filter((k) => c[k] > (ceil[f]?.[k] ?? 0))
-      .map((k) => `${f}: ${k} ${c[k]} > ${ceil[f]?.[k] ?? 0} (use the tokens in ui/tokens.css)`));
+      .map((k) => `${f}: ${k} ${c[k]} > ${ceil[f]?.[k] ?? 0} (use the tokens in ui/tokens.css and the ui/ components)`));
     expect(over).toEqual([]);
   });
 });

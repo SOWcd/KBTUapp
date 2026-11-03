@@ -23,6 +23,7 @@
   import Inbox from '@lucide/svelte/icons/inbox';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import X from '@lucide/svelte/icons/x';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Camera from '@lucide/svelte/icons/camera';
   import Backpack from '@lucide/svelte/icons/backpack';
   import CircleHelp from '@lucide/svelte/icons/circle-help';
@@ -34,6 +35,7 @@
   import { theme, chooseTheme } from '../../lib/state/theme.svelte';
   import { sheets } from '../../lib/state/sheets';
   import Capsule from '../../ui/Capsule.svelte';
+  import Notice from '../../ui/Notice.svelte';
   import Nav from '../../ui/Nav.svelte';
   import Toast from '../../ui/Toast.svelte';
   import Ask from '../../ui/Ask.svelte';
@@ -158,34 +160,43 @@
 
   <!-- ---- buttons ---- -->
   <h2 class="lh">Button</h2>
-  {#each ['filled', 'tinted', 'gray', 'plain'] as const as k (k)}
-    <i class="k">{k}: l / m / s · destructive · disabled</i>
+  <i class="k">one Liquid Glass family: rim, sheen, pink/blue fringes; tap one for the bloom</i>
+  {#each ['primary', 'secondary', 'destructive', 'plain'] as const as k (k)}
+    <i class="k">{k}: l / m / s · round · disabled</i>
     <div class="wrap">
       <Button kind={k} size="l">{t('common.save')}</Button><Button kind={k}>{t('event.ticket')}</Button><Button kind={k} size="s">{t('common.more')}</Button>
-      <Button kind={k} destructive>{t('pd.del')}</Button><Button kind={k} disabled>{t('common.save')}</Button>
+      <Button kind={k} round label="Bell">{#snippet icon()}<Bell size={20} />{/snippet}</Button><Button kind={k} disabled>{t('common.save')}</Button>
     </div>
   {/each}
-  <i class="k">with an icon · loading · done · on (toggled) · full L</i>
+  <i class="k">with an icon · loading · done · on (toggled) · destructive primary</i>
   <div class="wrap">
     <Button>{#snippet icon()}<Ticket size={20} />{/snippet}{t('event.ticket')}</Button>
     <Button loading={busy} onclick={() => { busy = true; setTimeout(() => (busy = false), 1200); }}>{t('common.save')}</Button>
     <Button done={went} onclick={() => (went = !went)}>{went ? t('event.youGo') : t('event.go')}</Button>
-    <Button kind="tinted" on>{t('event.youGo')}</Button>
+    <Button kind="primary" on>{t('event.youGo')}</Button><Button destructive>{t('pd.del')}</Button>
   </div>
-  <Button size="l" full>{t('event.goPrice', { price: money(2000) })}</Button>
+  <i class="k">full L, lit: the one main button of a sheet follows the tilt</i>
+  <Button size="l" full lit>{t('event.goPrice', { price: money(2000) })}</Button>
   <i class="k">a long L label takes two lines at 320 · a footer pair (base.css .btns)</i>
   <Button size="l" full>{t('event.notify')}</Button>
-  <div class="btns pair"><Button kind="gray" size="l" full>{t('common.cancel')}</Button><Button size="l" full destructive>{t('event.cancelReg')}</Button></div>
-  <i class="k">old names, now aliases: primary · secondary · neutral · danger</i>
-  <div class="wrap"><Button kind="primary">{t('event.go')}</Button><Button kind="secondary">{t('event.ticket')}</Button><Button kind="neutral">{t('common.more')}</Button><Button kind="danger">{t('pd.del')}</Button></div>
-  <i class="k">over a poster: glass · onmedia (filled, white)</i>
-  <div class="poster">
+  <div class="btns pair"><Button kind="secondary" size="l" full>{t('common.cancel')}</Button><Button size="l" full destructive>{t('event.cancelReg')}</Button></div>
+  <i class="k">in a list (Clubs' rows): s, no tilt, no blur</i>
+  <div class="card-ish rowsdemo">
+    {#each [['Chess Club', false], ['Debate Club', true]] as const as [n, sent] (n)}
+      <div class="rowdemo"><b>{n}</b><Button kind={sent ? 'neutral' : 'primary'} size="s">{sent ? t('join.sent') : t('join.apply')}</Button></div>
+    {/each}
+  </div>
+  <i class="k">every old name, mapped in one table: filled tinted gray neutral danger</i>
+  <div class="wrap"><Button kind="filled">filled</Button><Button kind="tinted">tinted</Button><Button kind="gray">gray</Button><Button kind="neutral">neutral</Button><Button kind="danger">danger</Button></div>
+  <i class="k">over a photo: glass (the only blur) · onmedia · primary</i>
+  <div class="poster photo">
     <Emoji name="popcorn_3d" size={64} />
     <div class="wrap"><Button kind="glass">{#snippet icon()}<Bookmark size={20} />{/snippet}{t('event.save')}</Button><Button onmedia>{t('event.go')}</Button><IconButton kind="glass" icon={Share} label={t('event.share')} /></div>
+    <div class="wrap"><Button kind="glass" size="s">{t('common.more')}</Button><Button kind="glass" destructive size="s">{t('event.cancelReg')}</Button><Button size="s">{t('event.ticket')}</Button></div>
   </div>
 
   <h2 class="lh">IconButton</h2>
-  <i class="k">gray · tinted · filled · plain · glass · s 36 · l 50 · badge · on · disabled</i>
+  <i class="k">secondary · tinted · primary · plain · glass · s 36 · l 50 · badge · on · disabled</i>
   <div class="wrap">
     <IconButton icon={Ellipsis} label="More" /><IconButton kind="tinted" icon={Plus} label="Add" /><IconButton kind="filled" icon={Search} label="Search" />
     <IconButton kind="plain" icon={X} label="Close" /><IconButton size="s" icon={Bell} label="Bell" /><IconButton size="l" icon={Bookmark} label="Save" />
@@ -213,6 +224,12 @@
   <!-- ---- lists ---- -->
   <h2 class="lh">Group · Row</h2>
   <div class="stack">
+    <Group caption="Line icons: Settings' rows">
+      <Row icon={MapPin} title="" placeholder={t('ed.place')} accessory="chevron" onclick={() => {}} />
+      <Row icon={Ticket} title={t('event.ticket')} value="2 000 ₸" accessory="chevron" onclick={() => {}} />
+      <Row icon={Users} title={t('set.showGoing')} accessory="switch" checked={sw1} onchange={(v) => (sw1 = v)} />
+      <Row icon={CalendarDays} title={t('set.calShort')} invalid accessory="chevron" onclick={() => {}} />
+    </Group>
     <Group>
       <Row title="Dana Seitova" subtitle="24B100001 · SITE" lead={av} accessory="chevron" onclick={() => {}} />
     </Group>
@@ -242,6 +259,15 @@
     </Group>
     <Group><Row tone="action" title={t('set.calShort')} onclick={() => {}} /></Group>
     <Group><Row tone="destructive" title={t('sched.del')} onclick={ask} /></Group>
+  </div>
+  <i class="k">the same rows: ui/Row (above) and Settings' base.css .set-row (below) match pixel for pixel</i>
+  <div id="lab-row"><Group>
+    <Row icon={Languages} title={t('me.guestLang')} value={LANG_FULL[i18n.lang]} accessory="chevron" onclick={() => {}} />
+    <Row icon={Bell} title={t('set.showGoing')} accessory="chevron" onclick={() => {}} />
+  </Group></div>
+  <div id="lab-setrow" class="set-group">
+    <button class="set-row"><span class="ic"><Languages size={20} strokeWidth={2} /></span><span class="lb">{t('me.guestLang')}</span><span class="val">{LANG_FULL[i18n.lang]}</span><ChevronRight class="chev" size={18} /></button>
+    <button class="set-row"><span class="ic"><Bell size={20} strokeWidth={2} /></span><span class="lb">{t('set.showGoing')}</span><ChevronRight class="chev" size={18} /></button>
   </div>
   {#snippet av()}<Avatar person={me} size={54} tappable={false} />{/snippet}
   {#snippet avSmall()}<Avatar person={{ id: 2, name: 'Ali Nurlanov' }} size={32} tappable={false} />{/snippet}
@@ -279,8 +305,17 @@
     <Segmented items={[{ value: 0, label: t('common.today') }, { value: 1, label: t('common.tomorrow') }, { value: 2, label: t('studio.draft') }]} bind:value={seg3} />
   </div>
 
+  <h2 class="lh">Notice</h2>
+  <div class="stack">
+    <Notice tone="warning" text={t('ed.paidLocked')} action={{ label: t('common.more'), onclick: () => {} }} />
+    <Notice tone="danger" title={t('pd.delAsk')} text={t('pd.delText')} />
+    <Notice tone="accent" text={t('pd.note')} />
+    <Notice text={t('pd.cityNote')} />
+  </div>
+
   <h2 class="lh">Field · SearchField</h2>
   <div class="stack">
+    <Field label="Title" size="title" bind:value={name2} placeholder="Open Mic" />
     <Field label={t('pd.city')} bind:value={name} placeholder="Almaty" />
     <Field label="Name" bind:value={name2} />
     <Field label={t('pd.phone')} bind:value={bad} type="tel" error={t('common.error')} />
@@ -348,6 +383,11 @@
   .poster.short { align-items: flex-end; padding: var(--s-3); }
   .foot-demo { display: flex; align-items: center; gap: var(--s-2); }
   .pair { display: flex; gap: var(--s-2); }
+  /* a made-up photo: colour, light and detail, so the glass button's blur shows */
+  .poster.photo { background: radial-gradient(40% 50% at 18% 30%, var(--warning), transparent 70%), radial-gradient(45% 55% at 82% 70%, var(--tile-pink), transparent 70%),
+    radial-gradient(30% 40% at 60% 15%, var(--tile-teal), transparent 70%), repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.12) 0 6px, transparent 6px 18px), var(--ink); }
+  .rowsdemo { display: flex; flex-direction: column; gap: var(--s-3); }
+  .rowdemo { display: flex; align-items: center; justify-content: space-between; font: 600 var(--fs-body)/1.2 var(--font-text); }
   .lead { margin: 0 4px var(--s-4); font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
   .faces { display: inline-flex; }
   .faces > :global(*) + :global(*) { margin-left: -8px; }

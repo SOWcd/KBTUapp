@@ -3,13 +3,13 @@
   // Toolbar; filled for a composer's send).
   //   icon     a lucide component, drawn at 20 (24 for size l)
   //   label    what it does, for screen readers (required: there is no text)
-  //   kind     gray | glass | plain | filled | tinted;  size m 44 | s 36 (a 44 px hit area) | l 50
+  //   kind     any Button kind (gray: the secondary glass; glass over media; plain in a Toolbar; filled for a send);  size m 44 | s 36 (a 44 px hit area) | l 50
   //   badge    a red count on its corner;  on / disabled / loading / destructive: as Button
   import type { Component } from 'svelte';
-  import Button, { type Kind } from './Button.svelte';
+  import Button, { type Kind, type OldKind } from './Button.svelte';
   import Badge from './Badge.svelte';
 
-  type Props = { icon: Component<any>; label: string; kind?: Kind; size?: 'l' | 'm' | 's'; badge?: number; on?: boolean; disabled?: boolean;
+  type Props = { icon: Component<any>; label: string; kind?: Kind | OldKind; size?: 'l' | 'm' | 's'; badge?: number; on?: boolean; disabled?: boolean;
     loading?: boolean; destructive?: boolean; onclick?: (e: MouseEvent) => void };
   let { icon: Icon, label, kind = 'gray', size = 'm', badge = 0, on = false, disabled = false, loading = false, destructive = false, onclick }: Props = $props();
 </script>

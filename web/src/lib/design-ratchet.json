@@ -3,636 +3,920 @@
   "font": 1,
   "radius": 0,
   "hex": 3,
-  "mix": 2
+  "mix": 2,
+  "weight": 1,
+  "legacy": 0
+ },
+ "screens/ConsentGate.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/Screen.svelte": {
   "font": 7,
   "radius": 2,
   "hex": 3,
-  "mix": 4
+  "mix": 4,
+  "weight": 0,
+  "legacy": 0
  },
  "screens/admin/AdminAi.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/admin/AdminAudit.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/admin/AdminChats.svelte": {
   "font": 5,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 5
  },
  "screens/admin/AdminClubs.svelte": {
   "font": 8,
   "radius": 2,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 6,
+  "legacy": 4
+ },
+ "screens/admin/AdminStats.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/admin/MapFlaws.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
+ },
+ "screens/admin/StatsPane.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/afisha/Clubs.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 0
  },
  "screens/afisha/Feed.svelte": {
   "font": 7,
   "radius": 0,
   "hex": 10,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/afisha/List.svelte": {
   "font": 0,
-  "radius": 1,
+  "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 17,
+  "legacy": 0
  },
  "screens/afisha/News.svelte": {
   "font": 12,
   "radius": 1,
   "hex": 5,
-  "mix": 1
+  "mix": 1,
+  "weight": 8,
+  "legacy": 0
  },
  "screens/afisha/StoryRow.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "screens/assistant/Assistant.svelte": {
   "font": 4,
   "radius": 2,
   "hex": 2,
-  "mix": 2
+  "mix": 2,
+  "weight": 4,
+  "legacy": 0
  },
  "screens/club/Attendees.svelte": {
   "font": 7,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 4,
+  "legacy": 0
  },
  "screens/club/ClubEditSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 4
  },
  "screens/club/CoverFocus.svelte": {
   "font": 2,
   "radius": 5,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/club/EventEditor.svelte": {
-  "font": 11,
-  "radius": 6,
-  "hex": 18,
-  "mix": 1
+  "font": 0,
+  "radius": 0,
+  "hex": 13,
+  "mix": 0,
+  "weight": 12,
+  "legacy": 16
  },
  "screens/club/EventManage.svelte": {
   "font": 9,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 9,
+  "legacy": 0
  },
  "screens/club/JoinInbox.svelte": {
   "font": 3,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 1
  },
  "screens/club/MemoAsks.svelte": {
   "font": 5,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 41
  },
  "screens/club/MemoItemSheet.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 4
  },
  "screens/club/MemoSheet.svelte": {
   "font": 7,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 5
  },
  "screens/club/OrgChats.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 2
  },
  "screens/club/PostComposer.svelte": {
   "font": 7,
   "radius": 2,
   "hex": 1,
-  "mix": 1
+  "mix": 1,
+  "weight": 3,
+  "legacy": 2
  },
  "screens/club/ReceiptSheet.svelte": {
   "font": 4,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/club/RemoveSheet.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 1
  },
  "screens/club/RosterRequests.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/club/RoundBoard.svelte": {
-  "font": 22,
+  "font": 21,
   "radius": 0,
   "hex": 3,
-  "mix": 1
+  "mix": 1,
+  "weight": 11,
+  "legacy": 9
  },
  "screens/club/RoundSetup.svelte": {
   "font": 8,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 4,
+  "legacy": 12
  },
  "screens/club/Scanner.svelte": {
   "font": 10,
   "radius": 1,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 7,
+  "legacy": 1
  },
  "screens/club/ScreenSheet.svelte": {
-  "font": 5,
+  "font": 4,
   "radius": 1,
   "hex": 2,
-  "mix": 1
+  "mix": 1,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/club/ShortLinks.svelte": {
   "font": 2,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 1
  },
  "screens/club/Studio.svelte": {
   "font": 6,
   "radius": 3,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 8,
+  "legacy": 2
  },
  "screens/club/Team.svelte": {
   "font": 8,
   "radius": 0,
   "hex": 2,
-  "mix": 3
+  "mix": 3,
+  "weight": 9,
+  "legacy": 0
  },
  "screens/club/TeamSetupSheet.svelte": {
   "font": 9,
   "radius": 1,
   "hex": 2,
-  "mix": 2
+  "mix": 2,
+  "weight": 8,
+  "legacy": 2
  },
  "screens/club/VolunteersSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/dmp/Registry.svelte": {
   "font": 9,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 0
  },
  "screens/dmp/Roster.svelte": {
   "font": 4,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 2
+ },
+ "screens/forum/Channel.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
+ },
+ "screens/forum/ChannelCompose.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 1
+ },
+ "screens/forum/ChannelReply.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/forum/Forum.svelte": {
   "font": 9,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 3
  },
  "screens/forum/ForumMod.svelte": {
   "font": 7,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 4,
+  "legacy": 2
+ },
+ "screens/forum/NewAsk.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 4
  },
  "screens/forum/PersonCards.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/forum/SkillPicker.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
+ },
+ "screens/lab/Directions.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
+ },
+ "screens/lab/Lab.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 4
  },
  "screens/map/CampusMap.svelte": {
-  "font": 12,
-  "radius": 15,
-  "hex": 39,
-  "mix": 2
+  "font": 11,
+  "radius": 14,
+  "hex": 37,
+  "mix": 2,
+  "weight": 7,
+  "legacy": 0
  },
  "screens/map/MapPad.svelte": {
   "font": 13,
   "radius": 9,
   "hex": 21,
-  "mix": 4
+  "mix": 4,
+  "weight": 8,
+  "legacy": 0
  },
  "screens/map/RouteUI.svelte": {
-  "font": 20,
-  "radius": 15,
-  "hex": 17,
-  "mix": 0
+  "font": 11,
+  "radius": 10,
+  "hex": 14,
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/profile/AddFriend.svelte": {
-  "font": 11,
+  "font": 10,
   "radius": 3,
   "hex": 7,
-  "mix": 0
+  "mix": 0,
+  "weight": 7,
+  "legacy": 0
  },
  "screens/profile/AppCard.svelte": {
   "font": 0,
   "radius": 3,
   "hex": 12,
-  "mix": 3
+  "mix": 3,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/profile/Awards.svelte": {
   "font": 13,
   "radius": 3,
   "hex": 6,
-  "mix": 1
+  "mix": 1,
+  "weight": 9,
+  "legacy": 1
  },
  "screens/profile/DeleteSheet.svelte": {
   "font": 1,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 1
  },
  "screens/profile/Friends.svelte": {
   "font": 6,
   "radius": 3,
   "hex": 5,
-  "mix": 0
+  "mix": 0,
+  "weight": 4,
+  "legacy": 0
  },
  "screens/profile/Hero.svelte": {
   "font": 8,
   "radius": 6,
   "hex": 21,
-  "mix": 0
- },
- "screens/profile/Invite.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 7,
+  "legacy": 0
  },
  "screens/profile/Me.svelte": {
   "font": 6,
   "radius": 7,
   "hex": 15,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/profile/MyQr.svelte": {
   "font": 5,
   "radius": 6,
-  "hex": 51,
-  "mix": 0
+  "hex": 29,
+  "mix": 0,
+  "weight": 4,
+  "legacy": 0
  },
  "screens/profile/Recent.svelte": {
   "font": 2,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/profile/SettingsList.svelte": {
   "font": 2,
   "radius": 6,
   "hex": 42,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 9
  },
  "screens/profile/SettingsSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 51
  },
  "screens/sheets/AcademicSheet.svelte": {
   "font": 4,
   "radius": 1,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/sheets/AnswersSheet.svelte": {
   "font": 2,
   "radius": 2,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/sheets/AwardSheet.svelte": {
   "font": 5,
   "radius": 2,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 7,
+  "legacy": 0
  },
  "screens/sheets/ChatsSheet.svelte": {
-  "font": 5,
+  "font": 4,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/sheets/ClubSheet.svelte": {
   "font": 8,
   "radius": 1,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 6,
+  "legacy": 0
  },
  "screens/sheets/CommentsSheet.svelte": {
   "font": 11,
   "radius": 4,
   "hex": 1,
-  "mix": 1
+  "mix": 1,
+  "weight": 5,
+  "legacy": 1
  },
  "screens/sheets/CreateClubSheet.svelte": {
   "font": 7,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 2
  },
  "screens/sheets/EventSheet.svelte": {
   "font": 36,
   "radius": 13,
   "hex": 5,
-  "mix": 0
+  "mix": 0,
+  "weight": 23,
+  "legacy": 1
  },
  "screens/sheets/InviteSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "screens/sheets/InviteToSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/sheets/LoginSheet.svelte": {
   "font": 4,
   "radius": 0,
   "hex": 6,
-  "mix": 1
+  "mix": 1,
+  "weight": 4,
+  "legacy": 3
  },
  "screens/sheets/PaySheet.svelte": {
   "font": 6,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 0
  },
  "screens/sheets/PcSheet.svelte": {
   "font": 0,
   "radius": 1,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "screens/sheets/PeopleSheet.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "screens/sheets/PersonSheet.svelte": {
   "font": 7,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 5,
+  "legacy": 0
  },
  "screens/sheets/PhotoViewer.svelte": {
   "font": 2,
   "radius": 0,
   "hex": 4,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/sheets/ReportSheet.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/sheets/RosterAsk.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/sheets/RosterWelcome.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
-  "mix": 1
+  "mix": 1,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/sheets/RoundApply.svelte": {
   "font": 13,
   "radius": 0,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 9,
+  "legacy": 2
  },
  "screens/sheets/ScheduleHowTo.svelte": {
   "font": 1,
   "radius": 1,
   "hex": 1,
-  "mix": 1
+  "mix": 1,
+  "weight": 1,
+  "legacy": 0
  },
  "screens/sheets/Stories.svelte": {
   "font": 9,
   "radius": 2,
   "hex": 14,
-  "mix": 1
+  "mix": 1,
+  "weight": 4,
+  "legacy": 0
+ },
+ "screens/sheets/SuggestChat.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 1
  },
  "screens/sheets/TicketView.svelte": {
   "font": 4,
   "radius": 1,
   "hex": 5,
-  "mix": 2
+  "mix": 2,
+  "weight": 8,
+  "legacy": 0
  },
  "screens/sheets/Unlock.svelte": {
   "font": 6,
   "radius": 0,
   "hex": 9,
-  "mix": 6
+  "mix": 6,
+  "weight": 2,
+  "legacy": 0
  },
  "screens/sheets/WeekSheet.svelte": {
   "font": 5,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "ui/AiBadge.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 1,
-  "mix": 2
+  "mix": 2,
+  "weight": 0,
+  "legacy": 0
+ },
+ "ui/Ask.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 3
+ },
+ "ui/AskAi.svelte": {
+  "font": 0,
+  "radius": 0,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "ui/Avatar.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 8,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Capsule.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
  },
  "ui/CardBack.svelte": {
   "font": 1,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "ui/ChatAvatar.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/ChatKind.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 3,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/ClubRow.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 1,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "ui/ClubScene.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/EmojiPick.svelte": {
   "font": 1,
   "radius": 1,
   "hex": 0,
-  "mix": 0
- },
- "ui/Founder.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 11,
-  "mix": 0
- },
- "ui/GovMark.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/LanyardBand.svelte": {
   "font": 8,
   "radius": 0,
-  "hex": 40,
-  "mix": 0
+  "hex": 30,
+  "mix": 0,
+  "weight": 4,
+  "legacy": 0
  },
  "ui/LanyardHolo.svelte": {
   "font": 7,
   "radius": 1,
-  "hex": 40,
-  "mix": 0
+  "hex": 7,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "ui/LinksEdit.svelte": {
   "font": 3,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 3,
+  "legacy": 0
  },
  "ui/LookMark.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 12,
-  "mix": 0
+  "hex": 7,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Medal.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 19,
-  "mix": 0
+  "hex": 15,
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/OrgLogo.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 13,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/OrgTag.svelte": {
   "font": 2,
   "radius": 0,
   "hex": 4,
-  "mix": 0
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0
  },
  "ui/Pin.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 6,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Poster.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Qr.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 2,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Sheet.svelte": {
   "font": 0,
   "radius": 1,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/Toast.svelte": {
   "font": 1,
   "radius": 0,
   "hex": 0,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "ui/TwoGisMark.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 5,
-  "mix": 0
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  }
 }

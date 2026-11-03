@@ -287,7 +287,7 @@ html.lowfx .stagger > * { animation: none; }
    in grey and a chevron on the right; what needs saying goes in a small footnote under the group, never under a row */
 .set-group { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--surface); }
 .set-row { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 10px 16px; text-align: left;
-  font: 450 17px/1.25 var(--font-text); color: var(--text); }
+  font: var(--fw-row) var(--fs-row)/1.25 var(--font-text); color: var(--text); }
 .set-row + .set-row::before { content: ''; position: absolute; top: 0; right: 0; left: 52px; height: 0.5px; background: var(--line-2); }
 .set-group.plain .set-row + .set-row::before { left: 16px; }
 button.set-row:active { background: var(--surface-2); }

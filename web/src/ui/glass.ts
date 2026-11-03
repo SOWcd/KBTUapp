@@ -85,7 +85,7 @@ export function tilt(allowed: boolean): void {
   if (allowed) sensor.run(); else sensor.stop();
 }
 
-function bloomAt(node: HTMLElement, e: PointerEvent) {
+export function bloomAt(node: HTMLElement, e: PointerEvent) {
   const r = node.getBoundingClientRect();
   const b = document.createElement('span');
   b.className = 'glass-bloom';
