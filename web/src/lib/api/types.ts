@@ -58,7 +58,7 @@ export interface AuditRow { id: Id; actor: PersonRef | null; action: string; tar
 export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'live' | 'held' | 'hidden'; at: Ts }
 /** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
-export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; msg: number | null; anon: boolean; sign: string; mine: boolean
+export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; sign: string; mine: boolean
   person: PersonRef | null /* a signed post's author; never on an anonymous one */; comments: number /* the students' comments the bot saw */; thread: number | null /* the bot's first comment in the group: the comments link */
   /** the newest commenters (app students who agreed to it), newest first, for students only (a guest: []): a face, no
    *  id, no name (name: one letter, the photo's fallback) */

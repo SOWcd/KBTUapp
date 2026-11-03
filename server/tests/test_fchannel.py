@@ -470,7 +470,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] in ("Anonymous", "\u0410\u043d\u043e\u043d\u0438\u043c") and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top"}  # no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top", "human"}  # no user id
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -478,7 +478,7 @@ def test_post_feed(env, monkeypatch):
         f = c.get("/api/forum-posts/feed", headers=viewer).json()
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
-        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "top")} == {
+        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "top", "human")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "sign": "Anonymous", "person": None, "mine": False,
             "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
@@ -773,7 +773,7 @@ def test_post_top(env, monkeypatch):
     four = post(); say(four, 2, 3, 4, 5)
     assert top() == {five, four, more}                                                         # at most 3; a tie: the newer
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top"}
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top", "human"}
     assert row["anon"] and row["person"] is None and row["top"] is True
     con.close()
 

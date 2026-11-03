@@ -103,7 +103,7 @@
 
   // my own post's mark beside the time: on its way (the AI looking), under review, removed, else simply "mine"
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'quiet', key: 'fc.checking' } as const
-    : p.status === 'held' ? { tone: 'warning', key: 'fc.held' } as const
+    : p.status === 'held' ? (p.human ? { tone: 'warning', key: 'fc.human' } as const : { tone: 'quiet', key: 'fc.checking' } as const)
     : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : { tone: 'accent', key: 'fc.mine' } as const;
 
   // a long post starts at four lines with a fade and a quiet "More" that opens it in place (its height glides to the
@@ -197,6 +197,7 @@
               {:else if live && !p.mine}<span class="del"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
             </div>
             <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
+            {#if p.mine && p.human}<p class="why">{t('fc.humanWhy')}</p>{/if}
             <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
             {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
             {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
@@ -301,6 +302,7 @@
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
   .tx { margin-top: 2px; font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
     max-height: 5.7em; overflow: hidden; transition: max-height 420ms var(--ease); }
+  .why { margin-top: 4px; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
   .tx.open { max-height: var(--h); }
   .post.off .tx { color: var(--text-3); }

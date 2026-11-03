@@ -124,7 +124,9 @@ def feed(con, v: Viewer) -> list[dict]:
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": p["id"] in hot,  # being discussed: HOT comments or more in the last hour (a count, nobody's)
-             "top": p["id"] in top})  # popular today: the app shows these first, under their own header
+             "top": p["id"] in top,
+             # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
+             "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check"})  # popular today: the app shows these first, under their own header
     return out
 
 

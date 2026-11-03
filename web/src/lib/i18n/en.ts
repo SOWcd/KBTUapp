@@ -71,6 +71,8 @@ const en: Dict = {
   'fc.checking': "Checking…",
   'fc.anonSign': "Anonymous student",
   'fc.live': "Published",
+  'fc.human': "Waiting for a moderator",
+  'fc.humanWhy': "The AI didn't publish it on its own: a human moderator will look at it",
   'fc.held': "Under review",
   'fc.hidden': "Removed",
   'fc.delete': "Delete",
