@@ -31,10 +31,15 @@ export function fitTitle(el: HTMLElement, min = 24): { destroy: () => void } {
  *  scrolled up under the capsule (the capsule then shows the screen's name, iOS's inline title) and when it's back. */
 export function largeTitle(el: HTMLElement, to: Tab | ((gone: boolean) => void)): { destroy: () => void } {
   const say = (gone: boolean) => { if (typeof to === 'function') to(gone); else if (!!ui.gone[to] !== gone) ui.gone[to] = gone; };
-  const top = document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46; // the capsule's lower edge
-  // a view out of the layout (display: none, My club vs All clubs) measures nothing: it says nothing either
-  const io = new IntersectionObserver(([e]) => { if (e.boundingClientRect.height) say(!e.isIntersecting && e.boundingClientRect.top < top); },
-    { rootMargin: `-${Math.round(top)}px 0px 0px 0px` });
-  io.observe(el);
-  return { destroy: () => { io.disconnect(); say(false); } };
+  // measured in the next frame, whose layout runs anyway: read here, mid-mount, it laid the half-built screen out once
+  // more inside the first build (perf round 4: ~70 ms at 4x CPU of the Afisha's first task). A new title is in view.
+  let io: IntersectionObserver | undefined;
+  const raf = requestAnimationFrame(() => {
+    const top = document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46; // the capsule's lower edge
+    // a view out of the layout (display: none, My club vs All clubs) measures nothing: it says nothing either
+    io = new IntersectionObserver(([e]) => { if (e.boundingClientRect.height) say(!e.isIntersecting && e.boundingClientRect.top < top); },
+      { rootMargin: `-${Math.round(top)}px 0px 0px 0px` });
+    io.observe(el);
+  });
+  return { destroy: () => { cancelAnimationFrame(raf); io?.disconnect(); say(false); } };
 }
