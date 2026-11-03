@@ -64,6 +64,8 @@ const en: Dict = {
   'fc.reactions': "Reactions",
   'fc.newSince': "New",
   'fc.hot': "Trending",
+  'fc.top': "Popular today",
+  'fc.latest': "New",
   'fc.emptyTitle': "Quiet so far",
   'fc.emptyText': "Write the first post — all of KBTU will see it.",
   'fc.checking': "Checking…",

@@ -64,6 +64,8 @@ const ru = {
   'fc.reactions': "Реакции",
   'fc.newSince': "Новые",
   'fc.hot': "Обсуждают",
+  'fc.top': "Популярное за сутки",
+  'fc.latest': "Новое",
   'fc.emptyTitle': "Пока тихо",
   'fc.emptyText': "Напиши первый пост — его увидит весь КБТУ.",
   'fc.checking': "Проверяем…",

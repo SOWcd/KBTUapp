@@ -47,9 +47,14 @@
   function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
   let since = $state(0);
   const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && !p.mine && !!p.msg;
-  // the line stands above the first post seen before, when some new one is above it
+  // popular today (the server's `top`: the day's most discussed) moved to the head under their own header, the rest
+  // under "New", newest first; no top post: no headers, the feed as it was. Each post once
+  const tops = $derived((channel.feed ?? []).filter((p) => p.top));
+  const rest = $derived((channel.feed ?? []).filter((p) => !p.top));
+  const list = $derived([...tops, ...rest]);
+  // the line stands above the first post seen before, when some new one is above it (among the new ones)
   const cut = $derived.by(() => {
-    const f = channel.feed ?? [], i = f.findIndex((p) => p.id > 0 && p.id <= since);
+    const f = rest, i = f.findIndex((p) => p.id > 0 && p.id <= since);
     return i > 0 && f.slice(0, i).some(fresh) ? f[i].id : null;
   });
 
@@ -161,14 +166,16 @@
 
   {#if channel.feed?.length}
     <div class="feed">
-      {#each channel.feed as p, i (p.id)}
+      {#each list as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
-        <!-- one element per post (flip needs it): a live one is a button into its comments, the others plain (role by state) -->
+        <!-- one element per post (flip needs it), its section's header above the first of each (outside the post's button) -->
+        <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
+        {#if tops.length && (i === 0 || i === tops.length)}<h3 class="sec">{t(i === 0 ? 'fc.top' : 'fc.latest')}</h3>{/if}
+        <!-- a live one is a button into its comments, the others plain (role by state) -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div class="post" style:--i={Math.min(i, 8)} class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut === p.id} data-post={p.id}
-          role={live ? 'button' : undefined} tabindex={live ? 0 : undefined} onclick={live ? (e) => press(e, p) : undefined} onkeydown={live ? (e) => key(e, p) : undefined}
-          animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
+          role={live ? 'button' : undefined} tabindex={live ? 0 : undefined} onclick={live ? (e) => press(e, p) : undefined} onkeydown={live ? (e) => key(e, p) : undefined}>
           {#if cut === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{t('fc.newSince')}</span></div>{/if}
           <div class="rail">
             {#if p.person}<Avatar person={p.person} size={36} />
@@ -184,7 +191,7 @@
               {:else}<b class="ellipsis">{p.sign}</b>{/if}
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-              {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
+              {:else if p.hot && live && !p.top}<span class="mk hot">{t('fc.hot')}</span>{/if}
               {#if p.mine && p.id > 0}<button class="del" aria-label={t('fc.delete')} onclick={() => drop(p)}><Trash2 size={16} strokeWidth={2} /></button>
               {:else if live && !p.mine}<button class="del" aria-label={t('common.more')} onclick={(e) => more(e, p)}><Ellipsis size={18} strokeWidth={2} /></button>{/if}
             </div>
@@ -212,6 +219,7 @@
             {/if}
           </div>
         </div>
+        </div>
       {/each}
     </div>
   {:else if channel.feed}
@@ -231,9 +239,13 @@
   /* the composer: my face, a quiet prompt, the pen; a hairline under it */
   .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-1) var(--gutter) var(--s-4); text-align: left;
     transition: background var(--t-base) var(--ease); }
-  .compose::after, .post + .post::before { content: ''; position: absolute; left: var(--rule); right: 0; height: 0.5px; background: var(--separator); }
+  .compose::after, .item + .item > .post::before { content: ''; position: absolute; left: var(--rule); right: 0; height: 0.5px; background: var(--separator); }
   .compose::after { bottom: 0; }
-  .post + .post::before { top: 0; }
+  .item + .item > .post::before { top: 0; }
+  /* a section's header (popular today, new): Settings' group caption; no hairline under it */
+  .sec { margin: var(--s-5) var(--gutter) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }
+  .item:first-child > .sec { margin-top: var(--s-4); }
+  .sec + .post::before { display: none; }
   .compose:active { background: var(--surface); transition-duration: 60ms; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
   .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text);

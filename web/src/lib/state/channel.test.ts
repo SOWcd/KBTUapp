@@ -6,7 +6,7 @@ vi.mock('../api', () => ({ api: { channelFeed: () => new Promise((done) => { ans
 import { channel, loadChannel, touched } from './channel.svelte';
 import type { ChannelFeedPost } from '../api';
 
-const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], hot: false });
+const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], hot: false, top: false });
 
 it('drops a refresh that was asked before my delete', async () => {
   channel.feed = [post(1), post(2)];

@@ -64,6 +64,8 @@ const kk: Dict = {
   'fc.reactions': "Реакциялар",
   'fc.newSince': "Жаңа",
   'fc.hot': "Талқылауда",
+  'fc.top': "Бүгін көп талқыланғандар",
+  'fc.latest': "Жаңа",
   'fc.emptyTitle': "Әзірге тыныш",
   'fc.emptyText': "Алғашқы постты жаз — оны бүкіл ҚБТУ көреді.",
   'fc.checking': "Тексеріп жатырмыз…",

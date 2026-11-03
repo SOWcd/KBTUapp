@@ -112,6 +112,7 @@ def feed(con, v: Viewer) -> list[dict]:
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
     hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT])
+    top = _popular(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
@@ -122,7 +123,8 @@ def feed(con, v: Viewer) -> list[dict]:
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
-             "hot": p["id"] in hot})  # being discussed: HOT comments or more in the last hour (a count, nobody's)
+             "hot": p["id"] in hot,  # being discussed: HOT comments or more in the last hour (a count, nobody's)
+             "top": p["id"] in top})  # popular today: the app shows these first, under their own header
     return out
 
 
@@ -135,6 +137,25 @@ def _hot(con, ids: list[int]) -> set[int]:
         return set()
     return {r[0] for r in rows(con, f"""SELECT post_id FROM fchan_comments WHERE gone = 0 AND at > ? AND post_id IN ({','.join('?' * len(ids))})
         GROUP BY post_id HAVING COUNT(*) >= ?""", _now() - 3600, *ids, HOT)}
+
+
+TOP_N, TOP_MIN = 3, 3  # popular today: at most TOP_N posts, each with TOP_MIN people or more (not its author) commenting
+TOP_AGE = 86400
+
+
+def _popular(con, ids: list[int]) -> set[int]:
+    """The TOP_N most discussed posts of the last day, one query for all of them: posts and comments under TOP_AGE old,
+    still up, ranked by how many distinct people commented, the author's own comments left out (it takes others; an
+    anonymous author can't pad it, nor show which comments are theirs); ties: the newer post. Only among the feed's ids:
+    ponytail: 24 h fits inside FEED_MAX at today's pace (15-36 posts a day); past ~50 a day, query the day's live posts
+    on their own instead of the feed's ids."""
+    if not ids:
+        return set()
+    day = _now() - TOP_AGE
+    return {r[0] for r in rows(con, f"""SELECT p.id FROM fchan_posts p JOIN fchan_comments c ON c.post_id = p.id
+        WHERE p.id IN ({','.join('?' * len(ids))}) AND p.created_at > ? AND c.gone = 0 AND c.at > ? AND c.user_id != p.user_id
+        GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ? ORDER BY COUNT(DISTINCT c.user_id) DESC, p.id DESC LIMIT ?""",
+        *ids, day, day, TOP_MIN, TOP_N)}
 
 
 FACES = 3  # the newest commenters a card shows
