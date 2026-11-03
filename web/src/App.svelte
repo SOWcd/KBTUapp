@@ -184,11 +184,20 @@
   // ...and once the start has settled, the rest are built one per idle moment, so the first tap on a tab only shows it
   // (a cold mount was the one long task left on a switch: ~1 s at 4x CPU). Away they cost nothing more: the hidden tab
   // is skipped by the engine (.tab below); their effects wait for ui.tab (loads, the badge's drop, the forum's seen line).
+  // A tab built while away was never laid out or drawn: its first showing did all of it inside the tap (Profile: ~150 ms
+  // at 4x CPU). So each one, once built, is drawn once in a later idle moment, unseen (.drawing), then skipped again with
+  // its layout kept; the tap only shows it.
+  let drawing = $state<string | null>(null);
+  const idle = (fn: () => void) => { if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 4000 }); else setTimeout(fn, 500); };
   function prebuild() {
     const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
     if (!k || session.banned) return;
     built[k] = true;
-    if ('requestIdleCallback' in window) requestIdleCallback(prebuild, { timeout: 4000 }); else setTimeout(prebuild, 500);
+    idle(() => {
+      if (ui.tab === k) { idle(prebuild); return; }
+      drawing = k;
+      requestAnimationFrame(() => setTimeout(() => { drawing = null; idle(prebuild); }));
+    });
   }
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
@@ -533,7 +542,7 @@
 
 <main class="app">
   {#each tabs as tab (tab)}
-    <section class="tab" class:on={ui.tab === tab} aria-hidden={ui.tab !== tab} inert={!!session.banned || gated}>
+    <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={!!session.banned || gated}>
       {#if tab === 'afisha'}
         {#if built.afisha}<ListPage />{/if}
       {:else if tab === 'forum'}
@@ -585,12 +594,14 @@
   .app { position: absolute; inset: 0; overflow: hidden; overflow: clip; background: var(--bg); isolation: isolate; }
   /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
-  .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+  /* a tab away sits under the one shown (same box), so it never takes a tap: `pointer-events` is inherited, and
+     flipping it restyled every node of the tab on each switch (the Forum: 1100 nodes, ~100 ms at 4x CPU) */
+  .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1; }
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
-  @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } }
+  @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }
   /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
-  .tab.on { visibility: visible; content-visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
+  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn 200ms var(--ease) backwards; }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
 </style>
