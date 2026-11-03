@@ -18,7 +18,7 @@
 </script>
 
 {#if layers}<span class="medal drawn lay" class:none={a.level === 0} style="width:{size}px;height:{size}px">{#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}</span>
-{:else if drawn}<span class="medal drawn" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" draggable="false" /></span>{:else}
+{:else if drawn}<span class="medal drawn pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" width={size} height={size} decoding="async" draggable="false" /></span>{:else}
 <span class="medal {tier}" style="width:{size}px;height:{size}px">
   <span class="disc">
     {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>
@@ -40,7 +40,10 @@
   .legend .disc { animation: spin 9s linear infinite reverse; }
   :global(html.lowfx) .legend, :global(html.lowfx) .legend .disc { animation: none; } /* power saving */
   .drawn, .medal.drawn:not(.none) { padding: 0; background: none; box-shadow: none; }
-  .drawn img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45)); }
+  .drawn img { width: 100%; height: 100%; object-fit: contain; }
+  /* a picture medal is a round coin: its shadow is the round box's, not a drop-shadow filter on the image (WebKit draws
+     a filtered image through a square buffer: a light square round the coin on the light theme's shelf, sometimes) */
+  .medal.pic:not(.none) { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.45); }
   .drawn.none img { filter: grayscale(1); opacity: 0.38; }
   .lay { border-radius: 50%; }
   .lay img { position: absolute; inset: 0; filter: none; }

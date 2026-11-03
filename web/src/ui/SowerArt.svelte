@@ -5,7 +5,8 @@
   // gold leaf on black lacquer. It fades under the text. `wide`: the profile's card (the seal is the medallion, top right);
   // else the badge's back (MyQr), the same corner.
   import { SOWER } from '../lib/awards';
-  import rosette from '../assets/lanyards/sower-rosette.svg?url';
+  // the mask as a picture (tools/scene-rasters.mjs): the tilt moves it every frame, and an SVG mask was rasterised again each time
+  import rosette from '../assets/lanyards/sower-rosette.webp';
   let { wide = false }: { wide?: boolean } = $props();
 </script>
 
