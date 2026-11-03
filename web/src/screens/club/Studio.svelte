@@ -11,14 +11,12 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Users from '@lucide/svelte/icons/users';
   import UserPlus from '@lucide/svelte/icons/user-plus';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pencil from '@lucide/svelte/icons/pencil';
   import PenLine from '@lucide/svelte/icons/pen-line';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
-  import { glass } from '../../ui/glass';
   import { api, type EventCard, type Id, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
@@ -38,6 +36,13 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Mail from '@lucide/svelte/icons/mail';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Section from '../../ui/Section.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import Field from '../../ui/Field.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import Crown from '@lucide/svelte/icons/crown';
   import BookUser from '@lucide/svelte/icons/book-user';
   import FileDown from '@lucide/svelte/icons/file-down';
@@ -94,19 +99,21 @@
   const next = $derived(upcoming.find((e) => e.status === 'published'));
   const today = $derived(!!next && dayNo(next.startsAt) === dayNo(nowTs()));
   // "Change room" on the day (rooms change on the spot): a KBTU room in one tap; who's coming hears it by the rules
-  let room = $state<string | null>(null);
-  let roomEl = $state<HTMLInputElement>();
-  async function startMove() { room = ''; await tick(); roomEl?.focus(); }
+  let moving = $state(false);
+  let room = $state('');
+  let roomForm = $state<HTMLFormElement>();
+  async function startMove() { room = ''; moving = true; await tick(); roomForm?.querySelector('input')?.focus(); }
   async function move() {
-    if (!next || !room?.trim()) return;
-    try { await api.changePlace(next.id, room.trim()); room = null; haptic.ok(); say(t('studio.moved'), 'sparkles_3d'); refresh(); }
+    if (!next || !room.trim()) return;
+    try { await api.changePlace(next.id, room.trim()); moving = false; haptic.ok(); say(t('studio.moved'), 'sparkles_3d'); refresh(); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
   let seg = $state(0);
   let picking = $state(false);
   const segs = $derived(staff ? [[t('studio.upcoming'), upcoming], [t('studio.drafts'), drafts], [t('studio.past'), past]] as const : [[t('studio.upcoming'), upcoming], [t('studio.past'), past]] as const);
-  const list = $derived(segs[Math.min(seg, segs.length - 1)][1]);
+  const at = $derived(Math.min(seg, segs.length - 1));
+  const list = $derived(segs[at][1]);
 
   // questions under our events that wait for the club's answer (Head+ see the count), the soonest first
   const asking = $derived(events.filter((e) => (e.questions ?? 0) > 0 && e.status === 'published' && !over(e)));
@@ -156,207 +163,170 @@
 <div class="page stagger" class:scroll={!onTitle} class:inpane={!!onTitle}>
   {#if m}
     <header class="hd">
-      <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right, in glass
-           (not inside the list) -->
+      <!-- the club's name switches clubs (A3; no chips row); the pencil to its page stays top right (not inside the list) -->
       {#snippet who()}
         <OrgLogo org={m.org} size={46} />
         <span class="name"><span class="h"><h1 class="ellipsis" use:fitTitle use:largeTitle={onTitle ?? 'club'}>{nameOf(m.org)}</h1>{#if multi}<ChevronDown size={20} strokeWidth={2.6} class="chev" />{/if}</span>
           <p class="t-foot role">{#if m.role === 'president'}<Crown size={14} strokeWidth={2.6} />{/if}{roleName(m.role, titleOf(m))}{members ? ' · ' + tn('studio.members', members) : ''}</p></span>
       {/snippet}
-      <div class="row">
+      <div class="top">
         {#if multi}
           <button class="title" aria-expanded={picking} onclick={() => { haptic.tap(); picking = !picking; }}>{@render who()}</button>
         {:else}<div class="title">{@render who()}</div>{/if}
-        {#if vice}<button class="ic glass glass-pill" use:glass onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id); }} aria-label={t('ce.title')}><Pencil size={19} strokeWidth={2.2} /></button>{/if}
+        {#if vice}<IconButton icon={Pencil} label={t('ce.title')} onclick={() => sheets.clubEdit(m.org.id)} />{/if}
       </div>
       {#if picking}
-        <div class="pick surface" transition:fold>
-          {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
-            <button onclick={() => { haptic.tap(); ui.club = x.org.id; seg = 0; picking = false; }}><OrgLogo org={x.org} size={30} /><span class="tx"><b class="ellipsis">{nameOf(x.org)}</b><i class="t-foot ellipsis">{roleName(x.role, titleOf(x))}</i></span></button>
-          {/each}
+        <div class="pick" transition:fold>
+          <Group>
+            {#each mine.filter((x) => x.org.id !== m.org.id) as x (x.org.id)}
+              <Row dense title={nameOf(x.org)} subtitle={roleName(x.role, titleOf(x))} onclick={() => { ui.club = x.org.id; seg = 0; picking = false; }}>
+                {#snippet lead()}<OrgLogo org={x.org} size={30} />{/snippet}
+              </Row>
+            {/each}
+          </Group>
         </div>
       {/if}
     </header>
 
-    <div class="todo surface">
-      <button onclick={() => { haptic.tap(); sheets.team(); }}><Users size={20} /><span class="tx team"><b class="ellipsis">{t('page.team')}</b>{#if removals}<i class="t-foot ellipsis">{t('team.removals')}</i>{/if}</span>
-        <!-- the faces fill the row: whole ones only (the line wraps the rest out of sight) -->
-        <span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
-        <span class="num n">{data.team[m.org.id]?.length ?? members}</span>{#if removals}<b class="count warn">{removals}</b>{/if}<ChevronRight size={18} /></button>
-    </div>
+    <div class="team"><Group>
+      <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>
+        <!-- the faces fill what the row leaves: whole ones only (the line wraps the rest out of sight) -->
+        {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
+          <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
+      </Row>
+    </Group></div>
 
     {#if todo}
-      <h2 class="sec">{t('studio.todo')}</h2>
-      <div class="todo surface">
-        {#if claims}
-          <button onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)}><UsersRound size={20} /><span class="tx"><b class="ellipsis">{t('ro.reqTitle')}</b></span><b class="count">{claims}</b><ChevronRight size={18} /></button>
-        {/if}
+      <Group caption={t('studio.todo')}>
+        {#if claims}<Row icon={UsersRound} title={t('ro.reqTitle')} count={claims} accessory="chevron" onclick={() => sheets.rosterRequests(refreshClaims, claimOrg)} />{/if}
         {#if alone}
-          <button onclick={() => shareInvite(m.org)}><Crown size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoPres')}</b><i class="t-foot">{t('studio.todoPresHint')}</i></span><ChevronRight size={18} /></button>
-          <button class="me" onclick={() => iAmPres(m.org.id)}>{t('studio.todoPresMe')}</button>
+          <Row icon={Crown} title={t('studio.todoPres')} subtitle={t('studio.todoPresHint')} accessory="chevron" onclick={() => shareInvite(m.org)} />
+          <Row tone="action" title={t('studio.todoPresMe')} onclick={() => iAmPres(m.org.id)} />
         {/if}
-        {#if fresh}
-          <button onclick={openRecruit}><UserPlus size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoApps')}</b></span><b class="count">{fresh}</b><ChevronRight size={18} /></button>
-        {/if}
-        {#if memoDue}
-          <button onclick={() => sheets.memo(m.org.id)}><Mail size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoMemo')}</b><i class="t-foot ellipsis">{t('studio.todoMemoBy', { n: nextWeek })}</i></span><ChevronRight size={18} /></button>
-        {/if}
-        {#if askRecruit}
-          <button onclick={openRecruit}><UserPlus size={20} /><span class="tx"><b class="ellipsis">{t('studio.todoRecruit')}</b><i class="t-foot ellipsis">{t('studio.todoRecruitHint')}</i></span><ChevronRight size={18} /></button>
-        {/if}
+        {#if fresh}<Row icon={UserPlus} title={t('studio.todoApps')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
+        {#if memoDue}<Row icon={Mail} title={t('studio.todoMemo')} subtitle={t('studio.todoMemoBy', { n: nextWeek })} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
+        {#if askRecruit}<Row icon={UserPlus} title={t('studio.todoRecruit')} subtitle={t('studio.todoRecruitHint')} accessory="chevron" onclick={openRecruit} />{/if}
         {#each asking as e (e.id)}
-          <button onclick={() => sheets.comments('event', e.id, e.title, () => void refresh())}><MessageCircle size={20} /><span class="tx"><b class="ellipsis">{e.title}</b><i class="t-foot ellipsis">{t('studio.questions')}</i></span><b class="count">{e.questions}</b><ChevronRight size={18} /></button>
+          <Row icon={MessageCircle} title={e.title} subtitle={t('studio.questions')} count={e.questions} accessory="chevron" onclick={() => sheets.comments('event', e.id, e.title, () => void refresh())} />
         {/each}
         {#each checking as e (e.id)}
-          <button onclick={() => sheets.attendees(e.id)}><ReceiptIcon size={20} /><span class="tx"><b class="ellipsis">{e.title}</b><i class="t-foot ellipsis">{t('studio.toCheck')}</i></span><b class="count warn">{e.toCheck}</b><ChevronRight size={18} /></button>
+          <Row icon={ReceiptIcon} title={e.title} subtitle={t('studio.toCheck')} count={e.toCheck} accessory="chevron" onclick={() => sheets.attendees(e.id)} />
         {/each}
         {#each volunteering as e (e.id)}
-          <button onclick={() => sheets.volunteers(e.id, e.needsVolunteers ?? 0)}><HandHeart size={20} /><span class="tx"><b class="ellipsis">{e.title}</b><i class="t-foot ellipsis">{t('studio.todoVol')}</i></span><b class="count">{e.volunteersAsked}</b><ChevronRight size={18} /></button>
+          <Row icon={HandHeart} title={e.title} subtitle={t('studio.todoVol')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(e.id, e.needsVolunteers ?? 0)} />
         {/each}
-      </div>
+      </Group>
     {/if}
 
     {#if dmp}
-      <h2 class="sec">{t('tab.dmp')}</h2>
-      <div class="todo surface">
-        <button onclick={() => sheets.registry()}><BookUser size={20} /><span class="tx"><b class="ellipsis">{t('reg.title')}</b><i class="t-foot ellipsis">{t('reg.studioSub')}</i></span>{#if data.registry?.length}<b class="count">{data.registry.length}</b>{/if}<ChevronRight size={18} /></button>
-        <button onclick={() => sheets.registry()}><Mail size={20} /><span class="tx"><b class="ellipsis">{t('reg.memos')}</b></span>{#if memos}<b class="count">{memos}</b>{/if}<ChevronRight size={18} /></button>
-        <button onclick={exportCsv} disabled={exporting}><FileDown size={20} /><span class="tx"><b class="ellipsis">{t('reg.export')}</b><i class="t-foot ellipsis">{t('reg.exportSub')}</i></span></button>
-      </div>
+      <Group caption={t('tab.dmp')}>
+        <Row icon={BookUser} title={t('reg.title')} subtitle={t('reg.studioSub')} count={data.registry?.length ?? 0} accessory="chevron" onclick={() => sheets.registry()} />
+        <Row icon={Mail} title={t('reg.memos')} count={memos} accessory="chevron" onclick={() => sheets.registry()} />
+        <Row icon={FileDown} title={t('reg.export')} subtitle={t('reg.exportSub')} disabled={exporting} onclick={exportCsv} />
+      </Group>
     {/if}
 
-    <h2 class="sec">{t('studio.next')}</h2>
-    {#if next}
-      <article class="hero surface">
-        <button class="top" onclick={() => openRow(next)}>
-          <Poster item={next} size={60} radius={16} />
-          <span class="txt">
-            <span class="t-foot when" class:now={today}>{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}</span>
-            <b class="t-title clamp-2">{next.title}</b>
-          </span>
-        </button>
-        <!-- how full it is -->
-        <div class="seats"><span class="t-foot"><b class="num">{tn('event.going', next.taken)}</b>{next.seats ? ' / ' + next.seats : ''}</span>
-          {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
-        <div class="acts btns">
-          {#if !next.guestHost}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
-          {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
-        </div>
-        {#if staff && today && !next.placeUrl}
-          {#if room === null}
-            <button class="move" onclick={startMove}><MapPin size={16} />{t('studio.move')}</button>
-          {:else}
-            <div class="moving">
-              <label class="field"><span class="t-cap">{t('studio.newRoom')}</span>
-                <input bind:this={roomEl} bind:value={room} maxlength="80" placeholder={next.place || '305'} enterkeyhint="done" onkeydown={(e) => e.key === 'Enter' && move()} /></label>
-              <Button kind="primary" size="m" disabled={!room.trim()} onclick={move}>{t('common.save')}</Button>
-            </div>
+    <Section title={t('studio.next')}>
+      {#if next}
+        <article class="hero">
+          <button class="ev" onclick={() => openRow(next)}>
+            <Poster item={next} size={60} radius={16} />
+            <span class="txt">
+              <span class="t-foot when" class:now={today}>{relDay(next.startsAt)}, {time(next.startsAt)} · {placeOf(next.place)}</span>
+              <b class="t-title clamp-2">{next.title}</b>
+            </span>
+          </button>
+          <!-- how full it is -->
+          <div class="seats"><span class="t-foot"><b class="num">{tn('event.going', next.taken)}</b>{next.seats ? ' / ' + next.seats : ''}</span>
+            {#if next.seats}<span class="bar"><i style="width:{Math.min(100, (next.taken / next.seats) * 100)}%"></i></span>{/if}</div>
+          <div class="acts btns">
+            {#if !next.guestHost}<Button kind={today ? 'primary' : 'secondary'} size="m" full onclick={() => sheets.scanner(next.id)}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('studio.scanner')}</Button>{/if}
+            {#if staff}<Button kind="secondary" size="m" full onclick={() => sheets.attendees(next.id)}>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('studio.attendees')}</Button>{/if}
+          </div>
+          {#if staff && today && !next.placeUrl}
+            {#if !moving}
+              <Button kind="plain" size="s" full onclick={startMove}>{#snippet icon()}<MapPin size={16} />{/snippet}{t('studio.move')}</Button>
+            {:else}
+              <form class="moving" bind:this={roomForm} onsubmit={(e) => { e.preventDefault(); void move(); }}>
+                <span class="fl"><Field label={t('studio.newRoom')} bind:value={room} maxlength={80} placeholder={next.place || '305'} enterkeyhint="done" /></span>
+                <Button kind="primary" size="l" type="submit" disabled={!room.trim()}>{t('common.save')}</Button>
+              </form>
+            {/if}
           {/if}
-        {/if}
-      </article>
-    {:else}
-      <p class="hero surface none t-callout">{t('studio.none')}</p>
-    {/if}
+        </article>
+      {:else}
+        <Group><EmptyState inline text={t('studio.none')} /></Group>
+      {/if}
+    </Section>
 
-    <!-- the actions as tiles (mockup v24): a new event, recruitment while it runs (closed: a "To do" at a term's start),
-         the memo to DMP; inviting lives on Team, editing the club up top. First, to Vice+ (who link chats): the channel
-         whose posts the userbot copies into the news, or "Link" -->
+    <!-- the actions (were tiles in mockup v24, now Settings' rows): a new event, recruitment while it runs (closed: a
+         "To do" at a term's start), the memo to DMP; inviting lives on Team, editing the club up top. First, to Vice+
+         (who link chats): the channel whose posts the userbot copies into the news, or "Link" -->
     {#if m.channel !== undefined || staff || may(m, 'posts') || may(m, 'memo') || recruitTile}
-      <div class="qa">
-        {#if m.channel !== undefined}<button class="qt surface" onclick={() => { haptic.tap(); sheets.clubEdit(m.org.id, 'chats'); }}><Megaphone size={22} /><span class="tt"><b>{t('studio.channelShort')}</b><small class="clamp-2">{m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')}</small></span></button>{/if}
-        {#if staff}<button class="qt surface" onclick={() => { haptic.tap(); sheets.editor(m.org.id); }}><Plus size={22} /><span class="tt"><b>{t('studio.newShort')}</b><small>{t('studio.newSub')}</small></span></button>{/if}
+      <Group>
+        {#if m.channel !== undefined}<Row icon={Megaphone} title={t('studio.channelShort')} subtitle={m.channel ? (m.channel.mirror ? m.channel.title : t('studio.channelOff')) : t('studio.channelLink')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id, 'chats')} />{/if}
+        {#if staff}<Row icon={Plus} title={t('studio.newShort')} subtitle={t('studio.newSub')} accessory="chevron" onclick={() => sheets.editor(m.org.id)} />{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
-        {#if may(m, 'posts')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.composer(m.org.id); }}><PenLine size={22} /><span class="tt"><b>{t('studio.postShort')}</b><small>{t('studio.postSub')}</small></span></button>{/if}
-        {#if recruitTile}<button class="qt surface" onclick={() => { haptic.tap(); openRecruit(); }}><UserPlus size={22} /><span class="tt"><b>{t('cast.card')}</b><small>{fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : 'studio.recruitClosed')}</small></span>{#if fresh}<i class="qd num">{fresh}</i>{/if}</button>{/if}
-        {#if may(m, 'memo')}<button class="qt surface" onclick={() => { haptic.tap(); sheets.memo(m.org.id); }}><Mail size={22} /><span class="tt"><b>{t('studio.memoShort')}</b><small>{t('studio.memoSub')}</small></span></button>{/if}
-      </div>
+        {#if may(m, 'posts')}<Row icon={PenLine} title={t('studio.postShort')} subtitle={t('studio.postSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id)} />{/if}
+        {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
+        {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} subtitle={t('studio.memoSub')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
+      </Group>
     {/if}
 
-    <div class="seg" role="tablist">
-      {#each segs as [label, l], i (label)}
-        <button class:on={i === Math.min(seg, segs.length - 1)} onclick={() => (seg = i)}>{label}{l.length ? ' · ' + l.length : ''}</button>
-      {/each}
-    </div>
-    <div class="list">
-      {#each list as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={() => openRow(e)} />
-      {:else}<p class="t-foot empty">{t('studio.empty')}</p>{/each}
+    <div class="events">
+      <Segmented label={t('studio.upcoming')} items={segs.map(([label, l], i) => ({ value: i, label: label + (l.length ? ' · ' + l.length : '') }))} value={at} onchange={(v) => (seg = v)} />
+      <div class="list">
+        {#each list as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} onopen={() => openRow(e)} />
+        {:else}<EmptyState inline text={t('studio.empty')} />{/each}
+      </div>
     </div>
   {/if}
   <div class="tail"></div>
 </div>
 
 <style>
-  .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
+  .page { position: absolute; inset: 0; display: flex; flex-direction: column; gap: var(--gap-group); padding: var(--page-top) var(--gutter) 0; }
+  .page > :global(*) { flex-shrink: 0; }
   .inpane { position: static; padding: 0; } /* the pane is the scroller, with its own edges */
-  .hd { margin-bottom: 18px; }
   .hd p { margin-top: 2px; }
-  .title { display: flex; align-items: center; gap: 12px; }
+  .title { display: flex; align-items: center; gap: var(--s-3); }
   .name { flex: 1; min-width: 0; }
   .name h1 { font: 800 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.025em; }
-  .row { display: flex; align-items: center; gap: 10px; }
-  .row .title { flex: 1; min-width: 0; }
+  .top { display: flex; align-items: center; gap: var(--s-2); }
+  .top .title { flex: 1; min-width: 0; }
   button.title { text-align: left; }
-  .ic { position: relative; flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text);
-    transition: transform 0.45s var(--ease-bounce); }
-  .ic:active { transform: scale(0.9); transition-duration: 80ms; }
-  button.title:active { opacity: 0.7; }
+  button.title:active { opacity: 0.7; transform: none; }
   .h { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .h :global(.chev) { flex: none; color: var(--text-3); transition: transform var(--t-base) var(--ease); }
   [aria-expanded='true'] .h :global(.chev) { transform: rotate(180deg); }
-  .pick { display: flex; flex-direction: column; margin-top: 12px; padding: 4px 0; border-radius: var(--r-l); overflow: hidden; }
-  .pick button { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; text-align: left; color: var(--text-3); }
-  .pick button + button { border-top: 0.5px solid var(--line); }
-  .pick button:active { background: var(--surface-2); }
-  .pick .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .pick .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
-  .pick .tx i { font-style: normal; }
+  .pick { margin-top: var(--s-3); }
   .role { display: flex; align-items: center; gap: 5px; }
-  .role :global(svg) { color: #FFB23D; }
-  .todo { display: flex; flex-direction: column; margin-bottom: 18px; padding: 4px 0; }
-  .todo button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px 8px 14px; text-align: left; color: var(--text-3); }
-  .todo button + button { border-top: 0.5px solid var(--line); }
-  .todo button:active { background: var(--surface-2); }
-  .todo button.me { width: auto; min-height: 0; margin-top: -6px; padding: 0 12px 12px 46px; border-top: 0; font: 650 14px/1.3 var(--font-text); color: var(--accent-text); }
-  .todo button.me:active { background: none; opacity: 0.6; }
-  .todo button > :global(svg:first-child) { flex: none; color: var(--accent-text); }
-  .todo .tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .todo .tx b { color: var(--text); font: 620 15px/1.2 var(--font-text); }
-  .tx.team { flex: none; max-width: 50%; }
-  .faces { flex: 1; min-width: 0; height: 32px; padding: 2px; display: flex; flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; overflow: hidden; }
+  .role :global(svg) { color: var(--gold); }
+  /* the Team row's faces: as many whole ones as fit (the wrap hides the rest), overlapping */
+  /* engine: Row's detail taking the width the title leaves (here: the title keeps its words, the faces get the rest) */
+  .team :global(.txt) { flex: none; max-width: 42%; }
+  .team :global(.end) { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+  .faces { flex: 0 1 auto; min-width: 0; height: 32px; padding: 2px; display: flex; flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; overflow: hidden; }
   .faces :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
   .faces :global(.av + .av) { margin-left: -8px; }
-  /* two columns, every count even: an odd last tile takes the whole row, its icon beside the words */
-  .qa { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-  .qt { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--accent-text); }
-  .qt:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 12px; }
-  .qt > :global(svg) { flex: none; }
-  .qt:active { transform: scale(0.97); }
-  .tt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .qt b { font: 680 var(--fs-body)/1.2 var(--font-text); color: var(--text); }
-  .qt small { font: 500 var(--fs-cap)/1.25 var(--font-text); color: var(--text-3); }
-  .qd { position: absolute; top: 12px; right: 12px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--danger); color: #fff; font: 700 12px/22px var(--font-text); font-style: normal; text-align: center; }
-  .sec { margin: 26px 4px 12px; font: 760 var(--fs-sec)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .seats { display: flex; flex-direction: column; gap: 6px; }
-  .seats b { color: var(--text); font-weight: 650; }
-  .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-  .n { font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
-  .count.warn { background: var(--warning-text); color: var(--bg); }
-  .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
-  .hero { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); }
-  .top { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; }
+  @media (max-width: 359px) { .faces { display: none; } } /* no room for a whole face beside the title */
+  .n { margin-left: var(--s-1); color: var(--text-3); font-weight: 450; }
+  .hero { display: flex; flex-direction: column; gap: var(--s-3); padding: 14px; border-radius: var(--r-group); background: var(--surface); }
+  .ev { display: flex; gap: var(--s-3); align-items: center; text-align: left; width: 100%; }
+  .ev:active { opacity: 0.7; transform: none; }
   .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .when { font-weight: 620; }
+  .when { font-weight: 600; }
   .when.now { color: var(--success-text); }
-  .acts { display: flex; gap: 8px; }
+  .seats { display: flex; flex-direction: column; gap: 6px; }
+  .seats b { color: var(--text); font-weight: 600; }
+  .bar { height: 6px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .acts { display: flex; gap: var(--s-2); }
   /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */
   @media (max-width: 359px) { .acts :global(.btn.full) { flex-basis: auto; padding-inline: var(--s-3); gap: 6px; } }
-  .move { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 6px; font: 620 14px/1 var(--font-text); color: var(--accent-text); }
-  .moving { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
-  .moving .field { flex: 1; min-width: 0; }
-  .none { padding: 18px 16px; color: var(--text-2); }
-  .seg { margin: 18px 0 12px; }
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  .empty { padding: 16px 4px; }
+  .moving { display: flex; align-items: flex-end; gap: var(--s-2); }
+  .fl { flex: 1; min-width: 0; }
+  .events { display: flex; flex-direction: column; gap: var(--s-3); }
+  .list { display: flex; flex-direction: column; gap: var(--s-2); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>
