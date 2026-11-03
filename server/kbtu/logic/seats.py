@@ -135,7 +135,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.starts_at > ?
               AND (e.guest_host IS NULL OR e.channel_msg IS NOT NULL)  -- a partner's event isn't announced; one posted before it became one is kept in step
-              AND (o.official = 1 OR e.channel_msg IS NOT NULL)  -- the channel is official clubs' (the ✓); a post made before the ✓ went is kept in step
+              AND (o.official = 1 OR o.kind != 'club' OR e.channel_msg IS NOT NULL)  -- official clubs' and KBTU's own; a post made before the ✓ went is kept in step
               AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) ORDER BY e.published_at""", core.now()):
         tr = json.loads(e["i18n"]) if e["i18n"] else {}  # the channel is everyone's: the other languages' titles under it (PLAN 9)
         also = [x for k in ("kk", "ru", "en") if (x := tr.get(k, {}).get("title")) and x.strip().lower() != e["title"].strip().lower()]

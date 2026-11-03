@@ -446,11 +446,13 @@ def publish_event(con, v: Viewer, eid: int) -> dict:
         if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
             after = _tell_after(con, e)
             told = after is None
-            if told:
+            for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
+                WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id) if told else []:
+                notify(con, r[0], "new_event", f"event:{eid}")
                 con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"told:{e['org_id']}", str(core.now())))
-                for r in rows(con, """SELECT s.user_id FROM subscriptions s JOIN users u ON u.id = s.user_id
-                    WHERE s.org_id = ? AND u.n_new_events = 1 AND s.user_id != ?""", e["org_id"], v.id):
-                    notify(con, r[0], "new_event", f"event:{eid}")
+            # the week starts when someone heard: nobody did, the key still says so (over the fallback to past events)
+            if told:
+                con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '0')", (f"told:{e['org_id']}",))
     out = full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
     # Studio's toast says whether the followers heard, and if not, from when a next event may tell them
     return out if told is None else {**out, "told": told, "tellAfter": after}
@@ -463,7 +465,7 @@ def _tell_after(con, e: sqlite3.Row) -> int | None:
     """None: an event published now may tell the club's followers; else when the next one may. A club without the ✓:
     once per rolling week, from the last time they were told (meta told:<org>, so deleting a cancelled event buys no
     other), or before that was kept, its last public event published (cancelled ones too)."""
-    if one(con, "SELECT official FROM orgs WHERE id = ?", e["org_id"])[0]:
+    if one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0]:  # an office (DMP, the app's) is KBTU's own
         return None
     t = one(con, """SELECT COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?), (SELECT MAX(published_at) FROM events
         WHERE org_id = ? AND id != ? AND visibility = 'public' AND guest_host IS NULL AND status != 'draft'))""",

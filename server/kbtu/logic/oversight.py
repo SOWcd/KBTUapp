@@ -138,7 +138,7 @@ def set_official(con, v: Viewer, oid: int, on: object) -> dict:
             con.execute("UPDATE orgs SET official = ? WHERE id = ?", (int(on), oid))
             log_action(con, v.id, "official", f"org:{oid}", json.dumps({"on": on}))
             for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", oid):
-                notify(con, uid, "club_official" if on else "club_unofficial", f"off:{oid}")  # once each
+                notify(con, uid, "club_official" if on else "club_unofficial", f"off:{oid}", after=None if on else core.now() + UNDO_WAIT)  # once each; a take-back waits the Undo's minute
     return org_ref(con, _org(con, oid))
 
 
@@ -390,6 +390,6 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
-from .clubs import _official, create_org  # noqa: E402
+from .clubs import UNDO_WAIT, _official, create_org  # noqa: E402
 from .seats import notify  # noqa: E402
 from .teams import team  # noqa: E402

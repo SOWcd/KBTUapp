@@ -67,10 +67,10 @@ def posts(con, v: Viewer, scope: str) -> list[dict]:
             args += [v.id, v.id]
         elif scope.startswith("org:"):
             sql += " AND org_id = ?"; args.append(int(scope[4:]))
-        elif scope == "all":  # a student initiative's posts reach its own members and followers; an official org's everyone
-            sql += """ AND (org_id IN (SELECT id FROM orgs WHERE official = 1) OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
-                OR org_id IN (SELECT org_id FROM org_members WHERE user_id = ?))"""
-            args += [v.id, v.id]
+        elif scope == "all":  # a student initiative's posts reach its own members and followers; an official org's (or KBTU's own office's) everyone
+            sql += """ AND (org_id IN (SELECT id FROM orgs WHERE official = 1 OR kind != 'club') OR featured_until > ? OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
+                OR org_id IN (SELECT org_id FROM org_members WHERE user_id = ?))"""  # a featured post is for everyone
+            args += [core.now(), v.id, v.id]
         else:
             raise ApiError("bad_input")
     return post_shapes(con, v, rows(con, sql + " ORDER BY pinned DESC, created_at DESC LIMIT 100", *args))

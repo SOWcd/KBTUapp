@@ -138,3 +138,37 @@ def test_losing_the_tick(env):
     assert c.patch(f"/api/events/{p['id']}", headers=tma(20), json={**party, "guestHost": None}).status_code == 200
     c.post(f"/api/registry/orgs/{oid}/official", headers=D, json={"on": True})
     assert bot._render(con, told[0]) is None  # the ✓ is back before it went out: nothing to say
+
+
+def test_review_fixes(env):
+    """The review's: KBTU's own office (official 0, not a club) is as official; a featured post is for everyone; a
+    publish nobody heard keeps the week; the President's message on losing the check mark waits the Undo's minute."""
+    c, cfg = env
+    con, oid = _club(c, cfg, False)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, can_broadcast) VALUES (90, 'dmp', 'office', 'DMP', 'D', 'crown_3d', 0, 1)")
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], 90, "president", "test")
+    e = _publish(c, 90, "DMP day")
+    assert e["told"] is True and [r[0]["id"] for r in logic.channel_due(con)] == [e["id"]]
+    _publish(c, 90, "DMP day 2")
+    assert c.post("/api/orgs/90/posts", headers=tma(20), json={"title": "DMP news", "body": "x"}).status_code == 200
+    p = c.post(f"/api/orgs/{oid}/posts", headers=tma(20), json={"title": "Featured", "body": "x"}).json()
+    seen = lambda: {x["title"] for x in c.get("/api/posts", headers=tma(31), params={"scope": "all"}).json()}  # noqa: E731
+    assert seen() == {"DMP news"}
+    con.execute("UPDATE posts SET featured_until = ? WHERE id = ?", (logic.core.now() + 3600, p["id"]))
+    assert seen() == {"DMP news", "Featured"}
+    # nobody to tell: the week isn't spent
+    lone = logic.create_org(con, None, "Lonely", "LO", "crown_3d", False)
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], lone, "president", "test")
+    assert _publish(c, lone, "A")["told"] is True and _publish(c, lone, "B")["told"] is True
+    # a club told before the meta key existed (the deploy): its last public event still counts, every time
+    old = logic.create_org(con, None, "Older", "OL", "crown_3d", False)
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], old, "president", "test")
+    c.put(f"/api/orgs/{old}/subscription", headers=tma(30))
+    _publish(c, old, "Then")
+    con.execute("DELETE FROM meta WHERE key = ?", (f"told:{old}",))
+    assert _publish(c, old, "Now")["told"] is False and _publish(c, old, "Again")["told"] is False
+    off = logic.create_org(con, None, "Ticked", "TI", "crown_3d", True)
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], off, "president", "test")
+    login(c, 70, "dmp"); con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 70")
+    c.post(f"/api/registry/orgs/{off}/official", headers=tma(70), json={"on": False})
+    assert con.execute("SELECT send_after FROM bot_outbox WHERE kind = 'club_unofficial'").fetchone()[0] >= logic.core.now() + 50
