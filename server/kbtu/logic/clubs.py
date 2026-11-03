@@ -603,7 +603,7 @@ def _official(con, oid: int, level: str) -> int | None:
     return r[0] if r else None
 
 
-SCHOOLS_VERSION = "2"  # 2: the short names (SITE, ISE, KMA), owner Oct 14
+SCHOOLS_VERSION = "3"  # 2: the short names (SITE, ISE, KMA), owner Oct 14; 3: SEPI's Russian short name fixed (a student, Nov 3)
 SCHOOLS = json.loads((Path(__file__).parent.with_name("i18n") / "schools.json").read_text(encoding="utf-8"))
 
 

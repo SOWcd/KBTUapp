@@ -202,7 +202,7 @@ def reserve(con, v: Viewer, body: dict) -> int:
         raise ApiError("bad_input", "short")
     with tx(con):
         # the pace: five a day, ten minutes apart; a post the AI called noise counts toward the day, not the ten minutes
-        # (its author rewrites it now: told why, ChannelCompose gives the words back)
+        # (its author rewrites it now: told why, ChannelCompose gives the words back); an ad counts toward both
         n, last = one(con, """SELECT COUNT(*), MAX(CASE WHEN why IS NOT 'noise' THEN created_at END) FROM fchan_posts
                              WHERE user_id = ? AND created_at > ?""", v.id, _now() - 86400)
         if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
@@ -228,8 +228,8 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
     with tx(con):
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'held' AND why = 'check'", pid)
         if p:
-            if verdict == "noise":  # no message in it: refused, its author told (the route), the words wiped
-                con.execute("UPDATE fchan_posts SET status = 'gone', why = 'noise', body = '', sign = NULL WHERE id = ?", (pid,))
+            if verdict in ("noise", "ad"):  # no message in it, or an ad: refused, its author told (the route), the words wiped
+                con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL WHERE id = ?", (verdict, pid))
                 return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
             if verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", _now() - 3600)[0] >= CHANNEL_AN_HOUR

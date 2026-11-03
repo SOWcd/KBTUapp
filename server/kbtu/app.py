@@ -1708,8 +1708,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         pid = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked
         verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
-        if p["status"] == "gone":  # the AI saw no message in it: said, never silently (the app gives the words back)
-            raise ApiError("bad_input", "noise")
+        if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise")
         return p
 
     @app.delete("/api/forum-posts/{pid}", status_code=204)

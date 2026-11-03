@@ -796,6 +796,12 @@ def test_post_meaningless_and_repeats(env, monkeypatch):
     r = c.post("/api/forum-posts", headers=A, json={"body": "test test test post please ignore"})
     assert r.status_code == 400 and r.json()["message"] == "noise"
     assert [tuple(x) for x in con.execute("SELECT status, why, body FROM fchan_posts")] == [("gone", "noise", "")]
+    said["word"] = "ad"                                                                          # an ad: refused, said
+    r = c.post("/api/forum-posts", headers=A, json={"body": "Essays for money, cheap and fast, write me"})
+    assert r.status_code == 400 and r.json()["message"] == "ad"
+    assert tuple(con.execute("SELECT status, why, body FROM fchan_posts ORDER BY id DESC").fetchone()) == ("gone", "ad", "")
+    assert c.post("/api/forum-posts", headers=A, json={"body": "Lost my blue umbrella near the library"}).json()["error"] == "rate_limited"  # an ad counts toward the ten minutes
+    clock[0] += 601
     said["word"] = "ok"
     assert c.post("/api/forum-posts", headers=A, json={"body": "Lost my blue umbrella near the library"}).json()["status"] == "live"
     clock[0] += 11 * 60
@@ -806,12 +812,12 @@ def test_post_meaningless_and_repeats(env, monkeypatch):
     assert c.post("/api/forum-posts", headers=A, json={"body": "Who wants to play chess on Friday?"}).json()["status"] == "live"
     r = c.post("/api/forum-posts", headers=A, json={"body": "Anyone up for basketball tonight?"})
     assert r.json()["error"] == "rate_limited"                                                    # ten minutes still
-    for i, text in enumerate(("Anyone up for basketball tonight?", "Selling a used calculator, cheap")):
+    for i, text in enumerate(("Anyone up for basketball tonight?",)):
         clock[0] += 11 * 60
         assert c.post("/api/forum-posts", headers=A, json={"body": text}).json()["status"] == "live"
     clock[0] += 11 * 60
     r = c.post("/api/forum-posts", headers=A, json={"body": "Looking for a math tutor this week"})
-    assert r.json()["error"] == "rate_limited"                                                    # five today, the noise one too
+    assert r.json()["error"] == "rate_limited"                                                    # five today, the noise and the ad too
 
 
 def test_post_reports(env, monkeypatch):

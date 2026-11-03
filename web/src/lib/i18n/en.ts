@@ -60,6 +60,7 @@ const en: Dict = {
   'fc.short': "Too short: write a few real words",
   'fc.dup': "You've posted this already: write something new",
   'fc.noise': "The AI found no message here: it looks like a test or random letters. Rewrite it, it wasn't posted",
+  'fc.ad': "Any advertising is banned in the forum. Your post wasn't published",
   'fc.comments': "Comments",
   'fc.reactions': "Reactions",
   'fc.newSince': "New",

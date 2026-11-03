@@ -263,7 +263,7 @@
   /* ---- Japanese Culture: their pink, their shanyrak top right (behind the QR on the card), sakura near ---- */
   .japanesecultureclub { background: rgb(224, 172, 190); }
   .jb { object-position: 100% 0; --z: -3; }
-  .sc:not(.wide) .jb { object-position: 100% 30%; }
+  .sc:not(.wide) .jb { left: auto; bottom: auto; width: 160%; height: 160%; object-position: 100% 0; } /* the badge's band nearer: their shanyrak big, the sun cut at the left (club, Nov 3) */
   .petals { left: -120px; top: -120px; width: calc(100% + 240px); height: calc(100% + 240px); background: url('../assets/lanyards/scenes/jcc-petals.svg') 0 0 / 120px 120px;
     opacity: 0.85; animation: jcpetal 24s linear infinite; }
   @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam; raspberry as their drawn petals, the pale ones melted into the pink (club, Nov 3) */
