@@ -17,14 +17,17 @@
     // light (.claude/reports/school-lanyards/gen-r5b.py, card files only; the band keeps round 4's). Round 6 (owner, on
     // 5b): SITE a wafer, Business round 5's chart finished, ISE's left a world chart, SCE a molecule in 3D, SMSGT a wind
     // turbine at dawn, SSS an amphitheatre (.claude/reports/club-lanyards/gen-r6.py). Round 7 (owner, on 6: richer, "wow"):
-    // SMSGT a solar field at dawn, SSS the theatre's colonnade against the sun, ISE a ring of light round the globe and
-    // the sunrise on its limb (.claude/reports/club-lanyards/round7/gen-schools-r7.py)
-    site: [['site-traces', 'far'], ['site-board', 'far'], ['site-wafer', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
+    // BS a gold king on a board under the risen chart, SMSGT a solar field at dawn, SSS the theatre's colonnade against
+    // the sun; then (7b) ISE a ring of light round the globe and the sunrise on its limb; (7d, owner: one card from the
+    // variants) SITE the opened chip in front of a server aisle's light, fibre feeding it, SCE a distillation column at
+    // night after rain (.claude/reports/club-lanyards/round7/gen-schools-r7.py)
+    site: [['site-traces', 'far'], ['site-aisle', 'far'], ['site-chip', 'near'], ['site-feed', 'near']], seogi: [['seogi-sky', 'far'], ['seogi-field', ''], ['seogi-dusk', 'far'], ['seogi-jack', 'near']],
     geology: [['geo-contours', 'far'], ['geo-strata', ''], ['geo-crystals', 'near']],
-    business: [['bs-chart', 'far'], ['bs-trend', 'near']], ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-ring-back', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near'], ['ise-ring-front', 'near']],
+    business: [['bs-chart', 'far'], ['bs-board', ''], ['bs-king', 'near']],
+    ise: [['ise-globe', 'far'], ['ise-chart', 'far'], ['ise-ring-back', 'far'], ['ise-earth', 'far'], ['ise-routes', 'near'], ['ise-ring-front', 'near']],
     kma: [['kma-moon', 'far'], ['kma-waves', 'waves'], ['kma-ship', 'near ship']],
     law: [['law-portico', 'far'], ['law-scales', 'near']], sam: [['sam-graph', 'far'], ['sam-ink', 'far'], ['sam-surface', 'near']],
-    sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-bokeh', 'far'], ['sce-mol', 'near']],
+    sce: [['sce-molecule-far', 'far'], ['sce-molecule', 'near'], ['sce-sky', 'far'], ['sce-plant', 'near']],
     smsgt: [['smsgt-comb', 'far'], ['smsgt-dawn', 'far'], ['smsgt-field', 'near']], sss: [['sss-book', 'far'], ['sss-sky', 'far'], ['sss-theatre', 'near']],
   };
   const shield = $derived(SH[`../assets/lanyards/school-${look}.webp`]);
