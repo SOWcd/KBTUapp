@@ -88,7 +88,7 @@
       leaving = true; haptic.ok(); say(phrase('ce.saved'), 'sparkles_3d'); close(overlay.id);
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'warning_3d');
+      say(e instanceof ApiErr && e.message === 'taken' ? t('nc.taken') : e instanceof ApiErr && (e.message === 'club_word' || e.message === 'emoji') ? t(`nc.${e.message}`) : e instanceof ApiErr && e.code === 'bad_input' ? t('nc.bad') : t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
   const hold = () => !leaving && changed;

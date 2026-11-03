@@ -2142,16 +2142,17 @@ def test_club_profile(env):
                 "(2, 'go', 'club', 'Go', 'GO', 'trophy_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0), (1, ?, 'member', 0)", (vice["id"], mem["id"]))
     V, M = tma(20, "Vice"), tma(21, "Mem")
-    patch = {"name": "IT Club KBTU", "short": "it", "emoji": "rocket_3d", "cover": 4, "description": "We build things.",
+    patch = {"name": "IT KBTU", "short": "it", "emoji": "rocket_3d", "cover": 4, "description": "We build things.",
              "links": ["https://instagram.com/itclub", "https://t.me/itclub"]}
     assert c.patch("/api/orgs/1", headers=M, json=patch).status_code == 403
     o = c.patch("/api/orgs/1", headers=V, json=patch).json()
     assert (o["name"], o["short"], o["emoji"], o["cover"], o["description"], o["links"], o["recruiting"]) == \
-        ("IT Club", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)  # "KBTU" goes, the club's "Club" stays
-    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT Club"   # one field at a time
+        ("IT", "IT", "rocket_3d", 4, "We build things.", patch["links"], True)  # "KBTU" goes
+    assert c.patch("/api/orgs/1", headers=V, json={"recruiting": False}).json()["name"] == "IT"   # one field at a time
     assert c.patch("/api/orgs/1", headers=V, json={"name": "go"}).json()["message"] == "taken"
     for bad in ({"links": ["javascript:alert(1)"]}, {"links": ["https://a.kz"] * 7}, {"cover": 9}, {"short": "ABC"}, {"emoji": "../x"},
-                {"name": "X"}, {"description": "x" * 601}, {}, {"description": "ok", "cover": True}):
+                {"name": "X"}, {"name": "IT Club"}, {"name": "\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432"}, {"name": "IT \U0001f680"},
+                {"description": "x" * 601}, {}, {"description": "ok", "cover": True}):
         assert c.patch("/api/orgs/1", headers=V, json=bad).status_code == 400, bad
     assert c.get("/api/orgs/1", headers=M).json()["description"] == "We build things."                    # nothing half-saved
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'org_edit'").fetchone()[0] == 1
@@ -5264,9 +5265,9 @@ def test_org_names(env):
         assert c.patch(f"/api/orgs/{club['id']}", headers=tma(21), json=body).status_code == 200
         o = c.get(f"/api/orgs/{club['id']}", headers=tma(21)).json()
         return o["name"], o["abbr"]
-    assert edit({"name": "Petroleum Club KBTU"}) == ("Petroleum Club", "SPE")        # renamed: the abbr it had stays; "Club" is theirs
-    assert edit({"name": "PC \u2013 Petroleum Club"}) == ("Petroleum Club", "PC")    # one the new name carries
-    assert edit({"name": "KBTU Oil Club (OC)", "abbr": "Oil"}) == ("Oil Club", "Oil")  # an abbr sent with it wins
+    assert edit({"name": "Petroleum KBTU"}) == ("Petroleum", "SPE")                  # renamed: the abbr it had stays
+    assert edit({"name": "PC \u2013 Petroleum"}) == ("Petroleum", "PC")    # one the new name carries
+    assert edit({"name": "KBTU Oil (OC)", "abbr": "Oil"}) == ("Oil", "Oil")  # an abbr sent with it wins
 
 
 
@@ -5282,7 +5283,8 @@ def test_club_rename_review3(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (4, 'cheer', 'club', 'Cheerleading', 'C', 'laptop_3d', 1, 0)")
     con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0)", [(o, pres["id"]) for o in (1, 3, 4)])
     rename = lambda oid, name: c.patch(f"/api/orgs/{oid}", headers=tma(21), json={"name": name})  # noqa: E731
-    assert rename(3, "Go Club").json()["name"] == "Go Club"
+    assert rename(3, "Go Club").json()["message"] == "club_word"               # owner, Nov 3: no "Club" in a name
+    con.execute("UPDATE orgs SET name = 'Go Club' WHERE id = 3")              # one named before stays
     logic.fill_abbrs(con)                                                      # the next deploy's start
     assert con.execute("SELECT name FROM orgs WHERE id = 3").fetchone()[0] == "Go Club"
     for name in ("KBTU", "\u041a\u0412\u0422\u0423 Go", "\uff2b\uff22\uff34\uff35 Go", "K.B.T.U. Go", "Go \u2705"):

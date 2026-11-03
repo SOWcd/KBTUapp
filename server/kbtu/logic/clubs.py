@@ -490,11 +490,24 @@ def _looks_ok(name: str) -> None:
         raise ApiError("bad_input", "name")
 
 
+# what a name may not carry (owner, Nov 3): "Club" as a word ("\u041a\u043b\u0443\u0431 \u0434\u0435\u0431\u0430\u0442\u043e\u0432" can't be cut to a genitive, so it's refused), and
+# emoji (the logo is the picture; they break lists and initials)
+_CLUB_WORD = re.compile(r"(?<![^\W_])(?:club|\u043a\u043b\u0443\u0431(?:\u044b|\u0430|\u0443)?)(?![^\W_])", re.I)
+
+
+def _plain(name: str) -> None:
+    if _CLUB_WORD.search(name):
+        raise ApiError("bad_input", "club_word")
+    if any(unicodedata.category(c) == "So" or 0x1F000 <= ord(c) <= 0x1FAFF or c in "\u200d\ufe0f" for c in name):
+        raise ApiError("bad_input", "emoji")
+
+
 def _rename_ok(con, oid: int | None, name: str) -> None:
-    """A club's name, at application, approval and rename (the admin's create_org is the admin's): _looks_ok, and not
-    another org's in any letters or case (oid: the club itself, None before it exists). Lanyards go by slug: a rename
-    neither gains nor loses one."""
+    """A club's name, at application, approval and rename (the admin's create_org is the admin's): _looks_ok, _plain,
+    and not another org's in any letters or case (oid: the club itself, None before it exists). Lanyards go by slug: a
+    rename neither gains nor loses one. Names already there stay till they're changed."""
     _looks_ok(name)
+    _plain(name)
     skel = _skeleton(name)
     if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id IS NOT ?", oid)):
         raise ApiError("conflict", "taken")
