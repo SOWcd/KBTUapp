@@ -99,6 +99,7 @@
   const freeMe = $derived(!!e?.price && !!e.freeLeft && !!session.me?.student?.freeFirst);
   const canInvite = $derived(!preview && !!session.me?.student && !!e && e.status === 'published' && !started && (e.visibility ?? 'public') === 'public');
   const over = $derived(!!e && (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs());
+  const shut = $derived(started && !e?.lateSignup); // late sign-up: "Going" stays until the end (over comes first)
   // the student's classes around the event that day: the last one before, any that overlap, the first one
   // after — so they see at once whether they make it
   const day = $derived.by(() => {
@@ -536,7 +537,7 @@
           </div>
         {:else if going}
           <Button kind="primary" size="l" full onclick={() => sheets.ticket(id)}>{#snippet icon()}<Ticket size={18} />{/snippet}{t('event.ticket')}</Button>
-        {:else if started}
+        {:else if shut}
           <Button kind="neutral" size="l" full disabled>{t('event.started')}</Button>
         {:else if st === 'hold'}
           <Button kind="primary" size="l" full onclick={() => sheets.pay(id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button>

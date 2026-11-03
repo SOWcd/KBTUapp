@@ -189,6 +189,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         meeting = i.get("meeting") is True  # a club meeting (§2b): team-only, someone's tag or the whole club expected
         tag = int(i["meetingTag"]) if meeting and i.get("meetingTag") is not None else None
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
+        late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
@@ -200,7 +201,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
     if not ok:
         raise ApiError("bad_input")
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
-            "emoji": emoji, "color": color, "seats": seats, "reg_until": reg_until, "first_year": int(bool(i.get("firstYear"))),
+            "emoji": emoji, "color": color, "seats": seats, "reg_until": None if late else reg_until, "late_signup": int(late), "first_year": int(bool(i.get("firstYear"))),
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
             "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
@@ -314,10 +315,14 @@ def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None
 
 
 def _partner_ok(f: dict, e: sqlite3.Row | None = None) -> None:
-    """A partner's event has no tickets: no price, public, not a meeting (the link out is the only way in)."""
+    """A partner's event has no tickets: no price, public, not a meeting (the link out is the only way in). Late sign-up
+    likewise: free, uncapped, public, ours (late review: no receipt judged at the door, no waitlist nobody leaves)."""
     get = lambda k: f[k] if k in f else e[k] if e else None  # noqa: E731
     if get("guest_host") and (get("price") or get("meeting") or (get("visibility") or "public") != "public"):
         raise ApiError("bad_input", "partner")
+    if get("late_signup") and (get("price") or get("seats") is not None or get("meeting") or (get("visibility") or "public") != "public"
+                               or get("guest_host") or get("external_url")):
+        raise ApiError("bad_input", "late")
 
 
 def create_event(con, v: Viewer, oid: int, body: dict) -> dict:

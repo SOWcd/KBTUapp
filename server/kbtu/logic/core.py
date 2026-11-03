@@ -465,7 +465,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
         # its own questions at sign-up ("questions" is Studio's count)
         "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "visibility": e["visibility"],
-        "regUntil": e["reg_until"], "freeFirst": e["free_first"] if e["price"] else None,
+        "regUntil": e["reg_until"], "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,

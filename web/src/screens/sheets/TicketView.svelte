@@ -146,6 +146,8 @@
       {#if valid && !started}
         <button class="pill glass glass-pill" use:glass onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={18} />{t('tk.calendar')}</button>
         <button class="pill glass glass-pill danger" use:glass onclick={cancelReg}>{t('event.cancelReg')}</button>
+      {:else if valid && e?.lateSignup && !my?.checkedInAt && (e.endsAt ?? e.startsAt + 3 * 3600) > nowTs()}<!-- late sign-up: one may step out until the end -->
+        <button class="pill glass glass-pill danger" use:glass onclick={cancelReg}>{t('event.cancelReg')}</button>
       {/if}
     </div>
   {/if}

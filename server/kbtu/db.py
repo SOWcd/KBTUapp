@@ -1165,6 +1165,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Admin → Inbox (Nov 3): decided() and Undo read a thing's newest line, Done the last 30 days
     (119, """CREATE INDEX IF NOT EXISTS audit_by_target ON audit_log(target, id);
     CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
+    # late sign-up (Nov 3): a free uncapped public event keeps "Going" open from its start until its end
+    (120, "ALTER TABLE events ADD COLUMN late_signup INTEGER NOT NULL DEFAULT 0;"),
 ]
 
 

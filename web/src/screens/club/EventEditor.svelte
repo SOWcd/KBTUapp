@@ -97,7 +97,7 @@
     meeting: false, meetingTag: null as Id | null,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
-    paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, regDate: '', regTime: '18:00',
+    paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, late: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
   // a new event named like a casting, by someone who may open the club's recruitment: say that's the better tool
@@ -133,6 +133,9 @@
     return f.endDate || e > startTs ? e : e + 86400;
   });
   const regTs = $derived(fromInputs(f.regDate, f.regTime));
+  // "Until the end" (late sign-up): free, uncapped, public, ours only (the server checks the same)
+  const lateOk = $derived(!f.paid && !(+f.seats > 0) && !f.teamOnly && !f.leaders && !f.partner);
+  const regMode = $derived(f.late && lateOk ? 'end' : f.deadline ? 'date' : 'start');
   // switched on: the day before the event, or its own day when that's already gone
   function deadlineOn(on: boolean) {
     f.deadline = on;
@@ -152,7 +155,7 @@
     host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
     link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
     form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? t('ed.formBad') : '',
-    reg: !f.deadline ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
+    reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
   // a room from DMP: asked in the weekly memo (the block at the end), no longer an in-app request
@@ -281,7 +284,7 @@
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
-          deadline: !!e.regUntil, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
+          deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place, memo: e.memo ?? {} };
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
@@ -315,7 +318,7 @@
   const input = (): EventInput => ({
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     memo: Object.keys(f.memo).length ? $state.snapshot(f.memo) : null,
-    placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: f.deadline && !isMeeting && Number.isFinite(regTs) ? regTs : null,
+    placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: isMeeting && !f.partner ? f.meetingTag : null,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
@@ -402,7 +405,7 @@
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
   const tickets = $derived(!isMeeting && !f.partner);
   const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
-  const regVal = $derived(f.deadline && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
+  const regVal = $derived(regMode === 'end' ? t('ex.untilEnd') : regMode === 'date' && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
   const dayText = $derived(Number.isFinite(startTs) ? `${weekdayShort(startTs)}, ${dayMonthShort(startTs)}` : '—');
   // the end's day: its own date when set, else the day the end time falls on (dimmed: nothing chosen)
   const endDay = $derived(endTs != null ? endTs : Number.isFinite(startTs) ? startTs : null);
@@ -669,13 +672,18 @@
           <Field label={t('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder={t('ed.seatsPh')} error={tried && err.seats ? err.seats : undefined} />
 
         {:else if pick === 'reg'}
-          <Group footnote={t('ed.deadlineHint')}><Row title={t('ed.deadline')} accessory="switch" checked={f.deadline} onchange={deadlineOn} /></Group>
-          {#if f.deadline}
+          <!-- until the start, a date before it, or (free and uncapped) the end: one choice in sight -->
+          <Segmented items={[{ value: 'start', label: t('ex.untilStart') }, { value: 'date', label: t('ex.untilDate') }, ...(lateOk ? [{ value: 'end', label: t('ex.untilEnd') }] : [])]}
+            value={regMode} label={t('ex.regUntil')} onchange={(v) => { touch(); f.late = v === 'end'; deadlineOn(v === 'date'); }} />
+          {#if regMode === 'end'}<p class="hint">{t('ed.lateHint')}</p>
+          {:else if !lateOk}<p class="hint">{t('ed.lateOnly')}</p>{/if}
+          {#if regMode === 'date'}
             <div class="two">
               <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
               <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
             </div>
             {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
+            <p class="hint">{t('ed.deadlineHint')}</p>
           {/if}
 
         {:else if pick === 'video'}
