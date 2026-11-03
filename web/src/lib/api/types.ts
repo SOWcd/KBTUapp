@@ -314,6 +314,7 @@ export interface EventCard {
   guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
+  lateSignup?: boolean;         // sign-up stays open from the start until the end (free, uncapped, public)
   freeFirst?: number | null;    // a paid event: how many 1st-year students come free (the first to register)
   freeLeft?: number | null;     // ... of them still free
   my: MyRegistration | null;
@@ -419,6 +420,7 @@ export interface EventInput {
   color: string;
   seats: number | null;
   regUntil?: Ts | null;        // registration closes (at most the start); null or left out = open until the start
+  lateSignup?: boolean;        // open until the end instead (free, uncapped, public only); left out = off
   firstYear: boolean;
   needsPhone?: boolean;        // sign-up asks for the phone if none is kept
   form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none

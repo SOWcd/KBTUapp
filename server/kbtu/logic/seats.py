@@ -164,6 +164,11 @@ def end_of(e: sqlite3.Row) -> int:
     return e["ends_at"] or e["starts_at"] + NO_END
 
 
+def signup_open(e: sqlite3.Row) -> bool:
+    """Its time lets one sign up or step out: before the start, or until the end with late sign-up on."""
+    return e["starts_at"] > core.now() or bool(e["late_signup"]) and core.now() < end_of(e)
+
+
 # "To calendar" on the ticket (§4.2). The phone's browser fetches the file with no session, so the link is signed;
 # app.create sets the key from TOKEN_KEY, the same in every worker process (this random one is for scripts).
 ICS_KEY = secrets.token_bytes(32)
@@ -407,7 +412,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         e = _event(con, v, eid)
         if e["status"] == "draft":
             raise ApiError("not_found")
-        if e["status"] == "cancelled" or e["starts_at"] <= core.now():
+        if e["status"] == "cancelled" or not signup_open(e):
             raise ApiError("closed")
         if e["reg_until"] and e["reg_until"] <= core.now():
             raise ApiError("closed", "deadline")
@@ -575,7 +580,7 @@ def unregister(con, v: Viewer, eid: int) -> dict:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if not r:
             raise ApiError("not_found")
-        if e["starts_at"] <= core.now():
+        if not signup_open(e):
             raise ApiError("closed")
         freed = r["status"] in ("going", "hold")
         con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'self', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
