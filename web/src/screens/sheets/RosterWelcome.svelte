@@ -16,6 +16,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Hand from '@lucide/svelte/icons/hand';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
 
@@ -32,15 +34,13 @@
     <p class="t-callout lead">{t('ro.text')}</p>
   </div>
   <div class="spots">
-    {#each spots as s, i (s.org.id + ':' + i)}
-      <div class="spot surface" style:animation-delay="{120 + i * 90}ms">
-        <OrgLogo org={s.org} size={48} />
-        <span class="tx"><b class="ellipsis">{nameOf(s.org)}</b><i class="ellipsis">{s.title || roleName(s.role, null)}</i></span>
-      </div>
-    {/each}
+    <Group footnote={t('ro.signNote')}>
+      {#each spots as s, i (s.org.id + ':' + i)}
+        <Row title={nameOf(s.org)} subtitle={s.title || roleName(s.role, null)}>{#snippet lead()}<OrgLogo org={s.org} size={40} />{/snippet}</Row>
+      {/each}
+    </Group>
   </div>
-  <p class="t-foot note">{t('ro.signNote')}</p>
-  <button class="sup" onclick={() => writeSupport(t('ro.draft', { org: spots.map((s) => s.org.name).join(', ') }))}>{t('ro.support')}</button>
+  <div class="sup"><Button kind="plain" size="s" onclick={() => writeSupport(t('ro.draft', { org: spots.map((s) => s.org.name).join(', ') }))}>{t('ro.support')}</Button></div>
 
   {#snippet footer()}
     <Button kind="primary" size="l" full onclick={go}>{t('ro.signIn')}</Button>
@@ -50,18 +50,12 @@
 <style>
   .hero { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 10px 0 6px; }
   .glow { position: absolute; top: -10px; width: 260px; height: 200px; border-radius: 50%; pointer-events: none;
-    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 38%, transparent), transparent); filter: blur(6px); }
+    background: radial-gradient(closest-side, var(--accent-soft), transparent); filter: blur(6px); }
   .em { position: relative; animation: pop 700ms cubic-bezier(.2, 1.5, .35, 1) both; }
-  .hi { position: relative; margin: 10px 0 4px; }
+  .hi { position: relative; margin: 10px 0 var(--s-1); }
   .lead { position: relative; color: var(--text-2); }
-  .spots { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
-  .spot { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r-l); animation: rise 520ms cubic-bezier(.2, .9, .25, 1) both; }
-  .tx { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .tx b { font: 700 17px/1.2 var(--font-display); }
-  .tx i { font: 620 13.5px/1.2 var(--font-text); font-style: normal; color: var(--accent-text); }
-  .note { margin: 16px 4px 0; text-align: center; }
-  .sup { display: block; margin: 10px auto 0; padding: 6px 10px; font: 560 13.5px/1.2 var(--font-text); color: var(--text-3); }
+  .spots { margin-top: var(--s-5); }
+  .sup { display: flex; justify-content: center; margin-top: var(--s-3); --plain-ink: var(--text-3); }
   @keyframes pop { 0% { transform: scale(0.3) rotate(-20deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
-  @keyframes rise { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .em, .spot { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .em { animation: none; } }
 </style>
