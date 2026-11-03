@@ -318,9 +318,9 @@
   "mix": 0
  },
  "screens/profile/Hero.svelte": {
-  "font": 10,
+  "font": 8,
   "radius": 6,
-  "hex": 40,
+  "hex": 21,
   "mix": 0
  },
  "screens/profile/Invite.svelte": {
@@ -492,9 +492,9 @@
   "mix": 1
  },
  "screens/sheets/TicketView.svelte": {
-  "font": 9,
-  "radius": 3,
-  "hex": 7,
+  "font": 4,
+  "radius": 1,
+  "hex": 5,
   "mix": 2
  },
  "screens/sheets/Unlock.svelte": {
@@ -525,6 +525,12 @@
   "font": 3,
   "radius": 0,
   "hex": 2,
+  "mix": 0
+ },
+ "ui/CardBack.svelte": {
+  "font": 1,
+  "radius": 1,
+  "hex": 0,
   "mix": 0
  },
  "ui/ChatAvatar.svelte": {

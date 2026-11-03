@@ -19,17 +19,15 @@
   import { session } from '../../lib/state/session.svelte';
   import OrgMedal from '../../ui/OrgMedal.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
-  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, QR_LOOK, SOWER } from '../../lib/awards';
+  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, SOWER } from '../../lib/awards';
   import SowerArt from '../../ui/SowerArt.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { api } from '../../lib/api';
   import { say, overlays, moment, backTo } from '../../lib/state/ui.svelte';
-  import Qr from '../../ui/Qr.svelte';
-  import LookMark from '../../ui/LookMark.svelte';
+  import CardBack from '../../ui/CardBack.svelte';
   import { burst } from '../../ui/burst';
   import jccPhoto from '../../assets/lanyards/jcc-top-photo.webp';
   import jccLeft from '../../assets/lanyards/jcc-top-left.webp';
@@ -206,23 +204,12 @@
       <span class="foot"><LanyardHolo look={face} no={h.no} />{#if face === 'japanesecultureclub'}<img class="jt jl" src={jccLeft} alt="" /><img class="jt jr" src={jccRight} alt="" />{/if}</span>
       <i class="shade" bind:this={shade} aria-hidden="true"></i>
     </div>
-    <!-- the back, mine only: my QR on a white plate, big enough to scan here; the medallion, my name and number beside it -->
+    <!-- the back, mine only (ui/CardBack): my QR on a white plate, big enough to scan here; my name and number beside it,
+         the medallion the button that turns the card face on -->
     {#if mine}
       <div class="back" onclick={backTap} role="presentation" inert={!flipped}>
-        <!-- the lanyard's own art on this side too (owner, Nov 3: the back was a bare colour) -->
-        {#if face === 'sower'}<SowerArt wide />{/if}
-        {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
-        <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
-        <button class="plate" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}><Qr text={link} tone={QR_LOOK[face]} lazy><LookMark look={face} /></Qr></button>
-        <span class="bside">
-          <b class="bnm">{h.name}</b>
-          <span class="role bro">{h.title}</span>
-          <span class="meta bmeta">{h.line}</span>
-          <span class="bno">№ {h.no}</span>
-        </span>
-        <!-- the medallion on the right, where the face has it: the button that turns the card face on (owner, Nov 3:
-             QR left, name in the middle, the button on the right) -->
-        <button class="bmed" onclick={() => flip(false)} aria-label={t('me.cardFront')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><RefreshCw size={10} strokeWidth={2.6} /></span></button>
+        <CardBack look={face} name={h.name} title={h.title} line={h.line} no={h.no} text={link} lazy logo={medalLogo}
+          onplate={() => sheets.myQr(link, p)} plateLabel={t('me.qr')} onmedal={() => flip(false)} medalLabel={t('me.cardFront')} />
         <i class="bshade" bind:this={bshade} aria-hidden="true"></i>
       </div>
     {/if}
@@ -270,36 +257,9 @@
   /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
      parallax) through its parent's hidden backface, mirrored over the other side (JCC, Nov 3) */
   .card.sb .badge, .card:not(.sb) .back { visibility: hidden; }
-  .back { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; gap: 14px; padding: 22px 14px 18px 18px; overflow: hidden; border-radius: 22px;
-    transform: rotateY(180deg); color: white; background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
-    box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
-  .club .back { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
-  .faces .back { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
-  .sower .back { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 130, 170, 0.2), transparent 60%), linear-gradient(160deg, rgb(27, 28, 33), rgb(0, 0, 0)); }
-  .sw-gold .back { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 90, 30, 0.26), transparent 60%), linear-gradient(160deg, rgb(21, 18, 12), rgb(0, 0, 0)); }
-  .studex .back { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
-  .cheer .back { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
-  .knights .back { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
-  .moments .back { background: radial-gradient(70% 90% at 100% 100%, rgba(214, 120, 70, 0.4), transparent 70%), linear-gradient(150deg, rgb(74, 42, 30), rgb(20, 11, 8)); }
-  /* the plate: white, the code's own quiet zone in it; the size a door's scanner reads from a phone */
-  .plate { position: relative; z-index: 3; flex: none; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
-    box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
-  .plate:active { transform: scale(0.96); }
-  /* the name and the rest under the medallion's corner, down to the number at the foot */
-  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1;
-    align-self: stretch; padding-top: 50px; }
-  .bside > * { flex: none; }
-  .bmeta { margin-top: -2px; }
-  .bno { margin-top: 4px; }
-  /* the medallion where the face has it, top right: the button back to the face */
-  .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
-  .bmed:active { transform: scale(0.92); }
-  .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .bro { margin-top: -4px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-  .bno { font: 800 11px/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
+  .back { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: 22px; transform: rotateY(180deg);
+    box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75); }
   .bshade { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; border-radius: inherit; background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
-  @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
   .badge {
     position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;
     background: radial-gradient(110% 90% at 0% 0%, rgba(124, 77, 255, 0.6), transparent 55%), var(--kb);

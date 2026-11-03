@@ -4,6 +4,10 @@
   // middle). Opens from the event sheet, Profile → Me, the live capsule and t.me links (tk_<id>).
   // Telegram's Back, a tap outside or Close dismisses it. The pass is lit like the glass: its light and
   // a slight 3D tilt follow the phone, and it leans toward a pressing finger, like a card in Wallet.
+  // A real ticket (owner, Nov 3: the flat red card with a huge sparse code was weak): a club with a lanyard of its own
+  // prints it in its lanyard's art and colours (lib/awards.ts skinOf, ui/LanyardBand), its medallion top right; the rest
+  // in their colour on a security print. The stub tears off at notches and a perforation; its QR is a finer 33×33
+  // (Qr minVersion), as dense as the badge's.
   import { onMount } from 'svelte';
   import type { Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
@@ -21,6 +25,11 @@
   import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import OrgMedal from '../../ui/OrgMedal.svelte';
+  import LanyardBand from '../../ui/LanyardBand.svelte';
+  import LookMark from '../../ui/LookMark.svelte';
+  import { skinOf, clubLook, lookVars, QR_LOOK } from '../../lib/awards';
+  import guilloche from '../../assets/lanyards/kbtu-guilloche.svg?url';
   import { nameOf } from '../../lib/short';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
@@ -32,6 +41,7 @@
   const started = $derived(!!e && e.startsAt <= nowTs());
   const st = $derived(session.me?.student);
   const holder = $derived(st ? `${st.lastName} ${st.firstName}` : session.me?.name ?? '');
+  const skin = $derived(skinOf(e?.org)); // the club's (or school's) lanyard, if it has one
 
   let wrap: HTMLDivElement;
   let scrim: HTMLDivElement;
@@ -92,29 +102,36 @@
   <div class="page">
   {#if e}
     <div class="stage">
-      <div class="pass glass" bind:this={pass} style="--tint:{e.tint}" use:glass role="group" aria-label={t('event.ticket')}
+      <div class="pass {skin ?? 'plain'}" class:club={!!skin && !!clubLook(skin)} bind:this={pass} style="--tint:{e.tint}; {skin ? lookVars(skin) : ''}" use:glass role="group" aria-label={t('event.ticket')}
            onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
-        <button class="head" onclick={() => sheets.event(id)}>
-          <span class="org"><OrgLogo org={e.org} size={24} /><span class="ellipsis">{nameOf(e.org)}</span></span>
-          <span class="ttl clamp-2">{e.title}</span>
-        </button>
-        <div class="facts">
-          <div><i>{t('tk.when')}</i><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt) + ', ' + time(e.startsAt)}</b></div>
-          <div><i>{t('tk.where')}</i><b>{placeOf(e.place)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
+        <div class="main">
+          {#if skin}<LanyardBand look={skin} wide qr />{:else}<img class="gl" src={guilloche} alt="" />{/if}
+          <span class="medal">{#if skin}<OrgMedal look={skin} logo={e.org.logo ?? null} />{:else}<span class="rim"><OrgLogo org={e.org} size={44} /></span>{/if}</span>
+          <button class="head" onclick={() => sheets.event(id)}>
+            <span class="org ellipsis">{nameOf(e.org)}</span>
+            <span class="ttl clamp-2">{e.title}</span>
+          </button>
+          <div class="facts">
+            <div><i>{t('tk.when')}</i><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt) + ', ' + time(e.startsAt)}</b></div>
+            <div><i>{t('tk.where')}</i><b>{placeOf(e.place)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
+          </div>
         </div>
-        <div class="cut" aria-hidden="true"></div>
-        {#if valid && my?.ticketCode}
-          <div class="qrbox" class:used={!!my.checkedInAt}>
-            <Qr text={'KBTU' + my.ticketCode}><OrgLogo org={e.org} /></Qr>
-            {#if my.checkedInAt}<span class="stamp">✓ {t('tk.checkedIn', { time: time(my.checkedInAt) })}</span>{/if}
-          </div>
-          <div class="facts foot">
-            <div><i>{t('tk.holder')}</i><b class="ellipsis">{holder}</b></div>
-            <div class="code"><i>{t('tk.code')}</i><b class="num">{my.ticketCode.replace(/^(\w{3})(\w{3})$/, '$1 $2')}</b></div>
-          </div>
-        {:else}
-          <p class="void">{e.status === 'cancelled' ? t('event.cancelledLong') : t('tk.none')}</p>
-        {/if}
+        <!-- the stub: torn off at the notches along the perforation -->
+        <div class="stub">
+          <i class="perf" aria-hidden="true"></i>
+          {#if valid && my?.ticketCode}
+            <div class="qrbox" class:used={!!my.checkedInAt}>
+              <Qr text={'KBTU' + my.ticketCode} minVersion={4} tone={skin ? QR_LOOK[skin] : undefined}>{#if skin}<LookMark look={skin} />{:else}<OrgLogo org={e.org} />{/if}</Qr>
+              {#if my.checkedInAt}<span class="stamp">✓ {t('tk.checkedIn', { time: time(my.checkedInAt) })}</span>{/if}
+            </div>
+            <div class="facts foot">
+              <div><i>{t('tk.holder')}</i><b class="ellipsis">{holder}</b></div>
+              <div class="code"><i>{t('tk.code')}</i><b class="num">{my.ticketCode.replace(/^(\w{3})(\w{3})$/, '$1 $2')}</b></div>
+            </div>
+          {:else}
+            <p class="void">{e.status === 'cancelled' ? t('event.cancelledLong') : t('tk.none')}</p>
+          {/if}
+        </div>
       </div>
     </div>
 
@@ -158,37 +175,81 @@
   .page > :global(:last-child) { margin-bottom: auto; }
   .stage { perspective: 900px; }
 
+  /* the ticket: the main part over the stub, one material; each part cut by its own mask (half a notch each side of the
+     perforation), the shadow on the pass round both. Its colour is --base: the club's lanyard, else the event's tint */
   .pass {
-    position: relative; width: min(340px, calc(100vw - 40px)); padding: 16px 18px 16px; border-radius: 26px; color: #fff;
-    background-color: var(--tint);
-    background-image: radial-gradient(120% 70% at 15% 0%, rgba(255, 255, 255, 0.22), transparent 60%), linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.3));
-    -webkit-backdrop-filter: none; backdrop-filter: none;
-    box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.7), 0 10px 24px -12px rgba(0, 0, 0, 0.45);
+    --base: var(--tint); --r: 26px; --notch: 12px;
+    /* the text's colours: white on the colour; a lanyard's own (lookVars: dark on Shade's paper) below */
+    --t1: white; --t2: rgba(255, 255, 255, 0.72); --t3: rgba(255, 255, 255, 0.86); --tsh: 0 1px 2px rgba(0, 0, 0, 0.3);
+    position: relative; width: min(340px, calc(100vw - 40px)); border-radius: var(--r); color: var(--t1);
+    box-shadow: 0 34px 60px -22px rgba(0, 0, 0, 0.75), 0 10px 24px -12px rgba(0, 0, 0, 0.45);
     transform: rotateX(calc(var(--gy, 0) * -7deg + var(--py, 0) * 5deg)) rotateY(calc(var(--gx, 0) * 9deg - var(--px, 0) * 5deg)) scale(var(--ps, 1));
     transition: transform 160ms ease-out;
     touch-action: manipulation;
   }
-  .head { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; }
-  .org { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font: 620 13px/1.2 var(--font-text); color: rgba(255, 255, 255, 0.86); }
-  .ttl { font: 780 21px/1.15 var(--font-display); letter-spacing: -0.025em; }
+  .main, .stub { position: relative; overflow: hidden; isolation: isolate; }
+  .main { min-height: 178px; padding: 26px 18px 18px; border-radius: var(--r) var(--r) 0 0;
+    background: radial-gradient(110% 80% at 0% 0%, rgba(255, 255, 255, 0.24), transparent 55%), radial-gradient(80% 90% at 100% 100%, rgba(0, 0, 0, 0.3), transparent 65%),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.16), transparent 45%, rgba(0, 0, 0, 0.36)), var(--base);
+    -webkit-mask: radial-gradient(circle at 0 100%, transparent var(--notch), black calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+      radial-gradient(circle at 100% 100%, transparent var(--notch), black calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat;
+    mask: radial-gradient(circle at 0 100%, transparent var(--notch), black calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+      radial-gradient(circle at 100% 100%, transparent var(--notch), black calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat; }
+  .stub { padding: 20px 18px 16px; border-radius: 0 0 var(--r) var(--r);
+    background: radial-gradient(90% 60% at 50% 0%, rgba(255, 255, 255, 0.08), transparent 70%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.45)), var(--base);
+    -webkit-mask: radial-gradient(circle at 0 0, transparent var(--notch), black calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+      radial-gradient(circle at 100% 0, transparent var(--notch), black calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat;
+    mask: radial-gradient(circle at 0 0, transparent var(--notch), black calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+      radial-gradient(circle at 100% 0, transparent var(--notch), black calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat; }
+  /* the perforation: round holes punched between the notches */
+  .perf { position: absolute; top: -1.5px; left: calc(var(--notch) + 8px); right: calc(var(--notch) + 8px); height: 3px;
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.55) 1.3px, transparent 1.6px) 0 50% / 9px 3px repeat-x; }
+  /* a sheen across both parts that slides with the tilt (the badge's) */
+  .main::after, .stub::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 260%; z-index: 4; pointer-events: none;
+    background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.12) 46%, transparent 60%);
+    transform: translateX(calc(-30.769% - var(--gx, 0) * 27.692%)); }
 
-  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  /* a club's lanyard: its art under the text (LanyardBand), its card's colours (lookVars) */
+  .club { --base: var(--c2); --t1: var(--ink); --t2: var(--ink2); --t3: var(--role); }
+  .club .main { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }
+  .club .stub { background: radial-gradient(90% 60% at 50% 0%, rgba(255, 255, 255, 0.1), transparent 70%), linear-gradient(180deg, var(--c2), var(--c3)); }
+  .cheer { --base: rgb(24, 26, 52); --t3: rgb(255, 200, 61); }
+  .knights { --base: rgb(20, 50, 112); --t3: rgb(232, 196, 120); }
+  .moments { --base: rgb(58, 33, 22); --t3: rgb(244, 217, 190); }
+  .faces { --base: rgb(22, 12, 34); --t3: rgb(255, 155, 214); }
+  .studex { --base: rgb(16, 39, 90); }
+  .gl { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; opacity: 0.16; mix-blend-mode: screen; pointer-events: none; }
+
+  .medal { position: absolute; z-index: 3; top: 16px; right: 16px; width: 52px; height: 52px; }
+  /* a club without a lanyard: its logo set in a silver rim, as a medallion */
+  .rim { display: block; padding: 3px; border-radius: var(--r-m); background: linear-gradient(145deg, white, rgb(176, 184, 202) 42%, rgb(244, 246, 251) 62%, rgb(140, 150, 172));
+    box-shadow: 0 12px 20px -10px rgba(0, 0, 0, 0.7), 0 2px 5px rgba(0, 0, 0, 0.28); }
+  .rim :global(.logo) { border-radius: var(--r-s) !important; }
+  .head, .main .facts { position: relative; z-index: 3; text-shadow: var(--tsh); }
+  .head { display: flex; flex-direction: column; gap: 6px; width: 100%; padding-right: 60px; text-align: left; }
+  .org { display: block; font: 760 var(--fs-tab)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); }
+  .ttl { font: 780 var(--fs-sec)/1.12 var(--font-display); letter-spacing: -0.025em; }
+
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
   .facts div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .facts i { font: 650 10.5px/1.2 var(--font-text); font-style: normal; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
-  .facts b { font: 640 14.5px/1.3 var(--font-text); }
-  .foot { margin-top: 12px; }
+  .facts i { font: 650 var(--fs-tab)/1.2 var(--font-text); font-style: normal; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
+  .facts b { font: 640 var(--fs-body)/1.3 var(--font-text); }
+  .foot { margin-top: 14px; }
   .code { text-align: right; }
-  .code b { letter-spacing: 0.06em; }
+  .code b { letter-spacing: 0.08em; }
 
-  .cut { height: 0; margin: 16px -18px 16px; border-top: 1.5px dashed rgba(255, 255, 255, 0.28); }
-  .qrbox { position: relative; padding: 14px; border-radius: 20px; background: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04); }
+  /* the QR on its white plate, the code's own quiet zone in it */
+  .qrbox { position: relative; width: min(232px, 100%); margin: 0 auto; padding: 12px; border-radius: var(--r-l); background: white;
+    box-shadow: 0 16px 30px -18px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.05); }
   .qrbox.used :global(.qr) { opacity: 0.25; }
   .stamp {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); white-space: nowrap;
     padding: 8px 14px; border-radius: 12px; border: 2px solid var(--success); color: #13884A; background: rgba(255, 255, 255, 0.92);
     font: 750 15px/1 var(--font-text);
   }
-  .void { padding: 26px 0 10px; text-align: center; font: 620 15px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.8); }
+  .void { padding: 22px 0 8px; text-align: center; font: 620 var(--fs-body)/1.35 var(--font-text); color: var(--t2); }
+  @media (max-width: 359px) { .main, .stub { padding-left: 16px; padding-right: 16px; } .ttl { font-size: var(--fs-t3); } .qrbox { width: 210px; } }
 
   .hint { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.62); }
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }

@@ -12,16 +12,23 @@
   import type { Snippet } from 'svelte';
 
   // tone: two dark colours for a gradient across the code (both keep ≥ 7:1 against the white plate); lazy: a code that
-  // isn't encoded yet comes when the page is idle (the profile card's: encoding held up the tab's first frame)
-  let { text, tone, lazy = false, children }: { text: string; tone?: [string, string]; lazy?: boolean; children?: Snippet } = $props();
+  // isn't encoded yet comes when the page is idle (the profile card's: encoding held up the tab's first frame);
+  // minVersion: a short text drawn as a bigger, finer code (the ticket's 10 characters: 33×33, as dense as the badge's,
+  // not a coarse 21×21; read by zbarimg with the middle covered), a text too long for it takes the size it needs
+  let { text, tone, lazy = false, minVersion = 0, children }: { text: string; tone?: [string, string]; lazy?: boolean; minVersion?: number; children?: Snippet } = $props();
   const gid = 'qrg' + Math.random().toString(36).slice(2, 8); // gradient ids are page-global
 
-  function make(text: string): Code {
-    const had = made.get(text);
-    if (had) return had;
-    const q = qrcode(0, 'Q');
+  function encode(text: string, v: number) {
+    const q = qrcode(v as Parameters<typeof qrcode>[0], 'Q');
     q.addData(text, /^[0-9A-Z $%*+\-./:]*$/.test(text) ? 'Alphanumeric' : 'Byte');
-    q.make();
+    q.make(); // throws when the text doesn't fit version v
+    return q;
+  }
+  function make(text: string, minV: number): Code {
+    const key = minV + ':' + text, had = made.get(key);
+    if (had) return had;
+    let q;
+    try { q = encode(text, minV); } catch { q = encode(text, 0); }
     // the middle's size follows the code's: a ticket's short code is a 21×21, where a 7×7 hole lost too much to read
     // (zbarimg: none of five tickets read, all with 5×5; owner, Nov 3)
     const n = q.getModuleCount(), mid = Math.floor(n / 2), h = n > 29 ? 4 : n > 21 ? 3 : 2;
@@ -32,15 +39,15 @@
       dots += `M${x + 0.07} ${y + 0.5}a.43 .43 0 1 0 .86 0a.43 .43 0 1 0 -.86 0`;
     }
     const c = { text, n, dots, eyes: [[0, 0], [n - 7, 0], [0, n - 7]], hole: ((h * 2 + 1) / n) * 100 };
-    made.set(text, c);
+    made.set(key, c);
     return c;
   }
-  const now = $derived(lazy && !made.has(text) ? null : make(text));
+  const now = $derived(lazy && !made.has(minVersion + ':' + text) ? null : make(text, minVersion));
   let late = $state<Code | null>(null);
   $effect(() => {
     if (now) return;
-    const tx = text, idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 60));
-    const h = idle(() => (late = make(tx)), { timeout: 500 });
+    const tx = text, mv = minVersion, idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 60));
+    const h = idle(() => (late = make(tx, mv)), { timeout: 500 });
     return () => (window.cancelIdleCallback ?? clearTimeout)(h);
   });
   const code = $derived(now ?? (late?.text === text ? late : null));
