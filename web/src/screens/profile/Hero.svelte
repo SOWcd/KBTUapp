@@ -199,6 +199,7 @@
     <!-- the back, mine only: my QR on a white plate, big enough to scan here; the medallion, my name and number beside it -->
     {#if mine}
       <div class="back" onclick={backTap} role="presentation" inert={!flipped}>
+        <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
         <button class="plate" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}><Qr text={link} tone={QR_LOOK[face]} lazy><LookMark look={face} /></Qr></button>
         <span class="bside">
           <span class="bmed"><OrgMedal look={face} logo={medalLogo} /></span>
@@ -250,6 +251,10 @@
   .card { position: relative; transform-style: preserve-3d; }
   .card.flipped { transform: rotateY(180deg); }
   .badge, .back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
+     parallax) through its parent's hidden backface, mirrored over the other side (JCC, Nov 3) */
+  .badge, .back { transition: visibility 0s 310ms; }
+  .card.flipped .badge, .card:not(.flipped) .back { visibility: hidden; }
   .back { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; gap: 16px; padding: 22px 18px 18px; overflow: hidden; border-radius: 22px;
     transform: rotateY(180deg); color: white; background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }

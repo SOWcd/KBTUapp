@@ -42,9 +42,11 @@
 
   const SCHOOLISH = new Set(['school', 'office']);
   const clubsOnly = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
-  // ponytail: one A-Z list; orgs have no category yet, sections by theme (sport, creative, science…) once the server has one
-  const az = (a: Org, b: Org) => +!a.gov - +!b.gov || a.name.localeCompare(b.name, 'ru');
-  const all = $derived([...clubsOnly].sort(az));
+  // official clubs, then the schools, then the unofficial ones (owner, Nov 3: the clubs made yesterday for fun topped the
+  // list; they stay, below, to grow). Each by its people: the biggest first (the student government before all)
+  const bySize = (a: Org, b: Org) => +!a.gov - +!b.gov || b.members - a.members || b.subscribers - a.subscribers || a.name.localeCompare(b.name, 'ru');
+  const all = $derived(clubsOnly.filter((o) => o.official).sort(bySize));
+  const unofficial = $derived(clubsOnly.filter((o) => !o.official).sort(bySize));
   const schools = $derived(data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')));
   const found = $derived(searching ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
 
@@ -172,6 +174,11 @@
     {#if schools.length}
       <div class="sec"><h2>{t('clubs.schoolsOffices')}</h2><span>{schools.length}</span></div>
       <div class="rows surface">{#each schools as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)} />{/each}</div>
+    {/if}
+
+    {#if unofficial.length}
+      <div class="sec"><h2>{t('clubs.studentMade')}</h2><span>{unofficial.length}</span></div>
+      <div class="rows surface">{#each unofficial as o (o.id)}<ClubRow org={o} sub={sub(o)} hot={next.has(o.id)} />{/each}</div>
     {/if}
   {/if}
   <div class="cta"><CreateClubCard /></div>
