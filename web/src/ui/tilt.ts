@@ -12,3 +12,11 @@ export function tiltFrom(n: number[], u: number[], angle: number): [number, numb
   const a = (angle * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
   return [clamp(-(ay * c - ax * s) * 2.2), clamp(-(ax * c + ay * s) * 2.2)];
 }
+
+/** One step of a damped spring pulling `p` toward `to` (the award medal's pendulum, coin3d.ts), tuned per 60 Hz frame
+ *  and scaled by `k`, the frames' worth of time that passed: per frame alone, a 120 Hz screen swung it twice as fast and
+ *  a dropped frame slowed it. k = 1 is the original step exactly. */
+export function springStep(p: { x: number; v: number }, to: number, k: number): void {
+  p.v = (p.v + (to - p.x) * 0.045 * k) * 0.92 ** k;
+  p.x += p.v * k;
+}

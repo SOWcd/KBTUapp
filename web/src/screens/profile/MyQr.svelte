@@ -133,8 +133,10 @@
   }
   .card { position: relative; touch-action: manipulation; transition: transform 160ms ease-out;
     transform: rotateX(calc(var(--gy, 0) * -7deg + var(--py, 0) * 5deg)) rotateY(calc(var(--gx, 0) * 9deg - var(--px, 0) * 5deg)) scale(var(--ps, 1)); }
-  .pass::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.12) 46%, transparent 60%);
-    background-size: 260% 100%; background-position: calc(50% + var(--gx, 0) * 45%) 0; }
+  /* slid by transform on its own layer, not repainted with the pass on every tilt frame (Hero's .badge::after: same math) */
+  .pass::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 260%; pointer-events: none;
+    background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.12) 46%, transparent 60%);
+    transform: translateX(calc(-30.769% - var(--gx, 0) * 27.692%)); will-change: transform; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
 

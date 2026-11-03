@@ -1,3 +1,14 @@
+<script module lang="ts">
+  // the rise's timing from the design tokens, read once for the app: a computed style read at every sheet's mount
+  // restyled the document inside the tap that opened it
+  let read: { rise: number; spring: string } | null = null;
+  function tokens() {
+    if (read) return read;
+    const root = getComputedStyle(document.documentElement), slow = root.getPropertyValue('--t-slow').trim();
+    return (read = { rise: (parseFloat(slow) || 0.38) * (slow.endsWith('ms') ? 1 : 1000), spring: root.getPropertyValue('--ease-spring').trim() || 'ease-out' });
+  }
+</script>
+
 <script lang="ts">
   // Bottom sheet (liquid glass without the light spot, floats above everything). Closes by Telegram's Back button, a tap on the
   // scrim, or a pull down — from the grip, or from the content when it is scrolled to the top.
@@ -45,9 +56,7 @@
   // property (translate, added on), so the rise runs on untouched; the rise in pixels: a percentage of the height
   // would jump with it.
   let lift: Animation | null = null, height = 0;
-  const root = getComputedStyle(document.documentElement), slow = root.getPropertyValue('--t-slow').trim();
-  const RISE = (parseFloat(slow) || 0.38) * (slow.endsWith('ms') ? 1 : 1000), SPRING = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
-  const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : RISE, easing: SPRING });
+  const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : tokens().rise, easing: tokens().spring });
   // the first call comes after the browser's own layout and before the first paint: the rise starts there, with the
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
@@ -128,7 +137,9 @@
   // opened it when it goes (never to a text field: that would bring the keyboard up)
   onMount(() => {
     const opener = document.activeElement as HTMLElement | null;
-    if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+    // a frame later: focus needs the sheet laid out, and at mount that was a whole extra layout inside the tap (the frame
+    // lays it out anyway right after)
+    requestAnimationFrame(() => { if (panel.isConnected && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true }); });
     const back = () => { if (opener?.isConnected && !opener.matches('input, textarea, [contenteditable]')) opener.focus({ preventScroll: true }); };
     const ro = new ResizeObserver(resized);
     ro.observe(panel);

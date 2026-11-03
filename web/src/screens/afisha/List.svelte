@@ -58,16 +58,33 @@
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard });
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
+  // an event of several days that began earlier and still runs sits on today (a casting, 2-12 Nov). Its ids as one string:
+  // the days below follow the date and this, not the 30 s clock (every tick rebuilt all the days and re-rendered every row)
+  const running = $derived(data.events.filter((e) => dayNo(e.startsAt) < today && endOf(e) > now).map((e) => e.id).join());
   const days = $derived.by(() => {
-    const by = new Map<number, Item[]>();
-    // an event of several days that began earlier and still runs sits on today (a casting, 2-12 Nov)
-    for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), endOf(e) > now ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
+    const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
+    for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // the coming week's class days too (the owner missed his Wednesday), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
     const wanted = [...new Set([...week, ...by.keys()])].sort((a, b) => a - b);
     // a class before an event that starts at the same minute: you leave the class for it
     return wanted.map((d) => ({ d, items: [...classesOf(d), ...(by.get(d) ?? [])].sort((a, b) => a.at - b.at || ('c' in a ? -1 : 1)) }));
+  });
+  // the first screenfuls come with the tab, the rest a few days per idle moment: a term's worth of events (200 rows,
+  // 5k nodes) was one 2 s task at 4x CPU before the Afisha showed. Off-screen days skip layout and paint (.day)
+  const STEP = 8;
+  let upto = $state(2 * STEP);
+  const shownDays = $derived.by(() => {
+    let i = 0;
+    for (let n = 0; i < days.length && n < upto; i++) n += days[i].items.length;
+    return i >= days.length ? days : days.slice(0, Math.max(1, i));
+  });
+  $effect(() => {
+    if (shownDays.length >= days.length) return;
+    if (!('requestIdleCallback' in window)) { const id = setTimeout(() => (upto += STEP), 50); return () => clearTimeout(id); }
+    const id = requestIdleCallback(() => (upto += STEP), { timeout: 1000 });
+    return () => cancelIdleCallback(id);
   });
   const weekCount = $derived(shown.filter((e) => endOf(e) > now && dayNo(e.startsAt) < today + 7).length);
   // a day off by the academic calendar on a class day: say why the classes are gone
@@ -168,11 +185,14 @@
     </button>
   {/if}
 
-  {#each days as day (day.d)}
+  {#each shownDays as day (day.d)}
     <!-- no timetable yet: today's place asks for it (PLAN 26) instead of a "free day" we can't know (onboarding plan) -->
     {@const ask = day.d === today && !!session.me?.student && !data.schedule.length}
     {#if day.items.length || ask || data.schedule.length}
       {@const [a, b] = head(day.d)}
+      {@const cls = day.items.filter((x) => 'c' in x)}
+      {@const evs = day.items.filter((x) => !('c' in x))}
+      <div class="day">
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
       {#if ask}
         <button class="tile" onclick={() => sheets.schedHowTo()}>
@@ -183,8 +203,6 @@
       {/if}
       <!-- the day's classes folded into one line above its events (owner, Nov 3: classes between the events buried
            them); the line says what matters now (on now, next within the hour), a tap opens the rows -->
-      {@const cls = day.items.filter((x) => 'c' in x)}
-      {@const evs = day.items.filter((x) => !('c' in x))}
       {#if cls.length}
         {@const first = cls[0] as Extract<Item, { c: ClassItem }>}
         {@const last = cls[cls.length - 1] as Extract<Item, { c: ClassItem }>}
@@ -248,6 +266,7 @@
         {/each}
       </div>
       {#if !day.items.length && !ask}<p class="free t-foot">{t('list.freeDay')}</p>{/if}
+      </div>
     {/if}
   {/each}
 
@@ -277,6 +296,11 @@
   .sec { margin: 26px 0 12px; font: 780 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }
   .sec.two { display: flex; flex-direction: column; margin-top: 34px; }
   .sec.two span { color: var(--text-3); font-weight: 720; }
+  /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
+     press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
+     with the one above) */
+  .day { margin: 22px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); content-visibility: auto; contain-intrinsic-size: auto 360px; }
+  .day > .dh { margin-top: 0; }
   .dh { margin: 22px 0 6px; font: 720 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
   .dh span { color: var(--text-3); font-weight: 600; }
   .dh span::first-letter { text-transform: none; }

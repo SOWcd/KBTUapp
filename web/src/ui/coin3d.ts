@@ -11,6 +11,7 @@ import {
   RepeatWrapping, Scene, SRGBColorSpace, Texture, TorusGeometry, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { springStep } from './tilt';
 
 export type CoinState = () => { x: number; y: number; spin: number }; // tilt -1..1, spin in degrees
 // the canvas round the medal, in medal sizes: wide enough for the swing, tall above for the ribbon
@@ -230,27 +231,27 @@ export async function mountCoin(host: HTMLElement, o: { src: string; tint: strin
 
   const deg = Math.PI / 180;
   // the pendulum from the neck: damped springs toward where the tilt pulls it (sideways, toward/away)
-  const sw = { z: 4, vz: 0, x: 0, vx: 0 }; // the entrance starts it swinging
+  const sz = { x: 4, v: 0 }, sx = { x: 0, v: 0 }; // sideways and toward/away; the entrance starts it swinging
   // the entrance (owner, Nov 1: "super beautiful"): lowered from above on a damped spring (a slight overshoot),
   // 1.5 turns that slow to face front, a glint across the metal as it settles; ~1.2 s. Added on top of the tilt and
   // the finger, so nothing jumps when it ends
   const t0 = performance.now(), ZETA = 0.7, OMEGA = 5.5, WD = OMEGA * Math.sqrt(1 - ZETA * ZETA);
-  let landed = false, shown = '', raf = 0;
+  let landed = false, shown = '', raf = 0, prev = t0 - 1000 / 60;
   const frame = () => {
     raf = requestAnimationFrame(frame);
-    const t = (performance.now() - t0) / 1000, s = o.state();
+    const now = performance.now(), k = Math.min(4, (now - prev) / (1000 / 60)), t = (now - t0) / 1000, s = o.state();
+    prev = now;
     const drop = t > 1.6 ? 0 : 3.4 * Math.exp(-ZETA * OMEGA * t) * Math.cos(WD * t);
     if (!landed && drop <= 0) { landed = true; o.onLand?.(); }
     const turn = 540 * (1 - Math.min(1, t / 1.05)) ** 3;
     const glint = t > 0.45 && t < 1.25 ? Math.sin(((t - 0.45) / 0.8) * Math.PI) : 0;
-    sw.vz = (sw.vz + (-s.x * 5 - sw.z) * 0.045) * 0.92; sw.z += sw.vz;
-    sw.vx = (sw.vx + (s.y * 5 - sw.x) * 0.045) * 0.92; sw.x += sw.vx;
+    springStep(sz, -s.x * 5, k); springStep(sx, s.y * 5, k); // by the time passed: the same swing at 60 and 120 Hz
     const yaw = s.x * 26 + s.spin + turn;
-    const key = `${sw.z.toFixed(2)},${sw.x.toFixed(2)},${yaw.toFixed(2)},${s.y.toFixed(3)},${drop.toFixed(3)},${glint.toFixed(3)}`;
+    const key = `${sz.x.toFixed(2)},${sx.x.toFixed(2)},${yaw.toFixed(2)},${s.y.toFixed(3)},${drop.toFixed(3)},${glint.toFixed(3)}`;
     if (key === shown) return; // nothing moved: no draw
     shown = key;
     pend.position.y = NECK + drop;
-    pend.rotation.set(sw.x * deg, 0, sw.z * deg);
+    pend.rotation.set(sx.x * deg, 0, sz.x * deg);
     medalPivot.rotation.set(s.y * 14 * deg, yaw * deg, 0, 'YXZ'); // the medal turns on the ring, showing its rim
     ringPivot.rotation.y = Math.max(-0.5, Math.min(0.5, Math.sin(yaw * deg) * 0.35)); // the ring and fold follow a little
     scene.environmentRotation.y = glint * 0.9; // the room's lights slide across the metal

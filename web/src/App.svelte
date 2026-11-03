@@ -181,6 +181,15 @@
   const built = $state<Record<string, boolean>>({});
   // (the Clubs tab waits for who I am: the copy or the server, a frame; else a member's hidden catalogue built too)
   $effect(() => { if (ui.tab === 'club' && !session.ready) return; if (!built[ui.tab]) built[ui.tab] = true; });
+  // ...and once the start has settled, the rest are built one per idle moment, so the first tap on a tab only shows it
+  // (a cold mount was the one long task left on a switch: ~1 s at 4x CPU). Away they cost nothing more: the hidden tab
+  // is skipped by the engine (.tab below); their effects wait for ui.tab (loads, the badge's drop, the forum's seen line).
+  function prebuild() {
+    const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
+    if (!k || session.banned) return;
+    built[k] = true;
+    if ('requestIdleCallback' in window) requestIdleCallback(prebuild, { timeout: 4000 }); else setTimeout(prebuild, 500);
+  }
   $effect(() => { void ui.tab; void ui.club; persistNav(); });
   // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
@@ -374,15 +383,31 @@
   const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
   const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
-  const keep = () => { if (keepable()) writeCache(JSON.stringify(snap())); }; // no $state.snapshot: a clone through the proxies cost more
+  // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
+  // data.kept since) reuses its JSON: a tab's own refresh (friends, my card) re-wrote all 400 events, 60 ms through the
+  // proxies on each visit. Going to the background writes everything afresh (`all`): it catches the ponytail case above.
+  const jsonOf = new Map<string, { ref: unknown; kept: number; json: string }>();
+  const keep = (all = false) => {
+    if (!keepable()) return;
+    const out: string[] = [];
+    for (const [k, v] of Object.entries(snap())) {
+      const m = jsonOf.get(k);
+      // (studio and team are records of lists that gain a key in place: always written; they are small)
+      const json = !all && m && m.ref === v && m.kept === data.kept && k !== 'studio' && k !== 'team' ? m.json : JSON.stringify(v);
+      if (json === undefined) continue; // as JSON.stringify of the whole drops an undefined field
+      jsonOf.set(k, { ref: v, kept: data.kept, json });
+      out.push(`${JSON.stringify(k)}:${json}`);
+    }
+    writeCache(`{${out.join(',')}}`);
+  };
   $effect(() => {
     void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key
     if (!keepable()) return;
     clearTimeout(keepTimer);
-    keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(keep, { timeout: 3000 }) : keep()), 1000);
+    keepTimer = setTimeout(() => ('requestIdleCallback' in window ? requestIdleCallback(() => keep(), { timeout: 3000 }) : keep()), 1000);
   });
   onMount(() => {
-    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(); } };
+    const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(true); } };
     document.addEventListener('visibilitychange', away);
     return () => document.removeEventListener('visibilitychange', away);
   });
@@ -483,7 +508,6 @@
     // a keyboard's Esc does what Telegram's Back does (Telegram Desktop, a plain browser)
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && overlays.some((o) => !o.closing && shown(o))) close(); };
     addEventListener('keydown', esc);
-    for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache();
     if (snap) {
@@ -492,10 +516,12 @@
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
+      // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
+      for (const load of [eventSheet, personSheet, clubSheet]) load().then((m) => loaded.set(load, m)).catch(() => {});
       if (session.banned) return;
       // one toast at the start, and none on a launch that opens something itself (a link, the sign-up's ID form)
       if (!tg.startParam && !session.me?.msPending && !gated && !session.tgComment) greet(); // (not over the policy gate's button, nor my Telegram comment's card)
-      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800);
+      deepLink(); msBack(); setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(prebuild, 2500);
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
       moment(tgComment); moment(computerHint); booted = true; setTimeout(() => moment(celebrate));
     });
@@ -560,8 +586,11 @@
   /* one palette on every tab: a hue swap per tab looked childish; the lights wander wide instead of
      breathing in place ("they look sealed, they should float") */
   .tab { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+  /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
+     layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
+  @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } }
   /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
-  .tab.on { visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
+  .tab.on { visibility: visible; content-visibility: visible; pointer-events: auto; animation: tabIn 200ms var(--ease) backwards; }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
 </style>

@@ -104,8 +104,10 @@
   const long = $state<Record<number, boolean>>({}), open = $state<Record<number, boolean>>({}), full = $state<Record<number, number>>({});
   function measure(el: HTMLElement, id: number) {
     const check = () => { full[id] = el.scrollHeight; if (!open[id]) long[id] = el.scrollHeight > el.clientHeight + 2; };
+    // no check() here: the observer's first call comes before the first paint, for all posts in one batch. A read at
+    // mount forced a layout per post (each post's write dirtied it for the next): 50 layouts building the tab
     const ro = new ResizeObserver(check);
-    ro.observe(el); check();
+    ro.observe(el);
     return { destroy: () => ro.disconnect() };
   }
 
