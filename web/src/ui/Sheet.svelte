@@ -38,6 +38,8 @@
     children: Snippet; footer?: Snippet; hold?: () => boolean; onhold?: () => void };
   let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, children, footer, hold, onhold }: Props = $props();
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
+  // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy (owner, Nov 3)
+  const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
 
   let panel: HTMLDivElement;
   let scrim: HTMLDivElement;
@@ -154,7 +156,7 @@
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:under bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
@@ -192,6 +194,8 @@
     background: linear-gradient(180deg, var(--tint), transparent);
     opacity: 0.5;
   }
+  /* the tinted page's own colour (its tint under the ground's veil), so the sheet reads as part of it */
+  .ground { background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--ground); --surface-solid: transparent; }
   .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 8px auto 4px; }
   .body { position: relative; flex: 1; padding: 6px var(--gutter) calc(var(--s-6) + var(--safe-bottom)); }
   .foot {

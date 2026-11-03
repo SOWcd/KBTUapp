@@ -120,6 +120,7 @@
   --warning-text: #FFC66B;
   --warning-soft: rgba(255, 178, 61, 0.16);
   --glass-bg: rgba(24, 28, 44, 0.6);
+  --tint-veil: rgba(7, 8, 15, 0.5); /* the ground over a page's tint (--bg at half): the event editor and what opens over it */
   --glass-pill-bg: rgba(24, 28, 44, 0.6);
   --glass-clear: rgba(255, 255, 255, 0.1);
   --glass-solid: rgba(24, 28, 44, 0.96);
@@ -177,6 +178,7 @@
   --warning-text: #965A00;
   --warning-soft: rgba(255, 178, 61, 0.18);
   --glass-bg: rgba(255, 255, 255, 0.78);
+  --tint-veil: rgba(243, 245, 251, 0.72);
   --glass-pill-bg: rgba(255, 255, 255, 0.34); /* a pill is clearer than a sheet: there is little to read on it */
   --glass-clear: rgba(255, 255, 255, 0.42);
   --glass-solid: rgba(255, 255, 255, 0.97);
