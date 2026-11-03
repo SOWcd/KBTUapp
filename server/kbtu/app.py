@@ -16,7 +16,7 @@ import logging
 import re
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -54,6 +54,7 @@ async def _picture(fn, *args):
     except media.BadImage:
         raise ApiError("bad_input", "not_an_image") from None
 
+THREADS = 16               # see lifespan
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (the KBTU-password sign-in is gone since Oct 19)
 
@@ -83,7 +84,10 @@ class _Route(APIRoute):
 
 # ------------------------------------------------------------ who is calling
 
-def conn(request: Request) -> Iterator[sqlite3.Connection]:
+async def conn(request: Request) -> AsyncIterator[sqlite3.Connection]:
+    # async: taking a kept connection and giving it back are a queue's get and put, so they run on the loop; as a plain
+    # generator FastAPI sent each into the thread pool, two of a request's four thread hops (perf round 4: -9% server CPU
+    # per request under load)
     with request.app.state.pool.conn() as con:
         yield con
 
@@ -217,6 +221,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI):
+        # the sync routes' thread pool: anyio's default 40 threads fought over the one GIL (SQLite lets it go on every
+        # call): under load a request cost 24 ms of CPU, 10 with 16 threads, twice the requests a second (perf round 4)
+        # ponytail: one number for every route; a route that blocks long belongs on its own limiter (_imgs) instead
+        anyio.to_thread.current_default_thread_limiter().total_tokens = THREADS
         task = asyncio.create_task(bot.run(cfg)) if cfg.background else None
         yield
         if task:

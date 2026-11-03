@@ -142,6 +142,9 @@
 
   // ---- the app ----
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
+  // the other languages' dictionaries are asked for as Settings opens, a beat before the language row can be tapped,
+  // not by every launch at its start (perf round 4: ~80 KB gzip of a first launch; most students never switch)
+  for (const l of LANGS) void loadLang(l).catch(() => {});
   const keep = (patch: Partial<Settings>) => { if (me) api.updateMe(patch).then((m) => (session.me = m)).catch(() => {}); };
   function lang(l: Lang) {
     if (i18n.lang === l) return;
