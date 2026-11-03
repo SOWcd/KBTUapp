@@ -344,10 +344,15 @@ for (const k of 'bsgl') {
   files[`ribbon-${k}`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 640"><defs>${lin('rb', ['#0C1438', '#22306E', '#2E3E86', '#1A2558', '#0A1030'], 1, 0)}${lin('st', [m.rim[0], m.rim[1], m.rim[2]], 1, 0)}${lin('fold', ['#000000AA', '#00000000'], 0, 1)}${m.iri ? lin('iri', m.iri, 0, 1) : ''}</defs>${tail(-1)}${tail(1)}</svg>\n`;
 }
 
-// ---- pins: the one-time awards are enamel shields (ui/Pin): the enamel (Pin fills SHIELD with the colour), its
-// guilloche (zn-enamel, over the colour), one glyph struck in the frame's metal (zn-<glyph>-<metal>, floats with the
-// tilt), the bevelled metal frame on top (zn-frame-<metal>, still). SHIELD is lib/awards.ts SHIELD: the two stay equal.
+// ---- pins: the one-time awards are shields in the Recruiter's craft (owner, Nov 4: his medal "looks great", the
+// struck glyphs read childish). Layers as rc's, each the same 512 box, the shield's outline SHIELD (lib/awards.ts
+// SHIELD: the two stay equal): zn-<g>-field (far: deep enamel, the banknote guilloche, rays from a light behind the
+// glyph, far stars), zn-<g>-net (the glyph as thin luminous line art with glowing nodes, as rc-net's ties), zn-<g>-core
+// (near: a light burst at the glyph's key point), zn-frame-<m> (still: the milled metal frame). Event pins (an emoji) keep
+// zn-enamel over their colour under the same frame.
 const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
+const SC = [256, 262]; // the shield's middle, for scaling it
+const scaled = (s) => `translate(${SC[0]} ${SC[1]}) scale(${s}) translate(${-SC[0]} ${-SC[1]})`;
 files['zn-enamel'] = (() => {
   let fine = '', guil = '';
   for (let i = 0; i < 180; i++) { const a = (i * 2 * Math.PI) / 180; fine += `M256 250L${f(256 + 300 * Math.sin(a))} ${f(250 - 300 * Math.cos(a))}`; }
@@ -356,38 +361,68 @@ files['zn-enamel'] = (() => {
     `<g clip-path="url(#in)"><path d="${fine}" stroke="#FFFFFF" stroke-width="1" opacity=".07"/><g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".09">${guil}</g>
 <rect width="512" height="512" fill="url(#lt)"/><rect width="512" height="512" fill="url(#vig)"/></g>`);
 })();
+// the frame: rc-rim's craft round the shield: a milled outer edge, a rolled polished band, a fine bright lip inside it
 for (const k of 'gsr') {
-  files[`zn-frame-${k}`] = svg(metals(k) + relief('rr', 6, 8, 0.4) + lin('gl', ['#FFFFFF40', '#FFFFFF00'], 0.6, 1) + `<clipPath id="in"><path d="${SHIELD}"/></clipPath>`,
-    `<g clip-path="url(#in)"><path d="M60 40H460V130Q300 104 60 230z" fill="url(#gl)"/></g>
+  files[`zn-frame-${k}`] = svg(metals(k) + relief('rr', 7, 9, 0.4, 1.3, 18) + lin('gl', ['#FFFFFF30', '#FFFFFF00'], 0.6, 1) + `<clipPath id="in"><path d="${SHIELD}"/></clipPath>`,
+    `<g clip-path="url(#in)"><path d="M60 40H460V120Q300 96 60 214z" fill="url(#gl)"/></g>
 <g filter="url(#rr)"><path d="${SHIELD}" fill="none" stroke="url(#mg)" stroke-width="30" stroke-linejoin="round"/></g>
-<path d="${SHIELD}" fill="none" stroke="#000" stroke-opacity=".4" stroke-width="2.5" transform="translate(256 262) scale(.928) translate(-256 -262)"/>`);
+<path d="${SHIELD}" fill="none" stroke="${FACE[k][5]}" stroke-opacity=".55" stroke-width="7" stroke-dasharray="1.6 4" transform="${scaled(1.03)}"/>
+<path d="${SHIELD}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.5" transform="${scaled(0.93)}"/>
+<path d="${SHIELD}" fill="none" stroke="#FFFFFF" stroke-opacity=".45" stroke-width="1.5" transform="translate(1 1.5) ${scaled(0.93)}"/>`);
 }
-const glyph = (name, body) => { for (const k of 'gsr') files[`zn-${name}-${k}`] = svg(metals(k) + RELIEFS + ENAMELS + GLINT, body(k)); };
-// First 500: the number struck big
-glyph('500', (k) => {
-  const five = (x, y) => `M${x + 58} ${y}H${x + 12}L${x + 8} ${y + 52}C${x + 30} ${y + 40} ${x + 70} ${y + 46} ${x + 70} ${y + 84}C${x + 70} ${y + 122} ${x + 22} ${y + 126} ${x + 4} ${y + 104}`;
-  const d = `${five(130, 176)}M248 236m-30 0a30 58 0 1 0 60 0a30 58 0 1 0 -60 0M338 236m-30 0a30 58 0 1 0 60 0a30 58 0 1 0 -60 0`;
-  return `${part('r1', 'mg', `<path d="${d}" fill="none" stroke="url(#mg)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>`)}
-${part('r3', 'mh', `<path d="${star5(256, 350, 18, 8)}"/><path d="${star5(204, 354, 9, 4)}"/><path d="${star5(308, 354, 9, 4)}"/>`)}`;
-});
-// Anthem: KBTU's colonnade, two notes over it
-glyph('anthem', (k) => `${part('r2', 'mg', '<path d="M150 214L256 160L362 214z"/>')}${part('r2', 'mh', '<rect x="140" y="212" width="232" height="20" rx="4"/>')}
-${part('r1', 'mg', [0, 1, 2, 3].map((i) => `<rect x="${164 + i * 52}" y="236" width="30" height="100" rx="3"/>`).join(''))}
-${cut([0, 1, 2, 3].map((i) => `M${174 + i * 52} 246V326M${184 + i * 52} 246V326`).join(''), 2, k)}
-${part('r2', 'mh', '<rect x="132" y="338" width="248" height="16" rx="4"/><rect x="116" y="356" width="280" height="16" rx="4"/>')}
-${part('r2', 'ms', '<ellipse cx="330" cy="140" rx="16" ry="12" transform="rotate(-22 330 140)"/><ellipse cx="380" cy="126" rx="16" ry="12" transform="rotate(-22 380 126)"/><path d="M338 138V82L396 66V124H388V84L346 96V138z"/>')}`);
-// Made the creator laugh: a face laughing to tears
-glyph('laugh', (k) => `${part('r1', 'ms', '<circle cx="256" cy="250" r="106"/>')}
-${cut('M196 226Q214 204 232 226M280 226Q298 204 316 226', 9, k)}
-${enamel('M186 262Q256 274 326 262Q320 332 256 336Q192 332 186 262z', 'ek')}
-${part('r3', 'mh', '<path d="M196 266Q256 276 316 266L312 282Q256 290 200 282z"/>')}
-${part('r3', 'mg', '<path d="M168 230Q128 262 150 292Q174 302 178 268z"/><path d="M344 230Q384 262 362 292Q338 302 334 268z"/>')}
-${enamel('M164 244Q138 266 152 286Q168 292 170 268z', 'eb')}${enamel('M348 244Q374 266 360 286Q344 292 342 268z', 'eb')}`);
-// Found the creator: a hand waving hello
-glyph('wave', (k) => `<g transform="rotate(-16 256 270)">${part('r1', 'mg', '<rect x="178" y="236" width="150" height="140" rx="56"/>')}
-${part('r2', 'mh', [[184, 140, 150], [222, 112, 170], [260, 118, 166], [296, 146, 140]].map(([x, y, h]) => `<rect x="${x}" y="${y}" width="34" height="${h}" rx="17"/>`).join(''))}
-${part('r2', 'mg', '<rect x="300" y="250" width="34" height="104" rx="17" transform="rotate(42 318 300)"/>')}</g>
-${part('r3', 'mh', '<path d="M120 170Q108 210 122 248M394 170Q406 210 392 248M146 150Q130 200 146 246M368 150Q384 200 368 246" fill="none" stroke="url(#mh)" stroke-width="8" stroke-linecap="round"/>')}`);
+// the field: the Recruiter's (field above) inside the shield: deep enamel, rosette, rays from `light`, far stars; it
+// overscans the frame so the tilt never shows its edge
+function shieldField(colors, seed, light) {
+  let rays = '', guil = '', specks = '';
+  for (let i = 0; i < 32; i++) {
+    const a = (i * 11.25 * Math.PI) / 180, b = 0.028;
+    rays += `M${light[0]} ${light[1]}L${f(light[0] + 360 * Math.sin(a - b))} ${f(light[1] - 360 * Math.cos(a - b))}L${f(light[0] + 360 * Math.sin(a + b))} ${f(light[1] - 360 * Math.cos(a + b))}z`;
+  }
+  for (let i = 0; i < 24; i++) guil += `<ellipse cx="256" cy="252" rx="200" ry="76" transform="rotate(${f(i * 7.5)} 256 252)"/>`;
+  const rnd = rng(seed);
+  for (let i = 0; i < 46; i++) { const x = 100 + rnd() * 312, y = 80 + rnd() * 330; specks += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(0.8 + rnd() * 1.6)}" opacity="${f(0.25 + rnd() * 0.5)}"/>`; }
+  return svg(`<radialGradient id="field" cx=".44" cy=".36" r=".75">${stops(colors)}</radialGradient>
+<radialGradient id="rays" gradientUnits="userSpaceOnUse" cx="${light[0]}" cy="${light[1]}" r="250"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".5"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+<radialGradient id="vig" cx=".5" cy=".46" r=".62"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
+<clipPath id="in"><path d="${SHIELD}" transform="${scaled(1.05)}"/></clipPath>`,
+  `<g clip-path="url(#in)"><rect width="512" height="512" fill="url(#field)"/>
+<g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".08">${guil}</g>
+<path d="${rays}" fill="url(#rays)" opacity=".36"/>
+<g fill="#FFFFFF">${specks}</g><rect width="512" height="512" fill="url(#vig)"/></g>`);
+}
+// the glyph as rc-net draws its ties: a soft wide glow under a thin bright line, its nodes glowing orbs
+function lineArt(k, d, nodes) {
+  const m = METAL[k];
+  return svg(`<linearGradient id="tie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></linearGradient>
+<radialGradient id="orb" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></radialGradient>
+<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
+  `<g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${d}" stroke="url(#tie)" stroke-width="20" opacity=".2"/>
+<path d="${d}" stroke="${m.lit}" stroke-width="6.5" opacity=".92"/></g>
+${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r * 2.2)}" fill="url(#halo)"/>`).join('')}
+${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#orb)"/><circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1.5"/>`).join('')}`);
+}
+// the light at the glyph's key point, as rc-core: a soft burst and a four-point star; small sparkles round it
+const pinCore = (k, [x, y], sparks = []) => { const m = METAL[k]; return svg(`<radialGradient id="core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="${m.lit}"/><stop offset=".7" stop-color="${m.glow}" stop-opacity=".5"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
+  `<circle cx="${x}" cy="${y}" r="62" fill="url(#core)"/>${star4(x, y, 46, 6, m.lit)}${star4(x, y, 30, 3.5, '#FFFFFF')}<circle cx="${x}" cy="${y}" r="7" fill="#FFFFFF"/>
+${sparks.map(([u, v, r]) => star4(u, v, r, r / 7, '#FFFFFF')).join('')}`); };
+const pin = (name, k, colors, light, d, nodes, core, sparks) => {
+  files[`zn-${name}-field`] = shieldField(colors, name.charCodeAt(0) * 37 + name.length, light);
+  files[`zn-${name}-net`] = lineArt(k, d, nodes);
+  files[`zn-${name}-core`] = pinCore(k, core, sparks);
+};
+// Anthem: KBTU's colonnade drawn in light, two notes rising over it
+pin('anthem', 'g', ['#4A38B8', '#22186A', '#0A0628'], [256, 230],
+  'M150 206L256 150L362 206ZM140 220H372M172 232V330M224 232V330M288 232V330M340 232V330M132 344H380M118 364H394M338 128V80L392 64V114',
+  [[256, 150, 13], [150, 206, 9], [362, 206, 9], [330, 130, 13], [384, 116, 13]], [256, 150], [[188, 120, 10], [410, 168, 8]]);
+// Made the creator laugh: the theatre's comedy mask in one line, its eyes creased with laughing, its ribbons tied, two
+// tears of light
+pin('laugh', 'g', ['#14949E', '#0A4A52', '#021C20'], [256, 240],
+  'M160 166Q256 128 352 166Q368 266 318 332Q290 370 256 372Q222 370 194 332Q144 266 160 166ZM194 220Q216 196 240 220M272 220Q296 196 318 220M204 274Q256 338 308 274Q256 296 204 274ZM160 166Q132 146 112 172M352 166Q380 146 400 172',
+  [[112, 172, 9], [400, 172, 9], [188, 244, 10], [324, 244, 10]], [256, 134], [[150, 300, 9], [372, 318, 8]]);
+// Found the creator: an open hand waving hello, drawn in one line, the wave in two arcs each side
+pin('wave', 'g', ['#C84438', '#6A1420', '#240408'], [262, 250],
+  'M214 384L206 300Q172 270 160 238Q154 220 168 215Q182 212 192 228L214 262L208 156Q208 134 226 134Q244 134 244 156L246 238L250 136Q250 114 268 114Q286 114 286 136L284 236L292 150Q294 128 311 129Q328 130 326 150L318 242L334 182Q338 166 352 168Q366 170 362 188L344 300Q336 360 306 384ZM128 166Q112 206 126 246M150 184Q140 210 150 236M396 156Q412 196 398 236M374 176Q384 200 374 226',
+  [[226, 134, 8], [268, 114, 8], [311, 129, 8], [352, 168, 8], [166, 216, 8]], [160, 130], [[118, 140, 9], [412, 260, 8]]);
 
 // the files this tool owns are rewritten whole: drop the ones a rename left behind
 for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));
