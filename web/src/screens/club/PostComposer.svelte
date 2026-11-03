@@ -14,7 +14,6 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { byRank, may } from '../../lib/perms';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { POST_TAGS } from '../../lib/posts';
   import { shrink } from '../../lib/photo';
   import { haptic } from '../../lib/tg';
@@ -23,7 +22,12 @@
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Button from '../../ui/Button.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import { grow } from '../../ui/grow';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
 
   let { overlay, org, post }: { overlay: Overlay; org: Id; post?: Post } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
@@ -56,10 +60,11 @@
   let busy = $state(false);
   // the title is the post's headline (the bot's message, the comments): a tap without one says so and puts the cursor
   // there, never a grey button that doesn't say why (a tester)
-  let titleEl = $state<HTMLInputElement>();
+  // engine: Field could hand out its input (focus): found in its wrapper for now
+  let titleBox = $state<HTMLElement>();
   let tried = $state(false);
   const noTitle = $derived(title.trim().length < 2);
-  const needTitle = () => { tried = true; haptic.error(); titleEl?.focus(); return noTitle; };
+  const needTitle = () => { tried = true; haptic.error(); titleBox?.querySelector('input')?.focus(); return noTitle; };
 
   async function pickPhoto(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
@@ -103,44 +108,45 @@
   async function onhold() {
     if (await sheets.ask({ title: t('post.discard'), text: t('post.discardText'), ok: t('post.leave'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); }
   }
-  // the textarea grows with the text
 </script>
 
 <Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
-  <!-- the club chosen in Studio, no picker -->
-  {#if club}
-    <p class="from"><OrgLogo org={club} size={22} /><b>{club.name}</b></p>
-  {/if}
-  <!-- an event announces itself in News once published: no post for it as well -->
-  {#if !was && events}<button class="tip" onclick={() => sheets.editor(pick)}><CalendarPlus size={18} /><span>{t('post.eventTip')}</span><ChevronRight size={16} /></button>{/if}
+  <div class="stack">
+    <!-- the club chosen in Studio, no picker -->
+    {#if club}
+      <p class="from"><OrgLogo org={club} size={22} /><b>{club.name}</b></p>
+    {/if}
+    <!-- an event announces itself in News once published: no post for it as well -->
+    {#if !was && events}<Group><Row icon={CalendarPlus} title={t('post.eventTip')} accessory="chevron" onclick={() => sheets.editor(pick)} /></Group>{/if}
 
-  {#if photo}
-    <div class="shot"><img src={photo.url} alt="" /><button class="rm" aria-label="×" onclick={() => (photo = null)}><X size={18} /></button></div>
-  {:else}
-    <label class="add" class:busy={uploading}>
-      <ImagePlus size={24} /><span>{t('post.photo')}</span>
-      <input type="file" accept="image/*" onchange={pickPhoto} disabled={uploading} />
-    </label>
-  {/if}
+    {#if photo}
+      <div class="shot"><img src={photo.url} alt="" /><span class="rm"><IconButton icon={X} kind="glass" size="s" label={t('ed.photoRemove')} onclick={() => (photo = null)} /></span></div>
+    {:else}
+      <label class="add" class:busy={uploading}>
+        <ImagePlus size={24} /><span>{t('post.photo')}</span>
+        <input type="file" accept="image/*" onchange={pickPhoto} disabled={uploading} />
+      </label>
+    {/if}
 
-  <input class="title" class:bad={tried && noTitle} bind:this={titleEl} bind:value={title} placeholder={t('post.title')} maxlength="120" enterkeyhint="next" />
-  {#if tried && noTitle}<p class="err">{t('post.needTitle')}</p>{/if}
-  <textarea class="text" bind:value={body} placeholder={t('post.body')} maxlength="2000" rows="3" use:grow></textarea>
+    <div bind:this={titleBox}><Field label={t('post.title')} bind:value={title} maxlength={120} error={tried && noTitle ? t('post.needTitle') : undefined} /></div>
+    <Field label={t('post.text')} multiline rows={3} bind:value={body} maxlength={2000} placeholder={t('post.body')} />
 
-  <p class="t-cap lbl">{t('post.tag')}</p>
-  <div class="tags">
-    <button class:on={tag === null} onclick={() => (tag = null)}>{t('post.noTag')}</button>
-    {#each POST_TAGS.filter((x) => x !== 'important' || vice || tag === x) as x (x)}<button class:on={tag === x} onclick={() => (tag = x)}>{t(`tag.${x}`)}</button>{/each}
+    <span class="lbl">{t('post.tag')}</span>
+    <div class="wrap">
+      <Chip selected={tag === null} onclick={() => (tag = null)}>{t('post.noTag')}</Chip>
+      {#each POST_TAGS.filter((x) => x !== 'important' || vice || tag === x) as x (x)}<Chip selected={tag === x} onclick={() => (tag = x)}>{t(`tag.${x}`)}</Chip>{/each}
+    </div>
+    {#if tag === 'important' && !was && !(broadcast && toClubs)}<p class="hint">{t('post.importantNote')}</p>{/if}
+
+    {#if broadcast && !was}
+      <span class="lbl">{t('post.audience')}</span>
+      <Segmented items={[{ value: 'clubs', label: t('post.toClubs') }, { value: 'public', label: t('post.toPublic') }]} value={toClubs ? 'clubs' : 'public'} label={t('post.audience')}
+        onchange={(v) => (toClubs = v === 'clubs')} />
+      {#if toClubs}<p class="hint">{t('post.clubsNote')}</p>{/if}
+    {/if}
+
+    <Group footnote={t('post.pinNote')}><Row title={t('post.pin')} accessory="switch" checked={pinned} onchange={(on) => (pinned = on)} /></Group>
   </div>
-  {#if tag === 'important' && !was && !(broadcast && toClubs)}<p class="t-foot note">{t('post.importantNote')}</p>{/if}
-
-  {#if broadcast && !was}
-    <p class="t-cap lbl">{t('post.audience')}</p>
-    <div class="seg wide"><button class:on={toClubs} onclick={() => (toClubs = true)}>{t('post.toClubs')}</button><button class:on={!toClubs} onclick={() => (toClubs = false)}>{t('post.toPublic')}</button></div>
-    {#if toClubs}<p class="t-foot note">{t('post.clubsNote')}</p>{/if}
-  {/if}
-
-  <label class="switch"><span><b>{t('post.pin')}</b><i>{t('post.pinNote')}</i></span><input type="checkbox" role="switch" bind:checked={pinned} /></label>
 
   {#snippet footer()}
     {#if was}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !changed} onclick={save}>{t('common.save')}</Button>
@@ -149,35 +155,20 @@
 </Sheet>
 
 <style>
-  .tip { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 12px; padding: 10px 12px; border-radius: var(--r-m); background: var(--accent-soft);
-    color: var(--accent-text); font: 600 13.5px/1.3 var(--font-text); text-align: left; }
-  .tip span { flex: 1; }
-  .tip :global(svg) { flex: none; }
-  .from { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font: 600 14px/1 var(--font-text); }
+  .stack { display: flex; flex-direction: column; gap: var(--s-3); }
+  .stack > :global(section:last-child) { margin-top: var(--s-2); }
+  .from { display: flex; align-items: center; gap: var(--s-2); font: 600 var(--fs-body)/1 var(--font-text); }
+  .lbl { margin: var(--s-2) var(--s-4) -6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
 
-  .add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 112px; border-radius: 18px; color: var(--accent-text);
-    border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); font: 620 14px/1 var(--font-text); }
+  .add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 112px; border-radius: var(--r-group); color: var(--accent-text);
+    background: var(--accent-soft); font: 600 var(--fs-body)/1 var(--font-text); }
   .add input { display: none; }
   .add.busy { opacity: 0.6; animation: pulse 1.1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.35; } }
   .shot { position: relative; }
-  .shot img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 18px; display: block; animation: in 360ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  .shot img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: var(--r-group); display: block; animation: in 360ms cubic-bezier(.2, .9, .25, 1) backwards; }
   @keyframes in { from { opacity: 0; transform: scale(0.96); } }
-  .rm { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    color: #fff; background: rgba(10, 12, 24, 0.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-
-  .title { width: 100%; margin-top: 14px; padding: 4px 2px; background: none; color: var(--text); font: 740 21px/1.25 var(--font-display); letter-spacing: -0.02em; }
-  .text { width: 100%; min-height: 72px; margin-top: 6px; padding: 4px 2px; resize: none; background: none; color: var(--text); font: 450 16px/1.5 var(--font-text); }
-  .title::placeholder, .text::placeholder { color: var(--text-3); }
-  .title.bad::placeholder { color: var(--danger-text); }
-  .err { margin: 2px 2px 0; font: 600 13px/1.3 var(--font-text); color: var(--danger-text); }
-
-  .lbl { margin: 14px 0 8px; }
-  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tags button { height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 620 13px/1 var(--font-text); }
-  .tags button.on { background: var(--text); color: var(--bg); }
-  .seg.wide { display: flex; }
-  .seg.wide button { flex: 1; }
-  .note { margin-top: 6px; }
-  .switch { margin-top: 16px; }
+  .rm { position: absolute; top: var(--s-2); right: var(--s-2); }
 </style>

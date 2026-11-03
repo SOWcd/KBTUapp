@@ -11,6 +11,16 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type AppStage, type Id, type Round, type RoundApp, type RoundSlot } from '../../lib/api';
   import X from '@lucide/svelte/icons/x';
+  import Check from '@lucide/svelte/icons/check';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import { dateInput, nowTs } from '../../lib/time';
   import { placeOf } from '../../lib/i18n/index.svelte';
@@ -154,6 +164,7 @@
 
 <!-- one Back (AGENTS.md): Telegram's Back leaves an application for the list, then closes the board -->
 <Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
+  <div class="stack">
   {#if cur && r}
     {@const a = cur}
     <div class="who">
@@ -162,16 +173,17 @@
         <i>{[a.course ? t('person.course', { n: a.course }) : '', schoolShort(a.school)].filter(Boolean).join(' · ')}</i>
         <i>{[a.email, a.username ? '@' + a.username : ''].filter(Boolean).join(' · ')}</i></span>
     </div>
-    {#if a.username}<button class="tg" onclick={() => openLink('https://t.me/' + a.username)}><TelegramMark size={16} />{t('cast.write')}</button>{/if}
+    {#if a.username}<span class="lone"><Button kind="tinted" size="s" onclick={() => openLink('https://t.me/' + a.username)}>{#snippet icon()}<TelegramMark size={16} />{/snippet}{t('cast.write')}</Button></span>{/if}
 
     {#if a.invited}
-      <div class="ivline"><CalendarClock size={16} />
-        <span>{a.slot ? `${dayMonth(a.slot.startsAt)}, ${time(a.slot.startsAt)} · ${placeOf(a.slot.place)}` : t('cast.ivNoTime')}</span>
-        {#if a.slot}<span class="came"><button class:on={a.showed === true} onclick={() => showed(a.id, a.showed === true ? null : true)}>{t('cast.ivCame')}</button>
-          <button class:on={a.showed === false} onclick={() => showed(a.id, a.showed === false ? null : false)}>{t('cast.ivMissed')}</button></span>{/if}
-      </div>
+      <Notice tone="accent" icon={CalendarClock} text={a.slot ? `${dayMonth(a.slot.startsAt)}, ${time(a.slot.startsAt)} · ${placeOf(a.slot.place)}` : t('cast.ivNoTime')}>
+        {#if a.slot}<div class="wrap">
+          <Chip selected={a.showed === true} onclick={() => showed(a.id, a.showed === true ? null : true)}>{t('cast.ivCame')}</Chip>
+          <Chip selected={a.showed === false} onclick={() => showed(a.id, a.showed === false ? null : false)}>{t('cast.ivMissed')}</Chip>
+        </div>{/if}
+      </Notice>
     {/if}
-    <div class="picks">{#each a.departments as id, i (id)}<span style="--c:{depColor(id)}">{a.departments.length > 1 ? i + 1 + '. ' : ''}{depName(id)}</span>{/each}</div>
+    <div class="wrap">{#each a.departments as id, i (id)}<Tag><i class="dot" style:--c={depColor(id)}></i>{a.departments.length > 1 ? i + 1 + '. ' : ''}{depName(id)}</Tag>{/each}</div>
 
     <div class="facts">
       <span>{a.came ? tn('cast.came', a.came) + (a.lastEvent ? ' · ' + a.lastEvent : '') : t('cast.cameNone')}</span>
@@ -181,180 +193,159 @@
     </div>
 
     {#each Object.entries(a.answers) as [qid, ans] (qid)}
-      <div class="ans"><span class="t-cap">{qText(qid)}</span><p class="selectable">{Array.isArray(ans) ? ans.join(', ') : ans}</p></div>
+      <div class="ans"><span class="lbl">{qText(qid)}</span><p class="selectable">{Array.isArray(ans) ? ans.join(', ') : ans}</p></div>
     {/each}
 
     {#if a.votes.length}
-      <h3 class="t-cap sec">{t('cast.votes')}</h3>
-      {#each a.votes as x, i (i)}
-        <p class="vote"><b>{x.by}</b> · {t(`cast.v.${x.verdict}`)}{x.stars ? ' · ' + '★'.repeat(x.stars) : ''}{x.note ? ' — ' + x.note : ''}</p>
-      {/each}
+      <Group caption={t('cast.votes')}>
+        {#each a.votes as x, i (i)}
+          <Row dense title={x.by} subtitle={[t(`cast.v.${x.verdict}`), x.stars ? '★'.repeat(x.stars) : '', x.note].filter(Boolean).join(' · ')} />
+        {/each}
+      </Group>
     {/if}
 
-    <h3 class="t-cap sec">{t('cast.myVote')}</h3>
-    <div class="stars">{#each [1, 2, 3, 4, 5] as n (n)}<button class:on={(stars ?? 0) >= n} onclick={() => (stars = stars === n ? null : n)} aria-label={String(n)}><Star size={22} /></button>{/each}</div>
-    <label class="field"><textarea rows="2" maxlength="500" bind:value={note} placeholder={t('cast.notePh')}></textarea></label>
-    <div class="verdicts">
-      <button class="no" onclick={() => vote('no')}>{t('cast.v.no')}</button>
-      <button class="maybe" onclick={() => vote('maybe')}>{t('cast.v.maybe')}</button>
-      <button class="next" onclick={() => vote('next')}>{t('cast.v.next')}</button>
+    <h3 class="cap">{t('cast.myVote')}</h3>
+    <!-- engine: a star rating (five taps, the chosen ones filled) -->
+    <div class="stars">{#each [1, 2, 3, 4, 5] as n (n)}<button class:on={(stars ?? 0) >= n} onclick={() => (stars = stars === n ? null : n)} aria-label={String(n)}><Star size={24} /></button>{/each}</div>
+    <Field label={t('memo.note')} multiline rows={2} maxlength={500} bind:value={note} placeholder={t('cast.notePh')} />
+    <div class="btns">
+      <Button kind="gray" destructive full onclick={() => vote('no')}>{t('cast.v.no')}</Button>
+      <Button kind="gray" full onclick={() => vote('maybe')}>{t('cast.v.maybe')}</Button>
     </div>
+    <Button kind="tinted" full onclick={() => vote('next')}>{t('cast.v.next')}</Button>
 
-    <h3 class="t-cap sec">{t('cast.decision')}</h3>
-    <div class="take">
+    <h3 class="cap">{t('cast.decision')}</h3>
+    <div class="wrap">
       {#each r.departments as d (d.tagId)}
-        <button class:on={a.stage === 'yes' && a.takenTag === d.tagId} style="--c:{d.color}" onclick={() => decide('yes', d.tagId)}>{t('cast.takeInto', { name: d.name })}</button>
+        <Chip selected={a.stage === 'yes' && a.takenTag === d.tagId} onclick={() => decide('yes', d.tagId)}><i class="dot" style:--c={d.color}></i>{t('cast.takeInto', { name: d.name })}</Chip>
       {:else}
         <!-- no departments: into the club -->
-        <button class:on={a.stage === 'yes'} style="--c:var(--success)" onclick={() => decide('yes')}>{t('cast.take')}</button>
+        <Chip selected={a.stage === 'yes'} onclick={() => decide('yes')}>{t('cast.take')}</Chip>
       {/each}
-      <button class="nope" class:on={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</button>
+      <Chip selected={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</Chip>
     </div>
   {:else if r}
-    <p class="t-foot sub">{r.open ? t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) }) : t('cast.intakeClosed')} · {tn('cast.apps', apps.length)}</p>
+    <p class="hint">{r.open ? t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) }) : t('cast.intakeClosed')} · {tn('cast.apps', apps.length)}</p>
     {#if apps.length}
       <!-- the funnel: applied, invited, came, taken -->
-      <p class="funnel">{t('cast.funnel', { apps: apps.length, invited: apps.filter((a) => a.invited).length, came: apps.filter((a) => a.showed).length, yes: apps.filter((a) => a.stage === 'yes').length })}</p>
+      <p class="hint">{t('cast.funnel', { apps: apps.length, invited: apps.filter((a) => a.invited).length, came: apps.filter((a) => a.showed).length, yes: apps.filter((a) => a.stage === 'yes').length })}</p>
     {/if}
-    <div class="tools">
-      <button onclick={share}><Share size={17} />{t('cast.share')}</button>
-      <button onclick={() => sheets.roundSetup(org, r, () => void load())}><Pencil size={17} />{t('cast.edit')}</button>
+    <div class="wrap">
+      <Button kind="gray" size="s" onclick={share}>{#snippet icon()}<Share size={16} />{/snippet}{t('cast.share')}</Button>
+      <Button kind="gray" size="s" onclick={() => sheets.roundSetup(org, r, () => void load())}>{#snippet icon()}<Pencil size={16} />{/snippet}{t('cast.edit')}</Button>
     </div>
-    <div class="seg views"><button class:on={view === 'apps'} onclick={() => (view = 'apps')}>{t('cast.viewApps')}</button>
-      <button class:on={view === 'iv'} onclick={() => (view = 'iv')}>{t('cast.viewIv')}</button></div>
+    <Segmented items={[{ value: 'apps', label: t('cast.viewApps') }, { value: 'iv', label: t('cast.viewIv') }]} bind:value={view} label={t('cast.board')} />
 
     {#if view === 'iv'}
       {#if toInvite}<Button kind="primary" size="m" full onclick={inviteAll}>{t('cast.ivInviteGo', { n: toInvite })}</Button>{/if}
-      <button class="addday" onclick={() => (adding = !adding)}>{adding ? t('common.cancel') : t('cast.ivAdd')}</button>
+      <span class="lone"><Button kind="plain" size="s" onclick={() => (adding = !adding)}>{adding ? t('common.cancel') : t('cast.ivAdd')}</Button></span>
       {#if adding}
-        <div class="ivform" transition:fold>
-          <label class="field"><span class="t-cap">{t('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
+        <div class="stack" transition:fold>
+          <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
+          <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
           <div class="two">
-            <label class="field"><span class="t-cap">{t('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
-            <label class="field"><span class="t-cap">{t('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
+            <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
+            <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
           </div>
-          <span class="t-cap">{t('cast.ivLen')}</span>
-          <div class="seg">{#each [15, 20, 30, 45] as m (m)}<button class:on={nf.minutes === m} onclick={() => (nf.minutes = m)}>{m}</button>{/each}</div>
-          <span class="t-cap">{t('cast.ivCap')}</span>
-          <div class="seg">{#each [1, 3, 5, 10] as n (n)}<button class:on={nf.capacity === n} onclick={() => (nf.capacity = n)}>{n === 1 ? t('cast.ivSolo') : n}</button>{/each}</div>
-          <label class="field"><span class="t-cap">{t('memo.where')}</span><input bind:value={nf.place} maxlength="120" placeholder={t('cast.ivPlacePh')} /></label>
+          <span class="lbl">{t('cast.ivLen')}</span>
+          <Segmented items={[15, 20, 30, 45].map((m) => ({ value: m, label: String(m) }))} bind:value={nf.minutes} label={t('cast.ivLen')} />
+          <span class="lbl">{t('cast.ivCap')}</span>
+          <Segmented items={[1, 3, 5, 10].map((n) => ({ value: n, label: String(n) }))} bind:value={nf.capacity} label={t('cast.ivCap')} />
+          <Field label={t('memo.where')} bind:value={nf.place} maxlength={120} placeholder={t('cast.ivPlacePh')} />
           <Button kind="secondary" size="m" full onclick={addDay}>{t('cast.ivAddGo')}</Button>
         </div>
       {/if}
       {#each ivDays as [day, list] (day)}
-        <h3 class="t-cap sec">{day}</h3>
-        {#each list as s (s.id)}
-          <div class="slot surface">
-            <span class="st"><b>{time(s.startsAt)}</b><i>{placeOf(s.place)}{s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : ''}</i></span>
-            <span class="who2">
-              {#each s.people ?? [] as p (p.appId)}
-                <button class="pp" class:came={p.showed === true} class:miss={p.showed === false} onclick={() => { const a = apps.find((x) => x.id === p.appId); if (a) openApp(a); }}>{p.fullName}</button>
-              {:else}<span class="free">{t('cast.ivFree')}</span>{/each}
-            </span>
-            {#if !(s.people ?? []).length}<button class="x" onclick={() => dropSlot(s)} aria-label={t('memo.drop')}><X size={15} /></button>{/if}
-          </div>
-        {/each}
-      {:else}<p class="t-foot empty">{t('cast.ivEmpty')}</p>{/each}
+        <Group caption={day}>
+          {#each list as s (s.id)}
+            {@const people = s.people ?? []}
+            <Row title={time(s.startsAt)} subtitle={placeOf(s.place) + (s.capacity > 1 ? ' · ' + t('cast.ivLeft', { n: s.left }) : '')} value={people.length ? '' : t('cast.ivFree')}>
+              {#snippet trailing()}{#if !people.length}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => dropSlot(s)} />{/if}{/snippet}
+            </Row>
+            {#each people as p (p.appId)}
+              <Row dense title={p.fullName} value={p.showed === true ? t('cast.ivCame') : p.showed === false ? t('cast.ivMissed') : ''} invalid={p.showed === false} accessory="chevron"
+                onclick={() => { const a = apps.find((x) => x.id === p.appId); if (a) openApp(a); }}>
+                {#snippet lead()}<span class="mark" class:came={p.showed === true}>{#if p.showed === true}<Check size={18} strokeWidth={2.4} />{/if}</span>{/snippet}
+              </Row>
+            {/each}
+          {/each}
+        </Group>
+      {:else}<EmptyState inline text={t('cast.ivEmpty')} />{/each}
     {:else}
 
     {#if r.departments.length > 1}
-      <div class="deps">
-        <button class:on={dep == null} onclick={() => (dep = null)}>{t('cast.allDeps')}</button>
+      <div class="chips">
+        <Chip selected={dep == null} onclick={() => (dep = null)}>{t('cast.allDeps')}</Chip>
         {#each r.departments as d (d.tagId)}
           {@const n = apps.filter((a) => a.stage === 'yes' && a.takenTag === d.tagId).length}
-          <button class:on={dep === d.tagId} class:full={!!d.places && n >= d.places} style="--c:{d.color}" onclick={() => (dep = d.tagId)}><i></i>{d.name}{n || d.places ? ` · ${n}${d.places ? '/' + d.places : ''}` : ''}</button>
+          <Chip selected={dep === d.tagId} icon={d.places && n >= d.places ? Check : undefined} onclick={() => (dep = d.tagId)}><i class="dot" style:--c={d.color}></i>{d.name}{n || d.places ? ` · ${n}${d.places ? '/' + d.places : ''}` : ''}</Chip>
         {/each}
       </div>
     {/if}
-    <div class="seg stages" class:fl={fade.l} class:fr={fade.r} {@attach stagesRow} onscroll={(e) => edges(e.currentTarget)}>{#each STAGES as s (s)}<button class:on={stage === s} onclick={(e) => { stage = s; e.currentTarget.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}>{t(`cast.s.${s}`)}{count(s) ? ' · ' + count(s) : ''}</button>{/each}</div>
+    <div class="chips stages" class:fl={fade.l} class:fr={fade.r} {@attach stagesRow} onscroll={(e) => edges(e.currentTarget)}>
+      {#each STAGES as s (s)}<Chip selected={stage === s} onclick={(e) => { stage = s; (e.currentTarget as HTMLElement).scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' }); }}>{t(`cast.s.${s}`)}{count(s) ? ' · ' + count(s) : ''}</Chip>{/each}
+    </div>
 
     {#if stage === 'new' && count('new')}<Button kind="primary" size="m" full onclick={review}>{t('cast.reviewGo', { n: count('new') })}</Button>{/if}
-    <div class="list">
-      {#each shown as a (a.id)}
-        {@const st = starsOf(a)}
-        <button class="row surface" onclick={() => openApp(a)}>
-          <Avatar person={a.person} size={40} tappable={false} />
-          <span class="tx"><b class="ellipsis">{a.fullName}</b>
-            <i class="ellipsis">{a.stage === 'yes' && a.takenTag ? '→ ' + depName(a.takenTag) : a.departments.map(depName).join(', ')}{st ? ' · ★ ' + st.toFixed(1) : ''}</i></span>
-          <span class="n">{a.votes.length ? a.votes.length : ''}</span>
-        </button>
-      {:else}
-        <p class="t-foot empty">{t('cast.none')}</p>
-      {/each}
-    </div>
+    {#if shown.length}
+      <Group>
+        {#each shown as a (a.id)}
+          {@const st = starsOf(a)}
+          <Row dense title={a.fullName} subtitle={(a.stage === 'yes' && a.takenTag ? '→ ' + depName(a.takenTag) : a.departments.map(depName).join(', ')) + (st ? ' · ★ ' + st.toFixed(1) : '')}
+            value={a.votes.length ? String(a.votes.length) : ''} accessory="chevron" onclick={() => openApp(a)}>
+            {#snippet lead()}<Avatar person={a.person} size={40} tappable={false} />{/snippet}
+          </Row>
+        {/each}
+      </Group>
+    {:else}
+      <EmptyState inline text={t('cast.none')} />
+    {/if}
     {/if}
   {/if}
+  </div>
 
   {#snippet footer()}
     {#if r && !cur}
-      {#if r.open}<button class="shut" onclick={closeIntake}>{t('cast.closeGo')}</button>{/if}
+      {#if r.open}<Button kind="plain" full onclick={closeIntake}>{t('cast.closeGo')}</Button>{/if}
       <Button kind="primary" size="l" full disabled={!apps.length} onclick={sendResults}>{t('cast.sendGo')}</Button>
     {/if}
   {/snippet}
 </Sheet>
 
 <style>
-  .sub { margin-top: 2px; }
-  .tools { display: flex; gap: 8px; margin: 12px 0; }
-  .tools button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: var(--r-full); background: var(--surface-2); font: 620 14px/1 var(--font-text); }
-  .deps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
-  .deps button { flex: none; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); font: 600 13.5px/1 var(--font-text); color: var(--text-2); }
-  .deps button.on { background: var(--text); color: var(--bg); }
-  .deps button.full { box-shadow: inset 0 0 0 1.5px var(--success); }
-  .funnel { margin: 6px 0 0; font: 600 13px/1.3 var(--font-text); color: var(--text-2); }
-  .deps i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .stages { display: flex; overflow-x: auto; scrollbar-width: none; margin-bottom: 12px; max-width: 100%; }
-  .stages button { flex: none; }
+  .stack { display: flex; flex-direction: column; gap: var(--s-3); }
+  .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .lone { align-self: flex-start; }
+  /* a heading in Group's caption style, over what isn't a list */
+  .cap { margin: var(--s-3) var(--s-1) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+  .stack > :global(section) { margin-top: var(--s-3); }
+  .lbl { margin: 0 var(--s-4) -6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
+  .btns { display: flex; gap: var(--s-2); }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  /* the chips' rows scroll sideways (4 px of block padding keeps their 44 px hit areas) */
+  .chips { display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none; padding-block: var(--s-1); max-width: 100%; }
   .stages.fr { mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent); }
   .stages.fl { mask-image: linear-gradient(90deg, transparent, black 28px); }
   .stages.fl.fr { mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent); }
-  .list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left; }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left; }
-  .tx b { font: 650 15px/1.25 var(--font-text); }
-  .tx i { font: 500 13px/1.25 var(--font-text); font-style: normal; color: var(--text-2); }
-  .n { font: 650 13px/1 var(--font-text); color: var(--text-3); }
-  .empty { padding: 14px 4px; }
-  .who { display: flex; align-items: center; gap: 12px; }
-  .tg { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
-  .picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .picks span { padding: 6px 10px; border-radius: var(--r-full); background: color-mix(in srgb, var(--c) 22%, transparent); font: 650 13px/1 var(--font-text); }
-  .facts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font: 550 13px/1.3 var(--font-text); color: var(--text-2); }
-  .ans { margin-top: 14px; }
-  .ans p { margin-top: 4px; font: 500 15px/1.45 var(--font-text); white-space: pre-wrap; }
-  .sec { margin: 20px 2px 8px; }
-  .vote { font: 500 14px/1.4 var(--font-text); color: var(--text-2); margin-bottom: 4px; }
-  .vote b { color: var(--text); }
-  .stars { display: flex; gap: 4px; margin-bottom: 8px; }
-  .stars button { color: var(--text-3); padding: 2px; }
-  .stars button.on { color: #FFB23D; }
+  .mark { width: 24px; display: grid; place-items: center; }
+  .mark.came { color: var(--success-text); }
+  .who { display: flex; align-items: center; gap: var(--s-3); }
+  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .tx b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+  .tx i { font: 450 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px var(--s-3); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .ans { display: flex; flex-direction: column; gap: 10px; }
+  .ans p { margin: 0 var(--s-1); font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; }
+  .stars { display: flex; gap: var(--s-1); }
+  .stars button { position: relative; display: grid; place-items: center; width: var(--tap); height: var(--tap); color: var(--text-3); }
+  .stars button.on { color: var(--warning); }
   .stars button.on :global(svg) { fill: currentColor; }
-  .verdicts { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 8px; margin-top: 10px; }
-  .verdicts button { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 4px 6px; border-radius: var(--r-m); font: 700 14.5px/1.15 var(--font-text); text-align: center; overflow-wrap: anywhere; }
-  .verdicts .no { background: var(--danger-soft); color: var(--danger-text); }
-  .verdicts .maybe { background: var(--surface-2); color: var(--text); }
-  .verdicts .next { background: var(--success-soft); color: var(--success-text); }
-  .verdicts button:active, .take button:active { transform: scale(0.97); }
-  .take { display: flex; flex-wrap: wrap; gap: 8px; }
-  .take button { height: 40px; padding: 0 14px; border-radius: var(--r-full); background: var(--surface-2); font: 650 14px/1 var(--font-text); }
-  .take button.on { background: var(--c); color: #fff; }
-  .take .nope.on { background: var(--danger); color: #fff; }
-  .views { display: flex; margin-bottom: 12px; }
-  .views button { flex: 1; }
-  .addday { display: block; margin: 10px 0; padding: 6px 2px; font: 650 14.5px/1 var(--font-text); color: var(--accent-text); }
-  .ivform { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-  .slot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px; }
-  .st { flex: none; width: 92px; display: flex; flex-direction: column; gap: 2px; }
-  .st b { font: 750 16px/1 var(--font-display); }
-  .st i { font: 500 12px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
-  .who2 { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
-  .pp { padding: 5px 9px; border-radius: var(--r-full); background: var(--surface-2); font: 600 13px/1.2 var(--font-text); text-align: left; }
-  .pp.came { background: var(--success-soft); color: var(--success-text); }
-  .pp.miss { background: var(--danger-soft); color: var(--danger-text); text-decoration: line-through; }
-  .free { font: 500 13px/1.2 var(--font-text); color: var(--text-3); }
-  .ivline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: var(--r-m); background: var(--accent-soft); font: 600 14px/1.3 var(--font-text); }
-  .came { display: flex; gap: 6px; margin-left: auto; }
-  .came button { height: 30px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface); font: 650 13px/1 var(--font-text); }
-  .came button.on { background: var(--text); color: var(--bg); }
-  .shut { display: block; margin: 0 auto 10px; padding: 6px 10px; font: 620 14px/1 var(--font-text); color: var(--text-2); }
+  .stars button:active { transform: scale(0.9); }
+  /* Field's look for the date and time inputs it can't take yet */
+  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+    font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 </style>

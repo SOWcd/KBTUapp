@@ -18,6 +18,13 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import type { MenuItem } from '../../ui/menu';
 
   let { overlay, org, round = null, onsaved }: { overlay: Overlay; org: Id; round?: Round | null; onsaved?: () => void } = $props();
 
@@ -64,6 +71,11 @@
     } catch { say(t('common.error'), 'warning_3d'); }
   }
 
+  const kindMenu = (q: RoundQuestion): MenuItem[] => KINDS.map((k) => ({ label: t(`cast.kind.${k}`), checked: q.kind === k, onselect: () => { q.kind = k; } }));
+  const tagName = (id: Id) => tags.find((x) => x.id === id)?.name ?? '';
+  const forMenu = (q: RoundQuestion): MenuItem[] => [{ label: t('cast.forAll'), checked: q.tagId == null, onselect: () => { q.tagId = null; } },
+    ...deps.map((d) => ({ label: t('cast.onlyFor', { name: tagName(d.tagId) }), checked: q.tagId === d.tagId, onselect: () => { q.tagId = d.tagId; } }))];
+
   const closes = $derived(fromInputs(closeDate, closeTime));
   const results = $derived(resultsDate ? fromInputs(resultsDate, '20:00') : null);
   const err = $derived(!title.trim() ? 'title' : !Number.isFinite(closes) || closes <= nowTs() ? 'when' : results != null && results < closes ? 'results'
@@ -87,71 +99,82 @@
 </script>
 
 <Sheet {overlay} icon={Megaphone} full title={r0 ? t('cast.edit') : t('cast.open')}>
-  <p class="t-foot sub">{t('cast.openSub')}</p>
+  <div class="stack">
+    <p class="hint">{t('cast.openSub')}</p>
 
-  <label class="field" class:bad={tried && err === 'title'}><span class="t-cap">{t('cast.name')}</span><input bind:value={title} maxlength="80" /></label>
+    <Field label={t('cast.name')} bind:value={title} maxlength={80} error={tried && err === 'title' ? t('ed.need') : undefined} />
 
-  <h3 class="t-cap sec">{t('cast.deps')}</h3>
-  <p class="hint">{t('cast.depsHint')}</p>
-  <div class="tags">
-    {#each tags as g (g.id)}<button class:on={deps.some((d) => d.tagId === g.id)} style="--c:{g.color}" onclick={() => toggleDep(g.id)}><i></i>{g.name}</button>{/each}
-  </div>
-  <div class="newtag"><input class="field" bind:value={newTag} maxlength="30" placeholder={t('cast.newTag')} /><button onclick={makeTag} disabled={!newTag.trim()}><Plus size={18} /></button></div>
-  {#each deps as d (d.tagId)}
-    {@const g = tags.find((x) => x.id === d.tagId)}
-    <div class="dep" style="--c:{g?.color ?? 'var(--accent)'}">
-      <b>{g?.name ?? '…'}</b>
-      <div class="two">
-        <label class="field"><span class="t-cap">{t('cast.about')}</span><input bind:value={d.about} maxlength="200" placeholder={t('cast.aboutPh')} /></label>
-        <label class="field small"><span class="t-cap">{t('cast.places')}</span><input bind:value={d.places} type="number" inputmode="numeric" min="1" placeholder="—" /></label>
+    <h3 class="cap">{t('cast.deps')}</h3>
+    <p class="hint">{t('cast.depsHint')}</p>
+    {#if tags.length}
+      <div class="wrap">
+        {#each tags as g (g.id)}<Chip selected={deps.some((d) => d.tagId === g.id)} onclick={() => toggleDep(g.id)}><i class="dot" style:--c={g.color}></i>{g.name}</Chip>{/each}
       </div>
-    </div>
-  {/each}
-  {#if deps.length > 1}
-    <span class="t-cap lbl">{t('cast.picks')}</span>
-    <div class="seg">{#each [1, 2, 3] as n (n)}<button class:on={picks === n} onclick={() => (picks = n)} disabled={n > deps.length}>{n}</button>{/each}</div>
-  {/if}
-
-  <h3 class="t-cap sec">{t('cast.questions')}</h3>
-  <p class="hint">{locked ? t('cast.qsLocked') : t('cast.qsHint')}</p>
-  {#each qs as q, i (i)}
-    <div class="qcard surface">
-      <div class="qtop">
-        <select bind:value={q.kind} disabled={locked}>{#each KINDS as k (k)}<option value={k}>{t(`cast.kind.${k}`)}</option>{/each}</select>
-        {#if !locked}<button class="x" onclick={() => (qs = qs.filter((_, j) => j !== i))} aria-label={t('memo.drop')}><X size={16} /></button>{/if}
+    {/if}
+    <div class="newtag"><Field label={t('cast.newTag')} bind:value={newTag} maxlength={30} />
+      <IconButton icon={Plus} kind="tinted" label={t('cast.newTag')} disabled={!newTag.trim()} onclick={makeTag} /></div>
+    {#each deps as d (d.tagId)}
+      {@const g = tags.find((x) => x.id === d.tagId)}
+      <div class="dep" style:--c={g?.color ?? 'var(--accent)'}>
+        <b>{g?.name ?? '…'}</b>
+        <div class="two">
+          <Field label={t('cast.about')} bind:value={d.about} maxlength={200} placeholder={t('cast.aboutPh')} />
+          <Field label={t('cast.places')} bind:value={d.places} type="number" inputmode="numeric" placeholder="—" />
+        </div>
       </div>
-      <label class="field"><input bind:value={q.text} maxlength="200" placeholder={t('cast.qText')} disabled={locked} /></label>
-      {#if q.kind === 'one' || q.kind === 'many'}
-        <label class="field"><span class="t-cap">{t('cast.options')}</span>
-          <textarea rows="3" disabled={locked} value={(q.options ?? []).join('\n')} oninput={(e) => (q.options = (e.currentTarget as HTMLTextAreaElement).value.split('\n'))}></textarea></label>
+    {/each}
+    {#if deps.length > 1}
+      <span class="lbl">{t('cast.picks')}</span>
+      <Segmented items={[1, 2, 3].slice(0, deps.length).map((n) => ({ value: n, label: String(n) }))} bind:value={picks} label={t('cast.picks')} />
+    {/if}
+
+    <h3 class="cap">{t('cast.questions')}</h3>
+    <p class="hint">{locked ? t('cast.qsLocked') : t('cast.qsHint')}</p>
+    {#if locked}
+      <!-- someone applied: the questions as they are, to read -->
+      {#if qs.length}
+        <Group>
+          {#each qs as q, i (i)}
+            <Row dense title={q.text} subtitle={[t(`cast.kind.${q.kind}`), q.required ? t('cast.required') : '', q.tagId ? t('cast.onlyFor', { name: tagName(q.tagId) }) : ''].filter(Boolean).join(' · ')} />
+          {/each}
+        </Group>
       {/if}
-      <div class="qbot">
-        <label class="chk"><input type="checkbox" bind:checked={q.required} disabled={locked} />{t('cast.required')}</label>
-        {#if deps.length > 1}
-          <select bind:value={q.tagId} disabled={locked}><option value={null}>{t('cast.forAll')}</option>
-            {#each deps as d (d.tagId)}<option value={d.tagId}>{t('cast.onlyFor', { name: tags.find((x) => x.id === d.tagId)?.name ?? '' })}</option>{/each}</select>
-        {/if}
+    {:else}
+      {#each qs as q, i (i)}
+        <div class="q">
+          <Field label={t('cast.qText')} bind:value={q.text} maxlength={200} />
+          {#if q.kind === 'one' || q.kind === 'many'}
+            <Field label={t('cast.options')} multiline rows={3} bind:value={() => (q.options ?? []).join('\n'), (v) => (q.options = v.split('\n'))} />
+          {/if}
+          <Group>
+            <Row title={t('cast.qKind')} value={t(`cast.kind.${q.kind}`)} menu={kindMenu(q)} />
+            <Row title={t('cast.required')} accessory="switch" checked={q.required} onchange={(on) => (q.required = on)} />
+            {#if deps.length > 1}<Row title={t('cast.qFor')} value={q.tagId ? tagName(q.tagId) : t('cast.forAll')} menu={forMenu(q)} />{/if}
+            <Row tone="destructive" title={t('memo.drop')} onclick={() => (qs = qs.filter((_, j) => j !== i))} />
+          </Group>
+        </div>
+      {/each}
+    {/if}
+    {#if tried && err === 'qs'}<p class="err">{t('cast.needQs')}</p>{/if}
+    {#if !locked && qs.length < 6}
+      <div class="wrap tpls">
+        {#each TEMPLATES.filter((x) => !used(x.text)) as x (x.key)}<Button kind="tinted" size="s" onclick={() => addQ(x)}>{#snippet icon()}<Plus size={14} />{/snippet}{x.text}</Button>{/each}
+        <Button kind="tinted" size="s" onclick={() => addQ({ kind: 'short', text: '', required: true })}>{#snippet icon()}<Plus size={14} />{/snippet}{t('cast.ownQ')}</Button>
       </div>
-    </div>
-  {/each}
-  {#if tried && err === 'qs'}<p class="err">{t('cast.needQs')}</p>{/if}
-  {#if !locked && qs.length < 6}
-    <div class="tpls">
-      {#each TEMPLATES.filter((x) => !used(x.text)) as x (x.key)}<button onclick={() => addQ(x)}><Plus size={14} />{x.text}</button>{/each}
-      <button onclick={() => addQ({ kind: 'short', text: '', required: true })}><Plus size={14} />{t('cast.ownQ')}</button>
-    </div>
-  {/if}
+    {/if}
 
-  <h3 class="t-cap sec">{t('cast.dates')}</h3>
-  <div class="two">
-    <label class="field" class:bad={tried && err === 'when'}><span class="t-cap">{t('cast.closes')}</span><input type="date" bind:value={closeDate} /></label>
-    <label class="field" class:bad={tried && err === 'when'}><span class="t-cap">{t('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
+    <h3 class="cap">{t('cast.dates')}</h3>
+    <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
+    <div class="two">
+      <label class="fl" class:bad={tried && err === 'when'}><span>{t('cast.closes')}</span><input type="date" bind:value={closeDate} /></label>
+      <label class="fl" class:bad={tried && err === 'when'}><span>{t('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
+    </div>
+    <label class="fl" class:bad={tried && err === 'results'}><span>{t('cast.resultsBy')}</span><input type="date" bind:value={resultsDate} /></label>
+    <p class="hint">{t('cast.resultsHint')}</p>
+
+    <Field label={t('cast.next')} multiline rows={3} maxlength={300} bind:value={next} placeholder={t('cast.nextPh')} />
+    <Field label={t('cast.decline')} multiline rows={3} maxlength={500} bind:value={decline} placeholder={t('cast.declinePh')} />
   </div>
-  <label class="field" class:bad={tried && err === 'results'}><span class="t-cap">{t('cast.resultsBy')}</span><input type="date" bind:value={resultsDate} /></label>
-  <p class="hint">{t('cast.resultsHint')}</p>
-
-  <label class="field gap"><span class="t-cap">{t('cast.next')}</span><textarea rows="3" maxlength="300" bind:value={next} placeholder={t('cast.nextPh')}></textarea></label>
-  <label class="field gap"><span class="t-cap">{t('cast.decline')}</span><textarea rows="3" maxlength="500" bind:value={decline} placeholder={t('cast.declinePh')}></textarea></label>
 
   {#snippet footer()}
     <Button kind="primary" size="l" full loading={busy} onclick={save}>{r0 ? t('common.save') : t('cast.openGo')}</Button>
@@ -159,31 +182,29 @@
 </Sheet>
 
 <style>
-  .sub { margin: 2px 0 14px; }
-  .gap { margin-top: 10px; }
-  .sec { margin: 22px 2px 6px; }
-  .lbl { display: block; margin: 12px 2px 6px; }
-  .hint { margin: 0 4px 8px; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
-  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tags button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2);
-    font: 600 14px/1 var(--font-text); color: var(--text-2); }
-  .tags button.on { background: var(--text); color: var(--bg); }
-  .tags i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
-  .newtag { display: flex; gap: 8px; margin-top: 8px; }
-  .newtag input { flex: 1; min-width: 0; font: 550 15px/1.3 var(--font-text); }
-  .newtag button { flex: none; width: 44px; border-radius: var(--r-m); background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
-  .dep { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-left: 12px; border-left: 3px solid var(--c); }
-  .dep b { font: 650 15px/1.2 var(--font-text); }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .dep .two { grid-template-columns: 1fr 96px; }
-  .qcard { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; padding: 10px; }
-  .qtop, .qbot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  select { height: 34px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text); font: 600 13.5px/1 var(--font-text); max-width: 60%; }
-  .x { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-2); background: var(--surface-2); }
-  .chk { display: flex; align-items: center; gap: 8px; font: 550 14px/1.2 var(--font-text); }
-  .chk input { width: 18px; height: 18px; accent-color: var(--accent); }
-  .tpls { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tpls button { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft);
-    color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
-  .err { margin: 6px 4px 0; font: 600 12.5px/1.3 var(--font-text); color: var(--danger-text); }
+  .stack { display: flex; flex-direction: column; gap: var(--s-3); }
+  .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .cap + .hint { margin-top: -6px; }
+  /* a heading in Group's caption style, over what isn't a list */
+  .cap { margin: var(--s-4) var(--s-1) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+  .lbl { margin: 0 var(--s-4) -6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .err { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
+  .wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
+  .tpls > :global(.btn) { max-width: 100%; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .newtag { display: flex; align-items: flex-end; gap: var(--s-2); }
+  .newtag > :global(:first-child) { flex: 1; min-width: 0; }
+  .newtag > :global(:last-child) { margin-bottom: 3px; }
+  .dep { display: flex; flex-direction: column; gap: var(--s-2); padding-left: var(--s-3); border-left: 3px solid var(--c); }
+  .dep b { font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); align-items: end; }
+  .dep .two { grid-template-columns: minmax(0, 1fr) 96px; }
+  .q { display: flex; flex-direction: column; gap: var(--s-2); }
+  .q + .q { padding-top: var(--s-3); border-top: 0.5px solid var(--separator); }
+  /* Field's look for the date and time inputs it can't take yet */
+  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+    font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .fl.bad > input { box-shadow: inset 0 0 0 1.5px var(--danger); }
 </style>

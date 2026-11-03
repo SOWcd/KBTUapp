@@ -27,7 +27,7 @@
   import Globe from '@lucide/svelte/icons/globe';
   import Crown from '@lucide/svelte/icons/crown';
   import CalendarCheck from '@lucide/svelte/icons/calendar-check';
-  import Tag from '@lucide/svelte/icons/tag';
+  import TagIcon from '@lucide/svelte/icons/tag';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import Phone from '@lucide/svelte/icons/phone';
   import Images from '@lucide/svelte/icons/images';
@@ -35,12 +35,16 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Handshake from '@lucide/svelte/icons/handshake';
   import Mail from '@lucide/svelte/icons/mail';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+  import Plus from '@lucide/svelte/icons/plus';
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Segmented from '../../ui/Segmented.svelte';
-  import { menu } from '../../ui/menu';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import type { MenuItem } from '../../ui/menu';
   import { check, type Finding } from '../../lib/eventCheck';
   import { api, ApiErr, original, type EventFull, type EventInput, type Id, type Media, type MemoAsks, type Video } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -130,8 +134,9 @@
   });
   const regTs = $derived(fromInputs(f.regDate, f.regTime));
   // switched on: the day before the event, or its own day when that's already gone
-  function deadlineOn(ev: Event) {
-    if (!(ev.currentTarget as HTMLInputElement).checked || f.regDate) return;
+  function deadlineOn(on: boolean) {
+    f.deadline = on;
+    if (!on || f.regDate) return;
     const d = Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400;
     f.regDate = dateInput(d - 86400 > nowTs() ? d - 86400 : d);
   }
@@ -158,16 +163,19 @@
   const example = { place: realPlaces.length ? any(realPlaces) : phrase('ed.placePh') };
 
   // the place field takes a room or a pasted 2GIS share: the link becomes the route, the text stays the name
-  function placeTyped() {
+  $effect(() => {
     const m = f.place.match(GIS_LINK);
     if (!m) return;
     f.placeUrl = m[0];
     f.place = f.place.replace(m[0], ' ').replace(/\s+/g, ' ').replace(/^[\s,.·-]+|[\s,.·-]+$/g, '').slice(0, 80);
     haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d');
-  }
+  });
+  // the Kaspi number written as the phone shows it, as it's typed
+  $effect(() => { const v = fmtPhone(f.payPhone); if (v !== f.payPhone) f.payPhone = v; });
 
   // a photo cover: shrunk on the phone, re-encoded by the server; the emoji and colour stay as the fallback
   let uploading = $state(false);
+  let photoIn = $state<HTMLInputElement>();
   async function pickPhoto(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
@@ -405,19 +413,17 @@
   const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
 
   // the pull-downs (2-4 choices) on a row's value
-  function whoMenu(el: Element) {
-    menu(el, [
-      { label: t('ed.whoAll'), checked: !f.teamOnly && !f.leaders, onselect: () => { f.teamOnly = false; f.leaders = false; } },
-      { label: t('ed.whoTeam'), checked: f.teamOnly, onselect: () => { f.teamOnly = true; f.leaders = false; } },
-      ...(oversee ? [{ label: t('ed.whoLeaders'), checked: f.leaders, onselect: () => { f.leaders = true; f.teamOnly = false; } }] : []),
-    ], 'end');
-  }
-  const leadMenu = (el: Element) => menu(el, (['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })), 'end');
-  const tagMenu = (el: Element) => menu(el, [
+  const whoMenu = $derived<MenuItem[]>([
+    { label: t('ed.whoAll'), checked: !f.teamOnly && !f.leaders, onselect: () => { f.teamOnly = false; f.leaders = false; } },
+    { label: t('ed.whoTeam'), checked: f.teamOnly, onselect: () => { f.teamOnly = true; f.leaders = false; } },
+    ...(oversee ? [{ label: t('ed.whoLeaders'), checked: f.leaders, onselect: () => { f.leaders = true; f.teamOnly = false; } }] : []),
+  ]);
+  const leadMenu = $derived<MenuItem[]>((['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })));
+  const tagMenu = $derived<MenuItem[]>([
     ...(deptOnly ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null, onselect: () => { f.meetingTag = null; } }]),
     ...tags.filter((g) => !deptOnly || g.id === ownDept).map((g) => ({ label: g.name, checked: f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; } })),
-  ], 'end');
-  const valueOf = (e: MouseEvent) => (e.currentTarget as Element).querySelector('.v') ?? (e.currentTarget as Element);
+  ]);
+  const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
 
   // "Check my event": on the phone, at once, on every Publish/Save; a price or seats in a meeting's or a partner's
   // text aren't this event's to fix; a live event's Save stops only for a contradiction, never for a missing cover
@@ -480,19 +486,12 @@
 
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
-{#snippet row(Icon: typeof Ticket, title: string, value: string, onclick: (e: MouseEvent) => void, bad = false, updown = false)}
-  <button class="r" class:bad {onclick}><Icon size={19} /><b>{title}</b><span class="v">{bad ? t('ed.need') : value}</span>
-    {#if updown}<ChevronsUpDown size={16} />{:else}<ChevronRight size={18} />{/if}</button>
-{/snippet}
-{#snippet toggle(Icon: typeof Ticket, title: string, get: () => boolean, set: (v: boolean) => void)}
-  <label class="r"><Icon size={19} /><b>{title}</b><span class="sw-on"><input type="checkbox" role="switch" checked={get()} onchange={(e) => set(e.currentTarget.checked)} /></span></label>
-{/snippet}
-
+<!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
 <div class="panel" bind:this={panel} style:--tint={shade(f.color)} oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event (Luma): its colour, the cover blurred over it, the page's ground on top for contrast -->
   <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
-    {#if !inTelegram}<button class="x" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={22} /></button>{/if}
+    {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
 
   <div class="body scroll">
@@ -501,14 +500,15 @@
       <span class="artbtn glass glass-pill"><ImagePlus size={20} /></span>
     </button>
     {#if !id && session.board}
-      <button class="fill" class:busy={filling} disabled={filling} onclick={fillFromText}><Sparkles size={16} />{filling ? t('as.thinking') + '…' : t('ed.fill')}</button>
+      <span class="mid"><Button kind="secondary" size="s" loading={filling} onclick={fillFromText}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ed.fill')}</Button></span>
     {/if}
 
-    <textarea class="name" class:bad={tried && err.title} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} enterkeyhint="done"></textarea>
+    <!-- engine: Field size="title" with its label for screen readers only (the editor's big name has none in sight) -->
+    <textarea class="name" class:bad={tried && err.title} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
     {#if castLike}
       <!-- a casting made as an event (JCC, Nov 3): the club's recruitment does it properly -->
-      <div class="cast"><p>{t('ed.castHint')}</p><button onclick={() => { close(overlay.id); sheets.roundSetup(org); }}>{t('ed.castOpen')}</button></div>
+      <Notice tone="accent" text={t('ed.castHint')} action={{ label: t('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
     <div class="pill when" class:bad={tried && err.when}>
@@ -524,51 +524,46 @@
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
     <button class="pill go" class:bad={tried && err.place} onclick={() => open('place')}><MapPin size={20} />
-      <span class="ellipsis" class:ph={!f.place.trim()}>{f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
-      {#if f.placeUrl && !f.tba}<span class="chip">{t('event.route')}</span>{/if}</button>
+      <span class="gt ellipsis" class:ph={!f.place.trim()}>{f.tba ? t('ed.tba') : f.place.trim() || t('ex.placeAdd')}</span>
+      {#if f.placeUrl && !f.tba}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
     <button class="pill go" onclick={() => open('about')}><AlignLeft size={20} />
-      <span class="clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
+      <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
-      <h3 class="cap">{t('ex.tickets')}</h3>
-      <div class="pill grp">
-        {#if canPrice}{@render row(Ticket, t('ex.price'), priceVal, () => open('price'), tried && priceBad)}
-        {:else}<div class="r still"><Ticket size={19} /><b>{t('ex.price')}</b><span class="v">{t('ex.free')}</span></div>{/if}
-        {@render row(Users, t('ed.seats'), +f.seats > 0 ? f.seats : t('ex.unlimited'), () => open('seats'), tried && !!err.seats)}
-        {@render row(Clock, t('ex.regUntil'), regVal, () => open('reg'), tried && !!err.reg)}
-      </div>
-      {#if !canPrice && !isMeeting}<p class="hint">{official ? t('ed.paidRight') : t('ed.paidOfficial')}</p>{/if}
+      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting ? (official ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
+        {#if canPrice}<Row icon={Ticket} title={t('ex.price')} value={tried && priceBad ? '' : priceVal} invalid={tried && priceBad} accessory="chevron" onclick={() => open('price')} />
+        {:else}<Row icon={Ticket} title={t('ex.price')} value={t('ex.free')} />{/if}
+        <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : +f.seats > 0 ? f.seats : t('ex.unlimited')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
+        <Row icon={Clock} title={t('ex.regUntil')} value={tried && err.reg ? '' : regVal} invalid={tried && !!err.reg} accessory="chevron" onclick={() => open('reg')} />
+      </Group>
     {/if}
 
-    <h3 class="cap">{t('ex.options')}</h3>
-    <div class="pill grp">
+    <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly ? t('ed.noChannel') : undefined}>
       {#if !f.partner}
-        {#if oversee}{@render row(Globe, t('ex.who'), whoVal, (e) => whoMenu(valueOf(e)), false, true)}
-        {:else}{@render toggle(Globe, t('ed.teamOnly'), () => f.teamOnly, (v) => (f.teamOnly = v))}{/if}
-        {#if f.leaders}{@render row(Crown, t('ex.leadersFrom'), t(LEAD[f.leadersFrom]), (e) => leadMenu(valueOf(e)), false, true)}{/if}
-        {#if f.teamOnly}{@render toggle(CalendarCheck, t('ed.meeting'), () => f.meeting, (v) => (f.meeting = v))}{/if}
+        {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
+        {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
+        {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
+        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => (f.meeting = v)} />{/if}
         {#if isMeeting && tags.length}
-          {@render row(Tag, t('ed.meetingWho'), tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll'), (e) => tagMenu(valueOf(e)), false, true)}
+          <Row icon={TagIcon} title={t('ed.meetingWho')} value={tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} menu={tagMenu} />
         {/if}
       {/if}
       {#if tickets}
-        {@render toggle(GraduationCap, t('ed.firstYear'), () => f.firstYear, (v) => (f.firstYear = v))}
-        {@render toggle(Phone, t('ed.needsPhone'), () => f.needsPhone, (v) => (f.needsPhone = v))}
+        <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />
+        <Row icon={Phone} title={t('ed.needsPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} />
       {/if}
-      {@render toggle(Images, t('ed.albumOpen'), () => f.albumOpen, (v) => (f.albumOpen = v))}
-    </div>
-    {#if f.leaders}<p class="hint">{t('ed.leadersHint')}</p>{/if}
-    {#if initiative && !f.teamOnly && !f.leaders}<p class="hint">{t('ed.noChannel')}</p>{/if}
+      <Row icon={Images} title={t('ed.albumOpen')} accessory="switch" checked={f.albumOpen} onchange={(v) => (f.albumOpen = v)} />
+    </Group>
 
-    <h3 class="cap">{t('ex.more')}</h3>
-    <div class="pill grp">
-      {@render row(Clapperboard, t('ed.video'), [vids.tall, vids.wide].filter(Boolean).length ? String([vids.tall, vids.wide].filter(Boolean).length) : t('ex.no'), () => open('video'))}
-      {#if session.board && tickets}{@render row(ListChecks, t('ed.form'), f.form.length ? String(f.form.length) : t('ex.no'), () => open('form'), tried && !!err.form)}{/if}
-      {#if tickets}{@render row(HandHeart, t('ed.vol'), f.vol ? f.volN : t('ex.no'), () => open('vol'))}{/if}
-      {#if canPartner && !isMeeting}{@render row(Handshake, t('ed.partner'), f.partner ? f.host.trim() || t('ed.need') : t('ex.no'), () => open('partner'), tried && !!(err.host || err.link))}{/if}
-      {#if !f.placeUrl && !f.leaders}{@render row(Mail, t('studio.memoShort'), memoN ? String(memoN) : t('ex.no'), () => open('memo'))}{/if}
-      {@render row(Eye, t('ed.preview'), '', showPreview)}
-    </div>
+    <Group caption={t('ex.more')}>
+      <Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />
+      {#if session.board && tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : f.form.length ? String(f.form.length) : t('ex.no')} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
+      {#if tickets}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+      {#if canPartner && !isMeeting}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
+        invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
+      {#if !f.placeUrl && !f.leaders}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
+      <Row icon={Eye} title={t('ed.preview')} accessory="chevron" onclick={showPreview} />
+    </Group>
 
     <!-- the form's end, as Luma's Create (owner, Nov 2: no floating bar over the form) -->
     <div class="foot">
@@ -576,12 +571,12 @@
         <Button kind="filled" size="l" full loading={busy === 'save'} disabled={!dirty} onclick={publish}>{t('common.save')}</Button>
       {:else}
         <Button kind="filled" size="l" full loading={busy === 'publish'} onclick={publish}>{t('ed.publish')}</Button>
-        <button class="draft" disabled={!!busy} onclick={() => submit('draft')}>{busy === 'draft' ? '…' : t('ed.saveDraft')}</button>
+        <Button kind="plain" full loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>
+      {/if}
+      {#if saved?.status === 'draft'}
+        <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{t('ed.delete')}</Button>
       {/if}
     </div>
-    {#if saved?.status === 'draft'}
-      <button class="del" onclick={remove}><Trash size={18} />{t('ed.delete')}</button>
-    {/if}
     <div class="tail"></div>
   </div>
 
@@ -593,16 +588,17 @@
         {#if pick !== 'check'}<Button kind="tinted" size="s" onclick={() => (pick = '')}>{t('ex.done')}</Button>{/if}</header>
       <div class="pkb scroll">
         {#if pick === 'cover'}
-          <div class="photo">
-            <label class="pbtn" class:busy={uploading}><ImagePlus size={18} />{uploading ? t('ed.photoUp') : f.cover ? t('ed.photoChange') : t('ed.photo')}
-              <input type="file" accept="image/*" onchange={pickPhoto} disabled={uploading} /></label>
-            {#if f.cover}<button class="pdel" onclick={dropPhoto}><X size={16} />{t('ed.photoRemove')}</button>{/if}
+          <div class="btns">
+            <Button kind="tinted" full loading={uploading} onclick={() => photoIn?.click()}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{f.cover ? t('ed.photoChange') : t('ed.photo')}</Button>
+            {#if f.cover}<Button kind="gray" onclick={dropPhoto}>{#snippet icon()}<X size={16} />{/snippet}{t('ed.photoRemove')}</Button>{/if}
+            <input bind:this={photoIn} type="file" accept="image/*" onchange={pickPhoto} hidden />
           </div>
           {#if f.cover}
             <CoverFocus cover={f.cover} onpick={(p) => { f.cover = { ...f.cover!, focus: p }; void readColor(false); }} />
             <div class="slides">
               {#each f.slides as p, k (p.id)}
-                <span class="sl"><img src={p.thumb} alt="" /><button onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
+                <!-- engine: IconButton xs, a remove mark on a thumbnail -->
+                <span class="sl"><img src={p.thumb} alt="" /><button class="rmx" onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
               {/each}
               {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
               {#if f.slides.length + slidesUp < SLIDES}
@@ -619,37 +615,39 @@
 
         {:else if pick === 'place'}
           {#if !f.tba}
-            <label class="field" class:bad={tried && err.place}><span class="t-cap">{t('ed.place')}</span>
-              <input bind:value={f.place} oninput={placeTyped} maxlength="400" placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="done" /></label>
+            <Field label={t('ed.place')} bind:value={f.place} maxlength={400} placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="done"
+              error={tried && err.place ? err.place : undefined} />
           {/if}
           {#if !f.placeUrl && !f.tba && addressGis(f.place)}
             <!-- a typed street address: its 2GIS route offered, seen before saving -->
-            <button class="gisoffer" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
-              <MapPin size={16} />{t('ed.gisOffer')}</button>
+            <span class="lone"><Button kind="tinted" size="s" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
+              {#snippet icon()}<MapPin size={16} />{/snippet}{t('ed.gisOffer')}</Button></span>
           {/if}
           {#if f.placeUrl && !f.tba}
-            <div class="gis"><MapPin size={17} /><span class="ellipsis">{t('event.route')}</span>
-              <button onclick={() => (f.placeUrl = '')} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
+            <Group>
+              <Row icon={MapPin} title={t('event.route')}>
+                {#snippet trailing()}<IconButton icon={X} kind="plain" size="s" label={t('ed.photoRemove')} onclick={() => (f.placeUrl = '')} />{/snippet}
+              </Row>
+            </Group>
           {:else if !f.tba}
             <p class="hint">{t('ed.placeHint')}</p>
           {/if}
           {#if !f.placeUrl}
-            <label class="switch"><span><b>{t('ed.tba')}</b><i class="t-foot">{t('ed.tbaHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.tba} /></label>
+            <Group footnote={t('ed.tbaHint')}><Row title={t('ed.tba')} accessory="switch" checked={f.tba} onchange={(v) => (f.tba = v)} /></Group>
           {/if}
 
         {:else if pick === 'about'}
-          <label class="field"><textarea bind:value={f.description} maxlength="2000" rows="7" placeholder={t('ed.aboutPh')}></textarea></label>
+          <Field label={t('ed.about')} multiline rows={7} bind:value={f.description} maxlength={2000} placeholder={t('ed.aboutPh')} />
           {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
           {#if session.board}
             {#if suggestion}
-              <div class="sug">
-                <span class="t-cap"><Sparkles size={13} /> {t('ex.aiSuggest')}</span>
-                <p>{suggestion}</p>
-                <div class="sugb"><Button kind="gray" size="s" onclick={() => (suggestion = '')}>{t('ex.aiKeep')}</Button>
+              <Notice tone="accent" title={t('ex.aiSuggest')}>
+                <p class="sugt">{suggestion}</p>
+                <div class="btns sugb"><Button kind="gray" size="s" onclick={() => (suggestion = '')}>{t('ex.aiKeep')}</Button>
                   <Button kind="tinted" size="s" onclick={() => { touch(); f.description = suggestion; suggestion = ''; haptic.ok(); }}>{t('ex.aiUse')}</Button></div>
-              </div>
+              </Notice>
             {:else}
-              <button class="ai" disabled={writing} class:busy={writing} onclick={aiWrite}><Sparkles size={16} />{writing ? t('as.thinking') + '…' : t('ex.aiWrite')}</button>
+              <span class="lone"><Button kind="tinted" size="s" loading={writing} onclick={aiWrite}>{#snippet icon()}<Sparkles size={16} />{/snippet}{t('ex.aiWrite')}</Button></span>
               {#if !f.description.trim()}<p class="hint">{t('ex.aiHint')}</p>{/if}
             {/if}
           {/if}
@@ -659,30 +657,23 @@
           <Segmented items={[{ value: 'free', label: t('ex.free') }, { value: 'paid', label: t('ex.paidSeg') }]} value={f.paid ? 'paid' : 'free'} label={t('ex.price')}
             onchange={(v) => { touch(); f.paid = v === 'paid'; }} />
           {#if f.paid}
-            <label class="field" class:bad={tried && err.price}><span class="t-cap">{t('ed.price')}</span>
-              <input bind:value={f.price} type="number" inputmode="numeric" min="1" placeholder="2000" /></label>
-            <label class="field" class:bad={tried && err.payTo}><span class="t-cap">{t('ed.payTo')}</span>
-              <input bind:value={f.payTo} maxlength="80" placeholder={t('ed.payToPh')} /></label>
-            <label class="field" class:bad={tried && err.payPhone}><span class="t-cap">{t('ed.payPhone')}</span>
-              <input bind:value={f.payPhone} oninput={() => (f.payPhone = fmtPhone(f.payPhone))} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" /></label>
-            {#if tried && err.payPhone}<p class="err">{err.payPhone}</p>{/if}
+            <Field label={t('ed.price')} bind:value={f.price} type="number" inputmode="numeric" placeholder="2000" error={tried && err.price ? err.price : undefined} />
+            <Field label={t('ed.payTo')} bind:value={f.payTo} maxlength={80} placeholder={t('ed.payToPh')} error={tried && err.payTo ? err.payTo : undefined} />
+            <Field label={t('ed.payPhone')} bind:value={f.payPhone} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" error={tried && err.payPhone ? err.payPhone : undefined} />
             <p class="hint">{t('ed.payHint')}</p>
-            <label class="field" class:bad={tried && err.freeFirst}><span class="t-cap">{t('ed.freeFirst')}</span>
-              <input bind:value={f.freeFirst} type="number" inputmode="numeric" min="0" placeholder={t('ed.freeFirstPh')} /></label>
+            <Field label={t('ed.freeFirst')} bind:value={f.freeFirst} type="number" inputmode="numeric" placeholder={t('ed.freeFirstPh')} error={tried && err.freeFirst ? err.freeFirst : undefined} />
             <p class="hint">{t('ed.freeFirstHint')}</p>
           {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}
 
         {:else if pick === 'seats'}
-          <label class="field" class:bad={tried && err.seats}><span class="t-cap">{t('ed.seats')}</span>
-            <input bind:value={f.seats} type="number" inputmode="numeric" min="1" placeholder={t('ed.seatsPh')} /></label>
+          <Field label={t('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder={t('ed.seatsPh')} error={tried && err.seats ? err.seats : undefined} />
 
         {:else if pick === 'reg'}
-          <label class="switch"><span><b>{t('ed.deadline')}</b><i class="t-foot">{t('ed.deadlineHint')}</i></span>
-            <input type="checkbox" role="switch" bind:checked={f.deadline} onchange={deadlineOn} /></label>
+          <Group footnote={t('ed.deadlineHint')}><Row title={t('ed.deadline')} accessory="switch" checked={f.deadline} onchange={deadlineOn} /></Group>
           {#if f.deadline}
             <div class="two">
-              <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
-              <label class="field" class:bad={tried && err.reg}><span class="t-cap">{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
+              <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
+              <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
             </div>
             {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
           {/if}
@@ -695,7 +686,8 @@
               <div class="vslot {slot}">
                 {#if x}
                   <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
-                    <button class="vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
+                    <!-- engine: IconButton xs over a picture -->
+                    <button class="rmx vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
                   <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
                 {:else}
                   <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
@@ -703,7 +695,7 @@
                     <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
                   <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
                 {/if}
-                <i class="t-foot">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
+                <i class="hint">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
               </div>
             {/each}
           </div>
@@ -712,35 +704,31 @@
           <!-- the event's own questions at sign-up (Oct 30): up to five, text or a choice; with the forum's policy section -->
           {#each f.form as q, i (i)}
             <div class="qc">
-              <div class="qrow"><input class="ql" bind:value={q.label} maxlength="80" placeholder={t('ed.formQ')} />
-                <button class="qx" onclick={() => (f.form = f.form.filter((_, k) => k !== i))} aria-label={t('ed.photoRemove')}><X size={16} /></button></div>
-              <div class="mtags"><button class:on={q.kind === 'text'} onclick={() => (q.kind = 'text')}>{t('ed.formText')}</button>
-                <button class:on={q.kind === 'choice'} onclick={() => (q.kind = 'choice')}>{t('ed.formChoice')}</button></div>
-              {#if q.kind === 'choice'}<input class="ql" bind:value={q.opts} maxlength="300" placeholder={t('ed.formOpts')} />{/if}
-              <label class="chk"><input type="checkbox" bind:checked={q.required} />{t('ed.formReq')}</label>
+              <div class="qrow"><Field label={t('cast.qText')} bind:value={q.label} maxlength={80} placeholder={t('ed.formQ')} />
+                <IconButton icon={X} kind="plain" size="s" label={t('ed.photoRemove')} onclick={() => (f.form = f.form.filter((_, k) => k !== i))} /></div>
+              <Segmented items={[{ value: 'text', label: t('ed.formText') }, { value: 'choice', label: t('ed.formChoice') }]} bind:value={q.kind} label={t('cast.qText')} />
+              {#if q.kind === 'choice'}<Field label={t('ed.formOptsL')} bind:value={q.opts} maxlength={300} placeholder={t('ed.formOpts')} />{/if}
+              <Group><Row title={t('ed.formReq')} accessory="switch" checked={q.required} onchange={(v) => (q.required = v)} /></Group>
             </div>
           {/each}
           {#if tried && err.form}<p class="err">{err.form}</p>{/if}
-          {#if f.form.length < 5}<button class="qadd" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>+ {t('ed.formAdd')}</button>{/if}
+          {#if f.form.length < 5}<span class="lone"><Button kind="tinted" size="s" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>
+            {#snippet icon()}<Plus size={16} />{/snippet}{t('ed.formAdd')}</Button></span>{/if}
           <p class="hint">{t('ed.formHint')}</p>
 
         {:else if pick === 'vol'}
           <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
-          <label class="switch"><span><b>{t('ed.vol')}</b><i class="t-foot">{t('ed.volHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.vol} /></label>
+          <Group footnote={t('ed.volHint')}><Row title={t('ed.vol')} accessory="switch" checked={f.vol} onchange={(v) => (f.vol = v)} /></Group>
           {#if f.vol}
-            <label class="field"><span class="t-cap">{t('ed.volN')}</span><input bind:value={f.volN} type="number" inputmode="numeric" min="1" max="500" /></label>
-            <label class="chk"><input type="checkbox" bind:checked={f.volSenior} />{t('ed.volSenior')}</label>
+            <Field label={t('ed.volN')} bind:value={f.volN} type="number" inputmode="numeric" />
+            <Group><Row title={t('ed.volSenior')} accessory="switch" checked={f.volSenior} onchange={(v) => (f.volSenior = v)} /></Group>
           {/if}
 
         {:else if pick === 'partner'}
-          <label class="switch"><span><b>{t('ed.partner')}</b><i class="t-foot">{t('ed.partnerHint')}</i></span><input type="checkbox" role="switch" bind:checked={f.partner} /></label>
+          <Group footnote={t('ed.partnerHint')}><Row title={t('ed.partner')} accessory="switch" checked={f.partner} onchange={(v) => (f.partner = v)} /></Group>
           {#if f.partner}
-            <label class="field" class:bad={tried && err.host}><span class="t-cap">{t('ed.partnerHost')}</span>
-              <input bind:value={f.host} maxlength="60" placeholder={t('ed.partnerHostPh')} /></label>
-            {#if tried && err.host}<p class="err">{err.host}</p>{/if}
-            <label class="field" class:bad={tried && err.link}><span class="t-cap">{t('ed.partnerLink')}</span>
-              <input bind:value={f.link} type="url" inputmode="url" maxlength="500" placeholder="https://" /></label>
-            {#if tried && err.link}<p class="err">{err.link}</p>{/if}
+            <Field label={t('ed.partnerHost')} bind:value={f.host} maxlength={60} placeholder={t('ed.partnerHostPh')} error={tried && err.host ? err.host : undefined} />
+            <Field label={t('ed.partnerLink')} bind:value={f.link} type="url" inputmode="url" maxlength={500} placeholder="https://" error={tried && err.link ? err.link : undefined} />
           {/if}
 
         {:else if pick === 'memo'}
@@ -750,11 +738,8 @@
           {#if found.length}
             <p class="sum">{tn('ex.found', found.length)}</p>
             {#each found as x (x.id)}
-              <div class="note" class:serious={SERIOUS.has(x.id)}>
-                <span class="ni">{#if SERIOUS.has(x.id)}<TriangleAlert size={17} />{:else}<Sparkles size={16} />{/if}</span>
-                <span class="nt">{noteText(x)}</span>
-                {#if fixable(x)}<button class="nfix" onclick={() => fix(x)}>{fixLabel(x)}</button>{/if}
-              </div>
+              <Notice tone={SERIOUS.has(x.id) ? 'warning' : 'neutral'} icon={SERIOUS.has(x.id) ? undefined : Sparkles} text={noteText(x)}
+                action={fixable(x) ? { label: fixLabel(x), onclick: () => fix(x) } : undefined} />
             {/each}
           {:else}
             <p class="okay"><CircleCheck size={20} />{t('ex.checkOk')}</p>
@@ -779,129 +764,86 @@
   :global(:root[data-theme='light']) .wash i { opacity: 0.72; }
   .bar { position: absolute; left: 0; right: 0; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); height: 38px; z-index: 1;
     display: flex; align-items: center; justify-content: center; pointer-events: none; }
-  .x { position: absolute; left: 12px; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: var(--surface); color: var(--text); pointer-events: auto; }
+  .x { position: absolute; left: var(--s-3); pointer-events: auto; }
 
-  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); margin-top: max(48px, var(--top)); padding: var(--s-2) var(--gutter) 0; }
+  /* the main page's lists on the event's tinted ground: the pills' glass, Settings' rows */
+  .body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); margin-top: max(48px, var(--top)); padding: var(--s-2) var(--gutter) 0;
+    --group-bg: var(--pill); }
   .body > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
+  .body > :global(section) { margin-top: var(--s-4); }
   .tail { height: calc(var(--safe-bottom) + 24px); }
   .ph { color: var(--text-3); }
-  .cast { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); margin: 0 var(--s-4); padding: var(--s-3) var(--s-4);
-    border-radius: var(--r-m); background: var(--accent-soft); font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text); }
-  .cast button { font: 650 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
-  .err { margin: -6px var(--s-4) 0; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
-  .hint { margin: 0 var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .mid { align-self: center; margin-top: calc(-1 * var(--s-1)); }
+  .err { margin: -6px var(--s-4) 0; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
+  .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); font-style: normal; color: var(--text-3); }
   .bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
 
   .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
   .art:active { transform: scale(0.98); }
   .art.busy { opacity: 0.6; }
-  .artbtn { position: absolute; right: -8px; bottom: -8px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--text); }
-  .fill, .ai { align-self: center; display: inline-flex; align-items: center; gap: 6px; height: var(--btn-s); padding: 0 var(--s-3); margin-top: calc(-1 * var(--s-1));
-    border-radius: var(--r-full); background: var(--pill); color: var(--text); font: 650 var(--fs-sub)/1 var(--font-text); }
-  .ai { align-self: flex-start; margin: 0; background: var(--accent-soft); color: var(--accent-text); }
-  .fill.busy, .ai.busy { opacity: 0.6; }
+  .artbtn { position: absolute; right: -8px; bottom: -8px; width: var(--tap); height: var(--tap); border-radius: 50%; display: grid; place-items: center; color: var(--text); }
   .name { width: 100%; resize: none; field-sizing: content; min-height: 1.2em; padding: var(--s-3) var(--s-4); border-radius: var(--r-l); background: var(--pill);
     color: var(--text); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; }
   .name::placeholder { color: var(--text-3); }
 
   .pill { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 54px; padding: 0 var(--s-4);
-    border-radius: var(--r-l); background: var(--pill); color: var(--text); text-align: left; font: 500 var(--fs-row)/1.3 var(--font-text); }
+    border-radius: var(--r-l); background: var(--pill); color: var(--text); text-align: left; font: var(--fw-row) var(--fs-row)/1.3 var(--font-text); }
   .pill > :global(svg) { flex: none; color: var(--text-2); }
   .go { padding-block: var(--s-3); }
-  .go > span:not(.chip) { flex: 1; min-width: 0; }
-  .chip { flex: none; padding: 4px 8px; border-radius: var(--r-full); background: var(--success-soft); color: var(--success-text); font: 600 var(--fs-cap)/1 var(--font-text); }
-  .go:active, .r:active { opacity: 0.7; transform: none; }
+  .gt { flex: 1; min-width: 0; }
+  .go:active { background: var(--fill); transform: none; }
   .when { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
   .wr { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 54px; padding: 0 var(--s-3) 0 44px; }
   .wr + .wr::before { content: ''; position: absolute; left: 44px; right: 0; top: 0; height: 0.5px; background: var(--separator); }
-  .wr b { flex: 1; min-width: 0; font-weight: 500; color: var(--text-2); }
-  .tv { position: relative; flex: none; padding: 7px 8px; border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); white-space: nowrap; }
+  .wr b { flex: 1; min-width: 0; font-weight: var(--fw-row); color: var(--text-2); }
+  .tv { position: relative; flex: none; padding: 7px var(--s-2); border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); white-space: nowrap; }
   .tv input { position: absolute; inset: 0; width: 100%; opacity: 0; }
   .tv.ph { color: var(--text-3); } /* nothing chosen: the end's day as it follows from the start */
   .dot { position: absolute; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-2); }
   .dot.o { background: none; box-shadow: inset 0 0 0 1.5px var(--text-2); }
   .line { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }
-  .cap { margin: var(--s-3) var(--s-1) calc(-1 * var(--s-1)); font: 650 var(--fs-body)/1.2 var(--font-text); color: var(--text-2); }
-  .grp { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
-  .r { position: relative; display: flex; align-items: center; gap: var(--s-3); min-height: 54px; padding: 0 var(--s-4); text-align: left; color: var(--text); }
-  .r + .r::before { content: ''; position: absolute; left: 47px; right: 0; top: 0; height: 0.5px; background: var(--separator); }
-  .r > :global(svg) { flex: none; color: var(--text-2); }
-  .r b { flex: 1 1 auto; min-width: 0; font-weight: 500; }
-  .r .v { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-weight: 500; }
-  .r.bad { box-shadow: none; }
-  .r.bad .v { color: var(--danger-text); }
-  .r > :global(svg:last-child) { color: var(--text-3); }
-  .r.still { cursor: default; }
-  .del { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; margin-top: var(--s-1); color: var(--danger-text); font: 620 var(--fs-body)/1 var(--font-text); }
 
   .foot { display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); margin-top: var(--s-5); }
-  .draft { height: 46px; color: var(--accent-text, var(--accent)); font: 600 var(--fs-body)/1 var(--font-text); }
-  .draft:active { opacity: 0.6; }
 
   /* the panel */
   .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
   @keyframes fade { from { opacity: 0; } }
-  .pk { position: absolute; left: 8px; right: 8px; bottom: calc(var(--safe-bottom) + 8px); max-height: calc(100% - var(--top) - 24px); display: flex; flex-direction: column;
+  .pk { position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px); display: flex; flex-direction: column;
     border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards; }
   @keyframes rise { from { transform: translate3d(0, 100%, 0); } }
   .pkh { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-2) var(--s-5); }
   .pkh b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.015em; }
   .pkb { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-2) var(--s-4) var(--s-4); }
   .pkb > :global(*) { flex-shrink: 0; }
+  .lone { align-self: flex-start; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
   .sum { margin: 0 var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .okay { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--success-text); }
   .pkfoot { display: flex; margin-top: var(--s-1); }
+  .sugt { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-line; }
+  .sugb { justify-content: flex-end; margin-top: var(--s-1); }
 
-  /* the check's notes, the AI's card */
-  .note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-radius: var(--r-m);
-    background: var(--surface-2); animation: note-in 300ms var(--ease-spring) backwards; }
-  @keyframes note-in { from { opacity: 0; transform: translateY(-4px); } }
-  .note.serious { background: var(--warning-soft); }
-  .ni { flex: none; display: inline-flex; color: var(--text-3); }
-  .serious .ni { color: var(--warning-text); }
-  .nt { flex: 1 1 160px; min-width: 0; font: 550 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
-  .nfix { flex: none; margin-left: auto; height: var(--btn-s); padding: 0 var(--s-3); border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-sub)/1 var(--font-text); white-space: nowrap; }
-  .serious .nfix { background: var(--accent); color: var(--on-accent); }
-  .sug { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--r-m); background: var(--accent-soft);
-    animation: note-in 300ms var(--ease-spring) backwards; }
-  .sug .t-cap { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); }
-  .sug p { font: 450 var(--fs-body)/1.45 var(--font-text); color: var(--text); white-space: pre-line; }
-  .sugb { display: flex; gap: var(--s-2); justify-content: flex-end; }
+  /* Field's look for the date and time inputs it can't take yet */
+  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
+    font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .fl.bad { box-shadow: none; }
+  .fl.bad > input { box-shadow: inset 0 0 0 1.5px var(--danger); }
 
-  /* the panels' own pieces (the old form's, kept) */
-  .chk { display: flex; align-items: center; gap: 10px; padding: 6px 4px 12px; font: 550 var(--fs-body)/1.3 var(--font-text); }
-  .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
-  .gisoffer { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
-    border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 620 var(--fs-sub)/1 var(--font-text); }
-  .gis { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 14px; border-radius: var(--r-m);
-    background: var(--success-soft); color: var(--success-text); font: 630 var(--fs-body)/1 var(--font-text); }
-  .gis span { flex: 1; min-width: 0; }
-  .gis button { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: inherit; }
-  .qc { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 2px; border-radius: var(--r-m); background: var(--surface-2); animation: note-in 260ms var(--ease-spring) backwards; }
-  .qrow { display: flex; align-items: center; gap: 6px; }
-  .ql { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-s); background: var(--fill); color: var(--text); font: 500 var(--fs-body)/1 var(--font-text); }
-  .qx { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); }
-  .qadd { align-self: flex-start; height: 36px; padding: 0 14px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-body)/1 var(--font-text); }
-  .mtags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mtags button { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--fill);
-    font: 600 var(--fs-body)/1 var(--font-text); color: var(--text-2); }
-  .mtags button.on { background: var(--text); color: var(--bg); }
-  .photo { display: flex; gap: 8px; }
-  .pbtn, .pdel { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: var(--r-m);
-    font: 630 var(--fs-body)/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
-  .pbtn { flex: 1; background: var(--accent-soft); color: var(--accent-text); position: relative; overflow: hidden; }
-  .pbtn input, .sl.add input, .vframe input { position: absolute; inset: 0; opacity: 0; }
-  .pbtn.busy { opacity: 0.6; }
-  .pdel { background: var(--fill); color: var(--text-2); }
-  .pbtn:active, .pdel:active { transform: scale(0.97); }
-  .slides { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* the panels' own pieces: the pictures, the questions */
+  .btns { display: flex; gap: var(--s-2); }
+  .qc { display: flex; flex-direction: column; gap: var(--s-2); padding-bottom: var(--s-3); border-bottom: 0.5px solid var(--separator); }
+  .qrow { display: flex; align-items: flex-end; gap: var(--s-1); }
+  .qrow > :global(:first-child) { flex: 1; min-width: 0; }
+  .qrow > :global(:last-child) { margin-bottom: 7px; }
+  .slides { display: flex; flex-wrap: wrap; gap: var(--s-2); }
   .sl { position: relative; width: 58px; height: 58px; border-radius: var(--r-s); overflow: hidden; background: var(--fill); flex: none; }
   .sl img { width: 100%; height: 100%; object-fit: cover; }
-  .sl button { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  .sl.add input, .vframe input { position: absolute; inset: 0; opacity: 0; }
+  .rmx { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     background: rgba(20, 22, 32, 0.6); color: var(--on-accent); }
+  .rmx::after { content: ''; position: absolute; inset: -11px; } /* 44 to the finger */
   .sl.add { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
   .sl.wait { animation: sl-wait 1.1s ease-in-out infinite; }
   @keyframes sl-wait { 50% { opacity: 0.5; } }
@@ -909,8 +851,8 @@
   @keyframes dot { from { transform: scale(0.3); opacity: 0; } }
   .vslots { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; align-items: end; }
   .vslot { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .vslot b { font: 630 var(--fs-sub)/1.2 var(--font-text); }
-  .vslot .t-foot { font-style: normal; line-height: 1.3; }
+  .vslot b { font: 600 var(--fs-sub)/1.2 var(--font-text); }
+  .vslot .hint { margin: 0; line-height: 1.3; }
   .vframe { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: var(--r-m);
     background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
   .tall .vframe { aspect-ratio: 9 / 14; }
@@ -919,6 +861,6 @@
   .vframe.busy { opacity: 0.7; }
   .vframe img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .prog { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--accent); transition: width 300ms linear; }
-  .vx { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: rgba(20, 22, 32, 0.55); color: var(--on-accent); }
+  .vx { right: 6px; top: 6px; width: 28px; height: 28px; }
+  .vx::after { inset: -8px; }
 </style>
