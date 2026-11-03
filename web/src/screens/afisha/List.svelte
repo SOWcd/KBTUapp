@@ -119,7 +119,7 @@
   {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>
   {:else if e.status === 'draft'}<Tag>{t('studio.draft')}</Tag>
   {:else if over}{#if e.my?.checkedInAt}<Tag tone="success">{t('event.attended')}</Tag>{/if}
-  {:else if live}<Tag tone="success">{t('event.live')}</Tag>
+  {:else if live}<Tag tone="success">{t('event.live')}</Tag>{#if st === 'going'}<Tag tone="accent">{t('event.youGo')}</Tag>{/if}<!-- a casting of ten days runs and I'm in it -->
   {:else if st === 'going'}<Tag tone="accent">{t('event.youGo')}</Tag>
   {:else if st === 'hold'}<Tag tone="warning">{t('event.pay', { price: money(e.price ?? 0) })}</Tag>
   {:else if st === 'waitlist'}<Tag tone="neutral">{t('event.notifyOn')}</Tag>
@@ -309,7 +309,7 @@
   /* "Your events": covers side by side, the next one peeks in */
   .heroes { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); scroll-padding: 0 var(--gutter); scrollbar-width: none; }
   .heroes::-webkit-scrollbar { display: none; }
-  .hero { position: relative; flex: none; width: calc(100% - 28px); height: 300px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
+  .hero { position: relative; flex: none; width: calc(100% - 28px); height: 210px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
     box-shadow: inset 0 0 0 1px var(--line), 0 18px 36px -24px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   .heroes.one .hero { width: 100%; }
