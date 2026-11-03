@@ -28,6 +28,7 @@
   import Crown from '@lucide/svelte/icons/crown';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import ShieldIcon from '@lucide/svelte/icons/shield'; // plain: a check reads as "verified"
 
   let { overlay, it, mine = false }: { overlay: Overlay; it: ShelfItem; mine?: boolean } = $props();
   let sharing = $state(false);
@@ -79,6 +80,7 @@
   // none on a medal not earned yet. The rays and halo only behind a round one (a pin's corners stay clean)
   const GLOW = ['124, 77, 255', '224, 160, 106', '200, 210, 230', '255, 196, 80', '176, 124, 255']; // r, g, b: rgba() below (no color-mix on old iOS)
   const ROSE = '226, 152, 124'; // the performer's rose gold
+  const STEEL = '120, 156, 204'; // the moderator's shield (ui/Shield)
   const DRAWN: Record<string, string> = { medal_init26_2: GLOW[3], medal_init26f_2: GLOW[2], medal_init26p_2: ROSE, medal_first500: GLOW[3] }; // a new art gets a new name: phones keep the old file for hours
   // the 3D medal's ribbon, stripes left to right (r, g, b): its own palette per drawn medal, else its metal on deep blue
   const GOLD = '214, 170, 72', SILVER = '206, 212, 224', NAVY = '18, 22, 82', VIOLET = '62, 32, 146', ROYAL = '30, 64, 196', WHITE = '238, 240, 246', AMETHYST = '88, 34, 150';
@@ -89,10 +91,11 @@
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
   const round = $derived(a ? isMedal(a) || isCoin(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
-  const glow = $derived(it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
+  const glow = $derived(it.staff ? (it.staff === 'admin' ? GLOW[3] : STEEL) : it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
+  const lit = $derived((round || !!it.staff) && !!glow); // a shield stands in the light as a coin does, without its edge
   const EDGE = Array.from({ length: 22 }, (_, i) => i + 1); // 22 discs 1 px apart: ~10% of the 220 px coin, a real coin's thickness
   const SIZE = 220;
   // Android (a user's video, Nov 2): the CSS coin flickered between its face and its milled edge many times a second
@@ -161,8 +164,8 @@
   const kicker = $derived(a?.code === 'init26' ? (a.variant ? t('aw.init26', { variant: variantName(a.code, a.variant) }) : '') : va?.level && tiers ? t('aw.level', { tier: tierOf(va.level - 1) })
     : b ? `${nameOf(b.org)} · ${dayMonth(b.at)}` : '');
 
-  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) || isCoin(it.ach) ? 'cap.achievement' : 'cap.badge') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : t('cap.badge');
-    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : BadgeCheck; });
+  $effect(() => { overlay.title = it.ach ? t(isMedal(it.ach) || isCoin(it.ach) ? 'cap.achievement' : 'cap.badge') : it.founder ? t('cap.founder') : it.idea ? t('cap.idea') : it.staff ? t('cap.staff') : t('cap.badge');
+    overlay.icon = it.ach ? Medal : it.founder ? Crown : it.idea ? Lightbulb : it.staff ? ShieldIcon : BadgeCheck; });
 
   // the entry pop runs on .pop, the tilt on .big inside it: a WAAPI transform on the tilted element itself hid the tilt
   // for the whole 620 ms and then jumped (owner, Nov 1: "the medal follows the phone only after a while")
@@ -193,10 +196,10 @@
 <div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
-  <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={round && !!glow} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
-    {#if round && glow}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
-    {#if round}<span class="shade" aria-hidden="true"></span>{/if}
-    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={round ? SIZE : 176} /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
+  <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
+    {#if lit}<span class="rays" aria-hidden="true"></span><span class="halo" aria-hidden="true"></span>{/if}
+    {#if lit}<span class="shade" aria-hidden="true"></span>{/if}
+    <span class="pop" bind:this={medal}><span class="big" class:round class:coin={layered && !gl} class:flat={!!gl} style:--edge={edge || null} bind:this={big}>{#if layered && !gl}{#each EDGE as z (z)}<i class="edge" style:--z={z}></i>{/each}<span class="back" aria-hidden="true"><Award it={shown} size={SIZE} /></span>{/if}<span class="face" class:hid={!!gl}><Award it={shown} size={lit ? SIZE : 176} deep /><span class="shine"></span>{#if round && glow}<span class="sweep"></span>{/if}</span></span><span class="gl" bind:this={host}></span></span>
   </div>
   <h2 class="name up">{it.name}</h2>
   {#if kicker}<p class="kick up">{kicker}</p>{/if}
@@ -254,6 +257,8 @@
     <p class="t-callout how">{t('aw.badgeHow')}</p>
   {:else if it.founder || it.idea}
     <p class="t-callout how">{t('seal.one')}</p>
+  {:else if it.staff}
+    <p class="t-callout how up">{t(it.staff === 'admin' ? 'seal.adminHow' : 'seal.moderatorHow')}</p>
   {/if}
 
   <!-- small glass pills in the medal's metal, right under it (owner, Nov 1: the wide blue button at the bottom was ugly) -->
