@@ -34,6 +34,6 @@
   .moments img { width: 66%; height: 66%; }
   .faces { background: #000; }
   .faces img { width: 100%; height: 100%; }
-  .japanesecultureclub img { width: 100%; height: 100%; } /* their sakura sits inside its own margin: 74% read as a dot (club, Nov 3) */
+  .japanesecultureclub img { width: 100%; height: 100%; transform: scale(1.2); } /* their sakura has its own margin: edge to edge of the plate (club, Nov 3; the plate itself is the QR's hole, no bigger) */
   .club { background: linear-gradient(150deg, var(--p1), var(--p2)); }
 </style>
