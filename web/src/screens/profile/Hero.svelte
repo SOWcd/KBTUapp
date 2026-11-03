@@ -37,11 +37,13 @@
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always). onphoto: my photo tapped (Me: settings, or
   // the photo's menu at it while they're open)
   let { p, qr = null, live = true, shelf = true, onphoto }: { p: PersonCard; qr?: string | null; live?: boolean; shelf?: boolean; onphoto?: (el: Element) => void } = $props();
-  const h = $derived(hero(p));
   // the club badge they picked (a skin; picked in Me's settings), else the KBTU one
   const look = $derived(lookOf(p)); // the lanyard picked
   // the one on show: it trails `look` while a new one is put on, so the old face turns away before the new one shows
   let face = $state(untrack(() => look));
+  // while a new lanyard waits to turn on (change), the card on show keeps its own role line: the skin it was drawn with
+  let was = $state(untrack(() => p.skin));
+  const h = $derived(hero(look === face ? p : { ...p, skin: was }));
   const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
@@ -96,13 +98,14 @@
   let spinning = false, shade: HTMLElement;
   // the edge's speed matched: TURN ends at slope 2 over 170 ms, LAND starts at slope 4.67 over 400 ms, both ~1.05 deg/ms (owner: 240+560 was slow)
   const TURN = 'cubic-bezier(.4, 0, .75, .5)', LAND = 'cubic-bezier(.12, .56, .25, 1)';
-  function spin() {
+  function spin(to: typeof look, sk: typeof was) {
     spinning = true;
     swing.style.willChange = 'transform';
     const out = swing.animate([{ transform: 'none' }, { transform: 'rotateY(90deg)' }], { duration: 170, easing: TURN, fill: 'forwards' });
     shade.animate([{ opacity: 0 }, { opacity: 0.55 }], { duration: 170, easing: TURN, fill: 'forwards' });
     out.onfinish = async () => {
-      face = untrack(() => look);
+      face = to;
+      was = sk;
       haptic.soft();
       await tick();
       requestAnimationFrame(() => {
@@ -112,7 +115,7 @@
         shade.animate([{ opacity: 0.55, background: 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))' },
           { opacity: 0.5, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.22))', offset: 0.45 },
           { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 400, easing: LAND });
-        back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) spin(); };
+        back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) change(); };
       });
     };
   }
@@ -185,10 +188,31 @@
   });
   $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations({ subtree: true }).forEach((x) => x.cancel()); flipped = side = false; } }); });
   $effect(() => {
-    if (look === untrack(() => face) || spinning) return;
-    if (still()) face = look;
-    else spin();
+    if (look === untrack(() => face)) { was = p.skin; return; }
+    if (spinning) return;
+    untrack(change);
   });
+  // a new lanyard waits, the old one on show, until its pictures are decoded (owner, Nov 3: it put itself together piece by
+  // piece as they came): its art is drawn unseen (.prep), each <img> decoded and each CSS picture fetched, at most WAIT_MS
+  // on a slow network; then it turns on. The first card doesn't wait: it is drawn as it is
+  const WAIT_MS = 1500;
+  let next = $state<typeof look | null>(null), prep = $state<HTMLElement>();
+  async function change() {
+    spinning = true;
+    const to = look, sk = p.skin;
+    next = to;
+    await tick();
+    const urls = new Set<string>(), waits: Promise<unknown>[] = [];
+    for (const el of prep ? [prep, ...prep.querySelectorAll('*')] : []) {
+      if (el instanceof HTMLImageElement) waits.push(el.decode());
+      for (const ps of [null, '::before', '::after']) for (const m of getComputedStyle(el, ps).backgroundImage.matchAll(/url\("?([^")]+)"?\)/g)) urls.add(m[1]);
+    }
+    for (const u of urls) { const im = new Image(); im.src = u; waits.push(im.decode()); }
+    await Promise.race([Promise.allSettled(waits), new Promise((r) => setTimeout(r, WAIT_MS))]);
+    next = null;
+    if (still()) { face = to; was = sk; spinning = false; if (look !== to) change(); }
+    else spin(to, sk);
+  }
 </script>
 
 <!-- JCC's top layer (round 5, their own split): their sakura over the photo, its frame and the strip, where their mock puts
@@ -233,6 +257,12 @@
     {/if}
     </div>
     <div class="clip" bind:this={clipEl} aria-hidden="true"></div>
+    <!-- the next lanyard's art, unseen, while its pictures decode (change) -->
+    {#if next}<div class="prep" bind:this={prep} aria-hidden="true" inert>
+      {#if next === 'sower'}<SowerArt wide />{/if}{#if banded(next)}<LanyardBand look={next} wide qr />{/if}
+      <OrgMedal look={next} logo={orgOfLook(p, next)?.logo ?? null} /><LanyardHolo look={next} no={h.no} />
+      {#if next === 'japanesecultureclub'}<img src={jccPhoto} alt="" /><img src={jccLeft} alt="" /><img src={jccRight} alt="" />{/if}
+    </div>{/if}
   </div>
 </div>
 
@@ -256,6 +286,8 @@
 
 <style>
   .rest :global(*) { animation-play-state: paused !important; }
+  .prep { position: absolute; inset: 0; z-index: -1; overflow: hidden; visibility: hidden; pointer-events: none; contain: strict; }
+  .prep :global(*) { animation: none !important; }
   .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
   .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
@@ -371,15 +403,17 @@
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .club .id { text-shadow: var(--tsh); }
   .club .meta { color: var(--ink2); }
-  /* JCC's sakura, cut from their 1712 px card (round 7: their corrected layer, .claude/reports/club-lanyards/cut-jcc-r7.py,
-     its colours as they are): placed by their mock's photo (124..500 x 183..558) and strip (80..1610 x 738..868), at the
-     strip's 28 px / 130 = 0.2154 px per art px. Pieces: the photo 0..640 x 60..690, the strip's left end 0..220 x
-     690..919, its right end 1380..1712 x 520..919 */
+  /* JCC's sakura from their final PSD (round 8, .claude/reports/club-lanyards/cut-jcc-r8.py): one scale, 0.2 px per art px
+     (at 375 px the card is their canvas), each piece pinned where their canvas has it: the photo's at the photo's centre
+     (their 312,370; art 0..900 x 0..690), the strip's ends at the strip (their 80..1610 x 738..868; the right 1100..1712 x
+     300..919, the left 0..400 x 690..919). Px, not the photo's %: a bigger photo no longer swells the flowers round it */
   .jt { position: absolute; z-index: 3; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
-  .jp { left: -32.98%; top: -32.8%; width: 170.2%; height: 168%; }
-  .jl { left: -17.2px; top: -10.3px; width: 47.4px; height: 49.3px; }
-  .jr { right: -22px; top: -47px; width: 71.5px; height: 85.9px; }
-  .japanesecultureclub .id { position: relative; z-index: 2; } /* the name over the petals */
+  .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; }
+  .jl { left: -16px; top: -9.6px; width: 80px; height: 45.8px; }
+  .jr { right: -20.4px; top: -87.6px; width: 122.4px; height: 123.8px; }
+  /* the name over the petals, a halo of the card's pink round its letters so a flower behind them steps back */
+  .japanesecultureclub .id { position: relative; z-index: 2; text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); }
+  .japanesecultureclub .medal { z-index: 3; } /* and the medallion over the name's box (it took the medallion's taps) */
 
   .bio { margin-top: 8px; text-align: center; color: var(--text); }
   /* the award shelf: six places, the empty ones dashed */

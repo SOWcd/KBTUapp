@@ -11,6 +11,9 @@
   import OrgMedal from './OrgMedal.svelte';
   import LookMark from './LookMark.svelte';
   import Qr from './Qr.svelte';
+  import jccPhoto from '../assets/lanyards/jcc-top-photo.webp';
+  import jccLeft from '../assets/lanyards/jcc-top-left.webp';
+  import jccRight from '../assets/lanyards/jcc-top-right.webp';
 
   let { look, name, title, line, no, text, logo = null, lazy = false, onplate, plateLabel, onmedal, medalLabel, mark }: {
     look: Look; name: string; title: string; line: string; no: string;
@@ -27,6 +30,9 @@
   <!-- the lanyard's own art on this side too (owner, Nov 3: the back was a bare colour) -->
   {#if look === 'sower'}<SowerArt wide />{/if}
   {#if banded(look)}<LanyardBand {look} wide qr />{/if}
+  <!-- JCC's sakura on this side too, where their canvas has it (round 8: the face's three pieces, the card as their
+       canvas), under the plate and the text -->
+  {#if look === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" /><img class="jt jl" src={jccLeft} alt="" /><img class="jt jr" src={jccRight} alt="" />{/if}
   <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
   {#snippet code()}<Qr {text} tone={QR_LOOK[look]} {lazy}>{#if mark}{@render mark()}{:else}<LookMark {look} />{/if}</Qr>{/snippet}
   {#if onplate}<button class="plate" onclick={onplate} aria-label={plateLabel}>{@render code()}</button>
@@ -90,5 +96,12 @@
   .sower .meta { color: rgba(255, 255, 255, 0.66); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
+  /* .claude/reports/club-lanyards/cut-jcc-r8.py: 0.2 px per art px, the canvas's top left at the card's, its foot 4 px up
+     (the face's strip, 14 px up, is their 868 of 919) */
+  .jt { position: absolute; z-index: 2; max-width: none; pointer-events: none; user-select: none; -webkit-user-select: none; }
+  .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
+  .jp { left: 0; top: -2px; width: 180px; height: 138px; }
+  .jl { left: 2px; bottom: 4px; width: 80px; height: 45.8px; }
+  .jr { right: -2.4px; bottom: 4px; width: 122.4px; height: 123.8px; }
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
 </style>
