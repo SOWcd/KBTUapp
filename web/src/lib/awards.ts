@@ -70,19 +70,45 @@ export const tierLabel = (level: number, of: number): string => (level === of &&
  *  I-III bronze, IV-VI silver, VII-VIII gold */
 export const metalOf = (level: number, of: number): number => (of <= 4 ? level - 1 : level === of ? 3 : Math.floor(((level - 1) * 3) / (of - 1)));
 export const METALS = ['bronze', 'silver', 'gold', 'legend'];
-// achievements drawn in layers (public/medals, made by tools/medals.mjs; owner, Nov 3: crisp at any size, the art
-// floating under a still rim with the tilt): Recruiter per level (a constellation, one more friend lit each level, the
-// rim the level's metal), the anthem's colonnade at sunrise under its staff
-const LAYERED: Record<string, string> = { referral: 'layer_rc', anthem: 'layer_an' };
-/** the picture an achievement shows: its own medal for this level (not earned: the first), else its emoji */
-export const artOf = (a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string =>
-  a.code in LAYERED ? LAYERED[a.code] + (a.levels.length > 1 ? Math.max(1, a.level) : '') : a.emoji;
+// Two kinds (awards plan, Nov 3), the shape tells them apart: a medal (round, levels, the rim the level's metal) and a
+// pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
+// tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
+// level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
+const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', critic: 'cr', referral: 'rc' };
+/** a medal (levels; Bug hunter given by hand counts too), else a pin */
+export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code in MEDAL_ART || a.levels.length > 1;
+/** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
+export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
+  const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length);
+  return !p ? a.emoji : p === 'rc' ? 'layer_rc' + (of > 1 ? l : '') : `layer_${p}_${'bsgl'[metalOf(l, of)]}`;
+}
 /** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
 export function layersOf(art: string): [string, number][] | null {
   const rc = /^layer_rc(\d)$/.exec(art);
   if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
-  return art === 'layer_an' ? [['an-field', -1], ['an-staff', 0.5], ['an-hall', 1], ['an-rim', 0]] : null;
+  const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
+  return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
 }
+/** the 2026 initiation's three drawn coins (owner, Nov 3: "everyone is used to them"): they stay exactly as they were,
+ *  a round picture (public/emoji/medal_init26*_2) and the 3D coin in the award view, among the pins in Awards */
+export const isCoin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji.startsWith('medal_init26');
+/** the full-size medal's engraved name round its band (ui/Medal from 160 px), for the round medals but Recruiter */
+export const legendOf = (art: string): string | null => { const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art); return o ? `${o[1]}-legend-${o[2]}` : null; };
+/** a medal's metal letter at its level (its ribbon's): b, s, g, l */
+export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];
+/** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
+export const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
+/** the drawn pins by their emoji name (an Admin row's variant too): the enamel, the glyph (public/medals/zn-*), the
+ *  frame's metal (g gold, s silver, r rose gold), and the year of its moment if it has one */
+export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 's' | 'r'; year?: number }> = {
+  medal_first500: { field: '#1E2A7A', glyph: '500', metal: 'g', year: 2026 },
+  headphone_3d: { field: '#3A2A9A', glyph: 'anthem', metal: 'g' },
+  face_with_tears_of_joy_3d: { field: '#0E7A86', glyph: 'laugh', metal: 'g' },
+  waving_hand_3d_default: { field: '#D2483A', glyph: 'wave', metal: 'g' },
+};
+/** the year a pin shows small: its moment's, else the one it was earned in (Almaty) */
+export const yearOf = (at: number | null | undefined, fixed?: number): number | undefined =>
+  fixed ?? (at ? new Date((at + 5 * 3600) * 1000).getUTCFullYear() : undefined);
 
 export function tierName(a: Achievement): string {
   if (a.level === 0) return a.secret ? t('ach.secret') : t('ach.locked');
@@ -92,7 +118,7 @@ export function tierName(a: Achievement): string {
 /** The profile QR's ink: KBTU blue into violet, both dark enough for any camera on white. */
 export const QR_TONE: [string, string] = ['#1D3CB8', '#5B2BC0'];
 
-export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; founder?: boolean; idea?: boolean; name: string; sub: string }
+export interface ShelfItem { key: string; ach?: Achievement; badge?: Badge; founder?: boolean; idea?: boolean; staff?: 'admin' | 'moderator'; name: string; sub: string }
 
 export const achItem = (a: Achievement): ShelfItem => ({ key: 'a' + achKey(a), ach: a, name: achName(a), sub: tierName(a) });
 export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge: b, name: b.title, sub: dayMonth(b.at) });
@@ -100,6 +126,8 @@ export const badgeItem = (b: Badge): ShelfItem => ({ key: 'b' + b.eventId, badge
 export const founderItem = (): ShelfItem => ({ key: 'founder', founder: true, name: t('person.founder'), sub: '' });
 /** the idea author's blue seal */
 export const ideaItem = (): ShelfItem => ({ key: 'idea', idea: true, name: t('person.idea'), sub: '' });
+/** the app's moderator's or admin's shield (ui/Shield): what the role is, never an action */
+export const staffItem = (role: 'admin' | 'moderator'): ShelfItem => ({ key: 'staff', staff: role, name: t(role === 'admin' ? 'seal.admin' : 'seal.moderator'), sub: '' });
 /** A showcase key (an achievement code, or b<event id> for a badge) as an item of this person's, if they have it. */
 export function shelfItem(p: PersonCard, key: string): ShelfItem | null {
   const b = /^b\d+$/.test(key) ? p.awards.badges.find((x) => 'b' + x.eventId === key) : undefined;
@@ -128,13 +156,10 @@ export interface HeroData {
 export const nextOf = (a: Achievement) => a.levels.find((l) => !l.reached);
 const hiddenAch = (a: Achievement) => a.secret && a.level === 0;
 const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
-/** The closest one to its next level (started ones first, else the nearest goal); secrets don't count. */
-/** one-off medals for an event (not levels): Awards shows them among the badges */
-export const MEDALS = ['first50', 'init26'];
-/** awards nobody works toward: the creator gives the bug hunter by hand, the medals are one-offs */
-const GIVEN = ['bugs', ...MEDALS];
+/** The closest medal to its next level (started ones first, else the nearest goal); secrets don't count, nor Bug
+ *  hunter (the creator gives it by hand) or the pins (one time, nobody works toward them). */
 export function closest(ach: Achievement[]): Achievement | undefined {
-  const open = ach.filter((a) => !hiddenAch(a) && !GIVEN.includes(a.code) && nextOf(a));
+  const open = ach.filter((a) => !hiddenAch(a) && isMedal(a) && a.code !== 'bugs' && nextOf(a));
   return [...open].filter((a) => a.count > 0).sort((a, b) => ratio(b) - ratio(a))[0] ?? [...open].sort((a, b) => nextOf(a)!.need - nextOf(b)!.need)[0];
 }
 export function leftLine(a: Achievement): string {

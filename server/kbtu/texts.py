@@ -41,14 +41,14 @@ SHARE_GRANT = {  # Admin → Awards: an award link (logic.grant_link), from any 
     "en": ("An award for you", "🏅 KBTU App gives you the <b>{award}</b> award. Thank you! The link works until {until}.", "🏅 Claim the award"),
 }
 SHARE_BADGE = {  # Admin → Awards: a one-person link for a badge's variant (logic.grant_link)
-    "ru": ("Тебе значок", "🏅 Тебе значок <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
-    "kk": ("Саған белгіше", "🏅 Саған <b>«{award}»</b> белгішесі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A badge for you", "🏅 A badge for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
+    "ru": ("Тебе знак", "🏅 Тебе знак <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
+    "kk": ("Саған белгі", "🏅 Саған <b>«{award}»</b> белгісі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A pin for you", "🏅 A pin for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
 }
 SHARE_BADGE_MANY = {  # Admin → Awards: a badge's link for many (logic.grant_link): forwarded from hand to hand
-    "ru": ("Значок", "🏅 Значок <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
-    "kk": ("Белгіше", "🏅 <b>«{award}»</b> белгішесі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A badge", "🏅 The <b>“{award}”</b> badge. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
+    "ru": ("Знак", "🏅 Знак <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
+    "kk": ("Белгі", "🏅 <b>«{award}»</b> белгісі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A pin", "🏅 The <b>“{award}”</b> pin. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
 }
 BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Admin → Badges says it (web ach.<badge>.v.<code>)
     "ru": {"init26f": "Посвящение 2026 · Гость", "init26": "Посвящение 2026 · Волонтёр", "init26p": "Посвящение 2026 · Выступающий"},
@@ -82,13 +82,13 @@ SHARE_AWARD = {
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
            "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала",
-           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Гимн от и до"},
+           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Гимн от и до", "critic": "Диванный критик"},
     "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
            "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы",
-           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Әнұран басынан аяғына дейін"},
+           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Әнұран басынан аяғына дейін", "critic": "Диван сыншысы"},
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
            "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter",
-           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Anthem, start to finish"},
+           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Anthem, start to finish", "critic": "Couch critic"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
     "ru": {"ru": "русский", "kk": "казахский", "en": "английский"},
@@ -224,7 +224,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> теперь официальный клуб КБТУ. Поздравляем команду!", "Открыть клуб"),
         "club_unofficial": ("ℹ️ <b>{name}</b> снова студенческая инициатива: отметку официального клуба сняли. События и команда остаются; платные события, канал событий и сообщение подписчикам о каждом событии — с отметкой.", "Открыть клуб"),
         "club_no": ("📝 Заявку на клуб <b>{name}</b> пока не одобрили. Причина — в приложении.", "Посмотреть"),
-        "achievement": ("🏅 Новое достижение: <b>{name}</b>{tier}", "Посмотреть"),
+        "achievement": ("🏅 Новая награда: <b>{name}</b>{tier}", "Посмотреть"),
         "photo_report": ("📸 Фото с <b>{title}</b> уже в альбоме — {n} шт. Добавь свои!", "Смотреть фото"),
         "comment_question": ("💬 Новый вопрос под <b>{title}</b>", "Ответить"),
         "comment_answer": ("💬 Ответ на твой вопрос под <b>{title}</b> — от {org}", "Посмотреть"),
@@ -367,7 +367,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> енді ҚБТУ-дың ресми клубы. Команданы құттықтаймыз!", "Клубты ашу"),
         "club_unofficial": ("ℹ️ <b>{name}</b> қайтадан студенттік бастама: ресми клуб белгісі алынды. Іс-шаралар мен команда қалады; ақылы іс-шаралар, іс-шаралар арнасы мен әр іс-шара туралы жазылушыларға хабарлама — белгімен.", "Клубты ашу"),
         "club_no": ("📝 <b>{name}</b> клубына өтінім әзірге мақұлданбады. Себебі — қосымшада.", "Қарау"),
-        "achievement": ("🏅 Жаңа жетістік: <b>{name}</b>{tier}", "Қарау"),
+        "achievement": ("🏅 Жаңа жүлде: <b>{name}</b>{tier}", "Қарау"),
         "photo_report": ("📸 <b>{title}</b> фотолары альбомда — {n} дана. Өзіңдікін де қос!", "Фотоларды көру"),
         "comment_question": ("💬 <b>{title}</b> астында жаңа сұрақ", "Жауап беру"),
         "comment_answer": ("💬 <b>{title}</b> астындағы сұрағыңа жауап — {org}", "Қарау"),
@@ -505,7 +505,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> is now an official KBTU club. Congratulations to the team!", "Open the club"),
         "club_unofficial": ("ℹ️ <b>{name}</b> is a student initiative again: the official club mark was taken off. Events and the team stay; paid events, the events channel and a message to followers about every event come with the mark.", "Open the club"),
         "club_no": ("📝 The application for <b>{name}</b> wasn't approved for now. The reason is in the app.", "See"),
-        "achievement": ("🏅 A new achievement: <b>{name}</b>{tier}", "See it"),
+        "achievement": ("🏅 A new award: <b>{name}</b>{tier}", "See it"),
         "photo_report": ("📸 Photos from <b>{title}</b> are in the album: {n} so far. Add yours!", "See the photos"),
         "comment_question": ("💬 A new question under <b>{title}</b>", "Answer"),
         "comment_answer": ("💬 {org} answered your question under <b>{title}</b>", "See"),
@@ -796,16 +796,48 @@ def channel_post(title: str, org: str, starts: int, place: str, price: int | Non
 
 CHANNEL_BUTTON = "📝 Записаться · Тіркелу · Sign up"
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
-CHANNEL_RULES = ("🤝 Балағат, спам мен жарнамасыз.\n"
-                 "💬 Без оскорблений, спама и рекламы.\n"
-                 "✌️ No insults, spam or ads.")  # owner, Nov 2: as short as it gets
-# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the rules in the channel's three
-# languages, and a button to that post in the app
-FORUM_RULES = ("🤝 Сыйластықпен сөйлесейік: балағат, спам мен жарнамасыз.\n\n"
-               "💬 Общаемся с уважением: без оскорблений, спама и рекламы.\n\n"
-               "✌️ Be kind: no insults, spam or ads.")  # owner, Nov 2: short, his words exactly; an emoji only at a line's start
-FORUM_BUTTON = "Открыть в приложении"
+CHANNEL_RULES = ("🤝 Балағатсыз, спамсыз, жарнамасыз.\n"
+                 "💬 Без хамства, спама и рекламы.\n"
+                 "✌️ No insults, spam or ads.")  # owner, Nov 3: one standard, each language one line on a phone
+# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the same rules (owner, Nov 3: one
+# standard for both channels), and a button to that post in the app
+FORUM_RULES = CHANNEL_RULES
+FORUM_BUTTON = "📱 Открыть · Ашу · Open"  # as CHANNEL_BUTTON: ru · kk · en
 FCH_REPLY_SIGN = "🎭 Автор поста"  # the anonymous author's replies in the group (tgc._replies); a Telegram name with it is deleted (tgc.posing)
+FCH_REPLY_NICK = "🎭 {nick}"  # the same, under a post that has a nick (owner, Nov 3): the post's own
+# an anonymous post's nick (fchannel.pick_nick, owner Nov 3), as the channel signs it: an adjective (masculine,
+# feminine, neuter) agreeing with the noun's gender (0 m, 1 f, 2 n). Stored as indexes: APPEND-ONLY, never reorder or
+# change a meaning (it renames every post). The app's three languages: web/src/lib/i18n/nicks.ts, the same order
+NICK_ADJ = [
+    ("Тихий", "Тихая", "Тихое"), ("Весёлый", "Весёлая", "Весёлое"), ("Смелый", "Смелая", "Смелое"),
+    ("Мудрый", "Мудрая", "Мудрое"), ("Быстрый", "Быстрая", "Быстрое"), ("Ловкий", "Ловкая", "Ловкое"),
+    ("Добрый", "Добрая", "Доброе"), ("Яркий", "Яркая", "Яркое"), ("Звёздный", "Звёздная", "Звёздное"),
+    ("Лунный", "Лунная", "Лунное"), ("Солнечный", "Солнечная", "Солнечное"), ("Ночной", "Ночная", "Ночное"),
+    ("Утренний", "Утренняя", "Утреннее"), ("Вечерний", "Вечерняя", "Вечернее"), ("Летний", "Летняя", "Летнее"),
+    ("Зимний", "Зимняя", "Зимнее"), ("Весенний", "Весенняя", "Весеннее"), ("Осенний", "Осенняя", "Осеннее"),
+    ("Степной", "Степная", "Степное"), ("Горный", "Горная", "Горное"), ("Лазурный", "Лазурная", "Лазурное"),
+    ("Золотой", "Золотая", "Золотое"), ("Серебряный", "Серебряная", "Серебряное"), ("Изумрудный", "Изумрудная", "Изумрудное"),
+    ("Спокойный", "Спокойная", "Спокойное"), ("Задумчивый", "Задумчивая", "Задумчивое"), ("Мечтательный", "Мечтательная", "Мечтательное"),
+    ("Любознательный", "Любознательная", "Любознательное"), ("Отважный", "Отважная", "Отважное"), ("Нежный", "Нежная", "Нежное"),
+    ("Гордый", "Гордая", "Гордое"), ("Свободный", "Свободная", "Свободное"), ("Юный", "Юная", "Юное"),
+    ("Северный", "Северная", "Северное"), ("Южный", "Южная", "Южное"), ("Ясный", "Ясная", "Ясное"),
+    ("Тёплый", "Тёплая", "Тёплое"), ("Снежный", "Снежная", "Снежное"), ("Светлый", "Светлая", "Светлое"),
+    ("Щедрый", "Щедрая", "Щедрое"),
+]
+NICK_NOUN = [
+    ("Лиса", 1), ("Барс", 0), ("Беркут", 0), ("Сокол", 0), ("Сова", 1), ("Ёж", 0), ("Заяц", 0), ("Белка", 1),
+    ("Волк", 0), ("Медведь", 0), ("Кит", 0), ("Дельфин", 0), ("Панда", 1), ("Енот", 0), ("Пингвин", 0), ("Лебедь", 0),
+    ("Журавль", 0), ("Ласточка", 1), ("Чайка", 1), ("Тигр", 0), ("Лев", 0), ("Рысь", 1), ("Сайгак", 0), ("Тулпар", 0),
+    ("Комета", 1), ("Галактика", 1), ("Планета", 1), ("Метеор", 0), ("Сияние", 2), ("Облако", 2), ("Ветер", 0),
+    ("Ручей", 0), ("Река", 1), ("Океан", 0), ("Вулкан", 0), ("Кедр", 0), ("Тюльпан", 0), ("Ромашка", 1), ("Клён", 0),
+    ("Эхо", 2),
+]
+
+
+def nick(a: int, n: int) -> str:
+    """A post's nick in Russian, the channel's language: "Тихая Лиса"."""
+    word, g = NICK_NOUN[n]
+    return f"{NICK_ADJ[a][g]} {word}"
 # an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."

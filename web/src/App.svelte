@@ -165,6 +165,7 @@
   sheets.channelReply = (post) => lazy(() => import('./screens/forum/ChannelReply.svelte'), { post });
   sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
+  sheets.myClubs = (rows) => lazy(() => import('./screens/afisha/MyClubs.svelte'), { rows });
   sheets.adminAi = () => lazy(() => import('./screens/admin/AdminAi.svelte'), {});
   sheets.adminAudit = () => lazy(() => import('./screens/admin/AdminAudit.svelte'), {});
   sheets.suggestChat = () => lazy(() => import('./screens/sheets/SuggestChat.svelte'), {});

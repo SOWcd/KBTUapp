@@ -1167,10 +1167,14 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS audit_by_at ON audit_log(at);"""),
     # late sign-up (Nov 3): a free uncapped public event keeps "Going" open from its start until its end
     (120, "ALTER TABLE events ADD COLUMN late_signup INTEGER NOT NULL DEFAULT 0;"),
+    # an anonymous post's random nick (Nov 3, .claude/reports/anon-nicks-review.md): texts.NICK_ADJ / NICK_NOUN indexes,
+    # drawn with secrets at the reserve; NULL on posts from before (signed "Anon")
+    (121, """ALTER TABLE fchan_posts ADD COLUMN nick_a INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN nick_n INTEGER;"""),
     # co-hosted events (Nov 3, "Crystal & JCC do an Anime Quiz together"): one other club of the app, invited by the
     # host, shown once its Vice+ accepts (logic/cohosts.py; events.co_org_id was never written and stays unused).
     # A declined row stays, so the same club isn't asked twice for one event; ending one deletes it.
-    (121, """CREATE TABLE event_cohosts (
+    (122, """CREATE TABLE event_cohosts (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),

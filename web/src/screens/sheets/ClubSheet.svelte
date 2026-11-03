@@ -95,7 +95,7 @@
         <div>
           {#if o.description}<p class="t-body selectable">{raw ? o.orig?.description ?? o.description : o.description}</p>
             {#if translated(o, 'description')}<span class="trn"><Button kind="plain" size="s" onclick={() => (raw = !raw)}><AiBadge /> {raw ? t('ai.showTr') : t('ai.showOrig')}</Button></span>{/if}{/if}
-          {#if joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t('join.closed')}</p>{/if}
+          {#if joinable && !o.myRole && !o.round && !o.recruiting && !o.myRequest}<p class="t-foot closed">{t(o.members ? 'join.closed' : 'join.noTeam')}</p>{/if}
         </div>
       {/if}
 

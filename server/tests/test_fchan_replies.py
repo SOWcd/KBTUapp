@@ -98,7 +98,8 @@ def test_reply_flow_wait_and_once(env, monkeypatch):
     tick(w.cfg, w.tg, w.con)
     s = group_sends(w.tg)
     assert len(s) == 1 and s[0]["reply_parameters"] == {"message_id": 60} and s[0]["parse_mode"] == "HTML"
-    assert s[0]["text"] == f"Agreed, the soup is cold\n\n<i>— {texts.FCH_REPLY_SIGN}</i>"
+    nick = texts.nick(*w.con.execute("SELECT nick_a, nick_n FROM fchan_posts WHERE id = ?", (w.pid,)).fetchone())
+    assert s[0]["text"] == f"Agreed, the soup is cold\n\n<i>— {texts.FCH_REPLY_NICK.format(nick=nick)}</i>"      # the post's nick
     assert w.c.get(f"/api/forum-posts/{w.pid}/replies", headers=tma(1)).json()[0]["state"] == "sent"
     # without a link: to the thread (the post's copy)
     t[0] += 61
@@ -197,7 +198,7 @@ def test_reply_anonymity(env, monkeypatch):
         assert w.c.delete(f"/api/forum-replies/{r['id']}", headers=h).status_code in (401, 404)
     q = w.c.get("/api/forum-posts/mod", headers=tma(3)).json()
     held = q["replies"]["held"][0]
-    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon"}
+    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon", "nick"}
     blob = json.dumps(q["replies"]) + json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(3)).json())
     assert "Ann" not in blob and '"person"' not in json.dumps(q["replies"])
     assert "Secret words" not in json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(2)).json())

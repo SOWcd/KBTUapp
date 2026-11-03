@@ -53,12 +53,15 @@ export type TgcRule = 'abuse' | 'fake' | 'spam' | 'pdata' | 'disrupt' | 'other';
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
+/** An anonymous post's random nick: indexes the app words in its language (i18n/nicks.ts); null on a named post or one
+ *  from before nicks (signed "Anon") */
+export type Nick = [number, number] | null;
 /** A post of mine in the forum channel (server logic/fchannel.py): live (in the channel, or seconds from it), held for
  *  a moderator, hidden (a moderator removed it). */
-export interface ChannelPost { id: Id; body: string; anon: boolean; status: 'live' | 'held' | 'hidden'; at: Ts }
+export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; status: 'live' | 'held' | 'hidden'; at: Ts }
 /** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
-export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; sign: string; mine: boolean
+export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; nick: Nick; sign: string; mine: boolean
   person: PersonRef | null /* a signed post's author; never on an anonymous one */; comments: number /* the students' comments the bot saw */; thread: number | null /* the bot's first comment in the group: the comments link */
   /** the newest commenters (app students who agreed to it), newest first, for students only (a guest: []): a face, no
    *  id, no name (name: one letter, the photo's fallback) */
@@ -76,7 +79,7 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
 export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
-export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; reports: number; at: Ts; undo: boolean; anon: boolean }
+export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */

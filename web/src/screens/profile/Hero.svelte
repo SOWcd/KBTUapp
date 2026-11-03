@@ -9,11 +9,12 @@
   // on the back: a tap on the card or the medallion turns it over to the full-screen QR (MyQr). The code holds only a
   // link into the app (your profile), never a student ID. Other people's cards never show it.
   import type { PersonCard } from '../../lib/api';
-  import { hero, founderItem, ideaItem } from '../../lib/awards';
+  import { hero, founderItem, ideaItem, staffItem } from '../../lib/awards';
   import { glass } from '../../ui/glass';
   import Avatar from '../../ui/Avatar.svelte';
   import Frame from '../../ui/Frame.svelte';
   import Founder from '../../ui/Founder.svelte';
+  import Shield from '../../ui/Shield.svelte';
   import Award from '../../ui/Award.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
@@ -46,6 +47,8 @@
   const h = $derived(hero(look === face ? p : { ...p, skin: was }));
   const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
+  // the app's moderator's or admin's shield by the name (here only, not in rows); the Creator wears his own seal alone
+  const staff = $derived(p.founder ? null : p.staff ?? null);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)
   const link = $derived(`https://t.me/KBTUappBot?startapp=u_${qr}`);
   // someone's photo full screen (owner, Nov 3), our biggest copy (media's 1600 px .webp beside the 480 px .t.webp)
@@ -243,7 +246,7 @@
         {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
         {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
         <span class="id">
-          <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}</b>
+          <b class="nm"><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={() => sheets.award(p.founder ? founderItem() : ideaItem(), p.id === session.me?.id)} aria-label={h.status}><Founder size={19} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it (owner, Nov 2) -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>

@@ -1,9 +1,8 @@
 <script lang="ts">
-  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection in three
-  // tabs. Achievements: on top, the one closest to its next level (the reason to go to one more event); then every
-  // achievement as a card — the medal in its tier's rim, the tier, the way to the next level, how rare it is — earned
-  // first. Badges: the one-off event medals, then the events' pins. Statuses: roles in the app. "Showcase" turns the page into a picker: up to 6 achievements or
-  // badges for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.
+  // Awards (SPEC §4.11), a sheet from the badge's numbers (no longer Profile's third page): the whole collection in two
+  // tabs. Medals: on top, the one closest to its next level (the reason to go to one more event); then every medal as a
+  // card — the medal in its level's rim, the level, the way to the next one, how rare it is — earned first. Pins: the
+  // app's one-time ones, then the events'. "Showcase" turns the page into a picker: up to 6 medals or pins for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Check from '@lucide/svelte/icons/check';
   import { api, type Achievement } from '../../lib/api';
@@ -12,9 +11,7 @@
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import BadgeCheck from '@lucide/svelte/icons/badge-check';
-  import { achItem, achKey, achName, badgeItem, closest as closestOf, founderItem, hero, ideaItem, leftLine, MEDALS, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, type ShelfItem } from '../../lib/awards';
+  import { achItem, achKey, achName, badgeItem, closest as closestOf, hero, isCoin, isMedal, leftLine, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, yearOf, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -23,35 +20,25 @@
   import Button from '../../ui/Button.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import Recent from './Recent.svelte';
-  import Group from '../../ui/Group.svelte';
-  import Row from '../../ui/Row.svelte';
   import Segmented from '../../ui/Segmented.svelte';
-  import Founder from '../../ui/Founder.svelte';
 
   const me = $derived(session.me);
   const p = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { void me?.showcase; if (me?.student) void loadMyCard(); }); // opened: refreshed
 
-  // three tabs (owner, Nov 1): Achievements (levels, the way up), Badges (one-off medals for an event, then the events'
-  // pins), Statuses (roles in the app: Creator, idea author, the team, a confirmed student). All from the one card: no fetch
+  // two tabs (awards plan, Nov 3): Medals (levels, the way up) and Pins (one time: the app's, then the events'). The
+  // statuses are no award: they stay as the seal by the name. All from the one card: no fetch
   const all = $derived(p?.awards.achievements ?? []);
-  const ach = $derived(all.filter((a) => !MEDALS.includes(a.code)));
-  const medals = $derived(all.filter((a) => MEDALS.includes(a.code)).sort((a, b) => b.level - a.level));
+  const ach = $derived(all.filter(isMedal));
+  const medals = $derived(all.filter((a) => !isMedal(a)).sort((a, b) => b.level - a.level || Number(hidden(a)) - Number(hidden(b))));
   const hidden = (a: Achievement) => a.secret && a.level === 0;
   const ratio = (a: Achievement) => { const n = nextOf(a); return n ? a.count / n.need : 1; };
   // earned first (higher tiers first), then the ones on their way, then the secrets
   const sorted = $derived([...ach].sort((a, b) => Number(hidden(a)) - Number(hidden(b)) || b.level - a.level || ratio(b) - ratio(a)));
-  const statuses = $derived(me ? [
-    me.founder && { key: 'founder', title: t('person.founder'), sub: t('seal.one'), open: founderItem() },
-    me.mark === 'idea' && { key: 'idea', title: t('person.idea'), sub: t('seal.one'), open: ideaItem() },
-    me.role !== 'user' && { key: 'staff', title: t(me.role === 'admin' ? 'staff.role.admin' : 'staff.role.moderator'), sub: t('awp.staff') },
-    me.student && !me.student.manual && { key: 'verified', title: t('awp.verified'), sub: t('awp.verifiedSub') },
-  ].filter((s) => !!s) : []);
-  let tab = $state<'ach' | 'badges' | 'status'>('ach');
+  let tab = $state<'ach' | 'badges'>('ach');
   const tabs = $derived([
     ['ach', t('person.achievements'), ach.filter((a) => a.level > 0).length],
     ['badges', t('person.badges'), medals.filter((a) => a.level > 0).length + (p?.awards.badges.length ?? 0)],
-    ['status', t('awp.statuses'), statuses.length],
   ] as const);
   // the closest to its next level: the reason to go to one more event
   const closest = $derived(closestOf(ach));
@@ -126,7 +113,7 @@
       {#snippet card(a: Achievement, i: number)}
         {@const n = nextOf(a)}
         {@const order = picked.indexOf(a.code)}
-        <button class="ach {tierClass(a)}" class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
+        <button class="ach {tierClass(a)}" class:zn={!isMedal(a) && !isCoin(a)} class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
                 onclick={() => (editing ? toggle(a.code, a.level > 0) : open(achItem(a)))}>
           <span class="md"><Medal {a} size={62} /></span>
           <b class="nm">{achName(a)}</b>
@@ -167,7 +154,7 @@
           {#each p.awards.badges as b, i (b.eventId)}
             {@const order = picked.indexOf('b' + b.eventId)}
             <button class="pinc" class:on={editing && order >= 0} style="--i:{i}" onclick={() => (editing ? toggle('b' + b.eventId, true) : open(badgeItem(b)))}>
-              <Pin emoji={b.emoji} color={b.color} size={64} />
+              <Pin emoji={b.emoji} color={b.color} year={yearOf(b.at)} size={64} />
               <b class="nm">{b.title}</b>
               <i class="tr">{dayMonth(b.at)}</i>
               {#if editing && order >= 0}<span class="ord num">{order + 1}</span>{/if}
@@ -179,22 +166,6 @@
       {/if}
       </div>
 
-      <div class="pane" class:gone={tab !== 'status'}>
-        {#if statuses.length}
-          <Group>
-            {#each statuses as s (s.key)}
-              {#if s.open}
-                {@const it = s.open}
-                <Row title={s.title} subtitle={s.sub} accessory="chevron" onclick={() => open(it)}>{#snippet lead()}<Founder size={30} idea={!!it.idea} />{/snippet}</Row>
-              {:else}
-                <Row title={s.title} subtitle={s.sub} icon={s.key === 'staff' ? ShieldCheck : BadgeCheck} tile={s.key === 'staff' ? 'indigo' : 'blue'} />
-              {/if}
-            {/each}
-          </Group>
-        {:else}
-          <div class="nopins"><span class="ghost"><BadgeCheck size={40} /></span><p class="t-foot">{t('awp.statusesEmpty')}</p></div>
-        {/if}
-      </div>
     {:else}
       <div class="skel"><span class="s1"></span><div class="sg"><span></span><span></span><span></span><span></span></div></div>
     {/if}
@@ -237,7 +208,7 @@
   .ach.legend { --g: rgba(124, 77, 255, 0.3); }
   .md { position: relative; display: flex; margin-bottom: 6px; }
   /* one pass of light across an earned medal when it comes into view (inside the object only: owner's taste) */
-  .ach:not(.off) .md::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay;
+  .ach:not(.off):not(.zn) .md::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; pointer-events: none; mix-blend-mode: overlay;
     background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.75) 50%, transparent 65%) no-repeat; background-size: 250% 100%;
     animation: sheen 1.6s ease-out 700ms backwards; animation-delay: calc(700ms + var(--i) * 90ms); background-position: 160% 0; }
   @keyframes sheen { from { background-position: -60% 0; } }

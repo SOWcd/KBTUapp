@@ -33,6 +33,7 @@
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
+  import { nickName } from '../../lib/i18n/nicks';
   import { haptic, on, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
@@ -195,7 +196,7 @@
           <div class="main">
             <div class="head">
               {#if p.person}<button class="name" onclick={() => { haptic.tap(); sheets.person(p.person!.id); }}><b class="ellipsis">{p.person.name}</b></button>
-              {:else}<b class="ellipsis">{p.sign}</b>{/if}
+              {:else}<b class="ellipsis">{nickName(p.nick) ?? p.sign}</b>{/if}
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
               {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}

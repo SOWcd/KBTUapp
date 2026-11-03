@@ -62,6 +62,20 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("init26p", "medal_init26p_2", (1,), False),  # performed on stage at the 2026 initiation (Admin → Badges)
     ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
 ]
+# Couch critic (awards plan, Nov 3): the forum channel's posts I commented under, each once (critic()). Off until the
+# privacy policy says the bot's record of my comments (its section on forum channel posts) also counts toward my award:
+# CRITIC_ON = True then, with the policy's new consent version. A level is raised by the comment itself (fchannel.commented).
+CRITIC = ("critic", "couch_and_lamp_3d", (1, 5, 25, 100, 250, 500, 1000), False)
+CRITIC_ON = False
+if CRITIC_ON:
+    ACHIEVEMENTS.append(CRITIC)
+
+
+def critic(con, uid: int) -> int:
+    """Forum channel posts I commented under, several comments under one counting once. Only my own comments as the bot
+    saw them come from my Telegram account (fchan_comments.user_id); one a moderator took down (gone) doesn't count; an
+    anonymous author's replies go out as the bot, on no one's row (fchan_replies), so they never count or say who."""
+    return one(con, "SELECT COUNT(DISTINCT post_id) FROM fchan_comments WHERE user_id = ? AND gone = 0", uid)[0]
 
 
 def _counts(con, uid: int) -> dict[str, int]:
@@ -82,7 +96,8 @@ def _counts(con, uid: int) -> dict[str, int]:
     return {"regular": len(times), "streak": streak, "streak_now": streak_now, "first_in": first_in, "soul": soul, "team": team,
             "season": max(map(seasons.count, set(seasons)), default=0), "first50": grants.get("first50", 0),
             "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "referral": referral,
-            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0)}
+            "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
+            "critic": critic(con, uid) if CRITIC_ON else 0}
 
 
 def brought(con, uid: int) -> int:
