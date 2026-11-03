@@ -510,6 +510,7 @@ def person(con, v: Viewer, uid: int) -> dict:
                   WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid)] if close else []
     return {
         **person_ref(p), "no": 0 if u["is_founder"] else u["card_no"], "course": s["course"], "school": s["school"], "bio": u["bio"],
+        "master": (s["student_id"] or "")[2:3] == "M",  # a master's 1st year isn't a bachelor's (the ID's letter)
         "city": u["city"] if u["city"] and not u["city_hidden"] else None,  # from the club's roster (PLAN 95), unless hidden
         "attended": len(attended(con, uid)),
         # the role shows only to the club's own team: outside, just the club

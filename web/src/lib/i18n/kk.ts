@@ -783,6 +783,7 @@ const kk: Dict = {
   'person.friendsSince': '{date} бастап доссыңдар',
   'person.eventsWord': { one: "іс-шара", other: "іс-шара" },
   'person.course': '{n} курс',
+  'person.courseM': 'Магистратура, {n} курс',
   'person.year': '{n} курс',
   'person.awardsWord': { one: "марапат", other: "марапат" },
   'person.clubsWord': { one: "клуб", other: "клуб" },

@@ -803,6 +803,7 @@ const ru = {
   'person.friendsSince': 'Вы друзья с {date}',
   'person.eventsWord': { one: "событие", few: "события", many: "событий", other: "события" },
   'person.course': '{n} курс',
+  'person.courseM': '{n} курс магистратуры',
   'person.year': '{n} год обучения',
   'person.awardsWord': { one: "награда", few: "награды", many: "наград", other: "награды" },
   'person.clubsWord': { one: "клуб", few: "клуба", many: "клубов", other: "клуба" },

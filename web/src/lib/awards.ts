@@ -132,7 +132,7 @@ export function hero(p: PersonCard): HeroData {
     nick: p.realName && p.nick ? p.nick : null,
     status: p.founder ? t('person.founder') : p.mark === 'idea' ? t('person.idea') : null,
     title: p.founder ? 'Creator · KBTU App' : p.mark === 'idea' ? 'Idea author · KBTU App' : top ? (top.role ? `${roleName(top.role, titleOf(top))} · ${CLUBS[top.org.slug]?.short ?? shortOf(top.org)}` : CLUBS[top.org.slug]?.short ?? nameOf(top.org)) : 'Student',
-    line: [p.course ? t('person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95
+    line: [p.course ? t(p.master ? 'person.courseM' : 'person.course', { n: p.course }) : '', schoolShort(p.school), p.city ?? ''].filter(Boolean).join(' · '),  // city: PLAN 95
     bio: p.bio,
     no: p.no == null ? '—' : String(p.no).padStart(5, '0'),
     // the shelf under the badge replaced "0 events · 1 award · 2 clubs" (owner, Oct 14: zeros read as a reproach, the

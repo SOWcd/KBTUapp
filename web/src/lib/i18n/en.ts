@@ -783,6 +783,7 @@ const en: Dict = {
   'person.friendsSince': 'Friends since {date}',
   'person.eventsWord': { one: "event", other: "events" },
   'person.course': 'Year {n}',
+  'person.courseM': "Master's, year {n}",
   'person.year': 'Year {n}',
   'person.awardsWord': { one: "award", other: "awards" },
   'person.clubsWord': { one: "club", other: "clubs" },

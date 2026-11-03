@@ -566,6 +566,7 @@ export interface PersonCard extends PersonRef {
   forum?: ForumMe;              // their skills and "open to projects", for those who see the forum
   no: number | null;            // the card number (as Me.no)
   course: number | null;
+  master?: boolean; // the course is a master's year
   school: string | null;
   city?: string | null;         // from the club's roster, unless they hid it
   bio: string;
