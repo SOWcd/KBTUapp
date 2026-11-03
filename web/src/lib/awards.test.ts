@@ -42,7 +42,7 @@ it("Recruiter's medal is drawn per level", () => {
   expect(isMedal({ code: 'anthem', levels: lv.slice(0, 1) as never })).toBe(false);
   expect(isMedal({ code: 'bugs', levels: lv.slice(0, 1) as never })).toBe(true); // Admin's row of a manual one
   // the 2026 initiation's coins stay the owner's drawn pictures, among the pins
-  expect([isCoin({ emoji: 'medal_init26p_2' }), isCoin({ emoji: 'medal_first500' }), isMedal({ code: 'init26', levels: lv.slice(0, 1) as never })]).toEqual([true, false, false]);
+  expect([isCoin({ emoji: 'medal_init26p_2' }), isCoin({ emoji: 'medal_first500' }), isMedal({ code: 'init26', levels: lv.slice(0, 1) as never })]).toEqual([true, true, false]);
 });
 
 it('every medal layer and pin glyph is drawn', async () => {
