@@ -3,10 +3,19 @@
 // curve and time, so the two land together; the real header shows when it lands. Only where motion is welcome (not
 // lowfx, not "reduce motion"), only from a poster on screen; otherwise the sheet just rises as before.
 // Returns stop(): the copy goes at once (the sheet closing mid-flight).
+// It measures in the first ResizeObserver call, after the browser's own layout and before the first paint: measuring
+// at mount forced a layout of the whole new sheet inside the tap (~30 ms at 4x CPU), done again by the frame anyway.
 export function fly(from: Element | null | undefined, to: HTMLElement, focus?: [number, number] | null): () => void {
   const panel = to.closest<HTMLElement>('[role=dialog]');
   if (!panel || !from?.isConnected || !Element.prototype.animate || document.documentElement.classList.contains('lowfx')
     || matchMedia('(prefers-reduced-motion: reduce)').matches) return () => {};
+  let stop = () => {};
+  const first = new ResizeObserver(() => { first.disconnect(); if (from.isConnected && to.isConnected) stop = launch(from, to, panel, focus); });
+  first.observe(to);
+  return () => { first.disconnect(); stop(); };
+}
+
+function launch(from: Element, to: HTMLElement, panel: HTMLElement, focus?: [number, number] | null): () => void {
   const a = from.getBoundingClientRect();
   if (!a.width || a.bottom < 0 || a.top > innerHeight) return () => {};
   const [fx, fy] = focus ?? [0.5, 0.5];
