@@ -113,6 +113,7 @@
   const dirty = $derived(touched && JSON.stringify(f) !== base);
   const live = $derived(!!saved && saved.status !== 'draft');
   $effect(() => { overlay.title = live ? t('ed.edit') : t('ed.new'); overlay.icon = live ? PencilLine : CalendarPlus; }); // the capsule's title (SPEC §8.2)
+  $effect(() => { overlay.tint = shade(f.color); }); // the sheets it opens (Ask, the AI's fill) take its colour
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 
@@ -764,7 +765,7 @@
 
 <style>
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
-    --pill: var(--surface-2); }
+    --pill: var(--surface-2); --surface-solid: transparent; } /* its buttons on the event's colour, not navy (Button's solid ground) */
   :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }
   .wash { position: absolute; inset: 0; background: var(--tint); overflow: hidden; pointer-events: none; }
   .wash img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(48px) saturate(1.3); }
@@ -789,6 +790,7 @@
   .art { position: relative; align-self: center; margin: var(--s-1) 0 var(--s-2); border-radius: var(--r-xl); box-shadow: var(--shadow-card); }
   .art:active { transform: scale(0.98); }
   .art.busy { opacity: 0.6; }
+  :global(html.lowfx) .artbtn { background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* no blur: the colour as the capsule's */
   .artbtn { position: absolute; right: -8px; bottom: -8px; width: var(--tap); height: var(--tap); border-radius: 50%; display: grid; place-items: center; color: var(--text); }
   .name { width: 100%; resize: none; field-sizing: content; min-height: 1.2em; padding: var(--s-3) var(--s-4); border-radius: var(--r-l); background: var(--pill);
     color: var(--text); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; }
@@ -817,7 +819,8 @@
   .scrim { position: absolute; inset: 0; background: var(--scrim); animation: fade 220ms var(--ease) backwards; }
   @keyframes fade { from { opacity: 0; } }
   .pk { position: absolute; left: var(--s-2); right: var(--s-2); bottom: calc(var(--safe-bottom) + var(--s-2)); max-height: calc(100% - var(--top) - 24px); display: flex; flex-direction: column;
-    border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards; }
+    border-radius: var(--r-xl); animation: rise 380ms var(--ease-spring) backwards;
+    background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--tint); } /* the page's colour, not plain navy (owner, Nov 3); Sheet's .ground the same */
   @keyframes rise { from { transform: translate3d(0, 100%, 0); } }
   .pkh { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-2) var(--s-5); }
   .pkh b { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.015em; }

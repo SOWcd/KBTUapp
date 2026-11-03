@@ -14,3 +14,15 @@ def test_frame(env):
     assert c.get(f"/api/users/{me['id']}", headers=tma(41, "Oth")).json()["frame"] == "flowers"
     assert c.patch("/api/me", json={"frame": None}, headers=H).json()["frame"] is None
     assert c.patch("/api/me", json={"frame": "space"}, headers=tma(99, "Guest")).status_code in (401, 403)
+
+
+def test_frames_match_the_web():
+    """The server's frames, the picker's list and the drawings in public/frames are the same set."""
+    import re
+    from pathlib import Path
+
+    from kbtu.logic.account import FRAMES
+    web = Path(__file__).resolve().parents[2] / "web"
+    picker = re.search(r"const FRAMES = \[null, ([^\]]+)\]", (web / "src/screens/profile/SettingsList.svelte").read_text())
+    assert picker and re.findall(r"'(\w+)'", picker.group(1)) == list(FRAMES)
+    assert {p.stem for p in (web / "public/frames").glob("*.svg")} == set(FRAMES)

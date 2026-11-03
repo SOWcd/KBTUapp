@@ -89,7 +89,7 @@
   }
 
   // the frame: in place at once, back on a failure (as the lanyard)
-  const FRAMES = [null, 'flowers', 'space', 'hearts'] as const;
+  const FRAMES = [null, 'flowers', 'space', 'hearts', 'sparkles', 'laurel', 'leaves', 'snow', 'notes', 'neon', 'blossom', 'gold'] as const;
   async function pickFrame(f: string | null) {
     if (busy || !me || (me.frame ?? null) === f) return;
     const was = me;

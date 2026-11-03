@@ -56,10 +56,14 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
     # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)
     live = {r["org_id"]: r for r in rows(con, f"SELECT id, org_id, closes_at FROM rounds WHERE org_id IN ({q}) AND status = 'open' AND closes_at > ?", *ids, core.now())}
+    # quick: nothing to answer or pick, so one tap sends it (the app skips the sheet)
+    quick = {r[0] for r in rows(con, f"""SELECT r.id FROM rounds r WHERE r.id IN ({_qs([x["id"] for x in live.values()])})
+        AND NOT EXISTS (SELECT 1 FROM round_questions WHERE round_id = r.id) AND (SELECT COUNT(*) FROM round_departments WHERE round_id = r.id) <= 1""",
+        *[x["id"] for x in live.values()])} if live else set()
     return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": json.loads(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
-        "round": {"id": live[o["id"]]["id"], "closesAt": live[o["id"]]["closes_at"]} if o["id"] in live else None,
+        "round": {"id": (rid := live[o["id"]]["id"]), "closesAt": live[o["id"]]["closes_at"], "quick": rid in quick} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),

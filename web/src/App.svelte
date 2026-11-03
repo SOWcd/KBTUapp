@@ -111,18 +111,27 @@
   // actions, not views: a guest is asked to sign in first, then lands in the sheet (owner, Oct 23: B1, a guest filled
   // in a whole application before the server said no)
   sheets.roundApply = (org, source) => asStudent(() => void quickApply(org, source), `rc_${org}`);
-  // a round with nothing to answer or pick: one confirm that says what the club gets, and it's sent (owner, Nov 3: the
-  // sheet of steps was too much for one tap); anything else, or a sent one, opens the sheet
+  // a round with nothing to answer or pick (round.quick): one tap sends it, no confirm (owner, Nov 3); the button turns
+  // "Sent" at once, the toast says what the club sees, with an Undo (it withdraws). Anything else, or a sent one, opens the sheet
   async function quickApply(org: Id, source = 'club') {
     const sheet = () => lazy(() => import('./screens/sheets/RoundApply.svelte'), { org, source });
-    const r = await api.round(org).catch(() => null);
-    if (!r || !r.open || r.mine || r.questions.length || r.departments.length > 1) return sheet();
-    const club = data.orgs.find((o) => o.id === org)?.name ?? r.title;
-    if (!(await sheets.ask({ title: t('cast.quickAsk', { club }), text: t('cast.shares'), ok: t('cast.send'), cancel: t('common.cancel') }))) return;
+    const o = data.orgs.find((x) => x.id === org);
+    if (!o?.round?.quick || o.round.applied) return sheet();
+    const round = o.round, mark = (applied: boolean) => { const x = data.orgs.find((y) => y.id === org); if (x?.round?.id === round.id) x.round = { ...x.round, applied }; };
+    mark(true); haptic.ok();
     try {
-      await api.applyRound(r.id, { departments: r.departments.map((d) => d.tagId), answers: {}, source });
-      haptic.ok(); burst(); say(t('cast.sent'), 'party_popper_3d'); void loadAfisha();
-    } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'closed' ? t('cast.closed') : t('common.error'), 'warning_3d'); }
+      await api.applyRound(round.id, { departments: [], answers: {}, source });
+      burst(); void loadAfisha();
+      say(t('cast.sentShares'), 'party_popper_3d', () => {
+        mark(false); haptic.soft();
+        api.withdrawRound(round.id).then(() => void loadAfisha()).catch(() => { mark(true); say(t('common.error'), 'warning_3d'); });
+      });
+    } catch (x) {
+      mark(false);
+      // the round changed meanwhile (questions or departments since): its sheet
+      if (x instanceof ApiErr && x.code === 'bad_input') { void loadAfisha(); return sheet(); }
+      haptic.error(); say(x instanceof ApiErr && x.code === 'closed' ? t('cast.closed') : t('common.error'), 'warning_3d');
+    }
   }
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
@@ -569,7 +578,7 @@
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
-  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} /></div>
+  <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
   {#if gated}{#await consentGate() then m}<m.default />{/await}{/if}
