@@ -12,16 +12,11 @@
   // the row, ↗ out of the app, an accent label with no mark does it now. No subtitles; few words.
   // Sections (each a unit Me animates, [data-unit]): the lanyard (the carousel of skins; my photo and nick), the app,
   // then privacy and about. A guest: the app and about.
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import { nameOf, schoolOf, schoolShort } from '../../lib/short';
   import Languages from '@lucide/svelte/icons/languages';
-  import Sun from '@lucide/svelte/icons/sun';
-  import Moon from '@lucide/svelte/icons/moon';
   import Bell from '@lucide/svelte/icons/bell';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import BatteryMedium from '@lucide/svelte/icons/battery-medium';
@@ -34,13 +29,16 @@
   import { api, ApiErr, type Me, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
-  import { say, ui, overlays } from '../../lib/state/ui.svelte';
+  import { say, ui } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, i18n, setLang, loadLang, LANGS, LANG_FULL, type Lang } from '../../lib/i18n/index.svelte';
   import { theme, chooseTheme, reveal, type Theme } from '../../lib/state/theme.svelte';
   import { power, setPowerMode, POWER_MODES } from '../../lib/state/power.svelte';
   import { haptic, openLink, on } from '../../lib/tg';
   import { menu, type MenuItem } from '../../ui/menu';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import ThemeGlyph, { glyph } from './ThemeGlyph.svelte';
   import { skinOf, skinned, STRAP, banded, clubLook, lookVars, type Look } from '../../lib/awards';
   // each lanyard's card art at the swatch's size, one small picture (tools/scene-rasters.mjs draws them from LanyardBand)
   const MINI = import.meta.glob('../../assets/lanyards/minis/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -121,18 +119,19 @@
   async function dropOwn() {
     if (await sheets.ask({ title: t('look.dropOwn'), ok: t('look.dropOwn'), cancel: t('common.cancel'), danger: true })) void work(() => api.deleteMyPhoto(), () => t('look.photoGone'));
   }
-  /** the photo's menu, at its row or at my photo on the lanyard (Me) */
-  export function photoMenu(at: Element, align?: 'start' | 'end') {
-    if (!me) return;
+  // the photo's menu: at its row (Row opens it) or at my photo on the lanyard (Me)
+  const photoItems = (): MenuItem[] => {
+    if (!me) return [];
     const { telegram, own } = me.photo;
-    open('photo', at, [
+    return [
       { label: t('look.fromTg'), checked: telegram, onselect: () => { if (!telegram) void work(() => api.updateMe({ avatarTg: true }), () => t('look.tgOn')); } },
       ...(own ? [{ label: t('look.own'), checked: !telegram, onselect: () => { if (telegram) void work(() => api.updateMe({ avatarTg: false }), () => t('look.photoSet')); } }] : []),
       // instant: the file picker opens inside the tap itself (iOS opens none from a later task)
       { label: t('look.upload'), instant: true, onselect: () => file?.click() },
       ...(own ? [{ label: t('look.dropOwn'), destructive: true, onselect: () => void dropOwn() }] : []),
-    ], align);
-  }
+    ];
+  };
+  export function photoMenu(at: Element, align?: 'start' | 'end') { if (me) menu(at, photoItems(), align); }
 
   // ---- the nick: lists and feeds show it instead of my name, my profile shows both (the nick rule, Nov 2) ----
   async function editNick() {
@@ -140,9 +139,6 @@
     if (v != null && v !== (me?.nick ?? '')) setNick(v);
   }
   const setNick = (v: string | null) => void work(() => api.updateMe({ nick: v }), (m) => t(m.nick ? 'look.nickSet' : 'look.nickOff'));
-  function nickMenu(at: Element) {
-    open('nick', at, [{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]);
-  }
 
   // ---- the app ----
   // language and theme live on the phone; the server keeps them too, so the bot writes in your language
@@ -155,17 +151,17 @@
   // the theme is a snap (owner, Oct 31): the menu fades, the row's sun turns into the moon (or back) with a spring, and
   // at its peak a click and the new theme grows from that icon. The menu is gone by then (its exit is 150 ms), so the
   // transition's snapshots never hold it; the icon's tail plays in the live new snapshot, the circle opening on it
-  let glyph = $derived(theme.current);
+  $effect.pre(() => { glyph.dark = theme.current === 'dark'; });
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('lowfx');
   // no "as in the system" item: until a pick the app follows Telegram's scheme on its own (owner, Oct 31)
-  function look(to: Theme, ic: Element) {
+  function look(to: Theme, ic: Element | null) {
     if (theme.chosen === to) return;
     keep({ theme: to });
     if (to === theme.current) return chooseTheme(to); // the look stays: nothing to play
-    glyph = to;
+    glyph.dark = to === 'dark';
     setTimeout(() => {
       haptic.rigid();
-      chooseTheme(to, ic);
+      chooseTheme(to, ic ?? undefined);
       say(phrase(`say.theme.${to}`), to === 'dark' ? 'crescent_moon_3d' : 'sparkles_3d');
     }, still() ? 0 : 160);
   }
@@ -188,31 +184,16 @@
     if (homeScreen.android()) homeWait = setTimeout(() => { if (home.v !== 'added') homeScreen.help(t('set.homeHelp')); }, 4000);
   }
 
-  // a row's menu, open: its aria-expanded
-  let opened = $state<{ row: string; id: number } | null>(null);
-  const isOpen = (row: string) => opened?.row === row && overlays.some((o) => o.id === opened!.id && !o.closing);
-  function open(row: string, at: Element, items: MenuItem[], align: 'start' | 'end' | undefined = 'end') { opened = { row, id: menu(at, items, align) }; }
-  // the menu grows out of the row's value
-  const at = (row: HTMLElement) => row.querySelector('.val') ?? row;
 </script>
 
-{#snippet row(Icon: typeof Bell, label: string, value: string, end: 'in' | 'menu' | 'out', go: (row: HTMLElement) => void, key = '')}
-  <button class="set-row" aria-haspopup={end === 'menu' ? 'menu' : undefined} aria-expanded={end === 'menu' ? isOpen(key) : undefined}
-    onclick={(e) => { haptic.tap(); go(e.currentTarget); }}>
-    {#if key === 'theme'}<span class="ic sm" class:moon={glyph === 'dark'}><Sun size={20} strokeWidth={2} /><Moon size={20} strokeWidth={2} /></span>
-    {:else}<span class="ic"><Icon size={20} strokeWidth={2} /></span>{/if}<span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
-    {#if end === 'in'}<ChevronRight class="chev" size={18} />{:else if end === 'menu'}<ChevronsUpDown class="chev" size={18} />{:else}<ArrowUpRight class="chev" size={18} />{/if}</button>
-{/snippet}
-
-<div class="set-list" role="region" aria-label={t('me.settings')}>
+<div class="set-list" role="region" aria-label={t('me.settings')} tabindex="-1">
   {#if me?.student}
     <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
     <div data-unit>
-      <h2 class="set-h first" tabindex="-1">{t('look.skin')}</h2>
-      <div class="set-group pick">
-        <button class="set-row" aria-expanded={looks} onclick={() => { haptic.tap(); looks = !looks; if (!looks) ui.tryOn = null; }}>
-          <span class="ic"><IdCard size={20} strokeWidth={2} /></span><span class="lb">{t('look.change')}</span><span class="val">{wornName}</span>
-          <ChevronRight class="chev fold" size={18} style="transform: rotate({looks ? 90 : 0}deg)" /></button>
+      <div class="pick first">
+        <Group caption={t('look.skin')}>
+          <Row icon={IdCard} title={t('look.change')} value={wornName} accessory="disclosure" open={looks} onclick={() => { haptic.tap(); looks = !looks; if (!looks) ui.tryOn = null; }} />
+        </Group>
       </div>
       {#if looks}
       <div class="looks" transition:slide={{ duration: 320, easing: cubicOut }}>
@@ -249,78 +230,52 @@
       {/if}
     </div>
     <div data-unit>
-      <div class="set-group">
-        {@render row(ImageIcon, t('look.photo'), me.photo.telegram ? 'Telegram' : t('look.own'), 'menu', (r) => photoMenu(at(r)), 'photo')}
-        {#if me.nick}{@render row(AtSign, t('look.nick'), me.nick, 'menu', (r) => nickMenu(at(r)), 'nick')}
-        {:else}{@render row(AtSign, t('look.nick'), t('look.noNick'), 'in', () => void editNick())}{/if}
-        {@render row(GraduationCap, t('look.school'), schoolShort(me.student.school) || t('look.noSchool'), 'in', () => sheets.settings('school'))}
-      </div>
-      <p class="set-foot">{t('look.nickFoot')}</p>
+      <Group footnote={t('look.nickFoot')}>
+        <Row icon={ImageIcon} title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
+        {#if me.nick}<Row icon={AtSign} title={t('look.nick')} value={me.nick} menu={[{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]} />
+        {:else}<Row icon={AtSign} title={t('look.nick')} value={t('look.noNick')} accessory="chevron" onclick={() => { haptic.tap(); void editNick(); }} />{/if}
+        <Row icon={GraduationCap} title={t('look.school')} value={schoolShort(me.student.school) || t('look.noSchool')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('school'); }} />
+      </Group>
     </div>
   {:else}
     <div class="spacer"></div>
   {/if}
 
-  <div data-unit>
-    <h2 class="set-h" class:first={!me?.student} tabindex="-1">{t('set.app')}</h2>
-    <div class="set-group">
-      {@render row(Languages, t('me.guestLang'), LANG_FULL[i18n.lang], 'menu', (r) => open('lang', at(r), LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))), 'lang')}
-      {@render row(Sun, t('me.guestTheme'), t(`theme.${theme.current}`), 'menu', (r) => open('theme', at(r), (['dark', 'light'] as const).map((x) => ({
-        label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, r.querySelector('.ic')!) }))), 'theme')}
+  <div data-unit class="sec" class:first={!me?.student}>
+    <Group caption={t('set.app')}>
+      <Row icon={Languages} title={t('me.guestLang')} value={LANG_FULL[i18n.lang]} menu={LANGS.map((l) => ({ label: LANG_FULL[l], checked: i18n.lang === l, instant: true, onselect: () => lang(l) }))} />
+      <Row icon={ThemeGlyph} title={t('me.guestTheme')} value={t(`theme.${theme.current}`)} menu={(['dark', 'light'] as const).map((x) => ({ label: t(`theme.${x}`), checked: theme.current === x, onselect: () => look(x, glyph.el) }))} />
       {#if me?.student}
-        {@render row(Bell, t('me.notifications'), bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off'), 'in', () => sheets.settings('notify'))}
-        {@render row(CalendarDays, t('set.calShort'), '', 'out', () => void subscribe())}
+        <Row icon={Bell} title={t('me.notifications')} value={bells === 3 ? t('set.on') : bells ? `${bells}/3` : t('set.off')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('notify'); }} />
+        <Row icon={CalendarDays} title={t('set.calShort')} accessory="external" onclick={() => { haptic.tap(); void subscribe(); }} />
       {/if}
-      {@render row(BatteryMedium, t('power.title'), t(`power.${power.mode}`), 'menu', (r) => open('power', at(r), POWER_MODES.map((m) => ({ label: t(`power.${m}`), checked: power.mode === m,
-        onselect: () => { if (power.mode !== m) { setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } } }))), 'power')}
-      {#if home.v === 'unknown' || home.v === 'missed'}
-        <button class="set-row act" onclick={addHome}><span class="ic"><Smartphone size={20} strokeWidth={2} /></span><span class="lb">{t('set.homeShort')}</span></button>
-      {/if}
-    </div>
+      <Row icon={BatteryMedium} title={t('power.title')} value={t(`power.${power.mode}`)} menu={POWER_MODES.map((m) => ({ label: t(`power.${m}`), checked: power.mode === m,
+        onselect: () => { if (power.mode !== m) { setPowerMode(m); say(phrase(`say.power.${m}`), POWER_EMOJI[m]); } } }))} />
+      {#if home.v === 'unknown' || home.v === 'missed'}<Row icon={Smartphone} title={t('set.homeShort')} tone="action" onclick={addHome} />{/if}
+    </Group>
   </div>
 
-  <div data-unit>
-    <div class="set-group gap">
-      {#if me?.student}{@render row(Lock, t('set.privacy'), '', 'in', () => sheets.settings('privacy'))}{/if}
-      {@render row(Info, t('set.about'), '', 'in', () => sheets.settings('about'))}
-    </div>
+  <div data-unit class="gap">
+    <Group>
+      {#if me?.student}<Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />{/if}
+      <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
+    </Group>
   </div>
 </div>
 
 <style>
   /* Me's stagger child, but it rises by its units (Me): no second animation on top */
-  .set-list { animation: none; display: flex; flex-direction: column; }
-  .set-h { margin: 28px 4px 10px; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); outline: none; }
-  .set-h.first { margin-top: 20px; }
+  .set-list { animation: none; display: flex; flex-direction: column; outline: none; }
+  /* the sections' captions where Settings' headings stood */
+  .first { margin-top: 20px; }
+  .sec { margin-top: 28px; }
+  .sec.first { margin-top: 20px; }
   .spacer { height: 44px; } /* a guest: the check sits where the student's gear does, never on the first title */
   .gap { margin-top: 28px; }
-  .act .ic { color: inherit; }
-  /* the theme row's sun and moon, one over the other; the one leaving turns away and shrinks, the other springs in */
-  .sm > :global(svg) { grid-area: 1 / 1; transition: transform 300ms var(--ease-bounce), opacity 120ms ease; }
-  .sm > :global(svg:last-child), .sm.moon > :global(svg:first-child) { opacity: 0; transform: rotate(-90deg) scale(0.3); }
-  .sm.moon > :global(svg:first-child) { transform: rotate(90deg) scale(0.3); }
-  .sm.moon > :global(svg:last-child) { opacity: 1; transform: none; }
-  /* the sun goes out: its rays draw in one by one round the clock, then the bare disk turns into the moon (it fades a
-     beat later so the rays are seen); on the way back they grow out the other way round. Lucide's paths are N, S, NW,
-     SE, W, E, SW, NE; --i is each one's place clockwise from the top */
-  .sm > :global(svg:first-child path) { transform-origin: 12px 12px; transition: transform 140ms var(--ease-bounce) calc(60ms + (7 - var(--i)) * 14ms); }
-  .sm.moon > :global(svg:first-child) { transition: transform 300ms var(--ease-bounce), opacity 120ms ease 90ms; }
-  .sm.moon > :global(svg:first-child path) { transform: scale(0); transition: transform 90ms var(--ease-in) calc(var(--i) * 10ms); }
-  .sm :global(path:nth-of-type(1)) { --i: 0; }
-  .sm :global(path:nth-of-type(8)) { --i: 1; }
-  .sm :global(path:nth-of-type(6)) { --i: 2; }
-  .sm :global(path:nth-of-type(4)) { --i: 3; }
-  .sm :global(path:nth-of-type(2)) { --i: 4; }
-  .sm :global(path:nth-of-type(7)) { --i: 5; }
-  .sm :global(path:nth-of-type(5)) { --i: 6; }
-  .sm :global(path:nth-of-type(3)) { --i: 7; }
-  :global(html.lowfx) .sm > :global(svg), :global(html.lowfx) .sm :global(path) { transition: none !important; }
-  @media (prefers-reduced-motion: reduce) { .sm > :global(svg), .sm :global(path) { transition: none !important; } }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
   .pick { margin-bottom: var(--s-4); }
   .looks { margin-top: calc(-1 * var(--s-2)); padding-bottom: var(--s-2); }
-  .set-row :global(.fold) { transition: transform 240ms var(--ease-out, ease); }
   .sub { margin: var(--s-3) 0 var(--s-2); font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
   .sub.first { margin-top: 0; }
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }

@@ -304,11 +304,11 @@
   "legacy": 0
  },
  "screens/profile/AddFriend.svelte": {
-  "font": 10,
+  "font": 0,
   "radius": 3,
   "hex": 7,
   "mix": 0,
-  "weight": 7,
+  "weight": 0,
   "legacy": 0
  },
  "screens/profile/AppCard.svelte": {
@@ -320,27 +320,19 @@
   "legacy": 0
  },
  "screens/profile/Awards.svelte": {
-  "font": 13,
+  "font": 12,
   "radius": 3,
   "hex": 6,
   "mix": 1,
   "weight": 9,
-  "legacy": 1
- },
- "screens/profile/DeleteSheet.svelte": {
-  "font": 1,
-  "radius": 1,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 1
+  "legacy": 0
  },
  "screens/profile/Friends.svelte": {
-  "font": 6,
-  "radius": 3,
-  "hex": 5,
+  "font": 0,
+  "radius": 1,
+  "hex": 4,
   "mix": 0,
-  "weight": 4,
+  "weight": 0,
   "legacy": 0
  },
  "screens/profile/Hero.svelte": {
@@ -352,11 +344,11 @@
   "legacy": 0
  },
  "screens/profile/Me.svelte": {
-  "font": 6,
-  "radius": 7,
+  "font": 2,
+  "radius": 5,
   "hex": 15,
   "mix": 0,
-  "weight": 3,
+  "weight": 0,
   "legacy": 0
  },
  "screens/profile/MyQr.svelte": {
@@ -367,29 +359,13 @@
   "weight": 4,
   "legacy": 0
  },
- "screens/profile/Recent.svelte": {
-  "font": 2,
-  "radius": 1,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
  "screens/profile/SettingsList.svelte": {
   "font": 2,
   "radius": 6,
   "hex": 42,
   "mix": 0,
   "weight": 1,
-  "legacy": 9
- },
- "screens/profile/SettingsSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 51
+  "legacy": 0
  },
  "screens/sheets/AcademicSheet.svelte": {
   "font": 4,

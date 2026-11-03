@@ -12,7 +12,6 @@
   import Plus from '@lucide/svelte/icons/plus';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import SettingsIcon from '@lucide/svelte/icons/settings';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
@@ -38,6 +37,9 @@
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Notice from '../../ui/Notice.svelte';
 
   // today: Me stays mounted and the app can stay open for days, so it moves on when the app comes back
   let today = $state(dateInput(nowTs()));
@@ -141,7 +143,7 @@
     }
     all('[data-unit]').forEach((u, i) => u.animate(q ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }],
       { duration: q ? 150 : 380, delay: q ? 0 : 45 * i, easing: EASE, fill: 'backwards' }));
-    page?.querySelector<HTMLElement>('.set-h')?.focus({ preventScroll: true });
+    page?.querySelector<HTMLElement>('.set-list')?.focus({ preventScroll: true });
     if (pending) { out(); return; }
     setTimeout(() => { if (r === run) phase = 'on'; }, q ? 150 : 515);
   }
@@ -217,7 +219,7 @@
         {#if friends.length}
           <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
             {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
-        {:else}<span class="cluster ghost" aria-hidden="true">{#each SPOTS.slice(0, 9) as [w, x, y], i}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%">{#if !i}<Plus size={22} strokeWidth={2.4} />{/if}</span>{/each}</span>{/if}
+        {:else}<span class="cluster ghost" aria-hidden="true">{#each SPOTS.slice(0, 9) as [w, x, y], i (i)}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%">{#if !i}<Plus size={22} strokeWidth={2.4} />{/if}</span>{/each}</span>{/if}
         {#if asked}<b class="req num">{asked}</b>{/if}
         <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
       </button>
@@ -240,24 +242,25 @@
   {#if rest}
   {#if me?.student && !me.student.ms}
     <!-- not confirmed with the KBTU account yet: in sight on the profile, not only in the settings -->
-    <button class="confirm surface" data-away onclick={() => { haptic.tap(); sheets.login(); }}>
-      <svg viewBox="0 0 21 21" width="26" height="26" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>
-      <span class="lb">{t('me.msTitle')}<i class="sub">{t('me.msText')}</i></span><ChevronRight size={18} /></button>
+    <div data-away><Group footnote={t('me.msText')}>
+      <Row title={t('me.msTitle')} accessory="chevron" onclick={() => { haptic.tap(); sheets.login(); }}>{#snippet lead()}
+        <svg viewBox="0 0 21 21" width="24" height="24" aria-hidden="true"><path fill="#f25022" d="M0 0h10v10H0z"/><path fill="#7fba00" d="M11 0h10v10H11z"/><path fill="#00a4ef" d="M0 11h10v10H0z"/><path fill="#ffb900" d="M11 11h10v10H11z"/></svg>{/snippet}</Row>
+    </Group></div>
   {/if}
   {#if me?.deleteAt}
     <!-- the week to change my mind (DeleteSheet), with the way back -->
-    <div class="soon surface" data-away><span>{t('del.soon', { date: dayMonth(me.deleteAt) })}</span>
-      <Button kind="secondary" size="s" onclick={keepAccount}>{t('del.keep')}</Button></div>
+    <div data-away><Notice tone="danger" text={t('del.soon', { date: dayMonth(me.deleteAt) })} action={{ label: t('del.keep'), onclick: keepAccount }} /></div>
   {/if}
 
   <!-- the term: a strip of its weeks (mockup v24), the academic calendar behind it; out of term the row
-       names what comes next. Under it KBTU's psychologist -->
-  <div class="term surface" data-away>
+       names what comes next. Under it KBTU's psychologist and the anthem -->
+  <div data-away><Group>
     {#if sem}
       <!-- v25: one track with the term filled to this week and a glowing dot on it,
            the midterm a gold band, the exams red at the end; the next calendar day its own row, never cut -->
       {@const at = (w: number) => `${((w - 0.5) / (sem.weeks + 1)) * 100}%`}
-      <button class="sem" onclick={() => sheets.academic()}>
+      <!-- engine: Group takes Rows alone; kb-row (Row's own mark) gives the strip the line under it -->
+      <button class="sem kb-row" onclick={() => sheets.academic()}>
         <span class="sem-h"><b>{sem.over ? t('sem.over') : t('sem.week', { n: sem.week, of: sem.weeks })}</b>
           <span class="left">{sem.toExams ? tn('sem.toExams', sem.toExams) : t('sem.examsNow')}</span></span>
         <span class="track" aria-hidden="true">
@@ -268,18 +271,16 @@
         </span>
         <span class="sem-l"><span>{semFrom}</span><span style="left:{at((sem.mid[0] + sem.mid[1]) / 2)}">{t('sem.mid')}</span><span>{t('sem.exams')}</span></span>
       </button>
-      {#if up}<button class="r nx" onclick={() => sheets.academic()}><span class="ni"><CalendarDays size={18} /></span>
-        <span class="lb ellipsis">{nameOf(up)}</span><span class="nw">{whenOf(up)}</span><ChevronRight size={16} /></button>{/if}
+      {#if up}<Row icon={CalendarDays} title={nameOf(up)} subtitle={whenOf(up)} accessory="chevron" onclick={() => sheets.academic()} />{/if}
     {:else}
-      <button class="r" onclick={() => sheets.academic()}>
-        <span class="lb">{t('acad.title')}<i class="sub">{up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')}</i></span><ChevronRight size={18} /></button>
+      <Row icon={CalendarDays} title={t('acad.title')} subtitle={up ? `${nameOf(up)} · ${whenOf(up)}` : t('acad.sub')} accessory="chevron" onclick={() => sheets.academic()} />
     {/if}
     <!-- KBTU's psychologist: one quiet row, a small button to their own booking page (nothing else) -->
-    <div class="r psy"><span class="pi"><MessageCircleHeart size={18} /></span><span class="lb">{t('psy.kbtu')}</span>
-      <button class="book" onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}>{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></button></div>
+    <Row icon={MessageCircleHeart} title={t('psy.kbtu')}>{#snippet trailing()}
+      <Button kind="secondary" size="s" onclick={() => openLink(PSYCHOLOGIST)}><span class="bk">{t('me.psychBook')}<ArrowUpRight size={14} strokeWidth={2.4} /></span></Button>{/snippet}</Row>
     <!-- KBTU's anthem: the words and the song (the Oct 31 initiation's card on Afisha, here for good) -->
-    <button class="r psy" onclick={() => sheets.anthem()}><span class="pi"><Music size={18} /></span><span class="lb">{t('anthem.title')}</span><ChevronRight size={18} /></button>
-  </div>
+    <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
+  </Group></div>
 
   <AppCard />
   {/if}
@@ -292,7 +293,6 @@
 </div>
 
 <style>
-  .sub { display: block; margin-top: 2px; font: 500 12.5px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: 12px; }
   .page > :global(*) { flex-shrink: 0; }
   /* settings in place: what leaves is gone after the swap; the shield steps aside; no taps while a fade runs */
@@ -300,11 +300,6 @@
   .mode .shield { opacity: 0; pointer-events: none; }
   .hold { pointer-events: none; }
 
-  .confirm { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--r-l); text-align: left; color: var(--text-3);
-    box-shadow: inset 0 0 0 1.5px var(--accent-soft), var(--shadow-card); }
-  .confirm:active { transform: scale(0.98); }
-  .soon { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-l); box-shadow: inset 0 0 0 1.5px var(--danger-soft); font: 600 14.5px/1.3 var(--font-text); }
-  .soon span { flex: 1; }
 
   .guest { display: flex; flex-direction: column; gap: 12px; padding: 22px 18px 18px; border-radius: var(--r-xl); background: radial-gradient(90% 80% at 20% 0%, rgba(124, 77, 255, 0.55), transparent 60%), linear-gradient(160deg, #2443B8, #101633); color: #fff; }
   .guest p { color: rgba(255, 255, 255, 0.82); }
@@ -312,9 +307,6 @@
   .failed p { color: var(--text-2); }
   .mark { color: #fff; width: 64px; height: 64px; border-radius: 20px; background: rgba(255, 255, 255, 0.14); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 
-  .r { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 16px; text-align: left; color: var(--text-3); }
-  button.r:active { background: var(--surface-2); }
-  .lb { flex: 1; min-width: 0; font: 580 15.5px/1.2 var(--font-text); color: var(--text); }
   /* my friends and my invite: two squares under the badge (Invite.svelte is the right one) */
   .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .sq { position: relative; overflow: hidden; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 14px; border-radius: var(--r-l); text-align: left; }
@@ -351,14 +343,13 @@
   .done .gi.c { opacity: 1; color: var(--accent-text); }
   .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
 
-  /* the term card: the strip of weeks, then the psychologist (mockup v24) */
-  .term { display: flex; flex-direction: column; border-radius: var(--r-l); overflow: hidden; }
+  /* the term's strip of weeks, the first block of its group (mockup v24) */
   .sem { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; text-align: left; }
   /* a <button> doesn't stretch its flex children on older iOS WebKit: the track had no width and every label sat on the
      left ("3midterms", Oct 31) */
   .sem > * { width: 100%; }
   .sem-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .sem-h b { font: 750 19px/1.15 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
+  .sem-h b { font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
   .left { flex: none; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .track { position: relative; height: 10px; margin: 6px 0 2px; border-radius: 5px; background: var(--surface-3); }
   .track i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
@@ -370,17 +361,7 @@
   .sem-l { position: relative; display: flex; justify-content: space-between; font: 600 var(--fs-cap)/1 var(--font-text); color: var(--text-3); }
   .sem-l span:nth-child(2) { position: absolute; translate: -50% 0; color: var(--warning-text); }
   .sem-l span:last-child { color: var(--danger-text); }
-  .nx { min-height: 52px; gap: 10px; }
-  .ni { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; background: var(--warning-soft); color: var(--warning-text); flex: none; }
-  .nx .lb { font-size: var(--fs-body); }
-  .nw { flex: none; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--warning-text); }
-  .term .r { box-shadow: inset 0 1px 0 var(--line); }
-  .psy { min-height: 56px; }
-  .book { position: relative; z-index: 1; flex: none; display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 10px 0 12px; border-radius: var(--r-full);
-    background: var(--surface-2); color: var(--text); font: 650 var(--fs-sub)/1 var(--font-text); }
-  .book:active { transform: scale(0.94); }
-  /* the psychologist in the app's own blue, its icon on a tile like the calendar row's (no pink accent) */
-  .pi { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 10px; flex: none; background: var(--accent-soft); color: var(--accent-text); }
+  .bk { display: inline-flex; align-items: center; gap: 3px; } /* the word and its ↗ on one line */
 
   .tail { flex: none; height: calc(var(--bottom) + 12px); }
   .crash { padding: 16px; color: var(--danger-text); word-break: break-word; }

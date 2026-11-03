@@ -9,6 +9,9 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Button from '../../ui/Button.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import { api } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -48,22 +51,16 @@
   <div class="wrap">
     <span class="ic"><TriangleAlert size={26} /></span>
     <h2 class="t-h2">{t('del.title')}</h2>
-    {#if items.length}
-      <div class="lost">
-        <p class="t-cap">{t('del.lost')}</p>
-        <p class="nums">{#each items as [n, word], i (word)}{#if i}<span class="dot">·</span>{/if}<b>{n}</b> {word}{/each}</p>
-      </div>
-    {/if}
+    {#if items.length}<Notice tone="danger" title={t('del.lost')} text={items.map(([n, word]) => `${n} ${word}`).join(' · ')} />{/if}
     <p class="t-callout dim">{t('del.text')}</p>
     <p class="t-callout dim">{t('del.stays')}</p>
     {#if info?.photos}
-      <label class="switch"><span><b>{t('del.photos')}</b><i class="t-foot">{tn('del.photosN', info.photos)}</i></span>
-        <input type="checkbox" role="switch" bind:checked={photos} onchange={() => haptic.select()} /></label>
+      <Group><Row title={t('del.photos')} subtitle={tn('del.photosN', info.photos)} accessory="switch" checked={photos} onchange={(on) => { photos = on; haptic.select(); }} /></Group>
     {/if}
-    {#if president}<p class="t-callout note">{t('del.president')}</p>{/if}
-    {#if info?.paid}<p class="t-callout note">{t('del.paid')}</p>{/if}
+    {#if president}<Notice tone="warning" text={t('del.president')} />{/if}
+    {#if info?.paid}<Notice tone="warning" text={t('del.paid')} />{/if}
     <p class="t-callout who">{t('del.confirm')}</p>
-    <button class="care t-foot" onclick={() => openLink(PSYCHOLOGIST)}><HeartHandshake size={15} />{t('del.care')}</button>
+    <span class="care"><Button kind="plain" size="s" onclick={() => openLink(PSYCHOLOGIST)}>{#snippet icon()}<HeartHandshake size={15} />{/snippet}{t('del.care')}</Button></span>
   </div>
   {#snippet footer()}
     <Button kind="danger" size="l" full loading={busy} onclick={submit}>{t('del.forever')}</Button>
@@ -72,14 +69,9 @@
 
 <style>
   .wrap { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; }
-  .ic { width: 54px; height: 54px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: var(--danger-soft); color: var(--danger-text); }
-  .lost { padding: 12px 14px; border-radius: var(--r-m); background: var(--danger-soft); }
-  .lost .t-cap { color: var(--danger-text); }
-  .nums { margin-top: 4px; font: 560 15px/1.3 var(--font-text); }
-  .nums b { font-weight: 760; }
-  .dot { margin: 0 7px; color: var(--text-3); }
+  .ic { width: 54px; height: 54px; border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; background: var(--danger-soft); color: var(--danger-text); }
   .dim { color: var(--text-2); }
-  .who { font-weight: 620; margin-top: 4px; }
-  .note { padding: 10px 12px; border-radius: var(--r-m); background: var(--warning-soft); color: var(--warning-text); }
-  .care { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 0; color: var(--text-3); }
+  .who { font-weight: 600; margin-top: 4px; }
+  /* quietly there: grey, not the accent of an action */
+  .care { align-self: flex-start; margin: 8px 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-3); }
 </style>
