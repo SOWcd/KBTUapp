@@ -143,21 +143,13 @@
   "weight": 2,
   "legacy": 4
  },
- "screens/club/CoverFocus.svelte": {
-  "font": 2,
-  "radius": 5,
-  "hex": 1,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
  "screens/club/EventEditor.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 13,
   "mix": 0,
-  "weight": 12,
-  "legacy": 16
+  "weight": 0,
+  "legacy": 0
  },
  "screens/club/EventManage.svelte": {
   "font": 9,
@@ -175,43 +167,11 @@
   "weight": 2,
   "legacy": 1
  },
- "screens/club/MemoAsks.svelte": {
-  "font": 5,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 41
- },
- "screens/club/MemoItemSheet.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 4
- },
- "screens/club/MemoSheet.svelte": {
-  "font": 7,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
-  "legacy": 5
- },
  "screens/club/OrgChats.svelte": {
   "font": 3,
   "radius": 0,
   "hex": 0,
   "mix": 0,
-  "weight": 3,
-  "legacy": 2
- },
- "screens/club/PostComposer.svelte": {
-  "font": 7,
-  "radius": 2,
-  "hex": 1,
-  "mix": 1,
   "weight": 3,
   "legacy": 2
  },
@@ -238,22 +198,6 @@
   "mix": 0,
   "weight": 1,
   "legacy": 0
- },
- "screens/club/RoundBoard.svelte": {
-  "font": 21,
-  "radius": 0,
-  "hex": 3,
-  "mix": 1,
-  "weight": 11,
-  "legacy": 9
- },
- "screens/club/RoundSetup.svelte": {
-  "font": 8,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 4,
-  "legacy": 12
  },
  "screens/club/Scanner.svelte": {
   "font": 10,
