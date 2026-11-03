@@ -1369,7 +1369,7 @@ def test_comments(env):
     pres, ali, zhan = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan")
     login(c, 94, "boss")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, 1)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Hack', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
@@ -2002,7 +2002,7 @@ def test_feature_post(env):
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
     login(c, 60, "boss"); pres = login(c, 61, "pres")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, 1)")
     for pid, aud in ((1, "public"), (2, "public"), (3, "clubs")):
         con.execute("INSERT INTO posts (id, org_id, author_id, audience, title, body, created_at) VALUES (?, 1, ?, ?, 'T', 'B', 0)", (pid, pres["id"], aud))
     B, P = tma(60, "Boss"), tma(61, "Pres")
@@ -3561,7 +3561,7 @@ def test_events_channel(env, monkeypatch):
     c, cfg = env
     login(c, 20, "pres")
     con = db.connect(cfg.db_path)
-    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)  # the channel is official clubs'
     logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], oid, "president", "test")
     ev = {"title": "Open day", "place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
     e = c.post(f"/api/orgs/{oid}/events", headers=tma(20), json=ev).json()
@@ -3704,7 +3704,7 @@ def test_channel_refused_post_skipped(env):
     c, cfg = env
     login(c, 20, "pres")
     con = db.connect(cfg.db_path)
-    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
     logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], oid, "president", "test")
     ev = {"place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
     ids = [c.post(f"/api/orgs/{oid}/events", headers=tma(20), json={**ev, "title": t}).json()["id"] for t in ("Long", "Fine")]
@@ -4051,7 +4051,7 @@ def test_translations(env):
     c, cfg = env
     pres = login(c, 20, "pres")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '')")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '', 1)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     start = int(time.time()) + 3600
     body = {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
@@ -5282,8 +5282,8 @@ def test_club_rename_review3(env):
         assert rename(3, name).status_code == 400, name                       # KBTU look-alikes, a fake badge
     for name in ("\u0448\u0430\u0445\u043c\u0430\u0442\u044b", "\u0428\u0410\u0425\u041c\u0410\u0422\u042b", "\u0420hysics", "physics."):
         assert rename(3, name).json()["message"] == "taken", name             # another club's, in other case or letters
-    assert rename(4, "Cheerleading Club").status_code == 200 and rename(1, "Physics Lab").status_code == 200
-    assert rename(1, "Physics Lab").status_code == 200                        # unchanged: no check
+    assert rename(4, "Cheerleading Club").status_code == 403 and rename(1, "Physics Lab").status_code == 403  # official: DMP's
+    assert rename(1, "Physics").status_code == 200                            # unchanged: no check
 
 COURSES = ("Physical Education", "Imaginary Algebra", "History of Made-Up Things", "Unlabelled Long Course", "Unlabelled Short Course")
 
