@@ -79,8 +79,9 @@ def _kz_phone(s: str) -> str:
     """DONATE_PHONE: empty, or a Kazakh number as +7XXXXXXXXXX (a typo would send students' money to a stranger)"""
     d = "".join(c for c in s if c.isdigit())
     d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else d
-    if s and not (len(d) == 11 and d[0] == "7"):
-        raise SystemExit("DONATE_PHONE must be a Kazakh number, e.g. +7 700 000 00 00")
+    if s and not (len(d) == 11 and d[0] == "7"):  # off, not a crash: a typo in the env mustn't take the app down
+        print("DONATE_PHONE is not a Kazakh number (+7 700 000 00 00): the Support page is off", flush=True)
+        return ""
     return "+" + d if s else ""
 
 

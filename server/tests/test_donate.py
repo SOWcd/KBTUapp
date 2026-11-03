@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 
-import pytest
 from fastapi.testclient import TestClient
 
 from kbtu import app as server, config
@@ -26,5 +25,4 @@ def test_donate_phone_checked():
     assert config._kz_phone("") == ""
     assert config._kz_phone("+7 700 000 00 00") == config._kz_phone("8 (700) 000-00-00") == FAKE
     for bad in ("+7 700 000 00", "+1 202 555 0100", "7000000000000"):
-        with pytest.raises(SystemExit):
-            config._kz_phone(bad)
+        assert config._kz_phone(bad) == ""                                  # the page off, the app up
