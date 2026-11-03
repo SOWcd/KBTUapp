@@ -25,6 +25,7 @@
   import Recent from './Recent.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
   import Founder from '../../ui/Founder.svelte';
 
   const me = $derived(session.me);
@@ -119,13 +120,8 @@
         </section>
       {/if}
 
-      <!-- the tabs: Studio's pill switcher (base.css .seg), each with its count; all three stay mounted, so a switch is
-           instant and fetches nothing (Recent loads once) -->
-      <div class="seg" role="tablist">
-        {#each tabs as [k, label, n] (k)}
-          <button role="tab" aria-selected={tab === k} class:on={tab === k} onclick={() => { if (tab !== k) { tab = k; haptic.select(); } }}>{label}{n ? ' · ' + n : ''}</button>
-        {/each}
-      </div>
+      <!-- the tabs, each with its count; all three stay mounted, so a switch is instant and fetches nothing (Recent loads once) -->
+      <Segmented items={tabs.map(([k, label, n]) => ({ value: k, label: label + (n ? ' · ' + n : '') }))} bind:value={tab} label={t('page.awards')} onchange={() => haptic.select()} />
 
       {#snippet card(a: Achievement, i: number)}
         {@const n = nextOf(a)}
@@ -214,8 +210,6 @@
   .pill { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 650 14px/1 var(--font-text); transition: transform var(--t-fast) var(--ease); }
   .pill:active { transform: scale(0.95); }
-  .seg { align-self: flex-start; max-width: 100%; }
-  @media (max-width: 359px) { .seg button { padding: 0 6px; font-size: 12px; } } /* three labels with counts on a 320-px phone */
   .pane { display: flex; flex-direction: column; gap: 14px; }
   .pane.gone { display: none; }
 
