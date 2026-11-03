@@ -6,6 +6,10 @@ describe('fmtPhone', () => {
     for (const v of ['8 (701) 234-56-78', '87012345678', '+77012345678', '+7 701 234 56 78', '7012345678', '+7 8701 234 56 78', '+7 (701) 234 56 78'])
       expect(fmtPhone(v)).toBe('+7 (701) 234 56 78');
   });
+  it('shows the support page number (DONATE_PHONE, "+7" and digits) as Privacy shows a phone', () => {
+    expect(fmtPhone('+77000000000')).toBe('+7 (700) 000 00 00');
+    expect(kzPhone(fmtPhone('+77000000000'))).toBe('+77000000000'); // what the copy button copies
+  });
   it('formats while typing and deleting', () => {
     expect(fmtPhone('7')).toBe('+7 (7');
     expect(fmtPhone('8')).toBe('');            // the trunk 8 typed first

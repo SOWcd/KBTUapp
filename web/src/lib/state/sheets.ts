@@ -66,7 +66,7 @@ export const sheets = {
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
   /** the pages pushed from the settings under my lanyard (Me): notifications, privacy and its pages, about */
-  settings: (_kind: 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | 'last' | 'first' | 'middle' | 'sees' | 'about') => {},
+  settings: (_kind: 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | 'last' | 'first' | 'middle' | 'sees' | 'about' | 'donate') => {},
   /** the admin panel (pilot): clubs and their teams */
   admin: () => {},
   /** the campus map, on a floor (step 1: the 2023 plans) */

@@ -50,7 +50,10 @@ class Config:
     groq_key: str = field(default="", repr=False)
     apinex_key: str = field(default="", repr=False)  # APINEX_API_KEY: the chain's first link
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
-    seed: bool = True           # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
+    # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
+    # Never in the repo, the bundle or the logs (repr=False); .claude/reports/donate-review.md
+    donate_phone: str = field(default="", repr=False)
+    seed: bool = True          # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
 
 
 def _dotenv() -> dict[str, str]:
@@ -70,6 +73,15 @@ def _month_day(s: str) -> str:
     if not ok:
         raise SystemExit("MS_AGE_CUTOFF must be MM-DD, e.g. 06-01")
     return s
+
+
+def _kz_phone(s: str) -> str:
+    """DONATE_PHONE: empty, or a Kazakh number as +7XXXXXXXXXX (a typo would send students' money to a stranger)"""
+    d = "".join(c for c in s if c.isdigit())
+    d = "7" + d[1:] if len(d) == 11 and d[0] == "8" else d
+    if s and not (len(d) == 11 and d[0] == "7"):
+        raise SystemExit("DONATE_PHONE must be a Kazakh number, e.g. +7 700 000 00 00")
+    return "+" + d if s else ""
 
 
 def load() -> Config:
@@ -109,4 +121,5 @@ def load() -> Config:
         groq_key=env.get("GROQ_API_KEY", "").strip(),
         apinex_key=env.get("APINEX_API_KEY", "").strip(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
+        donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
     )
