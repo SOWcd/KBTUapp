@@ -36,7 +36,7 @@ function preloads(): Plugin {
   };
 }
 
-// The sheets a tap opens anywhere are chunks fetched ahead (App.svelte). V8 compiles a function only on its first call,
+// The sheets a tap opens anywhere, the settings list and the map are chunks. V8 compiles a function only on its first call,
 // so the first open of each paid for compiling the whole sheet inside the tap (~40 ms at 4x CPU of a ~140 ms task).
 // Chrome's explicit compile hint has them compiled as the chunk loads, ahead of the tap; other engines ignore the line.
 function compileHints(names: RegExp): Plugin {
@@ -64,7 +64,7 @@ function lucideIcon(): Plugin {
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet)$/)],
+  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|SettingsList|CampusMap)$/)],
   server: { host: true, port: 5180 },
   build: {
     outDir: 'dist',
