@@ -17,7 +17,8 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { CITIES } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
-  import { session } from '../../lib/state/session.svelte';
+  import { session, loadMe } from '../../lib/state/session.svelte';
+  import { onMount } from 'svelte';
   import { data, phrase, loadMyCard, dropSchedule } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
@@ -26,6 +27,8 @@
   import { haptic, openLink } from '../../lib/tg';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
+  // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
+  onMount(() => void loadMe());
 
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
