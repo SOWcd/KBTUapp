@@ -234,6 +234,8 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .btns .btn.full { flex: 1 1 0; width: auto; min-width: 0; }
 /* the keyboard's focus (Telegram Desktop, the staff on computers): a ring, never for a tap */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* a text field matches :focus-visible on a tap too (a blue box round Team's search, owner Nov 3): its caret says it */
+:where(input, textarea, [contenteditable]):focus-visible { outline: none; }
 .press { transition: transform 450ms var(--ease-bounce); }
 .press:active { transform: scale(0.965); transition-duration: 80ms; }
 /* every button answers a press (owner, Oct 13: "buttons don't react at all"): a small give, zero specificity, so a
