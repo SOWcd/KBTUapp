@@ -417,7 +417,7 @@
   .jp { left: calc(50% - 62.4px); top: calc(50% - 74.1px); width: 180px; height: 138px; transform: scale(0.8); transform-origin: 62.4px 74.1px; } /* drawn in to the photo: they ran onto the name (club, Nov 3) */
   .badge :global(.petals) { display: none; } /* no falling petals on the face, only on the back and the badge (club, Nov 3) */
   .jl { left: -16px; top: -9.6px; width: 80px; height: 45.8px; }
-  .jr { right: -20.4px; top: -87.6px; width: 122.4px; height: 123.8px; }
+  .jr { right: -14px; top: -80px; width: 122.4px; height: 123.8px; }
   /* the name over the petals, a halo of the card's pink round its letters so a flower behind them steps back */
   .japanesecultureclub .id { position: relative; z-index: 2; text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); }
   .japanesecultureclub .medal { z-index: 3; } /* and the medallion over the name's box (it took the medallion's taps) */
