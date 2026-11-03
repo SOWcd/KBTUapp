@@ -543,6 +543,20 @@ def _skin(con, uid: int) -> int | str | None:
     return o[0] if o else None
 
 
+def _one_off(w: str, ref: set[str]) -> bool:
+    """`w` is one of `ref`, or of 4+ letters and one letter added, dropped or changed from one of them."""
+    if w in ref:
+        return True
+    for r in ref:
+        if len(w) >= 4 and len(r) >= 4 and abs(len(w) - len(r)) <= 1:
+            a, b = (w, r) if len(w) >= len(r) else (r, w)
+            if len(a) == len(b) and sum(x != y for x, y in zip(a, b)) == 1:
+                return True
+            if len(a) == len(b) + 1 and any(a[:i] + a[i + 1:] == b for i in range(len(a))):
+                return True
+    return False
+
+
 def _skin_ok(con, uid: int, oid: int):
     """A club's lanyard is its members' alone (owner, Oct 31: it was open to all), a school's its students' alone (Nov 2);
     read on every look, so a pick of a club I'm not in (or left), or of a school no longer mine, falls back by itself
@@ -628,7 +642,8 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
             ref = (ms.get("givenName") or s["first_name"], ms.get("surname") or s["last_name"])
             # the Latin pair: the other half's Latin, else its Cyrillic (_words reads both scripts as one)
             new = " ".join(v if c == col else s[c] or s[c[:-4] + "_name"] for c in (("first_lat", "last_lat") if col in LAT_COLS else ("first_name", "last_name")))
-            if not roster.same_person(new, *ref) or roster._words(new) - roster._words(" ".join(ref)):
+            # a word of 4+ letters one letter off KBTU's own is the same word (Ameli/Amelie, Aidos/Aydos: owner, Nov 3)
+            if not roster.same_person(new, *ref) or not all(_one_off(w, roster._words(" ".join(ref))) for w in roster._words(new)):
                 raise ApiError("bad_input", "name_far")
         # an ID is free when no student has it and no list keeps it for another mail: the freshmen list (that student's
         # sign-up form would offer it) or a check-in's expected list (its CSV matches by ID: an absent friend would

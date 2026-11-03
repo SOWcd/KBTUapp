@@ -7201,6 +7201,7 @@ def test_identity_fix_once(env, monkeypatch):
     assert fix(lastName="Kim").json()["message"] == "name_far"               # someone else's name: support
     assert fix(lastName="Serikbayev Rector").json()["message"] == "name_far"  # KBTU's words kept, one added
     assert fix(firstName="Aidos Bekzat").json()["message"] == "name_far"
+    assert fix(firstName="Aidan").json()["message"] == "name_far"           # two letters off: another name
     surname = "\u0421\u0435\u0440\u0438\u043a\u0431\u0430\u0435\u0432"
     assert fix(lastName=surname).json()["student"]["lastName"] == surname    # KBTU's name in Cyrillic
     assert fix(middleName="").json()["student"]["fixable"] == ["firstName", "middleName", "lastLat", "firstLat", "middleLat", "course", "school"]  # nothing changed: not spent
@@ -7481,3 +7482,10 @@ def test_config_repr_hides_secrets():
     """A logged or dumped Config never carries a secret."""
     cfg = config.Config(bot_token="BOT-SECRET", token_key=b"KEY-SECRET", db_path=":memory:", web_dist=".", cf_ai_token="CF-SECRET")
     assert "SECRET" not in repr(cfg)
+
+
+def test_name_one_letter_off():
+    """A name word one letter off KBTU's own (added, dropped, changed) is a spelling, 4+ letters (owner, Nov 3)."""
+    from kbtu.logic.account import _one_off
+    assert _one_off("amelie", {"ameli", "sakenova"}) and _one_off("ameli", {"amelie"}) and _one_off("aidas", {"aidos"})
+    assert not _one_off("aidan", {"aidos"}) and not _one_off("bekzat", {"aidos"}) and not _one_off("ana", {"an"})
