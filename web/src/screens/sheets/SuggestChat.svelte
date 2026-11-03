@@ -12,12 +12,17 @@
   import { sheets } from '../../lib/state/sheets';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   let link = $state(''), busy = $state(false), note = $state('');
   // a club's President or Vice: their club's own channel goes on its page, from Studio's chats
   const mine = $derived(data.orgs.filter((o) => o.myRights?.includes('profile')));
+  // engine: ui/Field could take autocapitalize and spellcheck (a link or an @name is typed as it is)
+  const raw = (n: HTMLElement) => { const i = n.querySelector('input'); if (i) { i.autocapitalize = 'off'; i.spellcheck = false; } };
   function toStudio(id: number) { close(overlay.id); sheets.clubEdit(id, 'chats'); }
 
   async function send() {
@@ -34,22 +39,22 @@
 
 <Sheet {overlay} title={t('chats.suggest')} icon={Plus}>
   <p class="t-callout lead">{t('chats.suggestLead')}</p>
-  <label class="field" class:bad={!!note}><span class="t-cap">{t('chats.linkLabel')}</span>
-    <input bind:value={link} placeholder="@kbtu_chat · t.me/+…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"
-      oninput={() => (note = '')} onkeydown={(e) => e.key === 'Enter' && send()} /></label>
-  {#if note}<p class="t-foot note" role="alert">{note}</p>{/if}
+  <!-- Enter sends (the form's submit) -->
+  <form onsubmit={(e) => { e.preventDefault(); void send(); }} {@attach raw}>
+    <Field label={t('chats.linkLabel')} bind:value={() => link, (v) => { link = v; note = ''; }} error={note || undefined}
+      placeholder="@kbtu_chat · t.me/+…" autocomplete="off" enterkeyhint="send" />
+  </form>
   <div class="go"><Button kind="primary" size="l" full loading={busy} disabled={!link.trim()} onclick={send}>{t('chats.send')}</Button></div>
-  <button class="tg" onclick={pickInTelegram}><TelegramMark size={16} />{t('chats.pickInTg')}</button>
-  {#each mine.slice(0, 3) as o (o.id)}
-    <button class="own surface" onclick={() => toStudio(o.id)}>{t('chats.ownClub', { club: o.name })}</button>
-  {/each}
+  <div class="tg"><Button kind="plain" size="m" full onclick={pickInTelegram}>{#snippet icon()}<TelegramMark size={16} />{/snippet}{t('chats.pickInTg')}</Button></div>
+  {#if mine.length}
+    <Group>
+      {#each mine.slice(0, 3) as o (o.id)}<Row tone="action" title={t('chats.ownClub', { club: o.name })} onclick={() => toStudio(o.id)} />{/each}
+    </Group>
+  {/if}
 </Sheet>
 
 <style>
-  .lead { color: var(--text-2); margin: 4px 0 14px; }
-  .note { margin: 8px 4px 0; color: var(--danger-text); }
+  .lead { color: var(--text-2); margin: var(--s-1) 0 14px; }
   .go { margin-top: 14px; }
-  .own { display: block; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-m); text-align: left; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--accent-text); }
-  .own:active { transform: scale(0.98); }
-  .tg { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 12px; padding: 8px; font: 620 var(--fs-sub)/1.2 var(--font-text); color: var(--accent-text); }
+  .tg { margin: var(--s-2) 0; }
 </style>
