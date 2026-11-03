@@ -194,7 +194,7 @@ function mdRim(k) {
   let knurl = '';
   for (let i = 0; i < 160; i++) { const [a, b] = pt(254, i * 2.25), [c, d] = pt(244, i * 2.25); knurl += `M${a} ${b}L${c} ${d}`; }
   const ring = (r0, r1) => `<path fill-rule="evenodd" d="M${C - r1} ${C}a${r1} ${r1} 0 1 0 ${2 * r1} 0a${r1} ${r1} 0 1 0 ${-2 * r1} 0zM${C - r0} ${C}a${r0} ${r0} 0 1 0 ${2 * r0} 0a${r0} ${r0} 0 1 0 ${-2 * r0} 0z"/>`;
-  return svg(`${metals(k)}${relief('rr', 7, 8, 0.5, 1.3, 18)}${lin('band', [FACE[k][4], FACE[k][1], FACE[k][0], FACE[k][2], FACE[k][5], FACE[k][2], FACE[k][3], FACE[k][1], FACE[k][4]], 1, 1)}${relief('re', 3, 6, 0)}${RELIEFS}
+  return svg(`${metals(k)}${relief('rr', 7, 8, 0.5, 1.3, 18)}${lin('band', [FACE[k][4], FACE[k][1], FACE[k][3], FACE[k][2], FACE[k][5], FACE[k][2], FACE[k][1], FACE[k][3], FACE[k][4]], 1, 1)}${relief('re', 3, 6, 0)}${RELIEFS}
 <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".16"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
 ${m.iri ? lin('iri', m.iri, 1, 1) : ''}
 <radialGradient id="sink" cx=".5" cy=".5" r=".5"><stop offset=".86" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".6"/></radialGradient>`,
@@ -216,15 +216,21 @@ const legendSvg = (k, words) => {
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><defs>${arc}</defs>${txt('#FFFFFF', 0.55, 1.3)}${txt(FACE[k][5], 0.85, 0)}</svg>\n`;
 };
 
-// the field: calm deep enamel, the fine engine-turned sunburst his 500 coin has, a soft light behind the subject
+// the field: calm deep enamel over a guilloche, as his 500 coin's: two engine-turned rosettes of a wave turned round the
+// centre (one curve, its turned copies by <use>: a few hundred bytes), each line cut fine into the ground (its shadow
+// side dark, its lit side catching the light from the upper left), a soft light behind the subject
+const wave = (r, a, n) => 'M' + Array.from({ length: 145 }, (_, i) => { const t = (i * 2.5 * Math.PI) / 180, k = r + a * Math.sin(n * t); return `${f(C + k * Math.sin(t))} ${f(C - k * Math.cos(t))}`; }).join('L') + 'z';
 function mfield(colors) {
-  let fine = '';
-  for (let i = 0; i < 240; i++) { const [a, b] = pt(236, i * 1.5), [c, d] = pt(20, i * 1.5); fine += `M${c} ${d}L${a} ${b}`; }
+  const turn = (id, copies, period) => Array.from({ length: copies }, (_, i) => `<use href="#${id}" transform="rotate(${f((i * period) / copies)} ${C} ${C})"/>`).join('');
+  const lines = turn('w1', 22, 360 / 7) + turn('w2', 30, 360 / 12);
   return svg(`<radialGradient id="field" cx=".42" cy=".36" r=".72">${stops(colors)}</radialGradient>
 <radialGradient id="lt" cx=".5" cy=".47" r=".34"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".2"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
-<radialGradient id="vig" cx=".5" cy=".5" r=".5"><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>`,
+<radialGradient id="vig" cx=".5" cy=".5" r=".5"><stop offset=".62" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
+<linearGradient id="gl" gradientUnits="userSpaceOnUse" x1="60" y1="40" x2="452" y2="472"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".36"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".14"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".05"/></linearGradient>
+<path id="w1" d="${wave(110, 36, 7)}" fill="none"/><path id="w2" d="${wave(166, 18, 12)}" fill="none"/>`,
   `<circle cx="${C}" cy="${C}" r="236" fill="url(#field)"/>
-<path d="${fine}" stroke="#FFFFFF" stroke-width=".8" opacity=".07"/>
+<g stroke="#000000" stroke-opacity=".22" stroke-width="1.1">${lines}</g>
+<g stroke="url(#gl)" stroke-width=".8" transform="translate(.8 .8)">${lines}</g>
 <circle cx="${C}" cy="${C}" r="236" fill="url(#lt)"/><circle cx="${C}" cy="${C}" r="236" fill="url(#vig)"/>`);
 }
 
