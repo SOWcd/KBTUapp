@@ -92,13 +92,13 @@ export function removeOverlay(id: number): void {
 }
 
 // ---- toasts: live phrases with a 3D emoji ----
-export const toast = $state({ text: '', emoji: 'party_popper_3d', id: 0 });
+export const toast = $state<{ text: string; emoji: string; id: number; undo?: (() => void) | null }>({ text: '', emoji: 'party_popper_3d', id: 0 });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function say(text: string, emoji = 'sparkles_3d'): void {
+export function say(text: string, emoji = 'sparkles_3d', undo?: () => void): void {
   // a toast born mid-switch came solid and cleared up after (owner, Oct 31): it waits for the switch to end
   const vt = switching();
-  if (vt) { vt.then(() => say(text, emoji)); return; }
-  toast.text = text; toast.emoji = emoji; toast.id++;
+  if (vt) { vt.then(() => say(text, emoji, undo)); return; }
+  toast.text = text; toast.emoji = emoji; toast.undo = undo ?? null; toast.id++;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.text = ''), 2600);
+  toastTimer = setTimeout(() => (toast.text = ''), undo ? 5000 : 2600); // an Undo stays long enough to reach
 }

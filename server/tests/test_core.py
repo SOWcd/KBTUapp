@@ -3152,7 +3152,7 @@ def test_casting(env):
     assert mine["departments"] == [1, 2] and mine["stage"] == "sent"
     assert apply(11, [2], {q["Hours a week"]: "1-4", q["Why us?"]: "I like people"}).status_code == 200  # HR only: no portfolio asked
     assert apply(21, [2], {q["Why us?"]: "x"}).status_code == 409                                    # already in the club
-    assert c.get("/api/orgs/1", headers=tma(10)).json()["round"] == {"id": rid, "closesAt": body["closesAt"], "applied": True}
+    assert c.get("/api/orgs/1", headers=tma(10)).json()["round"] == {"id": rid, "closesAt": body["closesAt"], "applied": True, "quick": False}
 
     assert c.get(f"/api/rounds/{rid}/apps", headers=tma(10)).status_code == 403
     apps = {a["fullName"]: a for a in c.get(f"/api/rounds/{rid}/apps", headers=tma(21)).json()}
@@ -3237,6 +3237,10 @@ def test_casting_whole_club(env):
     q = str(r["questions"][0]["id"])
     assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [], "answers": {q: "Draw"}}).json()["mine"]["departments"] == [1]
     assert c.patch(f"/api/rounds/{r['id']}", headers=tma(20), json={**body, "departments": [{"tagId": 1}], "nextText": nxt}).json()["nextText"] == nxt
+    # quick (Nov 3): nothing to answer and one department at most, so the app sends it in one tap
+    assert c.get("/api/orgs/1", headers=tma(10)).json()["round"]["quick"] is False
+    con.execute("DELETE FROM round_questions WHERE round_id = ?", (r["id"],))
+    assert c.get("/api/orgs/1", headers=tma(10)).json()["round"]["quick"] is True
 
 
 def test_saved_tomorrow(env, monkeypatch):
