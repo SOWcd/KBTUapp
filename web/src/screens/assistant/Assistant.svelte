@@ -86,6 +86,7 @@
         <div class="sugg">{#each SUGGEST as k (k)}<Chip selected={false} onclick={() => { haptic.tap(); void ask(t(k)); }}>{t(k)}</Chip>{/each}</div>
       </div>
     {:else if chat.ctx}
+      <!-- engine: ui/Tag could truncate a long label with "…" (an event's title); till then this pill is local -->
       <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
     {/if}
     {#each chat.turns as m, i (i)}

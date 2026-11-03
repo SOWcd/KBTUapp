@@ -192,6 +192,7 @@
   .ch { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px; }
   .ch b { font: 600 var(--fs-body)/1.3 var(--font-text); min-width: 0; }
   .ch i { flex: none; font: 450 var(--fs-cap)/1 var(--font-text); font-style: normal; color: var(--text-3); }
+  /* engine: ui/Tag could have a small size (20 high) for a line of meta; till then it is shrunk here */
   .ch :global(.chip) { height: 20px; padding: 0 7px; font-size: var(--fs-micro); }
   /* the 36 px button inside a 26 px line: its hit area reaches past it */
   .more { margin: -5px -8px -5px auto; flex: none; color: var(--text-3); --plain-ink: var(--text-3); }
