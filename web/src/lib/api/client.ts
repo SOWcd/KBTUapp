@@ -248,7 +248,7 @@ export const server: Api = {
   hideAsk: (id) => call('POST', `/forum/asks/${id}/hide`),
   skillMod: (id, change) => call('PATCH', `/forum/skills/${id}`, change),
   refer: (code) => call('POST', '/referral', { code }),
-  channelFeed: () => call('GET', '/forum-posts/feed'),
+  channelFeed: (before) => call('GET', `/forum-posts/feed${before ? `?before=${before}` : ''}`),
   newChannelPost: (body, anon) => call('POST', '/forum-posts', { body, anon }),
   deleteChannelPost: (id) => call('DELETE', `/forum-posts/${id}`),
   channelMod: () => call('GET', '/forum-posts/mod'),

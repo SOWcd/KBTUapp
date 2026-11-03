@@ -3,10 +3,10 @@ import { expect, it, vi } from 'vitest';
 
 let answer: (v: unknown) => void = () => {};
 vi.mock('../api', () => ({ api: { channelFeed: () => new Promise((done) => { answer = done; }) } }));
-import { channel, loadChannel, touched } from './channel.svelte';
+import { channel, loadChannel, loadOlder, PAGE, touched } from './channel.svelte';
 import type { ChannelFeedPost } from '../api';
 
-const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], talking: 0 });
+const post = (id: number): ChannelFeedPost => ({ id, body: 'x', status: 'live', at: 0, msg: id, anon: false, sign: 'A', mine: true, person: null, comments: 0, thread: null, faces: [], reactions: [], hot: false });
 
 it('drops a refresh that was asked before my delete', async () => {
   channel.feed = [post(1), post(2)];
@@ -17,4 +17,15 @@ it('drops a refresh that was asked before my delete', async () => {
   expect(channel.feed!.map((p) => p.id)).toEqual([2]);
   const next = loadChannel(); answer([post(2)]); await next;  // the next refresh lands as usual
   expect(channel.feed!.map((p) => p.id)).toEqual([2]);
+});
+
+it('keeps the older pages under a refresh, and "more" by the page size', async () => {
+  const ids = (from: number, n: number) => Array.from({ length: n }, (_, i) => post(from - i));
+  channel.feed = null;
+  let next = loadChannel(); answer(ids(200, PAGE)); await next;
+  expect(channel.more).toBe(true);
+  next = loadOlder().then(() => {}); answer(ids(150, 3)); await next;     // the last page: 150..148
+  expect(channel.feed!.length).toBe(PAGE + 3); expect(channel.more).toBe(false);
+  next = loadChannel(); answer(ids(201, PAGE)); await next;              // a new post on top: nothing below is lost
+  expect(channel.feed!.map((p) => p.id)).toEqual(ids(201, PAGE + 4).map((p) => p.id));  // 201..152, 151 kept, 150..148
 });

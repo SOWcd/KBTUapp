@@ -296,6 +296,9 @@ BOT = {
         # an anonymous post's author replying in its comments (fchannel.reply_*, tgc._replies): to the author; the group's template
         "fch_reply_answer": ("💬 Тебе ответили на твой анонимный ответ в комментариях.", "Открыть пост"),
         "fch_reply_gone": ("Комментарий, на который ты отвечал(а) анонимно, удалён — ответ не отправлен.", "Открыть пост"),
+        # my own post: out in the channel, or declined by a moderator (one fixed reason line; to the author alone)
+        "fch_posted": ("✅ Твой пост вышел в канале форума.", "Открыть пост"),
+        "fch_declined": ("Модератор не пропустил твой пост: он не подходит под правила форума.", "Открыть форум"),
         "fch_reply_removed": ("Модератор снял этот ответ.", None),
         "fch_reply_deleted": ("Автор удалил этот ответ.", None),
         "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
@@ -427,6 +430,8 @@ BOT = {
         "fch_moved": ("Бұл пост арнада қайта жарияланды.", None),
         "fch_reply_answer": ("💬 Пікірлердегі анонимді жауабыңа жауап жазды.", "Постты ашу"),
         "fch_reply_gone": ("Сен анонимді жауап берген пікір өшірілген — жауап жіберілмеді.", "Постты ашу"),
+        "fch_posted": ("✅ Постың форум арнасында жарияланды.", "Постты ашу"),
+        "fch_declined": ("Модератор постыңды өткізбеді: ол форум ережелеріне сай емес.", "Форумды ашу"),
         "fch_reply_removed": ("Бұл жауапты модератор алып тастады.", None),
         "fch_reply_deleted": ("Бұл жауапты авторы өшірді.", None),
         "fch_reply_queue": ("🛡 Пікірлердегі авторлардың анонимді жауаптары модераторды күтуде (шағым немесе тексеру): {n}.", "Ашу"),
@@ -558,6 +563,8 @@ BOT = {
         "fch_moved": ("This post was published in the channel again.", None),
         "fch_reply_answer": ("💬 Someone answered your anonymous reply in the comments.", "Open the post"),
         "fch_reply_gone": ("The comment you replied to anonymously was deleted, so the reply wasn't sent.", "Open the post"),
+        "fch_posted": ("✅ Your post is out in the forum channel.", "Open the post"),
+        "fch_declined": ("A moderator didn't let your post through: it doesn't fit the forum's rules.", "Open the forum"),
         "fch_reply_removed": ("A moderator removed this reply.", None),
         "fch_reply_deleted": ("The author deleted this reply.", None),
         "fch_reply_queue": ("🛡 Authors' anonymous replies in the comments wait for a moderator (reports or a check): {n}.", "Open"),

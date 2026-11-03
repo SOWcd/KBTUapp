@@ -27,11 +27,28 @@ UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: 
 # what Telegram turns into a link or a ping even in plain text, looked for in the text NFKC-normalised (fullwidth
 # letters and dots fold to ASCII; the ideographic dots count as dots): a scheme, www., a domain (Latin or IDN labels,
 # a Latin TLD or a Cyrillic one Telegram links), an e-mail, @handle, a phone or a card number (+..., a Kazakh 8/7 7xx
-# number, ten digits or more in any spacing). ponytail: any "word.letters" counts as a domain ("node.js" too), since
-# Telegram knows every Latin TLD; a TLD list if students trip on it
+# number; ten digits or more in any spacing: _long_number). ponytail: any "word.letters" counts as a domain ("node.js"
+# too), since Telegram knows every Latin TLD; a TLD list if students trip on it. The app mirrors these as you type
+# (web/src/lib/forumRules.ts); tests/fchannel_rules.json holds the cases both must agree on
 _CYR_TLD = "\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d|\u0441\u0430\u0439\u0442|\u043e\u0440\u0433|\u043a\u043e\u043c|\u043c\u043e\u0441\u043a\u0432\u0430|\u049b\u0430\u0437|\u0431\u0435\u043b|\u0443\u043a\u0440|\u0441\u0440\u0431|\u0434\u0435\u0442\u0438"
 LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_][\w-]*)*\.(?:[a-z]{2,}|" + _CYR_TLD + r")\b|@\w{3,}"
-                   r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b|\d(?:[\s-]?\d){9,})")
+                   r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b)")
+DIGITS = re.compile(r"\d(?:[\s-]?\d){9,}")  # ten digits or more, one space or dash between any two
+SUM = re.compile(r"[1-9]\d{0,2}(?:\s\d{3})*\s\d00")  # a sum in thousands, round to the hundred ("15 000", "12 500", "1 500 000")
+MONEY = re.compile(r"\s*(?:\u20b8|\u0442\u0433|\u0442\u0435\u043d\u0433|tg\b|kzt\b)", re.I)  # tenge right after it
+
+
+def _long_number(s: str) -> bool:
+    """A phone or a card: ten digits or more in a run, unless it is a price: one round sum or a range of two ("10 000-15 000
+    \u0442\u0433", Nov 3), each under ten digits, twelve at most in all (a card is 16), with the tenge right after. A date's dots and a time's colons break a run anyway.
+    ponytail: a phone shaped as such a range with tenge after it ("8 700-1 234 500 \u0442\u0433") still passes; the AI looks too"""
+    for m in DIGITS.finditer(s):
+        parts = m[0].split("-")
+        if not (len(parts) <= 2 and sum(c.isdigit() for c in m[0]) <= 12 and all(SUM.fullmatch(x) and sum(c.isdigit() for c in x) < 10 for x in parts) and MONEY.match(s, m.end())):
+            return True
+    return False
+
+
 DOTS = str.maketrans({"\u3002": ".", "\uff61": ".", "\uff0e": "."})
 FILLERS = {"\u034f", "\u115f", "\u1160", "\u3164", "\uffa0"}  # invisible letters a model reads and a moderator doesn't see
 ZWJ = "\u200d"   # kept in the words (emoji families, flags); out of the text the link check reads
@@ -52,9 +69,10 @@ def _clean(raw: object) -> str:
     s = re.sub(r"\n{3,}", "\n\n", s)
     if not 2 <= len(s) <= BODY_MAX:
         raise ApiError("bad_input")
-    if LINKY.search(unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)):
+    seen = unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)
+    if LINKY.search(seen) or _long_number(seen):
         raise ApiError("bad_input", "links")
-    last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1]).lstrip() if "\n" in s else ""
+    last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1].replace(ZWJ, "")).lstrip() if "\n" in s else ""
     if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):
         raise ApiError("bad_input", "signature")
     return s
@@ -97,21 +115,22 @@ def mine(con, v: Viewer) -> list[dict]:
     return [_shape(p) for p in rows(con, "SELECT * FROM fchan_posts WHERE user_id = ? AND status != 'gone' ORDER BY id DESC LIMIT 30", v.id)]
 
 
-FEED_MAX = 50  # ponytail: the newest 50, no paging; a cursor when the channel outgrows a scroll
+FEED_MAX = 50  # a page; the next one by the cursor (before: the last id shown), "Show earlier" in the app
 
 
-def feed(con, v: Viewer) -> list[dict]:
+def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     """The Forum tab: what the channel shows (live posts the bot sent), newest first, signed as there (the name, or the
     anonymous line in the channel's language), plus my own posts on their way or removed. Never whose an anonymous post
     is: no user id, no person, no avatar, for every viewer (staff too), and `mine` true on my own rows alone. A signed
     one carries its author (person: the app's avatar, name with the nick first, and profile), read once for all rows; its
-    signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here)."""
-    ps = rows(con, """SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone'
-                      ORDER BY id DESC LIMIT ?""", v.id, FEED_MAX)
+    signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here).
+    One order, newest first (owner, Nov 3: a pinned "popular" block put old posts first); before: the page under that id."""
+    ps = rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone') AND id < ?
+                      ORDER BY id DESC LIMIT ?""", v.id, before if isinstance(before, int) and before > 0 else 1 << 62, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
-    talk = _talking(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
+    hot = _hot(con, [p["id"] for p in ps if p["comments"] >= HOT]) | _talked(con, [p["id"] for p in ps if p["status"] == "live" and p["tg_msg"]])
     out = []
     for p in ps:
         a = None if p["anon"] else who.get(p["user_id"])  # an anonymous row never reads its author's person
@@ -122,26 +141,36 @@ def feed(con, v: Viewer) -> list[dict]:
              "comments": p["comments"], "thread": p["rules_msg"] if p["tg_msg"] else None,
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
-             "talking": talk.get(p["id"], 0),  # people discussing it today (0: under TALK_MIN); a count, nobody's; the order stays newest first
+             "hot": p["id"] in hot,  # being discussed (one label, in place): a busy hour, or several people over the day
              # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
              "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check"})
     return out
 
 
-TALK_MIN, TALK_AGE = 3, 86400  # "N people discussing": TALK_MIN or more people commenting on a post of the last day
+HOT = 5  # comments in the last hour that make a post "being discussed" (the feed's label)
 
 
-def _talking(con, ids: list[int]) -> dict[int, int]:
-    """How many people commented on each post in the last day, one query for all of them: posts and comments under
-    TALK_AGE old, still up, each person once, only from TALK_MIN up. The author counts like anyone (review, Nov 3): left
-    out, an anonymous author's first comment would be the one that does not move the number, a tell on a 30 s poll.
-    Only among the feed's ids (ponytail: fits FEED_MAX at today's 15-36 posts a day)."""
+def _hot(con, ids: list[int]) -> set[int]:
+    """The posts with HOT or more students' comments (still up) in the last hour, one query for all of them."""
     if not ids:
-        return {}
-    day = _now() - TALK_AGE
-    return {r[0]: r[1] for r in rows(con, f"""SELECT p.id, COUNT(DISTINCT c.user_id) FROM fchan_posts p JOIN fchan_comments c ON c.post_id = p.id
-        WHERE p.id IN ({','.join('?' * len(ids))}) AND p.created_at > ? AND c.gone = 0 AND c.at > ?
-        GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ?""", *ids, day, day, TALK_MIN)}
+        return set()
+    return {r[0] for r in rows(con, f"""SELECT post_id FROM fchan_comments WHERE gone = 0 AND at > ? AND post_id IN ({','.join('?' * len(ids))})
+        GROUP BY post_id HAVING COUNT(*) >= ?""", _now() - 3600, *ids, HOT)}
+
+
+TALK_MIN, TALK_AGE = 3, 86400  # "being discussed" over the day too: TALK_MIN people or more (not its author) commenting
+
+
+def _talked(con, ids: list[int]) -> set[int]:
+    """The posts TALK_MIN or more distinct people commented on in the last day, one query for all of them: comments still
+    up; a signed post's author left out (it takes others). An anonymous one counts everyone: leaving its author out
+    would tell, by the label, whether a commenter is the author (review, Nov 3). ponytail: so its author can pad it by
+    one; fine for a hint"""
+    if not ids:
+        return set()
+    return {r[0] for r in rows(con, f"""SELECT p.id FROM fchan_posts p JOIN fchan_comments c ON c.post_id = p.id
+        WHERE p.id IN ({','.join('?' * len(ids))}) AND c.gone = 0 AND c.at > ? AND (p.anon = 1 OR c.user_id != p.user_id)
+        GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ?""", *ids, _now() - TALK_AGE, TALK_MIN)}
 
 
 FACES = 3  # the newest commenters a card shows
@@ -240,6 +269,13 @@ def delete(con, v: Viewer, pid: int) -> None:
         _unpost(con, p, "author")
         _post_off(con, pid)
         con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
+        _notes_off(con, pid)
+
+
+def _notes_off(con, pid: int) -> None:
+    """The bot's notes to the author about this post (fch_posted, fch_declined): out of the outbox with it, so no row ties
+    them to a removed post (a sent one's time would match the channel's)."""
+    con.execute("DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined') AND ref IN (?, ?)", (f"fp:{pid}", f"fd:{pid}"))
 
 
 def resigns(con) -> list:
@@ -293,6 +329,10 @@ def sent(con, pid: int, msg_id: int) -> None:
     """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
     right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
     if con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
+        # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post
+        a = one(con, "SELECT f.user_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND u.tg_id > 0", pid)
+        if a:
+            notify(con, a["user_id"], "fch_posted", f"fp:{pid}")
         # its author deleted the account while it went out, signed with the name: the signature rewritten next round
         if one(con, "SELECT 1 FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND f.anon = 0 AND u.tg_id < 0", pid):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg_id}",))
@@ -411,6 +451,8 @@ def sweep(con) -> None:
         return
     con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? OR status = 'hidden' AND created_at < ?",
                 (_now() - 86400, _now() - 30 * 86400))
+    con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
+        AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
     con.execute("DELETE FROM fchan_replies WHERE status IN ('gone', 'hidden', 'held') AND tg_msg IS NULL AND created_at < ?", (_now() - 30 * 86400,))
 
@@ -493,6 +535,8 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
             _unpost(con, p, "moderator", UNDO_WINDOW)
             _post_off(con, pid, UNDO_WINDOW)
             con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
+            if p["status"] == "held":  # declined before it went out: its author hears, after the undo minute (bot.py checks it still is)
+                notify(con, p["user_id"], "fch_declined", f"fd:{pid}", after=_now() + UNDO_WINDOW)
         log_action(con, v.id, "fchan_release" if ok else "fchan_hide", f"fchan:{pid}")
 
 

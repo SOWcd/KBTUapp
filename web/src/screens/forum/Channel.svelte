@@ -1,20 +1,23 @@
 <script lang="ts">
   // The Forum tab (Nov 1: the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
-  // newest first, laid out as Threads (owner, Nov 2): no boxes, the words the hero, a hairline between posts from the
-  // words' edge; the face on the left (an accent dot on it: new since my last visit), name · time, the words. Under them
-  // one quiet row (owner, rounds 3-4: "why two buttons", "too loud"): Telegram's reactions on the left as plain emoji
-  // and counts, which open the post in the channel (reacting is the one reason to go there), and on the right who
-  // replied, the bubble and how many. A tap on the post opens its comments too, the main thing. My own posts are marked (on their way, under review, removed) and can be deleted.
+  // newest first and nothing else (owner, Nov 3: a pinned "popular" block put old posts first; a post being discussed
+  // says so in place), laid out as Threads (owner, Nov 2): no boxes, the words the hero, a hairline between posts from
+  // the words' edge; the face on the left (an accent dot on it: new since my last visit), name · time, the words. Under
+  // them one quiet row: Telegram's reactions on the left as counts (read-only: they are Telegram's), and on the right
+  // the one way to the comments, which live in Telegram and say so ("Discuss in Telegram", who replied, how many); the
+  // post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
+  // Nothing jumps: the 30 s refresh never puts posts above the one I'm reading; they wait behind an "N new" pill (at
+  // the top already: they just come in). Under the 50th, "Show earlier" brings the next 50.
   // No large title (the capsule names the tab): the feed starts with a "Share with KBTU…" row that opens the new post
   // screen (ChannelCompose). A signed post shows its author as the app does (his profile on a tap); an anonymous one a
   // mask, nobody behind it (the API sends no one). Every tap answers at once (a new post stands at the top "checking";
   // a delete leaves the list before the server says so). It looks the same for every viewer, staff too: the channel's
   // moderation lives in Admin alone.
   import { tick, untrack } from 'svelte';
-  import { fly, slide } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
-  import Heart from '@lucide/svelte/icons/heart';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -26,7 +29,7 @@
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
-  import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
+  import { channel, loadChannel, loadOlder, touched } from '../../lib/state/channel.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -48,35 +51,45 @@
   function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
   let since = $state(0);
   const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && !p.mine && !!p.msg;
-  // newest first, the only order: nothing moves under the thumb (review, Nov 3: "popular today" on top read older posts
-  // first and reshuffled on the poll). Scrolled down, the poll's new posts wait above `cap` behind a pill ("N new
-  // posts") instead of sliding in; at the top (or on the pill) they come in. Mine always show at once
-  let page: HTMLElement;
-  let cap = $state<number | null>(null);
-  const newest = () => Math.max(0, ...(channel.feed ?? []).filter((p) => p.msg).map((p) => p.id));
-  const list = $derived((channel.feed ?? []).filter((p) => cap == null || p.id <= cap || p.mine || p.id < 0));
-  const waiting = $derived(cap == null ? 0 : (channel.feed ?? []).filter((p) => p.id > cap! && !p.mine && p.msg).length);
-  const release = () => { cap = null; page?.scrollTo({ top: 0, behavior: 'smooth' }); };
-  // the line stands above the first post seen before, when some new one is above it: "N new"
+
+  // what's on screen: the posts already shown (known), the older pages under them, mine; a refresh's others wait for
+  // the pill (or come in by themselves while I'm at the top). known empty: the first look, all of it
+  let known = $state(new Set<number>()), atTop = $state(true), scroller = $state<HTMLElement>();
+  const floor = $derived(known.size ? Math.min(...known) : Infinity);
+  const shown = (p: ChannelFeedPost) => p.id < 0 || p.mine || known.has(p.id) || p.id < floor;
+  const list = $derived((channel.feed ?? []).filter(shown));
+  const waiting = $derived((channel.feed ?? []).filter((p) => !shown(p)).length);
+  const showAll = () => { known = new Set((channel.feed ?? []).map((p) => p.id)); };
+  $effect(() => { if (channel.feed && (atTop || !known.size) && (waiting || !known.size)) untrack(showAll); });
+  function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+  // the line stands above the first post seen before, when some new one is above it: "N new", how many
   const cut = $derived.by(() => {
     const i = list.findIndex((p) => p.id > 0 && p.id <= since), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
     return n ? { id: list[i].id, n } : null;
   });
 
+  // older posts: the next page under the last one (they come in under it, nothing above moves)
+  let older = $state(false);
+  async function earlier() {
+    haptic.tap(); older = true;
+    try { await loadOlder(); } catch (e) { fail(e); } finally { older = false; }
+  }
+
   // a visit starts when the tab comes into view: the line between new and seen is where the last one ended
   // (declared before the effect below that moves the mark: effects run in order)
-  $effect(() => { if (here) untrack(() => { since = readSeen(); cap = null; void loadChannel().then(seek); }); });
+  $effect(() => { if (here) untrack(() => { since = readSeen(); void loadChannel().then(seek); }); });
   $effect(() => {
     if (!here) return;
-    const top = Math.max(0, ...list.filter((p) => p.msg).map((p) => p.id));  // only what is on screen: a waiting post isn't seen
+    const top = Math.max(0, ...(channel.feed ?? []).filter((p) => p.msg).map((p) => p.id));
     if (top > untrack(readSeen)) try { localStorage.setItem(SEEN, String(top)); } catch { /* private mode: no line next time */ }
   });
 
   // fresh while open: back from the background (Telegram's activated, the page shown again) and every 30 s while seen;
-  // at the top, a new post slides in there; scrolled down, it waits behind the pill
+  // a new post slides in at the top, the rest glide down (flip)
   $effect(() => {
     if (!here) return;
-    const pull = () => { if (document.hidden) return; if (page.scrollTop > 80) cap ??= newest(); void loadChannel(); };
+    const pull = () => { if (!document.hidden) void loadChannel(); };
     const every = setInterval(pull, 30_000);
     document.addEventListener('visibilitychange', pull);
     const off = on('activated', pull);
@@ -91,7 +104,7 @@
     if (id == null) return;
     channel.focus = null;
     if (!channel.feed?.some((p) => p.id === id)) return;
-    open[id] = true;
+    showAll(); open[id] = true;
     await tick();
     document.querySelector(`[data-post="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     lit = id;
@@ -141,26 +154,20 @@
     try { await api.deleteChannelPost(p.id); } catch (e) { channel.feed = before; fail(e); }
   }
 
-  // the reactions: a soft pop, then the post in the channel, where reactions are left (they are Telegram's, read-only
-  // here: the counts move when Telegram's do)
-  let popped = $state<number | null>(null);
-  function react(p: ChannelFeedPost) {
-    haptic.select(); popped = p.id;
-    setTimeout(() => { if (popped === p.id) popped = null; openLink(`${CHANNEL}/${p.msg}`); }, 260);
-  }
-
   // someone else's post: ⋯ → Report (the app's report sheet; into the admin's queue, whose it is stays hidden)
   function more(e: MouseEvent, p: ChannelFeedPost) {
     menu(e.currentTarget as Element, [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
   }
 
-  // the comments: the pill, or a tap anywhere on the post but its buttons (Enter and Space too)
+  // the comments, in Telegram: its button alone opens them
   const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
-  const press = (e: MouseEvent, p: ChannelFeedPost) => { if (!(e.target as Element).closest('button, a, .nw')) talk(p); };
-  const key = (e: KeyboardEvent, p: ChannelFeedPost) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); talk(p); } };
 </script>
 
-<div class="page scroll" bind:this={page} onscroll={() => { if (cap != null && page.scrollTop < 8) cap = null; }}>
+<div class="page scroll" bind:this={scroller} onscroll={(e) => { atTop = e.currentTarget.scrollTop < 40; }}>
+  <!-- new posts from the refresh while I read further down: a pill, never a jump -->
+  <div class="pill">{#if waiting && !atTop}<span class="pin" transition:slide={{ duration: 220, axis: 'y' }}>
+    <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
+  </span>{/if}</div>
   <!-- the way to write: my face and a quiet prompt, the pen at the end (Threads' composer); the whole row a tap -->
   <button class="compose" onclick={write}>
     {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
@@ -168,20 +175,14 @@
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
 
-  {#if waiting}
-    <div class="pill" transition:fly={{ y: -12, duration: 240, easing: cubicOut }}><button onclick={() => { haptic.tap(); release(); }}><ArrowUp size={14} strokeWidth={2.5} />{tn('fc.waiting', waiting)}</button></div>
-  {/if}
-
   {#if channel.feed?.length}
     <div class="feed">
       {#each list as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
-        <div class="item" transition:slide={{ duration: 360, easing: cubicOut }}>
-        <!-- a live one is a button into its comments, the others plain (role by state) -->
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <div class="post" style:--i={Math.min(i, 8)} class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut?.id === p.id} data-post={p.id}
-          role={live ? 'button' : undefined} tabindex={live ? 0 : undefined} onclick={live ? (e) => press(e, p) : undefined} onkeydown={live ? (e) => key(e, p) : undefined}>
+        <!-- one element per post (flip needs it) -->
+        <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
+        <div class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut?.id === p.id} data-post={p.id}>
           {#if cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
           <div class="rail">
             {#if p.person}<Avatar person={p.person} size={36} />
@@ -197,7 +198,7 @@
               {:else}<b class="ellipsis">{p.sign}</b>{/if}
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-              {:else if p.talking && live}<span class="mk hot">{tn('fc.talking', p.talking)}</span>{/if}
+              {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
               {#if p.mine && p.id > 0}<span class="del"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
               {:else if live && !p.mine}<span class="del"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
             </div>
@@ -208,27 +209,27 @@
             {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
             {#if live}
               <div class="acts">
-                <!-- Telegram's reactions, plain emoji and counts; none yet: a small heart. To the channel, where they are left -->
-                <button class="rx" class:pop={popped === p.id} onclick={() => react(p)}
-                  aria-label="{t('fc.reactions')}{p.reactions.length ? `: ${p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}` : ''}">
-                  {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>
-                  {:else}<span class="r none"><Heart size={19} strokeWidth={1.8} /></span>{/each}
-                </button>
-                <!-- the way to the talk: who replied (faces; no ids come: a face's colour by its letter), the bubble, how many -->
+                <!-- Telegram's reactions as counts, read-only (left in Telegram); none: nothing -->
+                {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
+                  {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>{/each}
+                </span>{/if}
+                <!-- the one way to the talk, in Telegram: who replied (faces; no ids come: a face's colour by its letter), the words, how many -->
                 <button class="talk" onclick={() => talk(p)} aria-label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}">
                   {#if p.faces.length}<span class="faces">{#each p.faces as f, i (i)}<Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={18} tappable={false} />{/each}</span>{/if}
-                  <MessageCircle size={18} strokeWidth={1.8} />
-                  {#if p.comments}<span>{compact(p.comments)}</span>{/if}
+                  <MessageCircle size={17} strokeWidth={1.9} />
+                  <span class="tl">{t('fc.comments')}</span>
+                  {#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}
                 </button>
               </div>
-              <!-- my anonymous post: answering in its comments through the bot (ChannelReply), a quiet line under the row -->
-              {#if p.mine && p.anon}<button class="areply" onclick={() => { haptic.tap(); sheets.channelReply({ id: p.id, body: p.body }); }}><VenetianMask size={15} strokeWidth={2} />{t('fcr.entry')}</button>{/if}
+              <!-- my anonymous post: answering in its comments as the mask, through the bot (ChannelReply) -->
+              {#if p.mine && p.anon}<span class="areply"><Button kind="secondary" size="s" onclick={() => sheets.channelReply({ id: p.id, body: p.body })}>{#snippet icon()}<VenetianMask size={16} strokeWidth={2} />{/snippet}{t('fcr.entry')}</Button></span>{/if}
             {/if}
           </div>
         </div>
         </div>
       {/each}
     </div>
+    {#if channel.more}<div class="earlier"><Button kind="plain" size="m" loading={older} onclick={earlier}>{t('fc.earlier')}</Button></div>{/if}
   {:else if channel.feed}
     <EmptyState icon={TAB_ICON.forum} title={t('fc.emptyTitle')} text={t('fc.emptyText')} />
   {/if}
@@ -249,11 +250,9 @@
   .compose::after, .item + .item > .post::before { content: ''; position: absolute; left: var(--rule); right: 0; height: 0.5px; background: var(--separator); }
   .compose::after { bottom: 0; }
   .item + .item > .post::before { top: 0; }
-  /* "N new posts": a small accent capsule held under the top edge while scrolled (zero height: the feed doesn't move) */
-  .pill { position: sticky; top: var(--s-2); /* from the padding edge: already under the capsule */ z-index: 3; height: 0; display: flex; justify-content: center; }
-  .pill button { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 var(--s-3); border-radius: var(--r-full); background: var(--accent);
-    color: var(--on-accent); font: 600 var(--fs-sub)/1 var(--font-text); box-shadow: 0 4px 14px rgb(0 0 0 / 0.18); transition: transform 380ms var(--ease-bounce); }
-  .pill button:active { transform: scale(0.94); transition-duration: 60ms; }
+  /* the "N new" pill: floats under the capsule, takes no room in the list */
+  .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
+  .pin { display: flex; height: max-content; }
   .compose:active { background: var(--surface); transition-duration: 60ms; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
   .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text);
@@ -272,9 +271,6 @@
   .nw::before, .nw::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.35; }
   .nw::before { display: none; }
   .nwl { display: inline-flex; align-items: center; gap: 3px; } /* the arrow: the new ones are above the line */
-  .tap { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  .tap:active:not(:has(button:active)) { background: var(--surface); transition-duration: 60ms; }
-  .tap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   /* the post the bot's button pointed at: an accent wash that fades */
   .post.lit { animation: lit 1.8s var(--ease); }
   @keyframes lit { 0%, 45% { background: var(--accent-soft); } }
@@ -302,7 +298,7 @@
   @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
   .mk.accent { color: var(--accent-text); }
   .mk.warning { color: var(--warning-text); }
-  .mk.hot { color: var(--warning-text); } /* people discussing: a quiet tinted chip by the time (no emoji: it shouted), never a reorder */
+  .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */
   .del { align-self: center; display: flex; flex: none; margin: -8px -8px -8px auto; --plain-ink: var(--text-3); }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
@@ -314,33 +310,28 @@
   .post.off .tx { color: var(--text-3); }
   .more { display: flex; margin: 0 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-2); }
 
-  /* the row under the words, on the words' edges, quiet: the reactions left, the talk right (under the thumb); no
-     fills, a press only dims; 44 high to hit, the air around the marks is the target */
-  .acts { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: -4px 0 -2px; } /* the hit areas reach into the air */
-  .rx, .talk { display: inline-flex; align-items: center; min-width: 44px; height: 44px; color: var(--text-2);
-    font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; transition: opacity var(--t-base) var(--ease), transform 380ms var(--ease-bounce); }
-  .rx:active, .talk:active { opacity: 0.45; transform: scale(0.96); transition-duration: 60ms; }
-  .rx { gap: var(--s-3); padding-right: var(--s-3); }
+  /* the row under the words, on the words' edges, quiet: the reactions left (plain counts), the talk right (under the
+     thumb); no fills, a press only dims; 44 high to hit, the air around the marks is the target */
+  .acts { display: flex; align-items: center; gap: var(--s-2); margin: -4px 0 -2px; } /* the hit areas reach into the air */
+  .rx, .talk { display: inline-flex; align-items: center; height: 44px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
+  .rx { flex: none; gap: var(--s-3); }
   .r { display: inline-flex; align-items: center; gap: 4px; }
   .e { font-size: var(--fs-body); line-height: 1; }
-  .r.none { color: var(--text-2); } /* an empty heart still reads as a button */
-  /* the tap's answer: the reactions pop softly (the empty heart fills red), then the channel */
-  .rx.pop .r { animation: pop 420ms var(--ease-bounce); }
-  .rx.pop .none { color: var(--danger); }
-  .rx.pop .none :global(svg) { fill: currentColor; }
-  @keyframes pop { 0% { transform: scale(0.9); } 45% { transform: scale(1.18); } 100% { transform: scale(1); } }
-  .talk { justify-content: flex-end; gap: 6px; padding-left: var(--s-3); }
+  .talk { min-width: 0; margin-left: auto; justify-content: flex-end; gap: 6px; padding-left: var(--s-3); color: var(--accent-text);
+    transition: opacity var(--t-base) var(--ease), transform 380ms var(--ease-bounce); }
+  .talk:active { opacity: 0.45; transform: scale(0.96); transition-duration: 60ms; }
   .talk :global(svg) { flex: none; }
+  .tl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .n { color: var(--text-2); }
   .faces { display: flex; margin-right: 4px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
   .faces :global(.av + .av) { margin-left: -5px; }
   .faces :global(.av:first-child) { z-index: 2; } /* the newest on top */
   .faces :global(.av:nth-child(2)) { z-index: 1; }
-  @media (max-width: 359px) { .r:nth-child(3) { display: none; } } /* 320: two reactions */
+  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } } /* 320: the top reaction, the words to the talk */
 
-  .areply { display: inline-flex; align-items: center; gap: 6px; height: 36px; margin: -6px 0 var(--s-2); font: 500 var(--fs-sub)/1 var(--font-text); color: var(--text-2);
-    transition: opacity var(--t-base) var(--ease); }
-  .areply:active { opacity: 0.45; transition-duration: 60ms; }
+  .areply { display: flex; margin: 0 0 var(--s-3); }
+  .earlier { display: flex; justify-content: center; padding: var(--s-3) 0; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .tail { height: calc(var(--bottom) + var(--s-8)); }
 </style>
