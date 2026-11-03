@@ -1129,7 +1129,7 @@ const en: Dict = {
   'give.sent': "Link sent",
   'give.linkDead': "The link was already used or has expired",
   'nc.title': "Your own club",
-  'nc.lead': "Clubs open after a check by the creator: tell us the idea. Until {dmp} marks the club official it's a «student initiative»: everything but paid events, the events channel and a message to followers about every event: those come with the mark (until then, one message to followers a week).",
+  'nc.lead': "Clubs open after a check by the creator: tell us the idea. Until {dmp} marks the club official it's a «student initiative»: everything but paid events, the events channel and a message to followers about every event: those come with the mark (until then, followers hear of one event a week).",
   'nc.name': "Name",
   'nc.namePh': "Chess Club",
   'nc.about': "About the club",

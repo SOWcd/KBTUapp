@@ -66,9 +66,8 @@
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
-  const canPrice = $derived(official && may(mine, 'money'));
-  // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
-  const canPartner = $derived(official || oversee);
+  // a student initiative: no @KBTUevents, its followers told once a week (KBTU's own offices are as official)
+  const initiative = $derived(!official && (data.orgs.find((o) => o.id === org) ?? mine?.org)?.kind === 'club');
   // a choice question's options, typed with commas: "S, M, L"
   const opts = (s: string) => [...new Set(s.split(',').map((o) => o.trim()).filter(Boolean))];
   const GUEST_BANNED = /kbtu|\u043a\u0431\u0442\u0443|dmp|\u0434\u043c\u043f|council|\u0441\u043e\u0432\u0435\u0442|school/i; // the server's own rule
@@ -83,6 +82,10 @@
   const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
+  // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
+  const canPrice = $derived((official || !!saved?.price) && may(mine, 'money'));
+  // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
+  const canPartner = $derived(official || oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
@@ -347,7 +350,7 @@
       studioChanged();
       haptic.ok();
       // a student initiative tells its followers once a week (the server's rule): the toast says if they heard, and when next
-      if (kind === 'publish') { burst(); say(pub?.told === undefined || official ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
+      if (kind === 'publish') { burst(); say(pub?.told === undefined || !initiative ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
       else say(kind === 'draft' ? phrase('say.draftSaved') : moved ? t('say.eventMoved') : phrase('say.eventSaved'), 'sparkles_3d');
       close(overlay.id);
     } catch (x) {
@@ -555,7 +558,7 @@
       {@render toggle(Images, t('ed.albumOpen'), () => f.albumOpen, (v) => (f.albumOpen = v))}
     </div>
     {#if f.leaders}<p class="hint">{t('ed.leadersHint')}</p>{/if}
-    {#if !official && !f.teamOnly && !f.leaders}<p class="hint">{t('ed.noChannel')}</p>{/if}
+    {#if initiative && !f.teamOnly && !f.leaders}<p class="hint">{t('ed.noChannel')}</p>{/if}
 
     <h3 class="cap">{t('ex.more')}</h3>
     <div class="pill grp">

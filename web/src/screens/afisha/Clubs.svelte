@@ -74,7 +74,7 @@
   // in each the student government first, then a round by its deadline, then any-time applications
   const mineIds = $derived(new Set(mine.map((x) => x.org.id)));
   const recruit = $derived(data.orgs.filter((o) => !mineIds.has(o.id) && !o.myRole && (o.round || o.recruiting))
-    .sort((a, b) => +!a.official - +!b.official || +!a.gov - +!b.gov || (a.round?.closesAt ?? Infinity) - (b.round?.closesAt ?? Infinity) || byWeight(a, b)));
+    .sort((a, b) => +!(a.official || a.kind !== 'club') - +!(b.official || b.kind !== 'club') || +!a.gov - +!b.gov || (a.round?.closesAt ?? Infinity) - (b.round?.closesAt ?? Infinity) || byWeight(a, b)));
   const recruitLine = (o: Org) => (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : t('clubs.openNow'));
   const canApply = (o: Org) => !!session.me?.student && !o.myRole;
   const sub = (o: Org) => next.get(o.id) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
