@@ -11,8 +11,7 @@
   // a delete leaves the list before the server says so). It looks the same for every viewer, staff too: the channel's
   // moderation lives in Admin alone.
   import { tick, untrack } from 'svelte';
-  import { flip } from 'svelte/animate';
-  import { slide } from 'svelte/transition';
+  import { fly, slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
   import Heart from '@lucide/svelte/icons/heart';
@@ -30,7 +29,7 @@
   import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
@@ -49,31 +48,35 @@
   function readSeen(): number { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } }
   let since = $state(0);
   const fresh = (p: ChannelFeedPost) => since > 0 && p.id > since && !p.mine && !!p.msg;
-  // popular today (the server's `top`: the day's most discussed) moved to the head under their own header, the rest
-  // under "New", newest first; no top post: no headers, the feed as it was. Each post once
-  const tops = $derived((channel.feed ?? []).filter((p) => p.top));
-  const rest = $derived((channel.feed ?? []).filter((p) => !p.top));
-  const list = $derived([...tops, ...rest]);
-  // the line stands above the first post seen before, when some new one is above it (among the new ones)
+  // newest first, the only order: nothing moves under the thumb (review, Nov 3: "popular today" on top read older posts
+  // first and reshuffled on the poll). Scrolled down, the poll's new posts wait above `cap` behind a pill ("N new
+  // posts") instead of sliding in; at the top (or on the pill) they come in. Mine always show at once
+  let page: HTMLElement;
+  let cap = $state<number | null>(null);
+  const newest = () => Math.max(0, ...(channel.feed ?? []).filter((p) => p.msg).map((p) => p.id));
+  const list = $derived((channel.feed ?? []).filter((p) => cap == null || p.id <= cap || p.mine || p.id < 0));
+  const waiting = $derived(cap == null ? 0 : (channel.feed ?? []).filter((p) => p.id > cap! && !p.mine && p.msg).length);
+  const release = () => { cap = null; page?.scrollTo({ top: 0, behavior: 'smooth' }); };
+  // the line stands above the first post seen before, when some new one is above it: "N new"
   const cut = $derived.by(() => {
-    const f = rest, i = f.findIndex((p) => p.id > 0 && p.id <= since);
-    return i > 0 && f.slice(0, i).some(fresh) ? f[i].id : null;
+    const i = list.findIndex((p) => p.id > 0 && p.id <= since), n = i > 0 ? list.slice(0, i).filter(fresh).length : 0;
+    return n ? { id: list[i].id, n } : null;
   });
 
   // a visit starts when the tab comes into view: the line between new and seen is where the last one ended
   // (declared before the effect below that moves the mark: effects run in order)
-  $effect(() => { if (here) untrack(() => { since = readSeen(); void loadChannel().then(seek); }); });
+  $effect(() => { if (here) untrack(() => { since = readSeen(); cap = null; void loadChannel().then(seek); }); });
   $effect(() => {
     if (!here) return;
-    const top = Math.max(0, ...(channel.feed ?? []).filter((p) => p.msg).map((p) => p.id));
+    const top = Math.max(0, ...list.filter((p) => p.msg).map((p) => p.id));  // only what is on screen: a waiting post isn't seen
     if (top > untrack(readSeen)) try { localStorage.setItem(SEEN, String(top)); } catch { /* private mode: no line next time */ }
   });
 
   // fresh while open: back from the background (Telegram's activated, the page shown again) and every 30 s while seen;
-  // a new post slides in at the top, the rest glide down (flip)
+  // at the top, a new post slides in there; scrolled down, it waits behind the pill
   $effect(() => {
     if (!here) return;
-    const pull = () => { if (!document.hidden) void loadChannel(); };
+    const pull = () => { if (document.hidden) return; if (page.scrollTop > 80) cap ??= newest(); void loadChannel(); };
     const every = setInterval(pull, 30_000);
     document.addEventListener('visibilitychange', pull);
     const off = on('activated', pull);
@@ -157,7 +160,7 @@
   const key = (e: KeyboardEvent, p: ChannelFeedPost) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); talk(p); } };
 </script>
 
-<div class="page scroll">
+<div class="page scroll" bind:this={page} onscroll={() => { if (cap != null && page.scrollTop < 8) cap = null; }}>
   <!-- the way to write: my face and a quiet prompt, the pen at the end (Threads' composer); the whole row a tap -->
   <button class="compose" onclick={write}>
     {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
@@ -165,19 +168,21 @@
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
   </button>
 
+  {#if waiting}
+    <div class="pill" transition:fly={{ y: -12, duration: 240, easing: cubicOut }}><button onclick={() => { haptic.tap(); release(); }}><ArrowUp size={14} strokeWidth={2.5} />{tn('fc.waiting', waiting)}</button></div>
+  {/if}
+
   {#if channel.feed?.length}
     <div class="feed">
       {#each list as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
-        <!-- one element per post (flip needs it), its section's header above the first of each (outside the post's button) -->
-        <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
-        {#if tops.length && (i === 0 || i === tops.length)}<h3 class="sec">{t(i === 0 ? 'fc.top' : 'fc.latest')}</h3>{/if}
+        <div class="item" transition:slide={{ duration: 360, easing: cubicOut }}>
         <!-- a live one is a button into its comments, the others plain (role by state) -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <div class="post" style:--i={Math.min(i, 8)} class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut === p.id} data-post={p.id}
+        <div class="post" style:--i={Math.min(i, 8)} class:tap={live} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut?.id === p.id} data-post={p.id}
           role={live ? 'button' : undefined} tabindex={live ? 0 : undefined} onclick={live ? (e) => press(e, p) : undefined} onkeydown={live ? (e) => key(e, p) : undefined}>
-          {#if cut === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{t('fc.newSince')}</span></div>{/if}
+          {#if cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
           <div class="rail">
             {#if p.person}<Avatar person={p.person} size={36} />
             {:else}
@@ -192,7 +197,7 @@
               {:else}<b class="ellipsis">{p.sign}</b>{/if}
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-              {:else if p.hot && live && !p.top}<span class="mk hot">{t('fc.hot')}</span>{/if}
+              {:else if p.talking && live}<span class="mk hot">{tn('fc.talking', p.talking)}</span>{/if}
               {#if p.mine && p.id > 0}<span class="del"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
               {:else if live && !p.mine}<span class="del"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
             </div>
@@ -244,10 +249,11 @@
   .compose::after, .item + .item > .post::before { content: ''; position: absolute; left: var(--rule); right: 0; height: 0.5px; background: var(--separator); }
   .compose::after { bottom: 0; }
   .item + .item > .post::before { top: 0; }
-  /* a section's header (popular today, new): Settings' group caption; no hairline under it */
-  .sec { margin: var(--s-5) var(--gutter) 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }
-  .item:first-child > .sec { margin-top: var(--s-4); }
-  .sec + .post::before { display: none; }
+  /* "N new posts": a small accent capsule held under the top edge while scrolled (zero height: the feed doesn't move) */
+  .pill { position: sticky; top: var(--s-2); /* from the padding edge: already under the capsule */ z-index: 3; height: 0; display: flex; justify-content: center; }
+  .pill button { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 var(--s-3); border-radius: var(--r-full); background: var(--accent);
+    color: var(--on-accent); font: 600 var(--fs-sub)/1 var(--font-text); box-shadow: 0 4px 14px rgb(0 0 0 / 0.18); transition: transform 380ms var(--ease-bounce); }
+  .pill button:active { transform: scale(0.94); transition-duration: 60ms; }
   .compose:active { background: var(--surface); transition-duration: 60ms; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
   .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text);
@@ -296,7 +302,7 @@
   @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
   .mk.accent { color: var(--accent-text); }
   .mk.warning { color: var(--warning-text); }
-  .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */
+  .mk.hot { color: var(--warning-text); } /* people discussing: a quiet tinted chip by the time (no emoji: it shouted), never a reorder */
   .del { align-self: center; display: flex; flex: none; margin: -8px -8px -8px auto; --plain-ink: var(--text-3); }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
