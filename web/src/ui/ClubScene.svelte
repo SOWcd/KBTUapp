@@ -80,15 +80,13 @@
     {:else}<img class="l z near" src={L('sh-strokes')} alt="" /><img class="word" src={shadeWord} alt="" />{/if}
   {:else if look === 'choice'}
     <!-- Choice (round 5b, their logo): near-black navy, the gold of their shield; the badge's band: the whole emblem in the
-         middle under the same light. The card (round 7, owner: round 5b's HUGE shield looked awesome, start from it): the
-         shield back, minted in gold, and their logo, the medallion, is its boss, so the helmet is there once. Round 7b
-         (owner: too far right, the focus unclear, more detail): the shield whole and centred on the medallion, from the
-         card's top to the strip, a burst of gold rays behind it; inside, rays from the boss, a guilloche, the Spartans'
-         lambda engraved in gold; a bevelled double rim with rivets; a light runs round the rim now and then
-         (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
-    {#if wide}<img class="l z chs" src={L('ch-shield')} alt="" /><span class="chglint z"><i></i></span>
-    {:else}<i class="chrays z"></i>
-      <img class="che" src={chEmblem} alt="" />{/if}
+         middle under the same light. The card, round 7g (the owner's pick from three concepts, "a real wow"): a Spartan
+         helmet's horsehair crest, alone and huge, sweeping across the whole card in gold strands; Thermopylae's dawn
+         softly behind it, the sky warming at the horizon over the pass's ridges; a soft darkening behind the name.
+         Round 7h (owner: with the gold shield, one composition): the minted shield, whole, centred on the medallion
+         (its boss) at the right, the crest sweeping from behind it (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
+    {#if wide}<img class="l z far chc" src={L('ch-crest')} alt="" /><img class="l z chs" src={L('ch-shield')} alt="" />
+    {:else}<i class="chrays z"></i><img class="che" src={chEmblem} alt="" />{/if}
   {:else if look === 'japanesecultureclub'}
     <!-- their own layers (round 5): the pink sky with its pale sun and their shanyrak far, petals drifting over it; their
          sakura is the card's top layer, over the photo and the strip (Hero). The badge's band (MyQr) as they asked: no
@@ -140,8 +138,8 @@
   /* a 320 px phone: the card is 52 px narrower and the text keeps its width; the stone and the shield shrink round the
      medallion's centre (40, 40 from the top right) so the role and the course line stay clear */
   @media (max-width: 359px) {
-    .wide .gem, .wide .chs, .wide .chglint { transform-origin: calc(100% - 40px) 40px; scale: 0.88; }
-    .wide .spark { right: 67px; top: 56px; }
+    .wide .gem, .wide .chs { transform-origin: calc(100% - 40px) 40px; scale: 0.88; }
+    .wide .spark { right: 66px; top: 54px; }
   }
   .crystalkbtu:not(.wide) { background: radial-gradient(60% 80% at 50% 30%, rgba(140, 240, 255, 0.35), transparent 70%), linear-gradient(180deg, rgb(12, 62, 76), rgb(14, 70, 84)); }
   .halo { right: -37px; bottom: -4px; width: 160px; height: 132px; background: radial-gradient(closest-side, rgba(150, 245, 255, 0.5), transparent); }
@@ -154,8 +152,8 @@
   @keyframes crprism { 0% { transform: translateX(0) rotate(18deg); opacity: 0; } 4% { opacity: 1; } 18% { opacity: 1; } 22%, 100% { transform: translateX(560px) rotate(18deg); opacity: 0; } }
   .spec { opacity: 0.9; }
   .gem { object-position: 100% 0; --z: 2; --zs: 1.03; } /* round the medallion: anchored to the top right, as Hero sets it */
-  /* a star of light on the girdle (the generator's point 258, 70.1), now and then: grows, turns a little, fades */
-  .spark { right: 72px; top: 60px; width: 20px; height: 20px; opacity: 0; --z: 2;
+  /* a star of light on the girdle (the generator's point 255, 71.9), now and then: grows, turns a little, fades */
+  .spark { right: 71px; top: 58px; width: 28px; height: 28px; opacity: 0; --z: 2;
     background: radial-gradient(circle, rgb(255, 255, 255) 0 1.5px, rgba(200, 250, 255, 0.6) 3px, transparent 60%),
       linear-gradient(90deg, transparent 10%, rgba(255, 255, 255, 0.9) 50%, transparent 90%) center / 100% 1.2px no-repeat,
       linear-gradient(transparent 10%, rgba(255, 255, 255, 0.9) 50%, transparent 90%) center / 1.2px 100% no-repeat;
@@ -250,18 +248,13 @@
   .choice { background: radial-gradient(46% 80% at calc(100% - 45px) 30%, rgba(226, 188, 114, 0.26), transparent 70%), radial-gradient(70% 90% at 0% 0%, rgba(70, 80, 140, 0.28), transparent 62%),
     linear-gradient(160deg, rgb(30, 35, 64), rgb(20, 22, 35) 55%, rgb(7, 8, 15)); }
   .sc:not(.wide).choice { background: radial-gradient(60% 90% at 50% 0%, rgba(226, 188, 114, 0.26), transparent 70%), linear-gradient(180deg, rgb(30, 35, 64), rgb(20, 22, 35)); }
+  .chc { object-position: 50% 50%; }
+  .chs { object-position: 100% 0; --z: 1; --zs: 1.02; } /* round its medallion: anchored to the card's top right, as Hero sets it */
   .chrays { inset: -40px; --z: -3; opacity: 0.7; /* from behind the medallion (round 6: the laurel's centre) */
     background: repeating-conic-gradient(from 0deg at calc(100% - 85px) 80px, rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
     -webkit-mask: radial-gradient(70% 90% at calc(100% - 85px) 80px, black, transparent 75%); mask: radial-gradient(70% 90% at calc(100% - 85px) 80px, black, transparent 75%); }
   .sc:not(.wide) .chrays { background: repeating-conic-gradient(from 0deg at 50% 60%, rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
     -webkit-mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); }
-  .chs { object-position: 100% 0; --z: 1; --zs: 1.02; } /* round its medallion: anchored to the card's top right, as Hero sets the medallion */
-  /* the light running round the rim: a soft band moving across, seen only through the rim (ch-rim-card.svg as a mask) */
-  .chglint { position: absolute; inset: 0; overflow: hidden; --z: 1; --zs: 1.02;
-    -webkit-mask: url('../assets/lanyards/scenes/ch-rim-card.svg') 100% 0 / auto 100% no-repeat; mask: url('../assets/lanyards/scenes/ch-rim-card.svg') 100% 0 / auto 100% no-repeat; }
-  .chglint i { left: 50%; top: -20%; width: 30px; height: 140%; opacity: 0; transform: translateX(-60px) rotate(20deg);
-    background: linear-gradient(90deg, transparent, rgb(255, 252, 240) 40% 60%, transparent); animation: chglint 9s 1.5s cubic-bezier(.45, 0, .3, 1) infinite; }
-  @keyframes chglint { 0% { opacity: 0; transform: translateX(-60px) rotate(20deg); } 6% { opacity: 1; } 26% { opacity: 1; } 32%, 100% { opacity: 0; transform: translateX(200px) rotate(20deg); } }
   .che { left: 50%; top: 14px; height: 100px; transform: translateX(-50%); filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)); }
   .choice .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.08), transparent 65%); box-shadow: inset 0 1px 0 rgba(226, 188, 114, 0.35); }
 
@@ -275,9 +268,9 @@
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } .spark, .chglint { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, :global(html.lowfx) .win,
   :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals { animation: none; }
   :global(html.lowfx) .win { opacity: 0.6; }
-  :global(html.lowfx) .spark, :global(html.lowfx) .chglint { display: none; }
+  :global(html.lowfx) .spark { display: none; }
 </style>
