@@ -19,11 +19,14 @@
   import momentsLogo from '../assets/lanyards/moments-logo.webp';
   import shadeLogo from '../assets/lanyards/shade-logo.webp'; // round 7: their prod avatar, trimmed a little onto its cream
   import knightsLogo from '../assets/lanyards/knights-logo.webp'; // round 7: their official logo (knight, building, ball) on white
+  import oteLogo from '../assets/lanyards/ote-logo.webp'; // new3: their wordmark on its blush, squared
+  import magLogo from '../assets/lanyards/kbtumag-logo.webp'; // new3: their wordmark on its cream, squared
 
   let { look, logo = null }: { look: Look; logo?: string | null } = $props();
   const DRAWN: Look[] = ['cheer', 'moments', 'faces', 'aichekbtu', 'crystalkbtu', 'arthousekbtu', 'choice'];
   // the official logos we ship: this file whatever the org's avatar is
-  const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo };
+  const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo,
+    teentertainmentkbtu: oteLogo, kbtumag: magLogo };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 
