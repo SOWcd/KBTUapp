@@ -41,22 +41,22 @@
 </div>
 
 <style>
-  .tip { margin: -2px 4px 0; font: 500 12.5px/1.35 var(--font-text); color: var(--text-3); }
-  .pick { display: flex; justify-content: center; padding: 10px; border-radius: var(--r-l); background: var(--surface-2); }
-  .wrap { position: relative; display: block; touch-action: none; cursor: crosshair; border-radius: 12px; outline: none; }
+  .tip { margin: -2px var(--s-4) 0; font: 450 var(--fs-cap)/1.35 var(--font-text); color: var(--text-3); }
+  .pick { display: flex; justify-content: center; padding: 10px; border-radius: var(--r-group); background: var(--surface-2); }
+  .wrap { position: relative; display: block; touch-action: none; cursor: crosshair; border-radius: var(--r-s); outline: none; }
   .wrap:focus-visible { box-shadow: 0 0 0 3px var(--accent); }
-  .wrap img { display: block; max-width: 100%; max-height: 260px; border-radius: 12px; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .wrap img { display: block; max-width: 100%; max-height: 260px; border-radius: var(--r-s); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   /* a ring you can see on any photo: white with a dark halo */
   .dot { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; pointer-events: none;
-    border: 3px solid #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.45), inset 0 0 0 1.5px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.35);
+    border: 3px solid var(--on-accent); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.45), inset 0 0 0 1.5px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.35);
     background: rgba(255, 255, 255, 0.18); transition: left 60ms linear, top 60ms linear; }
 
   .frames { display: flex; align-items: flex-end; justify-content: center; gap: 14px; }
   figure { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; }
   figure span { display: block; overflow: hidden; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
   figure img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .feed span { width: 58px; height: 124px; border-radius: 12px; }   /* a phone-tall Feed slide */
-  .card span { width: 136px; height: 79px; border-radius: 12px; }   /* the event sheet's photo */
-  .list span { width: 58px; height: 58px; border-radius: 14px; }    /* a list row */
-  figcaption { font: 560 12px/1 var(--font-text); color: var(--text-2); }
+  .feed span { width: 58px; height: 124px; border-radius: var(--r-s); }   /* a phone-tall Feed slide */
+  .card span { width: 136px; height: 79px; border-radius: var(--r-s); }   /* the event sheet's photo */
+  .list span { width: 58px; height: 58px; border-radius: var(--r-s); }    /* a list row */
+  figcaption { font: 500 var(--fs-cap)/1 var(--font-text); color: var(--text-2); }
 </style>
