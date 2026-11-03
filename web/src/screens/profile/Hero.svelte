@@ -44,9 +44,9 @@
   let face = $state(untrack(() => look));
   // while a new lanyard waits to turn on (change), the card on show keeps its own role line: the skin it was drawn with
   let was = $state(untrack(() => p.skin));
-  const h = $derived(hero(look === face ? p : { ...p, skin: was }));
-  const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   const mine = $derived(!!qr);
+  const h = $derived(hero(look === face ? p : { ...p, skin: was }, mine));
+  const club = $derived(clubLook(face)); // a template club's lanyard: its colours ride in CSS variables (lookVars)
   // the app's moderator's or admin's shield by the name (here only, not in rows); the Creator wears his own seal alone
   const staff = $derived(p.founder ? null : p.staff ?? null);
   const medalLogo = $derived(orgOfLook(p, face)?.logo ?? null); // the medallion: the org's own avatar (OrgMedal decides)

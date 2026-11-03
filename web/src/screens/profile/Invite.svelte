@@ -7,7 +7,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { sheets } from '../../lib/state/sheets';
-  import { leftLine, nextOf } from '../../lib/awards';
+  import { achItem, achName, leftLine, nextOf } from '../../lib/awards';
   import Medal from '../../ui/Medal.svelte';
 
   let { r, ach }: { r: NonNullable<Me['referrals']>; ach?: Achievement } = $props();
@@ -25,7 +25,7 @@
 
 <div class="sq inv surface" role="button" tabindex="0" onclick={open} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}>
   <span class="top">
-    <span class="art"><Medal {a} size={56} /></span>
+    <button class="art" onclick={(e) => { e.stopPropagation(); haptic.tap(); sheets.award(achItem(a), true); }} aria-label={achName(a)}><Medal {a} size={56} /></button>
     <span class="cnt"><b class="num">{r.count}</b><i>{tn('ref.came', r.count)}</i></span>
   </span>
   <span class="tx">
