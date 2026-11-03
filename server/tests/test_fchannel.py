@@ -923,3 +923,37 @@ def test_post_reports(env, monkeypatch):
     assert c.post(f"/api/admin/reports/fpost/{q2['id']}", headers=tma(4), json={"remove": False}).status_code == 204
     assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (q2["id"],)).fetchone()[0] == "live"
     assert not [x for x in c.get("/api/admin/reports", headers=tma(4)).json() if x["target"] == "fpost"]
+
+
+def test_couch_critic(env, monkeypatch):
+    """Couch critic (awards plan): the forum channel's posts a student commented under, several comments under one
+    counting once, a taken-down one not at all; the first comment that reaches a level raises it and queues its
+    card. The anonymous author's replies (the bot's, on no one's row) never count. Off by default (CRITIC_ON)."""
+    from kbtu.logic import profiles
+    assert "critic" not in [a[0] for a in profiles.ACHIEVEMENTS]                                 # until the policy says so
+    monkeypatch.setattr(profiles, "CRITIC_ON", True)
+    monkeypatch.setattr(profiles, "ACHIEVEMENTS", [*profiles.ACHIEVEMENTS, profiles.CRITIC])
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    login(c, 2, "bob")
+    login(c, 3, "cat")
+    con = db.connect(cfg.db_path)
+    ps = [c.post("/api/forum-posts", headers=tma(u), json={"body": b, "anon": True}).json() for u, b in ((1, "Who is going to the hackathon?"), (3, "Quiet post here"))]
+    tick(cfg, Telegram(), con)
+    for root, p in zip((55, 56), ps):  # the discussion group's copy of each post (tgc.gate records it)
+        mid = con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"fchcopy:{mid}", str(root)))
+    level = lambda: next(a for a in profiles.achievements(con, 2) if a["code"] == "critic")  # noqa: E731
+    assert level()["count"] == 0 and level()["level"] == 0
+    logic.fchannel.commented(con, 55, 60, 2)
+    logic.fchannel.commented(con, 55, 61, 2)                                                    # the same post again: once
+    assert level()["count"] == 1 and level()["level"] == 1
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = 2 AND code = 'critic'").fetchone()[0] == 1
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE user_id = 2 AND ref = 'ach:critic:1'").fetchone()[0] == 1
+    logic.fchannel.commented(con, 56, 62, 2)
+    assert level()["count"] == 2
+    con.execute("UPDATE fchan_comments SET gone = 1 WHERE msg_id = 62")                        # a moderator took it down
+    assert level()["count"] == 1
+    # the author's mask reply: the bot's, under the post, on no one's row
+    con.execute("INSERT INTO fchan_replies (post_id, body, status, created_at) VALUES (?, 'thanks all', 'live', 0)", (ps[0]["id"],))
+    assert [profiles.critic(con, u) for u in (1, 2)] == [0, 1]

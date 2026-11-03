@@ -14,6 +14,7 @@ import secrets
 import unicodedata
 
 from .. import texts
+from . import profiles
 from ..db import tx
 
 from .core import ApiError, PERSON, PERSON_COLS, Viewer, avatar_of, log_action, need_student, one, person_ref, rows, short_name, shown_name
@@ -426,9 +427,13 @@ def commented(con, root: int, msg_id: int, tg: int) -> None:
         p = one(con, """SELECT id FROM fchan_posts WHERE tg_msg > 0 AND tg_msg =
             (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key >= 'fchcopy:' AND key < 'fchcopy;' AND value = ?)""", str(root))
         u = one(con, "SELECT id FROM users WHERE tg_id = ?", tg)
+        # Couch critic: a first comment under a post may raise its level (profiles.CRITIC), told like any level
+        before = profiles._levels(con, u["id"]) if p and u and profiles.CRITIC_ON else None
         if p and u and con.execute("INSERT OR IGNORE INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)",
                                    (msg_id, p["id"], u["id"], _now())).rowcount:
             con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE id = ?", (p["id"],))
+            if before is not None:
+                profiles._celebrate(con, u["id"], before)
 
 
 def reacted(con, upd: dict) -> None:

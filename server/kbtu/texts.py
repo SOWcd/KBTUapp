@@ -41,14 +41,14 @@ SHARE_GRANT = {  # Admin → Awards: an award link (logic.grant_link), from any 
     "en": ("An award for you", "🏅 KBTU App gives you the <b>{award}</b> award. Thank you! The link works until {until}.", "🏅 Claim the award"),
 }
 SHARE_BADGE = {  # Admin → Awards: a one-person link for a badge's variant (logic.grant_link)
-    "ru": ("Тебе значок", "🏅 Тебе значок <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
-    "kk": ("Саған белгіше", "🏅 Саған <b>«{award}»</b> белгішесі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A badge for you", "🏅 A badge for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
+    "ru": ("Тебе знак", "🏅 Тебе знак <b>«{award}»</b>. Ссылка одноразовая, работает до {until}.", "🏅 Получить"),
+    "kk": ("Саған белгі", "🏅 Саған <b>«{award}»</b> белгісі. Сілтеме бір реттік, {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A pin for you", "🏅 A pin for you: <b>“{award}”</b>. The link works once, until {until}.", "🏅 Get it"),
 }
 SHARE_BADGE_MANY = {  # Admin → Awards: a badge's link for many (logic.grant_link): forwarded from hand to hand
-    "ru": ("Значок", "🏅 Значок <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
-    "kk": ("Белгіше", "🏅 <b>«{award}»</b> белгішесі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
-    "en": ("A badge", "🏅 The <b>“{award}”</b> badge. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
+    "ru": ("Знак", "🏅 Знак <b>«{award}»</b>. Открой, чтобы получить, и перешли тем, кому он тоже положен. Работает до {until}.", "🏅 Получить"),
+    "kk": ("Белгі", "🏅 <b>«{award}»</b> белгісі. Алу үшін аш, оған лайық басқаларға да жібер. {until} дейін жұмыс істейді.", "🏅 Алу"),
+    "en": ("A pin", "🏅 The <b>“{award}”</b> pin. Open it to get yours and pass it on to those it's meant for too. Works until {until}.", "🏅 Get it"),
 }
 BADGE_TITLES = {  # a badge's variant by its badge and variant, as the app's Admin → Badges says it (web ach.<badge>.v.<code>)
     "ru": {"init26f": "Посвящение 2026 · Гость", "init26": "Посвящение 2026 · Волонтёр", "init26p": "Посвящение 2026 · Выступающий"},
@@ -82,13 +82,13 @@ SHARE_AWARD = {
 ACH_NAMES = {
     "ru": {"regular": "Постоянный гость", "streak": "Серия", "first_in": "Первый на входе", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
            "creator_laugh": "Рассмешить создателя", "creator_found": "Привет, создатель", "bugs": "Охотник за багами", "team": "Гроза тимбилдинга", "referral": "Зазывала",
-           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Гимн от и до"},
+           "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Гимн от и до", "critic": "Диванный критик"},
     "kk": {"regular": "Тұрақты қонақ", "streak": "Серия", "first_in": "Бірінші келген", "soul": "Компанияның жаны", "season": "Маусым", "first50": "Алғашқы 500",
            "creator_laugh": "Авторды күлдірді", "creator_found": "Авторды тапты", "bugs": "Баг аңшысы", "team": "Тимбилдинг найзағайы", "referral": "Шақырушы",
-           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Әнұран басынан аяғына дейін"},
+           "init26": "Бағыштау волонтёры", "init26f": "Студенттікке бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Әнұран басынан аяғына дейін", "critic": "Диван сыншысы"},
     "en": {"regular": "Regular", "streak": "Streak", "first_in": "First in", "soul": "Life of the party", "season": "Season", "first50": "First 500",
            "creator_laugh": "Made the creator laugh", "creator_found": "Found the creator", "bugs": "Bug hunter", "team": "Teambuilding thunder", "referral": "Recruiter",
-           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Anthem, start to finish"},
+           "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Anthem, start to finish", "critic": "Couch critic"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
     "ru": {"ru": "русский", "kk": "казахский", "en": "английский"},
@@ -219,7 +219,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> теперь официальный клуб КБТУ. Поздравляем команду!", "Открыть клуб"),
         "club_unofficial": ("ℹ️ <b>{name}</b> снова студенческая инициатива: отметку официального клуба сняли. События и команда остаются; платные события, канал событий и сообщение подписчикам о каждом событии — с отметкой.", "Открыть клуб"),
         "club_no": ("📝 Заявку на клуб <b>{name}</b> пока не одобрили. Причина — в приложении.", "Посмотреть"),
-        "achievement": ("🏅 Новое достижение: <b>{name}</b>{tier}", "Посмотреть"),
+        "achievement": ("🏅 Новая награда: <b>{name}</b>{tier}", "Посмотреть"),
         "photo_report": ("📸 Фото с <b>{title}</b> уже в альбоме — {n} шт. Добавь свои!", "Смотреть фото"),
         "comment_question": ("💬 Новый вопрос под <b>{title}</b>", "Ответить"),
         "comment_answer": ("💬 Ответ на твой вопрос под <b>{title}</b> — от {org}", "Посмотреть"),
@@ -357,7 +357,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> енді ҚБТУ-дың ресми клубы. Команданы құттықтаймыз!", "Клубты ашу"),
         "club_unofficial": ("ℹ️ <b>{name}</b> қайтадан студенттік бастама: ресми клуб белгісі алынды. Іс-шаралар мен команда қалады; ақылы іс-шаралар, іс-шаралар арнасы мен әр іс-шара туралы жазылушыларға хабарлама — белгімен.", "Клубты ашу"),
         "club_no": ("📝 <b>{name}</b> клубына өтінім әзірге мақұлданбады. Себебі — қосымшада.", "Қарау"),
-        "achievement": ("🏅 Жаңа жетістік: <b>{name}</b>{tier}", "Қарау"),
+        "achievement": ("🏅 Жаңа жүлде: <b>{name}</b>{tier}", "Қарау"),
         "photo_report": ("📸 <b>{title}</b> фотолары альбомда — {n} дана. Өзіңдікін де қос!", "Фотоларды көру"),
         "comment_question": ("💬 <b>{title}</b> астында жаңа сұрақ", "Жауап беру"),
         "comment_answer": ("💬 <b>{title}</b> астындағы сұрағыңа жауап — {org}", "Қарау"),
@@ -490,7 +490,7 @@ BOT = {
         "club_official": ("✅ <b>{name}</b> is now an official KBTU club. Congratulations to the team!", "Open the club"),
         "club_unofficial": ("ℹ️ <b>{name}</b> is a student initiative again: the official club mark was taken off. Events and the team stay; paid events, the events channel and a message to followers about every event come with the mark.", "Open the club"),
         "club_no": ("📝 The application for <b>{name}</b> wasn't approved for now. The reason is in the app.", "See"),
-        "achievement": ("🏅 A new achievement: <b>{name}</b>{tier}", "See it"),
+        "achievement": ("🏅 A new award: <b>{name}</b>{tier}", "See it"),
         "photo_report": ("📸 Photos from <b>{title}</b> are in the album: {n} so far. Add yours!", "See the photos"),
         "comment_question": ("💬 A new question under <b>{title}</b>", "Answer"),
         "comment_answer": ("💬 {org} answered your question under <b>{title}</b>", "See"),
