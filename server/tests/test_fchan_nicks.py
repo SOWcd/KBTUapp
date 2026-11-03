@@ -1,6 +1,6 @@
 """An anonymous forum post's random nick (fchannel.pick_nick, Nov 3; .claude/reports/anon-nicks-review.md): drawn with
 secrets for anonymous posts alone, fresh across recent posts (one author's too), stable for its post, the channel's
-signature and the author's replies' in Russian, posing as it in its thread deleted; posts from before keep "Anon"."""
+signature and the author's replies' in Russian; posts from before keep "Anon"."""
 from __future__ import annotations
 
 import pathlib
@@ -8,7 +8,7 @@ import re
 
 from kbtu import logic, texts
 from test_core import env, tma  # noqa: F401  (env: the fixture)
-from test_fchan_replies import G, clock, gate, group_sends, note, world
+from test_fchan_replies import clock, group_sends, world
 from test_fchannel import tick
 
 F = logic.fchannel
@@ -54,7 +54,7 @@ def test_nick_anon_only_fresh_and_stable(env, monkeypatch):
     assert any(b["text"].endswith(f"<i>— {texts.nick(*a)}</i>") for b in w.tg.of("sendMessage"))
 
 
-def test_nick_reply_signature_and_posing(env, monkeypatch):
+def test_nick_reply_signature(env, monkeypatch):
     w = world(env, monkeypatch)
     t = clock(monkeypatch)
     nick = texts.nick(*nick_of(w.con, w.pid))
@@ -62,12 +62,6 @@ def test_nick_reply_signature_and_posing(env, monkeypatch):
     t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert group_sends(w.tg)[-1]["text"] == f"Thanks, all of you\n\n<i>— \U0001f3ad {nick}</i>"
-    # posing as the post's nick in its thread: the name (look-alikes, case) or a line of its own; inside a sentence stays
-    w.tg.calls.clear()
-    adj, noun = nick.split(" ")
-    gate(w.cfg, w.tg, w.con, note(80, 2, first_name=adj.upper(), last_name=noun), note(81, 2, text=f"yes\n\n— {nick}"),
-         note(82, 2, text=f"what {nick} said"), note(83, 2, first_name="Bob"))
-    assert w.tg.of("deleteMessages") == [{"chat_id": G, "message_ids": [80, 81]}]
 
 
 def test_nick_old_posts_fall_back(env, monkeypatch):
@@ -80,4 +74,3 @@ def test_nick_old_posts_fall_back(env, monkeypatch):
     t[0] += 21
     tick(w.cfg, w.tg, w.con)
     assert group_sends(w.tg)[-1]["text"] == f"Thanks, all of you\n\n<i>— {texts.FCH_REPLY_SIGN}</i>"
-    assert F.thread_nick(w.con, 55) is None

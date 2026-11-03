@@ -333,13 +333,6 @@ def _anon_sign(p) -> str:
     return texts.nick(p["nick_a"], p["nick_n"]) if p["nick_a"] is not None else anon_sign(p["body"])
 
 
-def thread_nick(con, root: int) -> str | None:
-    """The nick of the anonymous post whose copy in the group is this thread's root (tgc.posing), if it has one."""
-    p = one(con, """SELECT nick_a, nick_n FROM fchan_posts WHERE anon = 1 AND nick_a IS NOT NULL AND tg_msg > 0 AND tg_msg =
-        (SELECT CAST(substr(key, 9) AS INTEGER) FROM meta WHERE key >= 'fchcopy:' AND key < 'fchcopy;' AND value = ?)""", str(root))
-    return texts.nick(p[0], p[1]) if p else None
-
-
 def _sign(con, p) -> str:
     """The post's signature in the channel (its last line, after the dash): the one fixed when written, or the anonymous
     line (the channel speaks Russian). A post from before signatures were kept: the short name, as it was signed then."""

@@ -125,8 +125,7 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         return
     tg = int((msg.get("from") or {}).get("id") or 0)
     who = rules.commenter(con, tg)
-    # the anonymous author's mark, or this thread's post's nick: only the bot signs so
-    if who == "student" and posing(msg.get("from") or {}, _text(msg), logic.fchannel.thread_nick(con, root) if root else None):
+    if who == "student" and posing(msg.get("from") or {}, _text(msg)):  # the anonymous author's mark: only the bot signs so
         doomed.append(msg["message_id"])
         return
     if who == "student":
@@ -157,15 +156,14 @@ def _one(cfg: Config, http: httpx.AsyncClient, con, upd: dict, doomed: list, ban
         warns.append((root, str((msg.get("from") or {}).get("language_code") or "")[:2], bool(_text(msg))))
 
 
-def posing(sender: dict, text: str = "", nick: str | None = None) -> bool:
-    """The anonymous author's mark (texts.FCH_REPLY_SIGN's words, with or without the mask), or the nick of the post
-    whose thread this is (its author's replies are signed with it), in a Telegram name, or as a line of its own in the
-    text (the bot's signature line): read as letters only, NFKC, case and the common Latin and Cyrillic look-alikes
-    folded, invisible characters gone (clubs._skeleton). The mask alone in a name is fine. ponytail: a rename after
-    commenting shows on old messages and the bot never hears of it; the bot's identity is the real mark"""
-    marks = [_skeleton(texts.FCH_REPLY_SIGN)] + ([_skeleton(nick)] if nick else [])
-    name = _skeleton(f"{sender.get('first_name') or ''} {sender.get('last_name') or ''}")
-    return any(m in name for m in marks) or any(_skeleton(line) in marks for line in text.splitlines())
+def posing(sender: dict, text: str = "") -> bool:
+    """The anonymous author's mark (texts.FCH_REPLY_SIGN's words, with or without the mask) in a Telegram name, or as a
+    line of its own in the text (the bot's signature line): read as letters only, NFKC, case and the common Latin and
+    Cyrillic look-alikes folded, invisible characters gone (clubs._skeleton). The mask alone in a name is fine. ponytail:
+    a rename after commenting shows on old messages and the bot never hears of it; the bot's identity is the real mark"""
+    mark = _skeleton(texts.FCH_REPLY_SIGN)
+    return mark in _skeleton(f"{sender.get('first_name') or ''} {sender.get('last_name') or ''}") \
+        or any(_skeleton(line) == mark for line in text.splitlines())
 
 
 async def _act(cfg: Config, http: httpx.AsyncClient, con, doomed: list, bans: set, chans: set, warns: list) -> None:
