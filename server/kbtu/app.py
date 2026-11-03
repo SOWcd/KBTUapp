@@ -1700,8 +1700,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return F.mine(con, v)
 
     @app.get("/api/forum-posts/feed")
-    def fchan_feed(con: Con, v: FChan):
-        return F.feed(con, v)
+    def fchan_feed(con: Con, v: FChan, before: int | None = None):
+        return F.feed(con, v, before)
 
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):

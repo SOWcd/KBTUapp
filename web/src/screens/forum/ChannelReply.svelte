@@ -12,6 +12,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, type Key } from '../../lib/i18n/index.svelte';
+  import { broken, type Rule } from '../../lib/forumRules';
   import { haptic } from '../../lib/tg';
   import { ago, nowTs } from '../../lib/time';
   import { grow } from '../../ui/grow';
@@ -26,7 +27,10 @@
   const pid = untrack(() => post.id);
   let body = $state(''), link = $state(''), why = $state<string | null>(null);
   let mine = $state<ChannelReply[] | null>(null);
-  const ready = $derived(body.trim().length >= 2);
+  // the post's rules as I type (lib/forumRules), said at the spot as in ChannelCompose
+  const rule = $derived(broken(body));
+  const ready = $derived(body.trim().length >= 2 && !rule);
+  const HINT: Record<Rule, Key> = { link: 'fc.noLink', mention: 'fc.noMention', phone: 'fc.noPhone', signature: 'fc.signature' };
   const SIGN = '\u{1F3AD} \u0410\u0432\u0442\u043e\u0440 \u043f\u043e\u0441\u0442\u0430'; // the bot's mark (server texts.FCH_REPLY_SIGN)
 
   // "goes out in a few seconds": looked at again once that's surely over
@@ -82,7 +86,8 @@
       <span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
       <div class="col">
         <b class="ellipsis">{SIGN}</b>
-        <textarea class="text" bind:value={body} maxlength="1000" rows="3" placeholder={t('fcr.ph')} aria-label={t('fcr.ph')} use:grow={240}></textarea>
+        <textarea class="text" bind:value={body} maxlength="1000" rows="3" placeholder={t('fcr.ph')} aria-label={t('fcr.ph')} aria-invalid={!!rule} use:grow={240}></textarea>
+        {#if rule}<span class="hint" role="status">{t(HINT[rule])}</span>{/if}
       </div>
     </div>
     <label class="link">
@@ -129,6 +134,7 @@
   .link :global(svg) { flex: none; width: 36px; }
   .link input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; background: none; color: var(--text); font: 450 var(--fs-sub)/1.3 var(--font-text); text-overflow: ellipsis; }
   .why { margin-bottom: var(--s-3); }
+  .hint { margin-top: var(--s-2); font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
   .note { margin: var(--s-2) var(--s-4) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .note.warn { color: var(--warning-text); }
   .mine { margin-top: var(--gap-group); }

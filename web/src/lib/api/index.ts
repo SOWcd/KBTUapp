@@ -166,7 +166,7 @@ export interface Api {
   hideAsk(id: Id): Promise<void>;
   skillMod(id: Id, change: { approve?: true; name?: string; into?: Id; delete?: true }): Promise<Skill | null>;
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
-  channelFeed(): Promise<import('./types').ChannelFeedPost[]>;                            // the Forum tab: the channel's posts and my own, newest first
+  channelFeed(before?: number): Promise<import('./types').ChannelFeedPost[]>;            // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
   newChannelPost(body: string, anon: boolean): Promise<import('./types').ChannelPost>;   // one a day; the AI first, live: the bot posts it
   deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
   channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live

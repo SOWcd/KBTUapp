@@ -470,7 +470,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[1]["sign"] in ("Anonymous", "\u0410\u043d\u043e\u043d\u0438\u043c") and not feed[1]["mine"] and feed[1]["msg"] > 0
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top", "human"}  # no user id
+        assert set(p) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}  # no user id
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
     con.execute("UPDATE users SET role = 'admin' WHERE id = 3")
@@ -478,7 +478,7 @@ def test_post_feed(env, monkeypatch):
         f = c.get("/api/forum-posts/feed", headers=viewer).json()
         row = next(p for p in f if p["id"] == masked["id"])
         assert row["person"] is None and row["anon"] and not row["mine"]
-        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "top", "human")} == {
+        assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "human")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "sign": "Anonymous", "person": None, "mine": False,
             "faces": [], "reactions": []}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
@@ -732,10 +732,10 @@ def test_post_hot(env, monkeypatch):
     assert hot() is False                                                                       # one of them over an hour old
 
 
-def test_post_top(env, monkeypatch):
-    """Popular today: TOP_MIN or more other people commenting in the last day (each once, the author's own comments and
-    deleted ones not counted), on a live post of the last day; at most TOP_N, the most discussed; never a held or removed
-    one, the viewer's own included; an anonymous row's keys stay the same, `top` added."""
+def test_post_discussed(env, monkeypatch):
+    """"Being discussed", one label in place (Nov 3: no pinned block, the feed newest first): HOT comments in the last
+    hour, or TALK_MIN other people commenting in the last day (each once, the author's own and deleted ones not
+    counted, no cap on how many posts); never a held or removed one; an anonymous row's keys stay the same."""
     c, cfg, _, _ = setup(env, monkeypatch)
     for i in range(1, 8):
         login(c, i, f"u{i}")
@@ -752,29 +752,93 @@ def test_post_top(env, monkeypatch):
         for w in who:
             con.execute("INSERT INTO fchan_comments (msg_id, post_id, user_id, at, gone) VALUES (?, ?, ?, ?, ?)", (next(msg), pid, uid[w], now - age, gone))
 
-    def top(viewer=7):
-        return {x["id"] for x in c.get("/api/forum-posts/feed", headers=tma(viewer)).json() if x["top"]}
+    def hot(viewer=7):
+        got = c.get("/api/forum-posts/feed", headers=tma(viewer)).json()
+        assert [x["id"] for x in got] == sorted((x["id"] for x in got), reverse=True)            # one order, newest first
+        return {x["id"] for x in got if x["hot"]}
 
     one_ = post(); say(one_, 2)
     three = post(); say(three, 2, 3, 4)
-    assert top() == {three}                                                                    # 1: no; 3: yes
+    assert hot() == {three}                                                                    # 1: no; 3: yes
     five = post(anon=1); say(five, 2, 3, 4, 5, 6)
-    assert top() == {three, five}
-    spam = post(); say(spam, *[2] * 10)                                                        # one person, ten comments
+    spam = post(); say(spam, *[2] * 4)                                                         # one person, four comments
     selfp = post(author=2); say(selfp, 2, 2, 2, 3, 4)                                          # the author's own: not counted
     gone = post(); say(gone, 2, 3); say(gone, 4, gone=1)
     late = post(); say(late, 2, 3); say(late, 4, age=90000)                                    # a comment over a day old
-    old = post(age=90000); say(old, 2, 3, 4, 5)                                                # a post over a day old
-    assert top() == {three, five}
+    old = post(age=90000); say(old, 2, 3, 4, 5)                                                # an older post, talked about today
+    more, four = post(), post(); say(more, 2, 3, 4); say(four, 2, 3, 4, 5)
+    assert hot() == {three, five, old, more, four}                                             # no cap
     held = post(author=7, status="held"); say(held, 2, 3, 4, 5, 6)
     hidden = post(author=7, status="hidden"); say(hidden, 2, 3, 4, 5, 6)
-    assert top(7) == {three, five}                                                             # mine, held or removed: never
-    more = post(); say(more, 2, 3, 4)
-    four = post(); say(four, 2, 3, 4, 5)
-    assert top() == {five, four, more}                                                         # at most 3; a tie: the newer
+    assert hot(7) == {three, five, old, more, four}                                            # mine, held or removed: never
+    busy = post(); say(busy, *[2] * logic.fchannel.HOT)                                        # a busy hour, one person: still
+    con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
+    assert busy in hot()
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "top", "human"}
-    assert row["anon"] and row["person"] is None and row["top"] is True
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hot", "human"}
+    assert row["anon"] and row["person"] is None and row["hot"] is True
+    con.close()
+
+
+def test_feed_pages(env, monkeypatch):
+    """FEED_MAX a page, newest first; ?before=<the last id shown> the next one, my own held post in its place by id."""
+    c, cfg, _, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 1").fetchone()[0]
+    n = logic.fchannel.FEED_MAX
+    for i in range(n + 7):
+        con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'a post here', 0, ?, ?, 0)",
+                    (uid, "held" if i == 3 else "live", None if i == 3 else 100 + i))
+    page = lambda who, **q: [x["id"] for x in c.get("/api/forum-posts/feed", headers=tma(who), params=q).json()]  # noqa: E731
+    first = page(2)
+    assert len(first) == n and first == sorted(first, reverse=True)
+    rest = page(2, before=first[-1])
+    assert len(rest) == 6 and max(rest) < min(first)                                           # the held one: not bob's to see
+    assert len(page(1, before=first[-1])) == 7                                                 # ann's own held one: hers
+    assert page(2, before=min(rest)) == []
+    con.close()
+
+
+def test_post_rules_shared():
+    """The text rules the app also checks as you type (web/src/lib/forumRules.ts): every shared case refused or passed
+    the same way; dates and prices pass, phones and cards in any spacing don't."""
+    import pathlib
+    cases = json.loads(pathlib.Path(__file__).with_name("fchannel_rules.json").read_text())["cases"]
+    for text, kind in cases:
+        try:
+            logic.fchannel._clean(text)
+            got = None
+        except logic.ApiError as e:
+            got = {"links": kind if kind in ("link", "mention", "phone") else "links", "signature": "signature"}[e.message]
+        assert got == kind, text
+
+
+def test_post_author_told(env, monkeypatch):
+    """The author hears from the bot, a template to their own chat: when the post is out in the channel (once, also
+    anonymous), and when a moderator declines a held one (after the undo minute; an undo meanwhile: nothing)."""
+    c, cfg, said, _ = setup(env, monkeypatch, verdict="flag")
+    ann, mod = login(c, 1, "ann"), login(c, 3, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    tg = Telegram()
+    told = lambda kind: con.execute("SELECT *, 'ru' AS lang FROM bot_outbox WHERE kind = ?", (kind,)).fetchall()  # noqa: E731
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Secret confession here", "anon": True}).json()
+    assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=tma(3), json={"ok": True}).status_code == 204
+    assert not told("fch_posted")                                                              # released, not out yet
+    tick(cfg, tg, con)
+    (m,) = told("fch_posted")
+    assert m["user_id"] == ann["id"] and m["ref"] == f"fp:{p['id']}"
+    assert bot._render(con, m) == (*texts.bot_message("ru", "fch_posted"), f"fp_{p['id']}")
+    later = int(time.time()) + 700
+    set_clock(monkeypatch, lambda: later)
+    q = c.post("/api/forum-posts", headers=tma(1), json={"body": "Another thing to say today"}).json()
+    assert c.post(f"/api/forum-posts/{q['id']}/mod", headers=tma(3), json={"ok": False}).status_code == 204
+    (d,) = told("fch_declined")
+    assert d["user_id"] == ann["id"] and d["send_after"] >= later + 60                       # after the undo minute
+    assert bot._render(con, d) == (*texts.bot_message("ru", "fch_declined"), f"fp_{q['id']}")
+    assert c.post(f"/api/forum-posts/{q['id']}/restore", headers=tma(3)).status_code == 204
+    assert bot._render(con, d) is None                                                         # undone: not said
     con.close()
 
 

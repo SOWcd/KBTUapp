@@ -109,6 +109,10 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
         return (*texts.bot_message(lang, kind), f"fp_{r['id']}") if r else None
+    if kind in ("fch_posted", "fch_declined"):  # fp:<post> / fd:<post>, to its author: still out, still declined (an undo, a delete: nothing)
+        r = one(con, "SELECT id FROM fchan_posts WHERE id = ? AND user_id = ? AND " + ("status = 'live' AND tg_msg > 0" if kind == "fch_posted"
+                else "status = 'hidden' AND why = 'moderator'"), int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, kind), f"fp_{r['id']}") if r else None
     if kind == "fch_reply_queue":  # rq:<reply>, to moderators: anonymous authors' replies reported or held, in Admin
         n = one(con, """SELECT COUNT(*) FROM fchan_replies r WHERE r.status = 'held' AND r.why != 'check'
             OR r.status = 'live' AND EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id)""")[0]
