@@ -26,6 +26,7 @@ const ru = {
   'reg.came': { one: "пришёл", few: "пришли", many: "пришли", other: "пришли" },
   'reg.since': "В клубе с {date}",
   'reg.quiet': "60 дней без отметок",
+  'reg.contacts': "Контакты",
   'reg.empty': "В клубе пока никого",
   'reg.official': "Официальный клуб",
   'reg.officialNote': "Значок ✓ у названия. Президенту придёт поздравление",

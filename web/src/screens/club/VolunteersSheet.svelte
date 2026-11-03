@@ -14,6 +14,9 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import { schoolShort } from '../../lib/short';
 
   let { overlay, id, need }: { overlay: Overlay; id: Id; need: number } = $props();
@@ -39,47 +42,36 @@
   {#if list}
     <div class="list">
       {#each list as x (x.person.id)}
-        <article class="req" class:off={x.status === 'no'}>
-          <div class="top">
-            <Avatar person={x.person} size={44} />
-            <span class="who">
-              <b class="ellipsis">{withNick(x.fullName, x.person)}</b>
-              <span class="t-foot ellipsis">{line(x)}</span>
-            </span>
-            {#if x.username}
-              <Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + x.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>
+        {#snippet write()}<Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + x.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>{/snippet}
+        <!-- engine: Row needs content under it (the "why", the answer's buttons): one Group per person until then -->
+        <div class:off={x.status === 'no'}>
+          <Group>
+            <Row dense title={withNick(x.fullName, x.person)} subtitle={line(x)} trailing={x.username ? write : undefined}>
+              {#snippet lead()}<Avatar person={x.person} size={36} />{/snippet}
+            </Row>
+            {#if x.note}<p class="note">«{x.note}»</p>{/if}
+            {#if x.status === 'asked'}
+              <div class="acts btns">
+                <Button kind="secondary" size="m" full onclick={() => decide(x, false)}>{t('jr.decline')}</Button>
+                <Button kind="primary" size="m" full onclick={() => decide(x, true)}>{t('vol.yes')}</Button>
+              </div>
+            {:else}
+              <Row dense title={t(x.status === 'yes' ? 'vol.isYes' : 'vol.isNo')} trailing={flip} />
+              {#snippet flip()}<Button kind="secondary" size="s" onclick={() => decide(x, x.status !== 'yes')}>{t(x.status === 'yes' ? 'vol.unYes' : 'vol.yes')}</Button>{/snippet}
             {/if}
-          </div>
-          {#if x.note}<p class="note">«{x.note}»</p>{/if}
-          {#if x.status === 'asked'}
-            <div class="acts btns">
-              <Button kind="neutral" size="m" full onclick={() => decide(x, false)}>{t('jr.decline')}</Button>
-              <Button kind="primary" size="m" full onclick={() => decide(x, true)}>{t('vol.yes')}</Button>
-            </div>
-          {:else}
-            <div class="state"><span class="t-foot">{t(x.status === 'yes' ? 'vol.isYes' : 'vol.isNo')}</span>
-              <button class="undo" onclick={() => decide(x, x.status !== 'yes')}>{t(x.status === 'yes' ? 'vol.unYes' : 'vol.yes')}</button></div>
-          {/if}
-        </article>
+          </Group>
+        </div>
       {:else}
-        <p class="t-foot none">{t('vol.none')}</p>
+        <EmptyState inline text={t('vol.none')} />
       {/each}
     </div>
   {/if}
 </Sheet>
 
 <style>
-  .sub { margin: 2px 4px 0; }
-  .list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-  .req { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-l); background: var(--surface-2); }
-  .req.off { opacity: 0.6; }
-  .top { display: flex; align-items: center; gap: 12px; }
-  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .who b { font: 650 15.5px/1.3 var(--font-text); }
-  .note { margin: 0 2px; font: 500 14.5px/1.4 var(--font-text); color: var(--text-2); }
-  .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.neutral) { background: var(--surface-3); }
-  .state { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px; }
-  .undo { height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-3); color: var(--text-2); font: 620 13px/1 var(--font-text); }
-  .none { padding: 18px 4px; text-align: center; }
+  .sub { margin: 2px var(--s-1) 0; }
+  .list { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-4); }
+  .off { opacity: 0.6; }
+  .note { padding: 0 var(--s-4) var(--s-3); font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); }
+  .acts { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); }
 </style>

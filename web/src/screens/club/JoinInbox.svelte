@@ -18,7 +18,10 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { schoolShort } from '../../lib/short';
@@ -58,58 +61,40 @@
 </script>
 
 <Sheet {overlay} icon={Inbox} full title={t('cast.card')}>
-  {#if casting}
-    <button class="cast" onclick={() => (round ? sheets.roundBoard(org) : sheets.roundSetup(org, null, loadRound))}>
-      <Megaphone size={20} /><span class="lbl ellipsis">{round ? round.title : t('cast.cardOpen')}</span>
-      {#if round?.counts?.new}<b class="count">{round.counts.new}</b>{:else if round}<span class="t-foot">{tn('cast.apps', total)}</span>{/if}
-      <ChevronRight size={18} />
-    </button>
-  {/if}
-  {#if o}
-    <label class="switch">
-      <span><b>{t('jr.open')}</b><i class="t-foot">{t('jr.openHint')}</i></span>
-      <input type="checkbox" role="switch" checked={o.recruiting} onchange={(e) => { haptic.tap(); void setOpen(e.currentTarget.checked); }} />
-    </label>
-  {/if}
-  {#if list}
-    <div class="list">
+  <div class="list">
+    {#if casting || o}
+      <Group footnote={o ? t('jr.openHint') : undefined}>
+        {#if casting}
+          <Row icon={Megaphone} title={round ? round.title : t('cast.cardOpen')} count={round?.counts?.new ?? 0}
+            value={round && !round.counts?.new ? tn('cast.apps', total) : undefined} accessory="chevron"
+            onclick={() => (round ? sheets.roundBoard(org) : sheets.roundSetup(org, null, loadRound))} />
+        {/if}
+        {#if o}
+          <Row icon={UserPlus} title={t('jr.open')} accessory="switch" checked={o.recruiting} onchange={(on) => { haptic.tap(); void setOpen(on); }} />
+        {/if}
+      </Group>
+    {/if}
+    {#if list}
       {#each list as r (r.id)}
-        <article class="req">
-          <div class="top">
-            <Avatar person={r.person} size={44} />
-            <span class="who">
-              <b class="ellipsis">{withNick(r.fullName, r.person)}</b>
-              <span class="t-foot ellipsis">{[line(r), relDay(r.createdAt)].filter(Boolean).join(' · ')}</span>
-            </span>
-            {#if r.username}
-              <Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + r.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>
-            {/if}
-          </div>
+        {#snippet write()}<Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + r.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>{/snippet}
+        <!-- engine: Row needs content under it (the answer's buttons): one Group per applicant until then -->
+        <Group>
+          <Row dense title={withNick(r.fullName, r.person)} subtitle={[line(r), relDay(r.createdAt)].filter(Boolean).join(' · ')} trailing={r.username ? write : undefined}>
+            {#snippet lead()}<Avatar person={r.person} size={36} />{/snippet}
+          </Row>
           <div class="acts btns">
-            <Button kind="neutral" size="m" full onclick={() => decide(r, false)}>{t('jr.decline')}</Button>
+            <Button kind="secondary" size="m" full onclick={() => decide(r, false)}>{t('jr.decline')}</Button>
             <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('jr.accept')}</Button>
           </div>
-        </article>
+        </Group>
       {:else}
-        <p class="t-foot none">{t('jr.none')}</p>
+        <EmptyState inline text={t('jr.none')} />
       {/each}
-    </div>
-  {/if}
+    {/if}
+  </div>
 </Sheet>
 
 <style>
-  .list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-  .req { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: var(--r-l); background: var(--surface-2); }
-  .top { display: flex; align-items: center; gap: 12px; }
-  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .who b { font: 650 15.5px/1.3 var(--font-text); }
-  .acts { display: flex; gap: 8px; }
-  .acts :global(.btn.neutral) { background: var(--surface-3); } /* the card is surface-2 already */
-  .cast { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 0 12px 0 14px; border-radius: var(--r-l);
-    background: var(--surface-2); text-align: left; color: var(--text-3); }
-  .cast > :global(svg:first-child) { flex: none; color: var(--accent-text); }
-  .cast + .switch { margin-top: 10px; }
-  .cast .lbl { flex: 1; min-width: 0; color: var(--text); font: 620 15px/1 var(--font-text); }
-  .count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font: 700 13px/24px var(--font-text); text-align: center; }
-  .none { padding: 18px 4px; text-align: center; }
+  .list { display: flex; flex-direction: column; gap: var(--s-3); }
+  .acts { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); }
 </style>

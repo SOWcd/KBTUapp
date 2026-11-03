@@ -12,7 +12,6 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import UserSearch from '@lucide/svelte/icons/user-search';
-  import Search from '@lucide/svelte/icons/search';
   import { api, type CheckinResult, type DoorPerson, type EventFull, type Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { eventById } from '../../lib/state/data.svelte';
@@ -22,6 +21,12 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import QrCam from '../../ui/QrCam.svelte';
+  import Field from '../../ui/Field.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay, id, names = false }: { overlay: Overlay; id: Id; names?: boolean } = $props();
 
@@ -147,7 +152,7 @@
             <span>{res.result === 'ok' ? t('scan.ok') : t('scan.already', { time: time(res.at) })}</span>
             {#if res.walkIn || res.late >= 5 || undoFor === res.person.id}<span class="more">{[undoFor === res.person.id && t('door.byHand'), res.walkIn && t('scan.walkIn'), res.late >= 5 && t('scan.late', { n: res.late })].filter(Boolean).join(' · ')}</span>{/if}
             {#if res.flagged}<span class="flag"><TriangleAlert size={16} />{t('scan.flagged')}</span>{/if}
-            {#if undoFor === res.person.id}<button class="undo" onclick={undo}>{t('door.undo')}</button>{/if}
+            {#if undoFor === res.person.id}<Button kind="secondary" size="s" onclick={undo}>{t('door.undo')}</Button>{/if}
           </div>
         {:else}
           <div class="res bad"><span class="ic"><TriangleAlert size={44} /></span><b class="nm">{t(MSG[res.result])}</b></div>
@@ -161,29 +166,35 @@
       {:else if live === 'failed'}
         <p class="t-callout hint">{t('scan.noCamera')}</p>
       {/if}
-      <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}>
-        <label class="field"><span class="t-cap">{t('scan.code')}</span>
-          <input bind:value={code} autocapitalize="characters" autocomplete="off" spellcheck="false" enterkeyhint="done" placeholder="7K4 M2P" /></label>
+      <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
+      <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
+        {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>
+        <Field label={t('scan.code')} bind:value={code} autocomplete="off" enterkeyhint="done" placeholder="7K4 M2P" />
         <Button kind="secondary" size="l" type="submit" loading={busy} disabled={!code.trim()}>{t('scan.mark')}</Button>
       </form>
     {/if}
 
     {#if !byName}
-      <button class="byname" onclick={openByName}><UserSearch size={18} />{t('door.byName')}</button>
+      <Button kind="secondary" size="l" full onclick={openByName}>{#snippet icon()}<UserSearch size={18} />{/snippet}{t('door.byName')}</Button>
     {:else}
       <section class="door">
-        <label class="search"><Search size={18} /><input bind:value={who} placeholder={t('door.search')} type="search" autocomplete="off" /></label>
+        <SearchField bind:value={who} placeholder={t('door.search')} />
         {#if people}
-          {#each found as d (d.person.id)}
-            <div class="dp" class:in={!!d.checkedInAt}>
-              <Avatar person={d.person} size={36} tappable={false} />
-              <b class="ellipsis">{withNick(d.person.realName, d.person)}</b>
-              {#if d.checkedInAt}<i>{t('door.came', { time: time(d.checkedInAt) })}</i>
-              {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => mark(d)}>{t('door.mark')}</Button>{/if}
-            </div>
+          {#if found.length}
+            <Group>
+              {#each found as d (d.person.id)}
+                {#snippet end()}
+                  {#if d.checkedInAt}<Tag tone="success">{t('door.came', { time: time(d.checkedInAt) })}</Tag>
+                  {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => mark(d)}>{t('door.mark')}</Button>{/if}
+                {/snippet}
+                <Row dense title={withNick(d.person.realName, d.person)} trailing={end} disabled={!!d.checkedInAt}>
+                  {#snippet lead()}<Avatar person={d.person} size={36} tappable={false} />{/snippet}
+                </Row>
+              {/each}
+            </Group>
           {:else}
-            <p class="t-foot none">{t('door.none')}</p>
-          {/each}
+            <EmptyState inline text={t('door.none')} />
+          {/if}
         {/if}
       </section>
     {/if}
@@ -222,19 +233,8 @@
   .cam.bad .aim { box-shadow: 0 0 0 4px var(--danger), 0 0 0 999px rgba(0, 0, 0, 0.28); }
   .aim.flash { animation: pulse 420ms cubic-bezier(.2, .9, .25, 1.2); }
   @keyframes pulse { from { transform: scale(1.08); } }
-  .undo { margin-top: 2px; padding: 8px 16px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.16); font: 650 14px/1 var(--font-text); }
-  .byname { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: var(--r-m); color: var(--accent-text);
-    background: var(--accent-soft); font: 640 15px/1 var(--font-text); }
-  .door { display: flex; flex-direction: column; gap: 6px; }
-  .search { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; margin-bottom: 4px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-3); }
-  .search input { flex: 1; min-width: 0; font: 500 16px/1 var(--font-text); color: var(--text); background: none; }
-  .dp { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 8px 6px 10px; border-radius: var(--r-m); background: var(--surface); }
-  .dp b { flex: 1; min-width: 0; font: 620 15px/1.2 var(--font-text); }
-  .dp i { flex: none; font: 600 12.5px/1 var(--font-text); font-style: normal; color: var(--success-text); }
-  .dp.in { opacity: 0.6; }
-  .none { padding: 6px 2px; }
-  .manual { display: flex; gap: 8px; align-items: stretch; }
-  .manual .field { flex: 1; min-width: 0; }
-  .manual input { letter-spacing: 0.06em; text-transform: uppercase; }
-  .manual :global(.btn) { height: auto; }
+  .door { display: flex; flex-direction: column; gap: var(--s-3); }
+  .manual { display: flex; gap: var(--s-2); align-items: flex-end; }
+  .manual > :global(:first-child) { flex: 1; min-width: 0; }
+  .manual :global(input) { letter-spacing: 0.06em; text-transform: uppercase; }
 </style>

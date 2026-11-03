@@ -2,8 +2,7 @@
   // The org's Telegram chats on its page (PLAN 86): its Vice+ add them by @name, a link or an
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
-  import Trash from '@lucide/svelte/icons/trash-2';
-  import Lock from '@lucide/svelte/icons/lock';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import { api, ApiErr, type Id, type StudioChat } from '../../lib/api';
   import { say } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -13,6 +12,11 @@
   import { haptic, openLink } from '../../lib/tg';
   import Button from '../../ui/Button.svelte';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import { menu } from '../../ui/menu';
 
   let { org }: { org: Id } = $props();
   let chats = $state<StudioChat[]>([]);
@@ -53,54 +57,40 @@
   }
   // a channel counts subscribers, a group members, as Telegram says
   const count = (c: StudioChat) => (c.members ? tn(c.kind === 'channel' ? 'clubs.subscribers' : 'chats.members', c.members).replace(String(c.members), compact(c.members)) : '');
-  const line = (c: StudioChat) => [c.main ? t('oc.main') : t(`chats.${c.kind}`), count(c)].filter(Boolean).join(' · ');
+  const line = (c: StudioChat) => [c.main ? t('oc.main') : t(`chats.${c.kind}`), count(c), c.closed && t('oc.closed'), c.bot && t('oc.bot')].filter(Boolean).join(' · ');
+  const mainOne = $derived(chats.find((c) => c.main));
+  const more = (e: MouseEvent, c: StudioChat) => menu(e.currentTarget as Element, [
+    ...(c.kind === 'channel' && !c.closed && !c.main ? [{ label: t('oc.makeMain'), onselect: () => main(c) }] : []),
+    { label: t('oc.drop'), destructive: true, onselect: () => drop(c) },
+  ]);
 </script>
 
-<h3 class="t-cap cap">{t('oc.studio')}</h3>
-<p class="t-foot note">{t('oc.studioNote')}</p>
-{#each chats as c (c.id)}
-  <div class="ch">
-    <div class="top">
-      <ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={40} />
-      <span class="tx"><b class="ellipsis">{#if c.closed}<Lock size={13} />{/if}{c.title}</b><i class="t-foot ellipsis">{line(c)}</i></span>
-      <button class="ic del" aria-label={t('oc.drop')} onclick={() => drop(c)}><Trash size={18} /></button>
-    </div>
-    <div class="acts">
-      {#if c.kind === 'channel' && !c.closed && !c.main}<button class="pill" onclick={() => main(c)}>{t('oc.makeMain')}</button>{/if}
-      {#if c.bot}<span class="pill on">{t('oc.bot')}</span>
-      {:else}<button class="pill" onclick={() => { haptic.tap(); openLink(addBotLink(c)); }}>{t('oc.addBot')}</button>{/if}
-    </div>
-    {#if c.main}
-      <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
-      <label class="switch mir"><span><b>{t('oc.mirror')}</b><i class="t-foot">{t('oc.mirrorNote')}</i></span>
-        <input type="checkbox" role="switch" checked={c.mirror} onchange={(e) => mirror(c, e.currentTarget.checked)} /></label>
-    {/if}
-  </div>
-{/each}
-{#if chats.some((c) => !c.bot)}<p class="t-foot note">{t('oc.botNote')}</p>{/if}
-<form class="add" onsubmit={add}>
-  <label class="field"><span class="t-cap">{t('oc.link')}</span>
-    <input bind:value={link} maxlength="200" placeholder="@kbtu_club" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="done" /></label>
-  <Button kind="primary" size="m" type="submit" loading={busy} disabled={link.trim().length < 4}>{t('oc.add')}</Button>
-</form>
+<div class="oc">
+  <Group caption={t('oc.studio')} footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '')}>
+    {#each chats as c (c.id)}
+      <Row dense title={c.title} subtitle={line(c)}>
+        {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
+        {#snippet trailing()}
+          {#if !c.bot}<Button kind="tinted" size="s" onclick={() => openLink(addBotLink(c))}>{t('oc.addBot')}</Button>{/if}
+          <IconButton icon={Ellipsis} label={t('common.more')} kind="plain" size="s" onclick={(e) => more(e, c)} />
+        {/snippet}
+      </Row>
+    {/each}
+  </Group>
+  {#if mainOne}
+    <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
+    <Group footnote={t('oc.mirrorNote')}>
+      <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
+    </Group>
+  {/if}
+  <form class="add" onsubmit={add}>
+    <!-- engine: Field's autocapitalize / spellcheck (a @username is typed as is) -->
+    <Field label={t('oc.link')} bind:value={link} maxlength={200} placeholder="@kbtu_club" autocomplete="off" enterkeyhint="done" />
+    <Button kind="primary" size="m" type="submit" loading={busy} disabled={link.trim().length < 4}>{t('oc.add')}</Button>
+  </form>
+</div>
 
 <style>
-  .cap { margin: 22px 2px 2px; }
-  .note { margin: 0 2px 10px; }
-  .ch { display: flex; flex-direction: column; gap: 8px; padding: 10px 2px; }
-  .ch + .ch { box-shadow: inset 0 1px 0 var(--line); }
-  .top { display: flex; align-items: center; gap: 10px; }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { display: flex; align-items: center; gap: 5px; font: 650 15px/1.25 var(--font-text); }
-  .tx b :global(svg) { flex: none; color: var(--text-3); }
-  .tx i { font-style: normal; }
-  .ic { flex: none; display: flex; padding: 8px; border-radius: var(--r-full); color: var(--text-2); background: var(--surface-2); }
-  .ic.del { color: var(--danger-text); }
-  .acts { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 50px; }
-  .pill { height: 30px; padding: 0 12px; border-radius: var(--r-full); display: inline-flex; align-items: center; background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
-  .pill.on { background: var(--success-soft); color: var(--success-text); }
-  .mir { margin: 2px 0 0 50px; }
-  .mir b { display: block; font: 620 14.5px/1.25 var(--font-text); }
-  .mir i { display: block; margin-top: 2px; font-style: normal; }
-  .add { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .oc { display: flex; flex-direction: column; gap: var(--gap-group); }
+  .add { display: flex; flex-direction: column; gap: var(--s-2); margin-top: calc(var(--s-3) - var(--gap-group)); }
 </style>

@@ -10,6 +10,10 @@
   import { nowTs } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
 
   let { org }: { org: Id } = $props();
   let links = $state<ShortLink[]>([]);
@@ -23,6 +27,7 @@
   let to = $state('club'); // 'club', 'round', or an event's id
   const s = $derived(slug.trim().toLowerCase());
   const ok = $derived(/^(?=.{2,32}$)[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)); // logic.SHORT
+  const targets = $derived([{ v: 'club', label: t('sl.club') }, { v: 'round', label: t('sl.round') }, ...events.map((e) => ({ v: String(e.id), label: e.title }))]);
   const where = (l: ShortLink) => (l.kind === 'event' ? l.eventTitle ?? '' : t(l.kind === 'club' ? 'sl.club' : 'sl.round'));
 
   async function copy(x: string) {
@@ -50,36 +55,29 @@
   }
 </script>
 
-<h3 class="t-cap cap">{t('sl.title')}</h3>
-<p class="t-foot note">{t('sl.note')}</p>
-{#each links as l (l.slug)}
-  <div class="ln">
-    <span class="tx"><b class="ellipsis selectable">{host}/{l.slug}</b><i class="t-foot ellipsis">{where(l)}</i></span>
-    <button class="ic" aria-label={t('sl.copy')} onclick={() => copy(l.slug)}><Copy size={18} /></button>
-    <button class="ic del" aria-label={t('sl.drop')} onclick={() => drop(l.slug)}><Trash size={18} /></button>
-  </div>
-{/each}
-<form class="add" onsubmit={add}>
-  <label class="field"><span class="t-cap">{host}/</span>
-    <input bind:value={slug} maxlength="32" placeholder="join-us" autocapitalize="none" autocomplete="off" spellcheck="false" enterkeyhint="done" /></label>
-  <select bind:value={to} aria-label={t('sl.to')}>
-    <option value="club">{t('sl.club')}</option>
-    <option value="round">{t('sl.round')}</option>
-    {#each events as e (e.id)}<option value={String(e.id)}>{e.title}</option>{/each}
-  </select>
-  <Button kind="primary" size="m" type="submit" loading={busy} disabled={!ok}>{t('sl.add')}</Button>
-</form>
+<div class="sl">
+  <Group caption={t('sl.title')} footnote={t('sl.note')}>
+    {#each links as l (l.slug)}
+      <Row dense title="{host}/{l.slug}" subtitle={where(l)}>
+        {#snippet trailing()}
+          <IconButton icon={Copy} label={t('sl.copy')} kind="plain" size="s" onclick={() => copy(l.slug)} />
+          <IconButton icon={Trash} label={t('sl.drop')} kind="plain" size="s" destructive onclick={() => drop(l.slug)} />
+        {/snippet}
+      </Row>
+    {/each}
+  </Group>
+  <form class="add" onsubmit={add}>
+    <!-- engine: Field's autocapitalize / spellcheck (a slug is typed as is) -->
+    <Field label="{host}/" bind:value={slug} maxlength={32} placeholder="join-us" autocomplete="off" enterkeyhint="done" />
+    <Group>
+      <Row title={t('sl.to')} value={targets.find((x) => x.v === to)?.label}
+        menu={targets.map((x) => ({ label: x.label, checked: x.v === to, onselect: () => (to = x.v) }))} />
+    </Group>
+    <Button kind="primary" size="m" type="submit" loading={busy} disabled={!ok}>{t('sl.add')}</Button>
+  </form>
+</div>
 
 <style>
-  .cap { margin: 22px 2px 2px; }
-  .note { margin: 0 2px 10px; }
-  .ln { display: flex; align-items: center; gap: 8px; padding: 8px 2px; }
-  .ln + .ln { box-shadow: inset 0 1px 0 var(--line); }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 650 15px/1.25 var(--font-text); }
-  .tx i { font-style: normal; }
-  .ic { flex: none; display: flex; padding: 8px; border-radius: var(--r-full); color: var(--text-2); background: var(--surface-2); }
-  .ic.del { color: var(--danger-text); }
-  .add { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-  .add select { height: 44px; padding: 0 12px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text); font: 550 15px/1 var(--font-text); }
+  .sl { display: flex; flex-direction: column; gap: var(--s-3); }
+  .add { display: flex; flex-direction: column; gap: var(--s-2); }
 </style>

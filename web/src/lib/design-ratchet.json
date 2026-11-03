@@ -127,22 +127,6 @@
   "weight": 4,
   "legacy": 0
  },
- "screens/club/Attendees.svelte": {
-  "font": 7,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 4,
-  "legacy": 0
- },
- "screens/club/ClubEditSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 4
- },
  "screens/club/CoverFocus.svelte": {
   "font": 2,
   "radius": 5,
@@ -158,22 +142,6 @@
   "mix": 0,
   "weight": 12,
   "legacy": 16
- },
- "screens/club/EventManage.svelte": {
-  "font": 9,
-  "radius": 1,
-  "hex": 0,
-  "mix": 0,
-  "weight": 9,
-  "legacy": 0
- },
- "screens/club/JoinInbox.svelte": {
-  "font": 3,
-  "radius": 1,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 1
  },
  "screens/club/MemoAsks.svelte": {
   "font": 5,
@@ -199,14 +167,6 @@
   "weight": 5,
   "legacy": 5
  },
- "screens/club/OrgChats.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 2
- },
  "screens/club/PostComposer.svelte": {
   "font": 7,
   "radius": 2,
@@ -214,30 +174,6 @@
   "mix": 1,
   "weight": 3,
   "legacy": 2
- },
- "screens/club/ReceiptSheet.svelte": {
-  "font": 4,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 0
- },
- "screens/club/RemoveSheet.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 1
- },
- "screens/club/RosterRequests.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
  },
  "screens/club/RoundBoard.svelte": {
   "font": 21,
@@ -256,76 +192,12 @@
   "legacy": 12
  },
  "screens/club/Scanner.svelte": {
-  "font": 10,
+  "font": 5,
   "radius": 1,
   "hex": 1,
   "mix": 0,
-  "weight": 7,
-  "legacy": 1
- },
- "screens/club/ScreenSheet.svelte": {
-  "font": 4,
-  "radius": 1,
-  "hex": 2,
-  "mix": 1,
-  "weight": 2,
+  "weight": 4,
   "legacy": 0
- },
- "screens/club/ShortLinks.svelte": {
-  "font": 2,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 1
- },
- "screens/club/Studio.svelte": {
-  "font": 6,
-  "radius": 3,
-  "hex": 2,
-  "mix": 0,
-  "weight": 8,
-  "legacy": 2
- },
- "screens/club/Team.svelte": {
-  "font": 8,
-  "radius": 0,
-  "hex": 2,
-  "mix": 3,
-  "weight": 9,
-  "legacy": 0
- },
- "screens/club/TeamSetupSheet.svelte": {
-  "font": 9,
-  "radius": 1,
-  "hex": 2,
-  "mix": 2,
-  "weight": 8,
-  "legacy": 2
- },
- "screens/club/VolunteersSheet.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
- "screens/dmp/Registry.svelte": {
-  "font": 9,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
-  "legacy": 0
- },
- "screens/dmp/Roster.svelte": {
-  "font": 4,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 2
  },
  "screens/forum/Channel.svelte": {
   "font": 0,

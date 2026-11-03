@@ -4,9 +4,6 @@
   // have and below their own level — and its tags, groups of people ("people"). The team runner also sees who is banned
   // and can lift it. Who has a tag is set here too, in the tag (owner, Oct 14: not on the fly in a person's card, where
   // a stray tap tagged someone).
-  import Plus from '@lucide/svelte/icons/plus';
-  import Check from '@lucide/svelte/icons/check';
-  import { fold } from '../../ui/fold';
   import { api, ApiErr, type ClubLevel, type ClubRole, type ClubTag, type Id, type Right, type TeamMember, type TeamSetup } from '../../lib/api';
   import { data, loadTeam } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -19,6 +16,10 @@
   import UserCog from '@lucide/svelte/icons/user-cog';
   import Button from '../../ui/Button.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Field from '../../ui/Field.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay, org, onchange }: { overlay: Overlay; org: Id; onchange?: () => void } = $props();
 
@@ -99,143 +100,118 @@
   const summary = (r: ClubRole) => { const on = r.rights.filter((k) => k !== 'door'); return on.length ? on.map(rightName).join(', ') : t('ts.noRights'); };
 </script>
 
+{#snippet dot(c: string)}<span class="dot" style="--c:{c}"></span>{/snippet}
+
+<!-- the open role or tag, in place of its list -->
 {#snippet form()}
   <div class="form">
-    <input bind:value={fname} disabled={!!ffixed} maxlength="24" placeholder={kind === 'role' ? t('ts.rolePh') : t('ts.tagPh')} enterkeyhint="done" />
-    {#if kind === 'role' && !ffixed}<!-- an official role's name is the app's own -->
-      <input bind:value={fkk} maxlength="24" placeholder={t('ts.roleKk')} enterkeyhint="done" lang="kk" />
-      <input bind:value={fen} maxlength="24" placeholder={t('ts.roleEn')} enterkeyhint="done" lang="en" />
+    {#if ffixed}<Group><Row title={fname}>{#snippet lead()}{@render dot(fcolor)}{/snippet}</Row></Group><!-- an official role's name is the app's own -->
+    {:else}
+      <Field label={kind === 'role' ? t('ts.rolePh') : t('ts.tagPh')} bind:value={fname} maxlength={24} enterkeyhint="done" />
+      {#if kind === 'role'}
+        <!-- engine: Field could pass `lang` (kk, en) to its input -->
+        <Field label={t('ts.roleKk')} bind:value={fkk} maxlength={24} enterkeyhint="done" />
+        <Field label={t('ts.roleEn')} bind:value={fen} maxlength={24} enterkeyhint="done" />
+      {/if}
     {/if}
     <div class="colors">
       {#each TEAM_COLORS as c (c)}<button class:on={fcolor === c} style="--c:{c}" onclick={() => (fcolor = c)} aria-label={c}></button>{/each}
     </div>
     {#if kind === 'role'}
-      <span class="t-cap">{t('ts.level')}</span>
-      <div class="rights">
+      <Group caption={t('ts.level')} footnote={TOGGLES.some((r) => !givable(r)) ? t('ts.locked') : undefined}>
         {#each TOGGLES as r (r.key)}
-          <label class="switch" class:locked={!givable(r)}><span><b>{rightName(r.key)}</b><i class="t-foot">{t(`right.${r.key}.sub` as 'right.door.sub')}</i></span>
-            <input type="checkbox" role="switch" disabled={!givable(r)} checked={frights.includes(r.key)} onchange={(e) => toggle(r.key, e.currentTarget.checked)} /></label>
+          <Row title={rightName(r.key)} subtitle={t(`right.${r.key}.sub` as 'right.door.sub')} accessory="switch" disabled={!givable(r)}
+            checked={frights.includes(r.key)} onchange={(on) => toggle(r.key, on)} />
         {/each}
-      </div>
-      {#if TOGGLES.some((r) => !givable(r))}<p class="t-foot">{t('ts.locked')}</p>{/if}
+      </Group>
     {:else}
-      <label class="switch"><span><b>{t('ts.isDept')}</b><i class="t-foot">{t('ts.isDeptSub')}</i></span>
-        <input type="checkbox" role="switch" bind:checked={fdept} disabled={!mayDept} /></label>
+      <Group footnote={t('ts.isDeptSub')}>
+        <Row title={t('ts.isDept')} accessory="switch" checked={fdept} disabled={!mayDept} onchange={(on) => (fdept = on)} />
+      </Group>
     {/if}
     {#if kind === 'tag' && fid != null}
       {@const tag = fid}
-      <span class="t-cap">{t('ts.tagPeople')}</span>
-      <div class="ppl">
+      <Group caption={t('ts.tagPeople')}>
         {#each team as x (x.person.id)}{@const on = !!x.tags?.includes(tag)}
-          <label class="pp" class:locked={!mayTag(x)}><Avatar person={x.person} size={30} /><b class="ellipsis">{withNick(x.fullName, x.person)}</b>
-            <input type="checkbox" checked={on} disabled={fdept !== !!setup?.tags.find((g) => g.id === tag)?.department || !(fdept ? mayDept : mayTag(x)) || tagging === x.person.id} onchange={() => tagPerson(x, tag, !on)} /></label>
+          <Row dense title={withNick(x.fullName, x.person)} accessory="check" checked={on} onclick={() => tagPerson(x, tag, !on)}
+            disabled={fdept !== !!setup?.tags.find((g) => g.id === tag)?.department || !(fdept ? mayDept : mayTag(x)) || tagging === x.person.id}>
+            {#snippet lead()}<Avatar person={x.person} size={30} tappable={false} />{/snippet}
+          </Row>
         {/each}
-      </div>
+      </Group>
     {/if}
     <div class="fa">
       <Button kind="primary" size="s" loading={busy} disabled={!fname.trim()} onclick={save}>{t('common.save')}</Button>
       <Button kind="secondary" size="s" onclick={() => (kind = null)}>{t('common.cancel')}</Button>
-      {#if fid != null && !ffixed}<button class="del" onclick={drop}>{t('ts.delete')}</button>{/if}
+      {#if fid != null && !ffixed}<span class="del"><Button kind="destructive" size="s" onclick={drop}>{t('ts.delete')}</Button></span>{/if}
     </div>
   </div>
 {/snippet}
 
 <Sheet {overlay} icon={UserCog} full title={t('team.setup')}>
-  <section>
-    <h3 class="t-cap">{t('ts.roles')}</h3>
-    <p class="t-foot hint">{t('ts.rolesHint')}</p>
-    <div class="items">
-      <!-- the three official roles first: the President, one per club, is the level itself -->
-      <div class="it"><span class="dot" style="--c:#FFB23D"></span><span class="rn"><b class="ellipsis">{ROLE_NAME.president}</b><i class="ellipsis">{t('ts.president')}</i></span><span class="n num">1</span></div>
-      {#each setup?.roles ?? [] as r (r.id)}
-        {#if kind === 'role' && fid === r.id}{@render form()}
-        {:else}
-          <button class="it" aria-expanded={mayEdit(r) ? undefined : peek === r.id} onclick={() => { if (mayEdit(r)) edit('role', r); else { haptic.select(); peek = peek === r.id ? null : r.id; } }}>
-            <span class="dot" style="--c:{r.color}"></span><span class="rn"><b class="ellipsis">{inLang(r.name, r.nameKk, r.nameEn)}</b><i class="ellipsis">{summary(r)}</i></span><span class="n num">{r.count}</span></button>
+  <div class="page">
+    {#if kind === 'role'}<section class="sec"><h3 class="cap">{t('ts.roles')}</h3>{@render form()}</section>
+    {:else}
+      <Group caption={t('ts.roles')} footnote={t('ts.rolesHint')}>
+        <!-- the three official roles first: the President, one per club, is the level itself -->
+        <Row dense title={ROLE_NAME.president} subtitle={t('ts.president')} value="1">{#snippet lead()}{@render dot('var(--gold)')}{/snippet}</Row>
+        {#each setup?.roles ?? [] as r (r.id)}
+          <Row dense title={inLang(r.name, r.nameKk, r.nameEn)} subtitle={summary(r)} value={String(r.count)}
+            accessory={mayEdit(r) ? 'chevron' : 'disclosure'} open={peek === r.id}
+            onclick={() => { if (mayEdit(r)) edit('role', r); else { haptic.select(); peek = peek === r.id ? null : r.id; } }}>
+            {#snippet lead()}{@render dot(r.color)}{/snippet}
+          </Row>
           {#if peek === r.id}
-            <div class="peek" transition:fold>
-              {#each TOGGLES as x (x.key)}{@const on = r.rights.includes(x.key)}
-                <div class="pr" class:off={!on}><span class="ck">{#if on}<Check size={15} strokeWidth={3} />{/if}</span><span><b>{rightName(x.key)}</b><i class="t-foot">{t(`right.${x.key}.sub` as 'right.door.sub')}</i></span></div>
-              {/each}
-              <p class="t-foot">{t('ts.readOnly')}</p>
-            </div>
+            <!-- a role I can't edit, open to read: what it may and may not do -->
+            {#each TOGGLES as x (x.key)}
+              <Row dense title={rightName(x.key)} subtitle={t(`right.${x.key}.sub` as 'right.door.sub')} accessory="check" checked={r.rights.includes(x.key)} />
+            {/each}
+            <EmptyState inline text={t('ts.readOnly')} />
           {/if}
-        {/if}
-      {/each}
-      {#if kind === 'role' && fid === null}{@render form()}
-      {:else if vice}<button class="add" onclick={() => edit('role')}><Plus size={17} />{t('ts.newRole')}</button>
-      {:else if !setup?.roles.length}<p class="t-foot none">{t('ts.noRoles')}</p>{/if}
-    </div>
-  </section>
-
-  <section>
-    <h3 class="t-cap">{t('ts.tags')}</h3>
-    <p class="t-foot hint">{t('ts.tagsHint')}</p>
-    <div class="items">
-      {#each setup?.tags ?? [] as g (g.id)}
-        {#if kind === 'tag' && fid === g.id}{@render form()}
-        {:else}
-          <button class="it" disabled={!head} onclick={() => edit('tag', g)}><span class="dot" style="--c:{g.color}"></span><b class="ellipsis">{g.name}</b>{#if g.department}<i>{t('ts.deptMark')}</i>{/if}<span class="n num">{g.count}</span></button>
-        {/if}
-      {/each}
-      {#if kind === 'tag' && fid === null}{@render form()}
-      {:else if head}<button class="add" onclick={() => edit('tag')}><Plus size={17} />{t('ts.newTag')}</button>
-      {:else if !setup?.tags.length}<p class="t-foot none">{t('ts.noTags')}</p>{/if}
-    </div>
-  </section>
-
-  {#if setup?.bans?.length}
-    <section>
-      <h3 class="t-cap">{t('ts.bans')}</h3>
-      <div class="items">
-        {#each setup.bans as b (b.person.id)}
-          <div class="it ban"><Avatar person={b.person} size={30} /><b class="ellipsis">{withNick(b.fullName, b.person)}</b>
-            <button class="unban" onclick={() => unban(b.person.id)}>{t('ts.unban')}</button></div>
         {/each}
-      </div>
-    </section>
-  {/if}
+        {#if vice}<Row tone="add" title={t('ts.newRole')} onclick={() => edit('role')} />
+        {:else if !setup?.roles.length}<EmptyState inline text={t('ts.noRoles')} />{/if}
+      </Group>
+    {/if}
+
+    {#if kind === 'tag'}<section class="sec"><h3 class="cap">{t('ts.tags')}</h3>{@render form()}</section>
+    {:else}
+      <Group caption={t('ts.tags')} footnote={t('ts.tagsHint')}>
+        {#each setup?.tags ?? [] as g (g.id)}
+          <Row dense title={g.name} subtitle={g.department ? t('ts.deptMark') : undefined} value={String(g.count)} accessory={head ? 'chevron' : 'none'}
+            onclick={head ? () => edit('tag', g) : undefined}>
+            {#snippet lead()}{@render dot(g.color)}{/snippet}
+          </Row>
+        {/each}
+        {#if head}<Row tone="add" title={t('ts.newTag')} onclick={() => edit('tag')} />
+        {:else if !setup?.tags.length}<EmptyState inline text={t('ts.noTags')} />{/if}
+      </Group>
+    {/if}
+
+    {#if setup?.bans?.length}
+      <Group caption={t('ts.bans')}>
+        {#each setup.bans as b (b.person.id)}
+          <Row dense title={withNick(b.fullName, b.person)}>
+            {#snippet lead()}<Avatar person={b.person} size={36} />{/snippet}
+            {#snippet trailing()}<Button kind="secondary" size="s" onclick={() => unban(b.person.id)}>{t('ts.unban')}</Button>{/snippet}
+          </Row>
+        {/each}
+      </Group>
+    {/if}
+  </div>
 </Sheet>
 
 <style>
-  .rights { display: grid; gap: 6px; }
-  .rights .switch, .form > .switch { padding: 10px 12px; background: var(--surface); }
-  .rights .switch i { margin-top: 1px; }
-  .rights .locked { opacity: 0.45; }
-  .rn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left; }
-  section { margin-top: 14px; }
-  .hint { margin: 4px 2px 10px; text-wrap: pretty; }
-  .items { display: flex; flex-direction: column; gap: 6px; }
-  .it { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: var(--r-m); background: var(--surface-2); text-align: left; }
-  .it:not(:disabled):active { transform: scale(0.99); }
-  .it:disabled { cursor: default; }
-  .it b { flex: 1; min-width: 0; font: 620 15px/1.2 var(--font-text); }
-  .it i { flex: none; font: 550 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
-  .n { flex: none; min-width: 26px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--surface); color: var(--text-2); font: 650 12.5px/22px var(--font-text); text-align: center; }
-  .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent); }
-  .add { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: var(--r-m); border: 1.5px dashed var(--line-2); color: var(--accent-text); font: 620 14.5px/1 var(--font-text); }
-  .none { padding: 6px 2px; }
-  .form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-m); background: var(--surface-2); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent); }
-  .form input:not([role="switch"]) { height: 44px; padding: 0 12px; border-radius: var(--r-s, 10px); background: var(--surface); color: var(--text); font: 550 16px/1 var(--font-text); }
-  .colors { display: flex; flex-wrap: wrap; gap: 8px; }
+  .page { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-3); }
+  .sec { display: flex; flex-direction: column; }
+  /* Group's caption, over the open form (engine: Group could take a form, not only Rows) */
+  .cap { margin: 0 var(--s-1) 10px; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+  .dot { flex: none; display: block; width: 12px; height: 12px; margin: 0 var(--s-1); border-radius: 50%; background: var(--c); }
+  .form { display: flex; flex-direction: column; gap: var(--s-4); }
+  .colors { display: flex; flex-wrap: wrap; gap: var(--s-2); padding: 0 var(--s-1); }
   .colors button { width: 30px; height: 30px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25); transition: transform var(--t-fast); }
-  .colors button.on { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--c); }
+  .colors button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
   .colors button:active { transform: scale(0.9); }
-  .fa { display: flex; align-items: center; gap: 8px; }
-  .del { margin-left: auto; padding: 8px 4px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
-  .peek { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--r-m); background: var(--surface-2); }
-  .pr { display: flex; gap: 10px; align-items: flex-start; }
-  .pr b { display: block; font: 620 14.5px/1.25 var(--font-text); }
-  .pr i { font-style: normal; }
-  .pr.off { opacity: 0.4; }
-  .ck { flex: none; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; background: var(--surface); color: var(--accent-text); }
-  .pr:not(.off) .ck { background: var(--accent); color: #fff; }
-  .ppl { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; border-radius: var(--r-s, 10px); background: var(--surface); }
-  .pp { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 12px; }
-  .pp + .pp { box-shadow: inset 0 1px 0 var(--line); }
-  .pp b { flex: 1; min-width: 0; font: 600 14.5px/1.2 var(--font-text); }
-  .pp input { flex: none; width: 22px; height: 22px; accent-color: var(--accent); }
-  .pp.locked { opacity: 0.45; }
-  .ban { gap: 10px; }
-  .unban { flex: none; height: 30px; padding: 0 12px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
+  .fa { display: flex; align-items: center; gap: var(--s-2); }
+  .del { margin-left: auto; }
 </style>

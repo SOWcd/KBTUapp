@@ -12,6 +12,8 @@
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
 
   // org: one club's (its Studio); none: every claim I confirm (DMP's Studio, the Admin sheet, the bot's link)
   let { overlay, ondone, org }: { overlay: Overlay; ondone?: () => void; org?: number } = $props();
@@ -27,25 +29,24 @@
 
 <Sheet {overlay} icon={ListChecks} title={t('ro.reqTitle')}>
   <p class="t-foot sub">{t('ro.reqText')}</p>
-  {#each list ?? [] as r (r.id)}
-    <div class="rq surface">
-      <div class="who"><Avatar person={r.person} size={44} />
-        <span class="tx"><b class="ellipsis">{r.name}</b><i class="t-foot ellipsis">{t('ro.listed', { name: r.sheetName ?? '—' })}</i>
-          <i class="t-foot ellipsis">{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
-      <div class="acts btns">
-        <Button kind="neutral" size="m" full onclick={() => decide(r, false)}>{t('ro.decline')}</Button>
-        <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('ro.confirm')}</Button>
-      </div>
-    </div>
-  {/each}
+  <div class="list">
+    {#each list ?? [] as r (r.id)}
+      <Group>
+        <Row dense title={r.name} subtitle={`${t('ro.listed', { name: r.sheetName ?? '—' })} · ${nameOf(r.org)} · ${r.title || roleName(r.role, null)}${r.dept ? ' · ' + r.dept : ''}`}>
+          {#snippet lead()}<Avatar person={r.person} size={36} />{/snippet}
+        </Row>
+        <!-- engine: Row needs content under it (a request's actions) -->
+        <div class="acts btns">
+          <Button kind="secondary" size="m" full onclick={() => decide(r, false)}>{t('ro.decline')}</Button>
+          <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('ro.confirm')}</Button>
+        </div>
+      </Group>
+    {/each}
+  </div>
 </Sheet>
 
 <style>
-  .sub { margin-bottom: 14px; }
-  .rq { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: var(--r-l); margin-bottom: 10px; }
-  .who { display: flex; align-items: center; gap: 12px; }
-  .tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 650 15.5px/1.25 var(--font-text); }
-  .tx i { font-style: normal; }
-  .acts { display: flex; gap: 8px; }
+  .sub { margin-bottom: var(--s-4); }
+  .list { display: flex; flex-direction: column; gap: var(--s-3); }
+  .acts { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); }
 </style>

@@ -3,9 +3,6 @@
   // since when; the President's and Vices' contacts (Telegram, email, phone) a tap away; who hasn't come in 60 days marked.
   // On top, a club's ✓ (§2, §4.6): DMP makes a student initiative official — the President hears it from the bot; taking
   // it back asks first.
-  import Mail from '@lucide/svelte/icons/mail';
-  import TelegramMark from '../../ui/TelegramMark.svelte';
-  import Phone from '@lucide/svelte/icons/phone';
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import { untrack } from 'svelte';
   import { api, type OrgRef, type RosterMember } from '../../lib/api';
@@ -22,6 +19,21 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
   import { fmtPhone, kzPhone } from '../../lib/phone';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Contact from '@lucide/svelte/icons/contact';
+  import { menu, type MenuItem } from '../../ui/menu';
+
+  // the President's and Vices' contacts, a tap away (a small menu at their row)
+  const contacts = (m: RosterMember): MenuItem[] => [
+    ...(m.username ? [{ label: '@' + m.username, onselect: () => openLink('https://t.me/' + m.username) }] : []),
+    ...(m.email ? [{ label: m.email, onselect: () => openLink('mailto:' + m.email) }] : []),
+    ...(m.phone ? [{ label: kzPhone(m.phone) ? fmtPhone(m.phone) : m.phone, onselect: () => openLink('tel:' + m.phone) }] : []),
+  ];
 
   let { overlay, org, onofficial }: { overlay: Overlay; org: OrgRef; onofficial?: (on: boolean) => void } = $props();
   let list = $state<RosterMember[] | null>(null);
@@ -29,20 +41,17 @@
   const quiet = $derived((list ?? []).filter((m) => m.quiet).length);
 
   let official = $state(untrack(() => org.official));
+  let sw = $state(untrack(() => org.official)); // the switch as shown: back on while we ask, and if the answer is no
   let busy = $state(false);
-  async function toggle(ev: Event) {
-    const el = ev.currentTarget as HTMLInputElement, on = el.checked;
-    if (!on) { // stays on while we ask
-      el.checked = true;
-      if (!(await sheets.ask({ title: t('reg.officialOffAsk', { name: org.name }), ok: t('reg.officialOffOk'), cancel: t('common.cancel'), danger: true }))) return;
-      el.checked = false;
-    }
+  async function toggle(on: boolean) {
+    sw = on;
+    if (!on && !(await sheets.ask({ title: t('reg.officialOffAsk', { name: org.name }), ok: t('reg.officialOffOk'), cancel: t('common.cancel'), danger: true }))) { sw = true; return; }
     busy = true;
     try {
-      official = (await api.setOfficial(org.id, on)).official;
+      official = sw = (await api.setOfficial(org.id, on)).official;
       onofficial?.(official);
       haptic.ok(); say(phrase(on ? 'reg.officialOn' : 'reg.officialOff'), on ? 'party_popper_3d' : 'waving_hand_3d_default');
-    } catch { el.checked = official; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    } catch { sw = official; haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 
@@ -57,56 +66,43 @@
 </script>
 
 <Sheet {overlay} icon={BookUser} full title={t('cap.roster')}>
-  <div class="hd"><OrgLogo {org} size={48} /><span><h2 class="t-h2">{org.name}{#if official}<span class="ok"><BadgeCheck size={20} /></span>{/if}</h2><p class="t-foot">{list ? tn('reg.people', list.length) + (quiet ? ' · ' + tn('reg.quietN', quiet) : '') : ' '}</p></span></div>
-  {#if org.kind === 'club'}
-    <label class="switch off"><span><b>{t('reg.official')}</b><i class="t-foot">{t('reg.officialNote')}</i></span><input type="checkbox" role="switch" checked={official} onchange={toggle} disabled={busy} /></label>
-    <button class="switch off abbr" onclick={rename}><span><b>{t('ce.abbr')}</b><i class="t-foot">{abbr}</i></span></button>
-  {/if}
-  {#if list}
-    <div class="list">
-      {#each list as m (m.person.id)}
-        <div class="m" class:lead={m.role !== 'member'}>
-          <Avatar person={m.person} size={40} />
-          <span class="tx">
-            <span class="top"><b class="ellipsis">{withNick(m.fullName, m.person)}</b><span class="role" class:hi={m.role === 'president' || m.role === 'vice'}>{ROLE_NAME[m.role]}</span></span>
-            <i>{m.studentId}{m.course ? ' · ' + t('person.year', { n: m.course }) : ''}{m.school ? ' · ' + schoolShort(m.school) : ''}</i>
-            <i>{t('reg.since', { date: dayMonth(m.joinedAt) })}{#if m.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}</i>
-            {#if m.username || m.email || m.phone}
-              <span class="contacts">
-                {#if m.username}<button onclick={() => openLink('https://t.me/' + m.username)}><TelegramMark size={14} />@{m.username}</button>{/if}
-                {#if m.email}<button onclick={() => openLink('mailto:' + m.email)}><Mail size={14} />{m.email}</button>{/if}
-                {#if m.phone}<button onclick={() => openLink('tel:' + m.phone)}><Phone size={14} />{kzPhone(m.phone) ? fmtPhone(m.phone) : m.phone}</button>{/if}
-              </span>
-            {/if}
-          </span>
-        </div>
-      {:else}<p class="t-foot none">{t('reg.empty')}</p>{/each}
-    </div>
-  {:else}
-    <div class="wait" aria-hidden="true"><span></span><span></span><span></span></div>
-  {/if}
+  <div class="pg">
+    <Group>
+      <Row title={org.name} subtitle={list ? tn('reg.people', list.length) + (quiet ? ' · ' + tn('reg.quietN', quiet) : '') : undefined}>
+        {#snippet lead()}<OrgLogo {org} size={48} />{/snippet}
+        {#snippet detail()}{#if official}<span class="ok"><BadgeCheck size={20} /></span>{/if}{/snippet}
+      </Row>
+    </Group>
+    {#if org.kind === 'club'}
+      <Group footnote={t('reg.officialNote')}>
+        <Row title={t('reg.official')} accessory="switch" checked={sw} disabled={busy} onchange={toggle} />
+      </Group>
+      <Group>
+        <Row title={t('ce.abbr')} value={abbr} accessory="chevron" onclick={rename} />
+      </Group>
+    {/if}
+    {#if list}
+      <Group>
+        {#each list as m (m.person.id)}
+          {@const c = contacts(m)}
+          {#snippet reach()}<IconButton icon={Contact} label={t('reg.contacts')} kind="plain" size="s" onclick={(e) => menu(e.currentTarget as Element, c)} />{/snippet}
+          <Row dense title={withNick(m.fullName, m.person)} trailing={c.length ? reach : undefined}
+            subtitle={[m.studentId, m.course && t('person.year', { n: m.course }), m.school && schoolShort(m.school), t('reg.since', { date: dayMonth(m.joinedAt) })].filter(Boolean).join(' · ')}>
+            {#snippet lead()}<Avatar person={m.person} size={36} />{/snippet}
+            {#snippet detail()}
+              {#if m.quiet}<Tag tone="warning">{t('reg.quiet')}</Tag>{/if}
+              <Tag tone={m.role === 'president' || m.role === 'vice' ? 'accent' : 'neutral'}>{ROLE_NAME[m.role]}</Tag>
+            {/snippet}
+          </Row>
+        {:else}<EmptyState inline text={t('reg.empty')} />{/each}
+      </Group>
+    {:else}
+      <Skeleton n={3} />
+    {/if}
+  </div>
 </Sheet>
 
 <style>
-  .hd { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
-  .ok { display: inline-flex; margin-left: 6px; vertical-align: -2px; color: var(--accent-text); }
-  .off { margin-bottom: 12px; }
-  .abbr { width: 100%; text-align: left; }
-  .list { display: flex; flex-direction: column; gap: 2px; }
-  .m { display: flex; gap: 12px; align-items: flex-start; padding: 10px 2px; border-bottom: 1px solid var(--line); }
-  .m:last-child { border-bottom: 0; }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .top b { min-width: 0; font: 650 15px/1.25 var(--font-text); }
-  .role { flex: none; padding: 3px 8px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2); font: 650 11.5px/1 var(--font-text); }
-  .role.hi { background: var(--accent-soft); color: var(--accent-text); }
-  .tx i { font: 500 12.5px/1.35 var(--font-text); font-style: normal; color: var(--text-2); }
-  .quiet { margin-left: 8px; padding: 2px 7px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; }
-  .contacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .contacts button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2);
-    color: var(--accent-text); font: 600 12.5px/1 var(--font-text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .none { padding: 18px 4px; text-align: center; }
-  .wait { display: flex; flex-direction: column; gap: 12px; }
-  .wait span { height: 60px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
+  .ok { display: inline-flex; color: var(--accent-text); }
 </style>

@@ -21,7 +21,10 @@
   import OrgLogo, { COVERS } from '../../ui/OrgLogo.svelte';
   import ShortLinks from './ShortLinks.svelte';
   import OrgChats from './OrgChats.svelte';
-  import { grow } from '../../ui/grow';
+  import Field from '../../ui/Field.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay, id, at }: { overlay: Overlay; id: Id; at?: 'chats' } = $props();
   // at 'chats' (the bot's "open in Studio" after linking a chat, the catalog sheet's "your club's channel?"): the
@@ -39,6 +42,7 @@
       .catch(() => { say(t('common.error'), 'warning_3d'); close(overlay.id); });
   });
   let uploading = $state(false);
+  let fileEl = $state<HTMLInputElement>();
   async function pickLogo(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
@@ -94,39 +98,56 @@
 </script>
 
 <Sheet {overlay} icon={PencilLine} full title={t('ce.title')} {hold} {onhold}>
-  <p class="t-foot sub">{t('ce.sub')}</p>
-
   {#if !o || !preview}
-    <div class="wait" aria-hidden="true"><span></span><span></span></div>
+    <Skeleton n={2} />
   {:else}
-    <div class="pv"><OrgLogo org={preview} size={64} /><span><b class="ellipsis">{preview.name}</b><i>{o.official ? t('clubs.official') : t('club.initiative')}</i></span></div>
-    <div class="lg">
-      <label class="pill" class:busy={uploading}><ImagePlus size={17} />{logo ? t('ce.logoChange') : t('ce.logoAdd')}
-        <input type="file" accept="image/*" onchange={pickLogo} disabled={uploading} /></label>
-      {#if logo}<button class="pill off" onclick={() => (logo = null)}><X size={16} />{t('ce.logoRemove')}</button>{/if}
+    <div class="pg">
+      <Group footnote={t('ce.sub')}>
+        <Row title={preview.name} subtitle={o.official ? t('clubs.official') : t('club.initiative')}>
+          {#snippet lead()}<OrgLogo org={preview} size={48} />{/snippet}
+        </Row>
+      </Group>
+      <div class="lg">
+        <input bind:this={fileEl} type="file" accept="image/*" onchange={pickLogo} hidden />
+        <Button kind="tinted" size="s" loading={uploading} onclick={() => fileEl?.click()}>{#snippet icon()}<ImagePlus size={17} />{/snippet}{logo ? t('ce.logoChange') : t('ce.logoAdd')}</Button>
+        {#if logo}<Button kind="secondary" size="s" onclick={() => (logo = null)}>{#snippet icon()}<X size={16} />{/snippet}{t('ce.logoRemove')}</Button>{/if}
+      </div>
+
+      <div class="fl">
+        <Field label={t('nc.name')} bind:value={f.name} maxlength={60} />
+        <p class="note">{t('ce.nameHint')}</p>
+      </div>
+      {#if o.kind !== 'school'}<!-- a school's comes from KBTU's site (schools.json) -->
+        <div class="fl">
+          <Field label={t('ce.abbr')} bind:value={f.abbr} maxlength={8} />
+          <p class="note">{t('ce.abbrHint')}</p>
+        </div>
+      {/if}
+      {#if !logo}
+        <div class="fl">
+          <p class="note top">{t('ce.logoOr')}</p>
+          <LookPick bind:emoji={f.emoji} bind:color={() => COVERS[f.cover], (c) => (f.cover = COVERS.indexOf(c))} colors={COVERS} size={26} />
+        </div>
+      {/if}
+      <div class="fl">
+        <Field label={t('nc.about')} bind:value={f.description} multiline maxlength={600} placeholder={t('nc.aboutPh')} />
+        <p class="note">{t('ce.aboutHint')}</p>
+      </div>
+
+      <!-- engine: Group with free content (a caption and a footnote around something that isn't Rows, here ui/LinksEdit) -->
+      <section>
+        <h3 class="cap">{t('ce.links')}</h3>
+        <p class="note under">{t('ce.linksNote')}</p>
+        <LinksEdit bind:links={f.links} />
+      </section>
+
+      <Group footnote={t('ce.hideMembersNote')}>
+        <Row title={t('ce.hideMembers')} accessory="switch" checked={f.hidden} onchange={(v) => (f.hidden = v)} />
+      </Group>
+
+      <div bind:this={chatsAt}><OrgChats org={id} /></div>
+      <ShortLinks org={id} />
     </div>
-    <label class="field"><span class="t-cap">{t('nc.name')}</span><input bind:value={f.name} maxlength="60" /></label>
-    <p class="t-foot note">{t('ce.nameHint')}</p>
-    {#if o.kind !== 'school'}<!-- a school's comes from KBTU's site (schools.json) -->
-      <label class="field"><span class="t-cap">{t('ce.abbr')}</span><input bind:value={f.abbr} maxlength="8" /></label>
-      <p class="t-foot note">{t('ce.abbrHint')}</p>
-    {/if}
-    {#if !logo}
-      <p class="t-foot note">{t('ce.logoOr')}</p>
-      <div class="ep"><LookPick bind:emoji={f.emoji} bind:color={() => COVERS[f.cover], (c) => (f.cover = COVERS.indexOf(c))} colors={COVERS} size={26} /></div>
-    {/if}
-    <label class="field"><span class="t-cap">{t('nc.about')}</span><textarea bind:value={f.description} maxlength="600" rows="3" placeholder={t('nc.aboutPh')} use:grow></textarea></label>
-    <p class="t-foot note">{t('ce.aboutHint')}</p>
-
-    <h3 class="t-cap cap">{t('ce.links')}</h3>
-    <p class="t-foot note">{t('ce.linksNote')}</p>
-    <LinksEdit bind:links={f.links} />
-
-    <label class="switch hide"><span><b>{t('ce.hideMembers')}</b><i class="t-foot">{t('ce.hideMembersNote')}</i></span>
-      <input type="checkbox" role="switch" bind:checked={f.hidden} /></label>
-
-    <div bind:this={chatsAt}><OrgChats org={id} /></div>
-    <ShortLinks org={id} />
   {/if}
 
   {#snippet footer()}
@@ -135,24 +156,12 @@
 </Sheet>
 
 <style>
-  .sub { margin-bottom: 14px; }
-  .pv { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .pv span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .pv b { font: 720 18px/1.2 var(--font-display); }
-  .pv i { font: 600 12.5px/1 var(--font-text); font-style: normal; color: var(--text-3); }
-  .field { margin-bottom: 12px; }
-  .field textarea { min-height: 0; color: var(--text); }
-  .ep { margin-bottom: 14px; }
-  .cap { margin: 6px 2px 2px; }
-  .note { margin: 0 2px 10px; }
-  .lg { display: flex; gap: 8px; margin: -2px 0 12px; }
-  .pill { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 620 14px/1 var(--font-text); }
-  .pill input { display: none; }
-  .pill.off { background: var(--surface-2); color: var(--text-2); }
-  .pill.busy { opacity: 0.6; animation: pulse 1.1s ease-in-out infinite; }
-  .wait { display: flex; flex-direction: column; gap: 12px; }
-  .wait span { height: 60px; border-radius: var(--r-m); background: var(--surface-2); animation: pulse 1.1s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
-  .hide { margin-top: 22px; }
+  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
+  .lg { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: calc(var(--s-3) - var(--gap-group)); }
+  .fl { display: flex; flex-direction: column; gap: var(--s-2); }
+  /* Group's caption and footnote, for content that isn't Rows */
+  .cap { margin: 0 var(--s-1) 10px; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
+  .note { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .note.top { margin-bottom: var(--s-1); }
+  .note.under { margin: 0 var(--s-1) var(--s-3); }
 </style>

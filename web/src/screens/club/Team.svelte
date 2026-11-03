@@ -26,9 +26,17 @@
   import Tags from '@lucide/svelte/icons/tags';
   import Crown from '@lucide/svelte/icons/crown';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import Plus from '@lucide/svelte/icons/plus';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import { menu } from '../../ui/menu';
 
   let { overlay }: { overlay: Overlay } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].sort(byRank));
@@ -77,10 +85,21 @@
   const ownLevel = $derived((setup?.roles ?? []).filter((r) => r.level === m?.role && r.rights.every((k) => may(m, k))));
   // the avatar is the profile; the row opens what I can do with them, or the profile when there's nothing (owner, Oct 14:
   // no "Profile" button, no tags on the fly here: who has a tag is picked in the tag, in "Roles and tags")
-  function tap(x: TeamMember, ev: MouseEvent) {
-    const self = x.person.id === me;
-    if ((ev.target as HTMLElement).closest('.av') || (self ? !ownLevel.length && !deptChoices(x).length : !isAbove(m, x.role) && !deptChoices(x).length)) { sheets.person(x.person.id); return; }
+  function tap(x: TeamMember) {
+    if (!hasActs(x)) { sheets.person(x.person.id); return; }
     open = open === x.person.id ? null : x.person.id;
+  }
+  // what can be done with them: the row unfolds the actions, else it opens the profile
+  const hasActs = (x: TeamMember) => (x.person.id === me ? ownLevel.length > 0 : isAbove(m, x.role)) || deptChoices(x).length > 0;
+  // the line under the name: the nick or @username, then the marks in words (statuses first, then tags)
+  const sub = (x: TeamMember) => [[x.person.nick, x.username && '@' + x.username].filter(Boolean).join(' · ') || x.person.name,
+    x.probation && t('team.probation'), x.quiet && t('reg.quiet'), x.brought && t('team.brought', { n: x.brought }),
+    ...(x.tags ?? []).map((id) => tagOf.get(id)?.name)].filter(Boolean).join(' · ');
+  // the tags' chip: a menu of every tag with its count
+  function tagMenu(e: MouseEvent) {
+    const all = list ?? [];
+    menu(e.currentTarget as Element, [{ label: `${t('common.all')} · ${all.length}`, checked: filter == null || filter === 'probation' || !!dept, onselect: () => (filter = null) },
+      ...otherTags.map((g) => ({ label: `${g.name} · ${all.filter((y) => y.tags?.includes(g.id)).length}`, checked: filter === g.id, onselect: () => (filter = g.id) }))]);
   }
   function refresh() {
     if (!m) return;
@@ -139,19 +158,20 @@
   }
 </script>
 
+{#snippet dot(c: string)}<span class="dot" style="--c:{c}"></span>{/snippet}
+
 {#snippet deptRow(x: TeamMember)}
   {@const choices = deptChoices(x)}
   {#if choices.length}
     <span class="t-cap">{t('team.dept')}</span>
     <div class="ar">
       {#each choices as g (g.id)}
-        <button class="pill" class:on={x.dept === g.id} disabled={busy || x.dept === g.id} onclick={() => setDept(x, g.id)}><span class="dot" style="--c:{g.color}"></span>{g.name}</button>
+        <Chip selected={x.dept === g.id} onclick={() => !busy && x.dept !== g.id && setDept(x, g.id)}>{@render dot(g.color)}{g.name}</Chip>
       {/each}
-      <button class="pill" class:on={x.dept == null} disabled={busy || x.dept == null} onclick={() => setDept(x, null)}>{t('team.noDept')}</button>
+      <Chip selected={x.dept == null} onclick={() => !busy && x.dept != null && setDept(x, null)}>{t('team.noDept')}</Chip>
     </div>
   {/if}
 {/snippet}
-
 
 <Sheet {overlay} tall title={t('page.team')} icon={Users}>
 <div class="team">
@@ -160,201 +180,141 @@
       <span class="org"><OrgLogo org={m.org} size={30} /><b class="nm ellipsis">{m.org.name}</b></span>
       <!-- the list first; invite and roles are icons up here (the invite row was too big, the hint noise) -->
       <span class="icons">
-        {#if vice}<button class="ic" class:on={linkOpen} aria-expanded={linkOpen} onclick={() => { haptic.select(); linkOpen = !linkOpen; }} aria-label={t('team.inviteTitle')}><LinkIcon size={19} /></button>{/if}
+        {#if vice}<IconButton icon={LinkIcon} size="s" label={t('team.inviteTitle')} on={linkOpen} onclick={() => { haptic.select(); linkOpen = !linkOpen; }} />{/if}
         {#if may(m, 'people') || vice || setup?.roles.length || setup?.tags.length}
-          <button class="ic" onclick={() => sheets.teamSetup(m.org.id, refresh)} aria-label={t('team.setup')}><Tags size={19} /></button>
+          <IconButton icon={Tags} size="s" label={t('team.setup')} onclick={() => sheets.teamSetup(m.org.id, refresh)} />
         {/if}
       </span>
     </header>
     {#if vice && linkOpen}
       <div class="linkpick" transition:fold>
-        <Button kind="filled" size="m" full onclick={() => shareLink(true)}>
-          {setup?.teamLink ? t('team.linkAllUntil', { date: dayMonth(setup.teamLink.expiresAt) }) : t('team.linkAll')}</Button>
-        <Button kind="gray" size="m" full onclick={() => shareLink(false)}>{t('team.linkOnce')}</Button>
-        <p class="t-foot">{t('team.linkHint')}</p>
-        {#if setup?.teamLink}<button class="off t-callout" disabled={busy} onclick={linkOff}>{t('team.linkOff')}</button>{/if}
+        <Group footnote={t('team.linkHint')}>
+          <Row tone="action" title={setup?.teamLink ? t('team.linkAllUntil', { date: dayMonth(setup.teamLink.expiresAt) }) : t('team.linkAll')} onclick={() => shareLink(true)} />
+          <Row tone="action" title={t('team.linkOnce')} onclick={() => shareLink(false)} />
+        </Group>
+        {#if setup?.teamLink}<Group><Row tone="destructive" title={t('team.linkOff')} disabled={busy} onclick={linkOff} /></Group>{/if}
       </div>
     {/if}
 
     {#if setup?.removals?.length}
       <!-- §2b: a Head's request; the President or a Vice above them decides -->
-      <section class="asks">
-        <h2 class="t-cap">{t('team.removals')}</h2>
+      <Group caption={t('team.removals')}>
         {#each setup.removals as q (q.id)}
-          <div class="ask">
-            <div class="aq"><Avatar person={q.person} size={36} />
-              <span class="tx"><b class="ellipsis">{withNick(q.fullName, q.person)}</b>
-                <i class="t-foot">{q.by ? t('team.removalBy', { name: q.by.name }) : ''}{q.ban ? ' · ' + t('team.withBan') : ''}{q.note ? ' · «' + q.note + '»' : ''}</i></span></div>
-            {#if q.canDecide}
-              <div class="ar"><Button kind="secondary" size="s" disabled={busy} onclick={() => decide(q, false)}>{t('team.keep')}</Button>
-                <Button kind="danger" size="s" disabled={busy} onclick={() => decide(q, true)}>{t('team.remove')}</Button></div>
-            {:else}<p class="t-foot">{t('team.onlyHigher')}</p>{/if}
-          </div>
+          <Row dense title={withNick(q.fullName, q.person)}
+            subtitle={[q.by && t('team.removalBy', { name: q.by.name }), q.ban && t('team.withBan'), q.note && '«' + q.note + '»', !q.canDecide && t('team.onlyHigher')].filter(Boolean).join(' · ')}>
+            {#snippet lead()}<Avatar person={q.person} size={36} />{/snippet}
+          </Row>
+          {#if q.canDecide}
+            <!-- engine: Row needs content under it (a request's actions) -->
+            <div class="ar under"><Button kind="secondary" size="s" disabled={busy} onclick={() => decide(q, false)}>{t('team.keep')}</Button>
+              <Button kind="destructive" size="s" disabled={busy} onclick={() => decide(q, true)}>{t('team.remove')}</Button></div>
+          {/if}
         {/each}
-      </section>
+      </Group>
     {/if}
 
     {#if list}
       {#if setup?.tags.length || onProbation}
         {#if depts.length}
-          <div class="filters depts">
-            <button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>
+          <div class="chips">
+            <Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>
             {#each depts as g (g.id)}
-              <button class:on={filter === g.id} onclick={() => (filter = filter === g.id ? null : g.id)}><span class="dot" style="--c:{g.color}"></span>{g.name}<span class="num">{list.filter((x) => x.dept === g.id).length}</span></button>
+              <Chip selected={filter === g.id} onclick={() => (filter = filter === g.id ? null : g.id)}>{@render dot(g.color)}{g.name}<span class="n num">{list.filter((x) => x.dept === g.id).length}</span></Chip>
             {/each}
           </div>
         {/if}
-        <!-- one row whatever the count: the tags sit behind one chip that opens the phone's own list, and the chosen
-             one shows on it (long department names in a scrolling row hid the chosen one; wrapped,
-             six of them took half the screen and stood ragged) -->
-        <div class="filters">
-          {#if !depts.length}<button class:on={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="num">{list.length}</span></button>{/if}
+        <!-- one row whatever the count: the tags sit behind one chip that opens a menu, and the chosen one shows on it
+             (long department names in a scrolling row hid the chosen one; wrapped, six of them took half the screen) -->
+        <div class="chips">
+          {#if !depts.length}<Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>{/if}
           {#if otherTags.length}
             {@const g = typeof filter === 'number' && !dept ? tagOf.get(filter) : null}
-            <label class="pick" class:on={!!g}>
-              {#if g}<span class="dot" style="--c:{g.color}"></span><span class="ellipsis">{g.name}</span><span class="num">{list.filter((x) => x.tags?.includes(g.id)).length}</span>
-              {:else}<span>{t('team.tagsLabel')}</span>{/if}
-              <ChevronDown size={16} />
-              <select value={g ? String(g.id) : ''} onchange={(e) => { const v = e.currentTarget.value; filter = v ? Number(v) : null; }} aria-label={t('team.tagsLabel')}>
-                <option value="">{t('common.all')} · {list.length}</option>
-                {#each otherTags as x (x.id)}<option value={String(x.id)}>{x.name} · {list.filter((y) => y.tags?.includes(x.id)).length}</option>{/each}
-              </select>
-            </label>
+            <Chip selected={!!g} onclick={tagMenu}>
+              {#if g}{@render dot(g.color)}<span class="ellipsis">{g.name}</span><span class="n num">{list.filter((x) => x.tags?.includes(g.id)).length}</span>
+              {:else}{t('team.tagsLabel')}{/if}<ChevronDown size={16} />
+            </Chip>
           {/if}
-          {#if onProbation}<button class:on={filter === 'probation'} onclick={() => (filter = filter === 'probation' ? null : 'probation')}>{t('team.probation')}<span class="num">{onProbation}</span></button>{/if}
+          {#if onProbation}<Chip selected={filter === 'probation'} onclick={() => (filter = filter === 'probation' ? null : 'probation')}>{t('team.probation')}<span class="n num">{onProbation}</span></Chip>{/if}
         </div>
       {/if}
-      <div class="list">
-        {#if dept && vice}<button class="deptinv" onclick={() => shareInvite(m.org, { id: dept.id, name: dept.name })}><LinkIcon size={16} />{t('team.inviteDept', { dept: dept.name })}</button>{/if}
+      {#if dept && vice}<span class="deptinv"><Button kind="tinted" size="s" onclick={() => shareInvite(m.org, { id: dept.id, name: dept.name })}>{#snippet icon()}<LinkIcon size={16} />{/snippet}{t('team.inviteDept', { dept: dept.name })}</Button></span>{/if}
+      <Group>
         {#each shown as x (x.person.id)}
           {@const manage = x.person.id !== me && canManage(m, x.role)}
-          <div class="row" class:out={open === x.person.id}>
-            <button class="who" onclick={(ev) => tap(x, ev)}>
-              <span class="av"><Avatar person={x.person} size={42} />{#if x.role === 'president'}<span class="crown" title={ROLE_NAME.president}><Crown size={12} strokeWidth={2.6} /></span>{/if}</span>
-              <span class="tx"><b class="ellipsis">{x.fullName}</b>
-                <i class="t-foot ellipsis">{[x.person.nick, x.username && '@' + x.username].filter(Boolean).join(' · ') || x.person.name}{#if x.quiet}<span class="quiet">{t('reg.quiet')}</span>{/if}{#if x.brought}<span class="brought">{t('team.brought', { n: x.brought })}</span>{/if}</i>
-                {#if x.tags?.length || x.probation}
-                  <span class="marks">
-                    {#if x.probation}<span class="prob">{t('team.probation')}</span>{/if}
-                    {#each x.tags ?? [] as id (id)}{@const g = tagOf.get(id)}{#if g}<span class="tag"><span class="dot" style="--c:{g.color}"></span>{g.name}</span>{/if}{/each}
-                  </span>
+          <Row dense title={x.fullName} subtitle={sub(x)} value={roleName(x.role, titleOf(x))} accessory={hasActs(x) ? 'disclosure' : 'chevron'} open={open === x.person.id}
+            onclick={() => tap(x)}>
+            <!-- the avatar is the profile (its own tap); the club's President: a crown on it -->
+            {#snippet lead()}<span class="av"><Avatar person={x.person} size={36} />{#if x.role === 'president'}<span class="crown" title={ROLE_NAME.president}><Crown size={11} strokeWidth={2.6} /></span>{/if}</span>{/snippet}
+          </Row>
+          {#if open === x.person.id}
+            <!-- engine: Row needs content under it (the person's actions, unfolded) -->
+            <div class="acts" transition:fold>
+              {#if x.person.id === me}
+                {@render deptRow(x)}
+                {#if ownLevel.length}
+                  <span class="t-cap">{t('team.roleLabel')}</span>
+                  <div class="ar">{#each ownLevel as r (r.id)}<Chip selected={x.roleId === r.id} onclick={() => !busy && x.roleId !== r.id && giveOwn(x, r)}>{@render dot(r.color)}{inLang(r.name, r.nameKk, r.nameEn)}</Chip>{/each}</div>
                 {/if}
-              </span>
-              <span class="rl" class:top={x.role !== 'member' && !x.title} class:own={!!x.title} style={x.titleColor ? `--c:${x.titleColor}` : undefined}>{roleName(x.role, titleOf(x))}</span>
-            </button>
-            {#if open === x.person.id}
-              <div class="acts">
-                {#if x.person.id === me}
-                  {@render deptRow(x)}
-                  {#if ownLevel.length}
-                    <span class="t-cap">{t('team.roleLabel')}</span>
-                    <div class="ar">{#each ownLevel as r (r.id)}<button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{inLang(r.name, r.nameKk, r.nameEn)}</button>{/each}</div>
-                  {/if}
-                {:else}
-                  {@render deptRow(x)}
-                  {#if isAbove(m, x.role)}
-                  {#if manage}
-                    <span class="t-cap">{t('team.roleLabel')}</span>
-                    <div class="ar">
-                      <!-- Member, or one of the club's roles, each its toggles (no levels by name); only rights I have -->
-                      <button class="pill" class:on={x.role === 'member' && !x.title} disabled={busy || (x.role === 'member' && !x.title)} onclick={() => give(x, 'member')}>{ROLE_NAME.member}</button>
-                      {#each (setup?.roles ?? []).filter((r) => canGive(m.role).includes(r.level) && r.rights.every((k) => may(m, k))) as r (r.id)}
-                        <button class="pill" class:on={x.roleId === r.id} disabled={busy || x.roleId === r.id} onclick={() => giveOwn(x, r)}><span class="dot" style="--c:{r.color}"></span>{inLang(r.name, r.nameKk, r.nameEn)}</button>
-                      {/each}
-                      <button class="pill add" onclick={() => sheets.teamSetup(m.org.id, refresh)}>{t('ts.newRole')}</button>
-                    </div>
-                  {/if}
-                  {#if !x.probation || vice}
-                    <span class="t-cap">{t('team.probation')}</span>
-                    <div class="ar">{#if x.probation}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, false)}>{t('team.probationOff')}</Button>
-                      {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, true)}>{t('team.probationOn')}</Button>{/if}</div>
-                  {/if}
-                  <div class="ar end">
-                    {#if m.role === 'president'}<Button kind="secondary" size="s" disabled={busy} onclick={() => handOver(x)}>{t('team.transfer')}</Button>{/if}
-                    <Button kind="danger" size="s" disabled={busy} onclick={() => removeOrAsk(x)}>{manage ? t('team.remove') : t('team.askRemove')}</Button>
+              {:else}
+                {@render deptRow(x)}
+                {#if isAbove(m, x.role)}
+                {#if manage}
+                  <span class="t-cap">{t('team.roleLabel')}</span>
+                  <div class="ar">
+                    <!-- Member, or one of the club's roles, each its toggles (no levels by name); only rights I have -->
+                    <Chip selected={x.role === 'member' && !x.title} onclick={() => !busy && !(x.role === 'member' && !x.title) && give(x, 'member')}>{ROLE_NAME.member}</Chip>
+                    {#each (setup?.roles ?? []).filter((r) => canGive(m.role).includes(r.level) && r.rights.every((k) => may(m, k))) as r (r.id)}
+                      <Chip selected={x.roleId === r.id} onclick={() => !busy && x.roleId !== r.id && giveOwn(x, r)}>{@render dot(r.color)}{inLang(r.name, r.nameKk, r.nameEn)}</Chip>
+                    {/each}
+                    <Chip selected={false} icon={Plus} onclick={() => sheets.teamSetup(m.org.id, refresh)}>{t('ts.newRole')}</Chip>
                   </div>
-                  {/if}
                 {/if}
-              </div>
-            {/if}
-          </div>
+                {#if !x.probation || vice}
+                  <span class="t-cap">{t('team.probation')}</span>
+                  <div class="ar">{#if x.probation}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, false)}>{t('team.probationOff')}</Button>
+                    {:else}<Button kind="secondary" size="s" disabled={busy} onclick={() => probation(x, true)}>{t('team.probationOn')}</Button>{/if}</div>
+                {/if}
+                <div class="ar end">
+                  {#if m.role === 'president'}<Button kind="secondary" size="s" disabled={busy} onclick={() => handOver(x)}>{t('team.transfer')}</Button>{/if}
+                  <Button kind="destructive" size="s" disabled={busy} onclick={() => removeOrAsk(x)}>{manage ? t('team.remove') : t('team.askRemove')}</Button>
+                </div>
+                {/if}
+              {/if}
+            </div>
+          {/if}
         {/each}
-        {#if !shown.length}<p class="t-foot empty">{t('clubs.nothing')}</p>{/if}
-      </div>
-      <button class="leave" onclick={leave}>{t('team.leave')}</button>
+        {#if !shown.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
+      </Group>
+      <Group><Row tone="destructive" title={t('team.leave')} onclick={leave} /></Group>
     {:else}
-      <div class="skel"><span></span><span></span><span></span></div>
+      <Skeleton n={4} />
     {/if}
   {/if}
 </div>
 </Sheet>
 
 <style>
-  .brought { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-soft); color: var(--accent-text); font-weight: 650; font-style: normal; }
-  .quiet { margin-left: 6px; padding: 1px 6px; border-radius: var(--r-full); background: var(--warning-soft); color: var(--warning-text); font-weight: 650; font-style: normal; }
-  .team { display: flex; flex-direction: column; gap: 10px; }
+  .team { display: flex; flex-direction: column; gap: var(--s-4); }
   .team > :global(*) { flex-shrink: 0; }
-  /* the club's President: a crown on the avatar */
-  .av { position: relative; }
-  .crown { position: absolute; right: -3px; top: -4px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    background: #FFB23D; color: #3A2400; box-shadow: 0 0 0 2px var(--surface-solid); }
-  .icons { display: flex; gap: 8px; flex: none; }
-  .ic { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); transition: transform var(--t-fast) var(--ease); }
-  .ic.on { background: var(--accent); color: var(--on-accent); }
-  .linkpick { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-  .linkpick .t-foot { margin: 0 4px; }
-  .off { align-self: center; padding: 6px 10px; color: var(--danger-text); }
-  .ic:active { transform: scale(0.9); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 22px rgba(59, 107, 255, 0.55); } /* a press glows */
-  .hd { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .hd { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .nm { min-width: 0; font: 650 var(--fs-body)/1.2 var(--font-text); }
-
-  .asks { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-l); background: var(--danger-soft); }
-  .asks h2 { color: var(--danger-text); }
-  .ask { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-m); background: var(--surface); }
-  .aq { display: flex; align-items: center; gap: 10px; min-width: 0; }
-
-  .filters { display: flex; gap: 6px; }
-  .filters button, .pick { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface); color: var(--text-2);
-    box-shadow: inset 0 0 0 1px var(--line); font: 620 13.5px/1 var(--font-text); }
-  .pick { position: relative; flex: 0 1 auto; min-width: 0; }
-  .pick :global(svg) { flex: none; opacity: 0.6; }
-  .pick select { position: absolute; inset: 0; opacity: 0; font-size: 16px; }
-  .filters button.on, .pick.on { background: var(--text); color: var(--bg); box-shadow: none; }
-  .filters .num { flex: none; font-weight: 700; opacity: 0.6; }
-
-  .list { display: flex; flex-direction: column; gap: 8px; }
-  .depts { overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
-  .depts::-webkit-scrollbar { display: none; }
-  .deptinv { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 620 13px/1 var(--font-text); }
-  .row { border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
-  .who { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; text-align: left; }
-  .who:active { background: var(--surface-2); }
-  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 640 15px/1.25 var(--font-text); }
-  .tx i { font-style: normal; }
-  .marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-  .tag, .prob { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2);
-    font: 620 11.5px/1 var(--font-text); }
-  .prob { background: var(--warning-soft); color: var(--warning-text); }
+  .nm { min-width: 0; font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .icons { display: flex; gap: var(--s-2); flex: none; }
+  .linkpick { display: flex; flex-direction: column; gap: var(--s-4); }
+  /* the club's President: a crown on the avatar */
+  .av { position: relative; display: inline-flex; }
+  .crown { position: absolute; right: -4px; top: -4px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--gold); color: var(--ink); box-shadow: 0 0 0 2px var(--surface-solid); }
+  .chips { display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter); }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips :global(.fc) { max-width: 75vw; }
+  .n { flex: none; font-weight: 700; opacity: 0.6; }
   .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .rl { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 9px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text-2);
-    font: 700 11px/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; }
-  .rl.top { background: var(--accent-soft); color: var(--accent-text); }
-  .rl.own { background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
-
-  .acts { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px 66px; }
-  .acts .t-cap { margin-top: 4px; }
+  .deptinv { align-self: flex-start; }
+  /* a row's unfolded actions, from where its title starts */
+  .acts { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4) 64px; }
+  .acts .t-cap { margin-top: var(--s-1); }
   .ar { display: flex; flex-wrap: wrap; gap: 6px; }
   .ar.end { margin-top: 6px; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text);
-    font: 620 13px/1 var(--font-text); box-shadow: inset 0 0 0 1.5px transparent; }
-  .pill.on { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 50%, transparent); }
-  .pill:disabled:not(.on) { opacity: 0.5; }
-  .empty { padding: 14px 4px; text-align: center; }
-  .leave { align-self: center; margin-top: 10px; padding: 10px 14px; font: 620 14px/1 var(--font-text); color: var(--danger-text); }
-  .skel { display: flex; flex-direction: column; gap: 8px; }
-  .skel span { height: 62px; border-radius: var(--r-l); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.5; } }
+  .ar.under { padding: 0 var(--s-4) var(--s-3) 64px; }
 </style>

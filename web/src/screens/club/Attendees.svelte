@@ -3,7 +3,6 @@
   // waitlist; a check-in shows its time. A tap opens the person's card. "Export" has the bot send the list as a CSV
   // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
-  import Search from '@lucide/svelte/icons/search';
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -19,6 +18,12 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Notice from '../../ui/Notice.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -68,62 +73,55 @@
 
 <Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
-  {#if list}
+  {#if list}<div class="col">
     <div class="bar"><p class="stats">{t('att.stats', { going, came })}</p>
-      {#if list.length}<button class="exp" onclick={exportList} disabled={sending}><FileDown size={17} />{t('att.export')}</button>{/if}</div>
-    {#if price && paid}<p class="due">{t('att.expected', { sum: money(paid * price), n: paid, price: money(price) })}{#if read}<br />
-      <span class:short={read < paid * price}>{t('att.byReceipts', { sum: money(read) })}</span>{/if}</p>{/if}
-    {#if list.length > 8}
-      <label class="search"><Search size={18} /><input bind:value={q} placeholder={t('att.search')} type="search" autocomplete="off" /></label>
+      {#if list.length}<Button kind="secondary" size="s" loading={sending} onclick={exportList}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('att.export')}</Button>{/if}</div>
+    {#if price && paid}
+      <Notice tone={read && read < paid * price ? 'warning' : 'neutral'} icon={ReceiptIcon} text={t('att.expected', { sum: money(paid * price), n: paid, price: money(price) })}>
+        {#if read}<p class="by">{t('att.byReceipts', { sum: money(read) })}</p>{/if}
+      </Notice>
     {/if}
-    <div class="list">
-      {#each shown as a (a.person.id)}
-        <div class="row">
-          <button class="who" onclick={() => sheets.person(a.person.id)}>
-            <Avatar person={a.person} size={40} tappable={false} />
-            <span class="txt"><b class="ellipsis">{a.fullName}</b><span class="t-foot">{a.person.name}{#if a.free}{' · ' + t('att.free')}{/if}{#if a.walkIn}{' · ' + t('att.walkIn')}{/if}{#if a.manual}{' · ' + t('att.manual')}{/if}</span></span>
-          </button>
-          {#if a.receipt}<button class="rc" class:flag={flagged(a)} onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} aria-label={t('rc.title')}>
-            {#if flagged(a)}<TriangleAlert size={17} />{:else}<ReceiptIcon size={17} />{/if}</button>{/if}
-          {#if a.checkedInAt}
-            {#if undoFor === a.person.id}<button class="undo" onclick={() => undo(a)}>{t('door.undo')}</button>{/if}
-            <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
-          {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
-          {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
-          {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
-          {:else}<Tag>{t('att.waitlist')}</Tag>{/if}
+    {#if list.length > 8}<SearchField bind:value={q} placeholder={t('att.search')} />{/if}
+    {#if shown.length}
+      <Group>
+        {#each shown as a (a.person.id)}
+          {@const acts = !!a.receipt || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
+          <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
+          <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
+            {...(acts ? { trailing: end } : { detail: end, onclick: () => sheets.person(a.person.id) })}>
+            {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts} />{/snippet}
+          </Row>
+          {#snippet end()}
+            {#if a.receipt}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : 'gray'} label={t('rc.title')}
+              onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
+            {#if a.checkedInAt}
+              {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}
+              <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
+            {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
+            {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
+            {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
+            {:else}<Tag>{t('att.waitlist')}</Tag>{/if}
+          {/snippet}
+          <!-- engine: Row needs content under it (the answers to the event's questions) -->
           {#if a.answers?.length}<dl class="ans">{#each a.answers as x, k (k)}<dt>{x.q}</dt><dd class="selectable">{x.a}</dd>{/each}</dl>{/if}
-        </div>
-      {:else}
-        <p class="t-foot empty">{list.length ? t('clubs.nothing') : t('att.none')}</p>
-      {/each}
-    </div>
-  {/if}
+        {/each}
+      </Group>
+    {:else}
+      <EmptyState inline text={list.length ? t('clubs.nothing') : t('att.none')} />
+    {/if}
+  </div>{/if}
 </Sheet>
 
 <style>
   .ev { margin-top: 2px; }
-  .bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 10px; }
-  .stats { font: 650 15px/1.3 var(--font-text); }
-  .exp { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 650 13.5px/1 var(--font-text); }
-  .exp:disabled { opacity: 0.55; }
-  .due { margin: -4px 0 10px; font: 600 14px/1.3 var(--font-text); color: var(--text-2); }
-  .due .short { color: var(--warning-text); }
-  .rc { flex: none; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-2); color: var(--text-2); }
-  .rc.flag { background: var(--warning-soft); color: var(--warning-text); }
-  .search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; margin-bottom: 8px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-3); }
-  .search input { flex: 1; min-width: 0; font: 500 16px/1 var(--font-text); color: var(--text); }
-  .list { display: flex; flex-direction: column; }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 2px; width: 100%; }
-  /* the answers to the event's own questions, under the name */
-  .ans { flex-basis: 100%; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 2px 48px; font: 500 13px/1.35 var(--font-text); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+  .stats { font: 600 var(--fs-row)/1.3 var(--font-text); }
+  .by { font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
+  .col { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
+  /* the answers to the event's own questions, under the name, from where the name starts */
+  .ans { display: grid; grid-template-columns: auto 1fr; gap: 3px var(--s-3); margin-left: calc(var(--s-4) + 36px + var(--s-3)); padding: 0 var(--s-4) var(--s-3) 0;
+    font: 450 var(--fs-sub)/1.35 var(--font-text); }
+  .ans:not(:last-child) { border-bottom: 0.5px solid var(--separator); }
   .ans dt { color: var(--text-3); }
   .ans dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
-  .who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; }
-  .undo { flex: none; padding: 6px 4px; font: 620 13px/1 var(--font-text); color: var(--text-2); }
-  .row + .row { border-top: 1px solid var(--line); }
-  .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .txt b { font: 620 15px/1.3 var(--font-text); }
-  .empty { padding: 18px 2px; }
 </style>
