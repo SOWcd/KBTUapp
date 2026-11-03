@@ -121,7 +121,9 @@ export function hero(p: PersonCard): HeroData {
   // the lanyard's line: the most important team first, DMP, then the Student Government, then clubs; within one tier the
   // higher role (owner, Oct 31: a minister read "Head of Events · Choice"). A role only to the club's own team
   const weight = (c: PersonCard['clubs'][number]) => (c.role ? 100 : 0) + (c.org.kind === 'office' ? 20 : c.org.gov ? 10 : 0) + (c.role ? RANK[c.role] : 0);
-  const top = [...p.clubs].sort((a, b) => weight(b) - weight(a))[0];
+  // ...unless I wear one of my clubs' lanyards: then its line is that club's (Nov 3: a student wanted his other club's
+  // role on the card and found no setting; the lanyard I pick is the setting)
+  const top = p.clubs.find((c) => c.org.id === p.skin) ?? [...p.clubs].sort((a, b) => weight(b) - weight(a))[0];
   const close = closest(p.awards.achievements);
   return {
     person: { id: p.id, name: p.name, avatar: p.avatar, founder: false },
