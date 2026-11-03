@@ -755,7 +755,8 @@ def test_post_discussed(env, monkeypatch):
 
     def hot(viewer=7):
         got = c.get("/api/forum-posts/feed", headers=tma(viewer)).json()
-        assert [x["id"] for x in got] == sorted((x["id"] for x in got), reverse=True)            # one order, newest first
+        keys = [x["msg"] or 1 << 62 for x in got]
+        assert keys == sorted(keys, reverse=True)                                                # one order, the channel's
         return {x["id"] for x in got if x["hot"]}
 
     one_ = post(); say(one_, 2)
@@ -783,7 +784,8 @@ def test_post_discussed(env, monkeypatch):
 
 
 def test_feed_pages(env, monkeypatch):
-    """FEED_MAX a page, newest first; ?before=<the last id shown> the next one, my own held post in its place by id."""
+    """FEED_MAX a page in the channel's order (its message ids: a post let out late sits where Telegram shows it);
+    ?before=<the last message shown> the next one; my own held post (no message yet) on top of my first page."""
     c, cfg, _, _ = setup(env, monkeypatch)
     login(c, 1, "ann"), login(c, 2, "bob")
     con = db.connect(cfg.db_path)
@@ -792,13 +794,14 @@ def test_feed_pages(env, monkeypatch):
     for i in range(n + 7):
         con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at) VALUES (?, 'a post here', 0, ?, ?, 0)",
                     (uid, "held" if i == 3 else "live", None if i == 3 else 100 + i))
-    page = lambda who, **q: [x["id"] for x in c.get("/api/forum-posts/feed", headers=tma(who), params=q).json()]  # noqa: E731
-    first = page(2)
-    assert len(first) == n and first == sorted(first, reverse=True)
-    rest = page(2, before=first[-1])
-    assert len(rest) == 6 and max(rest) < min(first)                                           # the held one: not bob's to see
-    assert len(page(1, before=first[-1])) == 7                                                 # ann's own held one: hers
-    assert page(2, before=min(rest)) == []
+    con.execute("UPDATE fchan_posts SET tg_msg = 999 WHERE id = 1")                            # written first, out last
+    feed = lambda who, **q: c.get("/api/forum-posts/feed", headers=tma(who), params=q).json()  # noqa: E731
+    first = feed(2)
+    assert len(first) == n and first[0]["id"] == 1 and [x["msg"] for x in first] == sorted((x["msg"] for x in first), reverse=True)
+    rest = feed(2, before=first[-1]["msg"])
+    assert len(rest) == 6 and max(x["msg"] for x in rest) < first[-1]["msg"]                    # the held one: not bob's to see
+    assert feed(1)[0]["status"] == "held"                                                       # ann's own held one: on top, hers
+    assert feed(2, before=min(x["msg"] for x in rest)) == []
     con.close()
 
 
