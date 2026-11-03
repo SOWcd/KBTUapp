@@ -781,15 +781,13 @@ def channel_post(title: str, org: str, starts: int, place: str, price: int | Non
 
 CHANNEL_BUTTON = "📝 Записаться · Тіркелу · Sign up"
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
-CHANNEL_RULES = ("🤝 Балағат, спам мен жарнамасыз.\n"
-                 "💬 Без оскорблений, спама и рекламы.\n"
-                 "✌️ No insults, spam or ads.")  # owner, Nov 2: as short as it gets
-# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the rules in the channel's three
-# languages, and a button to that post in the app
-FORUM_RULES = ("🤝 Сыйластықпен сөйлесейік: балағат, спам мен жарнамасыз.\n\n"
-               "💬 Общаемся с уважением: без оскорблений, спама и рекламы.\n\n"
-               "✌️ Be kind: no insults, spam or ads.")  # owner, Nov 2: short, his words exactly; an emoji only at a line's start
-FORUM_BUTTON = "Открыть в приложении"
+CHANNEL_RULES = ("🤝 Балағатсыз, спамсыз, жарнамасыз.\n"
+                 "💬 Без хамства, спама и рекламы.\n"
+                 "✌️ No insults, spam or ads.")  # owner, Nov 3: one standard, each language one line on a phone
+# the bot's first comment under each forum channel post (tgc.post_tick), plain text: the same rules (owner, Nov 3: one
+# standard for both channels), and a button to that post in the app
+FORUM_RULES = CHANNEL_RULES
+FORUM_BUTTON = "📱 Открыть · Ашу · Open"  # as CHANNEL_BUTTON: ru · kk · en
 FCH_REPLY_SIGN = "🎭 Автор поста"  # the anonymous author's replies in the group (tgc._replies); a Telegram name with it is deleted (tgc.posing)
 FCH_REPLY_NICK = "🎭 {nick}"  # the same, under a post that has a nick (owner, Nov 3): the post's own
 # an anonymous post's nick (fchannel.pick_nick, owner Nov 3), as the channel signs it: an adjective (masculine,
