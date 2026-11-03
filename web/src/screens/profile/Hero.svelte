@@ -299,7 +299,9 @@
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
   /* round 5: the name and the role give way to the medallion (its 66 px corner; 52 px, was 58: it outweighed the photo),
      the course line has the card's width; the role and the course line wrap to two lines at most (owner: long names fit) */
-  .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; }
+  /* the photo, the name and its lines don't move with the tilt: the light's --gx/--gy, written on the badge every frame
+     the phone moves, stop here, so the 80-odd elements under it (the seal's SVG among them) aren't restyled each frame */
+  .top { position: relative; display: flex; gap: 14px; align-items: center; padding: 0 18px; --gx: 0; --gy: 0; }
   /* Cheerleading and Knights: their art is the card's background (LanyardBand), under everything here */
   .foot { position: relative; display: block; margin: 16px 18px 0; } /* above the art (LanyardBand) */
   .medal { position: absolute; z-index: 1; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
