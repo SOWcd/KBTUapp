@@ -98,10 +98,12 @@
          logo in the middle, no sakura -->
     <img class="l z far jb" src={jccBack} alt="" /><i class="petals"></i>
   {:else if look === 'teentertainmentkbtu'}
-    <!-- óte entertainment (new3, .claude/reports/club-lanyards/new3/gen-new3.py): a stage before the show in their coral
-         on their blush: follow-spots crossing on the boards, the pool and rings of their light, a ticket stub under the
-         medallion, confetti in the air and a little falling. The badge's band: their wordmark in the spots -->
-    {#if wide}<img class="l z far" src={L('ote-stage')} alt="" /><img class="l z near" src={L('ote-confetti')} alt="" />
+    <!-- óte entertainment (new3 r2, owner: in the grammar of SITE, Shade, KMA, Geology; .claude/reports/club-lanyards/new3/
+         gen-r2.py): their blush lit from the top right, the house curtain's folds as fine coral lines far, fading toward
+         the name; the stage's boards in layers under the strip; a vintage microphone standing on them in a follow-spot,
+         its pool of light, a few flecks of confetti in the beam, some falling. The badge's band: the curtain, the spot on
+         their wordmark -->
+    {#if wide}<img class="l z far" src={L('ote-far')} alt="" /><img class="l" src={L('ote-ground')} alt="" /><img class="l z near" src={L('ote-mic')} alt="" />
     {:else}<img class="l" src={L('ote-stage')} alt="" /><img class="word otw" src={oteWord} alt="" />{/if}
     <i class="fall"></i>
   {:else if look === 'klubanimeshnikov'}
@@ -109,10 +111,11 @@
          name; red embers drifting up -->
     <img class="l z far anb" src={animeBack} alt="" /><i class="mist"></i><i class="ash"></i>
   {:else if look === 'kbtumag'}
-    <!-- kbtu.mag (new3): a page of the magazine on cream: a halftone disc behind the medallion, its columns of text, the
-         masthead's double rule, a printer's crop marks (the page's text, .mtx, off on the card's back: CardBack). The band: their wordmark over the disc -->
+    <!-- kbtu.mag (new3 r2, the same grammar): cream paper lit from the top right, a halftone screen far fading toward the
+         name, the desk in layers under the strip; two issues leaning on each other (the cover a halftone portrait under
+         their masthead) and an inkwell with its fountain pen. The badge's band: the screen, their wordmark -->
     <i class="paper"></i>
-    {#if wide}<img class="l z far" src={L('mag-page')} alt="" /><img class="l z far mtx" src={L('mag-text')} alt="" />
+    {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
@@ -289,21 +292,19 @@
   @keyframes jcpetal { to { transform: translate(120px, 120px); } } /* one tile down and to the right: the wind, no seam; raspberry as their drawn petals, the pale ones melted into the pink (club, Nov 3) */
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
 
-  /* ---- óte: their blush, warmer where the spots fall ---- */
-  .teentertainmentkbtu { background: radial-gradient(60% 90% at 88% 100%, rgba(255, 255, 255, 0.7), transparent 70%), radial-gradient(70% 90% at 0% 0%, rgba(255, 250, 250, 0.6), transparent 70%),
-    linear-gradient(165deg, rgb(248, 235, 234), rgb(243, 224, 224) 55%, rgb(236, 206, 205)); }
-  .sc:not(.wide).teentertainmentkbtu { background: radial-gradient(60% 80% at 50% 100%, rgba(255, 255, 255, 0.7), transparent 70%), linear-gradient(180deg, rgb(246, 230, 229), rgb(243, 224, 224)); }
-  .otw { top: 26px; height: 64px; }
+  /* ---- óte: their blush, lit from the top right ---- */
+  .teentertainmentkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.55), transparent 70%), linear-gradient(165deg, rgb(248, 235, 234), rgb(243, 224, 224) 55%, rgb(236, 206, 205)); }
+  .otw { top: 26px; height: 60px; }
   /* confetti falling, a tile per period, kept off the text (to the right on the card) */
-  .fall { left: 0; top: -120px; width: 100%; height: calc(100% + 120px); background: url('../assets/lanyards/scenes/ote-fall.svg') 0 0 / 120px 120px; opacity: 0.7;
-    -webkit-mask: linear-gradient(90deg, transparent 52%, black 82%); mask: linear-gradient(90deg, transparent 52%, black 82%); animation: otfall 30s linear infinite; }
+  .fall { left: 0; top: -120px; width: 100%; height: calc(100% + 120px); background: url('../assets/lanyards/scenes/ote-fall.svg') 0 0 / 120px 120px; opacity: 0.8;
+    -webkit-mask: linear-gradient(90deg, transparent 45%, black 75%); mask: linear-gradient(90deg, transparent 45%, black 75%); animation: otfall 30s linear infinite; }
   .sc:not(.wide) .fall { -webkit-mask: linear-gradient(90deg, black, transparent 32% 68%, black); mask: linear-gradient(90deg, black, transparent 32% 68%, black); }
   @keyframes otfall { to { transform: translateY(120px); } }
   .teentertainmentkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.4), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(150, 50, 45, 0.12); }
 
   /* ---- the anime club: their art; the band shows its top, the lily at the left and the swirl ---- */
   .klubanimeshnikov { background: rgb(150, 150, 154); }
-  .sc:not(.wide) .anb { object-position: 50% 15%; } /* above the painted-out strip's reflection */
+  .sc:not(.wide) .anb { object-position: 50% 0%; } /* above the painted-out strip's reflection */
   .mist { inset: 0; background: radial-gradient(42% 60% at 40% 38%, rgba(236, 236, 238, 0.5), transparent 75%); }
   .sc:not(.wide) .mist { display: none; }
   /* embers: their red specks rising and drifting, a tile per period */
@@ -316,9 +317,9 @@
   .klubanimeshnikov .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.18); }
 
   /* ---- kbtu.mag: cream paper, lit from the top left ---- */
-  .kbtumag { background: radial-gradient(90% 90% at 15% 0%, rgb(250, 244, 235), transparent 70%), linear-gradient(160deg, rgb(243, 233, 219), rgb(234, 220, 203) 55%, rgb(224, 206, 184)); }
-  .kbtumag .paper { opacity: 0.35; }
-  .mgw { top: 30px; height: 66px; }
+  .kbtumag { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 250, 240, 0.7), transparent 70%), linear-gradient(160deg, rgb(243, 233, 219), rgb(234, 220, 203) 55%, rgb(224, 206, 184)); }
+  .kbtumag .paper { opacity: 0.3; }
+  .mgw { top: 24px; height: 62px; }
   .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */

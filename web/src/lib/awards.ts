@@ -225,16 +225,18 @@ export const CLUB_LOOKS = {
   // óte entertainment (new3, their logo): coral on blush, a stage before the show
   teentertainmentkbtu: { strap: '\u00d3TE', strip: '\u00f3te entertainment', short: '\u00f3te', bg: ['#F8EBEA', '#F3E0E0', '#E8CACA'],
     straps: ['#B8403B', '#D5544E', '#FFF4F2'], holo: ['#D5544E', '#AE3833', '#FFF4F2'], role: '#B23A35', qr: ['#9E2E2A', '#5E1A18'], plate: ['#FBF1F0', '#F3E0E0'],
-    mark: oteMark, ring: '#FFFFFF', ink: ['#2B1212', 'rgba(43, 18, 18, 0.66)'] },
+    mark: oteMark, ink: ['#2B1212', 'rgba(43, 18, 18, 0.66)'] },
   // the anime club (new3, their own art): ink wash and red spider lilies, black ink on its light mist
   klubanimeshnikov: { strap: 'ANIME', short: 'ANIME', strip: '\u041a\u043b\u0443\u0431 \u0410\u043d\u0438\u043c\u0435\u0448\u043d\u0438\u043a\u043e\u0432', bg: ['#C9C9CC', '#A9A9AE', '#7C7C83'],
-    straps: ['#7E1418', '#C0262D', '#FFFFFF'], holo: ['#C0262D', '#7E1418', '#FFF4F2'], role: '#A3141C', qr: ['#8E1A20', '#1A1A1C'], plate: ['#FFFFFF', '#F1F1F2'],
-    mark: animeLily, ring: '#FFFFFF', ink: ['#121214', 'rgba(18, 18, 20, 0.74)'] },
+    // r2 (owner: the glossy red bar fought the ink wash): the strip charcoal glass with a red hairline (LanyardHolo), the
+    // photo's frame their red and ink
+    straps: ['#7E1418', '#C0262D', '#FFFFFF'], holo: ['#2A2A2E', '#141416', '#F6F2F0'], role: '#A3141C', qr: ['#8E1A20', '#1A1A1C'], plate: ['#FFFFFF', '#F1F1F2'],
+    mark: animeLily, ring: 'linear-gradient(135deg, #C0262D, #1A1A1C 50%, #C0262D)', ink: ['#121214', 'rgba(18, 18, 20, 0.74)'] },
   // kbtu.mag (new3, their logo): cream paper, maroon ink, a page of the magazine. ponytail: `kbtumag` is a placeholder
   // slug (their org isn't in prod yet): rename it here, in logic.LANYARDS and in ClubScene/OrgMedal when it is
   kbtumag: { strap: 'KBTU.MAG', strip: 'kbtu.mag', short: 'kbtu.mag', bg: ['#F3E9DB', '#EADCCB', '#DDCAB4'],
     straps: ['#3E0A12', '#6E1424', '#F3E7D7'], holo: ['#5A1220', '#3E0A12', '#F3E7D7'], role: '#7A1628', qr: ['#3E0A12', '#6E1424'], plate: ['#FBF5EC', '#EFE3D2'],
-    mark: magMark, ring: '#FFFFFF', ink: ['#24060B', 'rgba(36, 6, 11, 0.68)'] },
+    mark: magMark, ink: ['#24060B', 'rgba(36, 6, 11, 0.68)'] },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh

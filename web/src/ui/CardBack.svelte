@@ -91,11 +91,12 @@
   .sower .meta { color: rgba(255, 255, 255, 0.66); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
-  /* the new3 clubs' art where this side sets the name (mid-right): the anime club's mist moved under it, its swirl's ink
-     haloed; kbtu.mag's page text left off */
+  /* the anime club's art where this side sets the name (mid-right): its mist moved under it, its swirl's ink haloed */
   .klubanimeshnikov :global(.mist) { background: radial-gradient(34% 52% at 64% 56%, rgba(232, 232, 235, 0.72), transparent 80%); }
   .klubanimeshnikov .bside { text-shadow: 0 0 3px rgba(226, 226, 230, 0.9), 0 0 9px rgba(226, 226, 230, 0.7); }
-  .kbtumag :global(.mtx) { display: none; }
+  /* kbtu.mag: its issues stand where this side sets the name: quieter here, the name haloed in their cream */
+  .kbtumag :global(.near) { opacity: 0.45; }
+  .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
   .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
 </style>

@@ -13,14 +13,16 @@
  "scenes/cr-spectrum-card.svg": "8f7c141afce5",
  "scenes/fc-neon-card.svg": "0dfc1e649bea",
  "scenes/kn-jersey-card.svg": "309e71d2855a",
- "scenes/mag-page-card.svg": "852c0a1d62d3",
- "scenes/mag-text-card.svg": "4ca84e523d8b",
+ "scenes/mag-far-card.svg": "74d2c81f6e37",
+ "scenes/mag-ground-card.svg": "70727bed4a07",
+ "scenes/mag-issue-card.svg": "eed9b4bd489b",
  "scenes/mk-far-card.svg": "7381b7d5f7a0",
  "scenes/mk-mid-card.svg": "f057f5468362",
  "scenes/mk-near-card.svg": "023b44523b46",
  "scenes/mk-sky-card.svg": "424c3d0bb1b0",
- "scenes/ote-confetti-card.svg": "ed5cf8a46369",
- "scenes/ote-stage-card.svg": "74b36278e8c6",
+ "scenes/ote-far-card.svg": "2d826659861a",
+ "scenes/ote-ground-card.svg": "4db7536a26db",
+ "scenes/ote-mic-card.svg": "b9c20d84f081",
  "scenes/qa-hill-card.svg": "70e676402d00",
  "scenes/qa-sun-card.svg": "52f9ca03ebf6",
  "scenes/sh-strokes-card.svg": "b65e6245b0e5",
@@ -59,5 +61,5 @@
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
  "sower-rosette.svg": "94f0a7baa83c",
- "minis": "944f4d3004bb"
+ "minis": "1b8932bd1f42"
 }
