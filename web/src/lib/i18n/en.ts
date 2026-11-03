@@ -26,6 +26,7 @@ const en: Dict = {
   'reg.came': { one: "came", other: "came" },
   'reg.since': "In the club since {date}",
   'reg.quiet': "60 days without a check-in",
+  'reg.contacts': "Contacts",
   'reg.empty': "Nobody in the club yet",
   'reg.official': "Official club",
   'reg.officialNote': "A ✓ by the name. The President gets a congratulation",

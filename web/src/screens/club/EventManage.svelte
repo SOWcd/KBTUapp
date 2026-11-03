@@ -12,7 +12,6 @@
   import Eye from '@lucide/svelte/icons/eye';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { api, ApiErr, type Attendee, type Id, type PersonRef } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -26,7 +25,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Poster from '../../ui/Poster.svelte';
-  import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
@@ -82,7 +82,7 @@
         openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
   }
-    async function cancelEvent() {
+  async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
     catch { say(t('common.error'), 'warning_3d'); }
@@ -91,103 +91,68 @@
 
 <Sheet {overlay} icon={SlidersHorizontal} full title={t('mg.title')}>
   {#if e}
-    <button class="hd" onclick={() => sheets.event(id)}>
-      <Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />
-      <span class="txt">
-        <b class="t-title clamp-2">{e.title}</b>
-        <span class="t-foot">{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}</span>
-      </span>
-    </button>
+    <div class="pg">
+      <Group>
+        <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}" accessory="chevron" onclick={() => sheets.event(id)}>
+          {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
+        </Row>
+      </Group>
 
-    {#if head && price && list}
-      <h3 class="t-cap sec">{t('mg.money')}</h3>
-      <div class="card surface">
-        <div class="row"><i>{t('mg.expected')}</i><b>{money(paying * price)}</b><span class="t-foot">{paying} × {money(price)}</span></div>
-        <div class="row"><i>{t('mg.byReceipts')}</i><b class:short={byReceipts < paying * price}>{money(byReceipts)}</b>
-          {#if unread}<span class="t-foot">{t('mg.unread', { n: unread })}</span>{/if}</div>
-        {#if toCheck}
-          <button class="check" onclick={() => sheets.attendees(id)}><TriangleAlert size={18} /><span>{t('mg.check')}</span><b>{toCheck}</b><ChevronRight size={18} /></button>
+      {#if head && price && list}
+        <Group caption={t('mg.money')}>
+          <Row title={t('mg.expected')} subtitle="{paying} × {money(price)}" value={money(paying * price)} />
+          <Row title={t('mg.byReceipts')} subtitle={unread ? t('mg.unread', { n: unread }) : undefined}>
+            {#snippet detail()}<span class="sum num" class:short={byReceipts < paying * price}>{money(byReceipts)}</span>{/snippet}
+          </Row>
+          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+        </Group>
+      {/if}
+
+      {#if head && list}
+        <Group caption={t('mg.people')}>
+          <Row title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" />
+          <Row title={t('mg.came')} value={String(came)} />
+          {#if price}<Row title={t('mg.holds')} value={String(of('hold').length)} />{/if}
+          <Row title={t('mg.waitlist')} value={String(of('waitlist').length)} />
+          {#if e.savedBy}<Row title={t('mg.saved')} value={String(e.savedBy)} />{/if}
+        </Group>
+      {/if}
+
+      {#if head && brought.length}
+        <Group caption={t('mg.brought')}>
+          {#each brought as x (x.person.id)}
+            <Row dense title={x.person.name} accessory="chevron" onclick={() => sheets.person(x.person.id)}
+              subtitle={[`${t('mg.broughtSigned')} ${x.signed}`, price && `${t('mg.broughtPaid')} ${x.paid}`, `${t('mg.came')} ${x.came}`].filter(Boolean).join(' · ')}>
+              {#snippet lead()}<Avatar person={x.person} size={36} tappable={false} />{/snippet}
+            </Row>
+          {/each}
+        </Group>
+      {/if}
+
+      <Group>
+        {#if live && !e.guestHost}<!-- a partner's event has no door -->
+          {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
+          {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
         {/if}
-      </div>
-    {/if}
+        {#if head}
+          <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
+          <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
+          {#if live && !price && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
+          {#if e.status !== 'cancelled'}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
+          {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
+        {/if}
+        <Row icon={Eye} title={t('mg.asStudents')} accessory="chevron" onclick={() => sheets.event(id)} />
+      </Group>
 
-    {#if head && list}
-      <h3 class="t-cap sec">{t('mg.people')}</h3>
-      <div class="nums">
-        <div><b>{going.length}{e.seats ? ' / ' + e.seats : ''}</b><i>{t('mg.going')}</i></div>
-        <div><b>{came}</b><i>{t('mg.came')}</i></div>
-        {#if price}<div><b>{of('hold').length}</b><i>{t('mg.holds')}</i></div>{/if}
-        <div><b>{of('waitlist').length}</b><i>{t('mg.waitlist')}</i></div>
-        {#if e.savedBy}<div><b>{e.savedBy}</b><i>{t('mg.saved')}</i></div>{/if}
-      </div>
-    {/if}
-
-    {#if head && brought.length}
-      <h3 class="t-cap sec">{t('mg.brought')}</h3>
-      <div class="card surface" style="--n:{price ? 3 : 2}">
-        <div class="by hd2"><span></span><i>{t('mg.broughtSigned')}</i>{#if price}<i>{t('mg.broughtPaid')}</i>{/if}<i>{t('mg.came')}</i></div>
-        {#each brought as x (x.person.id)}
-          <button class="by" onclick={() => sheets.person(x.person.id)}>
-            <span class="who"><Avatar person={x.person} size={32} /><b class="ellipsis">{x.person.name}</b></span>
-            <span>{x.signed}</span>{#if price}<span>{x.paid}</span>{/if}<span class="cm">{x.came}</span>
-          </button>
-        {/each}
-      </div>
-    {/if}
-
-    <div class="tools">
-      {#if live && !e.guestHost}<!-- a partner's event has no door -->
-        {#if inner(e)}<button onclick={() => sheets.scanner(id, true)}><UserCheck size={20} />{t('studio.marks')}</button>
-        {:else}<button onclick={() => sheets.scanner(id)}><ScanLine size={20} />{t('studio.scanner')}</button>{/if}
-      {/if}
-      {#if head}
-        <button onclick={() => sheets.attendees(id)}><UsersRound size={20} />{t('studio.attendees')}</button>
-        <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
-        {#if live && !price && !e.guestHost}<button onclick={() => sheets.screens(undefined, id)}><MonitorUp size={20} />{t('scr.title')}</button>{/if}
-        <button onclick={() => sheets.editor(e.org.id, id)}><Pencil size={20} />{t('studio.edit')}</button>
-        {#if e.status !== 'cancelled'}<button onclick={openChat}><MessagesSquare size={20} />{t(chat ? 'chat.open' : 'chat.create')}</button>{/if}
-        {#if e.needsVolunteers}<button onclick={() => sheets.volunteers(id, e.needsVolunteers!)}><HandHeart size={20} />{t('vol.list')}{e.volunteersAsked ? ` · ${e.volunteersAsked}` : ''}</button>{/if}
-      {/if}
-      <button onclick={() => sheets.event(id)}><Eye size={20} />{t('mg.asStudents')}</button>
+      {#if head && live && !started}<Group><Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} /></Group>{/if}
+      {#if head && e.status === 'cancelled'}<Group><Row tone="destructive" title={t('studio.deleteEvent')} onclick={removeEvent} /></Group>{/if}
     </div>
-
-    {#if head && live && !started}<div class="kill"><Button kind="danger" size="m" full onclick={cancelEvent}>{t('studio.cancelEvent')}</Button></div>{/if}
-    {#if head && e.status === 'cancelled'}<div class="kill"><Button kind="danger" size="m" full onclick={removeEvent}>{t('studio.deleteEvent')}</Button></div>{/if}
   {/if}
 </Sheet>
 
 <style>
-  .hd { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin-top: 4px; }
-  .txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .sec { margin: 20px 2px 8px; }
-  .card { display: flex; flex-direction: column; padding: 4px 14px; }
-  .row { display: flex; align-items: baseline; gap: 10px; min-height: 50px; padding: 14px 0 12px; }
-  .row + .row { border-top: 1px solid var(--line); }
-  .row i { flex: none; width: 112px; font: 550 13.5px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .row b { font: 750 20px/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .row b.short { color: var(--warning-text); }
-  .row .t-foot { margin-left: auto; text-align: right; }
-  .check { display: flex; align-items: center; gap: 10px; margin: 2px -6px 10px; padding: 12px; border-radius: var(--r-m); text-align: left;
-    background: var(--warning-soft); color: var(--warning-text); font: 650 15px/1.2 var(--font-text); }
-  .check span { flex: 1; }
-  .check b { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--warning-text); color: var(--bg); font: 700 13px/24px var(--font-text); text-align: center; }
-  .check:active { transform: scale(0.98); }
-  .nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
-  .nums div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--r-l); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-  .nums b { font: 750 20px/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .nums i { font: 550 12.5px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
-  .by { display: grid; grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 68px); align-items: center; gap: 4px; width: 100%; min-height: 48px; text-align: left;
-    font: 650 15px/1 var(--font-text); font-variant-numeric: tabular-nums; }
-  .by + .by { border-top: 1px solid var(--line); }
-  .by > span:not(.who), .by i { text-align: right; }
-  .by i { font: 550 12px/1.2 var(--font-text); font-style: normal; color: var(--text-3); }
-  .by.hd2 { min-height: 34px; }
-  .by .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .by .cm { font-weight: 750; color: var(--accent-text); }
-  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
-  .tools button { display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px; border-radius: var(--r-l); background: var(--surface);
-    box-shadow: inset 0 0 0 1px var(--line); color: var(--text); font: 620 15px/1 var(--font-text); }
-  .tools button :global(svg) { color: var(--accent-text); flex: none; }
-  .tools button:active { transform: scale(0.97); }
-  .kill { margin-top: 18px; }
+  .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
+  .sum { margin-left: auto; color: var(--text-3); }
+  .sum.short { color: var(--warning-text); }
 </style>

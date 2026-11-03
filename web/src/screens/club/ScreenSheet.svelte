@@ -11,6 +11,10 @@
   import Sheet from '../../ui/Sheet.svelte';
   import MonitorPlay from '@lucide/svelte/icons/monitor-play';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Tag from '../../ui/Tag.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Play from '@lucide/svelte/icons/play';
   import Square from '@lucide/svelte/icons/square';
@@ -68,19 +72,20 @@
 <Sheet {overlay} icon={MonitorPlay} title={t('scr.title')}>
   <h2 class="t-h2 hd">{pick ? t('scr.pick') : t('scr.title')}</h2>
   {#if note}
-    <p class="t-foot sub">{note}</p>
+    <EmptyState icon={MonitorUp} title={note} />
   {:else if list && !list.length}
-    <p class="t-foot sub">{pick ? t('scr.noneOpen') : t('scr.none')}</p>
+    <EmptyState icon={MonitorUp} title={pick ? t('scr.noneOpen') : t('scr.none')} />
   {/if}
   {#each list ?? [] as s (s.session)}
-    <div class="ss surface">
-      <div class="top">
-        <b class="ellipsis">{s.title}</b>
-        <span class="st" class:on={s.param}>{s.ended ? t('scr.closed') : s.started ? t('scr.live') : t('scr.waiting')}</span>
-      </div>
-      <p class="num"><b>{s.done}</b>{#if s.expected}<span> / {s.expected}</span>{/if} <i class="t-foot">{t('scr.done')}{s.pending ? ' · ' + t('scr.joining', { n: s.pending }) : ''}</i></p>
-      {#if s.phase === 'out' || s.departed}<p class="t-foot out" class:on={s.phase === 'out'}><LogOut size={15} />{s.phase === 'out' ? t('scr.outNow', { n: s.departed }) : t('scr.leftN', { n: s.departed })}</p>{/if}
-      <p class="t-foot scr"><MonitorUp size={15} />{s.screens ? t('scr.screens', { n: s.screens }) : t('scr.howTo', { url: location.host + '/show' })}</p>
+    <div class="ss">
+      <Group>
+        <Row title={s.title}>
+          {#snippet detail()}<Tag tone={s.started && !s.ended ? 'accent' : 'neutral'}>{s.ended ? t('scr.closed') : s.started ? t('scr.live') : t('scr.waiting')}</Tag>{/snippet}
+        </Row>
+        <Row title="{s.done}{s.expected ? ' / ' + s.expected : ''} {t('scr.done')}" subtitle={s.pending ? t('scr.joining', { n: s.pending }) : undefined} />
+        {#if s.phase === 'out' || s.departed}<Row icon={LogOut} title={s.phase === 'out' ? t('scr.outNow', { n: s.departed }) : t('scr.leftN', { n: s.departed })} />{/if}
+        <Row icon={MonitorUp} title={s.screens ? t('scr.screens', { n: s.screens }) : t('scr.howTo', { url: location.host + '/show' })} />
+      </Group>
       <div class="acts">
         {#if pick}
           <Button kind="primary" size="m" full onclick={() => bind(s.session)}>{t('scr.here')}</Button>
@@ -97,21 +102,8 @@
 </Sheet>
 
 <style>
-  .hd { margin: 4px 0 2px; }
-  .sub { margin-bottom: 14px; }
-  .ss { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-l); margin: 10px 0; }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
-  .top b { font: 650 16px/1.25 var(--font-text); min-width: 0; }
-  .st { flex: none; font: 600 12.5px/1 var(--font-text); padding: 6px 10px; border-radius: 999px; color: var(--text-2);
-    background: color-mix(in srgb, var(--text) 8%, transparent); }
-  .st.on { color: #fff; background: var(--accent); }
-  .num { margin: 0; font-variant-numeric: tabular-nums; }
-  .num b { font: 800 34px/1 var(--font-text); }
-  .num span { font: 600 20px/1 var(--font-text); color: var(--text-2); }
-  .num i { font-style: normal; }
-  .out { display: flex; align-items: center; gap: 6px; margin: 0; }
-  .out.on { color: var(--warning-text, #E8A33D); font-weight: 650; }
-  .scr { display: flex; align-items: center; gap: 6px; margin: 0; }
-  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .hd { margin: var(--s-1) 0 var(--s-3); }
+  .ss { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--gap-group); }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
   .acts :global(.btn.full) { flex: 1 1 140px; width: auto; min-width: 0; }
 </style>

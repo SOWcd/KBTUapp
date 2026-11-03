@@ -26,6 +26,7 @@ const kk: Dict = {
   'reg.came': { one: "келді", other: "келді" },
   'reg.since': "Клубта: {date} бері",
   'reg.quiet': "60 күн белгісіз",
+  'reg.contacts': "Байланыс",
   'reg.empty': "Клубта әзірге ешкім жоқ",
   'reg.official': "Ресми клуб",
   'reg.officialNote': "Атауының жанында ✓ белгісі. Президентке құттықтау келеді",
