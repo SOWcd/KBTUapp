@@ -110,7 +110,7 @@ export interface Api {
   memoItem(org: Id, item: { kind: string; fields: object; place: string; startsAt: Ts; endsAt: Ts | null }): Promise<string>;
   createEvent(org: Id, input: EventInput): Promise<EventFull>;   // a draft
   updateEvent(id: Id, input: EventInput): Promise<EventFull>;
-  publishEvent(id: Id): Promise<EventFull>;
+  publishEvent(id: Id): Promise<EventFull & { told?: boolean; tellAfter?: number | null }>;  // told: the followers heard (a public event); else from when they may
   cancelEvent(id: Id): Promise<EventFull>;
   deleteEvent(id: Id): Promise<void>;                            // drafts only
   attendees(id: Id): Promise<Attendee[]>;

@@ -340,12 +340,14 @@
     busy = kind;
     try {
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
-      if (kind === 'publish') e = await api.publishEvent(e.id);
+      const pub = kind === 'publish' ? await api.publishEvent(e.id) : null;
+      if (pub) e = pub;
       const moved = live && e.taken > 0 && (saved!.startsAt !== e.startsAt || saved!.place !== e.place);
       base = JSON.stringify(f);
       studioChanged();
       haptic.ok();
-      if (kind === 'publish') { burst(); say(phrase('say.published'), 'party_popper_3d'); }
+      // a student initiative tells its followers once a week (the server's rule): the toast says if they heard, and when next
+      if (kind === 'publish') { burst(); say(pub?.told === undefined || official ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
       else say(kind === 'draft' ? phrase('say.draftSaved') : moved ? t('say.eventMoved') : phrase('say.eventSaved'), 'sparkles_3d');
       close(overlay.id);
     } catch (x) {
@@ -553,6 +555,7 @@
       {@render toggle(Images, t('ed.albumOpen'), () => f.albumOpen, (v) => (f.albumOpen = v))}
     </div>
     {#if f.leaders}<p class="hint">{t('ed.leadersHint')}</p>{/if}
+    {#if !official && !f.teamOnly && !f.leaders}<p class="hint">{t('ed.noChannel')}</p>{/if}
 
     <h3 class="cap">{t('ex.more')}</h3>
     <div class="pill grp">
