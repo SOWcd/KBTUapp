@@ -236,6 +236,8 @@ def admin_stats(con, v: Viewer) -> dict:
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, "SELECT COUNT(*) FROM students WHERE consent_version != 'staff'")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
+            # the number that matters (owner, Nov 3): students who finished signing up, and how many of them today
+            "studentsToday": one(con, "SELECT COUNT(*) FROM students WHERE verified_at >= ? AND consent_version != 'staff'", today)[0],
             # Microsoft-confirmed students by the month their account was made (counts only; "" unknown): whether the
             # dates split by intake before MS_AGE_CUTOFF is turned on (core.first_year_free)
             "msMonths": {r[0]: r[1] for r in rows(con, """SELECT COALESCE(substr(json_extract(ms_profile, '$.createdDateTime'), 1, 7), ''), COUNT(*)

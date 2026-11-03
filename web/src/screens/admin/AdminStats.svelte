@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → the numbers card (owner, Nov 3: just these three): everyone in the app, the KBTU-confirmed students among
-  // them, and who joined today. Held with the inbox (data store), so it never pops in late. A tap pushes the stats page.
+  // Admin → the numbers card (owner, Nov 3: just these three): the students who signed up first (the number that
+  // matters), how many of them today, then everyone who opened the app. Held with the inbox (data store), so it never pops in late. A tap pushes the stats page.
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import { data } from '../../lib/state/data.svelte';
   import { open } from '../../lib/state/ui.svelte';
@@ -14,9 +14,9 @@
 
 <button class="card" onclick={() => { haptic.tap(); open(StatsPane, {}); }} aria-label={t('adm.stats')}>
   {#if st}
-    <span class="n"><b class="num">{st.users}</b><i>{t('st.users')}</i></span>
     <span class="n"><b class="num">{st.students}</b><i>{t('st.students')}</i></span>
-    <span class="n"><b class="num" class:new={st.newToday > 0}>+{st.newToday}</b><i>{t('st.newToday')}</i></span>
+    <span class="n"><b class="num" class:new={st.studentsToday > 0}>+{st.studentsToday}</b><i>{t('st.newToday')}</i></span>
+    <span class="n"><b class="num">{st.users}</b><i>{t('st.users')}</i></span>
     <ChevronRight size={18} />
   {:else}
     <Skeleton kind="lines" n={2} />

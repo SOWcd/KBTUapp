@@ -5,5 +5,5 @@ __pycache__/
 tmp-serve/
 
 # server virtualenv
-server/.venv/
+server/.venv
 server/media/

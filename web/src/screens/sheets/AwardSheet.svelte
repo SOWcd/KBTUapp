@@ -277,7 +277,7 @@
   .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; padding-bottom: var(--close-room); }
   .wrap > :global(*) { pointer-events: auto; }
   /* the scroll ends above the × and fades out into it: Share never slides under it */
-  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(var(--top) + 8px) 20px 20px; display: flex; flex-direction: column;
+  .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */ display: flex; flex-direction: column;
     -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
   .page::-webkit-scrollbar { display: none; }
   .page > :first-child { margin-top: auto; }

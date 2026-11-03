@@ -198,6 +198,8 @@
     position: relative; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
     border-top: 1px solid var(--line);
   }
+  /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom (owner, Nov 3) */
+  .foot:not(:has(*)) { display: none; }
   .hasfoot .body { padding-bottom: var(--s-4); }
   .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
   .full .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));

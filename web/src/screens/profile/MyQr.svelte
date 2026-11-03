@@ -112,7 +112,7 @@
   /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
      button under it; no fade at its end (it ate the hint's last line on a short phone, Nov 2). Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
-    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px; }
+    gap: 14px; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */ }
   .page::-webkit-scrollbar { display: none; }
   .page > :global(*) { pointer-events: auto; }
   .page > :global(:first-child) { margin-top: auto; }
@@ -142,7 +142,7 @@
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
 
   .who { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 18px; }
-  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), calc(100dvh - 570px)); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight (owner, Nov 3) */
+  .banded { padding-top: 0; width: min(330px, calc(100vw - 40px), calc(100dvh - 520px)); } /* the art band on top (LanyardBand): ~90 px taller, so it narrows sooner and the hint under it stays in sight; not so soon that a big phone gets a thin card (owner, Nov 3) */
   .banded .who { margin-top: 14px; }
   .foot { display: block; margin: 14px 18px 0; }
   .ph { position: relative; flex: none; padding: 2px; border-radius: 15px; background: rgba(255, 255, 255, 0.16); }

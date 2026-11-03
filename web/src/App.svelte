@@ -225,7 +225,8 @@
   const live = $derived.by<Live | null>(() => {
     const now = clock;
     const today = dayNo(now);
-    const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now);
+    const ev = data.events.find((e) => e.my?.status === 'going' && e.status !== 'cancelled' && dayNo(e.startsAt) === today && (e.endsAt ?? e.startsAt + 3 * 3600) > now
+      && (e.endsAt ?? e.startsAt) - e.startsAt < 86400); // not one of several days (a casting over a week: owner, Nov 3)
     const cls = classesLeft(data.schedule, now).find((x) => x.b - now <= 3600 && !skipped.has(classKey(today, x.c)));
     if (cls) {
       const mins = Math.ceil((cls.b - now) / 60);

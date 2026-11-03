@@ -169,7 +169,7 @@
   /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
      button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
-    gap: 14px; padding: calc(var(--top) + 8px) 20px 20px;
+    gap: 14px; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */
     -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
   .page::-webkit-scrollbar { display: none; }
   .page > :global(*) { pointer-events: auto; }
