@@ -653,7 +653,7 @@ REPLY_HIDE_AT = 3  # distinct reporters, each verified over tgcomments.REPORTER_
 
 def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
     """/report on the bot's reply in the group (tgc._report): once per reporter (fchan_reply_reports), the reporter told
-    as for a comment, the moderators pinged (an hourly note; the Admin sheet lists it whatever its age). REPLY_HIDE_AT
+    as for a comment, the moderators pinged at once (one note a reply, at its first report; the Admin sheet lists it). REPLY_HIDE_AT
     long-verified reporters take it down at once (as a moderator's take-down: Undo, Bring back). False: not ours."""
     from .tgcomments import REPORTER_AGE, _mods
     r = one(con, "SELECT r.*, p.user_id AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live'", msg_id)
@@ -664,7 +664,7 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
         if u["id"] != r["author"] and con.execute("INSERT OR IGNORE INTO fchan_reply_reports (reply_id, user_id, at) VALUES (?, ?, ?)",
                                                   (r["id"], u["id"], _now())).rowcount:
             for uid in _mods(con):
-                notify(con, uid, "fch_reply_queue", f"rq:{_now() // 3600}")
+                notify(con, uid, "fch_reply_queue", f"rq:{r['id']}")
             n = one(con, """SELECT COUNT(*) FROM fchan_reply_reports x JOIN students s ON s.user_id = x.user_id AND s.manual = 0
                 WHERE x.reply_id = ? AND s.verified_at < ?""", r["id"], _now() - REPORTER_AGE)[0]
             if n >= REPLY_HIDE_AT:
