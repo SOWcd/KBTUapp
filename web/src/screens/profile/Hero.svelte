@@ -19,6 +19,7 @@
   import { session } from '../../lib/state/session.svelte';
   import OrgMedal from '../../ui/OrgMedal.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
   import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, QR_LOOK, SOWER } from '../../lib/awards';
@@ -123,26 +124,35 @@
   // on the code opens the full-screen one (MyQr) for a door's scanner; a tap elsewhere on the back, or Back, turns it face
   // on. The resting pose is the class (.flipped), the motion only a WAAPI layer over it, so a cancelled or interrupted
   // turn always lands face on or back on, never edge-on (53a0929's lesson).
-  let flipped = $state(false), card: HTMLDivElement, bshade = $state<HTMLElement>(); // the back is mine only
+  let flipped = $state(false), side = $state(false), card: HTMLDivElement, bshade = $state<HTMLElement>(), strap: HTMLDivElement, clipEl: HTMLDivElement; // the back is mine only
   const DARK = 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))', LIGHT = 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.24))';
   function flip(to: boolean) {
     if (spinning || flipped === to) return;
     haptic.soft();
     flipped = to;
-    if (still()) return;
+    // which side is drawn: switched at the edge-on moment (45% in), when neither shows
+    clearTimeout(sideAt);
+    if (still()) { side = to; return; }
+    sideAt = setTimeout(() => (side = to), 720 * 0.45);
     spinning = true;
     const from = to ? 0 : 180, end = to ? 180 : 0;
     card.style.willChange = 'transform';
-    const turn = card.animate([{ transform: `rotateY(${from}deg)` }, { transform: `translateZ(46px) rotateY(${(from + end) / 2}deg) scale(1.02)`, offset: 0.5 },
-      { transform: `rotateY(${end}deg)` }], { duration: 620, easing: 'cubic-bezier(.45, .05, .25, 1)' });
+    // a little past the end and back, as a badge on a strap settles (owner, Nov 3: the turn wants finishing); the strap
+    // and the clip twist with it, edge-on at the half turn (they hung still while the card turned under them)
+    const over = to ? 8 : -8;
+    const turn = card.animate([{ transform: `rotateY(${from}deg)` }, { transform: `translateZ(46px) rotateY(${(from + end) / 2}deg) scale(1.02)`, offset: 0.45 },
+      { transform: `rotateY(${end + over}deg)`, offset: 0.8 }, { transform: `rotateY(${end}deg)` }], { duration: 720, easing: 'cubic-bezier(.45, .05, .25, 1)' });
+    for (const el of [strap, clipEl]) el.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0.12)', offset: 0.45 }, { transform: 'scaleX(1)', offset: 0.8 }, { transform: 'scaleX(1)' }],
+      { duration: 720, easing: 'cubic-bezier(.45, .05, .25, 1)' });
     const [gone, come] = to ? [shade, bshade!] : [bshade!, shade];
-    gone.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.5 }, { opacity: 0.6 }], { duration: 620, easing: 'ease-in' });
-    come.animate([{ opacity: 0.6, background: DARK }, { opacity: 0.6, background: DARK, offset: 0.5 }, { opacity: 0.5, background: LIGHT, offset: 0.75 },
-      { opacity: 0, background: LIGHT }], { duration: 620 });
-    const done = () => { card.style.willChange = ''; spinning = false; };
+    gone.animate([{ opacity: 0 }, { opacity: 0.6, offset: 0.45 }, { opacity: 0.6 }], { duration: 720, easing: 'ease-in' });
+    come.animate([{ opacity: 0.6, background: DARK }, { opacity: 0.6, background: DARK, offset: 0.45 }, { opacity: 0.5, background: LIGHT, offset: 0.7 },
+      { opacity: 0, background: LIGHT }], { duration: 720 });
+    const done = () => { card.style.willChange = ''; spinning = false; clearTimeout(sideAt); side = flipped; };
     turn.onfinish = done;
     turn.oncancel = done;
   }
+  let sideAt: ReturnType<typeof setTimeout> | undefined;
   const toBack = () => flip(true);
   function cardTap(e: MouseEvent) {
     if (!(e.target as Element).closest('button')) toBack(); // the photo, the seal and the medallion have their own
@@ -157,7 +167,7 @@
     backTo.fn = f;
     return () => { if (backTo.fn === f) backTo.fn = null; };
   });
-  $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations().forEach((x) => x.cancel()); flipped = false; } }); });
+  $effect(() => { if (!live) untrack(() => { if (flipped) { card.getAnimations().forEach((x) => x.cancel()); flipped = side = false; } }); });
   $effect(() => {
     if (look === untrack(() => face) || spinning) return;
     if (still()) face = look;
@@ -172,9 +182,9 @@
 <section class="h">
 <div class="hang {face} {face === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
-    <div class="strap" aria-hidden="true"><span>{STRAP[face]}</span></div>
+    <div class="strap" bind:this={strap} aria-hidden="true"><span>{STRAP[face]}</span></div>
     <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
-    <div class="card" class:flipped bind:this={card}>
+    <div class="card" class:flipped class:sb={side} bind:this={card}>
     <div class="badge" use:glass onclick={mine ? cardTap : undefined} role="presentation" inert={flipped}>
       {#if face === 'sower'}<SowerArt wide />{/if}
       {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
@@ -199,19 +209,25 @@
     <!-- the back, mine only: my QR on a white plate, big enough to scan here; the medallion, my name and number beside it -->
     {#if mine}
       <div class="back" onclick={backTap} role="presentation" inert={!flipped}>
+        <!-- the lanyard's own art on this side too (owner, Nov 3: the back was a bare colour) -->
+        {#if face === 'sower'}<SowerArt wide />{/if}
+        {#if banded(face)}<LanyardBand look={face} wide qr />{/if}
         <span class="slot" aria-hidden="true"></span><!-- the clip's hole goes through both sides -->
         <button class="plate" onclick={() => sheets.myQr(link, p)} aria-label={t('me.qr')}><Qr text={link} tone={QR_LOOK[face]} lazy><LookMark look={face} /></Qr></button>
         <span class="bside">
-          <span class="bmed"><OrgMedal look={face} logo={medalLogo} /></span>
-          <b class="bnm ellipsis">{h.name}</b>
+          <b class="bnm">{h.name}</b>
           <span class="role bro">{h.title}</span>
+          <span class="meta bmeta">{h.line}</span>
           <span class="bno">№ {h.no}</span>
         </span>
+        <!-- the medallion on the right, where the face has it: the button that turns the card face on (owner, Nov 3:
+             QR left, name in the middle, the button on the right) -->
+        <button class="bmed" onclick={() => flip(false)} aria-label={t('me.cardFront')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><RefreshCw size={10} strokeWidth={2.6} /></span></button>
         <i class="bshade" bind:this={bshade} aria-hidden="true"></i>
       </div>
     {/if}
     </div>
-    <div class="clip" aria-hidden="true"></div>
+    <div class="clip" bind:this={clipEl} aria-hidden="true"></div>
   </div>
 </div>
 
@@ -253,9 +269,8 @@
   .badge, .back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
   /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
      parallax) through its parent's hidden backface, mirrored over the other side (JCC, Nov 3) */
-  .badge, .back { transition: visibility 0s 310ms; }
-  .card.flipped .badge, .card:not(.flipped) .back { visibility: hidden; }
-  .back { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; gap: 16px; padding: 22px 18px 18px; overflow: hidden; border-radius: 22px;
+  .card.sb .badge, .card:not(.sb) .back { visibility: hidden; }
+  .back { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; gap: 14px; padding: 22px 14px 18px 18px; overflow: hidden; border-radius: 22px;
     transform: rotateY(180deg); color: white; background: radial-gradient(90% 90% at 100% 0%, rgba(124, 77, 255, 0.45), transparent 60%), var(--kb);
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club .back { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
@@ -267,15 +282,23 @@
   .knights .back { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
   .moments .back { background: radial-gradient(70% 90% at 100% 100%, rgba(214, 120, 70, 0.4), transparent 70%), linear-gradient(150deg, rgb(74, 42, 30), rgb(20, 11, 8)); }
   /* the plate: white, the code's own quiet zone in it; the size a door's scanner reads from a phone */
-  .plate { flex: none; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
+  .plate { position: relative; z-index: 3; flex: none; width: 136px; height: 136px; padding: 8px; border-radius: var(--r-m); background: white;
     box-shadow: 0 10px 22px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(0, 0, 0, 0.06); transition: transform var(--t-fast) var(--ease); }
   .plate:active { transform: scale(0.96); }
-  .bside { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; flex: 1; }
-  .bmed { width: 40px; height: 40px; }
-  .bnm { max-width: 100%; font: 780 19px/1.15 var(--font-display); letter-spacing: -0.02em; }
+  /* the name and the rest under the medallion's corner, down to the number at the foot */
+  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1;
+    align-self: stretch; padding-top: 50px; }
+  .bside > * { flex: none; }
+  .bmeta { margin-top: -2px; }
+  .bno { margin-top: 4px; }
+  /* the medallion where the face has it, top right: the button back to the face */
+  .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
+  .bmed:active { transform: scale(0.92); }
+  .bnm { max-width: 100%; font: 780 18px/1.15 var(--font-display); letter-spacing: -0.02em; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .bro { margin-top: -4px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .bno { font: 800 11px/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
-  .bshade { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0; border-radius: inherit; background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
+  .bshade { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; border-radius: inherit; background: linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5)); }
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
   .badge {
     position: relative; overflow: hidden; padding: 26px 0 14px; border-radius: 22px; color: #fff;

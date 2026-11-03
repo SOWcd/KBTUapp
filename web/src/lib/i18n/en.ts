@@ -1542,6 +1542,7 @@ const en: Dict = {
   'jr.declineAsk': "Decline the application?",
   'jr.declineText': "The bot will let them know gently. They can apply again in 30 days.",
   'me.qr': "My QR",
+  'me.cardFront': "Turn the badge over",
   'me.qrHint': "Show it: it opens your profile in KBTU App",
   'pd.note': "Saved when an event asked for it, or from the KBTU portal before 19 October",
   'pd.phone': "Phone number",
