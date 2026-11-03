@@ -6,7 +6,7 @@
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import X from '@lucide/svelte/icons/x';
   import { untrack } from 'svelte';
-  import { api, type Id, type Media, type Post, type PostPatch, type PostTag } from '../../lib/api';
+  import { api, ApiErr, type Id, type Media, type Post, type PostPatch, type PostTag } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, loadNews } from '../../lib/state/data.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -86,7 +86,7 @@
       haptic.ok(); burst(); say(t('post.published'), 'party_popper_3d');
       void loadNews();
       close(overlay.id);
-    } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'link_title' ? 'post.linkTitle' : 'common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 

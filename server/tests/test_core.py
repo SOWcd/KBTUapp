@@ -995,6 +995,8 @@ def test_posts(env):
     assert c.post("/api/orgs/1/posts", headers=H, json={**post, "audience": "clubs"}).status_code == 400   # not a broadcast org
     assert c.post("/api/orgs/1/posts", headers=H, json={**post, "tag": "<b>"}).status_code == 400
     assert c.post("/api/orgs/1/posts", headers=H, json={**post, "photoId": 999}).status_code == 400
+    r = c.post("/api/orgs/1/posts", headers=H, json={**post, "title": "https://t.me/+fWvpKlkKId9iMzgy"})
+    assert r.status_code == 400 and r.json()["message"] == "link_title"                          # a bare link isn't a title
     p = c.post("/api/orgs/1/posts", headers=H, json=post).json()
     assert p["pinned"] and p["canDelete"] and p["photo"] is None
     assert [x["id"] for x in c.get("/api/posts?scope=subs", headers=M).json()] == [p["id"]]       # a member sees the club's post
@@ -4217,7 +4219,8 @@ def test_app_team(env):
     assert role(O, "A", "admin").status_code == 200                       # the owner makes an admin; it survives the next sign-in
     assert c.get("/api/me", headers=A).json()["role"] == "admin"
     assert role(A, "X", "admin").status_code == 403                       # an admin can't make admins
-    assert role(A, "M", "moderator").json()["team"][-1]["person"]["id"] == ids["M"]
+    assert role(A, "M", "moderator").status_code == 403                   # nor moderators: roles are the owner's alone (Nov 3)
+    assert role(O, "M", "moderator").json()["team"][-1]["person"]["id"] == ids["M"]
     assert role(A, "O", "user").status_code == 403 and ban(A, "O", True, "nope").status_code == 403   # nobody touches the owner
     assert role(A, "A", "user").status_code == 403                        # nor himself
     assert role(M, "U", "moderator").status_code == 403 and c.get("/api/admin/staff", headers=M).status_code == 403

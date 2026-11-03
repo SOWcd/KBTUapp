@@ -24,7 +24,7 @@
   const iOwn = $derived(!!session.me?.founder);
   const touchable = $derived(!p.owner && p.person.id !== session.me?.id && (p.role !== 'admin' || iOwn));
   const banned = $derived(!!p.banned || !!p.banReason);
-  const roles = $derived<PlatformRole[]>(iOwn ? ['user', 'moderator', 'admin'] : ['user', 'moderator']);
+  const roles: PlatformRole[] = ['user', 'moderator', 'admin']; // the creator's alone to give (owner, Nov 3)
   let banning = $state(false), why = $state(''), busy = $state(false);
 
   async function act(go: () => Promise<Staff>, done: string, emoji: string) {
@@ -52,8 +52,8 @@
     </div>
 
     <Group footnote={touchable ? undefined : p.owner ? t('staff.ownerNote') : p.person.id === session.me?.id ? t('staff.selfNote') : t('staff.adminNote')}>
-      <Row title={t('staff.role')} value={t(`staff.role.${p.role}`)} disabled={!touchable || banned || busy}
-        menu={touchable && !banned ? roles.map((r) => ({ label: t(`staff.role.${r}`), checked: p.role === r, onselect: () => setRole(r) })) : undefined} />
+      <Row title={t('staff.role')} value={t(`staff.role.${p.role}`)} disabled={!touchable || !iOwn || banned || busy}
+        menu={touchable && iOwn && !banned ? roles.map((r) => ({ label: t(`staff.role.${r}`), checked: p.role === r, onselect: () => setRole(r) })) : undefined} />
     </Group>
 
     <Group caption={t('adm.awards')}>

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 from ..db import tx
@@ -77,6 +78,13 @@ def posts(con, v: Viewer, scope: str) -> list[dict]:
 
 
 POST_TAGS = ("important", "recruiting", "results", "news")  # the composer's chips; the UI names them per language
+_LINK = re.compile(r"(https?://|www\.|t\.me/)\S+", re.I)
+
+
+def _worded(title: str) -> bool:
+    """A title says something besides a link (owner, Nov 3: a post titled with a bare invite link): links go in the text,
+    where the app turns them into a button."""
+    return len(re.findall(r"\w", _LINK.sub("", title))) >= 2
 
 
 def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
@@ -88,6 +96,8 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
     o = _org(con, oid)
     title, text = str(body.get("title") or "").strip(), str(body.get("body") or "").strip()
     tag, audience = body.get("tag"), body.get("audience") or "public"
+    if title and not _worded(title):
+        raise ApiError("bad_input", "link_title")
     if not 2 <= len(title) <= 120 or len(text) > 2000 or (tag is not None and tag not in POST_TAGS) \
             or audience not in ("public", "clubs") or (audience == "clubs" and not o["can_broadcast"]):
         raise ApiError("bad_input")
@@ -133,6 +143,8 @@ def update_post(con, v: Viewer, pid: int, body: dict) -> dict:
     bad, sets = object(), {}
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
     if "title" in body:
+        if text("title") and not _worded(text("title")):
+            raise ApiError("bad_input", "link_title")
         sets["title"] = text("title") if 2 <= len(text("title")) <= 120 else bad
     if "body" in body:
         sets["body"] = text("body") if len(text("body")) <= 2000 else bad

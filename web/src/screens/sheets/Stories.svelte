@@ -28,6 +28,7 @@
   import Emoji from '../../ui/Emoji.svelte';
   import { nameOf } from '../../lib/short';
   import Linked from '../../ui/Linked.svelte';
+  import { linkButtons } from '../../lib/social';
   import { menu } from '../../ui/menu';
 
   // at: open on that post of the first club (a club page's news list), else its first unread
@@ -174,9 +175,14 @@
 
     {#key p.id}
       <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
-      <div class="txt" class:card={p.body}>
-        <h2>{p.title}</h2>
-        {#if p.body}<p class="scroll"><Linked text={p.body} /></p>{/if}
+      <!-- its links as buttons under the words, never a bare address (owner, Nov 3) -->
+      {@const lt = linkButtons(p.title)}
+      {@const lb = linkButtons(p.body)}
+      {@const btns = [...lt.buttons, ...lb.buttons.filter((b) => !lt.buttons.some((x) => x.url === b.url))].slice(0, 2)}
+      <div class="txt" class:card={(lb.rest || btns.length) && p.photo} class:plain={!p.photo}>
+        {#if lt.rest}<h2>{lt.rest}</h2>{/if}
+        {#if lb.rest}<p class="scroll"><Linked text={lb.rest} /></p>{/if}
+        {#if btns.length}<div class="links">{#each btns as b (b.url)}<button class="lk" onclick={() => openLink(b.url)}>{#if b.kind === 'telegram'}<TelegramMark size={17} />{/if}{b.join ? t('story.join') : b.kind === 'telegram' ? t('tg.open') : t('story.link')}</button>{/each}</div>{/if}
       </div>
     {/key}
 
@@ -209,7 +215,7 @@
   .tapzone { position: absolute; inset: 0; }
   /* an event: its poster centred on its own tint */
   .bg.ev { display: grid; place-items: center; padding-bottom: 18vh; background: radial-gradient(90% 60% at 50% 35%, color-mix(in srgb, var(--c) 55%, transparent), #0E0F14 75%); }
-  .acts .open { flex: 1; justify-content: center; background: #fff; color: #0B0D14; font: 700 15.5px/1 var(--font-text); }
+  .acts .open, .lk { flex: 1; justify-content: center; background: #fff; color: #0B0D14; font: 700 15.5px/1 var(--font-text); }
   .top { position: absolute; left: 12px; right: 12px; top: calc(var(--head-bottom) + 8px); display: flex; flex-direction: column; gap: 10px; }
   .bars { display: flex; gap: 4px; }
   .bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.3); transition: background 200ms; }
@@ -224,6 +230,13 @@
   .txt { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 84px); display: flex; flex-direction: column; gap: 10px; pointer-events: none; animation: in 240ms ease-out both; }
   .txt h2 { margin: 0; font: 760 26px/1.12 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   .txt p { margin: 0; max-height: 34vh; overflow-y: auto; pointer-events: auto; white-space: pre-line; font: 450 15.5px/1.45 var(--font-text); color: rgba(255, 255, 255, 0.88); touch-action: pan-y; }
+  /* no photo: the words are the story, in the middle of the screen, not a caption over nothing (owner, Nov 3) */
+  .links { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
+  .plain .links { justify-content: center; }
+  .lk { height: 44px; padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; border-radius: var(--r-full); }
+  .txt.plain { top: calc(var(--safe-top) + 120px); bottom: calc(var(--safe-bottom) + 96px); left: 28px; right: 28px; justify-content: center; align-items: center; text-align: center; gap: 14px; }
+  .txt.plain h2 { font-size: var(--fs-title); }
+  .txt.plain p { font-size: var(--fs-card); }
   .txt.card { left: 12px; right: 12px; padding: 16px 16px 14px; gap: 8px; border-radius: 22px; background: rgba(12, 13, 18, 0.62); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
   .txt.card h2 { font-size: 21px; }
   .txt.card p { max-height: 30vh; color: rgba(255, 255, 255, 0.92); }

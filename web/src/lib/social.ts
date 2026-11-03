@@ -68,3 +68,11 @@ export function linked(text: string): { s: string; url?: string }[] {
 export const videoLinks = (text: string) =>
   [...new Set(linked(text).flatMap((p) => (p.url ? [p.url] : [])))]
     .map((url) => ({ url, ...social(url) })).filter((x) => ['instagram', 'tiktok', 'youtube'].includes(x.kind)).slice(0, 2);
+/** a post's links as buttons (owner, Nov 3: a bare invite link in a story looked broken): each address once, at most
+ *  two, a Telegram group's invite "join" and any other t.me "open"; `rest` is the text with those addresses taken out */
+export function linkButtons(text: string): { buttons: { url: string; kind: SocialKind; join: boolean }[]; rest: string } {
+  const parts = linked(text);
+  const urls = [...new Set(parts.flatMap((p) => (p.url ? [p.url] : [])))].slice(0, 2);
+  return { buttons: urls.map((url) => ({ url, kind: social(url).kind, join: /t\.me\/(\+|joinchat\/)/i.test(url) })),
+    rest: parts.map((p) => (p.url && urls.includes(p.url) ? '' : p.s)).join('').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() };
+}

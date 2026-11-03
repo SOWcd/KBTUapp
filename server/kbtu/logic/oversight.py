@@ -239,7 +239,7 @@ def set_staff(con, v: Viewer, uid, role) -> dict:
         raise ApiError("bad_input")
     with tx(con):
         u = _touchable(con, v, uid)
-        if role == "admin" and not _owner(con, v):
+        if not _owner(con, v):  # roles are the creator's alone to give and take, a moderator's too (owner, Nov 3)
             raise ApiError("forbidden")
         if u["banned_at"] is not None and role != "user":
             raise ApiError("conflict", "banned")
