@@ -3,18 +3,14 @@
   // notification switches with a footnote under each, Privacy (my phone and my city, each its own page with what can be
   // done to it; whether friends see where I'm going; who sees what; the policy; deleting the account) and About.
   // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Lock from '@lucide/svelte/icons/lock';
   import Bell from '@lucide/svelte/icons/bell';
   import Info from '@lucide/svelte/icons/info';
   import Phone from '@lucide/svelte/icons/phone';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
-  import Check from '@lucide/svelte/icons/check';
   import User from '@lucide/svelte/icons/user';
   import { schoolOf, shortOf } from '../../lib/short';
-  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { CITIES } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
@@ -27,6 +23,9 @@
   import { haptic, openLink } from '../../lib/tg';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
+  import Notice from '../../ui/Notice.svelte';
   // my clubs as they are now: a club that took me in while the app was open gives its lanyard here (Choice, Nov 3)
   onMount(() => void loadMe());
 
@@ -78,7 +77,7 @@
   async function fix(k: Typed, label: Key) {
     const was = me?.student?.[k] ?? '';
     const fill = LAT.includes(k) && !was; // an empty Latin one filled doesn't spend the once (the server's rule)
-    const v = await sheets.askText({ title: t(label), text: t(fill ? 'pd.latFill' : 'pd.once'), ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
+    const v = await sheets.askText({ title: t(label), text: fill ? t('pd.latFill') : undefined, ok: t('common.save'), cancel: t('common.cancel'), placeholder: was, max: 40, line: true, value: was });
     if (v == null || v.trim() === was) return;
     // a typo would spend the once: the new value read back before it's saved
     if (!fill && !(await sheets.ask({ title: t('pd.onceTitle'), text: t('pd.onceSure', { v: v.trim() }), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
@@ -165,176 +164,151 @@
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
-<!-- a correction that can't be undone: said big and red above the choices, not in a grey footnote (owner, Nov 2) -->
-{#snippet once()}<p class="once" role="note"><TriangleAlert size={20} strokeWidth={2.4} /><span><b>{t('pd.onceTitle')}</b>{t('pd.onceBig')}</span></p>{/snippet}
-{#snippet link(label: string, go: () => void, value = '', out = false)}
-  <button class="set-row" onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span>{#if value}<span class="val">{value}</span>{/if}
-    {#if out}<ArrowUpRight class="chev" size={18} />{:else}<ChevronRight class="chev" size={18} />{/if}</button>
+{#snippet link(title: string, go: () => void, value = '', out = false)}
+  <Row {title} {value} accessory={out ? 'external' : 'chevron'} onclick={() => { haptic.tap(); go(); }} />
 {/snippet}
-{#snippet act(label: string, go: () => void, red = false)}
-  <button class="set-row act" class:red onclick={() => { haptic.tap(); go(); }}><span class="lb">{label}</span></button>
+{#snippet act(title: string, go: () => void, red = false)}
+  <Row {title} tone={red ? 'destructive' : 'action'} onclick={() => { haptic.tap(); go(); }} />
 {/snippet}
 <!-- a name part: Cyrillic over Latin at the row's end (one line when they're the same) -->
-{#snippet two(label: string, a: string | null, b: string | null)}
-  <span class="lb">{label}</span><span class="val two"><span>{a || b}</span>{#if a && b && a !== b}<span class="sub">{b}</span>{/if}</span>
+{#snippet two(a: string | null, b: string | null)}
+  <span class="two"><span>{a || b}</span>{#if a && b && a !== b}<span class="sub">{b}</span>{/if}</span>
 {/snippet}
+<!-- a correction that can't be undone: said once, above the choices (the final confirm says it again) -->
+{#snippet once()}<div class="once"><Notice tone="danger" title={t('pd.onceTitle')} text={t('pd.onceBig')} /></div>{/snippet}
 
 <Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]}>
   {#if kind === 'notify' && me}
-    {#each SWITCHES as [k, title, hint] (k)}
-      <div class="sw">
-        <label class="set-group plain sw-on"><span class="set-row"><span class="lb">{t(title)}</span>
-          <input type="checkbox" role="switch" checked={me.settings[k]} onchange={(e) => set(k, e.currentTarget.checked)} /></span></label>
-        <p class="set-foot">{t(hint)}</p>
-      </div>
+    {#each SWITCHES as [k, title, hint], i (k)}
+      <div class:sw={i > 0}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
-    <p class="set-foot always">{t('set.always')}</p>
+    <p class="foot always">{t('set.always')}</p>
   {:else if kind === 'privacy'}
     <!-- my data: one row each, what can be done to it a tap deeper -->
     {#if me?.student}
       {@const st = me.student}
       <!-- who I am: each name part one row, its Latin form under it; correctable once (›), then a plain row -->
-      <div class="set-group plain">
+      <Group>
         {#each PARTS as [p, cyr, lat] (p)}
           {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
-          {#if can}<button class="set-row" onclick={() => { haptic.tap(); sheets.settings(p); }}>{@render two(t(TITLE[p][0]), st[cyr], st[lat])}<ChevronRight class="chev" size={18} /></button>
-          {:else if st[cyr] || st[lat]}<div class="set-row">{@render two(t(TITLE[p][0]), st[cyr], st[lat])}</div>{/if}
+          {#if can}<Row title={t(TITLE[p][0])} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings(p); }}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>
+          {:else if st[cyr] || st[lat]}<Row title={t(TITLE[p][0])}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>{/if}
         {/each}
-      </div>
+      </Group>
     {/if}
     {#if me?.student || phone || me?.city}
-      <div class="set-group plain" class:gap={me?.student}>
-        {#if me?.student}
-          {@const st = me.student}
-          <!-- the ID once too; the year up from the ID's; the email is the Microsoft login, never edited -->
-          {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
-          {:else}<div class="set-row"><span class="lb">{t('pd.sid')}</span><span class="val">{st.studentId}</span></div>{/if}
-          {#if courses.length > 1 && st.fixable?.includes('course')}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
-          {:else if st.course}<div class="set-row"><span class="lb">{t('pd.course')}</span><span class="val">{st.course}</span></div>{/if}
-          {#if st.email}<div class="set-row"><span class="lb">{t('pd.email')}</span><span class="val wide">{st.email}</span></div>{/if}
-        {/if}
-        {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
-        {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me?.city?.name ?? t('pd.cityNone'))}{/if}
+      <div class:gap={me?.student}>
+        <Group footnote={me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff' ? t('pd.support') : undefined}>
+          {#if me?.student}
+            {@const st = me.student}
+            <!-- the ID once too; the year up from the ID's; the email is the Microsoft login, never edited -->
+            {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
+            {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
+            {#if courses.length > 1 && st.fixable?.includes('course')}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
+            {:else if st.course}<Row title={t('pd.course')} value={String(st.course)} />{/if}
+            <!-- the email whole, on two lines if it must (owner, Oct 31) -->
+            {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
+          {/if}
+          {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
+          {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me?.city?.name ?? t('pd.cityNone'))}{/if}
+        </Group>
       </div>
-      {#if me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff'}<p class="set-foot">{t('pd.support')}</p>{/if}
     {/if}
     {#if me?.student}
       <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing); and off, nobody can
            send me a friend request (my friends and the requests waiting stay) -->
-      <div class="set-group plain sw-on gap">
-        <label class="set-row"><span class="lb">{t('set.showGoing')}</span><input type="checkbox" role="switch" checked={me.settings.showGoing} onchange={(e) => set('showGoing', e.currentTarget.checked, true)} /></label>
-        <label class="set-row"><span class="lb">{t('set.canFriend')}</span><input type="checkbox" role="switch" checked={me.settings.canFriend} onchange={(e) => set('canFriend', e.currentTarget.checked, true)} /></label>
-      </div>
+      <div class="gap"><Group>
+        <Row title={t('set.showGoing')} accessory="switch" checked={me.settings.showGoing} onchange={(on) => set('showGoing', on, true)} />
+        <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
+      </Group></div>
     {/if}
-    <div class="set-group plain" class:gap={phone || me?.city || me?.student}>
+    <div class:gap={phone || me?.city || me?.student}><Group>
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
-    </div>
+    </Group></div>
     {#if me?.student && !me.deleteAt}
-      <div class="set-group plain gap">{@render act(t('set.calReset'), resetCal, true)}{#if data.schedule.length}{@render act(t('sched.del'), dropWeek, true)}{/if}</div>
-      <div class="set-group plain gap">{@render act(t('me.deleteData'), deleteData, true)}</div>
+      <div class="gap"><Group>{@render act(t('set.calReset'), resetCal, true)}{#if data.schedule.length}{@render act(t('sched.del'), dropWeek, true)}{/if}</Group></div>
+      <div class="gap"><Group>{@render act(t('me.deleteData'), deleteData, true)}</Group></div>
     {/if}
   {:else if kind === 'phone'}
-    <div class="set-group plain"><div class="set-row"><span class="lb big">{phone}</span></div></div>
-    <p class="set-foot">{t('pd.note')}</p>
-    <div class="set-group plain gap">{@render act(t('pd.phoneEdit'), editPhone)}{@render act(t('pd.phoneDel'), dropPhone, true)}</div>
+    <Group footnote={t('pd.note')}><Row title={phone} /></Group>
+    <div class="gap"><Group>{@render act(t('pd.phoneEdit'), editPhone)}{@render act(t('pd.phoneDel'), dropPhone, true)}</Group></div>
   {:else if kind === 'city' && me?.city && !picking}
-    <div class="set-group plain sw-on">
-      <div class="set-row"><span class="lb big">{me.city.name}</span></div>
-      <label class="set-row"><span class="lb">{t('pd.cityHide')}</span><input type="checkbox" role="switch" checked={me.city.hidden} onchange={(e) => cityHidden(e.currentTarget.checked)} /></label>
-    </div>
-    <p class="set-foot">{t('pd.cityNote')}</p>
-    <div class="set-group plain gap">{@render act(t('pd.cityChange'), () => { haptic.tap(); picking = true; })}{@render act(t('pd.cityDel'), dropCity, true)}</div>
+    <Group footnote={t('pd.cityNote')}>
+      <Row title={me.city.name} />
+      <Row title={t('pd.cityHide')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />
+    </Group>
+    <div class="gap"><Group>{@render act(t('pd.cityChange'), () => (picking = true))}{@render act(t('pd.cityDel'), dropCity, true)}</Group></div>
   {:else if kind === 'city' && me}
     <!-- the big cities in my language, any other typed in -->
-    <div class="set-group plain" role="radiogroup" aria-label={t('pd.city')}>
+    <Group>
       {#each CITIES as c (c.en)}
         {@const name = c[i18n.lang]}
-        <button class="set-row" role="radio" aria-checked={me.city?.name === name} onclick={() => void setCity(name)}>
-          <span class="lb">{name}</span><span class="tick">{#if me.city?.name === name}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+        <Row title={name} accessory="check" checked={me.city?.name === name} onclick={() => void setCity(name)} />
       {/each}
-    </div>
-    <div class="set-group plain gap">{@render act(t('pd.cityOther'), () => void typeCity())}</div>
-    <p class="set-foot">{t('pd.cityNote')}</p>
+    </Group>
+    <div class="gap"><Group footnote={t('pd.cityNote')}>{@render act(t('pd.cityOther'), () => void typeCity())}</Group></div>
   {:else if part && me?.student}
     {@const st = me.student}
     {@const [, cyr, lat, latKey] = part}
+    {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
     <!-- the part's two spellings, each correctable once -->
-    {#if st.fixable?.includes(cyr) || st.fixable?.includes(lat)}{@render once()}{/if}
-    <div class="set-group plain">
+    {#if can}{@render once()}{/if}
+    <Group footnote={can ? undefined : t('pd.support')}>
       {#if st.fixable?.includes(cyr)}{@render link(t('pd.cyr'), () => void fix(cyr, TITLE[part[0]][0]), st[cyr] ?? '')}
-      {:else}<div class="set-row"><span class="lb">{t('pd.cyr')}</span><span class="val">{st[cyr] ?? ''}</span></div>{/if}
+      {:else}<Row title={t('pd.cyr')} value={st[cyr] ?? ''} />{/if}
       {#if st.fixable?.includes(lat)}{@render link(t('pd.lat'), () => void fix(lat, latKey), st[lat] ?? '')}
-      {:else}<div class="set-row"><span class="lb">{t('pd.lat')}</span><span class="val">{st[lat] ?? ''}</span></div>{/if}
-    </div>
-    <p class="set-foot">{t(st.fixable?.includes(cyr) || st.fixable?.includes(lat) ? 'pd.once' : 'pd.support')}</p>
+      {:else}<Row title={t('pd.lat')} value={st[lat] ?? ''} />{/if}
+    </Group>
   {:else if kind === 'course' && me?.student}
     {#if me.student.fixable?.includes('course')}
       {@render once()}
-      <div class="set-group plain" role="radiogroup" aria-label={t('pd.course')}>
+      <Group>
         {#each courses as n (n)}
-          <button class="set-row" role="radio" aria-checked={me.student.course === n} onclick={() => void pickCourse(n)}>
-            <span class="lb">{t('person.course', { n })}</span><span class="tick">{#if me.student.course === n}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+          <Row title={t('person.course', { n })} accessory="check" checked={me.student.course === n} onclick={() => void pickCourse(n)} />
         {/each}
-      </div>
+      </Group>
     {:else}
-      <div class="set-group plain"><div class="set-row"><span class="lb">{t('person.course', { n: me.student.course ?? 0 })}</span></div></div>
-      <p class="set-foot">{t('pd.support')}</p>
+      <Group footnote={t('pd.support')}><Row title={t('person.course', { n: me.student.course ?? 0 })} /></Group>
     {/if}
   {:else if kind === 'school' && me?.student && !me.student.fixable?.includes('school')}
-    <!-- the once spent: my school alone, then support -->
-    <div class="set-group plain"><div class="set-row"><span class="lb school">{mySchool?.name ?? me.student.school ?? t('look.noSchool')}</span>
-      {#if mySchool}<span class="val">{shortOf(mySchool)}</span>{/if}</div></div>
-    <!-- a mis-tap undone: the one before comes back, free, once (owner, Nov 3: everyone wrote to support) -->
-    {#if me.student.undo && 'school' in me.student.undo}{@const was = me.student.undo.school ?? null}
-      <div class="set-group plain gap">{@render act(t('pd.undo', { v: schoolOf(was)?.name ?? was ?? t('look.noSchool') }), () => void pickSchool(was))}</div>{/if}
-    <p class="set-foot">{t(me.student.undo && 'school' in me.student.undo ? 'pd.undoFoot' : 'pd.support')}</p>
+    <!-- the once spent: my school alone, then support; a mis-tap undone: the one before comes back, free, once (owner,
+         Nov 3: everyone wrote to support) -->
+    {@const undo = me.student.undo && 'school' in me.student.undo}
+    <Group footnote={undo ? undefined : t('pd.support')}><Row title={mySchool?.name ?? me.student.school ?? t('look.noSchool')}>{#snippet detail()}{#if mySchool}<span class="short">{shortOf(mySchool)}</span>{/if}{/snippet}</Row></Group>
+    {#if undo}{@const was = me.student.undo?.school ?? null}
+      <div class="gap"><Group footnote={t('pd.undoFoot')}>{@render act(t('pd.undo', { v: schoolOf(was)?.name ?? was ?? t('look.noSchool') }), () => void pickSchool(was))}</Group></div>{/if}
   {:else if kind === 'school' && me?.student}
     {#if me.student.school}{@render once()}{/if}
-    <div class="set-group plain" role="radiogroup" aria-label={t('look.school')}>
+    <Group>
       {#each schools as o (o.id)}
-        {@const on = mySchool?.id === o.id}
-        <button class="set-row" role="radio" aria-checked={on} onclick={() => void pickSchool(o.orig?.name ?? o.name)}>
-          <span class="lb school">{o.name}</span><span class="val">{shortOf(o)}</span><span class="tick">{#if on}<Check size={20} strokeWidth={2.4} />{/if}</span></button>
+        <Row title={o.name} accessory="check" checked={mySchool?.id === o.id} onclick={() => void pickSchool(o.orig?.name ?? o.name)}>{#snippet detail()}<span class="short">{shortOf(o)}</span>{/snippet}</Row>
       {/each}
-    </div>
+    </Group>
     <!-- no "no school" here: two students cleared theirs by mistake (Nov 2), and the once went with it -->
   {:else if kind === 'sees'}
-    <div class="set-group plain">
-      {#each SEES as [h, text] (h)}<div class="see"><b>{t(h)}</b><p>{t(text)}</p></div>{/each}
-    </div>
+    <!-- who sees what: read rather than tapped -->
+    <Group>{#each SEES as [h, text] (h)}<Row title={t(h)} subtitle={t(text)} />{/each}</Group>
   {:else if kind === 'about'}
-    <div class="set-group plain">
+    <Group>
       {@render link(t('set.terms'), () => page('terms'), '', true)}
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
-    </div>
+    </Group>
   {/if}
 </Pane>
 
 <style>
-  .big { font-size: 19px; font-weight: 600; }
-  .sw + .sw { margin-top: 22px; }
-  .always { margin-top: 26px; }
-  .gap { margin-top: 26px; }
-  /* the pick's check, Apple's: a fixed slot at the row's end so the short names line up */
-  /* a long school's name breaks between syllables, never mid-letter; at 320 px the short name
-     makes room for it */
-  .once { display: flex; gap: var(--s-3); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-4); border-radius: var(--r-l);
-    background: var(--danger-soft); color: var(--text); font: 500 var(--fs-body)/1.35 var(--font-text); }
-  .once :global(svg) { flex: none; margin-top: 2px; color: var(--danger); }
-  .once b { display: block; margin-bottom: 2px; font-weight: 700; color: var(--danger-text); }
-  .set-row > .lb.school { overflow-wrap: break-word; hyphens: auto; }
-  @media (max-width: 340px) { .lb.school + .val { display: none; } }
+  .sw { margin-top: 22px; }
+  .gap, .always { margin-top: 26px; }
+  .once { margin-bottom: var(--s-4); }
+  .foot { margin-inline: var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); } /* Group's footnote, alone */
   /* a name part's end: its Cyrillic over its Latin, each cut with … rather than wrapped */
-  .val.two { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
-  .val.two > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  .val.two > .sub { font-size: var(--fs-sub); }
-  .tick { flex: none; width: 20px; margin-right: -4px; display: grid; place-items: center; color: var(--accent-text); }
-  /* who sees what: a heading and its text in each cell, read rather than tapped */
-  .see { padding: 12px 16px; }
-  .see + .see { border-top: 1px solid var(--line); }
-  .see b { display: block; font: 600 16px/1.3 var(--font-text); }
-  .see p { margin-top: 3px; font: 450 15px/1.45 var(--font-text); color: var(--text-2); }
+  .two { display: flex; flex-direction: column; align-items: flex-end; max-width: 50vw; line-height: 1.25; color: var(--text-3); }
+  .two > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .two > .sub { font-size: var(--fs-sub); }
+  /* a school's short name stays whole; its long name wraps beside it */
+  .short { color: var(--text-3); }
+  .wide { max-width: 60vw; color: var(--text-3); overflow-wrap: anywhere; text-align: right; }
 </style>
