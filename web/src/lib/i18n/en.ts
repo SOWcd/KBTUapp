@@ -1573,6 +1573,7 @@ const en: Dict = {
   'join.notNow': "Not this time",
   'join.write': "Message the club",
   'join.closed': "The club isn't taking applications now",
+  'join.noTeam': "The club hasn't joined the app yet: you can't join it here for now",
   'join.withdrawAsk': "Withdraw your application?",
   'join.withdrawText': "The club won't see it anymore.",
   'join.withdraw': "Withdraw",
