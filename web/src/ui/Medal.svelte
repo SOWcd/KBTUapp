@@ -12,13 +12,15 @@
   // a drawn medal of its own (the 2026 initiation's, First 500; owner Nov 1): the picture is the whole medal, no rim or disc
   const art = $derived(artOf(a));
   const drawn = $derived(art.startsWith('medal_'));
+  // the 512 px picture is the Award sheet's coin; a row's medal up to 64 px at 3x takes the 192 px copy (emoji/sm, Pillow
+  // Lanczos, q90): the First 500 medal of a first launch's prebuilt Profile was 103 KB, now 19 (perf round 4)
   // a layered one (SVG, crisp at any size): the field, the art and its near part float with the tilt (base.css .z, the
   // glass's --gx/--gy from above) under the still rim
   const layers = $derived(layersOf(art));
 </script>
 
 {#if layers}<span class="medal drawn lay" class:none={a.level === 0} style="width:{size}px;height:{size}px">{#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}</span>
-{:else if drawn}<span class="medal drawn pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} alt="" width={size} height={size} decoding="async" draggable="false" /></span>{:else}
+{:else if drawn}<span class="medal drawn pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${art}.webp`} srcset={`emoji/sm/${art}.webp 192w, emoji/${art}.webp 512w`} sizes="{size}px" alt="" width={size} height={size} decoding="async" draggable="false" /></span>{:else}
 <span class="medal {tier}" style="width:{size}px;height:{size}px">
   <span class="disc">
     {#if hidden}<span class="q" style="font-size:{Math.round(size * 0.4)}px">?</span>
