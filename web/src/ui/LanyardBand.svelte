@@ -16,8 +16,11 @@
   import { clubLook, isSchool, type Look } from '../lib/awards';
   import panther from '../assets/lanyards/panther.webp';
   import pantherEyes from '../assets/lanyards/panther-eyes.webp';
-  import knights from '../assets/lanyards/knights.webp';
-  import ball from '../assets/lanyards/scenes/kn-ball-card.svg?url';
+  import knights from '../assets/lanyards/knights-white.webp'; // round 7: their official logo, knocked out to white
+  import knArcs from '../assets/lanyards/scenes/kn-arcs-card.svg?url';
+  import knHall from '../assets/lanyards/scenes/kn-hall-card.svg?url';
+  import knGame from '../assets/lanyards/scenes/kn-game-card.svg?url';
+  import sxCap from '../assets/lanyards/scenes/sx-cap-card.svg?url';
   import moments from '../assets/lanyards/moments.webp';
   import lens from '../assets/lanyards/moments-lens.svg?url'; // round 5b: .claude/reports/club-lanyards/gen-moments-lens.py
   import faces from '../assets/lanyards/faces.webp';
@@ -49,8 +52,14 @@
     <!-- round 5b (owner: "poor, not pretty"): heraldic, their navy and a knight's gold. Round 6 (owner: the helmet twice and
          a pointless shield): their logo is the medallion; the card's one subject is the game, a basketball under the
          arena's gold light on the court (.claude/reports/club-lanyards/gen-r6.py); fine gold hatching as the ground -->
-    {#if wide}<span class="beamw z"><i class="beam"></i></span>
-      <i class="kfacet"></i><img class="kball z" src={ball} alt="" /><i class="gloss"></i>
+    <!-- round 7 (owner: every attempt disliked; start again from their real identity): their royal blue and white, not navy
+         and gold. Their logo (knight, building, ball) is the medallion; the card takes its parts apart: the main building
+         faint behind, a basketball's seams huge as the sky's arcs, one white arena light sweeping slowly. Round 7b (owner:
+         a sports club, the sport must read at first glance): the medallion is the backboard, a hoop and its net hang under
+         it and a ball drops through, the shot's path dotted behind it, the court's lines on the floor
+         (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
+    {#if wide}<img class="kl z far" src={knArcs} alt="" /><span class="beamw z"><i class="beam"></i></span>
+      <img class="kl z" src={knHall} alt="" /><img class="kl kg z" src={knGame} alt="" /><i class="gloss"></i>
     {:else}<i class="beam"></i><img class="art" src={knights} alt="" />{/if}
   {:else if look === 'moments'}
     <i class="leak"></i><span class="date">{stamp}</span>
@@ -69,6 +78,9 @@
 </svg>
     <!-- the glint in an SVG of its own: its dash moving repaints only this, not the wedge and the blurred glow -->
     <svg class="dec sxg par z" viewBox="0 0 340 221" preserveAspectRatio="none"><path class="glint" d="M33.2 223L114.6 14" pathLength="100" vector-effect="non-scaling-stroke" /></svg>
+    <!-- round 7c (owner: combine the Oct 29 card with the cap on its trail): their graduation cap, the one on their logo's
+         S, thrown, rising on a red light trail under the medallion (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
+    <img class="dec sxr z" src={sxCap} alt="" />
     <i class="flare"></i><i class="gloss"></i>
   {:else if look === 'studex'}
     <!-- their key visual: red and navy split by the white arrow of growth, light streaks along it as on their poster; a
@@ -99,7 +111,9 @@
     <!-- the club night with the hands' triangle (round 5b, owner: back to round 4's card; their wavy wordmark is the
          medallion, OrgMedal). Round 6 (owner: good, can be better): on the card one light inside the hands' frame, the
          lasers fanning out of it, the hands lit by it -->
-    <i class="beams"></i><i class="bokeh" class:z={wide}></i>{#if wide}<i class="fglow z"></i>{/if}<img class="hands" class:z={wide} src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
+    <!-- round 7c (owner: fine, make it better): the haze the lasers cut through, low over the floor, and the two lasers'
+         heads glowing at the stage's corners -->
+    {#if wide}<i class="fsmoke"></i>{/if}<i class="beams"></i><i class="bokeh" class:z={wide}></i>{#if wide}<i class="fsrc"></i><i class="fglow z"></i>{/if}<img class="hands" class:z={wide} src={hands} alt="" />{#if !wide}<img class="art" src={faces} alt="" />{/if}
   {/if}
 </div>
 
@@ -138,6 +152,7 @@
   @keyframes sxflare { 0%, 24% { opacity: 0; transform: scale(0.3) rotate(0deg); } 31% { opacity: 1; transform: scale(1.1) rotate(20deg); } 48%, 100% { opacity: 0; transform: scale(0.6) rotate(45deg); } }
   /* the arrow lit: a soft glow breathing under the white cut */
   .glow29 { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 10; stroke-linecap: round; filter: blur(5px); } /* still: a blurred layer that changes repaints every frame */
+  .sxr { z-index: 1; object-fit: cover; object-position: 100% 100%; --z: 5; --zs: 1.02; } /* the cap: anchored at the foot on the right, nearest */
   /* gloss and depth, like a printed plastic card: a curved light from the top, a bevel along the edge */
   .gloss { position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit;
     background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 55%, transparent 70%),
@@ -213,27 +228,27 @@
   @media (prefers-reduced-motion: reduce) { .eyes { animation: none; opacity: 0.85; } }
   :global(html.lowfx) .eyes { animation: none; opacity: 0.85; }
 
-  /* Knights (round 5b): their navy, a knight's gold. The band: a gold light from above onto their logo, ending in the
-     pass's navy (MyQr) with no seam */
-  .knights { background: radial-gradient(60% 90% at 50% 0%, rgba(232, 196, 120, 0.3), transparent 70%), linear-gradient(180deg, rgb(23, 52, 110), rgb(11, 29, 68)); }
-  .knights .art { left: 50%; top: 20px; height: 94px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35)); }
-  .knights.wide { background: radial-gradient(44% 75% at calc(100% - 46px) 72%, rgba(232, 196, 120, 0.3), transparent 70%),
-    radial-gradient(70% 90% at 0% 0%, rgba(60, 110, 210, 0.3), transparent 62%), linear-gradient(160deg, rgb(24, 58, 126), rgb(15, 38, 89) 55%, rgb(7, 20, 54)); }
-  /* one gold light, a cone falling from behind the medallion, sweeping a little */
+  /* Knights (round 7): their royal blue (#2556B8, their logo's) and white. The band: a white light from above onto their
+     logo in white, ending in the pass's blue (MyQr) with no seam */
+  .knights { background: radial-gradient(60% 90% at 50% 0%, rgba(190, 215, 255, 0.4), transparent 70%), linear-gradient(180deg, rgb(37, 86, 184), rgb(16, 46, 116)); }
+  .knights .art { left: 50%; top: 18px; height: 98px; transform: translateX(-50%); filter: drop-shadow(0 4px 14px rgba(4, 18, 60, 0.45)); }
+  .knights.wide { background: radial-gradient(48% 80% at calc(100% - 40px) 30%, rgba(170, 205, 255, 0.4), transparent 70%),
+    radial-gradient(70% 90% at 0% 0%, rgba(90, 140, 240, 0.35), transparent 62%), linear-gradient(160deg, rgb(42, 96, 200), rgb(30, 74, 168) 50%, rgb(13, 40, 108)); }
+  /* one white arena light, a cone falling from behind the medallion, sweeping a little */
   .beamw { position: absolute; inset: 0; pointer-events: none; --z: -2; }
   .beam { position: absolute; right: -104px; top: -190px; width: 300px; height: 300px; pointer-events: none; transform-origin: 50% 50%;
-    background: conic-gradient(from 180deg at 50% 50%, rgba(240, 206, 140, 0.22) 0deg 4deg, rgba(240, 206, 140, 0) 20deg 340deg, rgba(240, 206, 140, 0.22) 356deg);
+    background: conic-gradient(from 180deg at 50% 50%, rgba(225, 236, 255, 0.32) 0deg 4deg, rgba(225, 236, 255, 0) 20deg 340deg, rgba(225, 236, 255, 0.32) 356deg);
     animation: knsweep 12s ease-in-out infinite alternate; }
   @keyframes knsweep { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
   .band.knights:not(.wide) .beam { left: 50%; right: auto; top: -210px; margin-left: -150px; animation-name: knsweepb; }
   @keyframes knsweepb { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
-  /* an engraving's hatching in gold on the right, fading under the text */
-  .kfacet { position: absolute; inset: 0; pointer-events: none; opacity: 0.6;
-    background: repeating-linear-gradient(118deg, transparent 0 22px, rgba(232, 196, 120, 0.09) 22px 23px), repeating-linear-gradient(62deg, transparent 0 30px, rgba(232, 196, 120, 0.06) 30px 31px);
-    -webkit-mask: linear-gradient(90deg, transparent 38%, black 78%); mask: linear-gradient(90deg, transparent 38%, black 78%); }
-  /* the ball, near against the tilt: a layer the card's size, anchored at its foot on the right (as ClubScene's .l) */
-  .kball { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; --z: 3; --zs: 1.03; }
-  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%); box-shadow: inset 0 1px 0 rgba(232, 196, 120, 0.4); }
+  /* the arcs far, the building near: layers the card's size, anchored at its foot on the right (as ClubScene's .l) */
+  .kl { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; --z: 2; --zs: 1.03; }
+  .kl.far { --z: -2; }
+  .kg { object-position: 100% 0; --z: 3; } /* under the medallion: anchored to the top right, as Hero sets it */
+  @media (max-width: 359px) { .sxr { transform-origin: 100% 100%; scale: 0.82; } .kl:not(.far):not(.kg) { transform-origin: 100% calc(100% - 43px); scale: 0.72; } .kg { transform-origin: calc(100% - 40px) 40px; scale: 0.9; } } /* 320 px: the building clear of the course line */
+  .knights .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.16), transparent 65%), linear-gradient(180deg, transparent 60%, rgba(4, 16, 54, 0.25));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 8px rgba(4, 16, 54, 0.3); }
   @media (prefers-reduced-motion: reduce) { .beam { animation: none; } }
   :global(html.lowfx) .beam { animation: none; }
 
@@ -292,10 +307,21 @@
       repeating-conic-gradient(from 165deg at 18% -30%, transparent 0 7deg, rgba(255, 79, 154, 0.3) 7deg 7.4deg, transparent 7.4deg 14deg),
       repeating-conic-gradient(from 135deg at 84% -30%, transparent 0 8deg, rgba(255, 164, 61, 0.28) 8deg 8.4deg, transparent 8.4deg 15deg);
     -webkit-mask: linear-gradient(#000 10%, transparent 92%); mask: linear-gradient(#000 10%, transparent 92%); }
-  /* the card: the lasers fan out of the hands' triangle (its middle 98 px from the right, 72 down) */
-  .wide .beams { background: repeating-conic-gradient(from 3deg at calc(100% - 98px) 72px, transparent 0 10deg, rgba(192, 75, 255, 0.34) 10deg 10.5deg, transparent 10.5deg 20deg),
-      repeating-conic-gradient(from 8deg at calc(100% - 98px) 72px, transparent 0 14deg, rgba(255, 79, 154, 0.26) 14deg 14.4deg, transparent 14.4deg 28deg);
-    -webkit-mask: radial-gradient(75% 130% at calc(100% - 98px) 72px, transparent 6%, #000 14%, transparent 78%); mask: radial-gradient(75% 130% at calc(100% - 98px) 72px, transparent 6%, #000 14%, transparent 78%); }
+  /* the card (round 7, owner: round 5b's club lasers were better; keep round 6's light, combine): round 5b's lasers from
+     the stage's two floor corners crossing the whole card again, finer, a third colour from under the hands; round 6's
+     light inside the hands' frame stays, lighting them */
+  .wide .beams { background: repeating-conic-gradient(from 10deg at -8% 110%, transparent 0 4deg, rgba(192, 75, 255, 0.34) 4deg 4.35deg, transparent 4.35deg 9deg),
+      repeating-conic-gradient(from 280deg at 108% 112%, transparent 0 6deg, rgba(255, 79, 154, 0.28) 6deg 6.35deg, transparent 6.35deg 12deg),
+      repeating-conic-gradient(from 300deg at calc(100% - 98px) 130%, transparent 0 9deg, rgba(255, 164, 61, 0.2) 9deg 9.3deg, transparent 9.3deg 18deg);
+    -webkit-mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); mask: radial-gradient(120% 120% at 50% 100%, #000 30%, transparent 85%); }
+  /* the haze the lasers cut through: violet smoke drifting low over the floor, lit pink on the right */
+  .fsmoke { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(50% 22% at 30% 88%, rgba(150, 80, 255, 0.22), transparent 70%), radial-gradient(45% 26% at 78% 80%, rgba(255, 90, 170, 0.2), transparent 70%),
+      radial-gradient(70% 18% at 55% 100%, rgba(200, 120, 255, 0.18), transparent 70%); }
+  /* the lasers' heads at the stage's two corners */
+  .fsrc { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+    background: radial-gradient(circle at 0% 100%, rgba(240, 210, 255, 0.9) 0 2px, rgba(192, 75, 255, 0.5) 6px, transparent 26px),
+      radial-gradient(circle at 100% 100%, rgba(255, 220, 236, 0.9) 0 2px, rgba(255, 79, 154, 0.5) 6px, transparent 26px); }
   /* the light inside the hands' frame, breathing slowly as a stage light on a dimmer */
   .fglow { position: absolute; right: 30px; top: 16px; width: 136px; height: 112px; pointer-events: none; --z: -3; mix-blend-mode: screen;
     background: radial-gradient(closest-side, rgba(255, 240, 252, 0.6), rgba(224, 96, 255, 0.3) 40%, rgba(255, 79, 154, 0.1) 70%, transparent);

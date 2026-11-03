@@ -10,18 +10,20 @@
   // 4): every school's big shield on its colours, Crystal's big diamond, ArtHouse's red mark; AIChE's drawn benzene ring
   // (aiche-medal.svg), Choice's logo cut square on its navy. Round 6 (owner): StudEx's and Moments' official logos, bundled
   // (their wordmarks trimmed onto their own ground, .claude/reports/club-lanyards/src/prod-logos), not our drawn marks.
+  // Round 7 (owner): Shade's own avatar (their prod upload), not our brush. Knights' official logo (.claude/reports/club-lanyards/knights-official.png) on white in a blue steel rim.
   import { clubLook, isSchool, type Look } from '../lib/awards';
   import LookMark from './LookMark.svelte';
   import Founder from './Founder.svelte';
   import aicheMedal from '../assets/lanyards/aiche-medal.svg?url';
   import studexLogo from '../assets/lanyards/studex-logo.webp';
   import momentsLogo from '../assets/lanyards/moments-logo.webp';
+  import shadeLogo from '../assets/lanyards/shade-logo.webp'; // round 7: their prod avatar, trimmed a little onto its cream
+  import knightsLogo from '../assets/lanyards/knights-logo.webp'; // round 7: their official logo (knight, building, ball) on white
 
   let { look, logo = null }: { look: Look; logo?: string | null } = $props();
-  const DRAWN: Look[] = ['cheer', 'moments', 'faces', 'shadekbtu', 'aichekbtu', 'crystalkbtu', 'arthousekbtu', 'choice'];
-  // the official logos we ship: this file whatever the org's avatar is. ponytail: Knights' slot: their logo goes here
-  // (knights: <file>) when they send it; LookMark's helmet until then
-  const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo };
+  const DRAWN: Look[] = ['cheer', 'moments', 'faces', 'aichekbtu', 'crystalkbtu', 'arthousekbtu', 'choice'];
+  // the official logos we ship: this file whatever the org's avatar is
+  const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 
@@ -48,7 +50,7 @@
       radial-gradient(120% 70% at 30% 0%, rgba(255, 255, 255, 0.22), transparent 60%); }
   /* each look's metal: Cheer's gold, Knights' blue steel, the clubs' and schools' own two strap colours with a light edge */
   .cheer { --rim: linear-gradient(145deg, rgb(255, 238, 190), rgb(196, 154, 64) 45%, rgb(236, 204, 128) 62%, rgb(150, 112, 40)); }
-  .knights { --rim: linear-gradient(145deg, rgb(255, 240, 200), rgb(196, 150, 70) 45%, rgb(240, 214, 150) 62%, rgb(120, 84, 30)); } /* round 5b: gold */
+  .knights { --rim: linear-gradient(145deg, rgb(255, 255, 255), rgb(120, 158, 228) 45%, rgb(236, 243, 255) 62%, rgb(28, 66, 150)); } /* round 7: their blue steel */
   .studex { --rim: linear-gradient(145deg, rgb(255, 255, 255), rgb(214, 38, 27) 45%, rgb(255, 210, 200) 62%, rgb(23, 48, 100)); }
   .moments { --rim: linear-gradient(145deg, rgb(246, 231, 214), rgb(196, 109, 71) 45%, rgb(242, 222, 200) 62%, rgb(110, 51, 34)); }
   .faces { --rim: linear-gradient(145deg, rgb(110, 123, 255), rgb(192, 75, 255) 40%, rgb(255, 79, 154) 70%, rgb(255, 164, 61)); }

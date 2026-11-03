@@ -33,9 +33,13 @@
   {:else if look === 'crystalkbtu'}
     <!-- an ice field of facets, a prism's glint passing now and then; on the badge's band their diamond under its crown (on
          the card it is the medallion: Hero's OrgMedal) -->
-    <img class="l z far" src={L('cr-facets')} alt="" /><i class="halo"></i><span class="prw"><i class="prism"></i></span>
+    <img class="l z far" src={L('cr-facets')} alt="" /><i class="halo"></i>{#if !wide}<span class="prw"><i class="prism"></i></span>{/if}
     <!-- round 6 (owner: push it a bit further): the prism's spectrum fanning from behind the medallion, glints on the facets -->
-    {#if wide}<img class="l z near spec" src={L('cr-spectrum')} alt="" />{/if}
+    {#if wide}<img class="l z near spec" src={L('cr-spectrum')} alt="" />
+      <!-- round 7 (owner: round 6's card is better overall, the new diamond looks cool: both): a round brilliant in 3D hangs
+           under the medallion, set on its table; a star of light on its girdle now and then
+           (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
+      <img class="l z gem" src={L('cr-gem')} alt="" /><i class="spark"></i>{/if}
     {#if !wide}<span class="hero"><img src={crystal} alt="" /></span>{/if}
   {:else if look === 'spekbtu'}
     <!-- an oil field at dusk: their map's dots in the sky, the sun on the horizon, the derrick against it -->
@@ -53,8 +57,11 @@
   {:else if look === 'arthousekbtu'}
     <!-- the card (round 6, owner: round 5 was childish): an empty stage before the show, the house curtain's folds at the
          side, a grand piano lid up in one follow-spot, its light pooled on the boards. The badge's band: the stage with
-         velvet, valance, a sound wave, their wordmark and the keys at the foot -->
-    {#if wide}<img class="l z far" src={L('ah-hall')} alt="" /><span class="spw"><i class="spot"></i></span><img class="l z near" src={L('ah-piano')} alt="" />
+         velvet, valance, a sound wave, their wordmark and the keys at the foot. Round 7 (owner: direction right, still
+         mediocre): the stage drawn properly, a valance with its gold fringe across the top, the curtain tied back in gold,
+         polished boards and the footlights' glow; the piano bigger and lacquered, its keys, the spot's rim light, dust in
+         the beam -->
+    {#if wide}<img class="l z far" src={L('ah-stage')} alt="" /><span class="spw"><i class="spot"></i></span><img class="l z near" src={L('ah-grand')} alt="" />
     {:else}<i class="velvet"></i><span class="spw"><i class="spot"></i></span><i class="pool"></i>
       <img class="l z far wave" src={L('ah-wave')} alt="" /><img class="l" src={L('ah-valance')} alt="" /><img class="word" src={arthouse} alt="" /><img class="keys" src={keys} alt="" />{/if}
   {:else if look === 'qairymdylyqkbtu'}
@@ -67,15 +74,21 @@
          The badge's band: their red swept across it, the word in the middle -->
     <i class="paper"></i>
     <!-- round 5b (owner: both): round 4's red sweep across the card over round 5's brushed word in the paper -->
-    {#if wide}<img class="sw z" src={shadeWord} alt="" /><img class="l z near" src={L('sh-strokes')} alt="" /><span class="shtag">CREATIVE PEOPLE CLUB</span>
+    <!-- round 7 (owner: loves it, a bit more beautiful; their own avatar in the medallion, OrgMedal): the paper lit warm
+         from the top right, a printer's hairline frame inside the edge, a few flecks of their red where the brush flicked -->
+    {#if wide}<i class="shlight"></i><img class="sw z" src={shadeWord} alt="" /><img class="l z near" src={L('sh-strokes')} alt="" /><i class="fleck z"></i><i class="frame"></i><span class="shtag">CREATIVE PEOPLE CLUB</span>
     {:else}<img class="l z near" src={L('sh-strokes')} alt="" /><img class="word" src={shadeWord} alt="" />{/if}
   {:else if look === 'choice'}
-    <!-- Choice (round 5b, their logo): near-black navy, the gold of their shield. The card (round 6, owner: no helmet
-         twice): their logo is the medallion, the scene a gold laurel round it, the victor's wreath, sharp gold rays
-         behind; the badge's band: the whole emblem in the middle under the same light -->
-    <i class="chrays z"></i>
-    {#if wide}<img class="l lau" src={L('ch-laurel')} alt="" />
-    {:else}<img class="che" src={chEmblem} alt="" />{/if}
+    <!-- Choice (round 5b, their logo): near-black navy, the gold of their shield; the badge's band: the whole emblem in the
+         middle under the same light. The card (round 7, owner: round 5b's HUGE shield looked awesome, start from it): the
+         shield back, minted in gold, and their logo, the medallion, is its boss, so the helmet is there once. Round 7b
+         (owner: too far right, the focus unclear, more detail): the shield whole and centred on the medallion, from the
+         card's top to the strip, a burst of gold rays behind it; inside, rays from the boss, a guilloche, the Spartans'
+         lambda engraved in gold; a bevelled double rim with rivets; a light runs round the rim now and then
+         (.claude/reports/club-lanyards/round7/gen-r7-clubs.py) -->
+    {#if wide}<img class="l z chs" src={L('ch-shield')} alt="" /><span class="chglint z"><i></i></span>
+    {:else}<i class="chrays z"></i>
+      <img class="che" src={chEmblem} alt="" />{/if}
   {:else if look === 'japanesecultureclub'}
     <!-- their own layers (round 5): the pink sky with its pale sun and their shanyrak far, petals drifting over it; their
          sakura is the card's top layer, over the photo and the strip (Hero). The badge's band (MyQr) as they asked: no
@@ -124,6 +137,12 @@
 
   /* ---- Crystal: cold teal, the light from the top right ---- */
   .crystalkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(140, 240, 255, 0.35), transparent 65%), linear-gradient(160deg, rgb(10, 52, 62), rgb(14, 70, 84) 50%, rgb(5, 30, 38)); }
+  /* a 320 px phone: the card is 52 px narrower and the text keeps its width; the stone and the shield shrink round the
+     medallion's centre (40, 40 from the top right) so the role and the course line stay clear */
+  @media (max-width: 359px) {
+    .wide .gem, .wide .chs, .wide .chglint { transform-origin: calc(100% - 40px) 40px; scale: 0.88; }
+    .wide .spark { right: 67px; top: 56px; }
+  }
   .crystalkbtu:not(.wide) { background: radial-gradient(60% 80% at 50% 30%, rgba(140, 240, 255, 0.35), transparent 70%), linear-gradient(180deg, rgb(12, 62, 76), rgb(14, 70, 84)); }
   .halo { right: -37px; bottom: -4px; width: 160px; height: 132px; background: radial-gradient(closest-side, rgba(150, 245, 255, 0.5), transparent); }
   .sc:not(.wide) .halo { right: auto; left: 50%; bottom: -10px; margin-left: -80px; }
@@ -134,6 +153,14 @@
     animation: crprism 9s 1.4s cubic-bezier(.45, 0, .3, 1) infinite; }
   @keyframes crprism { 0% { transform: translateX(0) rotate(18deg); opacity: 0; } 4% { opacity: 1; } 18% { opacity: 1; } 22%, 100% { transform: translateX(560px) rotate(18deg); opacity: 0; } }
   .spec { opacity: 0.9; }
+  .gem { object-position: 100% 0; --z: 2; --zs: 1.03; } /* round the medallion: anchored to the top right, as Hero sets it */
+  /* a star of light on the girdle (the generator's point 258, 70.1), now and then: grows, turns a little, fades */
+  .spark { right: 72px; top: 60px; width: 20px; height: 20px; opacity: 0; --z: 2;
+    background: radial-gradient(circle, rgb(255, 255, 255) 0 1.5px, rgba(200, 250, 255, 0.6) 3px, transparent 60%),
+      linear-gradient(90deg, transparent 10%, rgba(255, 255, 255, 0.9) 50%, transparent 90%) center / 100% 1.2px no-repeat,
+      linear-gradient(transparent 10%, rgba(255, 255, 255, 0.9) 50%, transparent 90%) center / 1.2px 100% no-repeat;
+    animation: crspark 7s 2s ease-in-out infinite; }
+  @keyframes crspark { 0%, 70% { opacity: 0; transform: scale(0.3) rotate(0deg); } 80% { opacity: 1; transform: scale(1) rotate(30deg); } 92%, 100% { opacity: 0; transform: scale(0.4) rotate(60deg); } }
   .crystalkbtu.wide .far { -webkit-mask: linear-gradient(90deg, transparent 22%, black 62%); mask: linear-gradient(90deg, transparent 22%, black 62%); } /* the ice away from the text */
   /* the diamond, big, cut by the right edge, the crown under the QR's corner; near with the tilt */
   .hero { position: absolute; }
@@ -185,7 +212,7 @@
   .velvet { inset: 0; opacity: 0.55; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0 4px, rgba(255, 80, 100, 0.08) 9px, rgba(0, 0, 0, 0.35) 14px);
     -webkit-mask: linear-gradient(90deg, black, transparent 30% 70%, black); mask: linear-gradient(90deg, black, transparent 30% 70%, black); }
   /* one warm spotlight from above, swaying a little as a follow-spot does */
-  .spw { position: absolute; right: -57px; top: -20px; width: 200px; height: calc(100% - 20px); transform-origin: 50% 0; animation: ahspot 14s ease-in-out infinite alternate; }
+  .spw { position: absolute; right: -40px; top: -20px; width: 200px; height: calc(100% - 20px); transform-origin: 50% 0; animation: ahspot 14s ease-in-out infinite alternate; }
   .spot { inset: 0; background: linear-gradient(180deg, rgba(255, 214, 150, 0.32), rgba(255, 200, 130, 0.12) 85%, transparent); clip-path: polygon(46% 0, 54% 0, 80% 100%, 20% 100%); }
   @keyframes ahspot { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
   .sc:not(.wide) .spw { right: auto; left: 50%; margin-left: -100px; }
@@ -211,6 +238,11 @@
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .45 0 0 0 0 .35 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"); }
   .shadekbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(120, 60, 40, 0.12); }
   .sw { left: 4%; top: 50%; width: 104%; margin-top: -46px; opacity: 0.2; transform: rotate(-5deg); mix-blend-mode: multiply; --z: -2; --zs: 1.03; }
+  .shlight { inset: 0; background: radial-gradient(70% 90% at 92% 8%, rgba(255, 250, 238, 0.85), transparent 60%), radial-gradient(60% 60% at 0% 100%, rgba(150, 90, 50, 0.12), transparent 70%); }
+  .fleck { inset: 0; --z: 3; background: radial-gradient(circle at 63% 30%, rgba(200, 0, 0, 0.75) 0 1.2px, transparent 1.8px), radial-gradient(circle at 66% 24%, rgba(200, 0, 0, 0.6) 0 0.8px, transparent 1.3px),
+    radial-gradient(circle at 71% 34%, rgba(200, 0, 0, 0.5) 0 0.7px, transparent 1.2px), radial-gradient(circle at 58% 70%, rgba(200, 0, 0, 0.55) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 92% 64%, rgba(200, 0, 0, 0.6) 0 1.4px, transparent 2px), radial-gradient(circle at 95% 58%, rgba(200, 0, 0, 0.45) 0 0.7px, transparent 1.2px); }
+  .frame { inset: 5px; border-radius: var(--r-m); box-shadow: inset 0 0 0 0.6px rgba(200, 0, 0, 0.28); }
   .shtag { position: absolute; left: 18px; top: 10px; display: flex; gap: 6px; font: 800 6.5px/1 var(--font-text); letter-spacing: 0.2em; color: rgb(200, 0, 0); opacity: 0.85; }
   .shadekbtu .word { top: 30px; height: 56px; }
 
@@ -218,12 +250,18 @@
   .choice { background: radial-gradient(46% 80% at calc(100% - 45px) 30%, rgba(226, 188, 114, 0.26), transparent 70%), radial-gradient(70% 90% at 0% 0%, rgba(70, 80, 140, 0.28), transparent 62%),
     linear-gradient(160deg, rgb(30, 35, 64), rgb(20, 22, 35) 55%, rgb(7, 8, 15)); }
   .sc:not(.wide).choice { background: radial-gradient(60% 90% at 50% 0%, rgba(226, 188, 114, 0.26), transparent 70%), linear-gradient(180deg, rgb(30, 35, 64), rgb(20, 22, 35)); }
-  .chrays { inset: -40px; --z: -3; opacity: 0.9; /* from behind the medallion (round 6: the laurel's centre) */
+  .chrays { inset: -40px; --z: -3; opacity: 0.7; /* from behind the medallion (round 6: the laurel's centre) */
     background: repeating-conic-gradient(from 0deg at calc(100% - 85px) 80px, rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
     -webkit-mask: radial-gradient(70% 90% at calc(100% - 85px) 80px, black, transparent 75%); mask: radial-gradient(70% 90% at calc(100% - 85px) 80px, black, transparent 75%); }
   .sc:not(.wide) .chrays { background: repeating-conic-gradient(from 0deg at 50% 60%, rgba(226, 188, 114, 0.12) 0deg 1.2deg, transparent 1.2deg 14deg);
     -webkit-mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); mask: radial-gradient(60% 90% at 50% 60%, black, transparent 75%); }
-  .lau { object-position: 100% 0; } /* round its medallion: anchored to the card's top right, as Hero sets the medallion */
+  .chs { object-position: 100% 0; --z: 1; --zs: 1.02; } /* round its medallion: anchored to the card's top right, as Hero sets the medallion */
+  /* the light running round the rim: a soft band moving across, seen only through the rim (ch-rim-card.svg as a mask) */
+  .chglint { position: absolute; inset: 0; overflow: hidden; --z: 1; --zs: 1.02;
+    -webkit-mask: url('../assets/lanyards/scenes/ch-rim-card.svg') 100% 0 / auto 100% no-repeat; mask: url('../assets/lanyards/scenes/ch-rim-card.svg') 100% 0 / auto 100% no-repeat; }
+  .chglint i { left: 50%; top: -20%; width: 30px; height: 140%; opacity: 0; transform: translateX(-60px) rotate(20deg);
+    background: linear-gradient(90deg, transparent, rgb(255, 252, 240) 40% 60%, transparent); animation: chglint 9s 1.5s cubic-bezier(.45, 0, .3, 1) infinite; }
+  @keyframes chglint { 0% { opacity: 0; transform: translateX(-60px) rotate(20deg); } 6% { opacity: 1; } 26% { opacity: 1; } 32%, 100% { opacity: 0; transform: translateX(200px) rotate(20deg); } }
   .che { left: 50%; top: 14px; height: 100px; transform: translateX(-50%); filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)); }
   .choice .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.08), transparent 65%); box-shadow: inset 0 1px 0 rgba(226, 188, 114, 0.35); }
 
@@ -237,8 +275,9 @@
   .japanesecultureclub .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.3), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(90, 30, 60, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals { animation: none; } .win { opacity: 0.6; } .spark, .chglint { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, :global(html.lowfx) .win,
   :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals { animation: none; }
   :global(html.lowfx) .win { opacity: 0.6; }
+  :global(html.lowfx) .spark, :global(html.lowfx) .chglint { display: none; }
 </style>
