@@ -65,8 +65,7 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
   faces: { avatar: string | null; name: string }[]
   /** Telegram's top reactions on the channel post; a custom emoji as "custom:<id>", a paid one as "paid" */
   reactions: { emoji: string; n: number }[]
-  hot: boolean /* being discussed: 5+ students' comments in the last hour */
-  top: boolean /* popular today: one of the 3 most discussed posts of the day (3+ people besides its author); shown first */ }
+  talking: number /* people commenting on it today, its author too (0: fewer than 3); a quiet chip, never a reorder */ }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null; undo?: boolean };
