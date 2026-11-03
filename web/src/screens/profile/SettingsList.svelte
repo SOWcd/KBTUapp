@@ -26,6 +26,7 @@
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Info from '@lucide/svelte/icons/info';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import { api, ApiErr, type Me, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase } from '../../lib/state/data.svelte';
@@ -262,6 +263,8 @@
     <Group>
       {#if me?.student}<Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />{/if}
       <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
+      <!-- the voluntary support page: this row is its only way in, no banners or reminders anywhere (donate-review.md) -->
+      {#if me?.donate}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
 </div>

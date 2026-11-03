@@ -1681,6 +1681,11 @@ const en: Dict = {
   'set.on': "On",
   'set.off': "Off",
   'set.about': "About the app",
+  'set.donate': "Support the app",
+  'don.head': "This is not a purchase",
+  'don.text': "Nothing is given for a transfer: no badges, no status. The app is free and the same for everyone. It's voluntary — only if you want to. If you don't, don't send.",
+  'don.bank': "Kaspi · transfer by number",
+  'don.safe': "We never ask for money in messages, in the bot or in channels. This number is only here.",
   'psy.kbtu': "A KBTU psychologist",
   'me.psychBook': "Book",
   // the academic calendar (SPEC §4.11)
