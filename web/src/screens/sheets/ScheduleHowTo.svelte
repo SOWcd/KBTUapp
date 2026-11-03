@@ -14,6 +14,8 @@
   import { haptic, onAndroid, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
+  import Group from '../../ui/Group.svelte';
+  import Row from '../../ui/Row.svelte';
 
   let { overlay, addLang = false }: { overlay: Overlay; addLang?: boolean } = $props();
   const PORTAL = 'https://uninet.kbtu.kz/student/schedule';
@@ -41,19 +43,22 @@
 
 <Sheet {overlay} title={t(addLang ? 'sched.addLang' : 'sched.howTitle')} icon={CalendarDays}>
   <p class="t-callout lead">{t(addLang ? 'sched.langLead' : 'sched.howLead')}</p>
-  {#each order as os (os)}
-    <h3 class="t-cap cap">{t(`sched.${os}`)}</h3>
-    {#if os === 'iphone'}
-      <div class="how">
-        <!-- muted + playsinline: iOS plays it in place; play() comes from use:autoplay -->
-        <video class="phone" src="howto/schedule-iphone.mp4" poster="howto/schedule-iphone.jpg" muted loop playsinline preload="auto"
-          disablepictureinpicture aria-label={t('sched.video')} use:autoplay={top}></video>
-        <ol class="steps">{#each steps(os) as s, i (i)}<li><b class="num">{i + 1}</b><span>{s}</span></li>{/each}</ol>
-      </div>
-    {:else}
-      <ol class="steps surface">{#each steps(os) as s, i (i)}<li><b class="num">{i + 1}</b><span>{s}</span></li>{/each}</ol>
-    {/if}
-  {/each}
+  <div class="oss">
+    {#each order as os (os)}
+      <Group caption={t(`sched.${os}`)}>
+        {#if os === 'iphone'}
+          <div class="how">
+            <!-- muted + playsinline: iOS plays it in place; play() comes from use:autoplay -->
+            <video class="phone" src="howto/schedule-iphone.mp4" poster="howto/schedule-iphone.jpg" muted loop playsinline preload="auto"
+              disablepictureinpicture aria-label={t('sched.video')} use:autoplay={top}></video>
+            <ol class="steps">{#each steps(os) as s, i (i)}<li><b class="num">{i + 1}</b><span>{s}</span></li>{/each}</ol>
+          </div>
+        {:else}
+          {#each steps(os) as s, i (i)}<Row dense title={s}>{#snippet lead()}<b class="n num">{i + 1}</b>{/snippet}</Row>{/each}
+        {/if}
+      </Group>
+    {/each}
+  </div>
   <p class="t-foot note">{t('sched.privacy')}</p>
   {#snippet footer()}
     <div class="acts btns">
@@ -63,21 +68,17 @@
 </Sheet>
 
 <style>
-  .lead { color: var(--text-2); margin: 4px 0 0; }
-  /* the names as their makers write them: iPhone, not IPHONE */
-  .cap { margin: 20px 4px 8px; text-transform: none; letter-spacing: 0.01em; }
-  .how { display: grid; grid-template-columns: minmax(0, 132px) 1fr; gap: 14px; align-items: center; padding: 12px; border-radius: var(--r-l);
-    background: var(--surface); }
+  .lead { color: var(--text-2); margin: var(--s-1) 0 0; }
+  .oss { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-5); }
+  .how { display: grid; grid-template-columns: minmax(0, 132px) 1fr; gap: 14px; align-items: center; padding: var(--s-3); }
   /* the recording in a phone's outline: rounded like the screen it came from */
-  .phone { width: 100%; aspect-ratio: 590 / 1278; border-radius: 18px; background: #000; object-fit: cover;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 14%, transparent), 0 10px 30px rgba(0, 0, 0, 0.35); }
-  .steps { list-style: none; margin: 0; padding: 4px 0; border-radius: var(--r-l); }
-  .how .steps { padding: 0; }
-  .steps li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
-  .how .steps li { padding: 9px 0; }
-  .steps li + li { border-top: 1px solid var(--line); }
-  .steps b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); font: 700 13px/1 var(--font-text); }
-  .steps span { font: 520 var(--fs-sub)/1.3 var(--font-text); }
-  .note { margin: 14px 4px 0; }
-  .acts { display: flex; gap: 8px; }
+  .phone { width: 100%; aspect-ratio: 590 / 1278; border-radius: var(--r-m); background: #000; object-fit: cover;
+    box-shadow: 0 0 0 3px var(--line-2), 0 10px 30px rgba(0, 0, 0, 0.35); }
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { display: flex; align-items: center; gap: var(--s-3); padding: 9px 0; }
+  .steps li + li { box-shadow: inset 0 0.5px 0 var(--separator); }
+  .n, .steps b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); font: 700 var(--fs-sub)/1 var(--font-text); }
+  .steps span { font: 500 var(--fs-sub)/1.3 var(--font-text); }
+  .note { margin: 14px var(--s-1) 0; }
+  .acts { display: flex; }
 </style>

@@ -399,14 +399,6 @@
   "weight": 0,
   "legacy": 51
  },
- "screens/sheets/AcademicSheet.svelte": {
-  "font": 4,
-  "radius": 1,
-  "hex": 1,
-  "mix": 0,
-  "weight": 2,
-  "legacy": 0
- },
  "screens/sheets/AnswersSheet.svelte": {
   "font": 2,
   "radius": 2,
@@ -423,22 +415,6 @@
   "weight": 7,
   "legacy": 0
  },
- "screens/sheets/ChatsSheet.svelte": {
-  "font": 4,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
-  "legacy": 0
- },
- "screens/sheets/ClubSheet.svelte": {
-  "font": 8,
-  "radius": 1,
-  "hex": 1,
-  "mix": 0,
-  "weight": 6,
-  "legacy": 0
- },
  "screens/sheets/CommentsSheet.svelte": {
   "font": 11,
   "radius": 4,
@@ -446,14 +422,6 @@
   "mix": 1,
   "weight": 5,
   "legacy": 1
- },
- "screens/sheets/CreateClubSheet.svelte": {
-  "font": 7,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
-  "legacy": 2
  },
  "screens/sheets/EventSheet.svelte": {
   "font": 36,
@@ -480,12 +448,12 @@
   "legacy": 0
  },
  "screens/sheets/LoginSheet.svelte": {
-  "font": 4,
+  "font": 0,
   "radius": 0,
   "hex": 6,
-  "mix": 1,
-  "weight": 4,
-  "legacy": 3
+  "mix": 0,
+  "weight": 0,
+  "legacy": 0
  },
  "screens/sheets/PaySheet.svelte": {
   "font": 6,
@@ -497,26 +465,10 @@
  },
  "screens/sheets/PcSheet.svelte": {
   "font": 0,
-  "radius": 1,
+  "radius": 0,
   "hex": 1,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
- },
- "screens/sheets/PeopleSheet.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 0,
-  "legacy": 0
- },
- "screens/sheets/PersonSheet.svelte": {
-  "font": 7,
-  "radius": 1,
-  "hex": 0,
-  "mix": 0,
-  "weight": 5,
   "legacy": 0
  },
  "screens/sheets/PhotoViewer.svelte": {
@@ -535,36 +487,12 @@
   "weight": 1,
   "legacy": 0
  },
- "screens/sheets/RosterAsk.svelte": {
-  "font": 1,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 0
- },
- "screens/sheets/RosterWelcome.svelte": {
-  "font": 3,
-  "radius": 0,
-  "hex": 0,
-  "mix": 1,
-  "weight": 2,
-  "legacy": 0
- },
- "screens/sheets/RoundApply.svelte": {
-  "font": 13,
-  "radius": 0,
-  "hex": 1,
-  "mix": 0,
-  "weight": 9,
-  "legacy": 2
- },
  "screens/sheets/ScheduleHowTo.svelte": {
-  "font": 1,
-  "radius": 1,
+  "font": 0,
+  "radius": 0,
   "hex": 1,
-  "mix": 1,
-  "weight": 1,
+  "mix": 0,
+  "weight": 0,
   "legacy": 0
  },
  "screens/sheets/Stories.svelte": {
@@ -574,14 +502,6 @@
   "mix": 1,
   "weight": 3,
   "legacy": 0
- },
- "screens/sheets/SuggestChat.svelte": {
-  "font": 0,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 1,
-  "legacy": 1
  },
  "screens/sheets/TicketView.svelte": {
   "font": 4,
@@ -597,14 +517,6 @@
   "hex": 9,
   "mix": 6,
   "weight": 2,
-  "legacy": 0
- },
- "screens/sheets/WeekSheet.svelte": {
-  "font": 5,
-  "radius": 0,
-  "hex": 0,
-  "mix": 0,
-  "weight": 3,
   "legacy": 0
  },
  "ui/AiBadge.svelte": {
