@@ -36,6 +36,8 @@
   import { compact } from '../../lib/chats';
   import { TAB_ICON } from '../../ui/icons';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Button from '../../ui/Button.svelte';
 
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
@@ -141,7 +143,6 @@
 
   // someone else's post: ⋯ → Report (the app's report sheet; into the admin's queue, whose it is stays hidden)
   function more(e: MouseEvent, p: ChannelFeedPost) {
-    haptic.tap();
     menu(e.currentTarget as Element, [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
   }
 
@@ -185,13 +186,13 @@
               <span class="when">{ago(p.at)}</span>
               {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
               {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
-              {#if p.mine && p.id > 0}<button class="del" aria-label={t('fc.delete')} onclick={() => drop(p)}><Trash2 size={16} strokeWidth={2} /></button>
-              {:else if live && !p.mine}<button class="del" aria-label={t('common.more')} onclick={(e) => more(e, p)}><Ellipsis size={18} strokeWidth={2} /></button>{/if}
+              {#if p.mine && p.id > 0}<span class="del"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
+              {:else if live && !p.mine}<span class="del"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
             </div>
             <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
             <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
             {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
-            {#if long[p.id] && !open[p.id]}<button class="more" onclick={() => { haptic.tap(); open[p.id] = true; }}>{t('common.more')}</button>{/if}
+            {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
             {#if live}
               <div class="acts">
                 <!-- Telegram's reactions, plain emoji and counts; none yet: a small heart. To the channel, where they are left -->
@@ -269,11 +270,11 @@
   .main { min-width: 0; }
   /* name · time, my mark, delete: one line */
   .head { display: flex; align-items: baseline; gap: 6px; min-height: 20px; margin-top: 1px; }
-  .head b { font: 650 var(--fs-body)/1.3 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
+  .head b { font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .name { display: flex; min-width: 0; padding: 0; text-align: left; }
   .head > .name, .head > b { flex-shrink: 0; max-width: 62%; } /* the name keeps its room; the mark gives way */
   .name:active { opacity: 0.6; }
-  .when, .mk { flex: none; font: 400 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
+  .when, .mk { flex: none; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
   .mk { flex-shrink: 10; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* at 320 the mark gives way before the name */
   .mk::before { content: '·'; margin-right: 6px; color: var(--text-3); }
   .chk { position: relative; height: 3px; margin-top: var(--s-2); border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
@@ -283,9 +284,7 @@
   .mk.accent { color: var(--accent-text); }
   .mk.warning { color: var(--warning-text); }
   .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */
-  .del { align-self: center; margin: -12px -12px -12px auto; width: 44px; height: 44px; display: grid; place-items: center; flex: none;
-    color: var(--text-3); border-radius: 50%; }
-  .del:active { color: var(--danger-text); }
+  .del { align-self: center; display: flex; flex: none; margin: -8px -8px -8px auto; --plain-ink: var(--text-3); }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
   .tx { margin-top: 2px; font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
@@ -293,7 +292,7 @@
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
   .tx.open { max-height: var(--h); }
   .post.off .tx { color: var(--text-3); }
-  .more { margin-top: 2px; padding: var(--s-1) 0; font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .more { display: flex; margin: 0 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-2); }
 
   /* the row under the words, on the words' edges, quiet: the reactions left, the talk right (under the thumb); no
      fills, a press only dims; 44 high to hit, the air around the marks is the target */

@@ -8,6 +8,8 @@
   import Sheet from '../../ui/Sheet.svelte';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Button from '../../ui/Button.svelte';
+  import Field from '../../ui/Field.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
   import SkillPicker from './SkillPicker.svelte';
 
   let { overlay, onmade }: { overlay: Overlay; onmade?: () => void } = $props();
@@ -27,22 +29,28 @@
 </script>
 
 <Sheet {overlay} icon={SquarePen} full title={t('fo.newAsk')}>
-  <div class="seg kinds" role="tablist">
-    {#each ['project', 'help'] as const as k (k)}<button class:on={kind === k} onclick={() => (kind = k)}>{t(`fo.kind.${k}`)}</button>{/each}
+  <div class="col">
+    <div>
+      <Segmented items={(['project', 'help'] as const).map((k) => ({ value: k, label: t(`fo.kind.${k}`) }))} bind:value={kind} label={t('fo.newAsk')} />
+      <p class="note">{t(`fo.kindNote.${kind}`)}</p>
+    </div>
+    <Field label={t('fo.askTitle')} bind:value={title} maxlength={80} placeholder={t(`fo.askTitlePh.${kind}`)} />
+    <Field label={t('fo.askBody')} bind:value={body} maxlength={500} multiline rows={4} />
+    <!-- a form's own small label, as Field's (the picker and the switch aren't Fields) -->
+    <div>
+      <h3 class="lb">{t(kind === 'project' ? 'fo.askSkills' : 'fo.askSkillsOpt')}</h3>
+      <SkillPicker bind:chosen={skills} max={3} />
+    </div>
+    <div>
+      <h3 class="lb">{t('fo.days')}</h3>
+      <Segmented items={([1, 3, 7, 30] as const).map((d) => ({ value: d, label: tn('fo.dayN', d) }))} bind:value={days} label={t('fo.days')} />
+    </div>
   </div>
-  <p class="t-foot note">{t(`fo.kindNote.${kind}`)}</p>
-  <label class="field"><span class="t-cap">{t('fo.askTitle')}</span><input bind:value={title} maxlength="80" placeholder={t(`fo.askTitlePh.${kind}`)} /></label>
-  <label class="field"><span class="t-cap">{t('fo.askBody')}</span><textarea bind:value={body} maxlength="500" rows="4"></textarea></label>
-  <h3 class="t-cap cap">{t(kind === 'project' ? 'fo.askSkills' : 'fo.askSkillsOpt')}</h3>
-  <SkillPicker bind:chosen={skills} max={3} />
-  <h3 class="t-cap cap">{t('fo.days')}</h3>
-  <div class="seg" role="tablist">{#each [1, 3, 7, 30] as const as d (d)}<button class:on={days === d} onclick={() => (days = d)}>{tn('fo.dayN', d)}</button>{/each}</div>
   {#snippet footer()}<Button kind="primary" size="l" full loading={busy} disabled={!ok} onclick={send}>{t('fo.post')}</Button>{/snippet}
 </Sheet>
 
 <style>
-  .kinds { margin-top: 4px; }
-  .note { margin: 8px 4px 14px; }
-  .field { margin-bottom: 10px; }
-  .cap { margin: 16px 4px 0; }
+  .col { display: flex; flex-direction: column; gap: var(--s-4); padding-top: var(--s-1); }
+  .note { margin: var(--s-2) var(--s-4) 0; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .lb { margin-bottom: 6px; padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
 </style>

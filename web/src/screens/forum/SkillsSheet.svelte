@@ -21,10 +21,11 @@
 </script>
 
 <Sheet {overlay} icon={Wrench} tall title={t('fo.mySkills')}>
-  <p class="t-foot">{t('fo.mySkillsNote')}</p>
+  <p class="note">{t('fo.mySkillsNote')}</p>
   <SkillPicker bind:chosen max={5} />
   {#snippet footer()}<Button kind="primary" size="l" full loading={busy} onclick={save}>{t('common.save')}</Button>{/snippet}
 </Sheet>
 
 <style>
+  .note { margin: 0 var(--s-4) var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
 </style>
