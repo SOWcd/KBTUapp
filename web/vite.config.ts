@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -35,11 +36,38 @@ function preloads(): Plugin {
   };
 }
 
+// The sheets a tap opens anywhere and the map are chunks. V8 compiles a function only on its first call,
+// so the first open of each paid for compiling the whole sheet inside the tap (~40 ms at 4x CPU of a ~140 ms task).
+// Chrome's explicit compile hint has them compiled as the chunk loads, ahead of the tap; other engines ignore the line.
+function compileHints(names: RegExp): Plugin {
+  return {
+    name: 'kb-compile-hints',
+    apply: 'build',
+    generateBundle(_o, bundle) {
+      for (const c of Object.values(bundle)) if (c.type === 'chunk' && names.test(c.name)) c.code = '//# allFunctionsCalledOnLoad\n' + c.code;
+    },
+  };
+}
+
+// every lucide icon renders through our ui/LucideIcon.svelte: the same SVG, a third of a tab's build time less
+function lucideIcon(): Plugin {
+  const to = fileURLToPath(new URL('./src/ui/LucideIcon.svelte', import.meta.url));
+  return {
+    name: 'kb-lucide-icon',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === '../Icon.svelte' && importer && /[\\/]@lucide[\\/]svelte[\\/]dist[\\/]icons[\\/]/.test(importer)) return to;
+    },
+  };
+}
+
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [svelte(), preloads()],
+  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|CampusMap)$/)],
   server: { host: true, port: 5180 },
+  // not prebundled in dev, so the dev server's icons go through ui/LucideIcon.svelte too (plugins don't run in a prebundle)
+  optimizeDeps: { exclude: ['@lucide/svelte'] },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

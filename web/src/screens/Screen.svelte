@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import Qr from '../ui/Qr.svelte';
+  import '../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../ui/KbtuMark.svelte';
   import { QR_TONE } from '../lib/awards';
   import { t } from '../lib/i18n/index.svelte';

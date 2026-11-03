@@ -15,6 +15,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import Link from '@lucide/svelte/icons/link';
   import Button from '../../ui/Button.svelte';
+  import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import Avatar from '../../ui/Avatar.svelte';
   import { session } from '../../lib/state/session.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';

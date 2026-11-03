@@ -54,6 +54,15 @@
       awards: { achievements: [], badges: [] }, friendship, friendsSince: friendship === 'friends' ? row.at : null, going: [] };
   });
   const me = $derived(session.me?.id === id);
+  // the card lands in two steps: the badge, then (a task later, the skeleton under it meanwhile) the lists below it;
+  // both at once were one long task in the middle of the sheet's rise
+  let below = $state(false);
+  $effect(() => {
+    if (!p || below) return;
+    let k = 0;
+    const f = requestAnimationFrame(() => (k = setTimeout(() => (below = true)) as unknown as number));
+    return () => { cancelAnimationFrame(f); clearTimeout(k); };
+  });
   // what they picked for their showcase leads, in their order; the rest after it as the server lists them
   function showcaseFirst<T>(list: T[], key: (x: T) => string): T[] {
     const pick = shown?.shelf ?? [];
@@ -158,7 +167,7 @@
 
     {#if !p && failed}
       <p class="t-body dim pad">{failed}</p>
-    {:else if !p}
+    {:else if !p || !below}
       <div class="skel" aria-hidden="true"><span class="s2"></span><span class="s3"></span></div>
     {:else}
     <!-- everything they have earned, right under the card: achievements with their level, then badges; what they haven't earned yet stays on their own Awards page -->

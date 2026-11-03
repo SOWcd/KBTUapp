@@ -5,6 +5,7 @@
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
   import Qr from '../ui/Qr.svelte';
+  import '../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import { QR_TONE } from '../lib/awards';
   import { t } from '../lib/i18n/index.svelte';
 
