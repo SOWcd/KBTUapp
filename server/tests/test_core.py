@@ -1044,7 +1044,7 @@ def test_invite_cards(env, monkeypatch):
     url = card["reply_markup"]["inline_keyboard"][0][0]["url"]
     code = c.get("/api/me", headers=A).json()["referrals"]["code"]
     assert card["type"] == "article" and url.endswith(f"startapp=r_{code}")            # an older app's "fr": the one invite link
-    assert card["reply_markup"]["inline_keyboard"][0][0]["text"] == "\U0001f91d \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 \u0434\u0440\u0443\u0437\u044c\u044f \u0432 KBTU App"
+    assert card["reply_markup"]["inline_keyboard"][0][0]["text"] == "\U0001f91d \u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0432 \u0434\u0440\u0443\u0437\u044c\u044f"
     assert "http" not in card["input_message_content"]["message_text"] and "Ali T" in card["input_message_content"]["message_text"]
     assert c.post("/api/share", headers=A, json={"kind": "join", "id": 1}).status_code == 200
     assert "startapp=join_1_" in sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"]

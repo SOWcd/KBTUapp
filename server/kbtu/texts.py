@@ -26,9 +26,9 @@ SHARE_EVENT = {
 
 # Invites shared from the app (no bare links in chats — a line of text and our bot's button under it)
 SHARE_REFER = {  # my one invite link (Nov 2): a tap on its landing makes us friends; a newcomer counts for me once signed in
-    "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья в KBTU App — увидите, кто куда идёт. Все события, клубы и друзья КБТУ в одном месте.", "🤝 Добавить в друзья в KBTU App"),
-    "kk": ("Дос бол", "👋 <b>{name}</b> сені KBTU App-та досқа шақырады — кім қайда баратынын көресіңдер. ҚБТУ-дің барлық іс-шаралары, клубтары мен достары бір жерде.", "🤝 KBTU App-та досқа қосу"),
-    "en": ("Be my friend", "👋 <b>{name}</b> invites you to be friends on KBTU App — you'll see where each other is going. KBTU's events, clubs and friends in one place.", "🤝 Add as a friend on KBTU App"),
+    "ru": ("Добавляйся в друзья", "👋 <b>{name}</b> зовёт тебя в друзья!\n\n👀 Смотри, кто куда идёт\n🎟 Все события и клубы КБТУ", "🤝 Добавить в друзья"),
+    "kk": ("Дос бол", "👋 <b>{name}</b> сені досқа шақырады!\n\n👀 Кім қайда баратынын көр\n🎟 ҚБТУ-дің барлық іс-шаралары мен клубтары", "🤝 Досқа қосу"),
+    "en": ("Be my friend", "👋 <b>{name}</b> wants to be friends!\n\n👀 See who's going where\n🎟 All KBTU events and clubs", "🤝 Add friend"),
 }
 SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 Тебя назначают президентом <b>{club}</b> в KBTU App. Открой и войди через KBTU — ссылка одноразовая, работает 7 дней.", "Стать президентом"),
