@@ -134,8 +134,18 @@
     for (let k = 0; k < 30; k++) { const m = (lo + hi) / 2; if (at(y1, y2, m) < 0.5) lo = m; else hi = m; }
     return at(x1, x2, lo);
   })();
+  // the back draws the lanyard's art a second time: it is mounted once the face is up and the page idle, not in the
+  // profile's first frame (a tap before that mounts it with the turn)
+  let backed = $state(false);
+  $effect(() => {
+    if (!mine || untrack(() => backed)) return;
+    const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 300)), stop = window.cancelIdleCallback ?? clearTimeout;
+    const id = idle(() => (backed = true), { timeout: 1500 });
+    return () => stop(id);
+  });
   function flip(to: boolean) {
     if (spinning || flipped === to) return;
+    backed = true;
     haptic.soft();
     flipped = to;
     side = to; // the class at rest; while turning, the animations below hold each side's visibility until EDGE
@@ -216,8 +226,8 @@
          the medallion the button that turns the card face on -->
     {#if mine}
       <div class="back" onclick={backTap} role="presentation" inert={!flipped}>
-        <CardBack look={face} name={h.name} title={h.title} line={h.line} no={h.no} text={link} lazy logo={medalLogo}
-          onplate={() => sheets.myQr(link, p)} plateLabel={t('me.qr')} onmedal={() => flip(false)} medalLabel={t('me.cardFront')} />
+        {#if backed}<CardBack look={face} name={h.name} title={h.title} line={h.line} no={h.no} text={link} lazy logo={medalLogo}
+          onplate={() => sheets.myQr(link, p)} plateLabel={t('me.qr')} onmedal={() => flip(false)} medalLabel={t('me.cardFront')} />{/if}
         <i class="bshade" bind:this={bshade} aria-hidden="true"></i>
       </div>
     {/if}
