@@ -63,6 +63,9 @@
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .sower { --role: rgb(212, 218, 232); }
   .sw-gold { --role: rgb(232, 196, 120); }
+  /* no tilt reaches the back (the face's glass writes --gx): its depth layers stand still, so they are painted with the
+     side, not each kept as a layer of its own */
+  .cb :global(.z) { will-change: auto; }
   .slot { position: absolute; z-index: 1; top: 9px; left: 50%; width: 46px; height: 8px; margin-left: -23px; border-radius: 4px;
     background: rgba(5, 8, 20, 0.55); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.16); }
   /* the plate: white, the code's own quiet zone in it; the size a door's scanner reads from a phone */
