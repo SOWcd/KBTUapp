@@ -5,7 +5,6 @@
   // 👍/👎 (on 👎, the student may send that one question and answer); when the server sees distress, its fixed help card
   // with the helplines (review, Oct 31: nothing of it is kept or sent by us; the student calls or writes themselves).
   import { untrack } from 'svelte';
-  import SendHorizontal from '@lucide/svelte/icons/send-horizontal';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
@@ -21,10 +20,13 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { PSYCHOLOGIST } from '../../lib/academic';
-  import { grow } from '../../ui/grow';
   import Sheet from '../../ui/Sheet.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Emoji from '../../ui/Emoji.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import Composer from '../../ui/Composer.svelte';
 
   // ctx: opened from a card's "Ask AI" (an event, a club); another card, or none, starts a fresh conversation
   let { overlay, ctx }: { overlay: Overlay; ctx?: AskCtx } = $props();
@@ -42,7 +44,6 @@
   async function ask(q: string) {
     q = q.trim();
     if (!q || busy) return;
-    haptic.tap();
     const history = chat.turns.filter((m) => m.text).slice(-6).map(({ role, text }) => ({ role, text }));
     chat.turns.push({ role: 'user', text: q });
     draft = ''; busy = true;
@@ -57,18 +58,17 @@
       if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
     } finally { busy = false; }
   }
-  const key = (ev: KeyboardEvent) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void ask(draft); } };
   const label = (a: NonNullable<Turn['actions']>[number]) => a.type === 'map' ? t('as.onMap', { room: a.room }) : eventById(a.id)?.title ?? t('as.event');
-  const go = (a: NonNullable<Turn['actions']>[number]) => { haptic.tap(); if (a.type === 'map') sheets.map(a.room); else sheets.event(a.id); };
+  const go = (a: NonNullable<Turn['actions']>[number]) => { if (a.type === 'map') sheets.map(a.room); else sheets.event(a.id); };
   // optimistic: the tap shows at once; a failed call quietly takes it back
   function vote(m: Turn, v: 'up' | 'down') {
     if (m.vote || !m.mark) return;
-    haptic.select(); m.vote = v;
+    m.vote = v;
     api.assistantVote(m.mark, v).catch((e) => { if (!(e instanceof ApiErr && e.code === 'conflict')) m.vote = undefined; }); // conflict: counted already
   }
   function send(m: Turn) {
     if (m.sent || !m.q || !m.mark || !m.pair) return;
-    haptic.tap(); m.sent = true;
+    m.sent = true;
     api.assistantSend(m.mark, m.pair, m.q, m.text).catch((e) => {
       m.sent = false; haptic.error();
       say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'as.sendFull' : 'common.error'), 'pleading_face_3d'); // past the day's cap: not kept, said so
@@ -82,8 +82,8 @@
       <div class="hello">
         <span class="orb" aria-hidden="true"><Emoji name="sparkles_3d" size={44} /></span>
         {#if chat.ctx}<h2 class="t-h2 clamp-2">{t('as.about', { title: chat.ctx.title })}</h2>
-        {:else}<h2 class="t-h2">{t('as.hello')}</h2><p class="t-callout">{t('as.helloText')}</p>{/if}
-        <div class="sugg">{#each SUGGEST as k, i (k)}<button style="--i:{i}" onclick={() => ask(t(k))}>{t(k)}</button>{/each}</div>
+        {:else}<h2 class="t-h2">{t('as.hello')}</h2><p class="hi">{t('as.helloText')}</p>{/if}
+        <div class="sugg">{#each SUGGEST as k (k)}<Chip selected={false} onclick={() => { haptic.tap(); void ask(t(k)); }}>{t(k)}</Chip>{/each}</div>
       </div>
     {:else if chat.ctx}
       <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
@@ -94,19 +94,22 @@
           <p class="selectable">{m.text}</p>
           {#if m.actions?.length}
             <div class="acts">{#each m.actions as a, k (k)}
-              <button onclick={() => go(a)}>{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}<span class="ellipsis">{label(a)}</span></button>
+              <Button kind="tinted" size="s" onclick={() => go(a)}>
+                {#snippet icon()}{#if a.type === 'map'}<MapPin size={15} />{:else}<CalendarDays size={15} />{/if}{/snippet}
+                {label(a)}
+              </Button>
             {/each}</div>
           {/if}
         </div>
       {/if}
       {#if m.mark && !m.care}
         <div class="rate">
-          <button class:on={m.vote === 'up'} disabled={!!m.vote} aria-label={t('as.good')} onclick={() => vote(m, 'up')}><ThumbsUp size={15} /></button>
-          <button class:on={m.vote === 'down'} disabled={!!m.vote} aria-label={t('as.bad')} onclick={() => vote(m, 'down')}><ThumbsDown size={15} /></button>
+          <IconButton kind="plain" size="s" icon={ThumbsUp} label={t('as.good')} on={m.vote === 'up'} disabled={!!m.vote} onclick={() => vote(m, 'up')} />
+          <IconButton kind="plain" size="s" icon={ThumbsDown} label={t('as.bad')} on={m.vote === 'down'} disabled={!!m.vote} onclick={() => vote(m, 'down')} />
         </div>
         {#if m.vote === 'down'}
-          <div class="offer">{#if m.sent}<p class="t-foot">{t('as.sent')}</p>{:else}
-            <button onclick={() => send(m)}>{t('as.sendQ')}</button><p class="t-foot">{t('as.sendNote')}</p>{/if}</div>
+          <div class="offer">{#if m.sent}<p>{t('as.sent')}</p>{:else}
+            <Button kind="plain" size="s" onclick={() => send(m)}>{t('as.sendQ')}</Button><p>{t('as.sendNote')}</p>{/if}</div>
         {/if}
       {/if}
       {#if m.care && m.help}
@@ -114,74 +117,58 @@
           <p class="selectable">{m.help}</p>
           <div class="lines">
             <!-- ponytail: a tel: link; Telegram's openLink takes http(s) only. If a client won't dial, the number is in the text above -->
+            <!-- engine: Button href (a link drawn as a primary Button); till then this one link is styled here -->
             <a class="first" href="tel:1303" onclick={() => haptic.tap()}><Phone size={16} />{t('as.call1303')}</a>
-            <button onclick={() => { haptic.tap(); openLink('https://wa.me/77081060810'); }}><MessageCircle size={16} />{t('as.write150')}</button>
-            <button onclick={() => { haptic.tap(); openLink(PSYCHOLOGIST); }}><HeartHandshake size={16} />{t('as.psych')}</button>
+            <Button kind="secondary" full onclick={() => openLink('https://wa.me/77081060810')}>{#snippet icon()}<MessageCircle size={16} />{/snippet}{t('as.write150')}</Button>
+            <Button kind="secondary" full onclick={() => openLink(PSYCHOLOGIST)}>{#snippet icon()}<HeartHandshake size={16} />{/snippet}{t('as.psych')}</Button>
           </div>
         </div>
       {/if}
     {/each}
     {#if busy}<div class="b assistant typing" aria-label={t('as.thinking')}><i></i><i></i><i></i></div>{/if}
   </div>
-  <p class="t-foot note">{t('as.note')}</p>
+  <p class="note">{t('as.note')}</p>
 
   {#snippet footer()}
-    <div class="row">
-      <textarea bind:value={draft} rows="1" maxlength="300" placeholder={t('as.ph')} use:grow={132} enterkeyhint="send" onkeydown={key}></textarea>
-      <button class="send" disabled={!draft.trim() || busy} onclick={() => ask(draft)} aria-label={t('cm.send')}><SendHorizontal size={20} /></button>
-    </div>
+    <div class="row"><Composer bind:value={draft} placeholder={t('as.ph')} maxlength={300} sending={busy} label={t('cm.send')} onsend={() => ask(draft)} /></div>
   {/snippet}
 </Sheet>
 
 <style>
   .list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
-  .hello { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 14px 6px 8px; }
-  .hello p { color: var(--text-2); max-width: 320px; }
+  .hello { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s-2); padding: 14px 6px 8px; }
+  .hi { max-width: 320px; font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }
   .orb { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%), var(--surface-2);
+    background: radial-gradient(circle at 35% 30%, var(--accent-soft), transparent 70%), var(--surface-2);
     animation: orb 3.2s ease-in-out infinite; }
-  @keyframes orb { 50% { transform: translateY(-4px) scale(1.04); box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--accent) 60%, transparent); } }
-  .sugg { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
-  .sugg button { padding: 9px 14px; border-radius: var(--r-full); background: var(--surface-2); color: var(--text); font: 600 14px/1.2 var(--font-text);
-    animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) backwards; animation-delay: calc(120ms + var(--i) * 60ms); transition: transform var(--t-fast) var(--ease); }
-  .sugg button:active { transform: scale(0.95); }
-  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.92); } }
+  @keyframes orb { 50% { transform: translateY(-4px) scale(1.04); } }
+  .sugg { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); margin-top: var(--s-2); padding: 4px 0;
+    animation: pop 380ms cubic-bezier(.2, 1.3, .4, 1) 120ms backwards; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 650 var(--fs-cap)/1 var(--font-text); }
-  .b { max-width: 86%; padding: 10px 14px; border-radius: 20px; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
+    background: var(--accent-soft); color: var(--accent-text); font: 600 var(--fs-cap)/1 var(--font-text); }
+  /* the chat's bubbles: bespoke content (no ui/ part draws a message), on the tokens */
+  .b { max-width: 86%; padding: 10px 14px; border-radius: var(--r-l); animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
   @keyframes in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
-  .b p { font: 450 15.5px/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .b.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
-  .b.assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
-  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .acts button { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 32px; padding: 0 12px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 650 13px/1 var(--font-text); }
-  .rate { display: flex; gap: 2px; margin: -4px 0 0 4px; }
-  .rate button { display: grid; place-items: center; width: 32px; height: 28px; border-radius: var(--r-full); color: var(--text-3);
-    transition: color var(--t-fast), transform var(--t-fast); }
-  .rate button:not(:disabled):active { transform: scale(0.88); }
-  .rate button.on { color: var(--accent-text); }
-  .rate button:disabled:not(.on) { opacity: 0.35; }
-  .offer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 86%; margin: -2px 0 0 8px; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
-  .offer button { padding: 6px 0; color: var(--accent-text); font: 650 var(--fs-body)/1.2 var(--font-text); }
-  .offer p { color: var(--text-3); }
+  .b p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .b.user { align-self: flex-end; background: var(--accent); color: var(--on-accent); border-bottom-right-radius: var(--r-xs); }
+  .b.assistant { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: var(--r-xs); }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s-2); }
+  .acts :global(.btn) { max-width: 100%; }
+  .rate { display: flex; gap: 2px; margin: -4px 0 0 0; --plain-ink: var(--text-3); }
+  .rate :global(.btn[aria-pressed='true']) { color: var(--accent-text); opacity: 1; }
+  .offer { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 86%; margin: -2px 0 0 0; animation: in 300ms cubic-bezier(.2, .9, .25, 1) backwards; }
+  .offer p { padding: 0 var(--s-2); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
   .help { max-width: 92%; }
-  .lines { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-  .lines a, .lines button { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: var(--r-full);
-    background: var(--surface); color: var(--text); font: 650 var(--fs-body)/1 var(--font-text); text-decoration: none; }
-  .lines .first { background: var(--accent); color: var(--on-accent); }
+  .lines { display: flex; flex-direction: column; gap: 6px; margin-top: var(--s-3); }
+  .lines a { display: flex; align-items: center; justify-content: center; gap: var(--s-2); height: var(--ctl-m); padding: 0 var(--s-5); border-radius: var(--r-full);
+    background: var(--accent); color: var(--on-accent); font: 600 var(--fs-body)/1 var(--font-text); text-decoration: none; }
+  .lines a:active { opacity: 0.8; }
   .typing { display: flex; gap: 5px; padding: 14px 16px; }
   .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); animation: dot 1s ease-in-out infinite; }
   .typing i:nth-child(2) { animation-delay: 150ms; } .typing i:nth-child(3) { animation-delay: 300ms; }
   @keyframes dot { 30% { transform: translateY(-4px); opacity: 1; } 0%, 60%, 100% { opacity: 0.4; } }
-  .note { text-align: center; margin: 8px 0 2px; }
-  .row { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
-  .row textarea { flex: 1; min-width: 0; min-height: 44px; padding: 11px 14px; border-radius: 22px; resize: none; background: var(--surface-2); color: var(--text);
-    font: 450 16px/1.4 var(--font-text); }
-  .row textarea::placeholder { color: var(--text-3); }
-  .send { flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #fff;
-    transition: opacity var(--t-fast), transform var(--t-fast); }
-  .send:disabled { opacity: 0.35; }
-  .send:not(:disabled):active { transform: scale(0.92); }
+  .note { margin: var(--s-2) 0 2px; text-align: center; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .row { width: 100%; }
   :global(html.lowfx) .orb { animation: none; }
 </style>
