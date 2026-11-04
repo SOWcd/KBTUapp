@@ -483,8 +483,11 @@ LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskb
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug,
 # Nov 4), as the web's awards.ts lookKey
+# other names a drawn club goes by (owner, Nov 4: kbtu.mag is just "Mag"); as the web's awards.ts ALIASES
+LANYARD_NAMES = ("mag", "kbtumag", "kbtumagazine", "\u043c\u0430\u0433", "\u043a\u0431\u0442\u0443\u043c\u0430\u0433")
+_NAMES = "(" + ", ".join(f"'{x}'" for x in (*LANYARDS, *LANYARD_NAMES)) + ")"
 SKINNED = (f"o.status = 'active' AND (o.slug IN {_LIST} OR o.kind != 'school' AND "
-           f"lower(replace(replace(replace(o.name, '.', ''), ' ', ''), '-', '')) IN {_LIST})")
+           f"lower(replace(replace(replace(replace(o.name, '.', ''), ' ', ''), '-', ''), '_', '')) IN {_NAMES})")
 
 
 # the schools' lanyards (Nov 2: their official shields and colours): each its own students' alone, by students.school,

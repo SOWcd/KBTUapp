@@ -271,7 +271,7 @@ export const CLUB_LOOKS = {
     mark: animeLily, ring: 'linear-gradient(135deg, #C0262D, #1A1A1C 50%, #C0262D)', ink: ['#121214', 'rgba(18, 18, 20, 0.74)'] },
   // kbtu.mag (new3, their logo): cream paper, maroon ink, a page of the magazine. ponytail: `kbtumag` is a placeholder
   // slug (their org isn't in prod yet): rename it here, in logic.LANYARDS and in ClubScene/OrgMedal when it is
-  kbtumag: { strap: 'KBTU.MAG', strip: 'kbtu.mag', short: 'kbtu.mag', bg: ['#F3E9DB', '#EADCCB', '#DDCAB4'],
+  kbtumag: { strap: 'MAG', strip: 'Mag', short: 'Mag', bg: ['#F3E9DB', '#EADCCB', '#DDCAB4'],
     straps: ['#3E0A12', '#6E1424', '#F3E7D7'], holo: ['#5A1220', '#3E0A12', '#F3E7D7'], role: '#7A1628', qr: ['#3E0A12', '#6E1424'], plate: ['#FBF5EC', '#EFE3D2'],
     mark: magMark, ink: ['#24060B', 'rgba(36, 6, 11, 0.68)'] },
 } satisfies Record<string, ClubLook>;
@@ -301,8 +301,9 @@ export const clubLook = (look: Look): ClubLook | undefined => CLUBS[look];
 export type Skin = Hand | ClubSlug;
 /** a club's drawn look: by its slug, or by its name in letters and digits alone ("kbtu.mag" is `kbtumag`: Nov 4, the
  *  club was made in the app under another slug and its lanyard stayed locked) */
+const ALIASES: Record<string, string> = { mag: 'kbtumag', kbtumag: 'kbtumag', kbtumagazine: 'kbtumag', '\u043c\u0430\u0433': 'kbtumag', '\u043a\u0431\u0442\u0443\u043c\u0430\u0433': 'kbtumag' }; // server: logic.LANYARD_NAMES
 const lookKey = (o: OrgRef): string | null => o.slug in CLUB_LOOKS ? o.slug
-  : ((k) => (k in CLUB_LOOKS ? k : null))(o.name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''));
+  : ((k) => (k in CLUB_LOOKS ? k : ALIASES[k] ?? null))(o.name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''));
 export const skinOf = (o?: OrgRef | null): Skin | null => (o && (o.kind === 'school' ? (o.slug in SCHOOL_LOOKS ? (o.slug as ClubSlug) : null)
   : (SKINS as Record<string, Hand>)[o.slug] ?? (lookKey(o) as ClubSlug | null))) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
