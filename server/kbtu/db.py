@@ -1186,6 +1186,13 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';  -- ponytail: one co-host, more later
     CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);"""),
+    # a forum post the AI refused (noise, an ad) that its author sent to a moderator (fchannel.appeal, Nov 4): when, for
+    # the day's three; explained: the AI's reason for a refusal was asked (once a post or reply: ai.explain); refused: a
+    # hash of the refused words (they're wiped), so the appeal and the reason are only ever about the words the AI read
+    (123, """ALTER TABLE fchan_posts ADD COLUMN appealed_at INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN refused TEXT;
+    ALTER TABLE fchan_posts ADD COLUMN explained INTEGER;
+    ALTER TABLE fchan_replies ADD COLUMN explained INTEGER;"""),
 ]
 
 

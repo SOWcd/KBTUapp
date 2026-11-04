@@ -1,11 +1,10 @@
 <script lang="ts">
   // The Forum tab (Nov 1: the in-app forum became the public channel @KBTUappForum). Posts only: the channel's feed,
   // newest first and nothing else (owner, Nov 3: a pinned "popular" block put old posts first; a post being discussed
-  // says so in place), laid out as Threads (owner, Nov 2): no boxes, the words the hero, a hairline between posts from
-  // the words' edge; the face on the left (an accent dot on it: new since my last visit), name · time, the words. Under
-  // them one quiet row: Telegram's reactions on the left as counts (read-only: they are Telegram's), and on the right
-  // the one way to the comments, which live in Telegram and say so ("Discuss in Telegram", who replied, how many); the
-  // post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
+  // says so in place). Each post a card on the ground (owner, Nov 4: the flat Threads list on black "limped"): the face
+  // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
+  // as small chips (read-only: they are Telegram's) and, on the right, the one way to the comments, which live in
+  // Telegram: who replied, and a real button with Telegram's mark and the count. The post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
   // Nothing jumps: the 30 s refresh never puts posts above the one I'm reading; they wait behind an "N new" pill (at
   // the top already: they just come in). Under the 50th, "Show earlier" brings the next 50.
   // No large title (the capsule names the tab): the feed starts with a "Share with KBTU…" row that opens the new post
@@ -18,7 +17,8 @@
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
-  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -41,6 +41,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Button from '../../ui/Button.svelte';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
+  import Marked from './Marked.svelte';
 
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
@@ -169,7 +171,7 @@
   <div class="pill">{#if waiting && !atTop}<span class="pin" transition:slide={{ duration: 220, axis: 'y' }}>
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
   </span>{/if}</div>
-  <!-- the way to write: my face and a quiet prompt, the pen at the end (Threads' composer); the whole row a tap -->
+  <!-- the way to write: a card of its own, my face and a quiet prompt, the pen at the end; the whole card a tap -->
   <button class="compose" onclick={write}>
     {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
     <span class="prompt ellipsis">{t('fc.share')}</span>
@@ -181,52 +183,62 @@
       {#each list as p, i (p.id)}
         {@const m = p.mine ? mark(p) : null}
         {@const live = !!p.msg && p.status === 'live'}
+        {@const why = p.mine && p.human ? channel.why[p.id] : undefined}
         <!-- one element per post (flip needs it) -->
         <div class="item" animate:flip={{ duration: 420, easing: cubicOut }} transition:slide={{ duration: 360, easing: cubicOut }}>
-        <div class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:cut={cut?.id === p.id} data-post={p.id}>
-          {#if cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
-          <div class="rail">
-            {#if p.person}<Avatar person={p.person} size={36} />
-            {:else}
-              <!-- anonymous: the mask; an author no longer here (a deleted account): the signature's initials -->
-              <span class="av" class:anon={p.anon} aria-hidden="true">{#if p.anon}<VenetianMask size={18} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
-            {/if}
-            {#if fresh(p)}<span class="dot" aria-hidden="true"></span>{/if}
-          </div>
-          <div class="main">
-            <div class="head">
+        {#if cut?.id === p.id}<div class="nw" role="separator"><span class="nwl"><ArrowUp size={12} strokeWidth={2.5} />{tn('fc.newSince', cut.n)}</span></div>{/if}
+        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
+          <!-- the face, the name and when, my mark; the post's one menu at the end -->
+          <div class="head">
+            <span class="rail">
+              {#if p.person}<Avatar person={p.person} size={40} />
+              {:else}
+                <!-- anonymous: the mask; an author no longer here (a deleted account): the signature's initials -->
+                <span class="av" class:anon={p.anon} aria-hidden="true">{#if p.anon}<VenetianMask size={19} strokeWidth={2} />{:else}{initials(p.sign)}{/if}</span>
+              {/if}
+              {#if fresh(p)}<span class="dot" aria-hidden="true"></span>{/if}
+            </span>
+            <span class="who">
               {#if p.person}<button class="name" onclick={() => { haptic.tap(); sheets.person(p.person!.id); }}><b class="ellipsis">{p.person.name}</b></button>
               {:else}<b class="ellipsis">{nickName(p.nick) ?? p.sign}</b>{/if}
-              <span class="when">{ago(p.at)}</span>
-              {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-              {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
-              {#if p.mine && p.id > 0}<span class="del"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
-              {:else if live && !p.mine}<span class="del"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
-            </div>
-            <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}>{p.body}</p>
-            {#if p.mine && p.human}<p class="why">{t('fc.humanWhy')}</p>{/if}
-            <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
-            {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
-            {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
-            {#if live}
-              <div class="acts">
-                <!-- Telegram's reactions as counts, read-only (left in Telegram); none: nothing -->
-                {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
-                  {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>{/each}
-                </span>{/if}
-                <!-- the one way to the talk, in Telegram: who replied (faces; no ids come: a face's colour by its letter), the words, how many -->
-                <button class="talk" onclick={() => talk(p)} aria-label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}">
-                  {#if p.faces.length}<span class="faces">{#each p.faces as f, i (i)}<Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={18} tappable={false} />{/each}</span>{/if}
-                  <MessageCircle size={17} strokeWidth={1.9} />
-                  <span class="tl">{t('fc.comments')}</span>
-                  {#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}
-                </button>
-              </div>
-              <!-- my anonymous post: answering in its comments as the mask, through the bot (ChannelReply) -->
-              {#if p.mine && p.anon}<span class="areply"><Button kind="secondary" size="s" onclick={() => sheets.channelReply({ id: p.id, body: p.body })}>{#snippet icon()}<VenetianMask size={16} strokeWidth={2} />{/snippet}{t('fcr.entry')}</Button></span>{/if}
-            {/if}
+              <span class="meta"><span>{ago(p.at)}</span>
+                {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
+                {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}</span>
+            </span>
+            {#if p.mine && p.id > 0}<span class="end"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>
+            {:else if live && !p.mine}<span class="end"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>{/if}
           </div>
-        </div>
+          <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} quote={why?.quote} /></p>
+          {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
+          <!-- my post the AI passed to a moderator: why, in its words once they come (to me alone), else the plain line -->
+          {#if p.mine && p.human}
+            <div class="held">
+              <p>{why?.reason ?? t('fc.humanWhy')}</p>
+              {#if why?.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{why.fix}</span></p>{/if}
+            </div>
+          {/if}
+          <!-- the AI looking: a running bar under the words, not just a word (owner, Nov 2) -->
+          {#if p.id < 0}<div class="chk" role="progressbar" aria-label={t('fc.checking')}><span></span></div>{/if}
+          {#if live}
+            <div class="acts">
+              <!-- Telegram's reactions as small counts, read-only (left in Telegram); none: nothing -->
+              {#if p.reactions.length}<span class="rx" role="img" aria-label="{t('fc.reactions')}: {p.reactions.map((r) => `${glyph(r.emoji)} ${r.n}`).join(', ')}">
+                {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>{/each}
+              </span>{/if}
+              <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
+              {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} />{/each}</span>{/if}
+              <span class="talk"><Button kind="tinted" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
+                {#snippet icon()}<TelegramMark size={16} />{/snippet}{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}
+              </Button></span>
+            </div>
+            <!-- my anonymous post: answering in its comments as the mask, through the bot (ChannelReply): a row of the card -->
+            {#if p.mine && p.anon}<button class="areply" onclick={() => { haptic.tap(); sheets.channelReply({ id: p.id, body: p.body }); }}>
+              <span class="ai" aria-hidden="true"><VenetianMask size={17} strokeWidth={2} /></span>
+              <span class="al">{t('fcr.entry')}</span>
+              <ChevronRight size={18} strokeWidth={2} aria-hidden="true" />
+            </button>{/if}
+          {/if}
+        </article>
         </div>
       {/each}
     </div>
@@ -241,97 +253,101 @@
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; }
   .page > :global(*) { flex-shrink: 0; }
-  /* the composer and the posts run edge to edge; the hairlines start at the words' edge (Threads) */
-  .compose, .feed { margin: 0 calc(-1 * var(--gutter)); }
-  .compose, .post { --rule: calc(var(--gutter) + 36px + var(--s-3)); }
+  /* every post a card on the ground (owner, Nov 4: "just a black background"): the app's surface and radius, a hairline
+     rim in the dark (no shadow there), the soft card shadow in the light; the composer is the first card */
+  .compose, .post { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line); }
 
-  /* the composer: my face, a quiet prompt, the pen; a hairline under it */
-  .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-1) var(--gutter) var(--s-4); text-align: left;
-    transition: background var(--t-base) var(--ease); }
-  .compose::after, .item + .item > .post::before { content: ''; position: absolute; left: var(--rule); right: 0; height: 0.5px; background: var(--separator); }
-  .compose::after { bottom: 0; }
-  .item + .item > .post::before { top: 0; }
+  /* the composer: my face, a quiet prompt, the pen */
+  .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
+    transition: transform 450ms var(--ease-bounce); }
+  .compose:active { transform: scale(0.98); transition-duration: 80ms; }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
-  .compose:active { background: var(--surface); transition-duration: 60ms; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
-  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text);
-    transition: transform 380ms var(--ease-bounce); }
+  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 4px 12px -4px var(--accent); transition: transform 380ms var(--ease-bounce); }
   .compose:active .pen { transform: scale(0.9); transition-duration: 80ms; }
 
-  /* a post: the face's rail and the words; under them, when people replied, their faces and the count */
-  .post { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: var(--s-3);
-    padding: var(--s-4) var(--gutter) var(--s-1); animation: rise 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */
-    transition: background var(--t-base) var(--ease); }
-  .post:not(:has(.acts)) { padding-bottom: var(--s-4); }
-  /* the line between the new and the seen: a word on a hairline in the accent, in place of the post's own hairline */
-  .post.cut::before { display: none; }
-  .nw { grid-column: 2; display: flex; align-items: center; gap: var(--s-2); margin: calc(-1 * var(--s-2)) calc(-1 * var(--gutter)) var(--s-3) 0; /* from the words' edge, as the hairlines */
+  .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
+  /* a post: the head (face, name and when, the menu), the words, the row under them */
+  .post { position: relative; display: flex; flex-direction: column; padding: var(--s-3) var(--s-4) var(--s-4);
+    animation: rise 420ms cubic-bezier(.2, .9, .25, 1.05) backwards; animation-delay: calc(var(--i) * 40ms); /* the first screen settles top down */ }
+  .post:has(.acts) { padding-bottom: var(--s-2); }
+  .post:has(.areply) { padding-bottom: 0; }
+  /* the line between the new and the seen: a word on a hairline in the accent, between the cards */
+  .nw { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-1) var(--s-2) var(--s-3);
     font: 600 var(--fs-cap)/1 var(--font-text); color: var(--accent-text); letter-spacing: 0.02em; }
   .nw::before, .nw::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.35; }
-  .nw::before { display: none; }
   .nwl { display: inline-flex; align-items: center; gap: 3px; } /* the arrow: the new ones are above the line */
   /* the post the bot's button pointed at: an accent wash that fades */
   .post.lit { animation: lit 1.8s var(--ease); }
   @keyframes lit { 0%, 45% { background: var(--accent-soft); } }
+  .post.off { opacity: 0.6; }
 
-  .rail { position: relative; }
-  .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
+  .head { display: flex; align-items: center; gap: var(--s-3); min-height: 40px; }
+  .rail { position: relative; flex: none; display: flex; }
+  .av { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2);
     color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); letter-spacing: 0.02em; }
+  .compose .av { width: 36px; height: 36px; }
   .av.anon { background: var(--fill-2); color: var(--text); }
-  /* new since my last visit: a small accent dot on the face's shoulder, cut out of it by the ground */
-  .dot { position: absolute; top: 0; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bg); }
-
-  .main { min-width: 0; }
-  /* name · time, my mark, delete: one line */
-  .head { display: flex; align-items: baseline; gap: 6px; min-height: 20px; margin-top: 1px; }
-  .head b { font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
-  .name { display: flex; min-width: 0; padding: 0; text-align: left; }
-  .head > .name, .head > b { flex-shrink: 0; max-width: 62%; } /* the name keeps its room; the mark gives way */
+  /* new since my last visit: a small accent dot on the face's shoulder, cut out of it by the card */
+  .dot { position: absolute; top: 0; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface-solid); }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
+  .name { display: flex; min-width: 0; max-width: 100%; padding: 0; text-align: left; }
   .name:active { opacity: 0.6; }
-  .when, .mk { flex: none; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
-  .mk { flex-shrink: 10; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* at 320 the mark gives way before the name */
+  .meta { display: flex; gap: 6px; min-width: 0; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); white-space: nowrap; }
+  .mk { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .mk::before { content: '·'; margin-right: 6px; color: var(--text-3); }
-  .chk { position: relative; height: 3px; margin-top: var(--s-2); border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
-  .chk span { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--accent); animation: chk 1.1s ease-in-out infinite; }
-  @keyframes chk { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
-  @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
   .mk.accent { color: var(--accent-text); }
   .mk.warning { color: var(--warning-text); }
   .mk.hot { color: var(--warning-text); text-transform: lowercase; } /* being discussed: a quiet tinted word by the time (no emoji: it shouted) */
-  .del { align-self: center; display: flex; flex: none; margin: -8px -8px -8px auto; --plain-ink: var(--text-3); }
+  .end { flex: none; display: flex; margin: -6px -10px -6px 0; --plain-ink: var(--text-3); }
+  .chk { position: relative; height: 3px; margin-top: var(--s-3); border-radius: var(--r-full); background: var(--surface-2); overflow: hidden; }
+  .chk span { position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit; background: var(--accent); animation: chk 1.1s ease-in-out infinite; }
+  @keyframes chk { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  @media (prefers-reduced-motion: reduce) { .chk span { animation: none; width: 100%; opacity: 0.5; } }
 
   /* the words: four lines and a fade while long and closed; open, the height glides to the whole */
-  .tx { margin-top: 2px; font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
-    max-height: 5.7em; overflow: hidden; transition: max-height 420ms var(--ease); }
-  .why { margin-top: 4px; font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-3); }
+  .tx { margin-top: var(--s-2); font: 450 var(--fs-body)/1.47 var(--font-text); letter-spacing: -0.006em; color: var(--text); white-space: pre-line; overflow-wrap: break-word;
+    max-height: 5.9em; overflow: hidden; transition: max-height 420ms var(--ease); }
   .tx.fade { -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent); mask-image: linear-gradient(to bottom, black 50%, transparent); }
   .tx.open { max-height: var(--h); }
-  .post.off .tx { color: var(--text-3); }
   .more { display: flex; margin: 0 0 0 calc(-1 * var(--s-2)); --plain-ink: var(--text-2); }
+  /* my held post's why: a quiet tinted block under the words */
+  .held { margin-top: var(--s-3); padding: var(--s-3); border-radius: var(--r-m); background: var(--warning-soft);
+    font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
+  .held .fix { display: flex; gap: 6px; margin-top: var(--s-2); color: var(--text); }
+  .held .fix :global(svg) { flex: none; margin-top: 1px; color: var(--warning-text); }
 
-  /* the row under the words, on the words' edges, quiet: the reactions left (plain counts), the talk right (under the
-     thumb); no fills, a press only dims; 44 high to hit, the air around the marks is the target */
-  .acts { display: flex; align-items: center; gap: var(--s-2); margin: -4px 0 -2px; } /* the hit areas reach into the air */
-  .rx, .talk { display: inline-flex; align-items: center; height: 44px; color: var(--text-2); font: 500 var(--fs-sub)/1 var(--font-text); font-variant-numeric: tabular-nums; }
-  .rx { flex: none; gap: var(--s-3); }
-  .r { display: inline-flex; align-items: center; gap: 4px; }
-  .e { font-size: var(--fs-body); line-height: 1; }
-  .talk { min-width: 0; margin-left: auto; justify-content: flex-end; gap: 6px; padding-left: var(--s-3); color: var(--accent-text);
-    transition: opacity var(--t-base) var(--ease), transform 380ms var(--ease-bounce); }
-  .talk:active { opacity: 0.45; transform: scale(0.96); transition-duration: 60ms; }
-  .talk :global(svg) { flex: none; }
-  .tl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .n { color: var(--text-2); }
-  .faces { display: flex; margin-right: 4px; }
-  .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
-  .faces :global(.av + .av) { margin-left: -5px; }
+  /* the row under the words: Telegram's reactions on the left (small chips), the talk's faces and its one button on
+     the right (under the thumb); 44 to the finger */
+  .acts { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; margin-top: var(--s-2); }
+  .rx { flex: none; display: flex; gap: 6px; }
+  .r { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border-radius: var(--r-full); background: var(--fill);
+    color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); font-variant-numeric: tabular-nums; }
+  .e { font-size: var(--fs-sub); line-height: 1; }
+  .faces { display: flex; margin-left: auto; }
+  .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
+  .faces :global(.av + .av) { margin-left: -6px; }
   .faces :global(.av:first-child) { z-index: 2; } /* the newest on top */
   .faces :global(.av:nth-child(2)) { z-index: 1; }
-  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } } /* 320: the top reaction, the words to the talk */
+  .talk { flex: none; display: flex; margin-left: auto; }
+  .faces + .talk { margin-left: 0; }
+  .n { margin-left: 2px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } } /* 320: the top reaction, the button */
 
-  .areply { display: flex; margin: 0 0 var(--s-3); }
+  /* my anonymous post's way into its comments: the card's last row, under a hairline (a Settings row's grammar) */
+  .areply { position: relative; display: flex; align-items: center; gap: var(--s-3); width: calc(100% + 2 * var(--s-4)); min-height: 48px;
+    margin: var(--s-1) calc(-1 * var(--s-4)) 0; padding: 0 var(--s-3) 0 var(--s-4); border-radius: 0 0 var(--r-l) var(--r-l); text-align: left;
+    color: var(--accent-text); font: 500 var(--fs-body)/1.2 var(--font-text); transition: background var(--t-base) var(--ease); }
+  .areply::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
+  .areply:active { background: var(--fill); transition-duration: 60ms; }
+  .ai { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); }
+  .al { flex: 1; min-width: 0; }
+  .areply > :global(svg:last-child) { flex: none; color: var(--text-3); }
+
   .earlier { display: flex; justify-content: center; padding: var(--s-3) 0; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   .tail { height: calc(var(--bottom) + var(--s-8)); }

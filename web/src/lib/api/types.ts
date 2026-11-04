@@ -58,7 +58,10 @@ export interface AuditRow { id: Id; actor: PersonRef | null; action: string; tar
 export type Nick = [number, number] | null;
 /** A post of mine in the forum channel (server logic/fchannel.py): live (in the channel, or seconds from it), held for
  *  a moderator, hidden (a moderator removed it). */
-export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; status: 'live' | 'held' | 'hidden'; at: Ts }
+export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; status: 'live' | 'held' | 'hidden'; at: Ts; ai?: boolean /* held by the AI's word: why() tells */ }
+/** Why the AI refused or held my post or reply, in its own words (server ai.explain): quote an exact piece of my text
+ *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
+export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
 /** The Forum tab's feed (GET /api/forum-posts/feed): the channel's posts, signed as there (a name or the anonymous line),
  *  plus my own on their way or removed. msg: its message in @KBTUappForum once the bot sent it. Never whose a mask is. */
 export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held' | 'hidden'; at: Ts; human?: boolean /* my held post: the AI passed it to a moderator */; msg: number | null; anon: boolean; nick: Nick; sign: string; mine: boolean
@@ -77,7 +80,7 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
   replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
-export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts }
+export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts; ai?: boolean }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */

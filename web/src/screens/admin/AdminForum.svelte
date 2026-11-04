@@ -24,7 +24,7 @@
   let mod = $state<ChannelMod | null>(null);
   const load = () => api.channelMod().then((m) => (mod = m)).catch(() => {});
   $effect(() => { void load(); });
-  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost' };
+  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost', noise: 'fc.whyNoise', ad: 'fc.whyAd' }; // noise, ad: refused, the author appealed
 
   function fail() { haptic.error(); say(t('common.error'), 'warning_3d'); }
 

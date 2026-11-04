@@ -174,6 +174,9 @@ export interface Api {
   refer(code: string): Promise<void>;                                                 // opened by someone's invite link
   channelFeed(before?: number): Promise<import('./types').ChannelFeedPost[]>;            // the Forum tab: the channel's posts and my own, newest first, 50 a page (before: the last id shown)
   newChannelPost(body: string, anon: boolean): Promise<import('./types').ChannelPost>;   // one a day; the AI first, live: the bot posts it
+  appealChannelPost(id: Id, body: string): Promise<import('./types').ChannelPost>;    // refused by the AI: to a moderator (3 a day), the words given back
+  channelPostWhy(id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }>; // the AI's reason for my refused or held post, once
+  channelReplyWhy(id: Id): Promise<{ explain: import('./types').ForumWhy | null }>;      // the same for my held reply
   deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
   channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live
   channelModDecide(id: Id, ok: boolean): Promise<void>;                                 // held: out or removed; live: only removed

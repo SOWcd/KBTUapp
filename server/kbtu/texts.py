@@ -308,6 +308,7 @@ BOT = {
         "fch_reply_removed": ("Модератор снял этот ответ.", None),
         "fch_reply_deleted": ("Автор удалил этот ответ.", None),
         "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
+        "fch_appeal": ("🛡 Авторы просят проверить посты, которые не пропустил ИИ: {n}.", "Открыть"),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -447,6 +448,7 @@ BOT = {
         "fch_reply_removed": ("Бұл жауапты модератор алып тастады.", None),
         "fch_reply_deleted": ("Бұл жауапты авторы өшірді.", None),
         "fch_reply_queue": ("🛡 Пікірлердегі авторлардың анонимді жауаптары модераторды күтуде (шағым немесе тексеру): {n}.", "Ашу"),
+        "fch_appeal": ("🛡 Авторлар ЖИ өткізбеген посттарды тексеруді сұрайды: {n}.", "Ашу"),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -586,6 +588,7 @@ BOT = {
         "fch_reply_removed": ("A moderator removed this reply.", None),
         "fch_reply_deleted": ("The author deleted this reply.", None),
         "fch_reply_queue": ("🛡 Authors' anonymous replies in the comments wait for a moderator (reports or a check): {n}.", "Open"),
+        "fch_appeal": ("🛡 Authors ask for a look at posts the AI refused: {n}.", "Open"),
     },
 }
 

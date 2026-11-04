@@ -119,6 +119,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         n = one(con, """SELECT COUNT(*) FROM fchan_replies r WHERE r.status = 'held' AND r.why != 'check'
             OR r.status = 'live' AND EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id)""")[0]
         return (*texts.bot_message(lang, kind, n=n), "capps") if n else None
+    if kind == "fch_appeal":  # fq:<hour>, to moderators: refused posts their authors sent for a look, waiting in Admin
+        n = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'held' AND appealed_at IS NOT NULL")[0]
+        return (*texts.bot_message(lang, kind, n=n), "capps") if n else None
     if kind == "id_clash":  # ic:<student id>:<new>:<holder>, to the admins: both people's names, emails and Telegram
         who = [one(con, """SELECT u.tg_id, u.tg_username, u.tg_first_name, s.first_name, s.last_name, s.email
             FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?""", int(x)) for x in ref[2:4]]
