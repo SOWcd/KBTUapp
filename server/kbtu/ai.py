@@ -131,7 +131,7 @@ async def screen(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=_verdict, con=con, only=only,
-                                 chain=chain(cfg), timeout=15)
+                                 chain=chain(cfg), timeout=15, race=True)
     except (llm.Busy, llm.BadAnswers):
         return None
     return _word(word) == "OK"
@@ -164,7 +164,7 @@ async def _screen(cfg, http: httpx.AsyncClient, text: str, con, prompt: str, wor
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         word, _ = await llm.chat(cfg, http, msgs, max_tokens=5, temperature=0, check=lambda w: _word(w) in words, con=con,
-                                 only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=15)
+                                 only=PUBLIC_PROVIDERS, chain=chain(cfg), timeout=15, race=True)
     except (llm.Busy, llm.BadAnswers):
         return None
     return _word(word).lower() if _word(word) in words else None

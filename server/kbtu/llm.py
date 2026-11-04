@@ -110,20 +110,21 @@ def _rest_for(r: httpx.Response) -> float:
 
 async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens: int = 800, temperature: float = 0.2,
                check: Callable[[str], bool] | None = None, con=None, only: tuple[str, ...] | None = None,
-               timeout: float = TIMEOUT, chain: str | None = None) -> tuple[str, str]:
+               timeout: float = TIMEOUT, chain: str | None = None, race: bool = False) -> tuple[str, str]:
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
-    chain. Busy: none answered; BadAnswers: none usable."""
+    chain. race: the first link and the first of another provider are asked at once and the first usable answer wins
+    (a student waiting on a check: owner, Nov 4), then the rest one by one. Busy: none answered; BadAnswers: none usable."""
     answered = False
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
     if only:  # stable: each provider's links keep the chain's order
         pool.sort(key=lambda x: only.index(x.provider))
     awake = [x for x in pool if _rest.get(x.name, 0) <= time.time()]
-    # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
-    # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often)
-    for link in awake or sorted(pool, key=lambda x: _rest.get(x.name, 0))[:1]:
+
+    async def ask(link) -> str | None:
+        nonlocal answered
         t0 = time.time()
         try:
             r = await http.post(link.url, headers={"Authorization": f"Bearer {link.token}"}, timeout=timeout,
@@ -132,17 +133,17 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             log.warning("ai %s: %s", link.name, type(exc).__name__)
             _rest[link.name] = time.time() + REST
             await asyncio.to_thread(_count, path, link.name, False)
-            continue
+            return None
         if r.status_code in (429, 503) or r.status_code >= 500:
             _rest[link.name] = time.time() + _rest_for(r)
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
             await asyncio.to_thread(_count, path, link.name, False)
-            continue
+            return None
         if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
             _rest[link.name] = time.time() + REST_BROKEN
             log.warning("ai %s: http %d: %s", link.name, r.status_code, r.text[:160].replace("\n", " "))
             await asyncio.to_thread(_count, path, link.name, False)
-            continue
+            return None
         try:
             body = r.json()
             choice = (body.get("choices") or body.get("result", {}).get("choices") or [{}])[0]
@@ -154,10 +155,34 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         if not isinstance(text, str) or not text.strip() or cut or (check and not check(text)):
             log.warning("ai %s: unusable answer", link.name)
             await asyncio.to_thread(_count, path, link.name, False)
-            continue
-        log.info("ai %s answered in %.1f s", link.name, time.time() - t0)
+            return None
+        log.warning("ai %s answered in %.1f s", link.name, time.time() - t0)  # a warning: the server's log keeps warnings, the timing shows there
         await asyncio.to_thread(_count, path, link.name, True)  # a write: never on the event loop
-        return text, link.name
+        return text
+
+    # every link resting: a rest is a guess (one timeout or 429 a minute ago), so the soonest to wake is asked anyway
+    # rather than "busy" for everyone (owner, Nov 1: the assistant said busy too often)
+    order = awake or sorted(pool, key=lambda x: _rest.get(x.name, 0))[:1]
+    if race and len(order) > 1:
+        firm = lambda x: x.provider.removesuffix("eu")  # noqa: E731  munitoeu and munito: one company's two hosts
+        other = next((x for x in order[1:] if firm(x) != firm(order[0])), order[1])  # another company: its own outage
+        pair = [order[0], other]
+        order = [x for x in order if x not in pair]
+        async def tagged(link):
+            return link, await ask(link)
+        tasks = [asyncio.ensure_future(tagged(x)) for x in pair]
+        try:
+            for done in asyncio.as_completed(tasks):
+                link, text = await done
+                if text is not None:
+                    return text, link.name
+        finally:
+            for t in tasks:
+                t.cancel()
+    for link in order:
+        text = await ask(link)
+        if text is not None:
+            return text, link.name
     raise BadAnswers() if answered else Busy()
 
 
