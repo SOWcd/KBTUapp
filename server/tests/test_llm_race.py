@@ -1,5 +1,5 @@
-"""A student waits on a post's check: race=True asks the first link and another company's at once, the first usable
-answer wins (owner, Nov 4: the check was slow)."""
+"""A student waits on a post's check: race=True asks the first link alone for llm.HEDGE seconds, then another
+company's too; the first usable answer wins (owner, Nov 4: the check was slow)."""
 from __future__ import annotations
 
 import asyncio
@@ -10,19 +10,33 @@ import httpx
 from kbtu import llm
 
 
-def test_race_takes_the_fastest_company(monkeypatch):
+def _run(monkeypatch, first_host):
+    asked = []
+
     async def reply(req):
+        asked.append(req.url.host)
         if "slow" in req.url.host:
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
         return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}]})
     links = [N(name=f"{p}:m", provider=p, url=f"https://{h}.example/v1", token="t", model="m")
-             for p, h in (("munitoeu", "slow"), ("munito", "slow2"), ("groq", "fast"))]
+             for p, h in (("munitoeu", first_host), ("munito", "slow2"), ("groq", "fast"))]
     monkeypatch.setattr(llm, "links", lambda cfg, chain=None: links)
+    monkeypatch.setattr(llm, "HEDGE", 0.2)
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
             t = asyncio.get_running_loop().time()
             out = await llm.chat(None, http, [], race=True, check=lambda w: w == "OK")
             return out, asyncio.get_running_loop().time() - t
-    (text, link), took = asyncio.run(go())
-    assert (text, link) == ("OK", "groq:m") and took < 1   # munito's second host is the same company: groq raced instead
+    (_, link), took = asyncio.run(go())
+    return link, took, asked
+
+
+def test_race_asks_one_on_a_good_day(monkeypatch):
+    link, _, asked = _run(monkeypatch, "quick")
+    assert link == "munitoeu:m" and asked == ["quick.example"]          # no second call spent
+
+
+def test_race_hedges_to_another_company(monkeypatch):
+    link, took, asked = _run(monkeypatch, "slow")
+    assert link == "groq:m" and took < 0.8 and asked == ["slow.example", "fast.example"]   # not munito's second host

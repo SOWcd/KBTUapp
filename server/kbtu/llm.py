@@ -37,6 +37,7 @@ CHAIN = ("apinex:free/deepseek-v4.1-flash,munito:deepseek-ai/deepseek-v4.1-flash
 REST = 60             # a limited or busy link without a Retry-After rests this long
 REST_BROKEN = 6 * 3600  # a refused key or an unknown model: hours, then a fresh try
 TIMEOUT = 60
+HEDGE = 1.5     # race: how long the first link has alone before another company's is asked too
 
 
 class Busy(Exception):
@@ -114,8 +115,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     """(the answer's text, the link that gave it). check: is this answer usable (JSON that parses, ...)? If not, the next
     link is asked; the one that answered doesn't rest for it. only: these providers and no other, whatever AI_CHAIN says
     (what the privacy policy names for a text), asked in that order; chain: a caller's own links instead of the shared
-    chain. race: the first link and the first of another provider are asked at once and the first usable answer wins
-    (a student waiting on a check: owner, Nov 4), then the rest one by one. Busy: none answered; BadAnswers: none usable."""
+    chain. race: a student waits (owner, Nov 4): the first link, and if it hasn't answered in HEDGE seconds (or failed),
+    another company's at once; the first usable answer wins, then the rest one by one. Busy: none answered; BadAnswers: none usable."""
     answered = False
     path = con.execute("PRAGMA database_list").fetchone()[2] if con is not None else None  # the file, for _count's own connection
     pool = [x for x in links(cfg, chain) if only is None or x.provider in only]
@@ -168,14 +169,19 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
         other = next((x for x in order[1:] if firm(x) != firm(order[0])), order[1])  # another company: its own outage
         pair = [order[0], other]
         order = [x for x in order if x not in pair]
-        async def tagged(link):
-            return link, await ask(link)
-        tasks = [asyncio.ensure_future(tagged(x)) for x in pair]
+        first = asyncio.ensure_future(ask(pair[0]))
+        tasks = {first: pair[0]}
         try:
-            for done in asyncio.as_completed(tasks):
-                link, text = await done
-                if text is not None:
-                    return text, link.name
+            await asyncio.wait([first], timeout=HEDGE)  # the usual day: one call, the other company never asked
+            if first.done() and first.result() is not None:
+                return first.result(), pair[0].name
+            tasks[asyncio.ensure_future(ask(pair[1]))] = pair[1]  # slow or failed: the other company at once
+            while tasks:
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for t in done:
+                    link = tasks.pop(t)
+                    if t.result() is not None:
+                        return t.result(), link.name
         finally:
             for t in tasks:
                 t.cancel()
