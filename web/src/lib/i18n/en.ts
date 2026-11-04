@@ -88,7 +88,7 @@ const en: Dict = {
   'fc.links': "Take out the links, @handles and numbers",
   'fc.modLive': "In the channel this week",
   'fc.whyAi': "The AI flagged it",
-  'fc.whyPerson': "Anonymous, about a person",
+  'fc.whyPerson': "About a specific person",
   'fc.whyCheck': "The AI didn't answer",
   'fc.whyBusy': "Many posts this hour",
   'fc.whyLost': "May be in the channel already: check there",
