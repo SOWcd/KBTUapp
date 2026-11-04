@@ -1193,6 +1193,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE fchan_posts ADD COLUMN refused TEXT;
     ALTER TABLE fchan_posts ADD COLUMN explained INTEGER;
     ALTER TABLE fchan_replies ADD COLUMN explained INTEGER;"""),
+    # the AI's reason (ai.explain's validated sentence) kept on the row, so a moderator deciding on a held or appealed
+    # post or reply reads why the AI stopped it (owner, Nov 4: the Admin queue's reason line); goes with the row
+    (124, """ALTER TABLE fchan_posts ADD COLUMN ai_reason TEXT;
+    ALTER TABLE fchan_replies ADD COLUMN ai_reason TEXT;"""),
 ]
 
 

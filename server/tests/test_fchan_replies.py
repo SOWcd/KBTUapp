@@ -205,7 +205,7 @@ def test_reply_anonymity(env, monkeypatch):
     assert w.c.post(f"/api/forum-replies/{r['id']}/why", headers=tma(1)).status_code == 404  # once
     q = w.c.get("/api/forum-posts/mod", headers=tma(3)).json()
     held = q["replies"]["held"][0]
-    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon", "nick"}
+    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon", "nick", "aiWhy"}
     blob = json.dumps(q["replies"]) + json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(3)).json())
     assert "Ann" not in blob and '"person"' not in json.dumps(q["replies"])
     assert "Secret words" not in json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(2)).json())

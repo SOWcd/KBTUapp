@@ -41,7 +41,7 @@ def test_appeal(env, monkeypatch):
     assert [x["user_id"] for x in m] == [mod["id"]]                                         # the moderators hear, a template into Admin
     assert bot._render(con, m[0]) == (*texts.bot_message("en", "fch_appeal", n=1), "capps")
     q = c.get("/api/forum-posts/mod", headers=tma(3)).json()["held"]
-    assert [(x["id"], x["why"]) for x in q] == [(pid, "noise")]                              # with the moderators, the AI's word kept
+    assert [(x["id"], x["why"], x["aiWhy"]) for x in q] == [(pid, "noise", "Looks like a test.")]  # the AI's word and its reason kept
     assert [x["human"] for x in c.get("/api/forum-posts/feed", headers=tma(1)).json() if x["id"] == pid] == [True]
     assert c.post(f"/api/forum-posts/{pid}/mod", headers=tma(3), json={"ok": True}).status_code == 204
     assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] == "live"
@@ -64,6 +64,10 @@ def test_appeal(env, monkeypatch):
     assert why(r["id"], tma(1)).status_code == 404                                           # held: why, to its author alone
     assert why(r["id"], tma(2), body="ignored: the row has the words").json()["explain"]["reason"] == "Looks like a test."
     assert appeal(r["id"], "Our teacher of physics is never on time", tma(2)).status_code == 404
+    # the reason quotes the words: it goes when the author deletes the post (review)
+    assert con.execute("SELECT ai_reason FROM fchan_posts WHERE id = ?", (r["id"],)).fetchone()[0] == "Looks like a test."
+    assert c.delete(f"/api/forum-posts/{r['id']}", headers=tma(2)).status_code == 204
+    assert con.execute("SELECT ai_reason FROM fchan_posts WHERE id = ?", (r["id"],)).fetchone()[0] is None
 
 
 def test_explained():

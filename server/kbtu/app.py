@@ -1740,12 +1740,16 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/forum-posts/{pid}/why")
     async def fchan_why(pid: int, con: Con, v: FChanWrite, body: dict = Body(default={})):
         text, verdict = await run_in_threadpool(F.why_post, con, v, pid, body)
-        return {"explain": await ai.explain(cfg, ai_http(), text, verdict)}
+        got = await ai.explain(cfg, ai_http(), text, verdict)
+        await run_in_threadpool(F.said, con, "fchan_posts", pid, got)  # the moderator's queue reads it too
+        return {"explain": got}
 
     @app.post("/api/forum-replies/{rid}/why")
     async def fchan_reply_why(rid: int, con: Con, v: FChanWrite):
         text, verdict = await run_in_threadpool(F.why_reply, con, v, rid)
-        return {"explain": await ai.explain(cfg, ai_http(), text, verdict)}
+        got = await ai.explain(cfg, ai_http(), text, verdict)
+        await run_in_threadpool(F.said, con, "fchan_replies", rid, got)
+        return {"explain": got}
 
     @app.delete("/api/forum-posts/{pid}", status_code=204)
     def fchan_drop(pid: int, con: Con, v: FChan):

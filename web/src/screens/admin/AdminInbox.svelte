@@ -17,7 +17,6 @@
   import { sheets } from '../../lib/state/sheets';
   import { say } from '../../lib/state/ui.svelte';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
-  import { nickName } from '../../lib/i18n/nicks';
   import { haptic, openLink } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import { withNick, roleName } from '../../lib/perms';
@@ -36,6 +35,7 @@
   import Row from '../../ui/Row.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Field from '../../ui/Field.svelte';
+  import ForumWho, { whyLine } from './ForumWho.svelte';
 
   const admin = $derived(session.me?.role === 'admin');
   const owner = $derived(admin && !!session.me?.founder);
@@ -125,7 +125,6 @@
     if (!(await sheets.ask({ title: t('fc.revealAsk'), text: t('fc.revealText'), ok: t('fc.reveal'), cancel: t('common.cancel') }))) return;
     try { const who = await api.revealChannelPost(id); say(t('fc.wrote', { name: who.name }), 'locked_3d'); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fcr.whyLost', reports: 'fcr.whyReports' };
   async function sendAgain(it: InboxItem, id: number) {
     // a lost send may be in the comments already (the bot can't tell): sent again only after a look there
     if (!(await sheets.ask({ title: t('fcr.againAsk'), text: t('fcr.againText'), ok: t('fcr.again'), cancel: t('common.cancel') }))) return;
@@ -223,8 +222,9 @@
           {@const p = it.data as ChannelModPost}
           <div class="card" class:hid={it.hidden} out:fold>
             {@render head(it, more(it))}
+            <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
+            {#if p.why}<i class="meta">{whyLine(p.why, p.aiWhy)}</i>{/if}
             <p class="text selectable">{p.body}</p>
-            <i class="meta">{p.anon ? nickName(p.nick) ?? t('fc.anon') : p.author?.name ?? ''}{p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</i>
             {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
               t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
           </div>
@@ -232,9 +232,10 @@
           {@const r = it.data}
           <div class="card" class:hid={it.hidden} out:fold>
             {@render head(it, more(it))}
+            <ForumWho anon={r.anon} nick={r.nick} />
+            {#if r.why || r.reports}<i class="meta">{[whyLine(r.why, r.aiWhy, true), r.reports ? t('fcr.reports', { n: r.reports }) : ''].filter(Boolean).join(' · ')}</i>{/if}
             <p class="quote">{r.postBody}</p>
             <p class="text selectable">{r.body}</p>
-            <i class="meta">{nickName(r.nick) ?? t('fc.anon')}{r.why && WHY[r.why] ? ' · ' + t(WHY[r.why]) : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</i>
             {#if it.hidden && r.why === 'lost'}
               {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
             {:else if it.hidden}

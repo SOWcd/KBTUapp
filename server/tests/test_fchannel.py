@@ -408,6 +408,8 @@ def test_old_board_cleaned_up(env):
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
     con.execute("DROP TABLE event_cohosts")  # 122's
+    con.execute("ALTER TABLE fchan_posts DROP COLUMN ai_reason")  # 124's
+    con.execute("ALTER TABLE fchan_replies DROP COLUMN ai_reason")
     con.execute("ALTER TABLE fchan_posts DROP COLUMN appealed_at")  # 123's
     con.execute("ALTER TABLE fchan_posts DROP COLUMN explained")
     con.execute("ALTER TABLE fchan_posts DROP COLUMN refused")

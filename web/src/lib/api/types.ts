@@ -74,7 +74,7 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
   hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */ }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
-export type ChannelModPost = ChannelPost & { why: string | null; author: PersonRef | null; undo?: boolean };
+export type ChannelModPost = ChannelPost & { why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
 /** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
 export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
   replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }
@@ -82,7 +82,7 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
 export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts; ai?: boolean }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
-export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
+export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
 export interface ScreenSession { session: Id; event: Id | null; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; param: string | null; screens: number }
 /** text: a photo's thumbnail path (media/...), a profile's nick and "about me", else the words */

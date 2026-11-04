@@ -106,6 +106,18 @@ def seed(path: str) -> None:
         con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"fchcopy:{100 + pid}", str(400 + pid)))
     for mid, pid, uid in ((601, 1, 1), (602, 1, 3), (603, 2, 2), (604, 2, 3)):
         con.execute("INSERT INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)", (mid, pid, uid, now - 1800))
+    # Admin's forum queue (Bota moderates): Ali's named post the AI held for naming a person, with its reason; Dana's
+    # anonymous one the AI refused and she appealed; her anonymous reply the AI held
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = 3")
+    for pid, uid, anon, body, why, reason in (
+            (4, 2, 0, "Our physics teacher never comes on time and then blames us for being late.", "person",
+             "It points at one teacher, so a person reads it first."),
+            (5, 1, 1, "test of the new coffee machine on the 2nd floor: it finally works", "noise", None)):
+        con.execute("""INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n, ai_reason, appealed_at)
+            VALUES (?, ?, ?, ?, 'held', ?, ?, ?, ?, ?, ?, ?)""", (pid, uid, body, anon, why, now - 900, None if anon else PEOPLE[uid - 1][2],
+                                                                   5 if anon else None, 11 if anon else None, reason, now - 600 if why == "noise" else None))
+    con.execute("""INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at, ai_reason)
+        VALUES (2, 603, 'Thanks! And the reading room on the third floor, is it open too?', 'held', 'ai', ?, 'It may read as a jab at someone.')""", (now - 700,))
     con.close()
 
 

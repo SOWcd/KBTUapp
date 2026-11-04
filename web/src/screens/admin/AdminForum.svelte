@@ -6,25 +6,24 @@
   // Every removal asks first. Below, the find-people forum's own queue and skills catalog (silent when it's off).
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import { api, type ChannelMod, type ChannelModPost, type ChannelModReply } from '../../lib/api';
-  import { nickName } from '../../lib/i18n/nicks';
   import { session } from '../../lib/state/session.svelte';
   import { loadChannel } from '../../lib/state/channel.svelte';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t, type Key } from '../../lib/i18n/index.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import ForumMod from '../forum/ForumMod.svelte';
+  import ForumWho, { whyLine } from './ForumWho.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const owner = $derived(session.me?.role === 'admin' && !!session.me?.founder);
   let mod = $state<ChannelMod | null>(null);
   const load = () => api.channelMod().then((m) => (mod = m)).catch(() => {});
   $effect(() => { void load(); });
-  const WHY: Record<string, Key> = { ai: 'fc.whyAi', person: 'fc.whyPerson', check: 'fc.whyCheck', busy: 'fc.whyBusy', lost: 'fc.whyLost', noise: 'fc.whyNoise', ad: 'fc.whyAd' }; // noise, ad: refused, the author appealed
 
   function fail() { haptic.error(); say(t('common.error'), 'warning_3d'); }
 
@@ -90,8 +89,9 @@
 
 {#snippet row(p: ChannelModPost, kind: 'held' | 'live' | 'removed')}
   <div class="mrow">
+    <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
+    <span class="mm">{ago(p.at)}{kind === 'held' && p.why ? ' · ' + whyLine(p.why, p.aiWhy) : ''}</span>
     <p class="mt selectable">{p.body}</p>
-    <span class="mm">{p.anon ? nickName(p.nick) ?? t('fc.anon') : p.author?.name ?? ''} · {ago(p.at)}{kind === 'held' && p.why ? ' · ' + t(WHY[p.why] ?? 'fc.whyCheck') : ''}</span>
     <span class="mb">
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => decide(p, true, true)}>{t('fc.release')}</Button>{/if}
       {#if kind === 'removed'}<Button kind="tinted" size="s" onclick={() => restore(p)}>{t(p.undo ? 'fc.undo' : 'fc.restore')}</Button>
@@ -104,9 +104,10 @@
 
 {#snippet reply(r: ChannelModReply, kind: 'held' | 'live' | 'removed')}
   <div class="mrow">
+    <ForumWho anon={r.anon} nick={r.nick} />
+    <span class="mm">{ago(r.at)}{kind === 'held' && r.why ? ' · ' + whyLine(r.why, r.aiWhy, true) : r.why === 'reports' ? ' · ' + t('fcr.whyReports') : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</span>
     <p class="mq">{r.postBody}</p>
     <p class="mt selectable">{r.body}</p>
-    <span class="mm">{nickName(r.nick) ?? t('fc.anon')} · {ago(r.at)}{kind === 'held' && r.why ? ' · ' + t(r.why === 'lost' ? 'fcr.whyLost' : WHY[r.why] ?? 'fc.whyCheck') : ''}{r.why === 'reports' ? ' · ' + t('fcr.whyReports') : ''}{r.reports ? ' · ' + t('fcr.reports', { n: r.reports }) : ''}</span>
     <span class="mb">
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => replyDecide(r, true, true)}>{t(r.why === 'lost' ? 'fcr.again' : 'fc.release')}</Button>{/if}
       {#if kind === 'live' && r.reports}<Button kind="tinted" size="s" onclick={() => replyDecide(r, true, false)}>{t('fcr.keep')}</Button>{/if}

@@ -311,12 +311,12 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
         if _repeat(con, v.id, text):
             raise ApiError("bad_input", "duplicate")
         sign = None if p["anon"] else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
-        con.execute("UPDATE fchan_posts SET status = 'held', body = ?, sign = ?, appealed_at = ? WHERE id = ?", (text, sign, _now(), pid))
-        # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref)
+        con.execute("UPDATE fchan_posts SET status = 'held', body = ?, sign = ?, appealed_at = ?, refused = NULL WHERE id = ?", (text, sign, _now(), pid))
+        # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref);
+        # all of them, an appealing moderator too (review: the one who got no notice was the anonymous author)
         from .tgcomments import _mods
         for uid in _mods(con):
-            if uid != v.id:
-                notify(con, uid, "fch_appeal", f"fq:{_now() // 3600}")
+            notify(con, uid, "fch_appeal", f"fq:{_now() // 3600}")
     return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
 
 
@@ -354,6 +354,15 @@ def why_reply(con, v: Viewer, rid: int) -> tuple[str, str]:
     return r["body"], WHY_OF[r["why"]]
 
 
+def said(con, table: str, rid: int, got: dict | None) -> None:
+    """The AI's validated reason onto its row, for the moderator who decides on it (the Admin queue's reason line)."""
+    if got:
+        # only while the row still waits (held) or is a fresh refusal: an author's delete during the model's seconds wipes
+        # the words, and the reason (it often quotes them) must not land after it (review)
+        live = "status = 'held'" if table == "fchan_replies" else "(status = 'held' OR status = 'gone' AND refused IS NOT NULL)"
+        con.execute(f"UPDATE {table} SET ai_reason = ? WHERE id = ? AND {live}", (got["reason"], rid))  # table: the route's own literal
+
+
 def _unpost(con, p, why: str, delay: int = 0) -> None:
     """Its channel message (if it went out) to the bot's round: deleted there, or edited to a template."""
     if p["tg_msg"]:
@@ -369,7 +378,7 @@ def delete(con, v: Viewer, pid: int) -> None:
             raise ApiError("not_found")
         _unpost(con, p, "author")
         _post_off(con, pid)
-        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
+        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, refused = NULL WHERE id = ?", (pid,))
         _notes_off(con, pid)
 
 
@@ -623,7 +632,7 @@ def mod_queue(con, v: Viewer) -> dict:
                            ORDER BY gone_at DESC LIMIT 50""", _now() - MOD_RECENT)
     ids = {p["user_id"] for p in held + live + removed if not p["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
-    shape = lambda p: _shape(p) | {"why": p["why"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    shape = lambda p: _shape(p) | {"why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
@@ -779,7 +788,8 @@ def reply_cap(con, p) -> int:
     """This post's replies a day: the others' comments under it the bot saw, and REPLIES_MORE. ponytail: a friend's
     comments deleted in Telegram still count (no delete event reaches the bot); each reply still has its AI look and
     REPLY_GAP. Count DISTINCT user_id if friends ever farm it."""
-    return one(con, "SELECT COUNT(*) FROM fchan_comments WHERE post_id = ? AND user_id != ?", p["id"], p["user_id"])[0] + REPLIES_MORE
+    return one(con, """SELECT COUNT(*) FROM fchan_comments c JOIN students s ON s.user_id = c.user_id
+                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE
 
 
 def reply_settle(con, rid: int, verdict: str | None) -> dict:
@@ -798,8 +808,9 @@ def reply_settle(con, rid: int, verdict: str | None) -> dict:
 def _drop(con, r, why: str, status: str = "gone", delay: int = 0) -> None:
     """A reply off: the words wiped when its author deletes it (a takedown keeps them 30 days for an undo); out of the
     group in the bot's round (now, or after the undo minute)."""
-    con.execute("UPDATE fchan_replies SET status = ?, why = ?, body = CASE WHEN ? = 'gone' THEN '' ELSE body END, drop_at = ? WHERE id = ?",
-                (status, why, status, _now() + delay, r["id"]))
+    con.execute("""UPDATE fchan_replies SET status = ?, why = ?, body = CASE WHEN ? = 'gone' THEN '' ELSE body END,
+                   ai_reason = CASE WHEN ? = 'gone' THEN NULL ELSE ai_reason END, drop_at = ? WHERE id = ?""",
+                (status, why, status, status, _now() + delay, r["id"]))
 
 
 def reply_delete(con, v: Viewer, rid: int) -> None:
@@ -886,7 +897,7 @@ def reply_missing(con, rid: int) -> None:
     """Telegram: the comment answered is gone. The reply is dropped (never sent elsewhere), its author told."""
     r = one(con, "SELECT p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND r.tg_msg = 0", rid)
     if r:
-        con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', tg_msg = NULL WHERE id = ?", (rid,))
+        con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', ai_reason = NULL, tg_msg = NULL WHERE id = ?", (rid,))
         notify(con, r["user_id"], "fch_reply_gone", f"fg:{rid}")
 
 
@@ -915,7 +926,7 @@ def reply_drop_later(con, rid: int) -> None:
 
 def _reply_mod_shape(r) -> dict:
     return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]), "nick": _nick(r),
-            "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
+            "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
 
 
 def reply_mod_queue(con) -> dict:
