@@ -8,7 +8,7 @@
   // ponytail: no earned date (nothing records it until the unlock moment ships).
   import { onMount } from 'svelte';
   import Check from '@lucide/svelte/icons/check';
-  import { achHow, artOf, isCoin, isMedal, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
+  import { achHow, artOf, isCoin, isDrawnPin, isMedal, isRound, metalOf, tierLabel, variantHow, variantName, type ShelfItem } from '../../lib/awards';
   import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayMonth } from '../../lib/time';
@@ -90,12 +90,12 @@
     medal_init26_2: [GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, GOLD],
     medal_init26f_2: [SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER, ROYAL, ROYAL, WHITE, ROYAL, ROYAL, SILVER],
   };
-  const round = $derived(a ? isMedal(a) || isCoin(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
-  const glow = $derived(it.staff ? (it.staff === 'admin' ? GLOW[3] : STEEL) : it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
+  const round = $derived(a ? isRound(a) : !!it.founder || !!it.idea); // a pin is a shield: no coin's edge, no rays
+  const glow = $derived(it.staff ? (it.staff === 'admin' ? GLOW[3] : STEEL) : it.founder || it.idea ? GLOW[0] : !va || !va.level ? '' : DRAWN[artOf(va)] ?? (artOf(va).startsWith('layer_zn_') ? GLOW[3] : tiers ? GLOW[metalOf(va.level, va.levels.length) + 1] : GLOW[0]));
   // the coin's edge (owner, Nov 1: "a real coin"): its metal; the seals' silver rim, the idea's blue. None on a medal
   // not earned yet: its face is see-through, the edge would show through it
   const edge = $derived(!round || !glow ? '' : it.founder ? GLOW[2] : it.idea ? '47, 91, 234' : glow);
-  const lit = $derived((round || !!it.staff) && !!glow); // a shield stands in the light as a coin does, without its edge
+  const lit = $derived((round || !!it.staff || (!!a && isDrawnPin(a))) && !!glow); // a shield stands in the light as a coin does, without its edge
   const EDGE = Array.from({ length: 22 }, (_, i) => i + 1); // 22 discs 1 px apart: ~10% of the 220 px coin, a real coin's thickness
   const SIZE = 220;
   // Android (a user's video, Nov 2): the CSS coin flickered between its face and its milled edge many times a second

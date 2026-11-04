@@ -1,21 +1,19 @@
 <script lang="ts">
   // A pin (awards plan, Nov 3): a one-time award for a moment, an upright enamel shield in a thin metal frame, so it
-  // never reads as a medal (round, levels) or a status (the seal by the name). A drawn one (owner, Nov 4) is the Recruiter's
-  // craft in the shield: its field, its glyph in luminous line art and its light (public/medals/zn-<glyph>-field, -net,
-  // -core) float with the tilt (base.css .z) at the Recruiter's depths under the still milled frame; an event's pin is
-  // its emoji on its colour (zn-enamel's guilloche over it). The year small from 64 px.
+  // never reads as a medal (round, levels) or a status (the seal by the name): an event's emoji on its colour
+  // (zn-enamel's guilloche over it) under a milled metal frame, the year small from 64 px. The app's own drawn pins are
+  // round medals built as Recruiter's (ui/Medal, lib/awards layersOf; owner, Nov 4).
   import Emoji from './Emoji.svelte';
   import { SHIELD } from '../lib/awards';
-  let { color, emoji = '', glyph = '', metal = 'g', year, off = false, hidden = false, size = 58 }:
-    { color: string; emoji?: string; glyph?: string; metal?: 'g' | 's' | 'r'; year?: number; off?: boolean; hidden?: boolean; size?: number } = $props();
+  let { color, emoji = '', metal = 'g', year, off = false, hidden = false, size = 58 }:
+    { color: string; emoji?: string; metal?: 'g' | 's' | 'r'; year?: number; off?: boolean; hidden?: boolean; size?: number } = $props();
 </script>
 
 <span class="pin {metal}" class:off style="width:{size}px;height:{size}px">
-  {#if glyph && !hidden}{#each [['field', -1], ['net', 0.5], ['core', 1]] as const as [n, z] (n)}<img class="z" style:--z={(z * size * 0.03).toFixed(1)} src={`medals/zn-${glyph}-${n}.svg`} alt="" draggable="false" />{/each}
-  {:else}<svg viewBox="0 0 512 512" aria-hidden="true"><path d={SHIELD} fill={color} /></svg>
-  <img src="medals/zn-enamel.svg" alt="" draggable="false" />{/if}
+  <svg viewBox="0 0 512 512" aria-hidden="true"><path d={SHIELD} fill={color} /></svg>
+  <img src="medals/zn-enamel.svg" alt="" draggable="false" />
   {#if hidden}<span class="q" style:font-size="{Math.round(size * 0.4)}px">?</span>
-  {:else if !glyph}<span class="glyph z" style:--z={(size * 0.03).toFixed(1)}><Emoji name={emoji} size={Math.round(size * 0.4)} /></span>{/if}
+  {:else}<span class="glyph z" style:--z={(size * 0.03).toFixed(1)}><Emoji name={emoji} size={Math.round(size * 0.4)} /></span>{/if}
   <img src={`medals/zn-frame-${metal}.svg`} alt="" draggable="false" />
   {#if year && size >= 64 && !hidden}<span class="yr num" style:font-size="{Math.max(8, Math.round(size * 0.075))}px">{year}</span>{/if}
 </span>
