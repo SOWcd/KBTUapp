@@ -40,6 +40,7 @@
 
 <style>
   .q { margin: 6px 0 8px; }
+  .dim { white-space: pre-line; } /* a text in paragraphs (an invite's description, then what saying yes means) */
   .say { margin-top: 12px; }
   .say textarea { width: 100%; resize: none; }
   .say input { width: 100%; }

@@ -41,6 +41,9 @@ export const sheets = {
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (_org: Id, _id?: Id) => {},
   scanner: (_id: Id, _names?: boolean) => {}, // names: a club's own event, marked by name (no tickets)
+  // only: a scanner-only door helper (server crew.py): tickets, no list by name
+  scannerOnly: (_id: Id) => {},
+  crew: (_id: Id, _onchange?: (n: number) => void) => {}, // an event's door helpers (a running club's President or Vice)
   attendees: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press

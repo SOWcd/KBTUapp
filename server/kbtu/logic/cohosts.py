@@ -16,6 +16,7 @@ from .core import ApiError, Viewer, at_least, can, full, one, org_ref, role_in, 
 
 
 COHOST_INVITES_A_DAY = 10  # a host club's invites (each one messages the other club's leaders)
+INITIATIVE_INVITES_A_WEEK = 3  # an initiative's (collab-review S1): its invites mostly go to official clubs' leaders
 # the co-host's accepted row, its club still shown (hidden or archived later: gone from the card and the door)
 ACCEPTED = """SELECT x.*, o.name FROM event_cohosts x JOIN orgs o ON o.id = x.org_id
     WHERE x.event_id = ? AND x.status = 'accepted' AND o.status = 'active'"""
@@ -52,6 +53,11 @@ def _fits(e: sqlite3.Row) -> bool:
     return e["visibility"] == "public" and not e["meeting"] and not e["guest_host"]
 
 
+def _free_ok(con, e: sqlite3.Row) -> bool:
+    """A collab with an initiative is free (owner, Nov 4; collab-review M1): only an official host's event has a price."""
+    return not e["price"] or bool(one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0])
+
+
 def _over(e: sqlite3.Row) -> bool:
     return e["status"] == "cancelled" or end_of(e) <= core.now()
 
@@ -75,7 +81,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
         e = _staff_event(con, v, eid, "events")
         if _over(e):
             raise ApiError("closed")
-        if not _fits(e):
+        if not _fits(e) or not _free_ok(con, e):
             raise ApiError("bad_input", "cohost")
         if oid == e["org_id"] or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND kind = 'club' AND status = 'active'", oid):
             raise ApiError("bad_input")
@@ -83,6 +89,15 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
             raise ApiError("conflict", "cohost")  # ponytail: one co-host per event; more later
         if one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND org_id = ?", eid, oid):
             raise ApiError("conflict", "declined")  # they said no to this one: not asked again
+        if one(con, "SELECT 1 FROM org_mutes WHERE org_id = ? AND muted_org_id = ?", oid, e["org_id"]):
+            raise ApiError("conflict", "declined")  # "Don't suggest again": the same answer as a no (collab-review S2)
+        if not one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0]:
+            week = f"cohost_wk:{e['org_id']}:{(core.now() + 5 * 3600) // (7 * 86400)}"  # an Almaty week (from Thursday)
+            sent = one(con, "SELECT value FROM meta WHERE key = ?", week)
+            if sent and int(sent[0]) >= INITIATIVE_INVITES_A_WEEK:
+                raise ApiError("rate_limited")
+            con.execute("DELETE FROM meta WHERE key LIKE 'cohost_wk:' || ? || ':%' AND key != ?", (e["org_id"], week))
+            con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (week,))
         # counted apart from the rows, which a withdrawal deletes (second review): per host club and Almaty day
         day = f"cohost_inv:{e['org_id']}:{(core.now() + 5 * 3600) // 86400}"
         sent = one(con, "SELECT value FROM meta WHERE key = ?", day)
@@ -106,13 +121,20 @@ def invites(con, v: Viewer, oid: int) -> list[dict]:
         WHERE x.org_id = ? AND x.status = 'pending' AND e.status != 'cancelled'
         AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND h.status = 'active' ORDER BY e.starts_at""", oid, core.NO_END, core.now())
     hosts = core._by_id(con, "orgs", (e["org_id"] for e in found))
-    return [{"event": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], "place": e["place"], "status": e["status"]},
-             "host": org_ref(con, hosts[e["org_id"]]), "at": e["asked"]} for e in found]
+    files = core._by_id(con, "files", (e["cover_file_id"] for e in found))
+    # what is being signed (collab-review S3): the cover, the description, the price, and whether our name goes on the
+    # @KBTUevents post (an official club vouching for an initiative)
+    us = one(con, "SELECT official FROM orgs WHERE id = ?", oid)[0]
+    return [{"event": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], "place": e["place"], "status": e["status"],
+                       "description": e["description"], "price": e["price"], "cover": core._event_cover(con, e, files)},
+             "host": org_ref(con, hosts[e["org_id"]]), "at": e["asked"],
+             "channel": bool(us) and not hosts[e["org_id"]]["official"] and hosts[e["org_id"]]["kind"] == "club"} for e in found]
 
 
-def answer(con, v: Viewer, eid: int, yes: object) -> list[dict]:
-    """The co-host's Vice+ says yes or no. Yes: the card shows both clubs, and if it's out already, our followers hear."""
-    if not isinstance(yes, bool):
+def answer(con, v: Viewer, eid: int, yes: object, mute: object = False) -> list[dict]:
+    """The co-host's Vice+ says yes or no. Yes: the card shows both clubs, and if it's out already, our followers hear.
+    No with `mute` ("Don't suggest again"): that host club's invites to us stop (unmute undoes it)."""
+    if not isinstance(yes, bool) or mute not in (True, False) or yes and mute:
         raise ApiError("bad_input")
     with tx(con):
         x = one(con, """SELECT x.* FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active'
@@ -122,8 +144,11 @@ def answer(con, v: Viewer, eid: int, yes: object) -> list[dict]:
         if x["status"] != "pending":
             raise ApiError("conflict")  # another Vice answered first
         e = one(con, "SELECT * FROM events WHERE id = ?", eid)
-        if yes and (_over(e) or not _fits(e)):
+        if yes and (_over(e) or not _fits(e) or not _free_ok(con, e)):
             raise ApiError("closed")
+        if mute:
+            con.execute("INSERT OR IGNORE INTO org_mutes (org_id, muted_org_id, by_id, created_at) VALUES (?, ?, ?, ?)",
+                        (x["org_id"], e["org_id"], v.id, core.now()))
         con.execute("UPDATE event_cohosts SET status = ?, decided_by = ?, decided_at = ? WHERE event_id = ? AND org_id = ?",
                     ("accepted" if yes else "declined", v.id, core.now(), eid, x["org_id"]))
         if yes:
@@ -132,6 +157,13 @@ def answer(con, v: Viewer, eid: int, yes: object) -> list[dict]:
         if x["invited_by"]:
             notify(con, x["invited_by"], "cohost_yes" if yes else "cohost_no", f"chd:{eid}:{x['org_id']}")
     return invites(con, v, x["org_id"])
+
+
+def unmute(con, v: Viewer, oid: int, muted: int) -> None:
+    """The toast's Undo of "Don't suggest again" (our Vice+)."""
+    if not at_least(role_in(con, v, oid), "vice"):
+        raise ApiError("forbidden")
+    con.execute("DELETE FROM org_mutes WHERE org_id = ? AND muted_org_id = ?", (oid, muted))
 
 
 def end(con, v: Viewer, eid: int) -> None:
@@ -155,10 +187,11 @@ def end(con, v: Viewer, eid: int) -> None:
 
 
 def changed(con, e: sqlite3.Row, after: sqlite3.Row) -> None:
-    """The host moved, re-priced or renamed an event we co-host: our leaders hear it once (a template, no words of the
-    host's), edits within 10 minutes in one message, as event_changed (organizing._changed)."""
+    """The host changed an event we co-host (our name may be on its channel post: any of what the post or the card
+    shows, collab-review R1): our leaders hear it once (a template, no words of the host's), edits within 10 minutes
+    in one message, as event_changed (organizing._changed)."""
     x = one(con, ACCEPTED, e["id"])
-    if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title")):
+    if not x or all(e[k] == after[k] for k in ("starts_at", "ends_at", "price", "title", "place", "place_url", "description", "cover_file_id")):
         return
     for uid in _leaders(con, x["org_id"]):
         if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'cohost_changed' AND ref LIKE ? AND sent_at IS NULL",

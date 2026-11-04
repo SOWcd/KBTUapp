@@ -616,6 +616,9 @@ def _looks_ok(name: str) -> None:
 _CLUB_WORD = re.compile(r"(?<![^\W_])(?:club|\u043a\u043b\u0443\u0431(?:\u044b|\u0430|\u0443)?)(?![^\W_])", re.I)
 
 
+_PAIR = re.compile("[×✕✖⨯⨉⨰⤫╳]|\\s[x\u0445]\\s", re.I)  # a times sign, or x (Latin, Cyrillic) between words; on the NFKC form
+
+
 def _plain(name: str) -> None:
     if _CLUB_WORD.search(name):
         raise ApiError("bad_input", "club_word")
@@ -629,9 +632,17 @@ def _rename_ok(con, oid: int | None, name: str) -> None:
     rename neither gains nor loses one. Names already there stay till they're changed."""
     _looks_ok(name)
     _plain(name)
+    if _PAIR.search(unicodedata.normalize("NFKC", name)):  # "JCC × Crystal" would pose as a collab's signature in the channel (collab-review I1)
+        raise ApiError("bad_input", "name")
     skel = _skeleton(name)
     if any(_skeleton(r[0]) == skel for r in rows(con, "SELECT name FROM orgs WHERE status != 'archived' AND id IS NOT ?", oid)):
         raise ApiError("conflict", "taken")
+    if oid is None or not _org(con, oid)["official"]:  # an initiative can't wear an official club's name or abbr (I2)
+        words = [_skeleton(w) for w in re.split(r"[\W_]+", name) if w]
+        runs = {"".join(words[i:j]) for i in range(len(words)) for j in range(i + 1, len(words) + 1)}
+        for o in rows(con, "SELECT name, abbr FROM orgs WHERE official = 1 AND status = 'active' AND id IS NOT ?", oid):
+            if _skeleton(o["name"]) in runs or o["abbr"] and len(_skeleton(o["abbr"])) >= 3 and _skeleton(o["abbr"]) in words:
+                raise ApiError("conflict", "taken")
 
 
 def _new_club_ok(con, name: str, short: str) -> None:

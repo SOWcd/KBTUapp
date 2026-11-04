@@ -897,7 +897,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/events/{eid}/cohost/answer")
     def cohost_answer(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.cohosts.answer(con, v, eid, body.get("yes"))
+        return logic.cohosts.answer(con, v, eid, body.get("yes"), body.get("mute", False))
+
+    @app.delete("/api/orgs/{oid}/mutes/{muted}", status_code=204)
+    def cohost_unmute(oid: int, muted: int, con: Con, v: Me):
+        logic.cohosts.unmute(con, v, oid, muted)
+
+    # an event's temporary door helpers (logic/crew.py): a running club's President or Vice gives and takes back
+    @app.put("/api/events/{eid}/crew")
+    def crew_put(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.crew.put(con, v, eid, body.get("userId"), body.get("kind"))
+
+    @app.delete("/api/events/{eid}/crew/{uid}")
+    def crew_drop(eid: int, uid: int, con: Con, v: Me):
+        return logic.crew.drop(con, v, eid, uid)
 
     @app.get("/api/orgs/{oid}/cohosts")
     def cohost_invites(oid: int, con: Con, v: Me):

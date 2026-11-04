@@ -14,13 +14,14 @@ from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE
 
 # ---------------------------------------------------------------- Studio (own org)
 
-def _staff_event(con, v: Viewer, eid: int, right: str, cohost: bool = False) -> sqlite3.Row:
+def _staff_event(con, v: Viewer, eid: int, right: str, cohost: bool = False, helper: tuple[str, ...] = ()) -> sqlite3.Row:
     """The event, if I have this right in its club: "events" to run it, "door" to check people in. cohost: the door and
-    the attendee list, which the co-host's event team has too (cohosts.py); every other right stays the host's."""
+    the attendee list, which the co-host's event team has too (cohosts.py); every other right stays the host's.
+    helper: the kinds of the event's temporary door helper let in too (crew.py)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e:
         raise ApiError("not_found")
-    if not (cohost and co_runs(con, v, eid)):
+    if not (cohost and co_runs(con, v, eid)) and not (helper and crew_kind(con, v, e) in helper):
         _may(con, v, e["org_id"], right)
     if right == "door" and e["guest_host"]:
         raise ApiError("closed")  # a partner's event has no door: people sign up on the host's site
@@ -37,6 +38,7 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     # Oct 15's requests without an event: left, hidden; the events we co-host, out already, for our event team (cohosts.py)
     found = rows(con, """SELECT * FROM events WHERE (org_id = ? OR ? AND status != 'draft' AND id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 ORDER BY starts_at""", oid, head, oid)
+    found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own (review)
     # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
@@ -107,10 +109,12 @@ def _team_door(e: sqlite3.Row) -> bool:
 
 
 def _expected(con, e: sqlite3.Row) -> list[int]:
-    """Who a club meeting expects (§2b): the club's students, or only those with its tag."""
+    """Who a team-only event is for (§2b; a meeting expects them): the club's students, only those with its tag, or
+    its board (Head+, by their roles now)."""
     tag = e["meeting_tag"]
     return [r[0] for r in rows(con, "SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ?"
-                                    + (" AND m.user_id IN (SELECT user_id FROM member_tags WHERE tag_id = ?)" if tag else ""), e["org_id"], *([tag] if tag else []))]
+                                    + (" AND m.user_id IN (SELECT user_id FROM member_tags WHERE tag_id = ?)" if tag else "")
+                                    + (" AND m.role IN ('head', 'vice', 'president')" if e["for_board"] else ""), e["org_id"], *([tag] if tag else []))]
 
 
 def meeting_answers(con, v: Viewer, eid: int) -> list[dict]:
@@ -191,7 +195,9 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         visibility = None if i.get("visibility") is None else str(i["visibility"])  # left out: kept as it is
         leaders = str(i.get("leadersFrom") or "president") if visibility == "leaders" else None
         meeting = i.get("meeting") is True  # a club meeting (§2b): team-only, someone's tag or the whole club expected
-        tag = int(i["meetingTag"]) if meeting and i.get("meetingTag") is not None else None
+        # "For whom" (owner, Nov 4): one of the club's tags on any team-only event, required or not (_meeting_ok checks it)
+        tag = int(i["meetingTag"]) if i.get("meetingTag") is not None else None
+        board = i.get("forBoard") is True  # "For whom": the board (Head+), a built-in choice beside the tags
         vol = int(i["volunteers"]) if i.get("volunteers") else None  # how many volunteers it needs; none: off
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
     except (KeyError, TypeError, ValueError):
@@ -201,7 +207,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
           and re.fullmatch(r"#[0-9a-fA-F]{6}", color) and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and visibility in (None, "public", "members", *(("leaders",) if oversee else ()))
           and leaders in (None, "president", "vice", "head") and (not meeting or visibility == "members" and seats is None)
-          and (vol is None or 1 <= vol <= 500 and not meeting))
+          and (vol is None or 1 <= vol <= 500 and not meeting) and not (board and tag))
     if not ok:
         raise ApiError("bad_input")
     return {"title": title, "description": description, "starts_at": starts, "ends_at": ends, "place": place, "place_url": url,
@@ -209,16 +215,20 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
             "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
-            "meeting": int(meeting), "meeting_tag": tag, "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
+            "meeting": int(meeting), "meeting_tag": tag, "for_board": int(board), "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
 
 
-def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None) -> None:
-    """A meeting's tag is one of the club's own, and a meeting has no price. A Head with a department calls only that
-    department (PLAN item 35); `was` (meeting, tag) before an edit: what someone else set stays as it is."""
-    if f["meeting"] and (priced or f["meeting_tag"] and not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", f["meeting_tag"], oid)):
+def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None, vis: str = "public") -> None:
+    """A meeting has no price. "For whom" (the tag) is one of the club's own, on a team-only event only (a meeting or
+    not: a department's get-together today, its required meeting tomorrow). A Head with a department calls only that
+    department (PLAN item 35); `was` (meeting, tag, board) before an edit: what someone else set stays as it is. `vis`: the
+    event's visibility after the edit."""
+    if f["meeting"] and priced or (f["meeting_tag"] or f["for_board"]) and f.get("visibility", vis) != "members" \
+            or f["meeting_tag"] and not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", f["meeting_tag"], oid):
         raise ApiError("bad_input")
-    if f["meeting"] and (f["meeting"], f["meeting_tag"]) != was and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
+    if (f["meeting"] or f["meeting_tag"] or f["for_board"]) and (f["meeting"], f["meeting_tag"], f["for_board"]) != was \
+            and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:
         own = dept_of(con, oid, v.id)
         if own is not None and f["meeting_tag"] != own:
             raise ApiError("forbidden", "dept")
@@ -378,7 +388,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         if (get("visibility") != "public" or get("meeting") or get("guest_host")) \
                 and one(con, "SELECT 1 FROM event_cohosts WHERE event_id = ? AND status != 'declined'", eid):
             raise ApiError("bad_input", "cohost")  # a co-host only on a public event (cohosts.py): remove it first
-        _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"]))
+        _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"], e["for_board"]), e["visibility"])
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"])
@@ -438,6 +448,7 @@ def change_place(con, v: Viewer, eid: int, place: object) -> dict:
         con.execute("UPDATE events SET place = ?, place_url = NULL, updated_at = ? WHERE id = ?", (text, core.now(), eid))
         after = one(con, "SELECT * FROM events WHERE id = ?", eid)
         _changed(con, v, e, after)
+        cohost_changed(con, e, after)
     return full(con, v, after)
 
 
@@ -633,7 +644,7 @@ def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite
     return e, found
 
 
-def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int) -> sqlite3.Row | str:
+def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True) -> sqlite3.Row | str:
     """A badge QR at the door: someone who forgot to register, or was just passing by, comes in.
     A ticket they hold is checked in as usual; a free event registers them on the spot (walk_in); a paid one
     needs a ticket."""
@@ -644,6 +655,8 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int) -> sqlite3.Row | 
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
     if r and r["status"] == "going":
         return r
+    if not walk:
+        return "cancelled" if r else "not_found"
     if e["price"]:
         return "paid"
     if r:  # waitlisted or cancelled earlier, at the door now
@@ -684,13 +697,13 @@ def screen_came(con, eid: int, uid: int, t: int) -> None:
 def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
     """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer."""
     with tx(con):
-        e = _staff_event(con, v, eid, "door", cohost=True)
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
         t = core.now()
         if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             return {"result": "closed"}
         badge = PROFILE_QR.search(str(raw))
-        if badge:
-            r = _walk_in(con, e, int(badge[1]), badge[2], t)
+        if badge:  # a scanner-only helper lets in who is going, never registers anyone (collab-review H1)
+            r = _walk_in(con, e, int(badge[1]), badge[2], t, walk=can(con, v, e["org_id"], "door") or co_runs(con, v, eid) or crew_kind(con, v, e) != "scan")
             if isinstance(r, str):
                 return {"result": r}
         else:
@@ -711,7 +724,8 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
         came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
         return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
                 "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
+                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and one(  # a helper sees the person only (crew.py)
+                    con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long
@@ -888,10 +902,17 @@ def delete_update(con, v: Viewer, eid: int, uid: int) -> None:
 UNDO = 600  # a check-in by name can be taken back this long (a wrong tap at the door)
 
 
+def _door_ok(con, v: Viewer, e: sqlite3.Row) -> sqlite3.Row:
+    """A department's (or the board's) team-only event: its door is for those it is for, and who runs the events."""
+    if e["visibility"] == "members" and not for_me(con, v, e, role_in(con, v, e["org_id"])):
+        raise ApiError("forbidden")
+    return e
+
+
 def door(con, v: Viewer, eid: int) -> list[dict]:
     """The door list for check-in by name (Member+, like the scanner; §3: a Member sees short names only): who is going,
     the ones still to come first."""
-    e = _staff_event(con, v, eid, "door", cohost=True)
+    e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual FROM registrations r
         JOIN users u ON u.id = r.user_id JOIN students s ON s.user_id = u.id WHERE r.event_id = ? AND r.status = 'going'""", eid)
     out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"])} for p in found]
@@ -906,14 +927,15 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
     """No QR (a dead phone): a person going to the event is checked in by hand from the door list (§4.4). The same answer
     as the scanner; marked "by hand" for the organizer and the CSV."""
     with tx(con):
-        e = _staff_event(con, v, eid, "door", cohost=True)
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
         if uid == v.id and not runs(con, v, e):
             raise ApiError("forbidden")  # the door is every member's: marking myself as came is for whoever runs the event
         t = core.now()
         if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             return {"result": "closed"}
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
-        if _team_door(e) and (not r or r["status"] != "going") and uid in _expected(con, e):  # §2b: came anyway
+        if _team_door(e) and (not r or r["status"] != "going") and (uid in _expected(con, e) or (e["meeting_tag"] or e["for_board"]) and one(  # §2b: came anyway
+                con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", e["org_id"], uid)):  # a department's: its Vice+ too
             if r:
                 con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, walk_in = 1, updated_at = ? WHERE id = ?", (t, r["id"]))
             else:
@@ -931,14 +953,15 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
         came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
         return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", uid)),
                 "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": one(con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
+                "flagged": (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and one(  # a helper sees the person only (crew.py)
+                    con, "SELECT 1 FROM receipts WHERE registration_id = ? AND status = 'accepted' AND flags != '' AND reviewed_at IS NULL", r["id"]) is not None}
 
 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
     """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
     that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left
     linked would keep saying they came (PLAN A19 "left")."""
-    _staff_event(con, v, eid, "door", cohost=True)
+    _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     with tx(con):
         cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?
             WHERE event_id = ? AND user_id = ? AND checkin_manual = 1 AND checked_in_at > ?""", (core.now(), eid, uid, core.now() - UNDO))
@@ -966,7 +989,7 @@ def _guest(g: sqlite3.Row, full: bool, me: int) -> dict:
 
 def door_guests(con, v: Viewer, eid: int) -> list[dict]:
     """The walk-ins by name, newest first: full names for Head+ (like the attendees), short ones for the door (§3)."""
-    e = _staff_event(con, v, eid, "door", cohost=True)
+    e = _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
     full = runs(con, v, e)
     return [_guest(g, full, v.id) for g in rows(con, "SELECT * FROM door_guests WHERE event_id = ? ORDER BY created_at DESC, id DESC", eid)]
 
@@ -978,7 +1001,7 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
     if not (3 <= len(full) <= 80 and GUEST_NAME.fullmatch(full)):
         raise ApiError("bad_input")
     with tx(con):
-        e = _staff_event(con, v, eid, "door", cohost=True)
+        e = _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
         t = core.now()
         if e["status"] != "published" or t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
             raise ApiError("conflict", "closed")
@@ -999,7 +1022,7 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
 
 def undo_door_guest(con, v: Viewer, eid: int, gid: int) -> None:
     """A wrong name taken back by whoever typed it, in the first 10 minutes, while nobody is linked to it."""
-    _staff_event(con, v, eid, "door", cohost=True)
+    _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
     if not con.execute("DELETE FROM door_guests WHERE id = ? AND event_id = ? AND added_by = ? AND user_id IS NULL AND created_at > ?",
                        (gid, eid, v.id, core.now() - UNDO)).rowcount:
         raise ApiError("conflict")
@@ -1048,6 +1071,8 @@ from . import core  # noqa: E402
 from .account import _drop_photo, _drop_unused, me  # noqa: E402
 from .clubs import _keep_name, org, people  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
+from .crew import kind as crew_kind  # noqa: E402
+from .seats import for_me  # noqa: E402
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402

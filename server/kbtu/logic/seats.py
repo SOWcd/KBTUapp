@@ -127,26 +127,69 @@ def chat_join(con, chat_id: int, tg_id: int) -> bool | None:
 # any of that edits the post, a cancel marks it. A few a round, so the first run fills the channel without a flood.
 # ponytail: one post per event; a morning digest when there are many a day.
 
+def for_me(con, v: Viewer, e: sqlite3.Row, role: str | None) -> bool:
+    """A team-only event's "For whom" includes me (a member): the whole team; a tag's people; the board (Head+). The
+    club's Vice+ and whoever runs its events see every one (they needn't come)."""
+    if not e["meeting_tag"] and not e["for_board"]:
+        return True
+    if at_least(role, "vice") or can(con, v, e["org_id"], "events") or e["for_board"] and at_least(role, "head"):
+        return True
+    return bool(e["meeting_tag"] and one(con, "SELECT 1 FROM member_tags WHERE tag_id = ? AND user_id = ?", e["meeting_tag"], v.id))  # ponytail: a query per tagged card, rare
+
+
 def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, str, str | None, str]]:
     """Posts to make or fix: (event, caption, the cover's path or None, its signature). bot: our bot's username, for
-    the sign-up link in the text."""
+    the sign-up link in the text. Who may be in the channel: an active official club or KBTU's own office; an
+    initiative's free event while an official club co-hosts it (owner, Nov 4: "Official × Initiative", the post then
+    hangs on that club, channel_via); a post made before the ✓ went is kept in step. A post that may no longer be
+    there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted (collab-review R2, X2,
+    X3); it comes back with a new yes."""
     out = []
-    for e in rows(con, """SELECT e.*, o.name AS org_name, f.path AS cover FROM events e JOIN orgs o ON o.id = e.org_id
-            LEFT JOIN files f ON f.id = e.cover_file_id
-            WHERE e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.starts_at > ?
+    for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
+            c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
+            e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL
               AND (e.guest_host IS NULL OR e.channel_msg IS NOT NULL)  -- a partner's event isn't announced; one posted before it became one is kept in step
-              AND (o.official = 1 OR o.kind != 'club' OR e.channel_msg IS NOT NULL)  -- official clubs' and KBTU's own; a post made before the ✓ went is kept in step
-              AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) ORDER BY e.published_at""", core.now()):
+              AND (e.status = 'published' OR e.status = 'cancelled' AND e.channel_msg IS NOT NULL) AS live
+            FROM events e JOIN orgs o ON o.id = e.org_id
+            LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.status = 'accepted'
+            LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active' AND c.kind = 'club'
+            LEFT JOIN files f ON f.id = e.cover_file_id
+            WHERE e.starts_at > ? AND (e.status != 'draft' OR e.channel_msg IS NOT NULL) OR e.channel_via IS NOT NULL
+            ORDER BY e.published_at""", core.now(), core.now()):
+        on = e["h_status"] == "active"
+        own = on and (e["h_off"] or e["h_kind"] != "club")
+        kept = on and e["channel_msg"] and e["channel_via"] is None
+        vouch = on and e["co_off"] and not e["price"]  # free only (M1)
+        if not e["live"] or not (own or kept or vouch):
+            # one still to come that may not be there, or a past one that hung on a co-host now gone
+            # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
+            if e["channel_msg"] and (e["live"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
+                _unpost(con, e)
+            continue
+        via = None if own or kept else e["co_id"]
+        if via != e["channel_via"]:
+            con.execute("UPDATE events SET channel_via = ? WHERE id = ?", (via, e["id"]))
         tr = json.loads(e["i18n"]) if e["i18n"] else {}  # the channel is everyone's: the other languages' titles under it (PLAN 9)
         also = [x for k in ("kk", "ru", "en") if (x := tr.get(k, {}).get("title")) and x.strip().lower() != e["title"].strip().lower()]
-        text = texts.channel_post(e["title"], e["org_name"], e["starts_at"], e["place"], e["price"], e["status"] == "cancelled",
+        # a co-hosted event names both clubs, the official one first (I3)
+        names = [e["org_name"]] + ([e["co_name"]] if e["co_id"] else [])
+        if e["co_id"] and e["co_off"] and not e["h_off"]:
+            names.reverse()
+        text = texts.channel_post(e["title"], " × ".join(names), e["starts_at"], e["place"], e["price"], e["status"] == "cancelled",
                                   f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "", also)
         sig = hashlib.sha256(f"{text}|{e['cover']}".encode()).hexdigest()[:16]
-        if sig != e["channel_sig"]:
+        if sig != e["channel_sig"] and len(out) < limit:
             out.append((e, text, e["cover"], sig))
-        if len(out) >= limit:
-            break
     return out
+
+
+def _unpost(con, e: sqlite3.Row) -> None:
+    """The event's channel post (and its copy in the discussion group) goes on the bot's next round (channel_gone)."""
+    with tx(con):
+        thread = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"thread:{e['id']}")
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{e['channel_msg']}", thread[0] if thread else ""))
+        con.execute("""UPDATE events SET channel_msg = NULL, channel_photo = 0, channel_sig = NULL, channel_via = NULL, channel_link = NULL
+            WHERE id = ?""", (e["id"],))
 
 
 def channel_gone(con) -> list[tuple[int, str]]:
@@ -267,7 +310,7 @@ def _visible(con, v: Viewer, e: sqlite3.Row, roles: dict[int, str] | None = None
     if e["status"] == "draft" or e["hidden_at"]:
         return team or v.role == "admin"
     if e["visibility"] == "members":
-        return team
+        return team and for_me(con, v, e, roles[e["org_id"]])
     if e["visibility"] == "leaders":
         return team or at_least(max(roles.values(), key=RANK.__getitem__, default=None), e["leaders_from"] or "president")
     return True

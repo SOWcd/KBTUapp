@@ -343,6 +343,12 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
+    if kind == "crew_added":  # cw:<event>, to the helper (logic/crew.py): quiet once the right is gone or the event over
+        e = one(con, """SELECT e.*, o.name AS org FROM event_crew c JOIN events e ON e.id = c.event_id JOIN orgs o ON o.id = c.org_id
+            WHERE c.event_id = ? AND c.user_id = ? AND e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public'
+            AND COALESCE(e.ends_at, e.starts_at + ?) > ? AND o.status = 'active' AND (c.org_id = e.org_id OR EXISTS (SELECT 1 FROM event_cohosts x
+            WHERE x.event_id = e.id AND x.org_id = c.org_id AND x.status = 'accepted'))""", int(ref[1]), m["user_id"], logic.NO_END, logic.now())
+        return (*texts.bot_message(lang, kind, org=e["org"], **ev(e)), f"ev_{e['id']}") if e else None
     if kind.startswith("cohost_"):  # ch: / chd: / che:<event>:<club> (logic/cohosts.py): quiet once what it says is no longer so
         e = one(con, """SELECT e.*, h.name AS host, c.name AS org, x.status AS co FROM events e JOIN orgs h ON h.id = e.org_id JOIN orgs c ON c.id = ?
             LEFT JOIN event_cohosts x ON x.event_id = e.id AND x.org_id = c.id WHERE e.id = ? AND e.status != 'cancelled' AND e.hidden_at IS NULL
