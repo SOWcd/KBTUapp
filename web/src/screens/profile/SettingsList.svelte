@@ -40,7 +40,7 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import ThemeGlyph, { glyph } from './ThemeGlyph.svelte';
-  import { skinOf, skinned, STRAP, banded, clubLook, lookVars, type Look } from '../../lib/awards';
+  import { skinOf, skinned, STRAP, banded, clubLook, comingLooks, lookVars, type Look } from '../../lib/awards';
   // each lanyard's card art at the swatch's size, one small picture (tools/scene-rasters.mjs draws them from LanyardBand)
   const MINI = import.meta.glob('../../assets/lanyards/minis/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   import { byRank } from '../../lib/perms';
@@ -58,11 +58,11 @@
   const school = $derived(schoolOf(me?.student?.school));
   // once each: a member of my school's org (staff often are) had it twice, a duplicate key that blanked Settings (Nov 2)
   const own = $derived([...mine, ...(school && skinned(school) && !mine.some((o) => o.id === school.id) ? [school] : [])]);
-  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && !own.some((x) => x.id === o.id))]
+  const skins = $derived([...own, ...data.orgs.filter((o) => skinned(o) && !own.some((x) => x.id === o.id)), ...comingLooks()]
     .filter((o, i, all) => all.findIndex((x) => x.id === o.id) === i));  // a key twice blanks the list: never
   // the creator wears any (owner, Nov 2; the server holds it too)
   const swatches = $derived([...(me?.founder ? [{ id: 'sower' as const, kind: 'sower', name: 'SOWER', word: 'SOWER' }] : []),
-    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: !me?.founder && !own.some((x) => x.id === o.id) })),
+    ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: o.id < 0 || !me?.founder && !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }]);
   // two rows (owner, Nov 2: three pushed the card off the screen): organisations (SOWER, mine, KBTU, the rest locked),
   // then the schools (mine first)

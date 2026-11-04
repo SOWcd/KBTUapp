@@ -304,7 +304,11 @@ export const skinOf = (o?: OrgRef | null): Skin | null => (o && (o.kind === 'sch
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
 export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
-  : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin)) ?? 'kbtu';
+  : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin) ?? comingLooks().find((o) => o.id === p.skin)) ?? 'kbtu';
+/** a drawn lanyard whose club isn't in the app yet (kbtu.mag, Nov 4): shown in the picker to try on, never worn; a
+ *  negative id the server never sees (the try-on is local) */
+export const comingLooks = (): OrgRef[] => !data.orgs.length ? [] : Object.entries(CLUB_LOOKS).filter(([slug]) => !data.orgs.some((o) => o.slug === slug))
+  .map(([slug, c], i) => ({ id: -1 - i, slug, name: c.strip, short: c.strip.slice(0, 2), emoji: '', cover: 0, kind: 'club' as const, official: false }));
 /** the org a look belongs to, as this person's card knows it (their clubs first, then the app's list): its logo is the
  *  card's medallion (ui/OrgMedal) */
 export const orgOfLook = (p: PersonCard, look: Look): OrgRef | undefined =>
