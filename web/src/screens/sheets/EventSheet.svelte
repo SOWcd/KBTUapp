@@ -254,7 +254,10 @@
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
   // the team's tools group has a row to show (a guest host's event leaves a Member nothing)
-  const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink || coCrew || coLead));
+  // a door helper (server crew.py): someone a running club's President or Vice asked to help at this event's door
+  const helper = $derived(!preview && !crew && !coCrew && e?.status === 'published' ? detail?.myCrew ?? null : null);
+  const crewLead = $derived(!preview && detail?.crew != null && e?.status === 'published' && !over && !e.guestHost && !inner(e));
+  const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink || coCrew || coLead || !!helper));
   function shareMine() {
     if (!e) return;
     haptic.tap();
@@ -467,6 +470,8 @@
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
           {#if !e.price && !over}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
         {/if}
+        {#if helper}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => (helper === 'scan' ? sheets.scannerOnly(id) : sheets.scanner(id))} />{/if}
+        {#if coLead && crewLead}<Row icon={UsersRound} title={t('crew.title')} count={detail?.crew?.length ?? 0} accessory="chevron" onclick={() => sheets.crew(id, () => void api.event(id).then((d) => (detail = d)).catch(() => {}))} />{/if}
         {#if myLink}<Row icon={Link} title={t('event.myLink')} onclick={shareMine} />{/if}
         {#if coLead}<Row tone="destructive" title={t('co.leave')} onclick={leaveCohost} />{/if}
       </Group>

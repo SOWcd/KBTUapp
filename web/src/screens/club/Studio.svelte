@@ -41,6 +41,7 @@
   import Mail from '@lucide/svelte/icons/mail';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
+  import { menu } from '../../ui/menu';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -94,10 +95,20 @@
     if (org && vice) api.cohostInvites(org).then((l) => { if (m?.org.id === org) coAsks = l; }).catch(() => {});
     else coAsks = [];
   });
-  async function coAnswer(x: CohostInvite, yes: boolean) {
+  // what a yes signs (collab-review S3): the description, and for an initiative's event our name on its channel post
+  const clip = (s: string) => (s.length > 280 ? s.slice(0, 280).trimEnd() + '…' : s);
+  async function coAnswer(x: CohostInvite, yes: boolean, mute = false) {
     haptic.tap();
+    const club = nameOf(x.host), org = m?.org;
+    if (yes && org && !(await sheets.ask({ title: t('co.acceptAsk', { club }), ok: t('co.yes'), cancel: t('common.cancel'),
+      text: [clip(x.event.description.trim()), x.channel ? t('co.acceptChannel', { us: nameOf(org), club }) : t('co.acceptPlain')].filter(Boolean).join('\n\n') }))) return;
     coAsks = coAsks.filter((y) => y !== x); // at once; back if the server says no
-    try { await api.cohostAnswer(x.event.id, yes); haptic.ok(); say(t(yes ? 'co.saidYes' : 'co.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); if (yes) studioChanged(); }
+    try {
+      await api.cohostAnswer(x.event.id, yes, mute); haptic.ok();
+      if (mute && org) say(t('co.muted', { club }), 'waving_hand_3d_default', () => void api.cohostUnmute(org.id, x.host.id).catch(() => {}));
+      else say(t(yes ? 'co.saidYes' : 'co.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default');
+      if (yes) studioChanged();
+    }
     catch { coAsks = [x, ...coAsks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // Head+ of a student initiative: the path to the official ✓ (server clubs.py, official_path), its marks read on each visit
@@ -121,6 +132,10 @@
     try { const x = await api.askOfficial(org); if (m?.org.id === org) path = x; haptic.ok(); say(t('op.sent'), 'party_popper_3d'); }
     catch { path = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  const coNo = (ev: MouseEvent, x: CohostInvite) => menu(ev.currentTarget as Element, [
+    { label: t('co.no'), onselect: () => void coAnswer(x, false) },
+    { label: t('co.mute'), destructive: true, onselect: () => void coAnswer(x, false, true) },
+  ]);
   const recruiting = $derived(data.orgs.find((x) => x.id === m?.org.id)?.recruiting ?? true);
   const members = $derived(data.orgs.find((x) => x.id === m?.org.id)?.members ?? 0);
   // the Team row's faces, from the roster the app loads with it; a dozen is more than a 430 px row holds
@@ -241,8 +256,8 @@
       <Group caption={t('studio.todo')}>
         {#each coAsks as x (x.event.id)}
           <Row title={x.event.title} subtitle={t('co.ask', { club: nameOf(x.host) })}>
-            {#snippet lead()}<OrgLogo org={x.host} size={30} />{/snippet}
-            {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('co.no')} onclick={() => coAnswer(x, false)} />
+            {#snippet lead()}{#if x.event.cover}<img class="cov" src={x.event.cover.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}{/snippet}
+            {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('co.no')} onclick={(ev) => coNo(ev, x)} />
               <Button kind="tinted" size="s" onclick={() => coAnswer(x, true)}>{t('co.yes')}</Button></span>{/snippet}
           </Row>
         {/each}
@@ -386,6 +401,7 @@
   .mark { display: flex; color: var(--text-3); }
   .mark.on { color: var(--success-text); }
   .yn { display: flex; align-items: center; gap: var(--s-2); }
+  .cov { width: 30px; height: 30px; border-radius: var(--r-xs); object-fit: cover; }
   /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */
   @media (max-width: 359px) { .acts :global(.btn.full) { flex-basis: auto; padding-inline: var(--s-3); gap: 6px; } }
   .moving { display: flex; align-items: flex-end; gap: var(--s-2); }

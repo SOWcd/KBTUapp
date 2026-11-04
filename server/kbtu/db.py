@@ -1209,6 +1209,30 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';
     CREATE INDEX official_requests_by_org ON official_requests(org_id, id);"""),
+    # collabs with an official club (owner, Nov 4; .claude/reports/collab-review.md): an official club's "Don't suggest
+    # again" for an initiative; the co-host whose ✓ put an initiative's event in the channel (NULL: the host's own
+    # right, kept in step after a lost ✓; set: the post goes when that co-host does); an event's temporary door
+    # helpers, any KBTU student a running club's President or Vice picks (scan: tickets only; door: the list too); a team-only
+    # event for the club's board (everyone Head+, read from roles at use)
+    (126, """CREATE TABLE org_mutes (
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      muted_org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      by_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      PRIMARY KEY (org_id, muted_org_id)
+    ) STRICT;
+    ALTER TABLE events ADD COLUMN channel_via INTEGER;
+    ALTER TABLE events ADD COLUMN for_board INTEGER NOT NULL DEFAULT 0;  -- "For whom": the board (Head+, from roles), not a tag
+    CREATE TABLE event_crew (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL CHECK (kind IN ('scan', 'door')),
+      added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+    CREATE INDEX crew_by_user ON event_crew(user_id);"""),
 ]
 
 

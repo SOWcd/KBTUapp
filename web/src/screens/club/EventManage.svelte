@@ -49,7 +49,9 @@
   const unread = $derived(going.filter((a) => a.receipt && a.receipt.amount == null).length);
   // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
   let chat = $state<string | null>(null);
-  $effect(() => { if (head) api.event(id).then((x) => (chat = x.chat ?? null)).catch(() => {}); });
+  // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
+  let crewN = $state<number | null>(null);
+  $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; crewN = x.crew ? x.crew.length : null; }).catch(() => {}); });
   async function openChat() {
     haptic.tap();
     if (chat) { openLink(chat); return; }
@@ -137,6 +139,9 @@
         {#if head}
           <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
           <!-- the big screen at the door (/show): a free public-ish event's own check-in session -->
+          {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
+            <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
+          {/if}
           {#if live && !price && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
           {#if e.status !== 'cancelled'}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}

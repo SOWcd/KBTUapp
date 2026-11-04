@@ -481,8 +481,9 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all
     pay = head or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
     return {**c, **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"],
-            "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"],
+            "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"], "forBoard": bool(e["for_board"]),
             "memo": json.loads(e["memo"]) if head and e["memo"] else None, "cohost": cohost_view(con, e) if head else None,
+            "crew": crew_view(con, v, e), "myCrew": crew_kind(con, v, e),  # the door helpers (crew.py): theirs to give, mine to use
             "badgeName": e["badge_name"], **_album_view(con, v, e), "commentsOn": bool(e["comments_on"]),
             "discuss": e["channel_link"] if e["comments_on"] else None,  # its post's comments in Telegram (the talk is there)
             "comments": one(con, "SELECT COUNT(*) FROM comments WHERE event_id = ? AND deleted_at IS NULL", e["id"])[0],
@@ -499,6 +500,7 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
 # when a function runs
 from .clubs import org, orgs  # noqa: E402
 from .cohosts import cohost_view, cohosts_of  # noqa: E402
+from .crew import kind as crew_kind, view as crew_view  # noqa: E402
 from .organizing import _album_view, _rating_view  # noqa: E402
 from .oversight import staff  # noqa: E402
 from .profiles import friends  # noqa: E402

@@ -98,7 +98,7 @@
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
     end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
-    meeting: false, meetingTag: null as Id | null,
+    meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, late: false, regDate: '', regTime: '18:00',
@@ -127,7 +127,10 @@
   // a Head with a department calls only their department (PLAN 35): that one is picked, the rest aren't offered
   let ownDept = $state<Id | null>(null);
   const deptOnly = $derived(ownDept != null && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
-  $effect(() => { if (isMeeting && !tags.length) api.teamSetup(org).then((s) => { tags = s.tags; ownDept = s.myDept ?? null; if (deptOnly && !saved) f.meetingTag = ownDept; }).catch(() => {}); });
+  // "For whom" (owner, Nov 4): any team-only event, required or not; picking a department doesn't make it required
+  let tagsRead = $state(false);
+  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; ownDept = s.myDept ?? null; tagsRead = true; if (deptOnly && !saved) f.meetingTag = ownDept; }).catch(() => {});
+  $effect(() => { if (f.teamOnly && !tagsRead) readTags(); });
 
   const startTs = $derived(fromInputs(f.date, f.start));
   // the end: a time on the start's day, earlier than the start meaning the next day (a night hackathon); an end date
@@ -285,7 +288,7 @@
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: e.endsAt ? time(e.endsAt) : '', endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
           seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
-          meeting: !!e.meeting, meetingTag: e.meetingTag ?? null,
+          meeting: !!e.meeting, meetingTag: e.meetingTag ?? null, forBoard: !!e.forBoard,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
@@ -325,7 +328,7 @@
     memo: Object.keys(f.memo).length ? $state.snapshot(f.memo) : null,
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
-    meeting: isMeeting && !f.partner, meetingTag: isMeeting && !f.partner ? f.meetingTag : null,
+    meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
     ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
     // only a changed photo or focus is sent: left out, the server keeps what the event has
@@ -460,8 +463,11 @@
   ]);
   const leadMenu = $derived<MenuItem[]>((['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })));
   const tagMenu = $derived<MenuItem[]>([
-    ...(deptOnly ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null, onselect: () => { f.meetingTag = null; } }]),
-    ...tags.filter((g) => !deptOnly || g.id === ownDept).map((g) => ({ label: g.name, checked: f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; } })),
+    ...(deptOnly && f.meeting ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null && !f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = false; } }]),
+    // the board (Head+, from roles; owner, Nov 4): built in, no tag to make
+    ...(deptOnly ? [] : [{ label: t('ed.meetingBoard'), checked: f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = true; } }]),
+    ...tags.filter((g) => !deptOnly || g.id === ownDept).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
+    ...(tags.length ? [] : [{ label: t('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
   ]);
   const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
 
@@ -583,10 +589,12 @@
         {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
         {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
         {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
-        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => (f.meeting = v)} />{/if}
-        {#if isMeeting && tags.length}
-          <Row icon={TagIcon} title={t('ed.meetingWho')} value={tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} menu={tagMenu} />
+        {#if f.teamOnly && tagsRead}
+          <Row icon={TagIcon} title={t('ed.meetingWho')} menu={tagMenu}
+            value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
         {/if}
+        <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
+        {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDept; f.forBoard = false; } }} />{/if}
       {/if}
       {#if tickets}
         <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />

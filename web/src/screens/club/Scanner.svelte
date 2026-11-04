@@ -28,7 +28,8 @@
   import Tag from '../../ui/Tag.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
 
-  let { overlay, id, names = false }: { overlay: Overlay; id: Id; names?: boolean } = $props();
+  // only: a scanner-only door helper (server crew.py): tickets and badges of people going, no list by name
+  let { overlay, id, names = false, only = false }: { overlay: Overlay; id: Id; names?: boolean; only?: boolean } = $props();
 
   let detail = $state<EventFull | null>(null);
   $effect(() => { api.event(id).then((d) => (detail = d)).catch(() => {}); });
@@ -174,7 +175,7 @@
       </form>
     {/if}
 
-    {#if !byName}
+    {#if only}{:else if !byName}
       <Button kind="secondary" size="l" full onclick={openByName}>{#snippet icon()}<UserSearch size={18} />{/snippet}{t('door.byName')}</Button>
     {:else}
       <section class="door">

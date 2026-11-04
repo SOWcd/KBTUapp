@@ -296,7 +296,12 @@ export interface MyRegistration {
 }
 
 /** A co-host invite waiting for my club's answer (its Vice+, Studio's To do): the host's event as it stands */
-export interface CohostInvite { event: { id: Id; title: string; startsAt: Ts; place: string; status: EventCard['status'] }; host: OrgRef; at: Ts }
+/** `channel`: our name goes on the host's @KBTUevents post (we are official, the host an initiative; collab-review S3) */
+export interface CohostInvite { event: { id: Id; title: string; startsAt: Ts; place: string; status: EventCard['status']; description: string; price: number | null; cover: EventCard['cover'] };
+  host: OrgRef; at: Ts; channel: boolean }
+/** an event's temporary door helper (server logic/crew.py): `scan` the scanner only, `door` the whole door; `org` the club that gave it */
+export type CrewKind = 'scan' | 'door';
+export interface CrewMember { person: PersonRef; kind: CrewKind; org: Id }
 
 export interface EventCard {
   /** the other languages (ai.py), applied by api/client.ts; `orig`: the text as typed */
@@ -348,7 +353,10 @@ export interface EventFull extends EventCard {
   volunteers?: { need: number; senior: boolean; taken: number; mine: 'asked' | 'yes' | 'no' | null; asked?: number } | null;
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
-  meetingTag?: Id | null;       // a meeting for one of the club's tags; null = the whole club
+  meetingTag?: Id | null;       // "for whom" on a team-only event: one of the club's tags; null = the whole team
+  forBoard?: boolean;           // "for whom": the club's board (Head+, from roles), instead of a tag
+  crew?: CrewMember[] | null;   // the door helpers, for the running clubs' Presidents and Vices (null for the rest)
+  myCrew?: CrewKind | null;     // I help at this event's door
   payToName: string | null;
   payPhone: string | null;
   memo?: MemoAsks | null;       // the club's Head+: what this event asks DMP for in the weekly memo
@@ -445,7 +453,7 @@ export interface EventInput {
   volunteersSenior?: boolean;  // not year 1
   visibility?: 'public' | 'members' | 'leaders';  // left out: kept as it is; leaders only from an oversight org
   meeting?: boolean;           // a club meeting: only team-only, no seats, no price
-  meetingTag?: Id | null;
+  meetingTag?: Id | null; forBoard?: boolean;
   guestHost?: string | null;   // a partner's event: the outside host; null turns it off, left out keeps it
   externalUrl?: string | null; // with guestHost: where people sign up (https)
   leadersFrom?: 'president' | 'vice' | 'head';
