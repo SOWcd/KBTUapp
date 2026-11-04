@@ -166,7 +166,7 @@
           <div class="hero-tx">
             <span class="when num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
             <b class="clamp-2">{e.title}</b>
-            <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}</span>
+            <span class="where ellipsis">{placeOf(e.place)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
             <!-- over the cover: the glass buttons -->
             <span class="acts">
               <Button kind="glass" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button>
@@ -254,7 +254,7 @@
               <button class="hit" onpointerdown={() => prefetchEvent(e.id)} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
               <Poster item={e} size={76} radius={16} dim={e.status === 'cancelled'} />
               <span class="tx">
-                <span class="org"><OrgLogo org={e.org} size={16} /><span class="ellipsis">{nameOf(e.org)}</span>{#if inner(e)}<UsersRound size={13} strokeWidth={2.2} />{/if}{#if e.saved && e.status !== 'cancelled'}<Bookmark class="sv" size={13} strokeWidth={2.4} fill="currentColor" aria-label={t('event.saved')} />{/if}</span>
+                <span class="org">{#if e.coHost}<span class="pair"><OrgLogo org={e.org} size={16} /><OrgLogo org={e.coHost} size={16} /></span><span class="ellipsis">{nameOf(e.org)} × {nameOf(e.coHost)}</span>{:else}<OrgLogo org={e.org} size={16} /><span class="ellipsis">{nameOf(e.org)}</span>{/if}{#if inner(e)}<UsersRound size={13} strokeWidth={2.2} />{/if}{#if e.saved && e.status !== 'cancelled'}<Bookmark class="sv" size={13} strokeWidth={2.4} fill="currentColor" aria-label={t('event.saved')} />{/if}</span>
                 <b class="clamp-2 title">{e.title}</b>
                 <span class="meta num">
                   <span><Clock size={14} strokeWidth={1.75} />{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
@@ -336,6 +336,9 @@
   .tx :global(button), .tx :global(a) { pointer-events: auto; }
   .org { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
   .org :global(.logo) { box-shadow: 0 0 0 1px var(--line); }
+  /* a co-hosted event: both marks, the second over the first's edge (as ui/OrgTag) */
+  .pair { display: flex; flex: none; }
+  .pair :global(.logo + .logo) { margin-left: -5px; box-shadow: 0 0 0 1.5px var(--bg); }
   .org :global(svg) { flex: none; color: var(--accent-text); }
   .org :global(.sv) { color: var(--warning-text); } /* saved: the themed amber */
   .title { font: 700 var(--fs-card)/1.22 var(--font-text); letter-spacing: -0.01em; }
