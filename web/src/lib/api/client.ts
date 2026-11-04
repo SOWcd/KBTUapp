@@ -1,7 +1,7 @@
 // The real server (SPEC §6). Every call carries Telegram's signed initData; errors come back as
 // { error, message } and become ApiErr.
 import type { Api } from './index';
-import type { ApiError, ClubApplication, Id, PersonCard, Video } from './types';
+import type { ApiError, ClubApplication, Id, OfficialPath, PersonCard, Video } from './types';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
 import { tg } from '../tg';
@@ -291,6 +291,9 @@ export const server: Api = {
   applyClub: (input) => call('POST', '/club-applications', input),
   clubApplications: () => call('GET', '/admin/club-applications'),
   decideClubApplication: (id, approve, reason) => call('POST', `/admin/club-applications/${id}`, { approve, reason: reason ?? '' }),
+  officialPath: (org) => call<{ path: OfficialPath | null }>('GET', `/orgs/${org}/official-path`).then((r) => r.path),
+  askOfficial: (org) => call<{ path: OfficialPath | null }>('POST', `/orgs/${org}/official-path`).then((r) => r.path),
+  decideOfficial: (id, approve, reason) => call('POST', `/admin/official-requests/${id}`, { approve, reason: reason ?? '' }),
   feature: (postId, days) => call('POST', '/admin/feature', { postId, days }),
   giveGrant: (userId, code) => call('POST', '/admin/grants', { userId, code }),
   grantScan: (qr, code, run) => call('POST', '/admin/grants/scan', { qr, code, run }),

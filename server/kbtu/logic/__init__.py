@@ -32,7 +32,7 @@ from .account import (CONSENT, CONSENT_AI, agreed, ai_on, policy, CONSENT_BOARD,
 from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFFICIAL_ROLES, REAPPLY, RESERVED,
     SCHOOLS, SCHOOLS_VERSION, SHORT, SLUG, TRANSLIT, _HEAD, _KB, _SEP, _TAIL, _acronym, _club_app, _keep_name,
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,
-    club_applications, create_org, decide_club_application, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
+    club_applications, create_org, decide_club_application, PATH_STEPS, ask_official, decide_official, official_path, official_requests, undo_official, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
     people, seed_schools, slug_for, start_by_slug, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hide_post, post_shape, post_shapes, posts,

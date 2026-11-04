@@ -35,6 +35,8 @@ def inbox(con, v: Viewer) -> dict:
         for a in club_applications(con, v):
             if a["status"] == "pending":
                 items.append(_item("capp", a["id"], a["createdAt"], False, a))
+        for r in official_requests(con, v):
+            items.append(_item("opath", r["id"], r["createdAt"], False, r))
         for r in roster_requests(con, v):
             items.append(_item("claim", r["id"], 0, False, r))
         f = one(con, "SELECT COUNT(*), MIN(created_at) FROM map_flaws WHERE done_at IS NULL")
@@ -70,6 +72,7 @@ def count(con, v: Viewer) -> int:
     if v.role == "admin":
         from .. import roster  # it imports kbtu.logic itself
         n += one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0]
+        n += one(con, "SELECT COUNT(*) FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0")[0]
         n += len(roster.requests(con, v))
         n += one(con, "SELECT EXISTS (SELECT 1 FROM map_flaws WHERE done_at IS NULL)")[0]
     return n
@@ -77,7 +80,7 @@ def count(con, v: Viewer) -> int:
 
 # ---- Done: the decisions of the last DONE_DAYS, newest first; an Undo where the action has one and nothing came after
 
-UNDOABLE = ("report_remove", "tg_confirm", "post_hide", "fchan_hide", "fchan_reply_hide", "capp_no", "chat_decline", "chat_remove",
+UNDOABLE = ("report_remove", "tg_confirm", "post_hide", "fchan_hide", "fchan_reply_hide", "capp_no", "opath_yes", "opath_no", "chat_decline", "chat_remove",
             "event_delete", "tg_report_close")
 NO_UNDO_KINDS = ("ask",)  # a forum request a moderator hid has no way back here
 
@@ -123,6 +126,7 @@ _TEXT = {  # target kind -> (the text, read for all rows at once)
     "fchan": "SELECT id, body FROM fchan_posts WHERE id IN ({})",
     "fchanr": "SELECT id, body FROM fchan_replies WHERE id IN ({})",
     "ask": "SELECT id, title FROM asks WHERE id IN ({})",
+    "opath": "SELECT r.id, o.name FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.id IN ({})",
     "roster": "SELECT id, full_name FROM roster_pending WHERE id IN ({})",  # while the row is there (never kept in the log)
     "tgreport": f"SELECT id, COALESCE(nick, (SELECT first_name || ' ' || last_name FROM students WHERE user_id = users.id), tg_first_name) FROM users WHERE id IN ({{}})",
 }
@@ -163,6 +167,8 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
         return restore(con, v, kind, tid)
     elif act == "capp_no":
         undo_club_refusal(con, v, tid)
+    elif act in ("opath_yes", "opath_no"):
+        undo_official(con, v, tid)
     elif act in ("chat_decline", "chat_remove"):
         undo_chat(con, v, tid)
     elif act == "event_delete":
@@ -178,7 +184,7 @@ def undo(con, v: Viewer, aid: int) -> list[str]:
 from . import fchannel, tgcomments  # noqa: E402
 from .account import roster_requests  # noqa: E402
 from .chatlist import pending_chats, undo_chat  # noqa: E402
-from .clubs import club_applications, undo_club_refusal  # noqa: E402
+from .clubs import club_applications, official_requests, undo_club_refusal, undo_official  # noqa: E402
 from .core import ADMIN_DONE, DECISIONS, MOD_DONE, UNDOES, decided, same_targets  # noqa: E402
 from .moderation import report_queue, restore  # noqa: E402
 from .organizing import undo_delete_event  # noqa: E402

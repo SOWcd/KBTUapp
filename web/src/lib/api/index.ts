@@ -2,7 +2,7 @@
 // (a second copy of the server's rules, drifting); screens are now checked on the real server with made-up people
 // (server/tools/qa.py).
 import type {
-  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
+  AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, ClubLevel, MemberPatch, Friends, Friendship, FoundStudent, FriendLinkUse, LinkCard, PersonRef, Media, Video, Attendee, DoorPerson, DoorGuest, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, EventCard, EventFull, EventInput, Id, Me, Org, PersonCard, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplication, ClubApplicationInput, OfficialPath, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, ShortLink, OrgChat, StudioChat, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcClosed, TgcRule } from './types';
 import { server } from './client';
 import type { Graph } from '../route';
 
@@ -212,6 +212,9 @@ export interface Api {
   applyClub(input: ClubApplicationInput): Promise<ClubApplication>;
   clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
+  officialPath(org: Id): Promise<OfficialPath | null>;   // the club's team: the steps to the ✓ (null: official already)
+  askOfficial(org: Id): Promise<OfficialPath | null>;    // its President or a Vice, all five done
+  decideOfficial(id: Id, approve: boolean, reason?: string): Promise<OfficialRequest>; // admin
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
   /** Admin → Awards: give a person a manual award (the bot sends them its card); undo: ungrant(its id) */
   giveGrant(userId: Id, code: GrantItem['code']): Promise<GrantItem>;

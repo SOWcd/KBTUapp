@@ -366,6 +366,124 @@ def undo_club_refusal(con, v: Viewer, aid: int) -> None:
         log_action(con, v.id, "capp_undo", f"capp:{aid}")
 
 
+# ---------------------------------------------------------------- the path to the official ✓ (Nov 4)
+# A student initiative's five steps, any order, each read live when Studio opens (one query, every fact once); all
+# done, its President or a Vice asks the admin, who gives the ✓ (or says no with a reason the club reads in Studio).
+
+PATH_STEPS = ("members", "profile", "round", "event", "collab")
+PATH_MIN = 3             # members in the app, and people outside the team at one event
+PATH_SETTLED = 3 * 86400  # a member counts once in the club this long (a night of friends joining isn't a club)
+
+
+def _path_steps(con, oid: int) -> dict[str, bool]:
+    r = con.execute("""SELECT
+        (SELECT COUNT(*) FROM org_members m JOIN students s ON s.user_id = m.user_id JOIN users u ON u.id = m.user_id
+          WHERE m.org_id = :o AND u.banned_at IS NULL AND m.joined_at <= :t - :settled) >= :n AS members,
+        (SELECT logo_file_id IS NOT NULL AND length(trim(description)) >= 10 FROM orgs WHERE id = :o) AS profile,
+        EXISTS (SELECT 1 FROM rounds r JOIN round_apps a ON a.round_id = r.id WHERE r.org_id = :o AND r.status = 'done' AND a.stage = 'yes') AS round,
+        -- an event over, with people scanned at the door who weren't in the club when it started (joining after counts)
+        EXISTS (SELECT 1 FROM events e WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
+          AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND (SELECT COUNT(*) FROM registrations g WHERE g.event_id = e.id
+            AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0 AND NOT EXISTS (SELECT 1 FROM org_members m
+              WHERE m.org_id = :o AND m.user_id = g.user_id AND m.joined_at < e.starts_at)) >= :n) AS event,
+        -- an accepted co-host row with an official club, whichever of the two hosted
+        EXISTS (SELECT 1 FROM event_cohosts c JOIN events e ON e.id = c.event_id
+          JOIN orgs x ON x.id = CASE WHEN e.org_id = :o THEN c.org_id ELSE e.org_id END
+          WHERE c.status = 'accepted' AND :o IN (e.org_id, c.org_id) AND x.official = 1 AND e.status = 'published' AND e.hidden_at IS NULL) AS collab""",
+        {"o": oid, "t": core.now(), "settled": PATH_SETTLED, "n": PATH_MIN}).fetchone()
+    return {k: bool(r[k]) for k in PATH_STEPS}
+
+
+def _official_request(r: sqlite3.Row | None) -> dict | None:
+    return r and {"id": r["id"], "status": r["status"], "reason": r["reason"], "createdAt": r["created_at"], "decidedAt": r["decided_at"],
+                  "againAt": r["decided_at"] + CLUB_REAPPLY if r["status"] == "rejected" else None}
+
+
+def official_path(con, v: Viewer, oid: int) -> dict | None:
+    """The card in Studio, for the club's team: the steps and the latest request. None: official, or not a club."""
+    if not role_in(con, v, oid):
+        raise ApiError("forbidden")
+    o = _org(con, oid)
+    if o["official"] or o["kind"] != "club":
+        return None
+    last = one(con, "SELECT * FROM official_requests WHERE org_id = ? ORDER BY id DESC LIMIT 1", oid)
+    return {"steps": _path_steps(con, oid), "request": _official_request(last)}
+
+
+def ask_official(con, v: Viewer, oid: int) -> dict | None:
+    """All five done: the President or a Vice asks. One pending request per club; after a no, again in 30 days."""
+    if role_in(con, v, oid) not in ("president", "vice"):
+        raise ApiError("forbidden")
+    o = _org(con, oid)
+    if o["official"] or o["kind"] != "club" or o["status"] != "active":
+        raise ApiError("bad_input")
+    with tx(con):  # a double tap makes one request
+        last = one(con, "SELECT * FROM official_requests WHERE org_id = ? ORDER BY id DESC LIMIT 1", oid)
+        if last and last["status"] == "pending":
+            raise ApiError("conflict", "pending")
+        if last and last["status"] == "rejected" and last["decided_at"] + CLUB_REAPPLY > core.now():
+            raise ApiError("rate_limited")
+        if not all(_path_steps(con, oid).values()):
+            raise ApiError("bad_input", "steps")
+        rid = con.execute("INSERT INTO official_requests (org_id, created_at) VALUES (?, ?)", (oid, core.now())).lastrowid
+        log_action(con, v.id, "opath_ask", f"opath:{rid}", json.dumps({"title": o["name"]}))
+        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
+            notify(con, uid, "club_path", f"opath:{rid}")
+    return official_path(con, v, oid)
+
+
+def official_requests(con, v: Viewer) -> list[dict]:
+    """Admin → Inbox: the requests waiting, oldest first (a club given the ✓ meanwhile by DMP drops out)."""
+    _admin(v)
+    found = rows(con, """SELECT r.*, (SELECT COUNT(*) FROM org_members m WHERE m.org_id = r.org_id) AS members FROM official_requests r
+        JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0 ORDER BY r.id""")
+    orgs = {o["id"]: o for o in rows(con, f"SELECT * FROM orgs WHERE id IN ({_qs(found)})", *(r["org_id"] for r in found))} if found else {}
+    logos = _by_id(con, "files", (o["logo_file_id"] for o in orgs.values()))
+    return [{**_official_request(r), "org": org_ref(con, orgs[r["org_id"]], logos), "members": r["members"]} for r in found]
+
+
+def decide_official(con, v: Viewer, rid: int, approve: bool, reason: object) -> dict:
+    """Yes: the club is official (its name is DMP's from now on, update_org); its President hears it from the bot after
+    the Undo's minute. No: a reason the club reads in Studio, no message (the card says it)."""
+    _admin(v)
+    why = str(reason or "").strip()
+    if not approve and not 3 <= len(why) <= 300:
+        raise ApiError("bad_input")
+    with tx(con):
+        r = one(con, "SELECT r.*, o.name FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.id = ?", rid)
+        if not r:
+            raise ApiError("not_found")
+        if r["status"] != "pending":
+            raise core.decided(con, f"opath:{rid}")
+        con.execute("UPDATE official_requests SET status = ?, reason = ?, decided_at = ? WHERE id = ?",
+                    ("approved" if approve else "rejected", None if approve else why, core.now(), rid))
+        if approve:
+            con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (r["org_id"],))
+            for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", r["org_id"]):
+                notify(con, uid, "club_official", f"off:{r['org_id']}", after=core.now() + UNDO_WAIT)  # said only while still so (bot)
+        log_action(con, v.id, "opath_yes" if approve else "opath_no", f"opath:{rid}", json.dumps({"title": r["name"]}))
+    core._SHARED.clear()  # event cards carry the club's ✓
+    return _official_request(one(con, "SELECT * FROM official_requests WHERE id = ?", rid))
+
+
+def undo_official(con, v: Viewer, rid: int) -> None:
+    """Admin → Done: a yes or a no taken back, the request waits again (a yes takes the ✓ back, its message unsent if
+    still waiting). Not once the club has asked anew."""
+    _admin(v)
+    with tx(con):
+        r = one(con, "SELECT * FROM official_requests WHERE id = ? AND status != 'pending'", rid)
+        if not r:
+            raise ApiError("not_found")
+        if one(con, "SELECT 1 FROM official_requests WHERE org_id = ? AND id > ?", r["org_id"], rid):
+            raise ApiError("conflict", "newer")
+        if r["status"] == "approved":
+            con.execute("UPDATE orgs SET official = 0 WHERE id = ?", (r["org_id"],))
+            con.execute("DELETE FROM bot_outbox WHERE kind = 'club_official' AND ref = ? AND sent_at IS NULL", (f"off:{r['org_id']}",))
+        con.execute("UPDATE official_requests SET status = 'pending', reason = NULL, decided_at = NULL WHERE id = ?", (rid,))
+        log_action(con, v.id, "opath_undo", f"opath:{rid}")
+    core._SHARED.clear()
+
+
 
 
 def create_org(con, actor: int | None, name: str, short: str, emoji: str, official: bool, slug: str | None = None,

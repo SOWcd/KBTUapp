@@ -81,8 +81,8 @@ def log_action(con, actor: int | None, action: str, target: str, data: str = "{}
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
 MOD_DONE = ("report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
             "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "chat_approve", "chat_decline", "chat_remove")
-ADMIN_DONE = ("capp_yes", "capp_no", "roster_ok", "roster_no", "event_delete", "tg_report_close")
-UNDOES = ("restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "chat_undo", "event_undo",
+ADMIN_DONE = ("capp_yes", "capp_no", "opath_yes", "opath_no", "roster_ok", "roster_no", "event_delete", "tg_report_close")
+UNDOES = ("restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "opath_undo", "chat_undo", "event_undo",
           "tg_report_open")
 DECISIONS = MOD_DONE + ADMIN_DONE + UNDOES
 
