@@ -814,7 +814,7 @@ def channel_post(title: str, org: str, starts: int, ends: int | None, place: str
     if link and not cancelled:
         name = f'<a href="{html.escape(link)}">{name}</a>'
     lines = [f"❌ <b><s>{name}</s></b>" if cancelled else f"<b>{name}</b>", html.escape(org), "", f"🗓 {day} · {at}",
-             *([f"📍 {html.escape(place)}"] if place else []),
+             *([f"📍 {html.escape(re.sub(r'(?i)^(?:room|rm\.?|ауд(?:\.|итория)?|каб(?:\.|инет)?)\s*(?=\d)', '', place))}"] if place else []),  # "Room 222": 222
              "💳 " + f"{price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else "🆓"]
     return "\n".join(lines)
 
