@@ -34,6 +34,14 @@ UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: 
 _CYR_TLD = "\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d|\u0441\u0430\u0439\u0442|\u043e\u0440\u0433|\u043a\u043e\u043c|\u043c\u043e\u0441\u043a\u0432\u0430|\u049b\u0430\u0437|\u0431\u0435\u043b|\u0443\u043a\u0440|\u0441\u0440\u0431|\u0434\u0435\u0442\u0438"
 LINKY = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://|\bwww\.|\b[^\W_][\w-]*(\.[^\W_][\w-]*)*\.(?:[a-z]{2,}|" + _CYR_TLD + r")\b|@\w{3,}"
                    r"|\+\d[\d\s().-]{7,}\d|\b[78][\s(.-]*\d{3}[\s).-]*\d{3}[\s.-]*\d{2}[\s.-]*\d{2}\b)")
+# a link disguised so Telegram won't make it one but a reader still can (Nov 4: "https ://www .instagram. com/reel/..."
+# went out): a scheme or www. with spaces, a TLD before a slash, a known site's name with a spaced dot, "dot com",
+# a bracketed dot ("x[.]com" reads as a dot, then LINKY). ponytail: lists, not every TLD; the AI is told too
+_TLDS = "com|ru|kz|org|net|io|me|ly|gg|app|xyz|link|site|info|tv|co|be|to|dev|ai|su|uk|us|cc|pro|online|store|shop"
+_SITES = "t|telegram|tg|instagram|insta|tiktok|youtube|youtu|wa|vk|discord|x|twitter|facebook|fb|threads|linktr|bit|clck|vm"
+SPACED = re.compile(r"(?i)\b[a-z]{3,6}\s*:\s*/\s*/|\bwww\s*[.,]|[.,]\s*(?:" + _TLDS + r")\s*/|\b(?:" + _SITES + r")\s*[.,]\s*(?:"
+                    + _TLDS + r")\b|\b(?:dot|\u0442\u043e\u0447\u043a\u0430|\u0442\u0447\u043a)\s*(?:" + _TLDS + r")\b")
+BRACKET_DOT = re.compile(r"(?i)\s*[\[({]\s*(?:\.|dot|\u0442\u043e\u0447\u043a\u0430)\s*[\])}]\s*")
 DIGITS = re.compile(r"\d(?:[\s-]?\d){9,}")  # ten digits or more, one space or dash between any two
 SUM = re.compile(r"[1-9]\d{0,2}(?:\s\d{3})*\s\d00")  # a sum in thousands, round to the hundred ("15 000", "12 500", "1 500 000")
 MONEY = re.compile(r"\s*(?:\u20b8|\u0442\u0433|\u0442\u0435\u043d\u0433|tg\b|kzt\b)", re.I)  # tenge right after it
@@ -70,8 +78,8 @@ def _clean(raw: object) -> str:
     s = re.sub(r"\n{3,}", "\n\n", s)
     if not 2 <= len(s) <= BODY_MAX:
         raise ApiError("bad_input")
-    seen = unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)
-    if LINKY.search(seen) or _long_number(seen):
+    seen = BRACKET_DOT.sub(".", unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS))
+    if LINKY.search(seen) or SPACED.search(seen) or _long_number(seen):
         raise ApiError("bad_input", "links")
     last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1].replace(ZWJ, "")).lstrip() if "\n" in s else ""
     if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):

@@ -7,6 +7,11 @@ export type Rule = 'link' | 'mention' | 'phone' | 'signature';
 const W = '\\p{L}\\p{N}_', B = `(?:^|[^${W}])`, E = `(?![${W}])`;
 const CYR_TLD = '\u0440\u0444|\u0440\u0443\u0441|\u043e\u043d\u043b\u0430\u0439\u043d|\u0441\u0430\u0439\u0442|\u043e\u0440\u0433|\u043a\u043e\u043c|\u043c\u043e\u0441\u043a\u0432\u0430|\u049b\u0430\u0437|\u0431\u0435\u043b|\u0443\u043a\u0440|\u0441\u0440\u0431|\u0434\u0435\u0442\u0438';
 const LINK = new RegExp(`${B}[a-z][a-z0-9+.-]*://|${B}www\\.|${B}[\\p{L}\\p{N}][${W}-]*(?:\\.[\\p{L}\\p{N}][${W}-]*)*\\.(?:[a-z]{2,}|${CYR_TLD})${E}`, 'iu');
+// a disguised link (the server's SPACED, BRACKET_DOT): a spaced scheme or www., a TLD before a slash, a site's spaced dot, "dot com"
+const TLDS = 'com|ru|kz|org|net|io|me|ly|gg|app|xyz|link|site|info|tv|co|be|to|dev|ai|su|uk|us|cc|pro|online|store|shop';
+const SITES = 't|telegram|tg|instagram|insta|tiktok|youtube|youtu|wa|vk|discord|x|twitter|facebook|fb|threads|linktr|bit|clck|vm';
+const SPACED = new RegExp(`${B}[a-z]{3,6}\\s*:\\s*/\\s*/|${B}www\\s*[.,]|[.,]\\s*(?:${TLDS})\\s*/|${B}(?:${SITES})\\s*[.,]\\s*(?:${TLDS})${E}|${B}(?:dot|\u0442\u043e\u0447\u043a\u0430|\u0442\u0447\u043a)\\s*(?:${TLDS})${E}`, 'iu');
+const BRACKET_DOT = /\s*[[({]\s*(?:\.|dot|\u0442\u043e\u0447\u043a\u0430)\s*[\])}]\s*/giu;
 const MENTION = new RegExp(`@[${W}]{3,}`, 'u');
 const PHONE = new RegExp(`\\+\\p{Nd}[\\p{Nd}\\s().-]{7,}\\p{Nd}|${B}[78][\\s(.-]*\\p{Nd}{3}[\\s).-]*\\p{Nd}{3}[\\s.-]*\\p{Nd}{2}[\\s.-]*\\p{Nd}{2}${E}`, 'u');
 const DIGITS = /\p{Nd}(?:[\s-]?\p{Nd}){9,}/gu;
@@ -26,8 +31,8 @@ const LINES = /\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/;
 /** The first rule the words break, or null. */
 export function broken(raw: string): Rule | null {
   const s = raw.replace(/‍/g, '').replace(HIDDEN, '').trim();
-  const seen = s.normalize('NFKC').replace(/[。｡．]/g, '.');
-  if (LINK.test(seen)) return 'link';
+  const seen = s.normalize('NFKC').replace(/[。｡．]/g, '.').replace(BRACKET_DOT, '.');
+  if (LINK.test(seen) || SPACED.test(seen)) return 'link';
   if (MENTION.test(seen)) return 'mention';
   if (PHONE.test(seen) || longNumber(seen)) return 'phone';
   const lines = s.split(LINES).map((l) => l.trimEnd());
