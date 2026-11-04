@@ -7,6 +7,6 @@ export const CONSENT_BOARD = '2026-11-v15', CONSENT_BOTH = '2026-11-v16'; // v11
 // with the channel's comments on (FORUM_GROUP) the server adds this to whichever version is in force
 export const CONSENT_TGC = '+tgc1';
 // with the forum channel on (FORUM_CHANNEL) the server adds this after that: the section on posts in the channel
-export const CONSENT_FCH = '+fch3'; // fch2 until Nov 3 (the anonymous author's replies), fch1 until Nov 2 (the feed's commenters' faces and reactions)
+export const CONSENT_FCH = '+fch4'; // fch3 until Nov 4 (the check's explanation, appeals, reply limits), fch2 until Nov 3 (the anonymous author's replies), fch1 until Nov 2 (the feed's commenters' faces and reactions)
 // with any of those on the server adds this last: students' texts to more AI providers (the policy's section 5)
 export const CONSENT_AI = '+ai1';

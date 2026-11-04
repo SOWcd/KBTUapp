@@ -93,6 +93,31 @@ def seed(path: str) -> None:
                  "\u0432 \u0430\u0432\u0442\u043e\u0431\u0443\u0441\u0435 40 \u043c\u0435\u0441\u0442. \u0421\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c 7 500 \u20b8: "
                  "\u0434\u043e\u0440\u043e\u0433\u0430 \u0438 \u043f\u043e\u0434\u044a\u0451\u043c\u043d\u0438\u043a.",
                  now + 9 * day + 4 * 3600, now, now))
+    # the Forum tab (FORUM_CHANNEL on below): a few made-up channel posts, one of them Dana's anonymous one with its copy
+    # in the group (her "Reply anonymously"), comments, faces and reactions
+    for pid, uid, anon, body, ago, comments, rx in (
+            (1, 2, 0, "Who wants to team up for the hackathon next weekend? We need a designer and one more backend person.", 3 * 3600, 4,
+             '{"\\ud83d\\udd25": 7, "\\ud83d\\udc4d": 3}'),
+            (2, 1, 1, "Is the library open on Sunday during the exam weeks? The site says nothing.", 2 * 3600, 2, '{"\\ud83d\\udc4d": 5}'),
+            (3, 3, 0, "Lost a black umbrella in room 256 yesterday. If you found it, leave it at the front desk please.", 40 * 60, 0, None)):
+        con.execute("""INSERT INTO fchan_posts (id, user_id, body, anon, status, tg_msg, created_at, sign, comments, rules_msg, rules_for, reactions, nick_a, nick_n)
+            VALUES (?, ?, ?, ?, 'live', ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (pid, uid, body, anon, 100 + pid, now - ago, None if anon else PEOPLE[uid - 1][2],
+                                                                  comments, 500 + pid, 100 + pid, rx, 3 if anon else None, 7 if anon else None))
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"fchcopy:{100 + pid}", str(400 + pid)))
+    for mid, pid, uid in ((601, 1, 1), (602, 1, 3), (603, 2, 2), (604, 2, 3)):
+        con.execute("INSERT INTO fchan_comments (msg_id, post_id, user_id, at) VALUES (?, ?, ?, ?)", (mid, pid, uid, now - 1800))
+    # Admin's forum queue (Bota moderates): Ali's named post the AI held for naming a person, with its reason; Dana's
+    # anonymous one the AI refused and she appealed; her anonymous reply the AI held
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = 3")
+    for pid, uid, anon, body, why, reason in (
+            (4, 2, 0, "Our physics teacher never comes on time and then blames us for being late.", "person",
+             "It points at one teacher, so a person reads it first."),
+            (5, 1, 1, "test of the new coffee machine on the 2nd floor: it finally works", "noise", None)):
+        con.execute("""INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n, ai_reason, appealed_at)
+            VALUES (?, ?, ?, ?, 'held', ?, ?, ?, ?, ?, ?, ?)""", (pid, uid, body, anon, why, now - 900, None if anon else PEOPLE[uid - 1][2],
+                                                                   5 if anon else None, 11 if anon else None, reason, now - 600 if why == "noise" else None))
+    con.execute("""INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at, ai_reason)
+        VALUES (2, 603, 'Thanks! And the reading room on the third floor, is it open too?', 'held', 'ai', ?, 'It may read as a jab at someone.')""", (now - 700,))
     con.close()
 
 
@@ -119,6 +144,12 @@ def fake_ai_app():
         q = msgs[-1]["content"]
         if "announcement" in msgs[0]["content"]:  # the event editor's fill: a made-up description (Russian, as the seed's people)
             return json.dumps({"description": ABOUT}), "qa"
+        if "public Telegram" in msgs[0]["content"]:  # the forum's look: "test" in a post is noise, "teacher" a person, the rest OK
+            return ("NOISE" if "test" in q.lower() else "PERSON" if "teacher" in q.lower() else "OK"), "qa"
+        if '"quote"' in msgs[0]["content"]:  # why it was refused (ai.explain): the first word, made up
+            post = json.loads(q)["post"]
+            return json.dumps({"quote": post.split()[0], "reason": "QA: no model here, so the first word is marked.",
+                               "fix": "QA: say what you need in a sentence."}), "qa"
         care = assistant.distress(q)
         return json.dumps({"text": "I'm sorry it's so hard right now." if care else f"QA answer, no model: I don't know \"{q[:40]}\".",
                            "actions": [], "known": False, "topic": "qa made up topic", "care": care}), "qa"
@@ -137,7 +168,7 @@ def main() -> None:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
-           "BOARD": os.environ.get("BOARD", "1")}  # the student forum on, as it will be after its policy part
+           "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002")}  # the student forum on, as it will be after its policy part
     subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 

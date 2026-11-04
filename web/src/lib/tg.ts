@@ -39,6 +39,7 @@ interface WebApp {
   shareMessage?(id: string, cb?: (ok: boolean) => void): void;
   downloadFile?(p: { url: string; file_name: string }, cb?: (ok: boolean) => void): void;
   requestWriteAccess?(cb?: (ok: boolean) => void): void;
+  readTextFromClipboard?(cb: (text: string | null) => void): void;
   addToHomeScreen?(): void;
   checkHomeScreenStatus?(cb: (s: string) => void): void;
   showAlert?(text: string): void;
@@ -203,6 +204,19 @@ export function requestWriteAccess(): Promise<boolean> {
     if (!can('6.9') || !W?.requestWriteAccess) return done(false);
     tgTry((w) => w.requestWriteAccess!((ok) => done(!!ok)));
   });
+}
+
+/** The clipboard's text: Telegram's own reader where it answers (6.4+; only some launches may read it), else the
+ *  browser's; null when neither may (the field stays to paste by hand). Telegram can stay silent: a second's wait */
+export async function readClipboard(): Promise<string | null> {
+  if (can('6.4') && W?.readTextFromClipboard) {
+    const got = await new Promise<string | null>((done) => {
+      const t = setTimeout(() => done(null), 1000);
+      tgTry((w) => w.readTextFromClipboard!((x) => { clearTimeout(t); done(x || null); }));
+    });
+    if (got) return got;
+  }
+  try { return (await navigator.clipboard?.readText()) || null; } catch { return null; }
 }
 
 export function deviceOrientation() { return can('8.0') ? W?.DeviceOrientation ?? null : null; }

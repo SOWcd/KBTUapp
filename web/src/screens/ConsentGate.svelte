@@ -39,7 +39,7 @@
     ['consent.textFch', [[TelegramMark, 'accent'], [EyeOff, 'success'], [Cpu, 'warning']]],
     ['consent.textAi', [[Cpu, 'warning']]],
   ];
-  // the channel's comments add "+tgc1" to whichever version (server logic/account.py CONSENT_TGC), its posts "+fch3"
+  // the channel's comments add "+tgc1" to whichever version (server logic/account.py CONSENT_TGC), its posts "+fch4"
   // after that (CONSENT_FCH), the AI providers "+ai1" last (CONSENT_AI): their lines, on top of the base's
   const ai = $derived(session.policy.endsWith(CONSENT_AI));
   const noAi = $derived(ai ? session.policy.slice(0, -CONSENT_AI.length) : session.policy);

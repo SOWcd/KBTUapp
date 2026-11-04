@@ -262,7 +262,8 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'held' AND why = 'check'", pid)
         if p:
             if verdict in ("noise", "ad"):  # no message in it, or an ad: refused, its author told (the route), the words wiped
-                con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL WHERE id = ?", (verdict, pid))
+                con.execute("UPDATE fchan_posts SET status = 'gone', why = ?, body = '', sign = NULL, refused = ? WHERE id = ?",
+                            (verdict, _refused(pid, p["body"]), pid))
                 return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
             if verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", _now() - 3600)[0] >= CHANNEL_AN_HOUR
@@ -271,6 +272,95 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
                 status, why = "held", {"person": "person", "flag": "ai"}.get(verdict or "", "check")
             con.execute("UPDATE fchan_posts SET status = ?, why = ? WHERE id = ?", (status, why, pid))
     return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
+
+
+def _refused(pid: int, text: str) -> str:
+    """A refused post's words as a hash (the words are wiped): the words given back later must be these (review: an
+    appeal with other words reached a moderator labelled with the AI's word on the first ones)."""
+    import hashlib
+    return hashlib.sha256(f"{pid}\0{text}".encode()).hexdigest()
+
+
+APPEALS_A_DAY = 3      # an author's "Send to a moderator" a day (owner, Nov 4): a human's time is the scarce thing
+APPEAL_WINDOW = 3600   # a refusal can be appealed this long after it (the app asks right away; a reload loses it anyway)
+
+
+def appeals_left(con, uid: int) -> int:
+    """My appeals left today: the refused posts I sent to a moderator in the last day (a deleted one still counts)."""
+    return APPEALS_A_DAY - one(con, "SELECT COUNT(*) FROM fchan_posts WHERE user_id = ? AND appealed_at > ?", uid, _now() - 86400)[0]
+
+
+def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
+    """The AI refused my post (noise, an ad) and I think it's wrong: the post waits for a moderator like any held one
+    (mod_queue, the Admin inbox; why stays the AI's word), who publishes or declines it; I hear as for any held post.
+    The words come back with the appeal (the refusal wiped them) and must be the ones the AI read (their hash); the
+    cheap gates run again. Not the AI again: it already said no."""
+    need_student(v)
+    text = _clean(body.get("body"))
+    if not _meaningful(text):
+        raise ApiError("bad_input", "short")
+    with tx(con):
+        p = one(con, """SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status = 'gone' AND why IN ('noise', 'ad')
+                        AND appealed_at IS NULL AND created_at > ?""", pid, v.id, _now() - APPEAL_WINDOW)
+        if not p:
+            raise ApiError("not_found")
+        if p["refused"] != _refused(pid, text):
+            raise ApiError("bad_input", "changed")
+        if appeals_left(con, v.id) <= 0:
+            raise ApiError("rate_limited", "appeals")
+        if _repeat(con, v.id, text):
+            raise ApiError("bad_input", "duplicate")
+        sign = None if p["anon"] else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
+        con.execute("UPDATE fchan_posts SET status = 'held', body = ?, sign = ?, appealed_at = ?, refused = NULL WHERE id = ?", (text, sign, _now(), pid))
+        # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref);
+        # all of them, an appealing moderator too (review: the one who got no notice was the anonymous author)
+        from .tgcomments import _mods
+        for uid in _mods(con):
+            notify(con, uid, "fch_appeal", f"fq:{_now() // 3600}")
+    return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
+
+
+# The AI's reason for a refusal (ai.explain, phase 2) is asked apart from the post (owner, Nov 4: the outcome shows at
+# once, the reason comes in when ready): my own refused or held post or reply, fresh, once each (explained), so the
+# endpoint is no free model for any text. A refused post's words were wiped: the app sends them back (checked as a
+# post); a held one's are on the row.
+WHY_OF = {"noise": "noise", "ad": "ad", "person": "person", "ai": "flag"}  # the row's why -> the AI's word
+
+
+def why_post(con, v: Viewer, pid: int, body: dict) -> tuple[str, str]:
+    """(the words, the AI's word) for ai.explain; not found if not mine, not refused or held by the AI, stale or asked."""
+    need_student(v)
+    with tx(con):
+        p = one(con, """SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND explained IS NULL AND created_at > ?
+                        AND (status = 'gone' AND why IN ('noise', 'ad') OR status = 'held' AND why IN ('person', 'ai'))""", pid, v.id, _now() - APPEAL_WINDOW)
+        if not p:
+            raise ApiError("not_found")
+        text = p["body"] or _clean(body.get("body"))
+        if p["status"] == "gone" and p["refused"] != _refused(pid, text):  # only the words the AI refused
+            raise ApiError("not_found")
+        con.execute("UPDATE fchan_posts SET explained = 1 WHERE id = ?", (pid,))
+    return text, WHY_OF[p["why"]]
+
+
+def why_reply(con, v: Viewer, rid: int) -> tuple[str, str]:
+    """The same for my reply the AI held (through the post: no user id on a reply)."""
+    need_student(v)
+    with tx(con):
+        r = one(con, """SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ?
+                        AND r.status = 'held' AND r.why IN ('person', 'ai') AND r.explained IS NULL AND r.created_at > ?""", rid, v.id, _now() - APPEAL_WINDOW)
+        if not r:
+            raise ApiError("not_found")
+        con.execute("UPDATE fchan_replies SET explained = 1 WHERE id = ?", (rid,))
+    return r["body"], WHY_OF[r["why"]]
+
+
+def said(con, table: str, rid: int, got: dict | None) -> None:
+    """The AI's validated reason onto its row, for the moderator who decides on it (the Admin queue's reason line)."""
+    if got:
+        # only while the row still waits (held) or is a fresh refusal: an author's delete during the model's seconds wipes
+        # the words, and the reason (it often quotes them) must not land after it (review)
+        live = "status = 'held'" if table == "fchan_replies" else "(status = 'held' OR status = 'gone' AND refused IS NOT NULL)"
+        con.execute(f"UPDATE {table} SET ai_reason = ? WHERE id = ? AND {live}", (got["reason"], rid))  # table: the route's own literal
 
 
 def _unpost(con, p, why: str, delay: int = 0) -> None:
@@ -288,7 +378,7 @@ def delete(con, v: Viewer, pid: int) -> None:
             raise ApiError("not_found")
         _unpost(con, p, "author")
         _post_off(con, pid)
-        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL WHERE id = ?", (pid,))
+        con.execute("UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, refused = NULL WHERE id = ?", (pid,))
         _notes_off(con, pid)
 
 
@@ -478,8 +568,9 @@ def sweep(con) -> None:
     Every 5 minutes (the bot's round): a DELETE takes the write lock even finding nothing."""
     if not core._once(con, "fch_sweep", str(_now() // 300)):
         return
-    con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? OR status = 'hidden' AND created_at < ?",
-                (_now() - 86400, _now() - 30 * 86400))
+    # (an appealed one stays its day from the appeal: appeals_left counts it)
+    con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?",
+                (_now() - 86400, _now() - 86400, _now() - 30 * 86400))
     con.execute("""DELETE FROM bot_outbox WHERE kind IN ('fch_posted', 'fch_declined')
         AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM fchan_posts)""")  # a swept post's notes too
     # replies deleted, taken down or never decided, out of the group: after the same 30 days (a deleted one is wordless already)
@@ -541,7 +632,7 @@ def mod_queue(con, v: Viewer) -> dict:
                            ORDER BY gone_at DESC LIMIT 50""", _now() - MOD_RECENT)
     ids = {p["user_id"] for p in held + live + removed if not p["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
-    shape = lambda p: _shape(p) | {"why": p["why"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    shape = lambda p: _shape(p) | {"why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
@@ -630,9 +721,11 @@ def reveal(con, v: Viewer, pid: int) -> dict:
 # it lands can't be matched to the author's "online"), then the bot sends it once. Stored without a user id: the post
 # is the only way to its author (the owner's reveal, account deletion), and the replies go with it.
 
-REPLY_GAP = 60             # one reply a minute per author
-REPLIES_A_DAY = 10         # per post
-REPLIES_A_COMMENT = 3      # per comment answered (all time)
+REPLY_GAP = 10            # seconds between an author's replies (owner, Nov 4: a minute stalled a live talk)
+# a post's replies a day: the others' comments under it the bot saw (fchan_comments: students', still up or not; the
+# author's own from their account left out, or they could buy replies with them) and REPLIES_MORE on top: as many
+# answers as there are people talking, plus a few for the thread (owner, Nov 4; the per-comment cap went)
+REPLIES_MORE = 5
 # seconds, at random, from the author's tap (the AI's look inside it) to the bot's send. ponytail: owner, Nov 3: 30-120 s
 # felt too slow; 5-20 s blurs the moment less (the author's "online" in Telegram and a reply seconds later still line up
 # across many replies), the composer warns of it; widen it if timing ever narrows an author down
@@ -668,9 +761,9 @@ def replies(con, v: Viewer, pid: int) -> list[dict]:
 
 
 def reply_reserve(con, v: Viewer, pid: int, body: dict) -> int:
-    """A reply, held ('check') before the AI looks, the caps counted in the same transaction: one a minute (all my
-    posts), REPLIES_A_DAY under a post, REPLIES_A_COMMENT to one comment (deleting one buys nothing back). The comment by
-    its link: under this post's message, a student's comment the bot saw (fchan_comments) and still up."""
+    """A reply, held ('check') before the AI looks, the caps counted in the same transaction: REPLY_GAP apart (all my
+    posts), the day's cap under a post (REPLIES_MORE; deleting one buys nothing back). The comment by its link: under
+    this post's message, a student's comment the bot saw (fchan_comments) and still up."""
     need_student(v)
     text = _clean(body.get("body"))
     link = str(body.get("link") or "").strip()
@@ -685,11 +778,18 @@ def reply_reserve(con, v: Viewer, pid: int, body: dict) -> int:
         last = one(con, """SELECT MAX(r.created_at) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE p.user_id = ?""", v.id)[0]
         if last and last > _now() - REPLY_GAP:
             raise ApiError("rate_limited", "replies")
-        if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND created_at > ?", pid, _now() - 86400)[0] >= REPLIES_A_DAY \
-                or comment and one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND comment_msg = ?", pid, comment)[0] >= REPLIES_A_COMMENT:
+        if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND created_at > ?", pid, _now() - 86400)[0] >= reply_cap(con, p):
             raise ApiError("rate_limited", "replies")
         return con.execute("INSERT INTO fchan_replies (post_id, comment_msg, body, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)",
                            (pid, comment, text, _now())).lastrowid
+
+
+def reply_cap(con, p) -> int:
+    """This post's replies a day: the others' comments under it the bot saw, and REPLIES_MORE. ponytail: a friend's
+    comments deleted in Telegram still count (no delete event reaches the bot); each reply still has its AI look and
+    REPLY_GAP. Count DISTINCT user_id if friends ever farm it."""
+    return one(con, """SELECT COUNT(*) FROM fchan_comments c JOIN students s ON s.user_id = c.user_id
+                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE
 
 
 def reply_settle(con, rid: int, verdict: str | None) -> dict:
@@ -708,8 +808,9 @@ def reply_settle(con, rid: int, verdict: str | None) -> dict:
 def _drop(con, r, why: str, status: str = "gone", delay: int = 0) -> None:
     """A reply off: the words wiped when its author deletes it (a takedown keeps them 30 days for an undo); out of the
     group in the bot's round (now, or after the undo minute)."""
-    con.execute("UPDATE fchan_replies SET status = ?, why = ?, body = CASE WHEN ? = 'gone' THEN '' ELSE body END, drop_at = ? WHERE id = ?",
-                (status, why, status, _now() + delay, r["id"]))
+    con.execute("""UPDATE fchan_replies SET status = ?, why = ?, body = CASE WHEN ? = 'gone' THEN '' ELSE body END,
+                   ai_reason = CASE WHEN ? = 'gone' THEN NULL ELSE ai_reason END, drop_at = ? WHERE id = ?""",
+                (status, why, status, status, _now() + delay, r["id"]))
 
 
 def reply_delete(con, v: Viewer, rid: int) -> None:
@@ -796,7 +897,7 @@ def reply_missing(con, rid: int) -> None:
     """Telegram: the comment answered is gone. The reply is dropped (never sent elsewhere), its author told."""
     r = one(con, "SELECT p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND r.tg_msg = 0", rid)
     if r:
-        con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', tg_msg = NULL WHERE id = ?", (rid,))
+        con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', ai_reason = NULL, tg_msg = NULL WHERE id = ?", (rid,))
         notify(con, r["user_id"], "fch_reply_gone", f"fg:{rid}")
 
 
@@ -825,7 +926,7 @@ def reply_drop_later(con, rid: int) -> None:
 
 def _reply_mod_shape(r) -> dict:
     return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]), "nick": _nick(r),
-            "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
+            "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
 
 
 def reply_mod_queue(con) -> dict:

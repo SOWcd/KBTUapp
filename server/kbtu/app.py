@@ -1728,8 +1728,28 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_post(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_posts WHERE id = ?", pid)[0])
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
-            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise")
-        return p
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
+        return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
+
+    @app.post("/api/forum-posts/{pid}/appeal")
+    def fchan_appeal(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.appeal(con, v, pid, body)  # to a moderator, the words given back (the refusal wiped them)
+
+    # why the AI refused or held my post or reply, in its own words (ai.explain, phase 2): asked by the app once the
+    # outcome is on screen, so nobody waits on it; once each; null: the app keeps its template words
+    @app.post("/api/forum-posts/{pid}/why")
+    async def fchan_why(pid: int, con: Con, v: FChanWrite, body: dict = Body(default={})):
+        text, verdict = await run_in_threadpool(F.why_post, con, v, pid, body)
+        got = await ai.explain(cfg, ai_http(), text, verdict)
+        await run_in_threadpool(F.said, con, "fchan_posts", pid, got)  # the moderator's queue reads it too
+        return {"explain": got}
+
+    @app.post("/api/forum-replies/{rid}/why")
+    async def fchan_reply_why(rid: int, con: Con, v: FChanWrite):
+        text, verdict = await run_in_threadpool(F.why_reply, con, v, rid)
+        got = await ai.explain(cfg, ai_http(), text, verdict)
+        await run_in_threadpool(F.said, con, "fchan_replies", rid, got)
+        return {"explain": got}
 
     @app.delete("/api/forum-posts/{pid}", status_code=204)
     def fchan_drop(pid: int, con: Con, v: FChan):
@@ -1765,7 +1785,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     async def fchan_reply(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
         rid = await run_in_threadpool(F.reply_reserve, con, v, pid, body)  # held, inside the caps, before the AI is asked
         verdict = await ai.screen_reply(cfg, ai_http(), logic.one(con, "SELECT body FROM fchan_replies WHERE id = ?", rid)[0])
-        return await run_in_threadpool(F.reply_settle, con, rid, verdict)
+        return await run_in_threadpool(F.reply_settle, con, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
 
     @app.delete("/api/forum-replies/{rid}", status_code=204)
     def fchan_reply_drop(rid: int, con: Con, v: FChan):

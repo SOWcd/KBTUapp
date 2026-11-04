@@ -159,21 +159,25 @@ def test_reply_caps_and_links(env, monkeypatch):
         r = post("Fine words here", bad)
         assert r.status_code == 400 and r.json()["message"] == "comment", bad
     assert post("Fine words here", f"t.me/KBTUappForum/{w.mid}?thread=55&comment=60").json()["comment"] == 60
-    # one a minute
+    gap = logic.fchannel.REPLY_GAP
+    # one per REPLY_GAP
     r = post("Another answer here")
-    assert r.status_code == 429 or r.json()["error"] == "rate_limited"
-    # three per comment, deleting doesn't buy one back
-    for _ in range(2):
-        t[0] += 61
-        rid = post("More words to you", w.link).json()["id"]
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    # a day's cap: the others' comments the bot saw (Bob's one) and REPLIES_MORE; the author's own comments from their
+    # account buy nothing; deleting a reply buys nothing back; no cap per comment
+    gate(w.cfg, w.tg, w.con, note(62, 1), note(63, 1))
+    cap = 1 + logic.fchannel.REPLIES_MORE
+    t[0] += gap
+    rid = post("More words to you", w.link).json()["id"]
     assert w.c.delete(f"/api/forum-replies/{rid}", headers=tma(1)).status_code == 204
-    t[0] += 61
-    assert post("Once more to you", w.link).json()["error"] == "rate_limited"
-    # ten a day per post
-    for i in range(7):
-        assert post(f"To the thread {i}").status_code == 200
-        t[0] += 61
-    assert post("The eleventh one").json()["error"] == "rate_limited"
+    for i in range(cap - 2):
+        t[0] += gap
+        assert post(f"To you again {i}", w.link).status_code == 200
+    t[0] += gap
+    assert post("One past the cap").json()["error"] == "rate_limited"
+    login(w.c, 3, "cat")
+    gate(w.cfg, w.tg, w.con, note(64, 3, text="and me"))                                  # one more person talking: one more reply
+    assert post("One more for you").status_code == 200
     t[0] += 86400
     assert post("A new day here").status_code == 200
     # someone else's post, a named post, a post not live: not found
@@ -196,9 +200,12 @@ def test_reply_anonymity(env, monkeypatch):
     for h in (tma(2), tma(3), tma(9)):
         assert w.c.get(f"/api/forum-posts/{w.pid}/replies", headers=h).status_code in (401, 404)
         assert w.c.delete(f"/api/forum-replies/{r['id']}", headers=h).status_code in (401, 404)
+        assert w.c.post(f"/api/forum-replies/{r['id']}/why", headers=h).status_code in (401, 403, 404)  # the AI's reason: its author's alone
+    assert r["ai"] is True and w.c.post(f"/api/forum-replies/{r['id']}/why", headers=tma(1)).json() == {"explain": None}
+    assert w.c.post(f"/api/forum-replies/{r['id']}/why", headers=tma(1)).status_code == 404  # once
     q = w.c.get("/api/forum-posts/mod", headers=tma(3)).json()
     held = q["replies"]["held"][0]
-    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon", "nick"}
+    assert set(held) == {"id", "body", "post", "postBody", "why", "reports", "at", "undo", "anon", "nick", "aiWhy"}
     blob = json.dumps(q["replies"]) + json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(3)).json())
     assert "Ann" not in blob and '"person"' not in json.dumps(q["replies"])
     assert "Secret words" not in json.dumps(w.c.get("/api/forum-posts/feed", headers=tma(2)).json())

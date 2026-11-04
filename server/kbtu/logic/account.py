@@ -864,7 +864,7 @@ CONSENT_FORUM = "2026-11-v14" # with FORUM=1: the policy's forum part is in forc
 CONSENT_BOARD = "2026-11-v15"  # with BOARD=1 alone: the student forum's section (11 then); v11, v7, v5 before
 CONSENT_BOTH = "2026-11-v16"  # (v12, v8, v6 before) FORUM=1 and BOARD=1: sections 11 and 12 (each combination its own text, its own version)
 CONSENT_TGC = "+tgc1"         # with FORUM_GROUP: added to whichever of the above (app.py), the channel comments' section
-CONSENT_FCH = "+fch3"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch2 until Nov 3: the anonymous author's replies; fch1 until Nov 2: commenters' faces and reactions)
+CONSENT_FCH = "+fch4"         # with FORUM_CHANNEL: added after that (app.py), the section on posts in the forum channel (fch3 until Nov 4: the check's explanation, appeals, reply limits; fch2 until Nov 3: the anonymous author's replies; fch1 until Nov 2: commenters' faces and reactions)
 CONSENT_AI = "+ai1"           # with any of the above on: added last (app.py), students' texts to more AI providers (section 5)
 
 
