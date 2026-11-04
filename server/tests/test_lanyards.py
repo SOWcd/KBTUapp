@@ -52,3 +52,15 @@ def test_school_lanyard(env):
     con.execute("UPDATE students SET school = NULL WHERE user_id = ?", (ann["id"],))
     con.commit()
     assert c.get("/api/me", headers=A).json()["skin"] is None          # no school any more: KBTU's
+
+
+def test_lanyard_by_name(env):
+    """A drawn club made in the app under another slug wears its lanyard by its name (kbtu.mag, Nov 4)."""
+    c, cfg = env
+    login(c, 1, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES
+        (90, 'club-90', 'club', 'kbtu.mag', 'km', 'x', 0, 0), (91, 'club-91', 'club', 'kbtu magazine', 'km', 'x', 0, 0)""")
+    uid = c.get("/api/me", headers=tma(1)).json()["id"]
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (90, ?, 'member', 0), (91, ?, 'member', 0)", (uid, uid))
+    assert logic.account._skin_ok(con, uid, 90) and not logic.account._skin_ok(con, uid, 91)

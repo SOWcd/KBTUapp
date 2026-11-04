@@ -479,8 +479,12 @@ FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", 
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
             "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
             "choice", "teentertainmentkbtu", "klubanimeshnikov",
-            "kbtumag")  # ponytail: kbtumag is a placeholder slug until kbtu.mag's org is in prod: rename here and in the web
-SKINNED = "o.status = 'active' AND o.slug IN (" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
+            "kbtumag")  # kbtu.mag: matched by its name (SKINNED)
+_LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
+# by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug,
+# Nov 4), as the web's awards.ts lookKey
+SKINNED = (f"o.status = 'active' AND (o.slug IN {_LIST} OR o.kind != 'school' AND "
+           f"lower(replace(replace(replace(o.name, '.', ''), ' ', ''), '-', '')) IN {_LIST})")
 
 
 # the schools' lanyards (Nov 2: their official shields and colours): each its own students' alone, by students.school,

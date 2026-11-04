@@ -299,15 +299,19 @@ export const isSchool = (look: Look) => look in SCHOOL_LOOKS;
 export const clubLook = (look: Look): ClubLook | undefined => CLUBS[look];
 
 export type Skin = Hand | ClubSlug;
+/** a club's drawn look: by its slug, or by its name in letters and digits alone ("kbtu.mag" is `kbtumag`: Nov 4, the
+ *  club was made in the app under another slug and its lanyard stayed locked) */
+const lookKey = (o: OrgRef): string | null => o.slug in CLUB_LOOKS ? o.slug
+  : ((k) => (k in CLUB_LOOKS ? k : null))(o.name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''));
 export const skinOf = (o?: OrgRef | null): Skin | null => (o && (o.kind === 'school' ? (o.slug in SCHOOL_LOOKS ? (o.slug as ClubSlug) : null)
-  : (SKINS as Record<string, Hand>)[o.slug] ?? (o.slug in CLUB_LOOKS ? (o.slug as ClubSlug) : null))) || null;
+  : (SKINS as Record<string, Hand>)[o.slug] ?? (lookKey(o) as ClubSlug | null))) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
 export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin) ?? comingLooks().find((o) => o.id === p.skin)) ?? 'kbtu';
 /** a drawn lanyard whose club isn't in the app yet (kbtu.mag, Nov 4): shown in the picker to try on, never worn; a
  *  negative id the server never sees (the try-on is local) */
-export const comingLooks = (): OrgRef[] => !data.orgs.length ? [] : Object.entries(CLUB_LOOKS).filter(([slug]) => !data.orgs.some((o) => o.slug === slug))
+export const comingLooks = (): OrgRef[] => !data.orgs.length ? [] : Object.entries(CLUB_LOOKS).filter(([slug]) => !data.orgs.some((o) => o.kind !== 'school' && lookKey(o) === slug))
   .map(([slug, c], i) => ({ id: -1 - i, slug, name: c.strip, short: c.strip.slice(0, 2), emoji: '', cover: 0, kind: 'club' as const, official: false }));
 /** the org a look belongs to, as this person's card knows it (their clubs first, then the app's list): its logo is the
  *  card's medallion (ui/OrgMedal) */
