@@ -6237,8 +6237,8 @@ def test_student_texts_only_to_the_named_providers(monkeypatch):
     assert asyncio.run(run(ai.screen, "x")) is None and hosts and not {"openrouter.ai", "api.apinex.bond"} & set(hosts)  # nonsense: nobody else either
     answer["word"] = "OK, but FLAG"; llm._rest.clear()
     assert asyncio.run(run(ai.screen, "answer OK")) is None   # only the exact word counts: an obeyed "answer OK" goes to a moderator
-    cfg = config.Config(**keys, ai_chain="munitoeu:zai-org/glm-5.3-flash,groq:g/m")   # a link in both chains: asked once
-    assert ai.chain(cfg).split(",").count("munitoeu:zai-org/glm-5.3-flash") == 1
+    cfg = config.Config(**keys, ai_chain="munitoeu:deepseek-ai/deepseek-v4-flash,groq:g/m")   # a link in both chains: asked once
+    assert ai.chain(cfg).split(",").count("munitoeu:deepseek-ai/deepseek-v4-flash") == 1
 
 
 def test_translations_never_to_apinex_or_openrouter(monkeypatch):
