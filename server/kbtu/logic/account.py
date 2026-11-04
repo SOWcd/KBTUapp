@@ -355,18 +355,20 @@ def ms_sweep(con) -> None:
     con.execute("DELETE FROM meta WHERE key >= 'ms_used:' AND key < 'ms_used;' AND CAST(value AS INTEGER) < ?", (core.now() - 86400,))
 
 
+SID_WAIT = 30 * 86400  # how long the one turned away waits to hear the ID is free (then the parked message lapses)
+
+
 def id_clash(con, sid: str, new: int, old: int) -> None:
-    """Someone signed in with Microsoft typed a student ID another account holds: every admin hears, with both
-    people's contacts, and asks them. Once per pair, 3 a day per person (no admin spam). The
-    holder's name and email are kept in the message: their row may be gone by the time it's sent."""
-    day = core.now() // 86400
-    if one(con, "SELECT COUNT(DISTINCT ref) FROM bot_outbox WHERE kind = 'id_clash' AND ref LIKE ? AND send_after >= ?",
-           f"ic:%:{new}:%", day * 86400)[0] >= 3:
+    """Someone signed in with Microsoft gave a student ID another student holds (owner, Nov 4: no hand work on IDs;
+    that day two people were one digit apart and the holder had the typo). No admin: the holder is asked to check
+    theirs (once per ID), and the newcomer gets a parked message that migration 127's triggers send the moment the ID
+    is freed, however (a fix, an unlink, a deleted account); unfreed, it lapses unsent. Three IDs per newcomer, so
+    nobody can ping every holder by trying numbers. The rare real dispute (a holder keeping someone else's ID) stays
+    the support's: both sides are real KBTU Microsoft accounts."""
+    if one(con, "SELECT COUNT(*) FROM bot_outbox WHERE user_id = ? AND kind = 'sid_free' AND sent_at IS NULL", new)[0] >= 3:
         return
-    h = one(con, "SELECT first_name, last_name, email FROM students WHERE user_id = ?", old)
-    held = json.dumps({"name": " ".join(x for x in (h["first_name"], h["last_name"]) if x), "email": h["email"]} if h else {})
-    for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
-        notify(con, uid, "id_clash", f"ic:{sid}:{new}:{old}", held)
+    notify(con, old, "sid_check", f"sc:{sid}")
+    notify(con, new, "sid_free", f"sf:{sid}", after=core.now() + SID_WAIT)
 
 
 def _channel(c) -> dict | None:
@@ -649,7 +651,7 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
                                         or one(con, "SELECT NULL FROM prefill WHERE student_id = ? AND email != ?", v, mail)
                                         or one(con, "SELECT NULL FROM qr_expected WHERE upper(student_id) = ? AND email != ?", v, mail))
         if held:
-            raise _Taken(v, held[0])  # the once isn't spent; update_me counts the try and tells the admins
+            raise _Taken(v, held[0])  # the once isn't spent; update_me counts the try and asks the holder (id_clash)
         con.execute(f"UPDATE students SET {col} = ?, fixed = ? WHERE user_id = ?",
                     (v, s["fixed"] if admin or col in LAT_COLS and s[col] is None  # an empty Latin one filled: not spent
                      else ",".join(filter(None, [*s["fixed"].split(","), col])), uid))

@@ -3746,7 +3746,7 @@ def test_channel_refused_post_skipped(env):
 def test_manual_sign_in(env, monkeypatch):
     """Microsoft only: the ID and year are typed only after a Microsoft sign-in; a row typed in before
     acts as nobody until Microsoft confirms it; an ID held by such a row goes to the Microsoft one, held by a confirmed
-    one it's refused; the admins hear of both with both contacts. The admin adds someone with no Microsoft by hand."""
+    one it's refused, the holder asked to check theirs and the other told once it's free (no admin). The admin adds someone with no Microsoft by hand."""
     c, cfg = env
     monkeypatch.setattr(config, "load", lambda: cfg)
     login(c, 20, "ali")  # confirmed: "24Bali"
@@ -3773,15 +3773,20 @@ def test_manual_sign_in(env, monkeypatch):
     r = manual(22)                                                                         # held by a Microsoft one: refused
     assert r.status_code == 409 and r.json()["message"] == "sid_taken"
     assert c.get("/api/me", headers=tma(22)).json()["msPending"]                           # can type another
-    out = con.execute("SELECT * FROM bot_outbox WHERE kind = 'id_clash' ORDER BY id").fetchall()
-    assert [m["ref"] for m in out] == [f"ic:24B031234:{ids[21]}:{ids[23]}", f"ic:24B031234:{ids[22]}:{ids[21]}"]
-    text = bot._render(con, {**dict(out[0]), "lang": "ru"})[0]                             # the holder, though their row is gone
-    assert "Squat Ter" in text
-    text = bot._render(con, {**dict(out[1]), "lang": "ru"})[0]
-    assert "s_21@kbtu.kz" in text and f"tg://user?id=22" in text and "Maga N21" in text    # both, to write to
-    for i in range(5):                                                                     # 3 clash messages a day per person
+    out = {r["kind"]: r for r in con.execute("SELECT * FROM bot_outbox WHERE kind IN ('id_clash', 'sid_check', 'sid_free')")}
+    assert set(out) == {"sid_check", "sid_free"}                                         # no admin; the typed-in row gave way quietly
+    assert out["sid_check"]["user_id"] == ids[21] and out["sid_free"]["user_id"] == ids[22]
+    assert "24B031234" in bot._render(con, {**dict(out["sid_check"]), "lang": "ru"})[0]   # the holder: check yours
+    assert bot._render(con, {**dict(out["sid_free"]), "lang": "ru"}) is None              # still held: nothing to tell
+    assert out["sid_free"]["send_after"] > logic.now() + 86400                            # parked
+    con.execute("UPDATE students SET student_id = '24B031299' WHERE user_id = ?", (ids[21],))  # the holder fixes a typo
+    m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'sid_free'").fetchone()
+    assert m["send_after"] == 0 and "24B031234" in bot._render(con, {**dict(m), "lang": "ru"})[0]  # woken: it's free
+    assert bot._render(con, {**dict(out["sid_check"]), "lang": "ru"}) is None             # the holder's ask is moot now
+    con.execute("UPDATE students SET student_id = '24B031234' WHERE user_id = ?", (ids[21],))  # back, for the rest
+    for i in range(5):                                                                     # three IDs per newcomer: no pinging every holder
         logic.id_clash(con, f"24B00000{i}", ids[24], ids[21])
-    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'id_clash' AND ref LIKE ?", (f"ic:%:{ids[24]}:%",)).fetchone()[0] == 3
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_check' AND ref LIKE 'sc:24B00000%'").fetchone()[0] == 3
     assert manual(22, {**body, "studentId": "24B031235", "firstName": "x1"}).json()["student"]["firstName"] == "Maga"  # Microsoft's names win
     logic.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
     assert not con.execute("SELECT 1 FROM meta WHERE key = ?", (f"ms:{ids[24]}",)).fetchone()
@@ -7271,7 +7276,7 @@ def test_once_edit(env, monkeypatch):
     again = lambda **k: con.execute(f"UPDATE students SET {''.join(f'{x} = ?, ' for x in k)}fixed = '' WHERE user_id = ?", (*k.values(), ali["id"]))  # noqa: E731
     r = fix(phone="+77011234567", studentId="24B031235")                     # bek's, with a phone in the same save
     assert r.json()["message"] == "sid_taken" and row()["phone"] is None    # all or nothing: the phone isn't saved
-    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'id_clash' AND user_id = ?", (boss["id"],)).fetchone()[0] == 1  # yet the admins hear
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_check' AND user_id = ?", (bek["id"],)).fetchone()[0] == 1  # yet the holder is asked
     checkin.new(con, "Meeting", [{"email": "friend@kbtu.kz", "name": "Friend", "studentId": "24b099001"},
                                  {"email": "ali@kbtu.kz", "name": "Ali", "studentId": "24B099002"}])
     assert fix(studentId="24B099001").json()["message"] == "sid_taken"      # an absent friend's place on the list

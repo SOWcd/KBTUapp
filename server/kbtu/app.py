@@ -343,7 +343,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """After Microsoft, someone new types the student ID and year (Microsoft knows neither: KBTU leaves employeeId
         empty, measured Oct 20), so the ID is the student's word, tied to a real @kbtu.kz account. Microsoft only
         no pending Microsoft sign-in, no account. An ID held by a typed-in row with no Microsoft goes
-        to the Microsoft one; held by a Microsoft-confirmed one, it's refused; the admins hear of both (id_clash)."""
+        to the Microsoft one; held by a Microsoft-confirmed one, it's refused and sorted without admins (id_clash)."""
         consent = str(body.get("consentVersion") or "")
         sid = str(body.get("studentId") or "").strip().upper()
         course = logic.course_of(sid)  # the ID says the year (audit M3: a typed "1" took free first-year seats); None: a year ahead
@@ -371,9 +371,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             if logic.one(con, "SELECT 1 FROM students WHERE ms_oid = ?", ms["oid"]):
                 raise ApiError("conflict", "linked")  # that Microsoft account got linked to another Telegram meanwhile
             taken = logic.one(con, "SELECT user_id, manual, ms_oid FROM students WHERE student_id = ?", sid)
-            if taken:
-                logic.id_clash(con, sid, v.id, taken["user_id"])
             held = taken and not (taken["manual"] and taken["ms_oid"] is None)
+            if held:
+                logic.id_clash(con, sid, v.id, taken["user_id"])  # the holder asked to check theirs; I hear once it's freed
             if taken and not held:
                 for t in ("students", "schedule_classes"):  # typed in, never confirmed: gives way (as admin.py unlink)
                     con.execute(f"DELETE FROM {t} WHERE user_id = ?", (taken["user_id"],))

@@ -407,6 +407,8 @@ def test_old_board_cleaned_up(env):
         VALUES (?, 'talk', 'old words', 1, 'live', 0, 0, 9999999999)""", (ann["id"],)).lastrowid
     con.execute("INSERT INTO thread_replies (thread_id, user_id, body, status, created_at) VALUES (?, ?, 'a reply', 'live', 0)", (tid, ann["id"]))
     con.execute("INSERT INTO reports (reporter_id, target, target_id, reason, created_at) VALUES (?, 'thread', ?, 'spam', 0)", (ann["id"], tid))
+    con.execute("DROP TRIGGER sid_freed_fix")  # 127's
+    con.execute("DROP TRIGGER sid_freed_gone")
     con.execute("DROP TABLE event_crew")  # 126's
     con.execute("ALTER TABLE events DROP COLUMN channel_via")
     con.execute("ALTER TABLE events DROP COLUMN for_board")

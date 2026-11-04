@@ -1233,6 +1233,16 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (event_id, user_id)
     ) STRICT;
     CREATE INDEX crew_by_user ON event_crew(user_id);"""),
+    # a student ID two people gave (logic/account.id_clash): the one turned away waits in a parked "sid_free" message;
+    # whatever frees the ID (the holder fixed a typo, an admin's fix or unlink, a deleted account) sends it now
+    (127, """CREATE TRIGGER sid_freed_fix AFTER UPDATE OF student_id ON students WHEN OLD.student_id IS NOT NEW.student_id
+    BEGIN
+      UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
+    END;
+    CREATE TRIGGER sid_freed_gone AFTER DELETE ON students
+    BEGIN
+      UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
+    END;"""),
 ]
 
 
