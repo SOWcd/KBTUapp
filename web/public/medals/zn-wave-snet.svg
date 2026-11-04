@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="tie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF0B8"/><stop offset="1" stop-color="#FFC94A"/></linearGradient>
+<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFC94A" stop-opacity=".75"/><stop offset="1" stop-color="#FFC94A" stop-opacity="0"/></radialGradient><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF7D6"/><stop offset="0.2" stop-color="#F7D774"/><stop offset="0.4" stop-color="#D29C2C"/><stop offset="0.6" stop-color="#FFEDAE"/><stop offset="0.8" stop-color="#C2861A"/><stop offset="1" stop-color="#7A4C08"/></linearGradient><linearGradient id="mh" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFEDAE"/><stop offset="0.25" stop-color="#F7D774"/><stop offset="0.5" stop-color="#D29C2C"/><stop offset="0.75" stop-color="#FFF7D6"/><stop offset="1" stop-color="#C2861A"/></linearGradient><radialGradient id="ms" cx="0.36" cy="0.3" r="0.8"><stop offset="0" stop-color="#FFF7D6"/><stop offset="0.33" stop-color="#F7D774"/><stop offset="0.67" stop-color="#D29C2C"/><stop offset="1" stop-color="#7A4C08"/></radialGradient><filter id="r1" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="6" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="7" diffuseConstant="1" lighting-color="#FFFFFF" result="d"><feDistantLight azimuth="235" elevation="52"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" result="l"/>
+<feSpecularLighting in="h" surfaceScale="7" specularConstant="1.15" specularExponent="22" lighting-color="#FFFFFF" result="s"><feDistantLight azimuth="235" elevation="38"/></feSpecularLighting>
+<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+<feComposite in="l" in2="s2" operator="arithmetic" k2="1" k3=".85" result="m"/>
+<feComposite in="m" in2="SourceAlpha" operator="in" result="o"/>
+<feGaussianBlur in="SourceAlpha" stdDeviation="5"/><feOffset dx="3" dy="7"/><feComponentTransfer><feFuncA type="linear" slope=".62"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="o"/></feMerge></filter><filter id="r2" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="3.5" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="5" diffuseConstant="1" lighting-color="#FFFFFF" result="d"><feDistantLight azimuth="235" elevation="52"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" result="l"/>
+<feSpecularLighting in="h" surfaceScale="5" specularConstant="1.15" specularExponent="22" lighting-color="#FFFFFF" result="s"><feDistantLight azimuth="235" elevation="38"/></feSpecularLighting>
+<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+<feComposite in="l" in2="s2" operator="arithmetic" k2="1" k3=".85" result="m"/>
+<feComposite in="m" in2="SourceAlpha" operator="in" result="o"/>
+<feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="1.8" dy="4.2"/><feComponentTransfer><feFuncA type="linear" slope=".62"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="o"/></feMerge></filter><filter id="r3" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+<feGaussianBlur in="SourceAlpha" stdDeviation="1.8" result="h"/>
+<feDiffuseLighting in="h" surfaceScale="3" diffuseConstant="1" lighting-color="#FFFFFF" result="d"><feDistantLight azimuth="235" elevation="52"/></feDiffuseLighting>
+<feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1.3" result="l"/>
+<feSpecularLighting in="h" surfaceScale="3" specularConstant="1.15" specularExponent="22" lighting-color="#FFFFFF" result="s"><feDistantLight azimuth="235" elevation="38"/></feSpecularLighting>
+<feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+<feComposite in="l" in2="s2" operator="arithmetic" k2="1" k3=".85" result="m"/>
+<feComposite in="m" in2="SourceAlpha" operator="in" result="o"/>
+<feGaussianBlur in="SourceAlpha" stdDeviation="1.75"/><feOffset dx="1.05" dy="2.45"/><feComponentTransfer><feFuncA type="linear" slope=".62"/></feComponentTransfer>
+<feMerge><feMergeNode/><feMergeNode in="o"/></feMerge></filter></defs><g transform="translate(256 256) scale(0.92) translate(-256 -256)"><g fill="none" stroke="#FFF0B8" stroke-width="1.6" stroke-dasharray="2 7" stroke-linecap="round" opacity=".45"><circle cx="256" cy="256" r="108"/><circle cx="256" cy="256" r="166"/></g>
+<path d="M364 256L402.57 178.07M364 256L402.57 333.93M148 256L109.43 333.93M148 256L109.43 178.07" stroke="#FFF0B8" stroke-width="3" stroke-linecap="round" opacity=".35" fill="none"/>
+<path d="M256 256L364 256M256 256L148 256M351.36 205.3A108 108 0 0 1 351.36 306.7M160.64 306.7A108 108 0 0 1 160.64 205.3M402.57 178.07A166 166 0 0 1 402.57 333.93M109.43 333.93A166 166 0 0 1 109.43 178.07" stroke="url(#tie)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".18" fill="none"/>
+<path d="M256 256L364 256M256 256L148 256M351.36 205.3A108 108 0 0 1 351.36 306.7M160.64 306.7A108 108 0 0 1 160.64 205.3M402.57 178.07A166 166 0 0 1 402.57 333.93M109.43 333.93A166 166 0 0 1 109.43 178.07" stroke="#FFF0B8" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".85" fill="none"/>
+<circle cx="364" cy="256" r="30" fill="url(#halo)"/><circle cx="148" cy="256" r="30" fill="url(#halo)"/><circle cx="402.57" cy="178.07" r="28" fill="url(#halo)"/><circle cx="402.57" cy="333.93" r="28" fill="url(#halo)"/><circle cx="109.43" cy="333.93" r="28" fill="url(#halo)"/><circle cx="109.43" cy="178.07" r="28" fill="url(#halo)"/>
+<g filter="url(#r2)" fill="url(#ms)"><circle cx="364" cy="256" r="15"/><circle cx="148" cy="256" r="15"/><circle cx="402.57" cy="178.07" r="14"/><circle cx="402.57" cy="333.93" r="14"/><circle cx="109.43" cy="333.93" r="14"/><circle cx="109.43" cy="178.07" r="14"/></g></g></svg>

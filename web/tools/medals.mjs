@@ -344,12 +344,9 @@ for (const k of 'bsgl') {
   files[`ribbon-${k}`] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 640"><defs>${lin('rb', ['#0C1438', '#22306E', '#2E3E86', '#1A2558', '#0A1030'], 1, 0)}${lin('st', [m.rim[0], m.rim[1], m.rim[2]], 1, 0)}${lin('fold', ['#000000AA', '#00000000'], 0, 1)}${m.iri ? lin('iri', m.iri, 0, 1) : ''}</defs>${tail(-1)}${tail(1)}</svg>\n`;
 }
 
-// ---- pins: the one-time awards are shields in the Recruiter's craft (owner, Nov 4: his medal "looks great", the
-// struck glyphs read childish). Layers as rc's, each the same 512 box, the shield's outline SHIELD (lib/awards.ts
-// SHIELD: the two stay equal): zn-<g>-field (far: deep enamel, the banknote guilloche, rays from a light behind the
-// glyph, far stars), zn-<g>-net (the glyph as thin luminous line art with glowing nodes, as rc-net's ties), zn-<g>-core
-// (near: a light burst at the glyph's key point), zn-frame-<m> (still: the milled metal frame). Event pins (an emoji) keep
-// zn-enamel over their colour under the same frame.
+// ---- pins: an event's pin is a shield (ui/Pin): its emoji on its colour, zn-enamel's guilloche over it, the milled
+// metal frame (zn-frame-<m>). SHIELD is lib/awards.ts SHIELD: the two stay equal. The app's own drawn pins are round
+// medals as Recruiter's (below).
 const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
 const SC = [256, 262]; // the shield's middle, for scaling it
 const scaled = (s) => `translate(${SC[0]} ${SC[1]}) scale(${s}) translate(${-SC[0]} ${-SC[1]})`;
@@ -370,59 +367,81 @@ for (const k of 'gsr') {
 <path d="${SHIELD}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.5" transform="${scaled(0.93)}"/>
 <path d="${SHIELD}" fill="none" stroke="#FFFFFF" stroke-opacity=".45" stroke-width="1.5" transform="translate(1 1.5) ${scaled(0.93)}"/>`);
 }
-// the field: the Recruiter's (field above) inside the shield: deep enamel, rosette, rays from `light`, far stars; it
-// overscans the frame so the tilt never shows its edge
-function shieldField(colors, seed, light) {
-  let rays = '', guil = '', specks = '';
-  for (let i = 0; i < 32; i++) {
-    const a = (i * 11.25 * Math.PI) / 180, b = 0.028;
-    rays += `M${light[0]} ${light[1]}L${f(light[0] + 360 * Math.sin(a - b))} ${f(light[1] - 360 * Math.cos(a - b))}L${f(light[0] + 360 * Math.sin(a + b))} ${f(light[1] - 360 * Math.cos(a + b))}z`;
-  }
-  for (let i = 0; i < 24; i++) guil += `<ellipse cx="256" cy="252" rx="200" ry="76" transform="rotate(${f(i * 7.5)} 256 252)"/>`;
-  const rnd = rng(seed);
-  for (let i = 0; i < 46; i++) { const x = 100 + rnd() * 312, y = 80 + rnd() * 330; specks += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(0.8 + rnd() * 1.6)}" opacity="${f(0.25 + rnd() * 0.5)}"/>`; }
-  return svg(`<radialGradient id="field" cx=".44" cy=".36" r=".75">${stops(colors)}</radialGradient>
-<radialGradient id="rays" gradientUnits="userSpaceOnUse" cx="${light[0]}" cy="${light[1]}" r="250"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".5"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
-<radialGradient id="vig" cx=".5" cy=".46" r=".62"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
-<clipPath id="in"><path d="${SHIELD}" transform="${scaled(1.05)}"/></clipPath>`,
-  `<g clip-path="url(#in)"><rect width="512" height="512" fill="url(#field)"/>
-<g fill="none" stroke="#FFFFFF" stroke-width="1" opacity=".08">${guil}</g>
-<path d="${rays}" fill="url(#rays)" opacity=".36"/>
-<g fill="#FFFFFF">${specks}</g><rect width="512" height="512" fill="url(#vig)"/></g>`);
-}
-// the glyph as rc-net draws its ties: a soft wide glow under a thin bright line, its nodes glowing orbs
-function lineArt(k, d, nodes) {
+// the app's own drawn pins (owner, Nov 4: the shields looked terrible, Recruiter's medal "looks great"): round medals
+// built exactly as Recruiter's, layer for layer (lib/awards layersOf): zn-<g>-field (its field, in the pin's own
+// enamel), zn-<g>-net (the symbol as a constellation: a few glowing studs joined by thin light, abstract, never a
+// drawing), Recruiter's own light (rc-core-<m>) and a plain rim of its metal (zn-rim-<m>: rim() without laurels).
+for (const k of 'gs') files[`zn-rim-${k}`] = rim(k);
+function constellation(k, nodes, ties, web, orbits) {
   const m = METAL[k];
   return svg(`<linearGradient id="tie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></linearGradient>
-<radialGradient id="orb" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="${m.lit}"/><stop offset="1" stop-color="${m.glow}"/></radialGradient>
-<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
-  `<g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${d}" stroke="url(#tie)" stroke-width="20" opacity=".2"/>
-<path d="${d}" stroke="${m.lit}" stroke-width="6.5" opacity=".92"/></g>
-${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r * 2.2)}" fill="url(#halo)"/>`).join('')}
-${nodes.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#orb)"/><circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1.5"/>`).join('')}`);
+<radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="${m.glow}" stop-opacity=".75"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>${metals(k)}${RELIEFS}`,
+  `<g fill="none" stroke="${m.lit}" stroke-width="1.6" stroke-dasharray="2 7" stroke-linecap="round" opacity=".45">${orbits}</g>
+<path d="${web}" stroke="${m.lit}" stroke-width="3" stroke-linecap="round" opacity=".35" fill="none"/>
+<path d="${ties}" stroke="url(#tie)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity=".18" fill="none"/>
+<path d="${ties}" stroke="${m.lit}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".85" fill="none"/>
+${nodes.map(([x, y, s]) => `<circle cx="${x}" cy="${y}" r="${f(s * 2)}" fill="url(#halo)"/>`).join('')}
+${part('r2', 'ms', nodes.map(([x, y, s]) => `<circle cx="${x}" cy="${y}" r="${s}"/>`).join(''))}`);
 }
-// the light at the glyph's key point, as rc-core: a soft burst and a four-point star; small sparkles round it
-const pinCore = (k, [x, y], sparks = []) => { const m = METAL[k]; return svg(`<radialGradient id="core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="${m.lit}"/><stop offset=".7" stop-color="${m.glow}" stop-opacity=".5"/><stop offset="1" stop-color="${m.glow}" stop-opacity="0"/></radialGradient>`,
-  `<circle cx="${x}" cy="${y}" r="62" fill="url(#core)"/>${star4(x, y, 46, 6, m.lit)}${star4(x, y, 30, 3.5, '#FFFFFF')}<circle cx="${x}" cy="${y}" r="7" fill="#FFFFFF"/>
-${sparks.map(([u, v, r]) => star4(u, v, r, r / 7, '#FFFFFF')).join('')}`); };
-const pin = (name, k, colors, light, d, nodes, core, sparks) => {
-  files[`zn-${name}-field`] = shieldField(colors, name.charCodeAt(0) * 37 + name.length, light);
-  files[`zn-${name}-net`] = lineArt(k, d, nodes);
-  files[`zn-${name}-core`] = pinCore(k, core, sparks);
+const arc = (r, a0, a1) => { const [x0, y0] = pt(r, a0), [x1, y1] = pt(r, a1); return `M${x0} ${y0}A${r} ${r} 0 0 ${a1 > a0 ? 1 : 0} ${x1} ${y1}`; };
+// Variant B (lib/awards PIN_SHAPE 'shield', owner, Nov 4: "the shields at the medals' level, or better"): the same pin
+// in the shield, built as the coin is: the coin's rim along the shield's outline (a milled outer band, the broad band
+// rolled by the same relief light, a raised lip, the field's edge sunk under it, the glaze's gloss), the same field and
+// constellation inside (zn-<g>-sfield: the field clipped to the shield; zn-<g>-snet: the constellation a little smaller
+// to clear the narrower sides), Recruiter's light in the middle. Each band is the outline scaled round the shield's
+// middle, in the coin's proportions (knurl 1-.935, band .94-.86, lip .865-.83: the coin's 255/238/240/220/221/212).
+const SH_PTS = [['M', 100, 78], ['Q', 256, 44, 412, 78], ['Q', 440, 84, 440, 112], ['L', 440, 268], ['Q', 440, 398, 256, 480], ['Q', 72, 398, 72, 268], ['L', 72, 112], ['Q', 72, 84, 100, 78]];
+const SHC = [256, 262];
+const SH_FILL = 1.12; // the shield fills the box as the coin does (its outline in lib/awards SHIELD keeps the shield pins of events)
+const shieldD = (k) => { const s = k * SH_FILL; return SH_PTS.map(([c, ...v]) => c + v.map((n, i) => f(SHC[i % 2] + (n - SHC[i % 2]) * s)).join(' ')).join('') + 'Z'; };
+const sring = (s0, s1) => `<path fill-rule="evenodd" d="${shieldD(s0)}${shieldD(s1)}"/>`;
+function shieldRim(k) {
+  const m = METAL[k];
+  return svg(`${metals(k)}${relief('rr', 10, 11, 0.5)}${relief('re', 3, 6, 0)}${RELIEFS}
+<linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+<clipPath id="fd"><path d="${shieldD(0.83)}"/></clipPath>
+<filter id="sb" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="7"/></filter>`,
+  `<g clip-path="url(#fd)"><path d="${shieldD(0.83)}" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="22" filter="url(#sb)"/>
+<path d="M90 ${f(230)}Q150 96 256 92Q362 96 420 150Q300 120 90 230z" fill="url(#gloss)"/></g>
+${part('re', 'mh', sring(1, 0.935))}
+<path d="${shieldD(0.968)}" fill="none" stroke="${m.rim[5]}" stroke-width="16" stroke-dasharray="1.6 3.4" opacity=".5"/>
+${part('rr', 'mg', sring(0.94, 0.86))}
+${part('r3', 'mh', sring(0.865, 0.83))}
+<path d="${shieldD(0.83)}" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="2.5"/>`);
+}
+for (const k of 'gs') files[`zn-srim-${k}`] = shieldRim(k);
+// a file's drawing clipped to the shield (the field overscans under the rim, as the coin's does)
+const clipShield = (s, scale) => s.replace('<defs>', `<defs><clipPath id="shc"><path d="${shieldD(scale)}"/></clipPath>`).replace('</defs>', '</defs><g clip-path="url(#shc)">').replace(/<\/svg>\n$/, '</g></svg>\n');
+// the constellation smaller round the shield's light, to clear its narrower sides and point
+const shrink = (s, k) => s.replace('</defs>', `</defs><g transform="translate(${C} ${C}) scale(${k}) translate(${-C} ${-C})">`).replace(/<\/svg>\n$/, '</g></svg>\n');
+const zpin = (name, k, colors, nodes, ties, web, orbits) => {
+  files[`zn-${name}-field`] = field(colors, name.charCodeAt(0) * 37 + name.length, [C, C], 0.38, true);
+  files[`zn-${name}-net`] = constellation(k, nodes, ties, web, orbits);
+  files[`zn-${name}-sfield`] = clipShield(files[`zn-${name}-field`], 0.9);
+  files[`zn-${name}-snet`] = shrink(files[`zn-${name}-net`], 0.92);
 };
-// Anthem: KBTU's colonnade drawn in light, two notes rising over it
-pin('anthem', 'g', ['#4A38B8', '#22186A', '#0A0628'], [256, 230],
-  'M150 206L256 150L362 206ZM140 220H372M172 232V330M224 232V330M288 232V330M340 232V330M132 344H380M118 364H394M338 128V80L392 64V114',
-  [[256, 150, 13], [150, 206, 9], [362, 206, 9], [330, 130, 13], [384, 116, 13]], [256, 150], [[188, 120, 10], [410, 168, 8]]);
-// Made the creator laugh: the theatre's comedy mask in one line, its eyes creased with laughing, its ribbons tied, two
-// tears of light
-pin('laugh', 'g', ['#14949E', '#0A4A52', '#021C20'], [256, 240],
-  'M160 166Q256 128 352 166Q368 266 318 332Q290 370 256 372Q222 370 194 332Q144 266 160 166ZM194 220Q216 196 240 220M272 220Q296 196 318 220M204 274Q256 338 308 274Q256 296 204 274ZM160 166Q132 146 112 172M352 166Q380 146 400 172',
-  [[112, 172, 9], [400, 172, 9], [188, 244, 10], [324, 244, 10]], [256, 134], [[150, 300, 9], [372, 318, 8]]);
-// Found the creator: an open hand waving hello, drawn in one line, the wave in two arcs each side
-pin('wave', 'g', ['#C84438', '#6A1420', '#240408'], [262, 250],
-  'M214 384L206 300Q172 270 160 238Q154 220 168 215Q182 212 192 228L214 262L208 156Q208 134 226 134Q244 134 244 156L246 238L250 136Q250 114 268 114Q286 114 286 136L284 236L292 150Q294 128 311 129Q328 130 326 150L318 242L334 182Q338 166 352 168Q366 170 362 188L344 300Q336 360 306 384ZM128 166Q112 206 126 246M150 184Q140 210 150 236M396 156Q412 196 398 236M374 176Q384 200 374 226',
-  [[226, 134, 8], [268, 114, 8], [311, 129, 8], [352, 168, 8], [166, 216, 8]], [160, 130], [[118, 140, 9], [412, 260, 8]]);
+// Anthem: a melody rising through the light, its notes on a faint staff
+(() => {
+  const n = [[110, 304, 16], [172, 222, 16], [340, 214, 16], [394, 140, 14]];
+  const staff = [196, 226, 256, 286, 316].map((y) => { const w = Math.sqrt(176 * 176 - (y - C) ** 2); return `<path d="M${f(C - w)} ${y}H${f(C + w)}"/>`; }).join('');
+  zpin('anthem', 'g', ['#5A3AD0', '#2A168A', '#0C0638'], n,
+    `M110 304L172 222L${C} ${C}L340 214L394 140`, `M110 304L340 214M172 222L394 140`, staff);
+})();
+// Made the creator laugh: a smile of five stars under two, the eyes tied to the light
+(() => {
+  const smile = [125, 152.5, 180, 207.5, 235].map((a) => [...pt(140, a), 15]), eyes = [-34, 34].map((a) => [...pt(124, a), 16]);
+  zpin('laugh', 'g', ['#1AA0A8', '#0A5058', '#021E24'], [...smile, ...eyes],
+    `${arc(140, 125, 235)}${eyes.map(([x, y]) => `M${C} ${C}L${x} ${y}`).join('')}`, `M${eyes[0][0]} ${eyes[0][1]}L${eyes[1][0]} ${eyes[1][1]}`,
+    `<circle cx="${C}" cy="${C}" r="140"/>`);
+})();
+// Found the creator: a hello going out both ways, waves of light from the middle
+(() => {
+  const near = [90, 270].map((a) => [...pt(108, a), 15]), far = [62, 118, 242, 298].map((a) => [...pt(166, a), 14]);
+  zpin('wave', 'g', ['#C8384A', '#6A1028', '#24040E'], [...near, ...far],
+    `${near.map(([x, y]) => `M${C} ${C}L${x} ${y}`).join('')}${arc(108, 62, 118)}${arc(108, 242, 298)}${arc(166, 62, 118)}${arc(166, 242, 298)}`,
+    `M${near[0][0]} ${near[0][1]}L${far[0][0]} ${far[0][1]}M${near[0][0]} ${near[0][1]}L${far[1][0]} ${far[1][1]}M${near[1][0]} ${near[1][1]}L${far[2][0]} ${far[2][1]}M${near[1][0]} ${near[1][1]}L${far[3][0]} ${far[3][1]}`,
+    `<circle cx="${C}" cy="${C}" r="108"/><circle cx="${C}" cy="${C}" r="166"/>`);
+})();
 
 // the files this tool owns are rewritten whole: drop the ones a rename left behind
 for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));

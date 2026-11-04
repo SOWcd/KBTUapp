@@ -54,7 +54,7 @@ it('every medal layer and pin glyph is drawn', async () => {
       const art = artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }), leg = legendOf(art);
       expect(layersOf(art)!.every(([f]) => has(f)) && (code === 'referral' ? leg === null : has(leg!))).toBe(true);
     }
-  for (const z of Object.values(ZNAKI)) expect(['field', 'net', 'core'].every((n) => has(`zn-${z.glyph}-${n}`)) && has('zn-enamel') && has(`zn-frame-${z.metal}`)).toBe(true);
+  for (const z of Object.values(ZNAKI)) expect(layersOf(`layer_zn_${z.glyph}_${z.metal}`)!.every(([n]) => has(n)) && has('zn-enamel') && has(`zn-frame-${z.metal}`)).toBe(true);
   for (const m of 'bsgl') expect(has(`ribbon-${m}`)).toBe(true);
 });
 

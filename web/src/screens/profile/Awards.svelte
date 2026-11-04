@@ -11,7 +11,7 @@
   import { ui, say } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { achItem, achKey, achName, badgeItem, closest as closestOf, hero, isCoin, isMedal, leftLine, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, yearOf, type ShelfItem } from '../../lib/awards';
+  import { achItem, achKey, achName, badgeItem, closest as closestOf, hero, isMedal, isRound, leftLine, METALS, metalOf, nextOf, shelfItem, tierLabel, tierName, yearOf, type ShelfItem } from '../../lib/awards';
   import { dayMonth } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Medal from '../../ui/Medal.svelte';
@@ -113,7 +113,7 @@
       {#snippet card(a: Achievement, i: number)}
         {@const n = nextOf(a)}
         {@const order = picked.indexOf(a.code)}
-        <button class="ach {tierClass(a)}" class:zn={!isMedal(a) && !isCoin(a)} class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
+        <button class="ach {tierClass(a)}" class:zn={!isRound(a)} class:off={a.level === 0} class:on={editing && order >= 0} style="--i:{i}"
                 onclick={() => (editing ? toggle(a.code, a.level > 0) : open(achItem(a)))}>
           <span class="md"><Medal {a} size={62} /></span>
           <b class="nm">{achName(a)}</b>

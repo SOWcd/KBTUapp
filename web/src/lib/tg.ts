@@ -161,10 +161,12 @@ export function scanQr(text: string, onText: (value: string) => boolean): boolea
 
 export function closeScanner(): void { if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
 
-export function shareMessage(preparedId: string): Promise<boolean> {
+/** true: sent; false: the picker closed; null: this client can't share a card (Telegram Desktop said UNSUPPORTED). */
+export function shareMessage(preparedId: string): Promise<boolean | null> {
   return new Promise((done) => {
-    if (!can('8.0') || !W?.shareMessage) return done(false);
-    tgTry((w) => w.shareMessage!(preparedId, (ok) => done(!!ok)));
+    if (!can('8.0') || !W?.shareMessage) return done(null);
+    const off = on('shareMessageFailed', () => { off(); done(null); });
+    tgTry((w) => w.shareMessage!(preparedId, (ok) => { off(); done(!!ok); }));
   });
 }
 
@@ -181,7 +183,9 @@ export async function shareCard(card: Record<string, string | number | boolean |
     const { id } = await r.json();
     if (!id) throw new Error('share');
     ready?.();
-    return await shareMessage(id); // true once the user picked a chat
+    const sent = await shareMessage(id); // true once the user picked a chat
+    if (sent !== null) return sent;
+    // a client without cards (a user on Telegram Desktop, Nov 4): Telegram's own picker with the link instead
   }
   ready?.();
   openLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);

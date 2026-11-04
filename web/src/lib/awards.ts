@@ -79,13 +79,18 @@ const MEDAL_ART: Record<string, string> = { regular: 'rg', streak: 'st', first_i
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
 export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
-  const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length);
+  const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length), z = ZNAKI[a.emoji];
+  if (z) return `layer_zn_${z.glyph}_${z.metal}`;
   return !p ? a.emoji : p === 'rc' ? 'layer_rc' + (of > 1 ? l : '') : `layer_${p}_${'bsgl'[metalOf(l, of)]}`;
 }
 /** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
 export function layersOf(art: string): [string, number][] | null {
   const rc = /^layer_rc(\d)$/.exec(art);
   if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
+  // a drawn pin, built as Recruiter's (owner, Nov 4): its own field and constellation, Recruiter's light, and the coin's
+  // rim of its metal, round or along the shield (PIN_SHAPE)
+  const z = /^layer_zn_([a-z0-9]+)_([gs])$/.exec(art);
+  if (z) { const s = PIN_SHAPE === 'shield' ? 's' : ''; return [[`zn-${z[1]}-${s}field`, -1], [`zn-${z[1]}-${s}net`, 0.5], [`rc-core-${z[2]}`, 1], [`zn-${s}rim-${z[2]}`, 0]]; }
   const o = /^layer_([a-z]{2})_([bsgl])$/.exec(art);
   return o ? [[`${o[1]}-field`, -1], [`${o[1]}-art-${o[2]}`, 0.5], [`${o[1]}-near-${o[2]}`, 1], [`md-rim-${o[2]}`, 0]] : null;
 }
@@ -98,6 +103,12 @@ export const legendOf = (art: string): string | null => { const o = /^layer_([a-
 export const metalLetter = (a: Pick<Achievement, 'level' | 'levels'>): string => 'bsgl'[metalOf(Math.max(1, a.level), Math.max(1, a.levels.length))];
 /** the pin's shield in a 512 box (tools/medals.mjs SHIELD draws its frame: the two stay equal) */
 export const SHIELD = 'M100 78Q256 44 412 78Q440 84 440 112V268Q440 398 256 480Q72 398 72 268V112Q72 84 100 78Z';
+/** the app's drawn pins as a shield or a round medal, both built as Recruiter's (owner, Nov 4: two variants, he picks) */
+export const PIN_SHAPE = 'shield' as 'shield' | 'round';
+/** a drawn pin (ZNAKI): Recruiter's craft, in PIN_SHAPE */
+export const isDrawnPin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji in ZNAKI;
+/** round: a medal, an owner's coin, or a drawn pin when pins are round; the rest of the pins are shields */
+export const isRound = (a: Pick<Achievement, 'code' | 'levels' | 'emoji'>): boolean => isMedal(a) || isCoin(a) || (PIN_SHAPE === 'round' && isDrawnPin(a));
 /** the drawn pins by their emoji name (an Admin row's variant too): the enamel, the glyph (public/medals/zn-*), the
  *  frame's metal (g gold, s silver, r rose gold), and the year of its moment if it has one */
 export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 's' | 'r'; year?: number }> = {
