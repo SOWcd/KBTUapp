@@ -796,23 +796,30 @@ MEMO2_DENSITY = ("70-100", "110-150", "200-250")   # "Плотность бум�
 MEMO2_FILM = "Разрешить съёмку в студии КБТУ:"     # then "Дата:", "Время:", "Примечание:" as the other requests
 MEMO2_BLANK = "Студенческая организация «{org}» просит Вас:"  # the memo with nothing from the events: the sender writes it
 MEMO2_DATES = "Даты: {dates}"
-def channel_post(title: str, org: str, starts: int, place: str, price: int | None, cancelled: bool, link: str = "",
-                 also: list[str] = ()) -> str:
-    """A public event's post in the events channel (HTML), in the channel's three languages (an event there is in all
-    three, owner Nov 2): the title as written, `also` its other languages (ai.py) in italics under it; the date, a place
-    to be confirmed, Free and the sign-up in kk, ru and en, each on one line; a place the club typed stays as it is.
-    Signing up is a link in the text, not a button: Telegram hides a post's comments under a button."""
+def channel_post(title: str, org: str, starts: int, ends: int | None, place: str, price: int | None, cancelled: bool,
+                 link: str = "") -> str:
+    """A public event's post in the events channel (HTML), in no language at all (owner, Nov 4: three languages on
+    every line was ugly): the title as the club wrote it, the club, then numbers and marks everyone reads, the date
+    as 06.11 and the time as 17:00 (an end too: 17:00-19:00; several days: 06.11-08.11), the place as typed (none
+    while it's to be confirmed), 🆓 or 💳 and the price. The title links to the app's sign-up: not a button, Telegram
+    hides a post's comments under one. A cancelled one is struck through."""
     t = time.gmtime(starts + 5 * 3600)
-    day = " · ".join(f"{MONTHS[x][t.tm_mon - 1]} {t.tm_mday}" if x == "en" else f"{t.tm_mday} {MONTHS[x][t.tm_mon - 1]}" for x in ("kk", "ru", "en"))
-    where = html.escape(place) if place else " · ".join(place_or_tba("", x) for x in ("kk", "ru", "en")).capitalize()
-    lines = [f"<b>{html.escape(title)}</b>", *(f"<i>{html.escape(x)}</i>" for x in dict.fromkeys(also)), html.escape(org), "",
-             f"🗓 {day}, {t.tm_hour:02d}:{t.tm_min:02d}", f"📍 {where}", f"💸 {price} ₸" if price else "🆓 Тегін · Бесплатно · Free"]
+    u = time.gmtime(ends + 5 * 3600) if ends else None
+    day, at = f"{t.tm_mday:02d}.{t.tm_mon:02d}", f"{t.tm_hour:02d}:{t.tm_min:02d}"
+    if u and (u.tm_year, u.tm_yday) != (t.tm_year, t.tm_yday):
+        day += f"–{u.tm_mday:02d}.{u.tm_mon:02d}"
+    elif u and ends > starts:
+        at += f"–{u.tm_hour:02d}:{u.tm_min:02d}"
+    name = html.escape(title)
     if link and not cancelled:
-        lines += ["", f'👉 <a href="{html.escape(link)}">KBTU App: тіркелу · записаться · sign up</a>']
-    return ("❌ <b>ЖОЙЫЛДЫ · ОТМЕНЕНО · CANCELLED</b>\n\n" if cancelled else "") + "\n".join(lines)
+        name = f'<a href="{html.escape(link)}">{name}</a>'
+    lines = [f"❌ <b><s>{name}</s></b>" if cancelled else f"<b>{name}</b>", html.escape(org), "", f"🗓 {day} · {at}",
+             *([f"📍 {html.escape(place)}"] if place else []),
+             "💳 " + f"{price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else "🆓"]
+    return "\n".join(lines)
 
 
-CHANNEL_BUTTON = "📝 Записаться · Тіркелу · Sign up"
+CHANNEL_BUTTON = "📝 KBTU App"  # no language (owner, Nov 4), as the post
 # the bot's first comment under each event's post in the channel's discussion group: the rules, and the sign-up again
 CHANNEL_RULES = ("🤝 Балағатсыз, спамсыз, жарнамасыз.\n"
                  "💬 Без хамства, спама и рекламы.\n"

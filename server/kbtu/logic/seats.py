@@ -169,14 +169,12 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
         via = None if own or kept else e["co_id"]
         if via != e["channel_via"]:
             con.execute("UPDATE events SET channel_via = ? WHERE id = ?", (via, e["id"]))
-        tr = json.loads(e["i18n"]) if e["i18n"] else {}  # the channel is everyone's: the other languages' titles under it (PLAN 9)
-        also = [x for k in ("kk", "ru", "en") if (x := tr.get(k, {}).get("title")) and x.strip().lower() != e["title"].strip().lower()]
         # a co-hosted event names both clubs, the official one first (I3)
         names = [e["org_name"]] + ([e["co_name"]] if e["co_id"] else [])
         if e["co_id"] and e["co_off"] and not e["h_off"]:
             names.reverse()
-        text = texts.channel_post(e["title"], " × ".join(names), e["starts_at"], e["place"], e["price"], e["status"] == "cancelled",
-                                  f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "", also)
+        text = texts.channel_post(e["title"], " × ".join(names), e["starts_at"], e["ends_at"], e["place"], e["price"],
+                                  e["status"] == "cancelled", f"https://t.me/{bot}?startapp=ev_{e['id']}" if bot else "")
         sig = hashlib.sha256(f"{text}|{e['cover']}".encode()).hexdigest()[:16]
         if sig != e["channel_sig"] and len(out) < limit:
             out.append((e, text, e["cover"], sig))

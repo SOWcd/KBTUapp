@@ -4083,7 +4083,9 @@ def test_translations(env):
     assert logic.cards(con, logic.Viewer(pres["id"], "student", True), [logic.one(con, "SELECT * FROM events WHERE id = ?", rid)])[0]["i18n"] == \
         {"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456"}, "en": {"title": "Hack night"}}
     post = logic.channel_due(con, "bot")[0][1]
-    assert "<i>\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456</i>" in post and "<i>Hack night</i>" in post
+    assert "Hack night" not in post and "\u0425\u0430\u043a\u0430\u0442\u043e\u043d" not in post  # no translations: the title as written
+    d = time.gmtime(start + 5 * 3600)
+    assert "\U0001f5d3 %02d.%02d \u00b7 %02d:%02d\u2013" % (d.tm_mday, d.tm_mon, d.tm_hour, d.tm_min) in post and "\n\U0001f4cd 305\n\U0001f193" in post
 
     c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "place": "306"})   # not the text: the translation stays
     assert logic.ai_next(con) is None
