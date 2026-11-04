@@ -8,7 +8,7 @@
   import type { Achievement } from '../lib/api';
   import Emoji from './Emoji.svelte';
   import Pin from './Pin.svelte';
-  import { ZNAKI, artOf, isCoin, isMedal, layersOf, legendOf, metalLetter, tierLabel, yearOf } from '../lib/awards';
+  import { PIN_SHAPE, ZNAKI, artOf, isCoin, isMedal, layersOf, legendOf, metalLetter, tierLabel, yearOf } from '../lib/awards';
   let { a, size = 64 }: { a: Achievement; size?: number } = $props();
 
   const hidden = $derived(a.secret && a.level === 0);
@@ -40,9 +40,9 @@
 </script>
 
 {#if isCoin(a)}<span class="medal pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${a.emoji}.webp`} srcset={`emoji/sm/${a.emoji}.webp 192w, emoji/${a.emoji}.webp 512w`} sizes="{size}px" alt="" width={size} height={size} decoding="async" draggable="false" /></span>
-{:else if !medal}<Pin color={zn?.field ?? 'rgb(47, 91, 234)'} glyph={zn?.glyph} emoji={a.emoji} metal={zn?.metal} year={a.level ? yearOf(a.at, zn?.year) : undefined} off={a.level === 0} {hidden} {size} />
-{:else if layers}<span class="medal lay" class:none={a.level === 0} style="width:{size}px;height:{size}px">
-  {#if size >= 96}<img class="rib" src={`medals/ribbon-${metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
+{:else if !medal && !layers}<Pin color={zn?.field ?? 'rgb(47, 91, 234)'} emoji={a.emoji} metal={zn?.metal} year={a.level ? yearOf(a.at, zn?.year) : undefined} off={a.level === 0} {hidden} {size} />
+{:else if layers && !hidden}<span class="medal lay" class:shield={!!zn && PIN_SHAPE === 'shield'} class:none={a.level === 0} style="width:{size}px;height:{size}px">
+  {#if size >= 96 && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
   {#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}
   {#if legend}<img src={`medals/${legend}.svg`} alt="" draggable="false" />{/if}
   {#if lit}<i class="glint" style="-webkit-mask-image:{metalMask};mask-image:{metalMask}"></i>{/if}
@@ -57,6 +57,9 @@
   .medal { position: relative; flex: none; border-radius: 50%; display: inline-flex; }
   .lay img { position: absolute; inset: 0; width: 100%; height: 100%; }
   .lay:not(.none) { box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.45); }
+  /* a drawn pin in its shield (PIN_SHAPE): the shadow follows the outline */
+  .lay.shield { border-radius: 0; }
+  .lay.shield:not(.none) { box-shadow: none; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35)); }
   .lay.none { filter: grayscale(1); opacity: 0.38; }
   /* the specular band: a soft diagonal light, its place the phone's tilt; the masks (the rim's and the relief's files)
      keep it on the metal. Screen-blended: it only lightens */
