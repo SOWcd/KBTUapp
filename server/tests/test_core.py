@@ -6218,7 +6218,8 @@ def test_student_texts_only_to_the_named_providers(monkeypatch):
             llm._rest.clear(); hosts.clear()
             assert asyncio.run(run(f, *a)) == none                                          # all busy: a moderator decides
             seen = list(dict.fromkeys(hosts))
-            assert seen == [eu, glob, groq, cf], (chain, seen)                              # in this order, nobody else
+            # in this order, nobody else; a check a student waits on hedges to another company (Groq) second
+            assert seen == ([eu, glob, groq, cf] if f is ai.screen_comment else [eu, groq, glob, cf]), (chain, seen)
             assert hosts.count(eu) >= 2 and hosts.count(glob) >= 2                         # both Munito keys, both hosts
         llm._rest.clear(); hosts.clear()
         try:
