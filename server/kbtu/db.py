@@ -1186,6 +1186,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';  -- ponytail: one co-host, more later
     CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);"""),
+    # the path to the official ✓ (Nov 4): a student initiative that did the five steps asks the admin (logic/clubs.py,
+    # official_path). Who asked and who decided are in the audit log; a no's reason the club reads in Studio
+    (125, """CREATE TABLE official_requests (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+      reason     TEXT CHECK (length(reason) <= 300),
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER
+    ) STRICT;
+    CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';
+    CREATE INDEX official_requests_by_org ON official_requests(org_id, id);"""),
 ]
 
 

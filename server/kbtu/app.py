@@ -1374,6 +1374,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def decide_club_application(aid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.decide_club_application(con, v, aid, bool(body.get("approve")), body.get("reason"))
 
+    # ------------------------------------------------------------ the path to the official ✓ (logic/clubs.py)
+
+    @app.get("/api/orgs/{oid}/official-path")
+    def official_path(oid: int, con: Con, v: Me):
+        return {"path": logic.official_path(con, v, oid)}
+
+    @app.post("/api/orgs/{oid}/official-path")
+    def ask_official(oid: int, con: Con, v: Me):
+        return {"path": logic.ask_official(con, v, oid)}
+
+    @app.post("/api/admin/official-requests/{rid}")
+    def decide_official(rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.decide_official(con, v, rid, bool(body.get("approve")), body.get("reason"))
+
     # ------------------------------------------------------------ the chats directory (§4.11)
 
     @app.get("/api/chats")

@@ -117,7 +117,7 @@
   }
 
   // ---- club applications: Decline asks for the reason the applicant reads ----
-  let refusing = $state<number | null>(null), why = $state('');
+  let refusing = $state<string | null>(null), why = $state('');  // the card's key (club and ✓ requests alike)
   let opened = $state<number | null>(null);
 
   // ---- the forum channel: the owner alone reveals an anonymous author, each look audited ----
@@ -133,10 +133,10 @@
   }
 
   // what a decided card was about, after its verdict on the slim line
-  const what = (it: InboxItem): string => it.kind === 'report' ? it.data.text : it.kind === 'capp' ? it.data.name : it.kind === 'chat' ? it.data.title
+  const what = (it: InboxItem): string => it.kind === 'report' ? it.data.text : it.kind === 'capp' ? it.data.name : it.kind === 'opath' ? it.data.org.name : it.kind === 'chat' ? it.data.title
     : it.kind === 'claim' ? it.data.name : it.kind === 'flaws' ? '' : it.data.body;
   const tagOf = (it: InboxItem): string =>
-    it.kind === 'report' ? t(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? t('adm.cappTag') : it.kind === 'fpost' ? t('adm.rep.fpost')
+    it.kind === 'report' ? t(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? t('adm.cappTag') : it.kind === 'opath' ? t('adm.k.opath') : it.kind === 'fpost' ? t('adm.rep.fpost')
       : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : it.kind === 'claim' ? t('adm.k.claim') : t('mf.title');
   function more(it: InboxItem): MenuItem[] {
     if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: t('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
@@ -208,7 +208,7 @@
                 {#each a.links as l (l)}<Button kind="plain" size="s" onclick={() => openLink(l)}>{l.replace('https://', '')}</Button>{/each}
               </div>
             {/if}
-            {#if refusing === a.id}
+            {#if refusing === it.key}
               <div class="cb" transition:fold>
                 <Field label={t('adm.cappReason')} bind:value={why} multiline rows={2} maxlength={300} />
                 <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
@@ -216,7 +216,26 @@
                     onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.capp_no'), `capp:${a.id}`, () => api.decideClubApplication(a.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
               </div>
             {:else}
-              {@render two(t('adm.cappApprove'), () => decide(it, t('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), t('adm.cappRefuse'), () => { refusing = a.id; why = ''; })}
+              {@render two(t('adm.cappApprove'), () => decide(it, t('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
+            {/if}
+          </div>
+        {:else if it.kind === 'opath'}
+          {@const r = it.data}
+          <div class="card" out:fold>
+            {@render head(it, [])}
+            <button class="who" onclick={() => sheets.club(r.org.id)}>
+              <OrgLogo org={r.org} size={44} />
+              <span class="tx"><b>{nameOf(r.org)}</b><i>{tn('studio.members', r.members)}</i></span>
+            </button>
+            {#if refusing === it.key}
+              <div class="cb" transition:fold>
+                <Field label={t('adm.opathReason')} bind:value={why} multiline rows={2} maxlength={300} />
+                <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
+                  <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
+                    onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.opath_no'), `opath:${r.id}`, () => api.decideOfficial(r.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
+              </div>
+            {:else}
+              {@render two(t('adm.opathApprove'), () => decide(it, t('adm.act.opath_yes'), `opath:${r.id}`, () => api.decideOfficial(r.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
             {/if}
           </div>
         {:else if it.kind === 'fpost'}

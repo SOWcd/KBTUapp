@@ -16,6 +16,10 @@ export interface ClubApplication {
   status: 'pending' | 'approved' | 'rejected'; reason: string | null; orgId: Id | null; createdAt: Ts; decidedAt: Ts | null; reapplyAt: Ts | null;
   applicant?: { person: PersonRef; fullName: string; username: string | null; course: number | null; school: string | null } | null;
 }
+/** The path to the official ✓ (server clubs.py, official_path): a student initiative's five steps and its latest request */
+export type PathStep = 'members' | 'profile' | 'round' | 'event' | 'collab';
+export interface OfficialRequest { id: Id; status: 'pending' | 'approved' | 'rejected'; reason: string | null; createdAt: Ts; decidedAt: Ts | null; againAt: Ts | null }
+export interface OfficialPath { steps: Record<PathStep, boolean>; request: OfficialRequest | null }
 export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
@@ -578,7 +582,7 @@ export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: s
 /** Admin → Inbox (server logic/inbox.py): everything waiting for the staff, by role; hidden: already out of sight,
  *  a person waits for the verdict. `flaws` is the map's open flaws as one card. */
 type InboxOf<K extends string, D> = { kind: K; key: string; at: Ts; hidden: boolean; data: D };
-export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'fpost', ChannelModPost>
+export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'opath', OfficialRequest & { org: OrgRef; members: number }> | InboxOf<'fpost', ChannelModPost>
   | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest> | InboxOf<'flaws', { count: number }>;
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }

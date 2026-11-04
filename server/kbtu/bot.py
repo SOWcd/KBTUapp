@@ -214,6 +214,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
+    if kind == "club_path":  # opath:<id>, to the admins while it waits
+        r = one(con, "SELECT o.name FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.status = 'pending' AND o.official = 0", int(ref[1]))
+        return (*texts.bot_message(lang, kind, name=r["name"]), "capps") if r else None
     if kind == "club_application_decided":  # cad:<id>:yes|no, to the applicant; a no's reason is read in the app (our words only here)
         a = one(con, "SELECT name, org_id, status FROM club_applications WHERE id = ?", int(ref[1]))
         if not a or a["status"] != ("approved" if ref[2] == "yes" else "rejected"):  # an Undo since: nothing to say
