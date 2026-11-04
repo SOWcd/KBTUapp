@@ -128,7 +128,10 @@
     return [Math.min(x1, Math.max(x0, x)), Math.min(y1, Math.max(y0, y))];
   }
   const clamp = () => { [x, y] = clamped(s, x, y); };
-  function reset() { halt(); s = 1; x = 0; y = Math.max(0, (stage.clientHeight - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
+  // the stage runs under Telegram's header (full-bleed, owner Nov 4); the plan rests below it, where .side starts
+  let side: HTMLDivElement;
+  const head = () => side.offsetTop - 10;
+  function reset() { halt(); s = 1; x = 0; y = head() + Math.max(0, (stage.clientHeight - head() - stage.clientWidth * AR) / 2); base = 1; plan.style.width = ''; tiles = []; clamp(); paint(); }
   /** the view a floor opens in: on the main map the building (u .12-.85 of Uni-Q's sheet, white margins round it) fills
    *  the width (owner, Oct 24: "why is it so far away"); the old plan has no margins, the whole of it */
   function home(): [number, number, number] {
@@ -138,7 +141,7 @@
   /** where the plan sits zoomed out at scale k: the building in the middle (home's place, at any scale) */
   function centered(k: number): [number, number] {
     const W = stage.clientWidth, H = stage.clientHeight;
-    return clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, (H - W * AR * k) / 2);
+    return clamped(k, ver === 'main' ? W / 2 - 0.485 * W * k : 0, head() + (H - head() - W * AR * k) / 2);
   }
   // one finger past where the plan may rest follows it less and less (a rubber band), and the plan springs back on the
   // let-go, its size kept: zoomed out it may rest only in the middle, zoomed in anywhere within bounds() (owner: "the
@@ -480,7 +483,7 @@
     glided = true;
     glideT = window.setTimeout(async () => { // after onMount: the stage has its size
       if (gone) return;
-      const W = stage.clientWidth, ns = fit ? zoom : Math.max(s, zoom), { top, bottom } = fit ? free() : { top: 0, bottom: 0 };
+      const W = stage.clientWidth, ns = fit ? zoom : Math.max(s, zoom), { top, bottom } = fit ? free() : { top: head(), bottom: 0 };
       const [nx, ny] = clamped(ns, W / 2 - u * W * ns, (top + stage.clientHeight - bottom) / 2 - v * W * AR * ns);
       // just opened: the whole floor for a blink (owner, Oct 12: "you can't see where it came from"; "less than a tenth of
       // a second", no waiting for tiles), the landing laid out big meanwhile (prepare: sharp all the way); its tiles come
@@ -503,7 +506,7 @@
     // offsets, not rects: a card still rising (a transform) would measure short
     const H = panel.clientHeight; let bottom = 0;
     panel.querySelectorAll<HTMLElement>('[data-cover]').forEach((el) => { bottom = Math.max(bottom, H - el.offsetTop); });
-    return { top: 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
+    return { top: head() + 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
   }
   /** glide to show all of `pts`, between the buttons at the top and `inset` px at the bottom (a route's card): the whole
    *  step, never closer than it fits (owner, Oct 15: the way didn't fit and he had to find himself) */
@@ -741,7 +744,7 @@
     </div>
   </div>
   <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
-  <div class="side">
+  <div class="side" bind:this={side}>
     <!-- the maps: a tap lists them (owner, Oct 27; it was a toggle to the 2023 plan) -->
     <div class="maps" class:away={!!rt.route}>
       <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }}
@@ -810,7 +813,7 @@
   .panel.main.theme-dark { background: #0d0d0d; }
   .x { position: absolute; z-index: 2; left: 12px; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); width: 38px; height: 38px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--surface-solid); color: var(--text); }
-  .stage { position: absolute; inset: max(48px, var(--top)) 0 0; overflow: hidden; touch-action: none; cursor: grab; }
+  .stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; }
   .rail { touch-action: none; }
   .plan { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 1; transform-origin: 0 0; will-change: transform;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
