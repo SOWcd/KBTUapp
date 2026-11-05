@@ -14,7 +14,7 @@
   import Copy from '@lucide/svelte/icons/copy';
   import Button from '../../ui/Button.svelte';
   import { schoolOf, shortOf } from '../../lib/short';
-  import { CITIES } from '../../lib/i18n/cities';
+  import { CITIES, cityName } from '../../lib/i18n/cities';
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { onMount } from 'svelte';
@@ -128,7 +128,7 @@
   let picking = $state(false);
   async function setCity(name: string) {
     const was = me;
-    if (!me || name === me.city?.name) { picking = false; return; }
+    if (!me || (me.city && cityName(me.city.name, i18n.lang) === name)) { picking = false; return; }
     haptic.select();
     session.me = { ...me, city: { name, hidden: me.city?.hidden ?? false } };
     picking = false;
@@ -222,7 +222,7 @@
             {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
           {/if}
           {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
-          {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), me?.city?.name ?? t('pd.cityNone'))}{/if}
+          {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), (me?.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone')))}{/if}
         </Group>
       </div>
     {/if}
@@ -247,7 +247,7 @@
     <div class="gap"><Group>{@render act(t('pd.phoneEdit'), editPhone)}{@render act(t('pd.phoneDel'), dropPhone, true)}</Group></div>
   {:else if kind === 'city' && me?.city && !picking}
     <Group footnote={t('pd.cityNote')}>
-      <Row title={me.city.name} />
+      <Row title={cityName(me.city.name, i18n.lang)} />
       <Row title={t('pd.cityHide')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />
     </Group>
     <div class="gap"><Group>{@render act(t('pd.cityChange'), () => (picking = true))}{@render act(t('pd.cityDel'), dropCity, true)}</Group></div>
@@ -256,7 +256,7 @@
     <Group>
       {#each CITIES as c (c.en)}
         {@const name = c[i18n.lang]}
-        <Row title={name} accessory="check" checked={me.city?.name === name} onclick={() => void setCity(name)} />
+        <Row title={name} accessory="check" checked={!!me.city && cityName(me.city.name, i18n.lang) === name} onclick={() => void setCity(name)} />
       {/each}
     </Group>
     <div class="gap"><Group footnote={t('pd.cityNote')}>{@render act(t('pd.cityOther'), () => void typeCity())}</Group></div>
