@@ -867,6 +867,11 @@ def test_guard_join(env):
     assert logic.guard_join(con, -100, 999) == "app"                       # never signed in
     con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ann["id"],))
     assert logic.guard_join(con, -100, 20) == "decline"
+    real, logic.seats.chat_join = logic.seats.chat_join, lambda *a: True  # an event's chat with a ticket: a ban still wins
+    try:
+        assert logic.guard_join(con, -100, 20) == "decline"
+    finally:
+        logic.seats.chat_join = real
     con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ann["id"],))
     key = bot.guard_key(cfg)
     t = logic.guard_token(key, -100, 20, "q:1")

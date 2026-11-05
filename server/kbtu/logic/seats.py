@@ -128,8 +128,8 @@ def guard_join(con, chat_id: int, tg_id: int) -> str:
     rest ("app") get the app to sign up; a chat the app doesn't know: its admins decide ("queue"; any chat can name us
     its guard, and it mustn't learn who our students are)."""
     ev = chat_join(con, chat_id, tg_id)
-    if ev is not None:
-        return "approve" if ev else "decline"
+    if ev is not None:  # a ban outranks a ticket (Codex review, Nov 5: a banned attendee was let in)
+        return "approve" if ev and not one(con, "SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NOT NULL", tg_id) else "decline"
     if not one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND status IN ('live', 'org')", chat_id):
         return "queue"
     u = one(con, """SELECT u.banned_at, s.user_id AS student FROM users u

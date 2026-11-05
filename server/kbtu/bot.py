@@ -496,7 +496,10 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
         except (httpx.HTTPError, ValueError) as exc:  # matched by its name or title then
             log.warning("bot added: %s", type(exc).__name__)
     who = int((upd.get("from") or {}).get("id") or 0)
-    if cid := logic.pick_claim(con, who, chat, invite) or logic.bot_added(con, who, chat, invite):  # Studio's picker first
+    # the picker only for a bot made admin: only a chat's admin can do that, a plain member adding us proves nothing
+    # (Codex review, Nov 5: someone else's open group claimed); a later promotion comes as another update
+    picked = status == "administrator" and logic.pick_claim(con, who, chat, invite)
+    if cid := picked or logic.bot_added(con, who, chat, invite):  # Studio's picker first
         await chat_card(cfg, http, con, cid, chat["id"])
 
 
