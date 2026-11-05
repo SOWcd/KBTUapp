@@ -64,6 +64,38 @@ def test_public_files_cache_and_304(env):
     assert me.status_code == 200 and (me.headers.get("content-encoding") == "gzip") == (len(me.content) >= 1024)
 
 
+def test_assets_go_precompressed(env):
+    """The build's .br / .gz are sent as they are (no gzip on the loop per client); without them, the file itself."""
+    import gzip
+    from pathlib import Path
+    c, cfg = env
+    js = Path(cfg.web_dist) / "assets" / "b.js"
+    body = b"export const x = 1;\n" * 200
+    js.write_bytes(body)
+    js.with_name("b.js.gz").write_bytes(gzip.compress(body))
+    js.with_name("b.js.br").write_bytes(b"not-really-brotli")  # its bytes, untouched, tell it apart
+    br = c.get("/assets/b.js", headers={"Accept-Encoding": "br"})
+    assert br.headers["content-encoding"] == "br" and br.headers["vary"] == "Accept-Encoding"
+    assert br.headers["content-type"].startswith("text/javascript") and br.headers["cache-control"].endswith("immutable")
+    gz = c.get("/assets/b.js", headers={"Accept-Encoding": "gzip"})
+    assert gz.headers["content-encoding"] == "gzip" and gz.content == body  # the client inflates the ready .gz
+    plain = c.get("/assets/b.js", headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers and plain.content == body
+    assert c.get("/assets/b.js", headers={"Accept-Encoding": "br", "If-None-Match": br.headers["etag"]}).status_code == 304
+
+
+def test_optimize_runs_once_a_night(env, monkeypatch):
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    assert con.execute("PRAGMA mmap_size").fetchone()[0] > 0
+    monkeypatch.setattr(time, "time", lambda: 86400 * 100 + 3600)  # 06:00 Almaty
+    q: list[str] = []
+    con.set_trace_callback(q.append)
+    bot.optimize_day(con)
+    bot.optimize_day(con)
+    assert sum(s.startswith("PRAGMA optimize") for s in q) == 1
+
+
 def _plans(con, fn) -> list[tuple[str, str]]:
     q: list[str] = []
     con.set_trace_callback(q.append)

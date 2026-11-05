@@ -7,3 +7,6 @@ tmp-serve/
 # server virtualenv
 server/.venv
 server/media/
+
+# test runs that point TMPDIR here (pytest-of-*)
+server/tmp/

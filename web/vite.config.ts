@@ -1,4 +1,7 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -49,6 +52,26 @@ function compileHints(names: RegExp): Plugin {
   };
 }
 
+// The hashed text files under assets/ written once more as .br and .gz, at the strongest levels: the server sends the
+// ready one (app.py file()) instead of gzipping the same bundle on its event loop for every new client, and brotli is
+// smaller still. Only text, and only what compression pays for.
+function precompress(): Plugin {
+  return {
+    name: 'kb-precompress',
+    apply: 'build',
+    writeBundle(opts, bundle) {
+      for (const [name, out] of Object.entries(bundle)) {
+        if (!/^assets\/.+\.(js|css|svg|json)$/.test(name)) continue;
+        const raw = Buffer.from(out.type === 'chunk' ? out.code : out.source);
+        if (raw.length < 1024) continue;
+        const file = join(opts.dir!, name);
+        writeFileSync(file + '.br', brotliCompressSync(raw, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }));
+        writeFileSync(file + '.gz', gzipSync(raw, { level: 9 }));
+      }
+    },
+  };
+}
+
 // every lucide icon renders through our ui/LucideIcon.svelte: the same SVG, a third of a tab's build time less
 function lucideIcon(): Plugin {
   const to = fileURLToPath(new URL('./src/ui/LucideIcon.svelte', import.meta.url));
@@ -64,7 +87,7 @@ function lucideIcon(): Plugin {
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|CampusMap)$/)],
+  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|CampusMap)$/), precompress()],
   server: { host: true, port: 5180 },
   // not prebundled in dev, so the dev server's icons go through ui/LucideIcon.svelte too (plugins don't run in a prebundle)
   optimizeDeps: { exclude: ['@lucide/svelte'] },

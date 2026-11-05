@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import logging
+import mimetypes
 import re
 import sqlite3
 import time
@@ -1949,9 +1950,19 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
         # video) changes rarely: a day, then revalidated in the background; a page (.html) is always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
                  "no-cache" if f.suffix == ".html" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
-        r = FileResponse(f, stat_result=f.stat(), headers={"Cache-Control": cache})
+        headers, send = {"Cache-Control": cache}, f
+        if path.startswith("assets/"):
+            # the build's ready .br / .gz (vite.config.ts precompress()): no gzip of the same bundle on the loop for
+            # every new client; a response that already has Content-Encoding passes GZipMiddleware untouched
+            headers["Vary"] = "Accept-Encoding"
+            took = {e.strip().split(";")[0] for e in request.headers.get("accept-encoding", "").lower().split(",")}
+            for enc, ext in (("br", ".br"), ("gzip", ".gz")):
+                if enc in took and (z := f.with_name(f.name + ext)).is_file():
+                    headers["Content-Encoding"], send = enc, z
+                    break
+        r = FileResponse(send, stat_result=send.stat(), headers=headers, media_type=mimetypes.guess_type(f.name)[0])
         if StaticFiles.is_not_modified(None, r.headers, request.headers):  # (it uses no self) If-None-Match / -Modified-Since
-            return Response(status_code=304, headers={k: r.headers[k] for k in ("etag", "last-modified", "cache-control")})
+            return Response(status_code=304, headers={k: r.headers[k] for k in ("etag", "last-modified", "cache-control", "vary") if k in r.headers})
         return r
 
     @app.get("/og/poster.jpg")
