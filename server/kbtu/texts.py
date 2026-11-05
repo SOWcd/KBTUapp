@@ -739,26 +739,51 @@ def registry_csv(lang: str, people) -> tuple[str, bytes, str]:
 
 
 MEMBERS_HEAD = {
-    "ru": ("Фамилия", "Имя", "Отчество", "Фамилия (латиницей)", "Имя (латиницей)", "Отчество (латиницей)", "Telegram", "Год обучения", "Школа", "Роль", "Должность", "Отдел", "В клубе с"),
-    "kk": ("Тегі", "Аты", "Әкесінің аты", "Тегі (латынша)", "Аты (латынша)", "Әкесінің аты (латынша)", "Telegram", "Курс", "Мектеп", "Рөл", "Лауазым", "Бөлім", "Клубта"),
-    "en": ("Last name", "First name", "Middle name", "Last name (Latin)", "First name (Latin)", "Middle name (Latin)", "Telegram", "Year of study", "School", "Role", "Position", "Department", "Member since"),
+    "ru": ("Фамилия", "Имя", "Фамилия (латиницей)", "Имя (латиницей)", "Telegram", "Год обучения", "Школа", "Роль", "Должность", "Отдел", "В клубе с"),
+    "kk": ("Тегі", "Аты", "Тегі (латынша)", "Аты (латынша)", "Telegram", "Курс", "Мектеп", "Рөл", "Лауазым", "Бөлім", "Клубта"),
+    "en": ("Last name", "First name", "Last name (Latin)", "First name (Latin)", "Telegram", "Year of study", "School", "Role", "Position", "Department", "Member since"),
 }
 MEMBERS_CAPTION = {"ru": "Состав клуба: {org}", "kk": "Клуб құрамы: {org}", "en": "Club members: {org}"}
+MEMBERS_GUESS = {"ru": "* латиница подобрана автоматически: человек её не указал, проверь перед официальными документами",
+                 "kk": "* латынша автоматты түрде жазылды: адам оны көрсетпеген, ресми құжаттар алдында тексер",
+                 "en": "* Latin spelling made up automatically: the person never gave one; check it before official papers"}
+# passport-style Latin for a name the person never typed in Latin (Settings fixes it); Kazakh letters too
+_LAT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюяәғқңөұүһі",
+                ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "kh", "ts", "ch",
+                 "sh", "shch", "", "y", "", "e", "yu", "ya", "a", "g", "k", "n", "o", "u", "u", "h", "i"]))
+
+
+def latin(name: str | None) -> str:
+    """Нурматов -> Nurmatov, Даулетұлы -> Dauletuly: each letter, the word's first capitalized; Latin input as is."""
+    out = "".join(_LAT.get(ch.lower(), ch) for ch in (name or ""))
+    return "-".join(w[:1].upper() + w[1:] for w in out.split("-"))
+
+
+def _guess(name: str | None) -> str:
+    """A made-up Latin spelling, starred (a wrong one would look real on a certificate: Nurasyl vs the person's Nurassyl)."""
+    return latin(name) + "*" if name else ""
 
 
 def members_csv(lang: str, org: str, people) -> tuple[str, bytes, str]:
-    """A club's roster for its Vice+ (logic.members_export): as attendees_csv, UTF-8 with a BOM and ';'."""
+    """A club's roster for its Vice+ (logic.members_export): as attendees_csv, UTF-8 with a BOM and ';'. The owner
+    (Nov 5): no middle name, Latin made up when missing, the school short, a column nobody has left out."""
+    from .logic.account import school_slug
+    from .logic.clubs import SCHOOLS
     lang = lang if lang in MEMBERS_HEAD else "ru"
-    out = io.StringIO()
-    w = csv.writer(out, delimiter=";")
-    w.writerow(MEMBERS_HEAD[lang])
+    abbr = {x["slug"]: x[lang].get("abbr") or x["short"] for x in SCHOOLS}
     day = lambda ts: time.strftime("%Y-%m-%d", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
     roles = {"president": "President", "vice": "Vice", "head": "Head", "member": "Member"}  # English in every language, as in the app
+    table = [MEMBERS_HEAD[lang]]
     for p in people:
         title = (p["title_kk"] if lang == "kk" else p["title_en"] if lang == "en" else None) or p["title"]
-        w.writerow([_cell(x) for x in (p["last_name"], p["first_name"], p["middle_name"], p["last_lat"], p["first_lat"], p["middle_lat"],
-                                       p["tg_username"], p["course"], p["school"], roles[p["role"]], title, p["dept"], day(p["joined_at"]))])
-    return "members.csv", ("\ufeff" + out.getvalue()).encode(), MEMBERS_CAPTION[lang].format(org=org)[:1000]
+        table.append([_cell(x) for x in (p["last_name"], p["first_name"], p["last_lat"] or _guess(p["last_name"]), p["first_lat"] or _guess(p["first_name"]),
+                                         p["tg_username"], p["course"], abbr.get(school_slug(p["school"]), p["school"]), roles[p["role"]], title, p["dept"],
+                                         day(p["joined_at"]))])
+    guessed = any(str(c).endswith("*") for r in table[1:] for c in r[2:4])
+    keep = [i for i in range(len(table[0])) if any(r[i] for r in table[1:])]  # an empty column says nothing
+    out = io.StringIO()
+    csv.writer(out, delimiter=";").writerows([r[i] for i in keep] for r in table)
+    return "members.csv", ("\ufeff" + out.getvalue()).encode(), (MEMBERS_CAPTION[lang].format(org=org)[:800] + ("\n" + MEMBERS_GUESS[lang] if guessed else ""))
 
 
 def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:

@@ -44,9 +44,10 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
 
 def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
     """The roster as a file for the club's Vice+ (Medina, Nov 5): only what the team already sees (policy §4: full
-    name, @username, role) plus course and school (every student sees those); no ID, email or phone. Audited."""
+    name, @username, role) plus course and school (every student sees those); no ID, email or phone. The `team` right
+    (Vice+, or a role given it). Audited."""
     _may(con, v, oid, "team")
-    found = rows(con, f"""SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.course, s.school,
+    found = rows(con, f"""SELECT s.last_name, s.first_name, s.last_lat, s.first_lat, u.tg_username, s.course, s.school,
             m.role, m.joined_at, {core.TITLES},
             (SELECT g.name FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department ORDER BY g.id LIMIT 1) AS dept
         FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id

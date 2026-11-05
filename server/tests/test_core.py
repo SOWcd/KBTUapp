@@ -844,10 +844,12 @@ def test_members_csv(env):
     assert c.post("/api/orgs/1/members/export", headers=tma(21, "Ali")).status_code == 403   # a plain member
     o, people = logic.members_export(con, logic.Viewer(pres["id"], "user", True), 1)
     name, data, caption = texts.members_csv("en", o["name"], people)
-    assert name == "members.csv" and data.startswith(codecs.BOM_UTF8) and caption == "Club members: IT Club"
-    head, top, row = data.decode("utf-8-sig").splitlines()
-    assert head.split(";") == list(texts.MEMBERS_HEAD["en"])
-    assert top.split(";")[9] == "President" and row.split(";")[1] == "Ali" and row.split(";")[9] == "Member"
+    assert name == "members.csv" and data.startswith(codecs.BOM_UTF8) and caption.startswith("Club members: IT Club")
+    head, top, row = (r.split(";") for r in data.decode("utf-8-sig").splitlines())
+    role = head.index("Role")
+    assert "Middle name" not in head and "Department" not in head and "Position" not in head  # none, or empty: no column
+    assert top[role] == "President" and row[role] == "Member" and row[head.index("First name (Latin)")] == "Ali*" and "made up" in caption
+    assert texts.latin("\u0414\u0430\u0443\u043b\u0435\u0442\u04b1\u043b\u044b") == "Dauletuly"
     assert "24Bali" not in data.decode("utf-8-sig") and "kbtu.kz" not in data.decode("utf-8-sig") and "7700" not in data.decode("utf-8-sig")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'members_export'").fetchone()[0] == 1
 
