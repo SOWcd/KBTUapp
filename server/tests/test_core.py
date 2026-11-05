@@ -831,6 +831,27 @@ def test_attendees_csv(env):
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'attendees_export'").fetchone()[0] == 1
 
 
+def test_members_csv(env):
+    """The roster file (Nov 5): the club's Vice+ only; only what the team sees (no student ID, email, phone);
+    highest role first; every export in the audit log."""
+    import codecs
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 21, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0)", (pres["id"], ali["id"]))
+    con.execute("UPDATE students SET email = 'a@kbtu.kz', phone = '+77001234567' WHERE user_id = ?", (ali["id"],))
+    assert c.post("/api/orgs/1/members/export", headers=tma(21, "Ali")).status_code == 403   # a plain member
+    o, people = logic.members_export(con, logic.Viewer(pres["id"], "user", True), 1)
+    name, data, caption = texts.members_csv("en", o["name"], people)
+    assert name == "members.csv" and data.startswith(codecs.BOM_UTF8) and caption == "Club members: IT Club"
+    head, top, row = data.decode("utf-8-sig").splitlines()
+    assert head.split(";") == list(texts.MEMBERS_HEAD["en"])
+    assert top.split(";")[9] == "President" and row.split(";")[1] == "Ali" and row.split(";")[9] == "Member"
+    assert "24Bali" not in data.decode("utf-8-sig") and "kbtu.kz" not in data.decode("utf-8-sig") and "7700" not in data.decode("utf-8-sig")
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'members_export'").fetchone()[0] == 1
+
+
 def test_team_rank_rule(env):
     """The club's own team (SPEC §2): everyone in it sees the roster; Vice+ manage only people below them and give only
     roles below their own; the President hands the club over and becomes Vice; anyone but the President can leave."""

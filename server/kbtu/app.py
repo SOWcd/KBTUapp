@@ -983,6 +983,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def team(oid: int, con: Con, v: Me):
         return logic.team(con, v, oid)
 
+    @app.post("/api/orgs/{oid}/members/export", status_code=204)
+    async def export_members(oid: int, con: Con, v: Me):
+        """The roster as a CSV into the asker's chat with the bot, like the attendees' (send_file)."""
+        o, people = await run_in_threadpool(logic.members_export, con, v, oid)
+        u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
+        await send_file(u["tg_id"], *texts.members_csv(u["lang"], o["name"], people))
+
     @app.get("/api/orgs/{oid}/people")
     def people(oid: int, con: Con, v: Me):
         return logic.people(con, v, oid)

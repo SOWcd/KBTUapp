@@ -27,6 +27,7 @@
   import Crown from '@lucide/svelte/icons/crown';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import Plus from '@lucide/svelte/icons/plus';
+  import FileDown from '@lucide/svelte/icons/file-down';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
@@ -156,6 +157,15 @@
     close(overlay.id); // not my team any more: the sheet would show the next club's
     void loadMe();
   }
+  // the roster as a file, from the bot (Medina, Nov 5): Vice+, like the attendees' list
+  let sending = $state(false);
+  async function exportRoster() {
+    if (!m || sending) return;
+    sending = true;
+    try { await api.exportMembers(m.org.id); haptic.ok(); say(t('att.sent'), 'party_popper_3d'); }
+    catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
+    finally { sending = false; }
+  }
 </script>
 
 {#snippet dot(c: string)}<span class="dot" style="--c:{c}"></span>{/snippet}
@@ -180,6 +190,7 @@
       <span class="org"><OrgLogo org={m.org} size={30} /><b class="nm ellipsis">{m.org.name}</b></span>
       <!-- the list first; invite and roles are icons up here (the invite row was too big, the hint noise) -->
       <span class="icons">
+        {#if vice}<IconButton icon={FileDown} size="s" label={t('team.export')} loading={sending} onclick={exportRoster} />{/if}
         {#if vice}<IconButton icon={LinkIcon} size="s" label={t('team.inviteTitle')} on={linkOpen} onclick={() => { haptic.select(); linkOpen = !linkOpen; }} />{/if}
         {#if may(m, 'people') || vice || setup?.roles.length || setup?.tags.length}
           <IconButton icon={Tags} size="s" label={t('team.setup')} onclick={() => sheets.teamSetup(m.org.id, refresh)} />

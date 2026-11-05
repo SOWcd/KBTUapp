@@ -42,6 +42,20 @@ def team(con, v: Viewer, oid: int) -> list[dict]:
                    for p in found), key=lambda m: (-RANK[m["role"]], m["fullName"]))
 
 
+def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
+    """The roster as a file for the club's Vice+ (Medina, Nov 5): only what the team already sees (policy §4: full
+    name, @username, role) plus course and school (every student sees those); no ID, email or phone. Audited."""
+    _may(con, v, oid, "team")
+    found = rows(con, f"""SELECT s.last_name, s.first_name, s.middle_name, s.last_lat, s.first_lat, s.middle_lat, u.tg_username, s.course, s.school,
+            m.role, m.joined_at, {core.TITLES},
+            (SELECT g.name FROM member_tags mt JOIN org_tags g ON g.id = mt.tag_id WHERE g.org_id = m.org_id AND mt.user_id = u.id AND g.department ORDER BY g.id LIMIT 1) AS dept
+        FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id LEFT JOIN org_roles t ON t.id = m.role_id
+        WHERE m.org_id = ? ORDER BY s.last_name, s.first_name""", oid)
+    found.sort(key=lambda p: -RANK[p["role"]])  # stable: highest role first, by name within
+    log_action(con, v.id, "members_export", f"org:{oid}", json.dumps({"rows": len(found)}))
+    return _org(con, oid), found
+
+
 def _below(con, v: Viewer, oid: int, uid: int, right: str) -> str:
     """My role, if I may act on them: the right, and strictly above them by the rank rule (§2)."""
     mine = role_in(con, v, oid)
