@@ -877,6 +877,26 @@ def test_guard_join(env):
     con.close()
 
 
+def test_chat_pick(env):
+    """Studio's "Link a group": Telegram's picker, then our bot added there by the same person within ten minutes links
+    it to the club; someone else's add, a stale pick, a plain member: nothing."""
+    c, cfg = env
+    pres, ali = login(c, 20, "pres"), login(c, 21, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0)", (pres["id"], ali["id"]))
+    assert c.post("/api/orgs/1/chats/pick", headers=tma(21, "Ali"), json={"kind": "group"}).status_code == 403
+    r = c.post("/api/orgs/1/chats/pick", headers=tma(20, "Pres"), json={"kind": "group"}).json()
+    assert "startgroup=" in r["url"] and "invite_users" in r["url"]
+    group = {"id": -100500, "type": "supergroup", "title": "IT Club chat"}
+    assert logic.pick_claim(con, 21, group, "https://t.me/+abcdefgh") is None          # not the one who picked
+    cid = logic.pick_claim(con, 20, group, "https://t.me/+abcdefgh")
+    row = con.execute("SELECT org_id, tg_chat_id, status, title FROM chats WHERE id = ?", (cid,)).fetchone()
+    assert tuple(row) == (1, -100500, "org", "IT Club chat")
+    assert logic.pick_claim(con, 20, {**group, "id": -100501}, "https://t.me/+zzzzzzzz") is None   # the pick is spent
+    con.close()
+
+
 def test_team_rank_rule(env):
     """The club's own team (SPEC §2): everyone in it sees the roster; Vice+ manage only people below them and give only
     roles below their own; the President hands the club over and becomes Vice; anyone but the President can leave."""

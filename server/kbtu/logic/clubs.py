@@ -372,7 +372,7 @@ def undo_club_refusal(con, v: Viewer, aid: int) -> None:
 
 PATH_STEPS = ("members", "profile", "round", "event", "collab")
 PATH_MIN = 3             # members in the app, and people outside the team at one event
-PATH_SETTLED = 3 * 86400  # a member counts once in the club this long (a night of friends joining isn't a club)
+PATH_SETTLED = 0  # owner, Nov 5: "in the club 3+ days" confused presidents (22 fresh members, the step still open); was 3 days
 
 
 def _path_steps(con, oid: int) -> dict[str, bool]:

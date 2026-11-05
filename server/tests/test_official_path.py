@@ -57,16 +57,9 @@ def _all_done(con, ids, oid):
 
 def test_each_step(env):
     c, con, ids, oid = _setup(env)
-    assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, False)
+    assert _steps(c, oid) == {**dict.fromkeys(logic.PATH_STEPS, False), "members": True}  # 3 KBTU students, at once (owner, Nov 5)
     assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(A)).status_code == 403  # not in the club
-    # members: 3 KBTU students settled 3 days; fresh joins don't count yet
-    assert not _steps(c, oid)["members"]
-    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ?", (logic.now() - 2 * DAY, oid))
-    assert not _steps(c, oid)["members"]
-    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ? AND role != 'head'", (logic.now() - 4 * DAY, oid))
-    assert not _steps(c, oid)["members"]  # two settled
-    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ?", (logic.now() - 4 * DAY, oid))
-    assert _steps(c, oid)["members"]
+    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ?", (logic.now() - 4 * DAY, oid))  # in the club before its events below
     con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids[HEAD],))
     assert not _steps(c, oid)["members"]  # a banned one doesn't
     con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ids[HEAD],))

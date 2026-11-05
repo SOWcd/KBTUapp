@@ -20,7 +20,22 @@
 
   let { org }: { org: Id } = $props();
   let chats = $state<StudioChat[]>([]);
-  $effect(() => { api.orgChats(org).then((l) => (chats = l)).catch(() => {}); });
+  const load = () => api.orgChats(org).then((l) => (chats = keep(l))).catch(() => {});
+  $effect(() => { void load(); });
+  // back from Telegram's picker: the chat our bot was just added to shows up (the bot links it, PLAN Nov 5)
+  $effect(() => {
+    const back = () => { if (!document.hidden) setTimeout(load, 1500); };
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  });
+  let picking = $state<'group' | 'channel' | null>(null);
+  async function pick(kind: 'group' | 'channel') {
+    picking = kind;
+    try { const { url } = await api.pickOrgChat(org, kind); haptic.tap(); openLink(url); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { picking = null; }
+  }
+  let byLink = $state(false);
   // a change here shows on Studio's channel tile at once (it reads my memberships, loaded with the app)
   function keep(l: StudioChat[]): StudioChat[] {
     const mine = session.me?.memberships.find((x) => x.org.id === org);
@@ -83,14 +98,21 @@
       <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
     </Group>
   {/if}
-  <form class="add" onsubmit={add}>
+  <!-- Telegram's own picker: our bot is added there as an admin and links the chat (no typing @names, owner Nov 5) -->
+  <div class="pick">
+    <Button kind="primary" size="m" full loading={picking === 'group'} onclick={() => pick('group')}>{t('oc.pickGroup')}</Button>
+    <Button kind="secondary" size="m" full loading={picking === 'channel'} onclick={() => pick('channel')}>{t('oc.pickChannel')}</Button>
+    {#if !byLink}<Button kind="plain" size="s" onclick={() => (byLink = true)}>{t('oc.byLink')}</Button>{/if}
+  </div>
+  {#if byLink}<form class="add" onsubmit={add}>
     <!-- engine: Field's autocapitalize / spellcheck (a @username is typed as is) -->
     <Field label={t('oc.link')} bind:value={link} maxlength={200} placeholder="@kbtu_club" autocomplete="off" enterkeyhint="done" />
-    <Button kind="primary" size="m" type="submit" loading={busy} disabled={link.trim().length < 4}>{t('oc.add')}</Button>
-  </form>
+    <Button kind="secondary" size="m" type="submit" loading={busy} disabled={link.trim().length < 4}>{t('oc.add')}</Button>
+  </form>{/if}
 </div>
 
 <style>
   .oc { display: flex; flex-direction: column; gap: var(--gap-group); }
+  .pick { display: flex; flex-direction: column; gap: var(--s-2); align-items: stretch; }
   .add { display: flex; flex-direction: column; gap: var(--s-2); margin-top: calc(var(--s-3) - var(--gap-group)); }
 </style>

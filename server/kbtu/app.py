@@ -622,6 +622,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return out
         return await run_in_threadpool(save)
 
+    @app.post("/api/orgs/{oid}/chats/pick")
+    def pick_org_chat(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        """Telegram's own picker for the org's group or channel: our bot added there as an admin (inviting, so its link;
+        a group's also what the guard bot needs) links it (logic.pick_claim)."""
+        kind = body.get("kind")
+        if kind not in ("group", "channel"):
+            raise logic.ApiError("bad_input")
+        with logic.tx(con):
+            logic.chat_pick(con, v, oid)
+        bot_url = f"https://t.me/{cfg.bot_username}"
+        return {"url": f"{bot_url}?startchannel&admin=invite_users+post_messages+edit_messages+delete_messages" if kind == "channel"
+                else f"{bot_url}?startgroup=pick&admin=invite_users+delete_messages+restrict_members+pin_messages"}
+
     @app.put("/api/orgs/{oid}/chats/{cid}/main")
     def main_org_chat(oid: int, cid: int, con: Con, v: Me):
         return logic.main_org_chat(con, v, oid, cid)

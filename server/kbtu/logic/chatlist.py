@@ -472,6 +472,62 @@ def _chats_audit(con, v: Viewer, oid: int, what: str) -> None:
     log_action(con, v.id, "org_chats", f"org:{oid}", what)
 
 
+PICK_TTL = 600  # "Link a group / channel": Telegram's own picker, then our bot added there, within ten minutes
+
+
+def chat_pick(con, v: Viewer, oid: int) -> None:
+    """Studio's "Link a group / channel" (owner, Nov 5: no typing @names): Telegram's add-the-bot picker opens next; the
+    chat our bot lands in from me in the next ten minutes becomes this org's (pick_claim). One pending pick a person."""
+    may_chats(con, v, oid)
+    tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)["tg_id"]
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"chpick:{tg}", f"{oid}:{core.now() + PICK_TTL}"))
+
+
+def pick_claim(con, tg_from: int, chat: dict, invite: str | None) -> int | None:
+    """Our bot just landed in a chat, added by someone with a fresh chat_pick: the chat is that org's now (the same rules
+    as add_org_chat: another org's stays theirs, a catalog chat is the admin's to give, the page's limit). Its id."""
+    key = f"chpick:{tg_from}"
+    m = one(con, "SELECT value FROM meta WHERE key = ?", key)
+    if not m:
+        return None
+    oid, until = map(int, m["value"].split(":"))
+    u = one(con, "SELECT id, role FROM users WHERE tg_id = ? AND banned_at IS NULL", tg_from)
+    url = f"https://t.me/{chat['username']}" if chat.get("username") else invite
+    if until < core.now() or not u:
+        con.execute("DELETE FROM meta WHERE key = ?", (key,))
+        return None
+    if not url:  # a plain member of a closed group, or a basic group before Telegram upgrades it: the pick waits for the admin rights
+        return None
+    v = Viewer(u["id"], u["role"], bool(one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"])))
+    with tx(con):
+        try:
+            may_chats(con, v, oid)
+        except ApiError:
+            return None
+        c = one(con, f"SELECT * FROM chats WHERE {SAME_CHAT}", url, url, chat["id"])
+        held = one(con, "SELECT * FROM chats WHERE tg_chat_id = ?", chat["id"])  # the bot's chat id is the proof (a closed chat's links differ)
+        if held and (not c or held["id"] != c["id"]):
+            c = held
+        if c and (c["org_id"] not in (None, oid) or c["org_id"] is None and v.role != "admin"):
+            return None
+        if (not c or c["org_id"] != oid) and one(con, "SELECT COUNT(*) FROM chats WHERE org_id = ?", oid)[0] >= ORG_CHATS:
+            return None
+        kind = "channel" if chat.get("type") == "channel" else "group"
+        if c:
+            con.execute("UPDATE chats SET org_id = ?, tg_chat_id = ? WHERE id = ?", (oid, chat["id"], c["id"]))
+            cid = c["id"]
+        else:
+            title = " ".join(str(chat.get("title") or "").split())[:80] or "Telegram"
+            cid = con.execute("""INSERT INTO chats (title, kind, forum, url, tg_chat_id, added_by, created_at, status, org_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'org', ?)""", (title, kind, int(bool(chat.get("is_forum"))), url, chat["id"], v.id, core.now(), oid)).lastrowid
+        ch = one(con, "SELECT * FROM chats WHERE id = ?", cid)
+        if ch["kind"] == "channel" and not _closed(ch) and not one(con, "SELECT 1 FROM chats WHERE org_id = ? AND main = 1", oid):
+            con.execute("UPDATE chats SET main = 1 WHERE id = ?", (cid,))
+        _chats_audit(con, v, oid, f"pick {url}")
+        con.execute("DELETE FROM meta WHERE key = ?", (key,))  # spent only once it worked
+    return cid
+
+
 def bot_added(con, tg_from: int, chat: dict, invite: str | None = None, cid: int | None = None) -> int | None:
     """Our bot is in a chat now: which org chat it is, among those of the orgs the one who added it may edit (the admin:
     any) and not yet kept by the bot. A group by Studio's link says (its /start oc_<id>); a channel can't carry one, so

@@ -141,6 +141,7 @@ export interface Api {
   exportAttendees(id: Id): Promise<void>;
   exportMembers(orgId: Id): Promise<void>;
   guardJoin(token: string): Promise<{ ok: boolean }>;
+  pickOrgChat(orgId: Id, kind: 'group' | 'channel'): Promise<{ url: string }>;
   checkin(id: Id, code: string): Promise<CheckinResult>;
   // the organizer's updates (Head+, three a day): pinned on the event, the bot pings the people going
   postUpdate(id: Id, body: string): Promise<EventUpdate[]>;

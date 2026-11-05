@@ -495,7 +495,8 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
             invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
         except (httpx.HTTPError, ValueError) as exc:  # matched by its name or title then
             log.warning("bot added: %s", type(exc).__name__)
-    if cid := logic.bot_added(con, int((upd.get("from") or {}).get("id") or 0), chat, invite):
+    who = int((upd.get("from") or {}).get("id") or 0)
+    if cid := logic.pick_claim(con, who, chat, invite) or logic.bot_added(con, who, chat, invite):  # Studio's picker first
         await chat_card(cfg, http, con, cid, chat["id"])
 
 
