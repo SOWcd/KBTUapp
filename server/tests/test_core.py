@@ -4133,7 +4133,7 @@ def test_translations(env):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '', 1)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    start = int(time.time()) + 3600
+    start = (int(time.time()) // 86400 + 1) * 86400 + 7 * 3600  # noon in Almaty: the range stays within one day
     body = {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
             "emoji": "laptop_3d", "color": "#3B6BFF"}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()

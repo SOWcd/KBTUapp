@@ -47,7 +47,15 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
     saved = dict(rows(con, f"SELECT event_id, COUNT(*) FROM saved_events WHERE event_id IN ({_qs(own)}) GROUP BY event_id", *own)) if head and own else {}
     asked = dict(rows(con, """SELECT x.event_id, COUNT(*) FROM volunteers x JOIN events e ON e.id = x.event_id
         WHERE e.org_id = ? AND x.status = 'asked' GROUP BY x.event_id""", oid)) if head else {}  # volunteers waiting for an answer
-    return [{**c, "questions": len(_asking(con, e["id"], v.id)) if head and e["org_id"] == oid else 0, "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
+    # The same cutoffs as _asking, counted once for the whole list; co-hosted events keep their host's questions.
+    questions = dict(rows(con, f"""WITH leads AS (SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('president', 'vice', 'head')),
+        live AS (SELECT id, event_id, user_id, as_org FROM comments WHERE event_id IN ({_qs(own)}) AND deleted_at IS NULL),
+        answered AS (SELECT event_id, MAX(id) AS last_id FROM live WHERE as_org = 1 OR user_id IN leads GROUP BY event_id)
+        SELECT c.event_id, COUNT(*) FROM live c LEFT JOIN answered a ON a.event_id = c.event_id
+        LEFT JOIN comment_reads r ON r.event_id = c.event_id AND r.user_id = ?
+        WHERE c.as_org = 0 AND c.user_id NOT IN leads AND c.id > COALESCE(a.last_id, 0) AND c.id > COALESCE(r.last_id, 0)
+        GROUP BY c.event_id""", oid, *own, v.id)) if head and own else {}
+    return [{**c, "questions": questions.get(e["id"], 0), "toCheck": check.get(e["id"], 0), "savedBy": saved.get(e["id"], 0),
              "volunteersAsked": asked.get(e["id"], 0)}
             for e, c in zip(found, cards(con, v, found))]
 

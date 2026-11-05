@@ -1243,6 +1243,8 @@ MIGRATIONS: list[tuple[int, str]] = [
     BEGIN
       UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
     END;"""),
+    # The forum feed's public page walks channel messages in order, without sorting all live posts on every poll.
+    (128, "CREATE INDEX IF NOT EXISTS fchan_posts_by_message ON fchan_posts(status, tg_msg, id);"),
 ]
 
 

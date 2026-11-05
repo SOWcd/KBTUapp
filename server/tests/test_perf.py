@@ -155,3 +155,69 @@ def test_expired_holds_promote_once(env, monkeypatch):
     monkeypatch.setattr(logic.seats, "one", lambda *a: (1,))  # the lock-free look saw an expiry another request swept since
     logic.seats.sweep_holds(con)
     assert not calls and not con.in_transaction
+
+
+def test_forum_feed_pages_use_message_index(env):
+    """Bound both halves before merging: the old visibility, deduplication and cursor order must stay exact."""
+    c, cfg = env
+    users = [c.get("/api/me", headers=tma(i)).json()["id"] for i in (7, 8)]
+    con = db.connect(cfg.db_path)
+    with db.tx(con):
+        con.executemany("""INSERT INTO fchan_posts (user_id, body, anon, status, tg_msg, created_at)
+            VALUES (?, 'Synthetic post', 1, ?, ?, 0)""",
+            [(users[i % 2], ("live", "held", "hidden", "gone")[i % 4],
+              (None, 0, -2, (1 << 62) + 1, (600 - i) // 2)[i % 5]) for i in range(500)])
+    for uid in users:
+        v = logic.Viewer(uid, "user", False)
+        for before in (None, 0, -1, True, 100, 200, 300, 1 << 62, (1 << 62) + 2):
+            cursor = before if isinstance(before, int) and before > 0 else (1 << 63) - 1
+            want = [r[0] for r in con.execute("""SELECT id FROM fchan_posts
+                WHERE (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')
+                AND COALESCE(NULLIF(tg_msg, 0), 1 << 62) < ?
+                ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT 50""", (uid, cursor))]
+            got = logic.fchannel.feed(con, v, before)
+            assert [p["id"] for p in got] == want
+            assert all(p["person"] is None for p in got)
+    plans = _plans(con, lambda: logic.fchannel.feed(con, v))
+    plan = next(p for s, p in plans if "WHERE id IN" in s)
+    assert "fchan_posts_by_message (status=? AND tg_msg>? AND tg_msg<?)" in plan, plan
+    con.close()
+
+
+def test_studio_questions_are_counted_once_for_the_list(env):
+    """Batch counts preserve lead/club answers, deleted comments, per-reader cutoffs and the host's ownership."""
+    c, cfg = env
+    users = [login(c, i, name)["id"] for i, name in ((7, "Lead"), (8, "Member"), (9, "Other"))]
+    con = db.connect(cfg.db_path)
+    with db.tx(con):
+        con.executemany("""INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at)
+            VALUES (?, ?, 'club', 'Synthetic club', 'S', 'x', 0)""", [(901, "perf1"), (902, "perf2")])
+        con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, ?, 0)",
+                        [(901, users[0], "head"), (901, users[1], "member"), (902, users[2], "president")])
+        for i in range(21):
+            eid = con.execute("""INSERT INTO events (org_id, status, title, starts_at, created_at, updated_at)
+                VALUES (?, 'published', 'Synthetic event', 1, 0, 0)""", (901 if i < 20 else 902,)).lastrowid
+            comments = []
+            for uid, as_org, deleted in [(users[1], 0, False), (users[2], 0, False), (users[0], 0, i % 2 == 0),
+                                         (users[1], int(i % 3 == 0), i % 5 == 0), (users[2], 0, False),
+                                         (users[0] if i % 4 == 0 else users[1], 0, i % 7 == 0)]:
+                comments.append(con.execute("""INSERT INTO comments (event_id, user_id, body, as_org, deleted_at, created_at)
+                    VALUES (?, ?, 'Synthetic comment', ?, ?, 0)""", (eid, uid, as_org, 1 if deleted else None)).lastrowid)
+            if i % 3:
+                con.execute("INSERT INTO comment_reads (event_id, user_id, last_id) VALUES (?, ?, ?)",
+                            (eid, users[0], comments[1 if i % 2 else 4]))
+            if i == 20:
+                cohost = eid
+                con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, 901, 'accepted', 0)", (eid,))
+    v = logic.Viewer(users[0], "user", True)
+    want = {r[0]: len(logic.organizing._asking(con, r[0], v.id)) for r in con.execute("SELECT id FROM events WHERE org_id = 901")}
+    want[cohost] = 0
+    queries = []
+    con.set_trace_callback(queries.append)
+    got = logic.org_events(con, v, 901)
+    con.set_trace_callback(None)
+    assert {e["id"]: e["questions"] for e in got} == want
+    assert any(want.values())
+    assert sum(s.startswith("WITH leads AS") for s in queries) == 1
+    assert all(e["questions"] == 0 for e in logic.org_events(con, logic.Viewer(users[1], "user", True), 901))
+    con.close()

@@ -140,9 +140,18 @@ def feed(con, v: Viewer, before: int | None = None) -> list[dict]:
     signature is the one it went out with (the app shows `person` instead; `sign` for an author no longer here).
     One order, the channel's own (owner, Nov 3): by the message's id in the channel, so a post a moderator let out late
     sits where Telegram shows it, not where it was written; mine not out yet on top. before: the page under that message."""
-    ps = rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')
-                      AND COALESCE(NULLIF(tg_msg, 0), 1 << 62) < ? ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?""",
-              v.id, before if isinstance(before, int) and before > 0 else (1 << 63) - 1, FEED_MAX)
+    cursor = before if isinstance(before, int) and before > 0 else (1 << 63) - 1
+    # Each side contributes at most a page: the public side walks its message index, instead of sorting the whole
+    # channel's history on every poll. UNION deduplicates my live posts before the final page limit.
+    ps = rows(con, """SELECT * FROM fchan_posts WHERE id IN (
+        SELECT id FROM (SELECT id FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 AND tg_msg < ?
+            ORDER BY tg_msg DESC, id DESC LIMIT ?)
+        UNION
+        SELECT id FROM (SELECT id FROM fchan_posts WHERE user_id = ? AND status != 'gone'
+            AND COALESCE(NULLIF(tg_msg, 0), 1 << 62) < ?
+            ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?)
+        ) ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?""",
+              cursor, FEED_MAX, v.id, cursor, FEED_MAX, FEED_MAX)
     ids = {p["user_id"] for p in ps if not p["anon"]}
     who = {p["id"]: p for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     faces = _faces(con, [p["id"] for p in ps if p["comments"]]) if v.student else {}  # people for students alone (a guest: none)
