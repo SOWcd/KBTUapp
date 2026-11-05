@@ -156,9 +156,9 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     tick(cfg, tg, con)
     assert {(b["chat_id"], b["message_id"]) for b in tg.of("deleteMessage")} == {(CH, mid), (G, 77)}
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
-    # deleting doesn't buy another post sooner
+    # deleting frees the ten minutes (owner, Nov 5: rewritten as anonymous); the day's five still count it
     said["word"] = "ok"
-    assert c.post("/api/forum-posts", headers=A, json={"body": "Trying again today"}).json()["error"] == "rate_limited"
+    assert c.post("/api/forum-posts", headers=A, json={"body": "Trying again today"}).status_code == 200
     con.close()
 
 
@@ -873,6 +873,21 @@ def test_post_author_told(env, monkeypatch):
     assert bot._render(con, d) is None                                                         # taken down after it went out: no "declined"
     assert c.delete(f"/api/forum-posts/{p['id']}", headers=tma(1)).status_code == 204
     assert [m["ref"] for m in told("fch_posted")] == [f"fp:{q['id']}"]                          # deleted: its note leaves the outbox
+    con.close()
+
+
+def test_post_ai_yes_silent(env, monkeypatch):
+    """The AI's yes is instant and the app already says so: no "it's out" from the bot (owner, Nov 5); and a post I
+    deleted myself frees the ten minutes (rewritten as anonymous), still counted toward the day."""
+    c, cfg, said, _ = setup(env, monkeypatch, verdict="ok")
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    p = c.post("/api/forum-posts", headers=tma(1), json={"body": "A plain thing to share here"}).json()
+    tick(cfg, Telegram(), con)
+    assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0] == "live"
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'fch_posted'").fetchall()
+    assert c.delete(f"/api/forum-posts/{p['id']}", headers=tma(1)).status_code == 204
+    assert c.post("/api/forum-posts", headers=tma(1), json={"body": "The same thing, now as a mask", "anon": True}).status_code == 200
     con.close()
 
 

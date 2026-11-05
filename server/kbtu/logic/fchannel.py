@@ -232,7 +232,8 @@ def reserve(con, v: Viewer, body: dict) -> int:
     with tx(con):
         # the pace: five a day, ten minutes apart; a post the AI called noise counts toward the day, not the ten minutes
         # (its author rewrites it now: told why, ChannelCompose gives the words back); an ad counts toward both
-        n, last = one(con, """SELECT COUNT(*), MAX(CASE WHEN why IS NOT 'noise' THEN created_at END) FROM fchan_posts
+        # one I deleted myself (gone, no why) frees the ten minutes: rewritten as anonymous (owner, Nov 5)
+        n, last = one(con, """SELECT COUNT(*), MAX(CASE WHEN why IS NOT 'noise' AND NOT (status = 'gone' AND why IS NULL) THEN created_at END) FROM fchan_posts
                              WHERE user_id = ? AND created_at > ?""", v.id, _now() - 86400)
         if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
             raise ApiError("rate_limited", "posts")
@@ -452,8 +453,11 @@ def sent(con, pid: int, msg_id: int) -> None:
     """The bot sent it: its message id kept; deleted or taken down meanwhile, the message goes right back out (with the
     right words if it's past 48 h: a moderator's take-down isn't the author's delete)."""
     if con.execute("UPDATE fchan_posts SET tg_msg = ? WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, pid, msg_id)).rowcount:
-        # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post
-        a = one(con, "SELECT f.user_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND u.tg_id > 0", pid)
+        # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
+        # only after a moderator let it out (owner, Nov 5: the AI's yes is instant, the app already says so)
+        a = one(con, """SELECT f.user_id FROM fchan_posts f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND u.tg_id > 0
+                        AND EXISTS (SELECT 1 FROM audit_log WHERE action IN ('fchan_release', 'fchan_undo', 'fchan_restore', 'fchan_republish')
+                                    AND target = 'fchan:' || f.id)""", pid)
         if a:
             notify(con, a["user_id"], "fch_posted", f"fp:{pid}")
         # its author deleted the account while it went out, signed with the name: the signature rewritten next round
