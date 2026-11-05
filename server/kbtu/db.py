@@ -1256,6 +1256,9 @@ def connect(path: str) -> sqlite3.Connection:
     con.execute(f"PRAGMA busy_timeout = {BUSY_MS}")  # a write waits its turn: 600 sign-ups at once took 11 s on a laptop core
     con.execute("PRAGMA secure_delete = ON")  # deleted rows' text doesn't linger in free pages (H2)
     con.execute("PRAGMA synchronous = NORMAL")  # with WAL: no corruption on a crash, fsync only at checkpoints
+    # reads straight from the OS page cache, shared by every worker and pooled connection, instead of each copying
+    # pages into its own small cache (writes still go through the WAL)
+    con.execute("PRAGMA mmap_size = 268435456")
     return con
 
 

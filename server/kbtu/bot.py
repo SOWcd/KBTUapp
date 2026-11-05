@@ -547,6 +547,19 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
                     (r["result"]["message_id"], int(bool(jpg and jpg.exists())), sig, e["id"]))
 
 
+def optimize_day(con) -> None:
+    """After 04:00 Almaty, once a day: the planner's statistics (sqlite_stat1) brought up to date. Without them it picks
+    indexes blind; 0x10002 looks at every table, analysis_limit keeps it to milliseconds on a big one."""
+    local = int(time.time()) + 5 * 3600
+    if local % 86400 < 4 * 3600 or not logic._once(con, "optimize_day", str(local // 86400)):
+        return
+    try:
+        con.execute("PRAGMA analysis_limit = 1000")
+        con.execute("PRAGMA optimize = 0x10002")
+    except sqlite3.Error as exc:  # busy: tomorrow again, nothing depends on it
+        log.warning("optimize failed: %s", exc)
+
+
 def backup_day(cfg: Config, con) -> None:
     """After 04:00 Almaty, once a day: a full copy of the database into backups/ beside it, the last 14 kept (there were none). It guards against a bad deploy or a wrong delete, not a lost disk: that needs a copy elsewhere."""
     db_path = Path(cfg.db_path).resolve()
@@ -662,6 +675,7 @@ def _chores(cfg: Config, con) -> None:
     purge(cfg, con)       # accounts whose week to change their mind ran out
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
     backup_day(cfg, con)  # a nightly copy of the database, 14 kept
+    optimize_day(con)     # the query planner's statistics, once a night
     userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back
     logic.close_gone(con)  # reports of what went by itself (the queue, a GET, never writes)
     logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
