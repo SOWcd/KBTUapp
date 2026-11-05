@@ -282,6 +282,8 @@ const kk: Dict = {
   'team.roleSet': "{name} — енді {role}",
   'team.setup': "Рөлдер мен тегтер",
   'team.export': "Құрамды жүктеп алу",
+  'guard.in': "Дайын: сен топтасың",
+  'guard.late': "Үлгермедік: топқа қайта кіріп көр",
   'team.removals': "Шығару сұраулары",
   'team.removalBy': "{name} сұрайды",
   'team.withBan': "бан арқылы",

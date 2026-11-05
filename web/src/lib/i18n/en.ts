@@ -282,6 +282,8 @@ const en: Dict = {
   'team.roleSet': "{name} is now {role}",
   'team.setup': "Roles and tags",
   'team.export': "Export the roster",
+  'guard.in': "Done: you're in the group",
+  'guard.late': "Too late: try joining the group again",
   'team.removals': "Removal requests",
   'team.removalBy': "Asked by {name}",
   'team.withBan': "with a ban",

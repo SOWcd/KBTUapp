@@ -10,6 +10,8 @@ now (SPEC §4.1), the stored ones were ended, and migration 18 dropped their tab
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import html
 import json
 import fcntl
@@ -1105,8 +1107,23 @@ async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> b
     return True
 
 
+def guard_key(cfg: Config) -> bytes:
+    return hmac.new(cfg.token_key, b"kbtu-guard", hashlib.sha256).digest()
+
+
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
-    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined."""
+    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. In a chat
+    whose guard bot we are (a query_id, answered within 10 s): a student in at once, a stranger gets the app to sign up
+    (POST /api/guard lets them in after), a banned person out."""
+    if qid := req.get("query_id"):
+        chat, who = req["chat"]["id"], req["from"]["id"]
+        d = logic.guard_join(con, chat, who)
+        url = f"https://{cfg.domain}/?startapp=gq_{logic.guard_token(guard_key(cfg), chat, who, qid)}"
+        r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/" + ("sendChatJoinRequestWebApp" if d == "app" else "answerChatJoinRequestQuery"),
+                            json={"chat_join_request_query_id": qid, **({"web_app_url": url} if d == "app" else {"result": d})})
+        if not r.json().get("ok"):
+            log.warning("guard: %s", str(r.json().get("description"))[:200])
+        return
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
     if ok is None:
         return
@@ -1139,6 +1156,13 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 await tgc.gate(cfg, http, con, mine)
             except Exception as exc:  # noqa: BLE001 - the rest of the batch still goes
                 log.warning("tgc: %s", type(exc).__name__)
+        # guarded join requests next, before anything slow (10 s to answer) and before the ban skip (guard_join declines)
+        for upd in answer["result"]:
+            if (upd.get("chat_join_request") or {}).get("query_id"):
+                try:
+                    await _join(cfg, http, con, upd["chat_join_request"])
+                except Exception as exc:  # noqa: BLE001 - the rest of the batch still goes
+                    log.warning("guard: %s", type(exc).__name__)
         for upd in answer["result"]:
             msg = {}
             try:  # all of it: a locked database even in the ban check replayed the whole batch
@@ -1158,7 +1182,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _tapped(cfg, http, con, upd["callback_query"])
                     continue
                 if "chat_join_request" in upd:
-                    await _join(cfg, http, con, upd["chat_join_request"])
+                    if not upd["chat_join_request"].get("query_id"):  # a guarded one was answered above
+                        await _join(cfg, http, con, upd["chat_join_request"])
                     continue
                 if "my_chat_member" in upd:
                     await _member(cfg, http, con, upd["my_chat_member"])

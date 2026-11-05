@@ -991,6 +991,24 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.members_csv(u["lang"], o["name"], people))
 
+    @app.post("/api/guard")
+    async def guard(con: Con, v: Me, body: dict = Body(...)):
+        """A stranger's join request held by our guard bot (bot._join): signed up now, they're let in. Only the person
+        the request is theirs, and only as a student."""
+        chat, who, qid = logic.guard_read(bot.guard_key(cfg), str(body.get("t") or ""))
+        u = logic.one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)
+        if not v.student or not u or u["tg_id"] != who or logic.guard_join(con, chat, who) != "approve":
+            raise ApiError("forbidden")  # the same rule as at the door, again now (an event's group since, unlinked, banned)
+        tg = f"https://api.telegram.org/bot{cfg.bot_token}/"
+        async with httpx.AsyncClient(timeout=15) as http:
+            r = (await http.post(tg + "answerChatJoinRequestQuery", json={"chat_join_request_query_id": qid, "result": "approve"})).json()
+            if not r.get("ok"):  # the query ran out: the request itself may still wait
+                r = (await http.post(tg + "approveChatJoinRequest", json={"chat_id": chat, "user_id": who})).json()
+        if not r.get("ok"):
+            log.warning("guard: %s", str(r.get("description"))[:200])
+            raise ApiError("conflict", "expired")
+        return {"ok": True}
+
     @app.get("/api/orgs/{oid}/people")
     def people(oid: int, con: Con, v: Me):
         return logic.people(con, v, oid)

@@ -210,6 +210,7 @@ export const server: Api = {
   volunteerDecide: (id, user, yes) => call('PUT', `/events/${id}/volunteers/${user}`, { yes }),
   exportAttendees: (id) => call('POST', `/events/${id}/attendees/export`),
   exportMembers: (oid) => call('POST', `/orgs/${oid}/members/export`),
+  guardJoin: (t) => call('POST', '/guard', { t }),
   checkin: (id, code) => call('POST', `/events/${id}/checkin`, { code }),
   door: (id) => call('GET', `/events/${id}/door`),
   postUpdate: (id, body) => call('POST', `/events/${id}/updates`, { body }),

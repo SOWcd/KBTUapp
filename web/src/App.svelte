@@ -15,7 +15,7 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg } from './lib/tg';
+  import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { api, ApiErr, localize, type Id } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -306,6 +306,14 @@
     }
     const fr = p.match(/^fr_([0-9a-f]{24})$/);
     if (fr) { friendByLink(fr[1]); return; }
+    const gq = p.match(/^gq_([A-Za-z0-9_-]+\.[0-9a-f]{24})$/); // a club group's join request (its guard bot): signed up, let in
+    if (gq) {
+      asStudent(async () => {
+        try { await api.guardJoin(gq[1]); haptic.ok(); say(t('guard.in'), 'party_popper_3d'); setTimeout(() => tgTry((w) => w.close()), 1800); }
+        catch { haptic.error(); say(t('guard.late'), 'pleading_face_3d'); }
+      }, p);
+      return;
+    }
     if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }   // the bot: "keep my account"

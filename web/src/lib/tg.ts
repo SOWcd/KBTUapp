@@ -73,7 +73,8 @@ export function tgTry(fn: (w: WebApp) => void): void {
 export const tg = {
   initData: W?.initData ?? '',
   user: W?.initDataUnsafe?.user ?? null,
-  startParam: W?.initDataUnsafe?.start_param ?? '',
+  // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query
+  startParam: W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '',
   platform: W?.platform ?? 'unknown',
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),

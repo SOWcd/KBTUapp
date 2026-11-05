@@ -140,6 +140,7 @@ export interface Api {
   /** the bot sends the attendee list as a CSV to my chat; forbidden/'no_dm' when it can't write to me */
   exportAttendees(id: Id): Promise<void>;
   exportMembers(orgId: Id): Promise<void>;
+  guardJoin(token: string): Promise<{ ok: boolean }>;
   checkin(id: Id, code: string): Promise<CheckinResult>;
   // the organizer's updates (Head+, three a day): pinned on the event, the bot pings the people going
   postUpdate(id: Id, body: string): Promise<EventUpdate[]>;

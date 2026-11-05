@@ -282,6 +282,8 @@ const ru = {
   'team.roleSet': "{name} — теперь {role}",
   'team.setup': "Роли и теги",
   'team.export': "Выгрузить состав",
+  'guard.in': "Готово: ты в группе",
+  'guard.late': "Не успели: попробуй вступить в группу ещё раз",
   'team.removals': "Запросы на исключение",
   'team.removalBy': "Просит {name}",
   'team.withBan': "с баном",

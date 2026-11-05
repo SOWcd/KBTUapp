@@ -122,6 +122,43 @@ def chat_join(con, chat_id: int, tg_id: int) -> bool | None:
     return bool(u and _chat_ok(con, e, u["id"]))
 
 
+def guard_join(con, chat_id: int, tg_id: int) -> str:
+    """A join request in a chat that made our bot its guard (Bot API 10.1 join request queries): an event's group keeps
+    its own rule; a chat linked in the app (a club's, the chats list): a confirmed student in, a banned person out, the
+    rest ("app") get the app to sign up; a chat the app doesn't know: its admins decide ("queue"; any chat can name us
+    its guard, and it mustn't learn who our students are)."""
+    ev = chat_join(con, chat_id, tg_id)
+    if ev is not None:
+        return "approve" if ev else "decline"
+    if not one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND status IN ('live', 'org')", chat_id):
+        return "queue"
+    u = one(con, """SELECT u.banned_at, s.user_id AS student FROM users u
+        LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0 WHERE u.tg_id = ?""", tg_id)  # typed-in, unconfirmed: not yet
+    return "decline" if u and u["banned_at"] else "approve" if u and u["student"] else "app"
+
+
+GUARD_TTL = 15 * 60  # a guarded request's app link, then join again
+
+
+def guard_token(key: bytes, chat_id: int, tg_id: int, qid: str) -> str:
+    """The app's link for a guarded join request: who, where, which query, when, signed (no row kept: nothing to delete)."""
+    import base64
+    body = base64.urlsafe_b64encode(json.dumps([chat_id, tg_id, qid, int(time.time())], separators=(",", ":")).encode()).decode().rstrip("=")
+    return body + "." + hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def guard_read(key: bytes, token: str) -> tuple[int, int, str]:
+    """(chat, Telegram id, query) from guard_token's link; forbidden when it's forged, gone when it's old."""
+    import base64
+    body, _, sig = (token or "").partition(".")
+    if not body or not hmac.compare_digest(sig, hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]):
+        raise ApiError("forbidden")
+    chat_id, tg_id, qid, at = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    if at < time.time() - GUARD_TTL:
+        raise ApiError("conflict", "expired")
+    return int(chat_id), int(tg_id), str(qid)
+
+
 # ------------------------------------------------------------ the events channel (@KBTUevents)
 # Public events go to the channel once published: the cover, title, club, when, where, price and "Sign up"; a change of
 # any of that edits the post, a cancel marks it. A few a round, so the first run fills the channel without a flood.

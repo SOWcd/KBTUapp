@@ -854,6 +854,29 @@ def test_members_csv(env):
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'members_export'").fetchone()[0] == 1
 
 
+def test_guard_join(env):
+    """A chat that made our bot its guard: a student in, a banned person out, a stranger gets the app; the app's link
+    is signed and only its own person can use it (Bot API 10.1 join request queries)."""
+    from kbtu import bot
+    c, cfg = env
+    ann = login(c, 20, "ann")
+    con = db.connect(cfg.db_path)
+    assert logic.guard_join(con, -100, 20) == "queue"                      # a chat the app doesn't know: its admins decide
+    con.execute("INSERT INTO chats (title, kind, url, tg_chat_id, status, created_at) VALUES ('G', 'group', 'https://t.me/g', -100, 'org', 0)")
+    assert logic.guard_join(con, -100, 20) == "approve"
+    assert logic.guard_join(con, -100, 999) == "app"                       # never signed in
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ann["id"],))
+    assert logic.guard_join(con, -100, 20) == "decline"
+    con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ann["id"],))
+    key = bot.guard_key(cfg)
+    t = logic.guard_token(key, -100, 20, "q:1")
+    assert logic.guard_read(key, t) == (-100, 20, "q:1")
+    assert c.post("/api/guard", headers=tma(20, "Ann"), json={"t": t[:-1] + ("1" if t[-1] == "0" else "0")}).status_code == 403   # forged
+    login(c, 21, "bob")
+    assert c.post("/api/guard", headers=tma(21, "Bob"), json={"t": t}).status_code == 403             # someone else's
+    con.close()
+
+
 def test_team_rank_rule(env):
     """The club's own team (SPEC §2): everyone in it sees the roster; Vice+ manage only people below them and give only
     roles below their own; the President hands the club over and becomes Vice; anyone but the President can leave."""
