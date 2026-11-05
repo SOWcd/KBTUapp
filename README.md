@@ -32,8 +32,7 @@ name, student ID and year, marked unconfirmed until the KBTU account is confirme
 No bot or real accounts needed: `qa.py` seeds a fresh database with made-up students and a club, starts the real
 server with the bot off and prints a link per person that opens the app as them.
 
-Needs Node 22 and Python 3.14, the versions production runs (the `Dockerfile`). An older system Python (macOS ships
-3.9) won't do: `uv python install 3.14`, then `uv venv -p 3.14 .venv` in `server/`.
+Node 22, Python 3.14 (as the `Dockerfile`).
 
 ```bash
 cd web && npm ci && npx vite build
