@@ -127,12 +127,12 @@
   .ly.moments .hl { background: linear-gradient(100deg, #F2DEC8, #E3A985, #C9C391); }
   .ly.faces .st { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .ly.faces .hl { background: linear-gradient(100deg, #6E7BFF, #C04BFF, #FF4F9A, #FFA43D); }
-  .ly.sower .st { background: linear-gradient(90deg, #DCDCE0, #fff 50%, #DCDCE0); }
-  .ly.sower .st i { color: #000; }
-  .ly.sower .cd { background: radial-gradient(90% 120% at 0% 0%, #26262B, #000 62%); }
+  .ly.sower .st { background: linear-gradient(90deg, #CECECA, #F6F6F4 50%, #CECECA); }
+  .ly.sower .st i { color: #1E1E1E; }
+  .ly.sower .cd { background: radial-gradient(90% 120% at 100% 0%, #5E5E5D, #2E2E2E 62%); }
   .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 76px; height: 76px; border-radius: 50%;
-    background: repeating-radial-gradient(circle, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 5.6px); }
-  .ly.sower .hl { background: #fff; }
+    background: radial-gradient(circle, rgba(232, 232, 231, 0.3) 1px, transparent 1.5px) 0 0 / 5px 5px; } /* his photo's halftone */
+  .ly.sower .hl { background: #E8E8E7; }
   .ly.locked .cd { background: linear-gradient(135deg, var(--c1, rgb(58, 66, 110)), var(--c2, rgb(22, 26, 48))); }
   .ly.club .st { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .ly.club .st i { color: var(--s3); font-size: calc(var(--sf) * 0.6); font-weight: var(--sfw); letter-spacing: var(--sl); line-height: calc(var(--slh) * 0.6); white-space: pre; text-align: center; }
