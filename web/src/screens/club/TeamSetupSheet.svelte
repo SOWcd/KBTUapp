@@ -38,15 +38,30 @@
   let kind = $state<'role' | 'tag' | null>(null);
   let fid = $state<Id | null>(null);
   let fname = $state('');
-  let fkk = $state(''); // the role's name in Kazakh and English: optional, else fname shows
-  let fen = $state('');
+  // a role's title is typed once in any language; the AI fills the other two ("Translations"), never one corrected by hand
+  type Lang = 'ru' | 'kk' | 'en';
+  const LANGS: Lang[] = ['ru', 'kk', 'en'];
+  // the server's ai.lang_of: Kazakh's own letters, else Cyrillic is Russian, else English
+  const langOf = (x: string): Lang => (/[\u04d9\u0493\u049b\u04a3\u04e9\u04b1\u04af\u04bb\u0456\u04d8\u0492\u049a\u04a2\u04e8\u04b0\u04ae\u04ba\u0406]/.test(x) ? 'kk' : /[\u0400-\u04ff]/.test(x) ? 'ru' : 'en');
+  let ftr = $state<Record<Lang, string>>({ ru: '', kk: '', en: '' });
+  let fwas: Record<Lang, string> = { ru: '', kk: '', en: '' }; // as opened: a changed one counts as corrected
+  let fhand = $state<Lang[]>([]);
+  let trOpen = $state(false);
+  const fsrc = $derived(langOf(fname));
+  const others = $derived(LANGS.filter((k) => k !== fsrc));
   let fcolor = $state(TEAM_COLORS[0]);
   let frights = $state<Right[]>([]);
   let ffixed = $state<ClubLevel | null>(null); // an official role: its name and level stay, rights up to the level
   let fdept = $state(false); // a tag that is a department (PLAN 47)
   let busy = $state(false);
   function edit(k: 'role' | 'tag', x?: ClubRole | ClubTag) {
-    kind = k; fid = x?.id ?? null; fname = x?.name ?? ''; fkk = (x && 'nameKk' in x && x.nameKk) || ''; fen = (x && 'nameEn' in x && x.nameEn) || ''; fcolor = x?.color ?? TEAM_COLORS[(setup?.[k === 'role' ? 'roles' : 'tags'].length ?? 0) % TEAM_COLORS.length];
+    const r = x && 'rights' in x ? x : null;
+    const slots: Record<Lang, string> = { ru: r?.name ?? '', kk: r?.nameKk ?? '', en: r?.nameEn ?? '' };
+    kind = k; fid = x?.id ?? null; fname = r ? slots[r.src ?? 'ru'] || r.name : x?.name ?? '';
+    // still translating: the Russian slot holds the typed text, not a translation
+    const shown = (l: Lang) => (r?.hand?.includes(l) || !r?.translating ? slots[l] : '');
+    ftr = { ru: shown('ru'), kk: shown('kk'), en: shown('en') }; fwas = { ...ftr }; fhand = (r?.hand ?? []) as Lang[]; trOpen = false;
+    fcolor = x?.color ?? TEAM_COLORS[(setup?.[k === 'role' ? 'roles' : 'tags'].length ?? 0) % TEAM_COLORS.length];
     frights = x && 'rights' in x ? [...x.rights] : ['door'];
     ffixed = x && 'fixed' in x && x.fixed ? x.level : null;
     fdept = !!(x && 'department' in x && x.department);
@@ -57,10 +72,12 @@
     haptic.error();
     say(e instanceof ApiErr && e.message === 'taken' ? t('ts.taken') : e instanceof ApiErr && e.message === 'many' ? t('ts.many') : t('common.error'), 'warning_3d');
   };
+  // every correction kept: one corrected before or changed now, not emptied (empty: the AI's again)
+  const corrected = () => Object.fromEntries(others.filter((l) => ftr[l].trim() && (fhand.includes(l) || ftr[l] !== fwas[l])).map((l) => [l, ftr[l]]));
   async function save() {
     if (!kind || busy || !fname.trim()) return;
     busy = true;
-    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, nameKk: fkk, nameEn: fen, color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); say(phrase('say.tsSaved'), 'sparkles_3d'); }
+    try { done(kind === 'role' ? await api.saveRole(org, { name: fname, tr: corrected(), color: fcolor, rights: frights }, fid ?? undefined) : await api.saveTag(org, { name: fname, color: fcolor, department: fdept }, fid ?? undefined)); say(phrase('say.tsSaved'), 'sparkles_3d'); }
     catch (e) { oops(e); } finally { busy = false; }
   }
   async function drop() {
@@ -109,9 +126,14 @@
     {:else}
       <Field label={kind === 'role' ? t('ts.rolePh') : t('ts.tagPh')} bind:value={fname} maxlength={24} enterkeyhint="done" />
       {#if kind === 'role'}
-        <!-- engine: Field could pass `lang` (kk, en) to its input -->
-        <Field label={t('ts.roleKk')} bind:value={fkk} maxlength={24} enterkeyhint="done" />
-        <Field label={t('ts.roleEn')} bind:value={fen} maxlength={24} enterkeyhint="done" />
+        <Group footnote={trOpen ? t('ts.trsSub') : undefined}>
+          <Row dense title={t('ts.trs')} subtitle={others.map((l) => ftr[l]).filter(Boolean).join(' \u00b7 ') || t('ts.trAuto')} accessory="disclosure" open={trOpen}
+            onclick={() => { haptic.select(); trOpen = !trOpen; }} />
+        </Group>
+        {#if trOpen}
+          <!-- engine: Field could pass `lang` to its input -->
+          {#each others as l (l)}<Field label={t(`ts.role.${l}`)} bind:value={ftr[l]} placeholder={t('ts.trAuto')} maxlength={24} enterkeyhint="done" />{/each}
+        {/if}
       {/if}
     {/if}
     <div class="colors">

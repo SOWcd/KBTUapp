@@ -1251,6 +1251,12 @@ MIGRATIONS: list[tuple[int, str]] = [
         kind    TEXT NOT NULL,
         PRIMARY KEY (user_id, kind)
     ) STRICT, WITHOUT ROWID;"""),
+    # A club role's title is typed once in any language (src: kk, ru or en; NULL: from before, normalized nightly), the
+    # AI fills the other two (ai_wait), never the ones a person corrected (hand: comma-separated languages)
+    (130, """ALTER TABLE org_roles ADD COLUMN src TEXT;
+    ALTER TABLE org_roles ADD COLUMN hand TEXT NOT NULL DEFAULT '';
+    ALTER TABLE org_roles ADD COLUMN ai_wait INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE org_roles ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;"""),
 ]
 
 
