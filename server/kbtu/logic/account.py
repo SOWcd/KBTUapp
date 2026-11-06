@@ -1318,3 +1318,15 @@ from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
 from .seats import _remind, _ticket_code, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402
+
+
+# "Support & ideas" at the bottom of Me (owner, Nov 6): the creator, then the main admin (Alikhan). A new main admin:
+# this line. Their Telegram usernames are the chat links; the cards are the app's own (photo as everywhere).
+SUPPORT = ("Sowers", "Relson69")
+
+
+def support(con) -> list[dict]:
+    found = {p["tg_username"].lower(): p for p in rows(con, f"""SELECT {core.PERSON_COLS}, u.tg_username FROM users u
+        LEFT JOIN students s ON s.user_id = u.id WHERE lower(u.tg_username) IN ({",".join("?" * len(SUPPORT))}) AND u.banned_at IS NULL""",
+        *(n.lower() for n in SUPPORT))}
+    return [{**person_ref(p), "username": p["tg_username"]} for n in SUPPORT if (p := found.get(n.lower()))]

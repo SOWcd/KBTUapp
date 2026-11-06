@@ -23,7 +23,8 @@
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
   import { t, i18n, type Key } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, openLink, tg } from '../../lib/tg';
+  import Emoji from '../../ui/Emoji.svelte';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
   import Group from '../../ui/Group.svelte';
@@ -167,10 +168,19 @@
   // Support the app (owner, Nov 3): a gift, never a purchase. The number is copied and nothing else: no Kaspi link (none
   // is public, and a payment link breaks Telegram's rules), no amounts, and nothing recorded, so no badge, status or
   // thanks can ever depend on it (.claude/reports/donate-review.md)
-  const donate = $derived(me?.donate ? fmtPhone(me.donate) : '');
+  const donate = $derived(session.donate ? fmtPhone(session.donate) : '');
+  // owner, Nov 6: a transfer inside one bank is free, so the page lists every bank the number has (the same number in
+  // each); a tap copies it and opens that bank's app. ponytail: banks publish no "transfer to this number" link, so the
+  // App Store page (its Open button) on iOS and a Play search elsewhere; the bank's own link if one turns up.
+  const BANKS = [['kaspi', 'Kaspi', 1195076505], ['halyk', 'Halyk', 440635615], ['freedom', 'Freedom', 1619733462], ['forte', 'Forte', 6474132802],
+    ['bereke', 'Bereke', 6449958451], ['bcc', 'BCC', 743617904], ['homecredit', 'Home Credit', 6443964296], ['alatau', 'Alatau', 1441936010]] as const;
+  async function toBank(name: string, ios: number) {
+    await copyDonate();
+    openLink(/^(ios|macos)$/.test(tg.platform) ? `https://apps.apple.com/kz/app/id${ios}` : `https://play.google.com/store/search?q=${encodeURIComponent(name + ' bank')}&c=apps`);
+  }
   async function copyDonate() {
     // the plain digits ("+77001234567"): Kaspi's search takes it as is
-    try { await navigator.clipboard.writeText(me?.donate ?? ''); haptic.ok(); say(t('pay.copied'), 'sparkles_3d'); }
+    try { await navigator.clipboard.writeText(session.donate); haptic.ok(); say(t('pay.copied'), 'sparkles_3d'); }
     catch { haptic.error(); } // the number is selectable too
   }
 </script>
@@ -309,16 +319,21 @@
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
   {:else if kind === 'donate' && donate}
-    <!-- the big line first: not a purchase; then the number to copy; a neutral mark, never Kaspi's logo -->
+    <!-- owner, Nov 6: a heart, "not a purchase" as a quiet pill, two lines (the page's own title names it); the number with its copy; then the banks -->
     <div class="don">
-      <span class="mark"><HandHeart size={28} /></span>
-      <h2 class="fs-t1">{t('don.head')}</h2>
+      <span class="heart"><Emoji name="blue_heart_3d" size={88} /></span>
+      <span class="pill">{t('don.head')}</span>
       <p class="fs-body dim">{t('don.text')}</p>
     </div>
     <div class="num-card">
-      <p class="fs-sub faint">{t('don.bank')}</p>
-      <p class="fs-t1 num selectable">{donate}</p>
-      <Button kind="secondary" size="m" onclick={copyDonate}>{#snippet icon()}<Copy size={18} />{/snippet}{t('pay.copy')}</Button>
+      <span><small class="fs-sub faint">{t('don.bank')}</small><b class="fs-t2 num selectable">{donate}</b></span>
+      <button class="cp" aria-label={t('pay.copy')} onclick={copyDonate}><Copy size={20} /></button>
+    </div>
+    <p class="banks-h fs-sub faint">{t('don.banks')}</p>
+    <div class="banks">
+      {#each BANKS as [id, name, ios] (id)}
+        <button class="bank" onclick={() => { haptic.tap(); void toBank(name, ios); }}><img src="banks/{id}.webp" alt="" width="54" height="54" /><small>{name}</small></button>
+      {/each}
     </div>
     <p class="foot always">{t('don.safe')}</p>
   {/if}
@@ -335,10 +350,19 @@
   .two > .sub { font-size: var(--fs-sub); }
   /* a school's short name stays whole; its long name wraps beside it */
   .short { color: var(--text-3); }
-  .don { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4) 0; text-align: center; }
-  .mark { display: grid; place-items: center; width: var(--s-10); height: var(--s-10); border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
-  .num-card { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); margin-top: var(--s-6); padding: var(--s-5) var(--s-4);
+  .don { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4) 0; text-align: center; }
+  .heart { display: grid; place-items: center; width: 132px; height: 112px; background: radial-gradient(circle, var(--accent-soft), transparent 62%); }
+  .pill { padding: 4px 12px; border-radius: var(--r-full); background: var(--surface-2); font: 700 var(--fs-cap)/1.4 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
+  .num-card { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-6); padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5);
     border-radius: var(--r-l); background: var(--surface); }
+  .num-card > span { display: flex; flex-direction: column; min-width: 0; }
   .num-card .num { white-space: nowrap; }
+  .cp { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: var(--r-m); background: var(--accent); color: var(--on-accent); }
+  .cp:active, .bank:active { transform: scale(0.95); }
+  .banks-h { margin: var(--s-6) var(--s-4) var(--s-2); }
+  .banks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4) var(--s-2); padding: var(--s-4) var(--s-2); border-radius: var(--r-l); background: var(--surface); }
+  .bank { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .bank img { width: 54px; height: 54px; border-radius: var(--r-m); box-shadow: var(--shadow-thumb); }
+  .bank small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-2); }
   .wide { max-width: 60vw; color: var(--text-3); overflow-wrap: anywhere; text-align: right; }
 </style>

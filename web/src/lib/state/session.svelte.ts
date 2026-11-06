@@ -7,7 +7,9 @@ import { CONSENT_VERSION } from '../legal';
 // (the server's word: its forum part counts only with the forum on)
 // board: the student forum (and the assistant, the event questions) is open to me: GET /api/me says so, the other
 // answers that carry Me don't, so it's kept here; channel (the forum channel's tab) and tgComment too (a deleted Telegram comment of mine waits: App's moment)
-export const session = $state({ me: null as Me | null, ready: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION, board: false, boardKnown: false, channel: false, tgComment: false });
+export const session = $state({ me: null as Me | null, ready: false, failed: false, banned: null as { reason: string | null; contact: string | null } | null, policy: CONSENT_VERSION, board: false, boardKnown: false, channel: false, tgComment: false,
+  // /api/me alone carries these (a PATCH's me doesn't): kept apart so a settings change never drops them
+  donate: '', support: [] as NonNullable<Me['support']> });
 
 import { clearCache } from './cache';
 function banned(d: Record<string, unknown>) {
@@ -18,7 +20,7 @@ if (typeof window !== 'undefined') addEventListener('kb:banned', (e) => banned((
 
 export async function loadMe(): Promise<void> {
   try {
-    session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.channel = !!session.me.forumChannel; session.boardKnown = true; session.tgComment = !!session.me.tgComment;
+    session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.channel = !!session.me.forumChannel; session.boardKnown = true; session.tgComment = !!session.me.tgComment; session.donate = session.me.donate ?? ''; session.support = session.me.support ?? [];
     if (session.me.avatar) new Image().src = session.me.avatar; // the profile tab opens with its photo in place
   } catch (x) {
     session.failed = true;

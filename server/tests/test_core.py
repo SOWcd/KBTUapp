@@ -7595,3 +7595,17 @@ def test_name_one_letter_off():
     from kbtu.logic.account import _one_off
     assert _one_off("amelie", {"ameli", "sakenova"}) and _one_off("ameli", {"amelie"}) and _one_off("aidas", {"aidos"})
     assert not _one_off("aidan", {"aidos"}) and not _one_off("bekzat", {"aidos"}) and not _one_off("ana", {"an"})
+
+
+def test_support_contacts(env):
+    """Me's "Support & ideas": the creator first, then the main admin, by their Telegram usernames; a banned one drops."""
+    c, cfg = env
+    a, b = login(c, 30, "relson69"), login(c, 31, "sowers")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET tg_username = 'Relson69' WHERE id = ?", (a["id"],))
+    con.execute("UPDATE users SET tg_username = 'Sowers', is_founder = 1 WHERE id = ?", (b["id"],))
+    assert [p["username"] for p in logic.account.support(con)] == ["Sowers", "Relson69"]
+    assert "support" in c.get("/api/me", headers=tma(32)).json()
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (a["id"],))
+    assert [p["username"] for p in logic.account.support(con)] == ["Sowers"]
+    con.close()
