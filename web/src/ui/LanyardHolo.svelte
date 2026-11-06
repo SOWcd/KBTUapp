@@ -81,6 +81,14 @@
     linear-gradient(100deg, var(--h1), var(--h2) 50%, var(--h1)); color: var(--h3);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 -1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .club span { font-variant-numeric: tabular-nums; }
+  /* Enactus (round 15, owner: the plain gold strip): their gold, deeper at the ends, a faint pattern of the phoenix's
+     feathers pressed into it, a navy hairline under it; the specular slides as on every club's */
+  .enactuskbtu { background:
+      linear-gradient(100deg, transparent 38%, rgba(255, 252, 235, 0.55) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+      linear-gradient(rgb(6, 10, 70), rgb(6, 10, 70)) 0 100% / 100% 1.5px no-repeat,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='28' viewBox='0 0 26 28'%3E%3Cg fill='none' stroke='%238A5A00' stroke-opacity='.3' stroke-width='.8' stroke-linecap='round'%3E%3Cpath d='M3 25C8 19 12 13 13 4'/%3E%3Cpath d='M6 21C4 18 4 15 5 13M8.4 17.4C6.4 14.6 6.6 11.6 8 9.6M10.4 13.4C9 10.6 9.6 8 11.2 6.4M6 21C9 20.6 11.4 19 12.8 17M8.4 17.4C11.2 16.6 13 14.8 14 12.6M10.4 13.4C12.6 12.4 13.8 10.6 14.2 8.6'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 26px 28px,
+      linear-gradient(100deg, rgb(214, 148, 12), rgb(255, 214, 84) 22%, rgb(255, 197, 33) 50%, rgb(255, 214, 84) 78%, rgb(214, 148, 12));
+    box-shadow: inset 0 0 0 1px rgba(255, 240, 190, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 3px rgba(6, 10, 70, 0.22), 0 4px 12px -6px rgba(0, 0, 0, 0.5); }
   /* new3 r2 (owner: the anime club's glossy red bar fought the ink wash): charcoal glass over their art, a fine red
      hairline at its edge and a red ink stroke under their name, the number in their red */
   .klubanimeshnikov { color: rgba(246, 242, 240, 0.95); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);

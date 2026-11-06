@@ -480,7 +480,8 @@ FRAMES = ("flowers", "space", "hearts", "sparkles", "laurel", "leaves", "snow", 
 LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskbtu",
             "mountainkingskbtu", "crystalkbtu", "spekbtu", "aichekbtu", "bigcitylightskbtu", "arthousekbtu", "qairymdylyqkbtu", "shadekbtu", "japanesecultureclub",
             "choice", "teentertainmentkbtu", "klubanimeshnikov",
-            "kbtumag")  # kbtu.mag: matched by its name (SKINNED)
+            "kbtumag",  # kbtu.mag: matched by its name (SKINNED)
+            "enactuskbtu", "caseclubkbtu", "knlknolimits", "literatureclub", "tumarorchestrakbtu", "web", "zhylyzhurekkbtu")  # round 10
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug,
 # Nov 4), as the web's awards.ts lookKey
