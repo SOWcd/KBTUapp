@@ -315,6 +315,7 @@ export interface Api {
   teamSetup(org: Id): Promise<TeamSetup>;
   saveRole(org: Id, input: { name: string; tr?: Partial<Record<'ru' | 'kk' | 'en', string>>; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup>;  // conflict/'taken'
   deleteRole(org: Id, id: Id): Promise<TeamSetup>;
+  assignRole(org: Id, id: Id, users: Id[]): Promise<{ team: TeamMember[]; setup: TeamSetup; skipped: number }>; // ticked get it, the rest lose it
   saveTag(org: Id, input: { name: string; color: string; department?: boolean }, id?: Id): Promise<TeamSetup>;
   deleteTag(org: Id, id: Id): Promise<TeamSetup>;
   updateMember(org: Id, user: Id, patch: MemberPatch): Promise<TeamMember[]>;

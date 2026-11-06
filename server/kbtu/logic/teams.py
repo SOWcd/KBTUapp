@@ -331,6 +331,60 @@ def delete_tag(con, v: Viewer, oid: int, tid: int) -> dict:
     return team_setup(con, v, oid)
 
 
+def _set_role(con, v: Viewer, oid: int, uid: int, rid: object, level: object) -> None:
+    """One person's role (update_member's rule): `rid` one of the club's roles, or None and `level` a level."""
+    mine = role_in(con, v, oid) if uid == v.id and rid is not None else _manage(con, v, oid, uid)
+    if not mine:
+        raise ApiError("forbidden")
+    if rid is not None:
+        r = one(con, "SELECT * FROM org_roles WHERE id = ? AND org_id = ?", rid, oid) if isinstance(rid, int) and not isinstance(rid, bool) else None
+        if not r:
+            raise ApiError("bad_input")
+        role, given = r["level"], _rights_from(r["level"], r["rights"])
+    else:
+        role = str(level or "")
+        if role not in RANK:
+            raise ApiError("bad_input")
+        given = LEVEL_RIGHTS[role]
+        rid = _official(con, oid, role)  # a Vice or Head level is its official role
+        if rid:
+            given = _rights_from(role, one(con, "SELECT rights FROM org_roles WHERE id = ?", rid)[0])
+    if (RANK[role] != RANK[mine] if uid == v.id else RANK[role] >= RANK[mine]) or not given <= rights_of(con, v.id, oid):  # only rights I have myself (as in Telegram)
+        raise ApiError("forbidden")
+    con.execute("UPDATE org_members SET role = ?, role_id = ? WHERE org_id = ? AND user_id = ?", (role, rid, oid, uid))
+    log_action(con, v.id, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": role, "roleId": rid, "by": "team"}))
+
+
+def assign_role(con, v: Viewer, oid: int, rid: int, body: dict) -> dict:
+    """One of the club's own roles to many at once (a president, Nov 6): `users` get it, its holders left out lose it
+    (they keep the level, as roleId null does). The same rule per person as update_member; whoever I may not change is
+    skipped and counted. The official ranks are not handed out this way. One transaction."""
+    users = body.get("users")
+    if not isinstance(users, list) or len(users) > 1000 or any(not isinstance(x, int) or isinstance(x, bool) for x in users):
+        raise ApiError("bad_input")
+    r = one(con, "SELECT * FROM org_roles WHERE id = ? AND org_id = ?", rid, oid)
+    if not r:
+        raise ApiError("not_found")
+    mine = role_in(con, v, oid)
+    if r["fixed"] or not can(con, v, oid, "team") or not mine or RANK[r["level"]] >= RANK[mine] \
+            or not _rights_from(r["level"], r["rights"]) <= rights_of(con, v.id, oid):  # only a role with rights I have (Astra)
+        raise ApiError("forbidden")
+    want, skipped = set(users), 0
+    with tx(con):
+        # never myself: a role below me would lower me, and nobody raises their own rights (Astra)
+        for m in rows(con, "SELECT user_id, role, role_id FROM org_members WHERE org_id = ? AND user_id != ?", oid, v.id):
+            on = m["user_id"] in want
+            if on == (m["role_id"] == rid):
+                continue
+            try:
+                _set_role(con, v, oid, m["user_id"], rid if on else None, m["role"])
+            except ApiError as e:
+                if e.code != "forbidden":
+                    raise
+                skipped += 1
+    return {"team": team(con, v, oid), "setup": team_setup(con, v, oid), "skipped": skipped}
+
+
 def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
     """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
     level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights);
@@ -343,27 +397,7 @@ def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
         raise ApiError("bad_input")
     with tx(con):
         if "role" in body or "roleId" in body:
-            rid = body.get("roleId")
-            mine = role_in(con, v, oid) if uid == v.id and rid is not None else _manage(con, v, oid, uid)
-            if not mine:
-                raise ApiError("forbidden")
-            if rid is not None:
-                r = one(con, "SELECT * FROM org_roles WHERE id = ? AND org_id = ?", rid, oid) if isinstance(rid, int) and not isinstance(rid, bool) else None
-                if not r:
-                    raise ApiError("bad_input")
-                role, given = r["level"], _rights_from(r["level"], r["rights"])
-            else:
-                role = str(body.get("role") or "")
-                if role not in RANK:
-                    raise ApiError("bad_input")
-                given = LEVEL_RIGHTS[role]
-                rid = _official(con, oid, role)  # a Vice or Head level is its official role
-                if rid:
-                    given = _rights_from(role, one(con, "SELECT rights FROM org_roles WHERE id = ?", rid)[0])
-            if (RANK[role] != RANK[mine] if uid == v.id else RANK[role] >= RANK[mine]) or not given <= rights_of(con, v.id, oid):  # only rights I have myself (as in Telegram)
-                raise ApiError("forbidden")
-            con.execute("UPDATE org_members SET role = ?, role_id = ? WHERE org_id = ? AND user_id = ?", (role, rid, oid, uid))
-            log_action(con, v.id, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": role, "roleId": rid, "by": "team"}))
+            _set_role(con, v, oid, uid, body.get("roleId"), body.get("role"))
         if "tags" in body:
             tags = body["tags"]
             if uid != v.id and RANK[role_in(con, v, oid) or "member"] < RANK["vice"]:

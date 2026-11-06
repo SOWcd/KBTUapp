@@ -68,7 +68,7 @@ from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_
     saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
 from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, normalize_role, roles_backfill, _ask_removal, _below, _manage, _named, _ordered,
     _remove, accept_invite, banned, decide_removal, delete_role, delete_tag, dept_of, invite, map_graph,
-    TEAM_LINK_TTL, members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off, team_setup, transfer, unban, update_member)  # noqa: F401
+    TEAM_LINK_TTL, members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off, assign_role, team_setup, transfer, unban, update_member)  # noqa: F401
 from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_AT, KEEP, MY_SKILLS, NAME_MAX,
     NEW_SKILLS_A_DAY, OPEN_ASKS, PING_DAY, PING_TOP, PING_WEEK, PUBLIC_AT, REPORTER_AGE, SEARCHES_AN_HOUR, STALE,
     TITLE_MAX, _FINDABLE, _UNBLOCKED, _ask_shape, _card, _enough_at, _holders, _matches, _now, _ping, _skill,

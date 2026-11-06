@@ -127,6 +127,7 @@ export const server: Api = {
   teamSetup: (org) => call('GET', `/orgs/${org}/team`),
   saveRole: (org, input, id) => (id == null ? call('POST', `/orgs/${org}/roles`, input) : call('PATCH', `/orgs/${org}/roles/${id}`, input)),
   deleteRole: (org, id) => call('DELETE', `/orgs/${org}/roles/${id}`),
+  assignRole: (org, id, users) => call('PUT', `/orgs/${org}/roles/${id}/people`, { users }),
   saveTag: (org, input, id) => (id == null ? call('POST', `/orgs/${org}/tags`, input) : call('PATCH', `/orgs/${org}/tags/${id}`, input)),
   deleteTag: (org, id) => call('DELETE', `/orgs/${org}/tags/${id}`),
   updateMember: (org, user, patch) => call('PATCH', `/orgs/${org}/members/${user}`, patch),
