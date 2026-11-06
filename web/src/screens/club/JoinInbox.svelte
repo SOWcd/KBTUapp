@@ -2,8 +2,8 @@
   import { withNick } from '../../lib/perms';
   // A club's applications (Vice+, §4.5), oldest first. The owner's flow: look at the person (the avatar opens
   // their card), write to them first ("come by, let's meet"), then accept or decline; the bot tells them.
-  // "Recruiting" (the round) is the row on top; the switch below it takes any-time join requests without a round.
-  // Studio's "Recruiting" tile opens this for Vice+.
+  // "Recruiting" (the round) is the row on top; the switch below it ("always open") takes any-time join requests without
+  // a round, with the club's own questions; their answers show under each person. Studio's "Recruiting" tile opens this for Vice+.
   // ponytail: "Write" needs a Telegram @username (no username, no chat link); a bot relay if that bites.
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, type Id, type JoinRequest, type Round } from '../../lib/api';
@@ -19,6 +19,7 @@
   import Button from '../../ui/Button.svelte';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import UserPlus from '@lucide/svelte/icons/user-plus';
+  import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -71,6 +72,8 @@
         {/if}
         {#if o}
           <Row icon={UserPlus} title={t('jr.open')} accessory="switch" checked={o.recruiting} onchange={(on) => { haptic.tap(); void setOpen(on); }} />
+          <!-- its own questions, as a round's (club presidents, Nov 6) -->
+          {#if o.recruiting}<Row icon={ClipboardPen} title={t('cast.questions')} value={o.joinQuestions?.length ? String(o.joinQuestions.length) : t('jr.qsNone')} accessory="chevron" onclick={() => sheets.joinQuestions(org)} />{/if}
         {/if}
       </Group>
     {/if}
@@ -82,6 +85,11 @@
           <Row dense title={withNick(r.fullName, r.person)} subtitle={[line(r), relDay(r.createdAt)].filter(Boolean).join(' · ')} trailing={r.username ? write : undefined}>
             {#snippet lead()}<Avatar person={r.person} size={36} />{/snippet}
           </Row>
+          {#if r.answers?.length}
+            <dl class="ans selectable">
+              {#each r.answers as x, i (i)}<dt>{x.q}</dt><dd>{Array.isArray(x.a) ? x.a.join(', ') : x.a}</dd>{/each}
+            </dl>
+          {/if}
           <div class="acts btns">
             <Button kind="secondary" size="m" full onclick={() => decide(r, false)}>{t('jr.decline')}</Button>
             <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('jr.accept')}</Button>
@@ -97,4 +105,9 @@
 <style>
   .list { display: flex; flex-direction: column; gap: var(--s-3); }
   .acts { display: flex; gap: var(--s-2); padding: 0 var(--s-4) var(--s-4); }
+  /* the answers to the club's questions, under the person */
+  .ans { margin: 0; padding: 0 var(--s-4) var(--s-3); display: flex; flex-direction: column; gap: 2px; white-space: pre-line; overflow-wrap: anywhere; }
+  .ans dt { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .ans dt:not(:first-child) { margin-top: var(--s-2); }
+  .ans dd { margin: 0; font: 450 var(--fs-body)/1.4 var(--font-text); }
 </style>

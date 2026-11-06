@@ -142,6 +142,8 @@
   sheets.teamSetup = (org, onchange) => lazy(() => import('./screens/club/TeamSetupSheet.svelte'), { org, onchange });
   sheets.removeMember = (org, user, name, request, ondone) => lazy(() => import('./screens/club/RemoveSheet.svelte'), { org, user, name, request, ondone });
   sheets.joinInbox = (org) => lazy(() => import('./screens/club/JoinInbox.svelte'), { org });
+  sheets.joinQuestions = (org) => lazy(() => import('./screens/club/JoinQuestions.svelte'), { org });
+  sheets.joinApply = (org) => lazy(() => import('./screens/sheets/JoinApply.svelte'), { org });
   sheets.admin = () => lazy(() => import('./screens/admin/AdminSheet.svelte'), {});
   sheets.map = (place, exit) => { warmMap(); return lazy(() => import('./screens/map/CampusMap.svelte'), { place, exit }); };
   sheets.deleteAccount = (lost) => lazy(() => import('./screens/profile/DeleteSheet.svelte'), { lost });

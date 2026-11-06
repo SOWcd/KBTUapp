@@ -64,6 +64,9 @@ export const sheets = {
   roundBoard: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch
   joinInbox: (_org: Id) => {},
+  /** always-open applications: the club's own questions (Vice+), and a student's answers to them */
+  joinQuestions: (_org: Id) => {},
+  joinApply: (_org: Id) => {},
   /** Team 2.0 (§2b): the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
   teamSetup: (_org: Id, _onchange?: () => void) => {},
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */

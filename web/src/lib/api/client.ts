@@ -139,7 +139,7 @@ export const server: Api = {
   adminPresLink: (org) => call('POST', `/admin/orgs/${org}/president-link`),
   org: (id) => call('GET', `/orgs/${id}`),
   subscribe: (id, on) => call(on ? 'PUT' : 'DELETE', `/orgs/${id}/subscription`),
-  apply: (org) => call('POST', `/orgs/${org}/join-requests`),
+  apply: (org, answers) => call('POST', `/orgs/${org}/join-requests`, answers ? { answers } : undefined),
   withdraw: (org) => call('DELETE', `/orgs/${org}/join-requests/mine`),
 
   schedule: () => call('GET', '/me/schedule'),
@@ -366,6 +366,7 @@ export const server: Api = {
   decideJoin: (id, accept) => call('POST', `/join-requests/${id}/${accept ? 'accept' : 'reject'}`),
   setRecruiting: (org, on) => call('PATCH', `/orgs/${org}`, { recruiting: on }),
   updateOrg: (org, patch) => call('PATCH', `/orgs/${org}`, patch),
+  deleteOrg: async (org) => { await call('DELETE', `/orgs/${org}`); },
   shortLinks: (org) => call('GET', `/orgs/${org}/links`),
   addShortLink: (org, link) => call('POST', `/orgs/${org}/links`, link),
   dropShortLink: (slug) => call('DELETE', `/links/${slug}`),

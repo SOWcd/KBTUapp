@@ -24,7 +24,7 @@
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
-  import Field from '../../ui/Field.svelte';
+  import Answers, { missing } from './Answers.svelte';
   import Chip from '../../ui/Chip.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
 
@@ -74,12 +74,7 @@
   // isn't a change
   const snap = $derived(JSON.stringify({ picks, answers: Object.fromEntries(Object.entries(payload())
     .map(([k, a]) => [k, Array.isArray(a) ? a : a.trim()] as const).filter(([, a]) => a.length)) }));
-  const missing = (q: Round['questions'][number]) => q.required && !(Array.isArray(answers[q.id]) ? (answers[q.id] as string[]).length : String(answers[q.id] ?? '').trim());
-  const ready = $derived((picks.length > 0 || (r?.departments.length ?? 0) <= 1) && !shown.some(missing));
-  function toggleMany(qid: Id, opt: string) {
-    const cur = (answers[qid] as string[] | undefined) ?? [];
-    answers[qid] = cur.includes(opt) ? cur.filter((x) => x !== opt) : [...cur, opt];
-  }
+  const ready = $derived((picks.length > 0 || (r?.departments.length ?? 0) <= 1) && !shown.some((q) => missing(q, answers)));
 
   async function send() {
     tried = true;
@@ -209,26 +204,7 @@
     </div>
     {/if}
 
-    {#each shown as q (q.id)}
-      {@const label = q.text + (q.required ? '' : ' · ' + t('cast.optional'))}
-      {@const error = tried && missing(q) ? t('ed.need') : undefined}
-      {#if q.kind === 'one' || q.kind === 'many'}
-        <div class="q">
-          <span class="lab">{label}</span>
-          <div class="opts">
-            {#each q.options ?? [] as o (o)}
-              {@const on = q.kind === 'one' ? answers[q.id] === o : ((answers[q.id] as string[] | undefined) ?? []).includes(o)}
-              <Chip selected={on} onclick={() => { haptic.select(); if (q.kind === 'one') answers[q.id] = o; else toggleMany(q.id, o); }}>{o}</Chip>
-            {/each}
-          </div>
-          {#if error}<p class="err">{error}</p>{/if}
-        </div>
-      {:else}
-        <Field {label} {error} multiline={q.kind === 'long'} rows={4} maxlength={q.kind === 'long' ? 2000 : q.kind === 'link' ? 300 : 200}
-          type={q.kind === 'link' ? 'url' : 'text'} inputmode={q.kind === 'link' ? 'url' : 'text'} placeholder={q.kind === 'link' ? 'https://' : ''}
-          bind:value={() => String(answers[q.id] ?? ''), (v) => (answers[q.id] = v)} />
-      {/if}
-    {/each}
+    <Answers questions={shown} bind:answers {tried} />
     </fieldset>
     {/if}
 
@@ -266,10 +242,5 @@
   .mark { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     box-shadow: inset 0 0 0 2px var(--c); font: 700 var(--fs-body)/1 var(--font-text); color: var(--on-accent); }
   .mark.on { background: var(--c); box-shadow: none; }
-  .q { display: flex; flex-direction: column; gap: 6px; }
-  .lab { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); } /* ui/Field's label */
-  .opts { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
-  /* engine: ui/Chip could wrap a long label (a question's options are sentences sometimes) */
-  .opts :global(.fc) { max-width: 100%; height: auto; min-height: var(--ctl-s); padding-block: var(--s-2); white-space: normal; line-height: 1.25; text-align: left; }
   .err { margin-top: 6px; padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--danger-text); }
 </style>

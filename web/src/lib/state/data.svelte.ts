@@ -286,6 +286,7 @@ export function toggleJoin(id: Id): void {
   asStudent(async () => {
     const o = data.orgs.find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
+    if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
     if (!on && !(await sheets.ask({ title: t('join.withdrawAsk'), text: t('join.withdrawText'), ok: t('join.withdraw'), cancel: t('join.keep') }))) return;
     o.myRequest = on ? 'pending' : null;
     haptic.tap();

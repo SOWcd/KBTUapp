@@ -657,9 +657,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def unsubscribe(oid: int, con: Con, v: Me):
         return logic.subscribe(con, v, oid, False)
 
+    @app.delete("/api/orgs/{oid}")
+    def delete_org(oid: int, con: Con, v: Me):
+        """The President's own empty club, made by mistake (logic.delete_org)."""
+        logic.delete_org(con, v, oid)
+        return {"ok": True}
+
     @app.post("/api/orgs/{oid}/join-requests")
-    def apply(oid: int, con: Con, v: Me):
-        return logic.apply(con, v, oid)
+    def apply(oid: int, con: Con, v: Me, body: dict | None = Body(None)):
+        return logic.apply(con, v, oid, body)
 
     @app.delete("/api/orgs/{oid}/join-requests/mine")
     def withdraw(oid: int, con: Con, v: Me):

@@ -1257,6 +1257,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE org_roles ADD COLUMN hand TEXT NOT NULL DEFAULT '';
     ALTER TABLE org_roles ADD COLUMN ai_wait INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE org_roles ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;"""),
+    # always-open recruitment (club presidents, Nov 6): the club's own questions for any-time join requests (JSON, as a
+    # round's: kind, text, options, required) and each request's answers (JSON [{q, a}], the question's text kept with it)
+    (131, "ALTER TABLE orgs ADD COLUMN join_questions TEXT; ALTER TABLE join_requests ADD COLUMN answers TEXT;"),
 ]
 
 

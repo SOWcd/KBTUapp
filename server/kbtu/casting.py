@@ -89,21 +89,58 @@ def _clean(con, oid: int, body: dict) -> dict:
         results = int(body["resultsBy"]) if body.get("resultsBy") is not None else None
         decline, nxt = str(body.get("declineText") or "").strip(), str(body.get("nextText") or "").strip()
         deps = [(int(d["tagId"]), str(d.get("about") or "").strip(), int(d["places"]) if d.get("places") else None) for d in body["departments"]]
-        qs = [(str(q["kind"]), " ".join(str(q["text"]).split()), [" ".join(str(o).split()) for o in q.get("options") or []],
-               bool(q.get("required", True)), int(q["tagId"]) if q.get("tagId") is not None else None) for q in body.get("questions") or []]
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
-    tags = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ?", oid)}
     ids = [d[0] for d in deps]
+    qs = clean_questions(body.get("questions"), ids)
+    tags = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ?", oid)}
     picks = max(1, min(picks, 3, len(deps) or 1))  # never more than there are departments
     ok = (0 < len(title) <= 80 and now() < closes <= now() + 120 * 86400 and (results is None or results >= closes)
           and len(decline) <= 500 and len(nxt) <= 300 and len(deps) <= 12 and len(set(ids)) == len(ids) and set(ids) <= tags
-          and all(len(a) <= 200 and (p is None or 0 < p <= 500) for _, a, p in deps) and len(qs) <= 6
-          and all(k in KINDS and 0 < len(t) <= 200 and (k not in ("one", "many") or 2 <= len(o) <= 8 and all(0 < len(x) <= 60 for x in o))
-                  and (g is None or g in ids) for k, t, o, _, g in qs))
+          and all(len(a) <= 200 and (p is None or 0 < p <= 500) for _, a, p in deps))
     if not ok:
         raise ApiError("bad_input")
     return {"title": title, "picks": picks, "closes": closes, "results": results, "decline": decline, "next": nxt, "deps": deps, "qs": qs}
+
+
+def clean_questions(raw, deps: list[int]) -> list[tuple]:
+    """At most six questions of the club's own, checked: (kind, text, options, required, department or None). Also the
+    always-open join questions (clubs.py: no departments)."""
+    try:
+        qs = [(str(q["kind"]), " ".join(str(q["text"]).split()), [" ".join(str(o).split()) for o in q.get("options") or []],
+               bool(q.get("required", True)), int(q["tagId"]) if q.get("tagId") is not None else None) for q in raw or []]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise ApiError("bad_input")
+    if not (len(qs) <= 6 and all(k in KINDS and 0 < len(t) <= 200 and (k not in ("one", "many") or 2 <= len(o) <= 8 and all(0 < len(x) <= 60 for x in o))
+                                 and (g is None or g in deps) for k, t, o, _, g in qs)):
+        raise ApiError("bad_input")
+    return qs
+
+
+def check_answers(qs: list[dict], answers: dict, picked: list[int]) -> dict:
+    """A student's answers to the questions ({id, kind, options, required, tag}), cleaned: a department's question only
+    if it was picked, no empty ones; bad_input names a missing required one (q<id>)."""
+    clean = {}
+    for q in qs:
+        if q["tag"] is not None and q["tag"] not in picked:
+            continue
+        a, opts = answers.get(str(q["id"])), q["options"] or []
+        if q["kind"] in LIMIT:
+            a = " ".join(str(a or "").split()) if q["kind"] != "long" else str(a or "").strip()
+            if len(a) > LIMIT[q["kind"]] or q["kind"] == "link" and a and not re.match(r"(https?://)?[\w-]+(\.[\w-]+)+\S*$", a):
+                raise ApiError("bad_input")
+        elif q["kind"] == "one":
+            if a not in (None, "", *opts):
+                raise ApiError("bad_input")
+        else:
+            a = [x for x in a or [] if isinstance(x, str)] if isinstance(a, list) else []
+            if not set(a) <= set(opts):
+                raise ApiError("bad_input")
+        if q["required"] and not a:
+            raise ApiError("bad_input", f"q{q['id']}")
+        if a:
+            clean[str(q["id"])] = a
+    return clean
 
 
 def open_round(con, v: Viewer, oid: int, body: dict) -> dict:
@@ -176,26 +213,8 @@ def apply(con, v: Viewer, rid: int, body: dict) -> dict:
         picked = list(deps)
     if not ((1 if deps else 0) <= len(picked) <= (r["picks"] if deps else 0) and len(set(picked)) == len(picked) and set(picked) <= deps) or source not in SOURCES:
         raise ApiError("bad_input")
-    clean = {}
-    for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid):
-        if q["tag_id"] is not None and q["tag_id"] not in picked:
-            continue
-        a, opts = answers.get(str(q["id"])), json.loads(q["options"]) if q["options"] else []
-        if q["kind"] in LIMIT:
-            a = " ".join(str(a or "").split()) if q["kind"] != "long" else str(a or "").strip()
-            if len(a) > LIMIT[q["kind"]] or q["kind"] == "link" and a and not re.match(r"(https?://)?[\w-]+(\.[\w-]+)+\S*$", a):
-                raise ApiError("bad_input")
-        elif q["kind"] == "one":
-            if a not in (None, "", *opts):
-                raise ApiError("bad_input")
-        else:
-            a = [x for x in a or [] if isinstance(x, str)]
-            if not set(a) <= set(opts):
-                raise ApiError("bad_input")
-        if q["required"] and not a:
-            raise ApiError("bad_input", f"q{q['id']}")
-        if a:
-            clean[str(q["id"])] = a
+    clean = check_answers([{"id": q["id"], "kind": q["kind"], "options": json.loads(q["options"]) if q["options"] else [], "required": q["required"],
+                            "tag": q["tag_id"]} for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)], answers, picked)
     con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (round_id, user_id) DO UPDATE SET departments = excluded.departments, answers = excluded.answers, updated_at = excluded.updated_at,
             stage = CASE WHEN stage = 'withdrawn' THEN 'new' ELSE stage END""",
@@ -448,3 +467,5 @@ def forget(con) -> None:
     if old:
         con.execute(f"UPDATE round_apps SET answers = '{{}}' WHERE round_id IN ({_qs(old)}) AND answers != '{{}}'", old)
         con.execute(f"DELETE FROM round_votes WHERE app_id IN (SELECT id FROM round_apps WHERE round_id IN ({_qs(old)}))", old)
+    # an any-time join request's answers: sixty days after the club's answer, the same
+    con.execute("UPDATE join_requests SET answers = NULL WHERE answers IS NOT NULL AND status != 'pending' AND decided_at < ?", (now() - 60 * DAY,))

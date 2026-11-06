@@ -48,7 +48,7 @@ export interface Api {
   adminPresLink(org: Id): Promise<{ token: string; expiresAt: Ts }>;  // the President's one-time link, shown as a QR
   org(id: Id): Promise<Org>;
   subscribe(id: Id, on: boolean): Promise<Org>;
-  apply(org: Id): Promise<Org>;                                  // join application (§4.5)
+  apply(org: Id, answers?: Record<string, string | string[]>): Promise<Org>;                                  // join application (§4.5)
   withdraw(org: Id): Promise<Org>;
 
   schedule(): Promise<ClassItem[]>;
@@ -325,6 +325,7 @@ export interface Api {
   setRecruiting(org: Id, on: boolean): Promise<Org>;
   /** the club's profile (Vice+): name, letters, emoji, cover, about, links */
   updateOrg(org: Id, patch: OrgPatch): Promise<Org>;
+  deleteOrg(org: Id): Promise<void>;                            // the President's own empty club (made by mistake)
   shortLinks(org: Id): Promise<ShortLink[]>;                                   // Vice+
   addShortLink(org: Id, link: { slug: string; kind: ShortLink['kind']; eventId?: Id }): Promise<ShortLink[]>; // conflict 'taken' / 'limit'
   dropShortLink(slug: string): Promise<void>;                                  // the club's Vice+, or the admin revoking it

@@ -22,7 +22,7 @@
   import Circle from '@lucide/svelte/icons/circle';
   import Clock from '@lucide/svelte/icons/clock';
   import { api, type CohostInvite, type EventCard, type Id, type OfficialPath, type PathStep, type Round } from '../../lib/api';
-  import { session } from '../../lib/state/session.svelte';
+  import { loadMe, session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
   import MapPin from '@lucide/svelte/icons/map-pin';
@@ -50,6 +50,7 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Notice from '../../ui/Notice.svelte';
   import Crown from '@lucide/svelte/icons/crown';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
   import BookUser from '@lucide/svelte/icons/book-user';
   import FileDown from '@lucide/svelte/icons/file-down';
   import { ApiErr } from '../../lib/api';
@@ -212,9 +213,24 @@
   // "Recruiting" is the round: its tile is always there for the casting team (casting audit: on a day without a round Studio
   // had no way in, so a President made her casting an event); closed, a tap opens the setup. Vice+ without the right:
   // the any-time join requests' sheet while those are on
-  const recruitTile = $derived(casting || (vice && recruiting));
-  const openRecruit = () => (casting && !round && !waiting ? sheets.roundSetup(m!.org.id, null, refreshRound)
-    : vice ? sheets.joinInbox(m!.org.id) : sheets.roundBoard(m!.org.id));
+  // the always-open switch lives in Vice+'s sheet: it opens from the start, not only once a round or a request exists
+  // (club presidents, Nov 6)
+  const recruitTile = $derived(casting || vice);
+  const openRecruit = () => (vice ? sheets.joinInbox(m!.org.id) : round ? sheets.roundBoard(m!.org.id) : sheets.roundSetup(m!.org.id, null, refreshRound));
+  // a club made by mistake (club presidents, Nov 6): its President deletes it while nobody else is in it and no event
+  // went out (the server checks it too, logic.delete_org); otherwise the row says why
+  const ownClub = $derived(m?.role === 'president' && m.org.kind === 'club' && !m.org.official);
+  const emptyClub = $derived(members <= 1 && events.every((e) => e.status === 'draft'));
+  async function deleteClub() {
+    if (!m || !emptyClub) return;
+    const org = m.org;
+    if (!(await sheets.ask({ title: t('studio.delAsk', { club: nameOf(org) }), text: t('studio.delText'), ok: t('studio.del'), cancel: t('common.cancel'), danger: true }))) return;
+    try {
+      await api.deleteOrg(org.id);
+      haptic.warn(); say(t('studio.deleted'), 'waving_hand_3d_default');
+      await loadMe(); studioChanged();
+    } catch { haptic.error(); say(t('studio.delNo'), 'warning_3d'); }
+  }
 </script>
 
 <div class="page stagger" class:scroll={!onTitle} class:inpane={!!onTitle}>
@@ -350,7 +366,7 @@
         {#if staff}<Row icon={Plus} title={t('studio.newShort')} subtitle={t('studio.newSub')} accessory="chevron" onclick={() => sheets.editor(m.org.id)} />{/if}
         <!-- the club's news, now circles on Afisha: written from here -->
         {#if may(m, 'posts')}<Row icon={PenLine} title={t('studio.postShort')} subtitle={t('studio.postSub')} accessory="chevron" onclick={() => sheets.composer(m.org.id)} />{/if}
-        {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
+        {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} subtitle={fresh ? tn('studio.newApps', fresh) : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
         {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} subtitle={t('studio.memoSub')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
       </Group>
     {/if}
@@ -362,6 +378,10 @@
         {:else}<EmptyState inline text={t('studio.empty')} />{/each}
       </div>
     </div>
+
+    {#if ownClub}
+      <Group><Row tone="destructive" icon={Trash2} title={t('studio.del')} subtitle={emptyClub ? undefined : t('studio.delWhyNot')} disabled={!emptyClub} onclick={deleteClub} /></Group>
+    {/if}
   {/if}
   <div class="tail"></div>
 </div>

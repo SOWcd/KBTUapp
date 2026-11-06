@@ -68,9 +68,15 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
         "round": {"id": (rid := live[o["id"]]["id"]), "closesAt": live[o["id"]]["closes_at"], "quick": rid in quick} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
-        "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]),
+        "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "joinQuestions": _join_qs(o),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
     } for o in found}
+
+
+def _join_qs(o: sqlite3.Row) -> list[dict]:
+    """The always-open applications' questions (types.ts RoundQuestion; the id is the position)."""
+    return [{"id": i, "kind": k, "text": t, "options": opts or None, "required": req, "tagId": None}
+            for i, (k, t, opts, req, _) in enumerate(json.loads(o["join_questions"] or "[]"))]
 
 
 def orgs(con, v: Viewer) -> list[dict]:
@@ -139,8 +145,10 @@ def _request_state(r: sqlite3.Row | None) -> str | None:
     return r["status"] if r and (r["status"] == "pending" or r["status"] == "rejected" and r["decided_at"] > core.now() - REAPPLY) else None
 
 
-def apply(con, v: Viewer, oid: int) -> dict:
-    """Ask to join; the club's Vice+ hear from the bot. Asking again while it's pending changes nothing."""
+def apply(con, v: Viewer, oid: int, body: dict | None = None) -> dict:
+    """Ask to join, answering the club's own questions if it has any; the club's Vice+ hear from the bot. Asking again
+    while it's pending changes nothing."""
+    from ..casting import check_answers  # imports logic: here, not at the top
     need_student(v)
     with tx(con):
         o = one(con, "SELECT * FROM orgs WHERE id = ? AND status = 'active'", oid)
@@ -156,7 +164,17 @@ def apply(con, v: Viewer, oid: int) -> dict:
         if mine is None:
             if not o["recruiting"]:
                 raise ApiError("closed")
-            con.execute("INSERT INTO join_requests (org_id, user_id, created_at) VALUES (?, ?, ?)", (oid, v.id, core.now()))
+            qs = _join_qs(o)
+            try:
+                given = {str(k): x for k, x in dict((body or {}).get("answers") or {}).items()}
+            except (TypeError, ValueError):
+                raise ApiError("bad_input")
+            # ponytail: answers match the questions by position; the club editing them while one is typed may mismatch
+            # one answer (the text kept with it says which question it answered)
+            got = check_answers([{**q, "tag": None} for q in qs], given, [])
+            answers = [{"q": q["text"], "a": got[str(q["id"])]} for q in qs if str(q["id"]) in got]
+            con.execute("INSERT INTO join_requests (org_id, user_id, created_at, answers) VALUES (?, ?, ?, ?)",
+                        (oid, v.id, core.now(), json.dumps(answers, ensure_ascii=False) if answers else None))
             for m in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('vice','president')", oid):
                 notify(con, m["user_id"], "join_request", f"jr:{oid}:{v.id}:{core.now() // 86400}")  # withdraw and ask again: one ping a day
     return org(con, v, oid)
@@ -171,11 +189,11 @@ def withdraw(con, v: Viewer, oid: int) -> dict:
 def join_requests(con, v: Viewer, oid: int) -> list[dict]:
     """Pending applications, oldest first, with what the club needs to write to the person first (§3: Vice+ see contacts)."""
     _may(con, v, oid, "team")
-    found = rows(con, f"""SELECT j.id AS rid, j.created_at AS at, {PERSON_COLS}, s.course, s.school, u.tg_username
+    found = rows(con, f"""SELECT j.id AS rid, j.created_at AS at, j.answers, {PERSON_COLS}, s.course, s.school, u.tg_username
         FROM join_requests j JOIN users u ON u.id = j.user_id JOIN students s ON s.user_id = u.id
         WHERE j.org_id = ? AND j.status = 'pending' ORDER BY j.id""", oid)
     return [{"id": p["rid"], "person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "course": p["course"],
-             "school": p["school"], "username": p["tg_username"], "createdAt": p["at"]} for p in found]
+             "school": p["school"], "username": p["tg_username"], "createdAt": p["at"], "answers": json.loads(p["answers"] or "[]")} for p in found]
 
 
 def decide_join(con, v: Viewer, rid: int, accept: bool) -> None:
@@ -203,6 +221,9 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     text = lambda k: str(body.get(k) or "").strip()  # noqa: E731
     if "recruiting" in body:
         sets["recruiting"] = body["recruiting"] if isinstance(body["recruiting"], bool) else bad
+    if "joinQuestions" in body:  # the always-open applications' own questions, as a round's (casting.py)
+        from ..casting import clean_questions
+        sets["join_questions"] = json.dumps(clean_questions(body["joinQuestions"], []), ensure_ascii=False) if isinstance(body["joinQuestions"], list) else bad
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
     if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too; "Club" stays
@@ -268,6 +289,29 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
         log_action(con, v.id, "org_edit", f"org:{oid}", json.dumps(sorted(sets.keys() - {"recruiting"})))
     core._SHARED.clear()  # event cards carry the club's name and logo: seen at once here (other workers: SHARED_TTL)
     return org(con, v, oid)
+
+
+def delete_org(con, v: Viewer, oid: int) -> None:
+    """A President's own club made by mistake goes (club presidents, Nov 6: one was stuck as the President of one): only
+    a student club nobody else is in, that never published an event and isn't official; otherwise conflict says why
+    (members / events / official). As the admin's hide (oversight.admin_hide_org): hidden, never removed, so the admin
+    can bring it back; audit-logged. The President leaves it (role history by its trigger)."""
+    with tx(con):
+        o = one(con, "SELECT * FROM orgs WHERE id = ? AND status = 'active'", oid)
+        if not o:
+            raise ApiError("not_found")
+        if role_in(con, v, oid) != "president":
+            raise ApiError("forbidden")
+        if o["official"] or o["kind"] != "club":
+            raise ApiError("conflict", "official")
+        if one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id != ?", oid, v.id):
+            raise ApiError("conflict", "members")
+        if one(con, "SELECT 1 FROM events WHERE org_id = ? AND status != 'draft'", oid):
+            raise ApiError("conflict", "events")
+        con.execute("UPDATE orgs SET status = 'hidden' WHERE id = ?", (oid,))
+        con.execute("DELETE FROM org_members WHERE org_id = ?", (oid,))
+        log_action(con, v.id, "org_delete", f"org:{oid}", json.dumps({"name": o["name"]}, ensure_ascii=False))
+    core._SHARED.clear()
 
 
 # ---------------------------------------------------------------- starting a club (§4.6)

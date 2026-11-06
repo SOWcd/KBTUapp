@@ -169,7 +169,8 @@ export interface Org extends OrgRef {
   subscribers: number;
   members: number;
   upcoming: number;
-  recruiting: boolean;          // takes join applications (the club closes it in Studio)
+  recruiting: boolean;          // takes join applications any time (Studio's "always open" switch)
+  joinQuestions?: (RoundQuestion & { id: Id })[]; // the club's own questions for them (as a round's; id: the position)
   membersHidden: boolean;       // the club hides its member list from outsiders
   leaders?: Member[];           // President and Vice, from api.org only
   chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
@@ -186,7 +187,7 @@ export interface Org extends OrgRef {
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
-export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
+export interface OrgPatch { name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; joinQuestions?: RoundQuestion[]; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
 
 /** A person as other students see them (§4): the nick if they have one, else the short name, and with a nick the short
  *  name too (`realName`: a nick is a display name, not a mask); their photo (their own or Telegram's); the founder
@@ -519,7 +520,8 @@ export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDept?: Id | n
 /** One person in Team, only what is sent: a level or a club role (Vice+), tags (Head+), probation (on: Head+, off: Vice+). */
 export interface MemberPatch { role?: OrgRole; roleId?: Id | null; tags?: Id[]; dept?: Id | null; probation?: boolean }
 
-export interface JoinRequest { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null; createdAt: Ts }
+export interface JoinRequest { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; username: string | null; createdAt: Ts;
+  answers?: { q: string; a: string | string[] }[] } // to the club's questions, each with the question's text as it was
 
 /** Door scanner answer (§4.4): a ticket or a badge QR. `walkIn` = registered at the door by their badge,
  *  `late` = minutes after the start. */
