@@ -595,6 +595,7 @@
   <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
        the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
   <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+  <div class="tgfade" aria-hidden="true"></div>
   <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
   <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
 
@@ -625,6 +626,10 @@
     -webkit-mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top));
     mask-image: linear-gradient(#000 calc(var(--head-bottom) - 4px), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
+  /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
+     --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
+  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: calc(var(--top) + min(var(--top), 12px)); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
+    background: linear-gradient(var(--bg), transparent); }
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }
