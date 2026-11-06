@@ -396,6 +396,7 @@
   /* SOWER, the creator's alone (ui/SowerArt, lib/awards.ts SOWER): his photo's graphite and white paper */
   .sower { --role: rgb(192, 193, 190); }
   .sower .meta { color: rgba(232, 232, 231, 0.7); }
+  .sower .id { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.6), 0 0 14px rgba(14, 14, 14, 0.5); } /* over the print's halftone */
   .sower .badge { background: rgb(30, 30, 30); }
   .sower .strap { background: linear-gradient(90deg, rgb(30, 30, 30), rgb(64, 64, 62) 50%, rgb(30, 30, 30)); box-shadow: inset 1px 0 0 rgba(232, 232, 231, 0.35), inset -1px 0 0 rgba(232, 232, 231, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3); }
   .sower .strap span { color: rgb(232, 232, 231); letter-spacing: 0.3em; }

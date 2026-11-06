@@ -370,7 +370,3 @@ export function lookVars(look: Look): string {
     .map(([k, v]) => `--${k}: ${v}`).join('; ');
 }
 export const banded = (look: Look) => look !== 'sower';
-/** The creator's own lanyard (owner, Nov 6: the holographic foil went; his photo's graphite, halftone and white paper),
- *  ui/SowerArt: two concepts, one line to switch. 'zine': a halftone print torn and layered like a collage, his hand cut
- *  out of white paper; 'stage': a concert in halftone, light through the haze, hands raised. */
-export const SOWER: 'zine' | 'stage' = 'zine';

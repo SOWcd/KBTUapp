@@ -1,16 +1,17 @@
 <script lang="ts">
   // The creator's own lanyard (owner, Nov 6: the holographic one went; in his photo's colours, a halftone hand cut out of
-  // white paper on graphite). lib/awards.ts SOWER picks the concept; its layers far to near (assets/lanyards/sower, drawn
-  // by .claude/reports/sower-lanyard/gen-sower.py; as pictures: tools/scene-rasters.mjs), the far and near ones moving
-  // with the tilt (base.css .z). `wide`: the profile's card and its back; else the full-screen badge (MyQr), the same
-  // scene across its top, fading down into the QR's side.
-  import { SOWER } from '../lib/awards';
-  const PIC = import.meta.glob('../assets/lanyards/sower/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+  // white paper on graphite). Its layers far to near (assets/lanyards/sower, drawn by
+  // .claude/reports/sower-lanyard/gen-sower.py; as pictures: tools/scene-rasters.mjs): a print's halftone and the
+  // spotlights' grain far, moving with the tilt (base.css .z); torn paper and the beams' light still; the hand in their
+  // light near, moving the most. `wide`: the profile's card and its back; else the full-screen badge (MyQr).
+  import far from '../assets/lanyards/sower/far-card.webp';
+  import mid from '../assets/lanyards/sower/mid-card.webp';
+  import near from '../assets/lanyards/sower/near-card.webp';
   let { wide = false }: { wide?: boolean } = $props();
 </script>
 
-<div class="sa {SOWER}" class:wide aria-hidden="true">
-  {#each ['far', 'mid', 'near'] as n (n)}<img class="l {n}" class:z={n !== 'mid'} src={PIC[`../assets/lanyards/sower/${SOWER}-${n}-card.webp`]} alt="" />{/each}
+<div class="sa" class:wide aria-hidden="true">
+  <img class="far z" src={far} alt="" /><img src={mid} alt="" /><img class="near z" src={near} alt="" />
   <i class="gloss"></i>
 </div>
 
