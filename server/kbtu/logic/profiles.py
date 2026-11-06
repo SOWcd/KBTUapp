@@ -1,6 +1,8 @@
 """People's pages, awards and friends: streaks, achievements, grants, the first 500, friend requests and links."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
 import secrets
@@ -250,7 +252,7 @@ def grant_link(con, v: Viewer, code: object, uses: object = 1, days: object = 7)
     return token
 
 
-def use_grant_link(con, v: Viewer, token: str) -> dict:
+def use_grant_link(con, v: Viewer, token: str, qr: bool = False) -> dict:
     """A student opened an award link: theirs, celebrated like any new level. Each person once per link; opened again
     by one who got it here: fine, nothing more (a chat's link gets tapped twice). Held already some other way:
     'conflict', and the use stays for whom it was meant. Expired, revoked or full: 'closed'."""
@@ -261,13 +263,16 @@ def use_grant_link(con, v: Viewer, token: str) -> dict:
         # closed once used (used_at: used_by goes NULL with the user's account)
         r = one(con, """SELECT g.*, u.is_founder, (SELECT COUNT(*) FROM grant_link_uses x WHERE x.token = g.token) AS used
             FROM grant_links g JOIN users u ON u.id = g.created_by AND u.role = 'admin' AND u.banned_at IS NULL
-            WHERE g.token = ? AND (g.multi = 1 OR g.used_at IS NULL) AND g.expires_at > ?""", token, core.now())
+            WHERE g.token = ? AND (g.multi = 1 OR g.used_at IS NULL) AND g.expires_at > ? AND g.qr = ? AND (g.qr = 0 OR g.lease_until > ?)""",
+                token, core.now(), int(qr), core.now())
         if not r or (r["code"] in CREATOR_ONLY and not r["is_founder"]):
-            raise ApiError("closed")
+            raise ApiError("closed")  # a shown QR's bare token (from a photo of it) is no link: closed too
         if one(con, "SELECT 1 FROM grant_link_uses WHERE token = ? AND user_id = ?", token, v.id):
+            if qr:  # the QR's scanner wants to hear it: "you have it already"
+                raise ApiError("conflict")
             return {"code": r["code"]}  # mine already: nothing more, even if it was taken back since
         cap = r["max_uses"] if r["multi"] else 1
-        if cap is None and r["code"] != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
+        if cap is None and not qr and r["code"] != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ?", v.id, r["code"]):
             return {"code": r["code"]}  # a link with no cap held some other way (an older one, tapped again): quietly nothing
         if cap is not None and r["used"] >= cap:
             raise ApiError("closed")
@@ -277,6 +282,68 @@ def use_grant_link(con, v: Viewer, token: str) -> dict:
             con.execute("UPDATE grant_links SET used_by = ?, used_at = ? WHERE token = ?", (v.id, core.now(), token))
         log_action(con, v.id, "grant_link_used", f"link:{token[:8]}", json.dumps({"code": r["code"], "by": r["created_by"]}))
     return {"code": r["code"]}
+
+
+# Admin → Awards → Show QR (owner, Nov 6): the giver's phone shows a big code the hall scans with its cameras, faster
+# than scanning each card. Underneath: a grant link with no cap (once per person, logged and undone as one), qr = 1,
+# for QR_LIFE at most, closed when the giver closes the screen (revoke_link). The code is t.me/…?startapp=bq_<token>_
+# <slot>_<sig>, a new one every QR_SLOT s, taken QR_OK s after its slot ended: a photo of it goes stale within a minute.
+QR_KEY = b""      # app.py: from the server's token key, the same on every worker
+QR_SLOT = 20
+QR_OK = 60        # a cold Telegram start on crowded wifi (checkin.py: 60 s was tight there)
+QR_LIFE = 30 * 60
+QR_LEASE = 15     # each poll of the screen renews this: the screen gone (killed, offline), its code stops this soon after
+QR_TRIES = 10     # bad or stale codes one person may send in 10 min, then 'rate_limited'
+_tries: dict[int, list[float]] = {}  # ponytail: per worker (WEB_CONCURRENCY multiplies it); a table if it is ever abused
+QR_PARAM = re.compile(r"bq_([0-9a-f]{24})_(\d{1,12})_([0-9a-f]{16})")
+
+
+def _qr_sig(token: str, slot: int) -> str:
+    return hmac.new(QR_KEY, f"bq.{token}.{slot}".encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def open_qr(con, v: Viewer, code: object) -> dict:
+    """The giver opens the screen for `code` (not Bug hunter: it adds up; the creator's own two: him alone)."""
+    code = _giver(con, v, code)
+    if code == "bugs":
+        raise ApiError("bad_input")
+    token = secrets.token_hex(12)
+    con.execute("INSERT INTO grant_links (token, code, created_by, created_at, expires_at, multi, qr) VALUES (?, ?, ?, ?, ?, 1, 1)",
+                (token, code, v.id, core.now(), core.now() + QR_LIFE))  # its lease: qr_code below
+    log_action(con, v.id, "grant_link", f"link:{token[:8]}", json.dumps({"code": code, "qr": True}))
+    return qr_code(con, v, token)
+
+
+def qr_code(con, v: Viewer, token: str) -> dict:
+    """The screen's current code (its maker's, while open), when the next comes, and how many got it here."""
+    _admin(v)
+    r = one(con, "SELECT * FROM grant_links WHERE token = ? AND qr = 1 AND created_by = ? AND expires_at > ?", str(token), v.id, core.now())
+    if not r or (r["code"] in CREATOR_ONLY and not _owner(con, v)):
+        raise ApiError("closed")
+    con.execute("UPDATE grant_links SET lease_until = ? WHERE token = ?", (core.now() + QR_LEASE, r["token"]))
+    t = time.time()
+    slot = int(t) // QR_SLOT
+    return {"token": r["token"], "code": r["code"], "param": f"bq_{r['token']}_{slot}_{_qr_sig(r['token'], slot)}",
+            "next": QR_SLOT - int(t) % QR_SLOT, "until": r["expires_at"],
+            "got": one(con, "SELECT COUNT(*) FROM grant_link_uses WHERE token = ?", r["token"])[0]}
+
+
+def claim_qr(con, v: Viewer, p: object) -> dict:
+    """A student scanned the shown code: the award, once (again: 'conflict'), as a link's use. Forged or stale:
+    'bad_input' (qr_old: scan the screen again); closed: 'closed'; too many bad ones: 'rate_limited'."""
+    need_student(v)
+    t = time.time()
+    tries = _tries[v.id] = [x for x in _tries.get(v.id, []) if x > t - 600]
+    if len(tries) >= QR_TRIES:
+        raise ApiError("rate_limited")
+    m = QR_PARAM.fullmatch(str(p or ""))
+    if not m or not hmac.compare_digest(_qr_sig(m[1], int(m[2])), m[3]):
+        tries.append(t)
+        raise ApiError("bad_input", "qr")
+    if not 0 <= t - int(m[2]) * QR_SLOT <= QR_OK + QR_SLOT:
+        tries.append(t)
+        raise ApiError("bad_input", "qr_old")
+    return use_grant_link(con, v, m[1], qr=True)
 
 
 def claim_link(con, code: str, until: int) -> str:

@@ -249,6 +249,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.core.MS_AGE_CUTOFF = cfg.ms_age_cutoff or None  # free 1st-year seats by account age: off unless set
     logic.assistant.KEY = hmac.new(cfg.token_key, b"kbtu-assist", hashlib.sha256).digest()  # an answer's topic, signed for its vote
+    logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
 
     # ------------------------------------------------------------ errors
 
@@ -1548,6 +1549,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/admin/grant-links/{token}", status_code=204)
     def revoke_link(token: str, con: Con, v: Me):
         logic.revoke_link(con, v, token)
+
+    # Admin → Awards → Show QR: open one (its first code), then the current code every slot; closing it: revoke above
+    @app.post("/api/admin/badge-qr")
+    def open_qr(con: Con, v: Me, body: dict = Body(...)):
+        return logic.open_qr(con, v, body.get("code"))
+
+    @app.get("/api/admin/badge-qr/{token}")
+    def qr_code(token: str, con: Con, v: Me):
+        return logic.qr_code(con, v, token)
+
+    @app.post("/api/badge-qr")
+    def claim_qr(con: Con, v: Me, body: dict = Body(...)):
+        return logic.claim_qr(con, v, body.get("p"))
 
     # Admin → Awards: find a student with their awards; everyone counted in a check-in session (the owner)
     @app.get("/api/admin/badges/people")

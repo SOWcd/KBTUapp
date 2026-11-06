@@ -56,6 +56,7 @@
   sheets.event = (id, from) => lazy(eventSheet, { id, from });
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
+  sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
   sheets.cropPhoto = (file) => new Promise((done) => lazy(() => import('./screens/profile/PhotoCrop.svelte'), { file, done }));
   sheets.person = (id, invite) => lazy(personSheet, { id, invite });
   sheets.club = (id) => lazy(clubSheet, { id });
@@ -303,6 +304,14 @@
         try { await api.useGrantLink(gl[1]); await loadMe(); void loadMyCard(); haptic.ok(); } // loadMe brings the unlock moment
         catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'conflict' ? t('give.already') : t('give.linkDead'), 'pleading_face_3d'); } // mine already: the link stays for whom it was meant
       }, p); // a guest's Microsoft sign-in round trip keeps the link (takeAgain)
+      return;
+    }
+    if (/^bq_[0-9a-f]{24}_\d{1,12}_[0-9a-f]{16}$/.test(p)) { // Admin → Awards → Show QR: the giver's rotating code (logic/profiles.py claim_qr)
+      ui.tab = 'profile';
+      asStudent(async () => {
+        try { await api.claimBadgeQr(p); await loadMe(); void loadMyCard(); haptic.ok(); } // loadMe brings the unlock moment
+        catch (e) { haptic.error(); say(!(e instanceof ApiErr) ? t('common.error') : e.code === 'conflict' ? t('give.already') : e.message === 'qr_old' ? t('ci.old') : t('give.linkDead'), 'pleading_face_3d'); }
+      }, p);
       return;
     }
     const fr = p.match(/^fr_([0-9a-f]{24})$/);

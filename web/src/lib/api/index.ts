@@ -247,6 +247,10 @@ export interface Api {
   badgePeople(q: string): Promise<import('./types').BadgeHolder[]>;
   badgeSessions(): Promise<import('./types').BadgeSession[]>;
   useGrantLink(token: string): Promise<{ code: string }>;
+  /** Admin → Awards → Show QR: open one for an award, its current code (closing it: revokeLink); a student's scan of it */
+  openBadgeQr(code: GrantItem['code']): Promise<import('./types').BadgeQr>;
+  badgeQr(token: string): Promise<import('./types').BadgeQr>;
+  claimBadgeQr(p: string): Promise<{ code: string }>;
   myGrants(): Promise<GrantItem[]>;
   staff(): Promise<Staff>;                                // admin: the app's team and the banned
   staffFind(username: string): Promise<StaffRow>;          // admin: anyone who opened the app, by @username

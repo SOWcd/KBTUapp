@@ -174,3 +174,65 @@ def test_link_review_fixes(env):
         with pytest.raises(logic.ApiError):
             logic.grant_link(con, A, "init26", 1, d)
     con.close()
+
+
+def test_badge_qr(env):
+    """Admin → Awards → Show QR (Nov 6): a rotating signed code; once per person; stale, forged or a bare token
+    refused; closed with the screen; the creator's own two his alone on every path; bad codes rate-limited."""
+    import time
+    from kbtu.logic import profiles
+    c, cfg = env
+    con, boss, adm = _staff(c, cfg)
+    ann, bob, cat = login(c, 62, "ann"), login(c, 63, "bob"), login(c, 64, "cat")
+    show = lambda tg, code: c.post("/api/admin/badge-qr", headers=tma(tg), json={"code": code})  # noqa: E731
+    claim = lambda tg, p: c.post("/api/badge-qr", headers=tma(tg), json={"p": p})  # noqa: E731
+    # the creator's own: an admin can't open its QR, give it, scan it or link it; the creator can
+    for code in profiles.CREATOR_ONLY:
+        assert show(61, code).status_code == 403
+        assert c.post("/api/admin/grants", headers=tma(61), json={"userId": ann["id"], "code": code}).status_code == 403
+        assert c.post("/api/admin/grants/scan", headers=tma(61), json={"qr": "x", "code": code}).status_code == 403
+        assert c.post("/api/share", headers=tma(61), json={"kind": "gl", "code": code, "uses": 1, "days": 1}).status_code == 403
+    assert show(62, "init26").status_code == 403 and show(61, "bugs").status_code == 400
+    q = show(60, "creator_found").json()
+    assert q["param"].startswith(f"bq_{q['token']}_") and 0 < q["next"] <= profiles.QR_SLOT and q["got"] == 0
+    assert c.get(f"/api/admin/badge-qr/{q['token']}", headers=tma(61)).json()["error"] == "closed"  # not another admin's screen
+    # a scan: the award, once; again refused, nothing more
+    assert claim(62, q["param"]).json() == {"code": "creator_found"}
+    assert claim(62, q["param"]).status_code == 409
+    assert con.execute("SELECT COUNT(*) FROM achievement_grants WHERE user_id = ? AND code = 'creator_found'", (ann["id"],)).fetchone()[0] == 1
+    assert c.get(f"/api/admin/badge-qr/{q['token']}", headers=tma(60)).json()["got"] == 1
+    # the bare token (from a photo of the code) is no link
+    assert c.post(f"/api/grant-links/{q['token']}", headers=tma(63)).json()["error"] == "closed"
+    # forged, stale and future codes
+    slot = int(time.time()) // profiles.QR_SLOT
+    assert claim(63, f"bq_{q['token']}_{slot}_{'0' * 16}").json()["message"] == "qr"
+    old = slot - (profiles.QR_OK // profiles.QR_SLOT + 2)
+    assert claim(63, f"bq_{q['token']}_{old}_{profiles._qr_sig(q['token'], old)}").json()["message"] == "qr_old"
+    assert claim(63, f"bq_{q['token']}_{slot + 1}_{profiles._qr_sig(q['token'], slot + 1)}").json()["message"] == "qr_old"
+    # an admin's QR for an award of theirs works; closed with the screen, or expired: closed
+    a = show(61, "init26").json()
+    assert claim(63, a["param"]).json() == {"code": "init26"}
+    assert c.delete(f"/api/admin/grant-links/{a['token']}", headers=tma(61)).status_code == 204
+    assert claim(62, a["param"]).json()["error"] == "closed"
+    assert c.get(f"/api/admin/badge-qr/{a['token']}", headers=tma(61)).json()["error"] == "closed"
+    b = show(61, "init26f").json()
+    con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ?", (int(time.time()) - 1, b["token"]))
+    assert claim(62, b["param"]).json()["error"] == "closed"
+    # the screen stopped polling (killed, offline): once its lease lapses its code is closed; a poll renews it
+    d = show(61, "init26p").json()
+    con.execute("UPDATE grant_links SET lease_until = ? WHERE token = ?", (int(time.time()) - 1, d["token"]))
+    assert claim(62, d["param"]).json()["error"] == "closed"
+    d = c.get(f"/api/admin/badge-qr/{d['token']}", headers=tma(61)).json()
+    assert claim(62, d["param"]).json() == {"code": "init26p"}
+    # an admin's screen somehow holding the creator's award never gives it
+    con.execute("UPDATE grant_links SET code = 'creator_laugh', expires_at = ? WHERE token = ?", (int(time.time()) + 600, b["token"]))
+    assert claim(62, b["param"]).json()["error"] == "closed"
+    # too many bad codes: rate-limited, even a good one then
+    try:
+        for _ in range(profiles.QR_TRIES):
+            claim(64, "bq_" + "0" * 24 + f"_{slot}_" + "0" * 16)
+        assert claim(64, show(61, "init26p").json()["param"]).status_code == 429
+        assert not con.execute("SELECT 1 FROM achievement_grants WHERE user_id = ?", (cat["id"],)).fetchone()
+    finally:
+        profiles._tries.clear()
+    con.close()

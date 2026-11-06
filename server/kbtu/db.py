@@ -1270,6 +1270,10 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE rounds ADD COLUMN group_link TEXT;
     UPDATE round_apps SET sent_at = (SELECT r.sent_at FROM rounds r WHERE r.id = round_apps.round_id)
         WHERE stage != 'withdrawn' AND round_id IN (SELECT id FROM rounds WHERE status = 'done');"""),
+    # Admin → Awards → Show QR (owner, Nov 6): a grant link shown as a rotating code on the giver's phone (qr = 1),
+    # used only through a fresh signed code (profiles.claim_qr), never by its bare token, and only while the screen
+    # keeps renewing its lease (lease_until: a killed or offline screen stops the code within seconds)
+    (134, "ALTER TABLE grant_links ADD COLUMN qr INTEGER NOT NULL DEFAULT 0; ALTER TABLE grant_links ADD COLUMN lease_until INTEGER;"),
 ]
 
 

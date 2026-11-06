@@ -1,11 +1,13 @@
 <script lang="ts">
   // Admin → Awards → one award (pushed from the right; owner + review Nov 3): its medal large, the variant picked here
-  // (Initiation: Performer / Volunteer / Guest, which sets what everything below gives), then Scan (the camera stays
-  // open: each card QR is one grant, the person's face with a tick, this run's people below, each undoable) and Link (up
+  // (Initiation: Performer / Volunteer / Guest, which sets what everything below gives), then Show QR (BadgeQr: one
+  // rotating code the hall scans), Scan (the camera stays open: each card QR is one grant, the person's face with a
+  // tick, this run's people below, each undoable) and Link (up
   // to N people for some days; sent as the bot's card). Under them its links with who used each, the owner's "everyone
   // checked in", and who has it (a tap: their profile, or take it back).
   import Check from '@lucide/svelte/icons/check';
   import ScanLine from '@lucide/svelte/icons/scan-line';
+  import QrCode from '@lucide/svelte/icons/qr-code';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { api, ApiErr, type BadgeSession, type GrantItem, type GrantLink } from '../../lib/api';
   import { codesOf, manualMedal, manualName, manualTitle, variantHow, type Manual } from '../../lib/awards';
@@ -190,8 +192,10 @@
           <Segmented bind:value={code} label={t(`ach.${a.code}.name` as Key)} onchange={() => haptic.select()}
             items={a.variants.map((v) => ({ value: v.code, label: manualName(v.code, true) }))} />
         {/if}
+        <!-- Show QR first: the hall scans one code, faster than scanning each card (owner, Nov 6) -->
+        {#if a.scan}<Button kind="filled" full onclick={() => { haptic.tap(); sheets.badgeQr(a, code); }}>{#snippet icon()}<QrCode size={18} />{/snippet}{t('aw.show')}</Button>{/if}
         <div class="btns">
-          {#if a.scan}<Button kind="filled" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
+          {#if a.scan}<Button kind="tinted" full onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{t('aw.scan')}</Button>{/if}
           <Button kind={a.scan ? 'tinted' : 'filled'} full on={mode === 'link'} onclick={() => { haptic.select(); mode = mode === 'link' ? null : 'link'; }}>{#snippet icon()}<TelegramMark size={17} />{/snippet}{t('aw.link')}</Button>
         </div>
         {#if mode === 'link'}

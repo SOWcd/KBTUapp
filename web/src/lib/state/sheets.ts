@@ -1,7 +1,7 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, Id, LinkCard, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
-import type { ShelfItem } from '../awards';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
+import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
 
@@ -25,6 +25,8 @@ export const sheets = {
   person: (_id: Id, _invite?: { code: string; card: LinkCard }) => {},
   /** my QR full screen (the corner of my badge) */
   myQr: (_link: string, _p: PersonCard) => {},
+  /** Admin → Awards → Show QR: the award's rotating code full screen, for the hall's cameras */
+  badgeQr: (_award: Manual, _code: GrantItem['code']) => {},
   /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
   cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
   club: (_id: Id) => {},

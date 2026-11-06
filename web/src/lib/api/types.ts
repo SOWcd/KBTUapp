@@ -590,6 +590,8 @@ export interface BadgeVariant { code: string; emoji: string; have: boolean; rari
 /** Admin → Badges: a student found, with the badge variants they hold */
 export interface BadgeHolder { person: PersonRef; username: string | null; has: GrantItem['code'][] }
 /** an award link (Admin → Awards): `max` people (null: no cap) until `until`; who used it, each undoable */
+/** Admin → Awards → Show QR: the screen's current code (startapp param), seconds to the next, how many got it there */
+export interface BadgeQr { token: string; code: GrantItem['code']; param: string; next: number; until: Ts; got: number }
 export interface GrantLink { token: string; code: GrantItem['code']; at: Ts; until: Ts; max: number | null; people: GrantItem[] }
 export interface BadgeSession { id: Id; title: string; at: Ts; done: number }
 export interface Badge { eventId: Id; title: string; org: OrgRef; emoji: string; color: string; at: Ts }
