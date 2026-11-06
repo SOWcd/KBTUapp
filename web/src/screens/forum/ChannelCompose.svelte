@@ -75,6 +75,8 @@
 
   let { overlay, draft }: { overlay: Overlay; draft?: Draft } = $props();
   let body = $state(untrack(() => draft?.body ?? kept.body)), anon = $state(untrack(() => draft?.anon ?? kept.anon));
+  let revealed = $state<number | null>(null);
+  onMount(() => { api.channelRevealed().then((r) => (revealed = r.revealed)).catch(() => {}); });
   $effect(() => { kept.body = body; kept.anon = anon; });
   $effect(() => { overlay.title = t('fc.new'); overlay.icon = SquarePen; });
   const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
@@ -186,6 +188,7 @@
       {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
     </div>{/if}
     <p class="note">{anon ? t('fc.asAnon') : t('fc.rules')}</p>
+    {#if anon && revealed !== null}<p class="note">{t('fc.revealed', { n: revealed })}</p>{/if}
   </div>
 </div>
 

@@ -636,6 +636,11 @@ def unposted(con, msg_id: int) -> None:
 
 # ---- moderators: held posts, recent live ones; the owner's reveal
 
+def revealed(con) -> int:
+    """The trust signal shown to every student: how many anonymous authors were ever revealed (the audit log is never deleted). A count only."""
+    return one(con, "SELECT COUNT(*) FROM audit_log WHERE action = 'reveal_anon'")[0]
+
+
 def mod_queue(con, v: Viewer) -> dict:
     """What waits (oldest first) and what went out this week (newest first, to take one down). Named posts show the
     author's name; anonymous ones show nobody, to moderators too."""
@@ -652,9 +657,7 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     shape = lambda p: _shape(p) | {"why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
-            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con),
-            # the trust signal: how many anonymous authors were ever revealed (the audit log is never deleted)
-            "revealed": one(con, "SELECT COUNT(*) FROM audit_log WHERE action = 'reveal_anon'")[0]}
+            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
 
 def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:

@@ -98,7 +98,7 @@ const en: Dict = {
   'fc.reveal': "Who wrote it?",
   'fc.revealAsk': "Reveal the author?",
   'fc.revealText': "Only to deal with a broken rule. It goes into the audit log.",
-  'fc.revealed': "Authors revealed: {n}",
+  'fc.revealed': "Anonymous authors revealed, all time: {n}",
   'fc.wrote': "Written by {name}",
   'fc.guestTitle': "KBTU students' channel",
   'fc.guestText': "Sign in with your KBTU account to post in the channel.",

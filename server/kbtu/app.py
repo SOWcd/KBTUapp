@@ -1802,6 +1802,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_mine(con: Con, v: FChan):
         return F.mine(con, v)
 
+    @app.get("/api/forum-posts/revealed")
+    def fchan_revealed(con: Con, v: FChan):
+        return {"revealed": F.revealed(con)}
+
     @app.get("/api/forum-posts/feed")
     def fchan_feed(con: Con, v: FChan, before: int | None = None):
         return F.feed(con, v, before)

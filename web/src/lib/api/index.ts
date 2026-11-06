@@ -185,6 +185,7 @@ export interface Api {
   channelPostWhy(id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }>; // the AI's reason for my refused or held post, once
   channelReplyWhy(id: Id): Promise<{ explain: import('./types').ForumWhy | null }>;      // the same for my held reply
   deleteChannelPost(id: Id): Promise<void>;                                             // mine: the bot takes it out of the channel
+  channelRevealed(): Promise<{ revealed: number }>;                                      // how many anonymous authors were ever revealed (a count)
   channelMod(): Promise<import('./types').ChannelMod>;                                  // moderators: held, and this week's live
   channelModDecide(id: Id, ok: boolean): Promise<void>;                                 // held: out or removed; live: only removed
   channelModRepublish(id: Id): Promise<void>;                                           // a live post sent anew (its message lost in Telegram)
