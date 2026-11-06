@@ -401,9 +401,9 @@ def past_events(con, v: Viewer) -> list[dict]:
 
 def afisha_ok(o: str) -> str:
     """SQL: the org `o` (its alias) puts its events on the general afisha by itself (owner, Nov 6: no pre-moderation, so
-    a student initiative's don't): an official club, a school, a council, KBTU's own office.
-    ponytail: today "official"; the club path's top level ("Path to the top", clubs.py) is to join it here."""
-    return f"({o}.official = 1 OR {o}.kind != 'club')"
+    a student initiative's don't): an official club, a school, a council, KBTU's own office, or a student initiative at
+    the path's top (clubs.path_top: orgs.top_at)."""
+    return f"({o}.official = 1 OR {o}.kind != 'club' OR {o}.top_at IS NOT NULL)"
 
 
 def on_afisha(e: str = "e") -> str:

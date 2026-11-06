@@ -471,8 +471,7 @@ def _path_steps(con, oid: int) -> tuple[dict[str, bool], sqlite3.Row]:
 
 
 def path_top(con, oid: int) -> bool:
-    """A student initiative at the top: an official club's tools, no ✓. After the merge, the afisha's check for an
-    unofficial club's events (seats.py, afisha_ok) lets a top club's own events in by this (or orgs.top_at)."""
+    """A student initiative at the top: an official club's tools, no ✓; its events reach the afisha (seats.afisha_ok)."""
     return bool(one(con, "SELECT top_at IS NOT NULL FROM orgs WHERE id = ?", oid)[0])
 
 
