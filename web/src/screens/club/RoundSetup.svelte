@@ -11,6 +11,7 @@
   import { api, type ClubTag, type Id, type Round, type RoundKind, type RoundQuestion } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, studioChanged } from '../../lib/state/data.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
   import { haptic } from '../../lib/tg';
@@ -29,7 +30,9 @@
   let { overlay, org, round = null, onsaved }: { overlay: Overlay; org: Id; round?: Round | null; onsaved?: () => void } = $props();
 
   let tags = $state<ClubTag[]>([]);
-  $effect(() => { api.teamSetup(org).then((s) => (tags = s.tags)).catch(() => {}); });
+  // a picked department deleted in Team setup leaves the round too
+  const readTags = () => api.teamSetup(org).then((s) => { tags = s.tags; deps = deps.filter((d) => s.tags.some((x) => x.id === d.tagId)); }).catch(() => {});
+  $effect(() => { void readTags(); });
 
   const r0 = untrack(() => round); // the form starts from it once
   let title = $state(r0?.title ?? t('cast.defTitle', { club: data.orgs.find((o) => o.id === org)?.name ?? '' }));
@@ -113,6 +116,7 @@
     {/if}
     <div class="newtag"><Field label={t('cast.newTag')} bind:value={newTag} maxlength={30} />
       <IconButton icon={Plus} kind="tinted" label={t('cast.newTag')} disabled={!newTag.trim()} onclick={makeTag} /></div>
+    <Group><Row dense title={t('cast.manageDeps')} accessory="chevron" onclick={() => sheets.teamSetup(org, readTags)} /></Group>
     {#each deps as d (d.tagId)}
       {@const g = tags.find((x) => x.id === d.tagId)}
       <div class="dep" style:--c={g?.color ?? 'var(--accent)'}>

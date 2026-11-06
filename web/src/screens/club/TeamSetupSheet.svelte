@@ -199,7 +199,8 @@
     {#if kind === 'tag'}<section class="sec"><h3 class="cap">{t('ts.tags')}</h3>{@render form()}</section>
     {:else}
       <Group caption={t('ts.tags')} footnote={t('ts.tagsHint')}>
-        {#each setup?.tags ?? [] as g (g.id)}
+        <!-- departments first: recruitment and meetings look for them here -->
+        {#each [...(setup?.tags ?? [])].sort((a, b) => +!!b.department - +!!a.department) as g (g.id)}
           <Row dense title={g.name} subtitle={g.department ? t('ts.deptMark') : undefined} value={String(g.count)} accessory={head ? 'chevron' : 'none'}
             onclick={head ? () => edit('tag', g) : undefined}>
             {#snippet lead()}{@render dot(g.color)}{/snippet}
