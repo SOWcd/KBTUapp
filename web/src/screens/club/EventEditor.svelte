@@ -411,6 +411,8 @@
   const co = $derived(saved ? saved.cohost ?? null : coWant ? { org: coWant, status: 'new' as const } : null);
   const coOk = $derived(!isMeeting && !f.teamOnly && !f.leaders && !f.partner && saved?.status !== 'cancelled' && (!!co || may(mine, 'events')));
   const coShort = (o: OrgRef) => (o.name.length > 12 && o.abbr) || nameOf(o); // the row's value has a third of 375 px: a long name by its abbreviation
+  // an official co-host's yes takes an initiative's event to the afisha (server seats.on_afisha)
+  const onAfisha = $derived(co?.status === 'accepted' && (co.org.official || co.org.kind !== 'club'));
   const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: coShort(co.org) }) : coShort(co.org));
   const coFound = $derived.by(() => {
     const q = coQ.trim().toLowerCase();
@@ -584,7 +586,7 @@
       </Group>
     {/if}
 
-    <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly ? t('ed.noChannel') : undefined}>
+    <Group caption={t('ex.options')} footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
       {#if !f.partner}
         {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
         {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}

@@ -114,7 +114,7 @@ def test_hot_reads_use_indexes(env):
     uid = con.execute("SELECT id FROM users WHERE tg_id = 7").fetchone()[0]
     v = logic.Viewer(uid, "user", True)
     plans = _plans(con, lambda: (logic.events(con, v), logic.posts(con, v, "all"), logic.orgs(con, v), logic.profiles._counts(con, uid)))
-    for table, sql in [("events", "FROM events WHERE starts_at >"), ("posts", "FROM posts WHERE"), ("join_requests", "FROM join_requests WHERE user_id")]:
+    for table, sql in [("e", "FROM events e WHERE starts_at >"), ("posts", "FROM posts WHERE"), ("join_requests", "FROM join_requests WHERE user_id")]:
         found = [p for s, p in plans if sql in s]
         assert found, sql
         assert f"SCAN {table}" not in found[-1] and f"SEARCH {table} USING" in found[-1] and "TEMP B-TREE" not in found[-1], found[-1]

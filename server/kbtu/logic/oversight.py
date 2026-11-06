@@ -170,7 +170,7 @@ def _mod(v: Viewer) -> None:
 
 # ---------------------------------------------------------------- my staff notifications (Admin -> My notifications)
 
-_MOD_MUTES = ("chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue")  # what moderators get; admins all of them
+_MOD_MUTES = ("chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue", "event_reported")  # what moderators get; admins all of them
 
 
 def staff_mutes(con, v: Viewer) -> list[dict]:

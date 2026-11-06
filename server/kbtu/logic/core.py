@@ -499,7 +499,8 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
 # Staff work items (to admins, moderators): each may mute one for themselves (Admin -> My notifications); the value
 # is the switch (both backup messages are one). Moderators get the last four only (the callers pick who).
 STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path", "backup_failed": "backup", "backup_ok": "backup",
-               "chat_suggested": "chat_suggested", "tgc_queue": "tgc_queue", "fch_appeal": "fch_appeal", "fch_reply_queue": "fch_reply_queue"}
+               "chat_suggested": "chat_suggested", "tgc_queue": "tgc_queue", "fch_appeal": "fch_appeal", "fch_reply_queue": "fch_reply_queue",
+               "event_reported": "event_reported"}
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only

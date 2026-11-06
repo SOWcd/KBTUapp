@@ -225,6 +225,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not p or not one(con, "SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", int(ref[1]), m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, name=logic.shown_name(p)), "friends")
+    if kind == "event_reported":  # er:<event>:<its oldest open report>, to moderators: 3 people reported it; quiet once decided or taken down
+        r = one(con, "SELECT 1 FROM reports r JOIN events e ON e.id = r.target_id AND e.hidden_at IS NULL WHERE r.id = ? AND r.status = 'open'", int(ref[2]))
+        return (*texts.bot_message(lang, kind), "capps") if r else None
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None

@@ -153,6 +153,19 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
         raise ApiError("rate_limited")
     con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (v.id, target, tid, reason, note, core.now()))
+    if target == "event":
+        _urgent_event(con, tid)
+
+
+EVENT_ALARM = 3  # different people's open reports of an event: the moderators hear at once (owner, Nov 6: it isn't hidden)
+
+
+def _urgent_event(con, eid: int) -> None:
+    """The 3rd person reporting an event: an urgent work item to the moderators (Admin's report queue decides). The ref
+    is its oldest open report, so a new round after a decision rings again; the same round only once."""
+    r = one(con, "SELECT COUNT(DISTINCT reporter_id), MIN(id) FROM reports WHERE target = 'event' AND target_id = ? AND status = 'open'", eid)
+    if r[0] >= EVENT_ALARM:
+        notify_staff(con, _mods(con), "event_reported", f"er:{eid}:{r[1]}")
 
 
 def _about(con, target: str, tid: int) -> int | None:
@@ -361,6 +374,7 @@ from .forum import hide_ask  # noqa: E402
 from . import fchannel  # noqa: E402
 from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
-from .seats import _event, notify  # noqa: E402
+from .seats import _event, notify, notify_staff  # noqa: E402
+from .tgcomments import _mods  # noqa: E402
 from .teams import remove  # noqa: E402
 from . import tgcomments  # noqa: E402
