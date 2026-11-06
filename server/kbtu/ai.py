@@ -152,9 +152,14 @@ POST_PROMPT = ("You check a post a university student wants to publish in the st
                "students' own campus events and recruiting, KBTU internships and jobs, lost and found, looking for a roommate "
                "or a teammate, asking for recommendations, free giveaways, a student selling a used thing of their own. "
                "Answer NOISE only if it carries no message at all: random letters, "
-               "keyboard mash, a bare \"test\", a word repeated, filler; a post that also says anything else is not NOISE. Otherwise answer PERSON if it names or points at a specific "
-               "person (a name or surname, a nickname, a teacher, a group, a room, a description that tells who it is), "
-               "else OK. Answer exactly OK, PERSON, FLAG, AD or NOISE.") + LANG_NOTE
+               "keyboard mash, a bare \"test\", a word repeated, filler; a post that also says anything else is not NOISE. Otherwise answer PERSON only if an identifiable person "
+               "(a name, a nickname, a teacher, a group, a room, a description that tells who it is) is accused, insulted, "
+               "mocked, shamed or harassed; or linked to private facts (health, relationships, grades, address, phone, "
+               "photos); or targeted by a call to action against them (\"find him\", \"everyone write to her\"). A full "
+               "name (first and last) or an @username together with anything negative is always PERSON. A first name, or a "
+               "name with an initial, alone is fine when the post is neutral, friendly or about the author's own life "
+               "(\"sorry Bakhtiyar, I declined your friend request by accident\", \"I walked with my friend Vova\"): that is OK. "
+               "Else OK. Answer exactly OK, PERSON, FLAG, AD or NOISE.") + LANG_NOTE
 POST_WORDS = ("OK", "PERSON", "FLAG", "AD", "NOISE")  # AD: refused at once, the author told (owner, Nov 3: no ads in the forum)
 
 
