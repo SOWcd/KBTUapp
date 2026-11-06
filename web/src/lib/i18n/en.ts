@@ -1753,6 +1753,7 @@ const en: Dict = {
   'app.mainAdmin': "main admin",
   'app.donate': "Support",
   'app.donateSub': "the project",
+  'app.donateRow': "Support the project",
   'app.codeSub': "open code",
   'set.homeDone': "On your home screen now",
   'set.calShort': "Calendar",

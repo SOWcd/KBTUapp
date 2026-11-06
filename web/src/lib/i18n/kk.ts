@@ -1753,6 +1753,7 @@ const kk: Dict = {
   'app.mainAdmin': "бас әкімші",
   'app.donate': "Демеу",
   'app.donateSub': "жобаға",
+  'app.donateRow': "Жобаға демеу",
   'app.codeSub': "ашық код",
   'set.homeDone': "Енді басты экранда",
   'set.calShort': "Күнтізбе",

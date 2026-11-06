@@ -2,6 +2,7 @@
   // The app's links and people, at the bottom of Profile (owner, Nov 6: the best of three takes: Astra's glass card and
   // tiles with a line under each, colour-coded icons in tinted squares, Telegram in its own round mark).
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import GitHubMark from '../../ui/GitHubMark.svelte';
@@ -28,14 +29,15 @@
       <b>{t('app.channel')}</b><small>{t('app.channelSub')}</small><ArrowUpRight class="go" size={12} aria-hidden="true" /></button>
     <button class="apt" onclick={() => openLink(TG_TALK)}><span class="ic talk"><MessagesSquare size={20} strokeWidth={2} /></span>
       <b>{t('app.group')}</b><small>{t('app.groupSub')}</small><ArrowUpRight class="go" size={12} aria-hidden="true" /></button>
-    {#if session.donate}
-      <button class="apt" onclick={() => { haptic.tap(); sheets.settings('donate'); }}><span class="ic give"><HandHeart size={20} strokeWidth={2} /></span>
-        <b>{t('app.donate')}</b><small>{t('app.donateSub')}</small></button>
-    {:else}
-      <button class="apt" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic give"><GitHubMark size={22} /></span>
-        <b>GitHub</b><small>{t('app.codeSub')}</small><ArrowUpRight class="go" size={12} aria-hidden="true" /></button>
-    {/if}
   </div>
+  <!-- in-app, so a row with a chevron, apart from the two tiles that leave for Telegram (owner, Nov 6) -->
+  {#if session.donate}
+    <button class="give-r" onclick={() => { haptic.tap(); sheets.settings('donate'); }}><span class="ic give"><HandHeart size={20} strokeWidth={2} /></span>
+      <span class="wt"><b>{t('app.donateRow')}</b><small>{t('don.bank')}</small></span><ChevronRight class="chev" size={18} aria-hidden="true" /></button>
+  {:else}
+    <button class="give-r" onclick={() => openLink('https://github.com/SOWcd/KBTUapp')}><span class="ic give"><GitHubMark size={22} /></span>
+      <span class="wt"><b>GitHub</b><small>{t('app.codeSub')}</small></span><ArrowUpRight class="chev" size={16} aria-hidden="true" /></button>
+  {/if}
   {#if support.length}
     <!-- one way to us: two faces, each a tap to their Telegram with a draft that says it's from the app -->
     <h3 class="sp-h">{t('app.support')}</h3>
@@ -62,10 +64,10 @@
   .mk { flex: none; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s);
     border-radius: var(--r-s); color: var(--on-accent); background: var(--grad-accent);
     box-shadow: inset 0 1px 0 var(--glass-sheen); }
-  .ap-t { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
+  .ap-t { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
   /* A quiet bevel gives the actions depth without competing with the faces below. */
   .apt { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0;
-    min-height: 124px; padding: var(--s-4) var(--s-3); border-radius: var(--r-m); text-align: left;
+    min-height: 116px; padding: var(--s-4) var(--s-3); border-radius: var(--r-m); text-align: left;
     background: linear-gradient(155deg, var(--lens-top), transparent 65%), var(--surface-2);
     box-shadow: inset 0 1px 0 var(--line-2), inset 0 0 0 1px var(--line); }
   .ic { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: var(--s-3); border-radius: var(--r-s); }
@@ -76,6 +78,12 @@
   .apt b { font: 600 var(--fs-body)/1.3 var(--font-text); letter-spacing: -0.02em; color: var(--text); }
   .apt small { margin-top: var(--s-1); font: 450 var(--fs-cap)/1.4 var(--font-text); color: var(--text-2); overflow-wrap: anywhere; }
   .apt :global(.go) { position: absolute; top: var(--s-3); right: var(--s-2); color: var(--text-3); }
+  .give-r { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; margin-top: var(--s-2);
+    padding: var(--s-3); border-radius: var(--r-m); text-align: left;
+    background: linear-gradient(155deg, var(--lens-top), transparent 65%), var(--surface-2);
+    box-shadow: inset 0 1px 0 var(--line-2), inset 0 0 0 1px var(--line); }
+  .give-r .ic { margin-bottom: 0; }
+  .give-r :global(.chev) { flex: none; color: var(--text-3); }
   .sp-h { margin: var(--s-6) 0 var(--s-2); font: 600 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
   .sp { display: flex; flex-direction: column; }
   .who { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-width: 0;
@@ -89,13 +97,13 @@
     padding: var(--s-3) 0; border-radius: var(--r-xs); color: var(--accent-text); }
   .wl { flex: 1; text-align: left; font: 600 var(--fs-sub)/1.4 var(--font-text); color: var(--text); }
   .write b { font: 600 var(--fs-sub)/1.4 var(--font-text); }
-  .apt, .who, .write { transition: transform var(--t-base) var(--ease), opacity var(--t-fast) var(--ease); }
-  .apt:active, .who:active, .write:active { transform: scale(0.98); opacity: 0.75; transition-duration: var(--t-fast); }
+  .apt, .give-r, .who, .write { transition: transform var(--t-base) var(--ease), opacity var(--t-fast) var(--ease); }
+  .apt:active, .give-r:active, .who:active, .write:active { transform: scale(0.98); opacity: 0.75; transition-duration: var(--t-fast); }
   @media (hover: hover) {
-    .apt:hover { background-color: var(--fill-2); }
+    .apt:hover, .give-r:hover { background-color: var(--fill-2); }
     .who:hover, .write:hover { background-color: var(--surface-2); }
   }
-  @media (prefers-reduced-motion: reduce) { .apt:active, .who:active, .write:active { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .apt:active, .give-r:active, .who:active, .write:active { transform: none; } }
   @media (max-width: 359px) {
     .appc { padding-inline: var(--s-3); }
     .apt { padding-inline: var(--s-2); }

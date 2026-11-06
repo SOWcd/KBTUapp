@@ -1773,6 +1773,7 @@ const ru = {
   'app.mainAdmin': "главный админ",
   'app.donate': "Помочь",
   'app.donateSub': "проекту",
+  'app.donateRow': "Помочь проекту",
   'app.codeSub': "открытый код",
   'set.homeDone': "Теперь на главном экране",
   'set.calShort': "Календарь",
