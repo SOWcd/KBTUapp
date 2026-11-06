@@ -49,13 +49,13 @@ it('every medal layer and pin glyph is drawn', async () => {
   const fs = await import('node:fs' as string);
   const has = (n: string) => fs.existsSync(new URL(`../../public/medals/${n}.svg`, import.meta.url));
   const lv = Array.from({ length: 9 }, (_, i) => ({ need: i + 1, share: 0 }));
-  for (const code of ['regular', 'streak', 'soul', 'team', 'season', 'bugs', 'critic', 'referral'])
+  for (const code of ['regular', 'streak', 'first_in', 'soul', 'team', 'season', 'bugs', 'critic', 'referral'])
     for (const n of [1, 4, 7]) {
       const art = artOf({ code, emoji: '', level: n, levels: lv.slice(0, 7) as never }), leg = legendOf(art);
       expect(layersOf(art)!.every(([f]) => has(f)) && (code === 'referral' ? leg === null : has(leg!))).toBe(true);
     }
-  // the temporary vector set (VECTOR in awards.ts): First in and the creator's two
-  for (const art of ['layer_vb_firstin', 'layer_vb_laugh', 'layer_vb_hello']) expect(layersOf(art)!.every(([f]) => has(f))).toBe(true);
+  // the temporary vector set (VECTOR in awards.ts): the creator's two
+  for (const art of ['layer_vb_laugh', 'layer_vb_hello']) expect(layersOf(art)!.every(([f]) => has(f))).toBe(true);
   for (const z of Object.values(ZNAKI)) expect(layersOf(`layer_zn_${z.glyph}_${z.metal}`)!.every(([n]) => has(n)) && has('zn-enamel') && has(`zn-frame-${z.metal}`)).toBe(true);
   for (const m of 'bsgl') expect(has(`ribbon-${m}`)).toBe(true);
 });

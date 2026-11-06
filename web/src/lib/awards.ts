@@ -89,13 +89,13 @@ export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.c
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
 export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
   const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length), z = ZNAKI[a.emoji];
-  const v = a.code === 'first_in' ? 'firstin' : VECTOR[a.emoji];
+  const v = VECTOR[a.emoji];
   if (v) return `layer_vb_${v}`;
   if (z) return `layer_zn_${z.glyph}_${z.metal}`;
   return !p ? a.emoji : p === 'rc' ? 'layer_rc' + (of > 1 ? l : '') : `layer_${p}_${'bsgl'[metalOf(l, of)]}`;
 }
 // ponytail: a temporary swap (owner): the earlier vector set (public/medals/vb-*, from .claude/reports/badges/vector-claude)
-// in place of the shield pins for the creator's two awards, and First in under its one gold rim at every level.
+// in place of the shield pins for the creator's two awards.
 // Upgrade path: delete this map and the vb branches once the final art lands.
 const VECTOR: Record<string, string> = { face_with_tears_of_joy_3d: 'laugh', waving_hand_3d_default: 'hello' };
 /** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
