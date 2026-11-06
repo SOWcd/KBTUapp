@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+from .. import ai
 from ..db import tx
 
 from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, _may, _org, _rights_from, can,
@@ -137,11 +138,37 @@ def _named(body: dict) -> tuple[str, str]:
 
 
 def _also(body: dict, key: str) -> str | None:
-    """A role's optional name in another language: the same rule as the name; empty: none (the name shows)."""
+    """A role's title in one language, by the name's rule; empty: none."""
     x = " ".join(str(body.get(key) or "").split())
     if len(x) > 24:
         raise ApiError("bad_input")
     return x or None
+
+
+SLOT = {"ru": "name", "kk": "name_kk", "en": "name_en"}  # where each language's title lives; `name` is also the fallback
+
+
+def role_tr(r) -> tuple[str, set[str]]:
+    """A role's typed language and the languages a person corrected by hand. A row from before (src NULL): its name's
+    language, and the Kazakh and English it has were typed by hand."""
+    if r["src"]:
+        return r["src"], set(filter(None, r["hand"].split(",")))
+    src = ai.lang_of(r["name"])
+    return src, {k for k in ("kk", "en") if k != src and r[SLOT[k]]}
+
+
+def normalize_role(con, r) -> None:
+    """A role from before into the typed-once shape (src, hand); what it lacks waits for the AI (queues.ai_next)."""
+    src, hand = role_tr(r)
+    need = [k for k in SLOT if k != src and k not in hand]  # ru, when typed in another language, holds that text till then
+    con.execute(f"UPDATE org_roles SET src = ?, hand = ?, ai_wait = ?, {SLOT[src]} = ? WHERE id = ?",
+                (src, ",".join(sorted(hand)), int(bool(need)), r[SLOT[src]] or r["name"], r["id"]))
+
+
+def roles_backfill(con, n: int = 50) -> None:
+    """Nightly (stats_day): a batch of roles from before gets normalized, so the translator fills their titles."""
+    for r in rows(con, "SELECT * FROM org_roles WHERE src IS NULL AND fixed = 0 ORDER BY id LIMIT ?", n):
+        normalize_role(con, r)
 
 
 def team_setup(con, v: Viewer, oid: int) -> dict:
@@ -151,7 +178,7 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
     if not mine:
         raise ApiError("forbidden")
     out: dict = {
-        "roles": [{"id": r["id"], **core.titled(r, "name"), "color": r["color"], "level": r["level"], "rights": _ordered(_rights_from(r["level"], r["rights"])),
+        "roles": [{"id": r["id"], **core.titled(r, "name"), **_tr_out(r), "color": r["color"], "level": r["level"], "rights": _ordered(_rights_from(r["level"], r["rights"])),
                    "count": r["n"], "fixed": bool(r["fixed"])} for r in rows(con, """SELECT r.*,
             (SELECT COUNT(*) FROM org_members m WHERE m.role_id = r.id) AS n FROM org_roles r WHERE r.org_id = ?
             ORDER BY r.fixed DESC, r.fixed AND r.level = 'head', r.id""", oid)],
@@ -175,6 +202,12 @@ def team_setup(con, v: Viewer, oid: int) -> dict:
     return out
 
 
+def _tr_out(r) -> dict:
+    """The editor's one field shows the title as typed (src); "Translations" marks the corrected ones (hand)."""
+    src, hand = role_tr(r)
+    return {"src": src, "hand": sorted(hand), "translating": bool(r["ai_wait"]) and r["ai_tries"] < AI_TRIES}
+
+
 def _ordered(rights) -> list[str]:
     return [r for r in RIGHTS if r in rights]
 
@@ -183,12 +216,18 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
     """Whoever runs the team ("team") makes the club's own roles: a name, a colour and toggles of rights (SPEC §2), only
     rights they have themselves and below their own level (the rights' highest level is the role's); a changed level
     moves everyone holding the role (they are all below the editor). A `level` alone (an older app) means its rights.
-    The official Vice and Head (`fixed`) keep their name and level."""
+    The official Vice and Head (`fixed`) keep their name and level. The name is typed once in any language; the AI
+    fills the other two (queues.ai_next), except what `tr` ({lang: title}, every correction the person keeps) sets by
+    hand. No `tr`: the corrections stay. The same text keeps the AI's translations."""
     mine = role_in(con, v, oid)
     if not can(con, v, oid, "team"):
         raise ApiError("forbidden")
     name, color = _named(body)
-    kk, en = (_also(body, k) for k in ("nameKk", "nameEn"))
+    src = ai.lang_of(name)
+    tr = body.get("tr")
+    if tr is not None and not isinstance(tr, dict):
+        raise ApiError("bad_input")
+    given = {k: x for k in SLOT if k != src and (x := _also(tr, k))} if tr is not None else None
     rights = body["rights"] if "rights" in body else list(LEVEL_RIGHTS[body["level"]]) if body.get("level") in ("member", "head", "vice") else None
     if not isinstance(rights, list) or any(r not in RIGHTS for r in rights):
         raise ApiError("bad_input")
@@ -197,6 +236,7 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
     if RANK[level] >= RANK[mine] or not set(rights) <= rights_of(con, v.id, oid):
         raise ApiError("forbidden")
     with tx(con):
+        r = None
         if rid is None:
             if one(con, "SELECT COUNT(*) FROM org_roles WHERE org_id = ?", oid)[0] >= 20:
                 raise ApiError("conflict", "many")
@@ -206,17 +246,31 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
                 raise ApiError("not_found")
             if RANK[r["level"]] >= RANK[mine] or r["fixed"] and RANK[level] > RANK[r["level"]]:
                 raise ApiError("forbidden")
-            kk = kk if "nameKk" in body else r["name_kk"]  # an older app's edit keeps them
-            en = en if "nameEn" in body else r["name_en"]
-            if r["fixed"]:  # an official role keeps its name and level; its rights below the level may be tuned
-                name, level, kk, en = r["name"], r["level"], r["name_kk"], r["name_en"]
+            if not r["fixed"] and r["src"] is None:
+                normalize_role(con, r)
+                r = one(con, "SELECT * FROM org_roles WHERE id = ?", rid)
+        if r and r["fixed"]:  # an official role keeps its name and level; its rights below the level may be tuned
+            level, slots, hand, wait, fresh = r["level"], {k: r[c] for k, c in SLOT.items()}, r["hand"].split(","), r["ai_wait"], False
+        else:
+            osrc, ohand = role_tr(r) if r else ("", set())
+            hand = given if given is not None else {k: r[SLOT[k]] for k in ohand if k != src}
+            slots = {k: None for k in SLOT} | hand | {src: name}
+            need = [k for k in SLOT if slots[k] is None]
+            if r and osrc == src and r[SLOT[src]] == name:  # the same text: the AI's translations stay, a dropped correction is the AI's again
+                slots |= {k: r[SLOT[k]] for k in need if k not in ohand}
+                fresh = any(k in ohand for k in need)
+                wait = r["ai_wait"] or fresh
+            else:
+                wait = fresh = bool(need)  # a new text: three new tries
+        row = (slots["ru"] or name, slots["kk"], slots["en"], src if not (r and r["fixed"]) else r["src"], ",".join(sorted(hand)), int(bool(wait)))
         try:
             if rid is None:
-                con.execute("INSERT INTO org_roles (org_id, name, name_kk, name_en, color, level, rights, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                            (oid, name, kk, en, color, level, ",".join(rights), core.now()))
+                con.execute("""INSERT INTO org_roles (org_id, name, name_kk, name_en, src, hand, ai_wait, color, level, rights, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (oid, *row, color, level, ",".join(rights), core.now()))
             else:
-                con.execute("UPDATE org_roles SET name = ?, name_kk = ?, name_en = ?, color = ?, level = ?, rights = ? WHERE id = ?",
-                            (name, kk, en, color, level, ",".join(rights), rid))
+                con.execute("""UPDATE org_roles SET name = ?, name_kk = ?, name_en = ?, src = ?, hand = ?, ai_wait = ?,
+                    ai_tries = CASE WHEN ? THEN 0 ELSE ai_tries END, color = ?, level = ?, rights = ? WHERE id = ?""",
+                            (*row, fresh, color, level, ",".join(rights), rid))
                 con.execute("UPDATE org_members SET role = ? WHERE org_id = ? AND role_id = ?", (level, oid, rid))
         except sqlite3.IntegrityError:
             raise ApiError("conflict", "taken") from None
@@ -529,4 +583,5 @@ from . import core, oversight  # noqa: E402
 from .clubs import _official, org_shape  # noqa: E402
 from .forum import asks  # noqa: E402
 from .oversight import QUIET_FOR, _admin  # noqa: E402
+from .queues import AI_TRIES  # noqa: E402
 from .seats import notify  # noqa: E402

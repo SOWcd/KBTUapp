@@ -509,7 +509,7 @@ export interface TeamMember {
 
 /** Team 2.0 (§2b): the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */
 export type ClubLevel = 'member' | 'head' | 'vice';
-export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn?: string | null; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
+export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn?: string | null; src?: 'ru' | 'kk' | 'en'; hand?: string[]; translating?: boolean; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
 export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null; ban: boolean; note: string; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }

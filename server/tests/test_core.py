@@ -2855,20 +2855,22 @@ def test_team_two(env):
     assert (ann["role"], ann["title"], ann["titleColor"]) == ("head", "SMM lead", "#FF4FA3")
     assert c.get("/api/me", headers=tma(10)).json()["memberships"][0]["title"] == "SMM lead"
     assert c.get("/api/orgs/1", headers=tma(10)).json()["myTitle"] == "SMM lead"
-    # its name in Kazakh and English: everywhere the title goes; empty or missing: none, and the app shows `name`
+    # its title in Kazakh and English: everywhere the title goes (typed once in English here; the AI's turn: test_role_titles)
     kk = "SMM \u0436\u0435\u0442\u0435\u043a\u0448\u0456\u0441\u0456"
-    assert c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": "x" * 25}).status_code == 400
-    role = next(r for r in c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": f" {kk} ", "nameEn": "SMM  lead EN"}).json()["roles"] if r["id"] == rid)
-    assert (role["name"], role["nameKk"], role["nameEn"]) == ("SMM lead", kk, "SMM lead EN")
+    for bad in ({"tr": {"kk": "x" * 25}}, {"tr": "kk"}):
+        assert c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, **bad}).status_code == 400
+    role = next(r for r in c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "tr": {"kk": f" {kk} ", "en": "ignored: the typed one"}}).json()["roles"] if r["id"] == rid)
+    assert (role["name"], role["nameKk"], role["nameEn"], role["src"], role["hand"]) == ("SMM lead", kk, "SMM lead", "en", ["kk"])
     titles = lambda o, k="title": (o[k], o[k + "Kk"], o[k + "En"])  # noqa: E731
-    assert titles(member(11, 10)) == titles(c.get("/api/me", headers=tma(10)).json()["memberships"][0]) == ("SMM lead", kk, "SMM lead EN")
-    assert titles(c.get("/api/orgs/1", headers=tma(10)).json(), "myTitle") == ("SMM lead", kk, "SMM lead EN")
-    assert titles(c.get(f"/api/users/{uid[10]}", headers=tma(11)).json()["clubs"][0]) == ("SMM lead", kk, "SMM lead EN")
-    assert titles(next(m for m in c.get("/api/orgs/1/people", headers=tma(11)).json() if m["person"]["id"] == uid[10])) == ("SMM lead", kk, "SMM lead EN")
-    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameEn": ""})  # an older app's edit (no nameKk) keeps it
-    assert titles(member(11, 10)) == ("SMM lead", kk, None)
-    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "nameKk": None})
-    assert titles(member(11, 10)) == ("SMM lead", None, None)
+    want = ("SMM lead", kk, "SMM lead")
+    assert titles(member(11, 10)) == titles(c.get("/api/me", headers=tma(10)).json()["memberships"][0]) == want
+    assert titles(c.get("/api/orgs/1", headers=tma(10)).json(), "myTitle") == want
+    assert titles(c.get(f"/api/users/{uid[10]}", headers=tma(11)).json()["clubs"][0]) == want
+    assert titles(next(m for m in c.get("/api/orgs/1/people", headers=tma(11)).json() if m["person"]["id"] == uid[10])) == want
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json=smm)                     # no `tr`: the correction stays
+    assert titles(member(11, 10)) == want
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(21), json={**smm, "tr": {}})        # dropped: the AI's again
+    assert titles(member(11, 10)) == ("SMM lead", None, "SMM lead")
     # the memo signs with them; a known word still wins
     assert texts.memo_pos("head", "SMM lead", kk, None) == {"kk": kk, "ru": "SMM lead", "en": "SMM lead"}
     assert texts.memo_pos("head", "Head of SMM", kk, "x") == texts.memo_pos("head", "Head of SMM")
@@ -4184,6 +4186,62 @@ def test_translations(env):
     assert logic.ai_state(con)["today"] == 2
     c.patch("/api/orgs/1", headers=tma(20), json={"description": "\u041d\u043e\u0432\u043e\u0435."})
     assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b"}} and logic.ai_next(con)[0] == "org"
+    con.close()
+
+
+def test_role_titles(env):
+    """Owner, Nov 6: a club role's title is typed once in any language; the translator (ai_next/ai_save) fills the other
+    two, never a correction made by hand; the same text keeps them, a new one asks again; a Russian title another role
+    has stays the typed one. Roles from before: a batch a night (stats_day) joins the queue, their own kk/en kept."""
+    c, cfg = env
+    login(c, 20, "pres")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
+    roles = lambda: {r["id"]: r for r in c.get("/api/orgs/1/team", headers=tma(20)).json()["roles"]}  # noqa: E731
+    sec = "\u0421\u0435\u043a\u0440\u0435\u0442\u0430\u0440\u044c"
+    body = {"name": sec, "color": "#FF4FA3", "rights": ["door"]}
+    rid = next(iter(c.post("/api/orgs/1/roles", headers=tma(20), json=body).json()["roles"]))["id"]
+    r = roles()[rid]
+    assert (r["name"], r["nameKk"], r["nameEn"], r["src"], r["hand"], r["translating"]) == (sec, None, None, "ru", [], True)
+    assert logic.ai_next(con) == ("role", rid, {"title": sec})
+    tr = lambda k, e: {"kk": {"title": k}, "en": {"title": e}}  # noqa: E731
+    logic.ai_save(con, "role", rid, {"title": sec}, "ru", tr("\u0425\u0430\u0442\u0448\u044b", "Secretary"))
+    assert logic.ai_next(con) is None and (roles()[rid]["nameKk"], roles()[rid]["nameEn"], roles()[rid]["translating"]) == ("\u0425\u0430\u0442\u0448\u044b", "Secretary", False)
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**body, "color": "#2FBF71"})   # the same text: kept
+    assert logic.ai_next(con) is None and roles()[rid]["nameEn"] == "Secretary"
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**body, "tr": {"en": "Club secretary"}})  # a correction by hand
+    c.patch(f"/api/orgs/1/roles/{rid}", headers=tma(20), json={**body, "name": sec + " 2", "tr": {"en": "Club secretary"}})  # retyped
+    assert logic.ai_next(con) == ("role", rid, {"title": sec + " 2"})
+    logic.ai_save(con, "role", rid, {"title": sec}, "ru", tr("x", "x"))                      # for the old text: dropped
+    logic.ai_save(con, "role", rid, {"title": sec + " 2"}, "ru", tr("\u0425\u0430\u0442\u0448\u044b 2", "Secretary 2"))
+    r = roles()[rid]
+    assert (r["name"], r["nameKk"], r["nameEn"], r["hand"]) == (sec + " 2", "\u0425\u0430\u0442\u0448\u044b 2", "Club secretary", ["en"])
+
+    # typed in English: the Russian slot (`name`) holds it till the AI writes Russian; one another role has: kept as typed
+    eid = c.post("/api/orgs/1/roles", headers=tma(20), json={**body, "name": "Treasurer"}).json()["roles"][-1]["id"]
+    assert (roles()[eid]["name"], roles()[eid]["nameEn"], roles()[eid]["src"]) == ("Treasurer", "Treasurer", "en")
+    assert logic.ai_next(con) == ("role", eid, {"title": "Treasurer"})
+    logic.ai_save(con, "role", eid, {"title": "Treasurer"}, "en", {"kk": {"title": "\u049a\u0430\u0437\u044b\u043d\u0430\u0448\u044b"}, "ru": {"title": sec + " 2"}})
+    assert (roles()[eid]["name"], roles()[eid]["nameKk"], roles()[eid]["translating"]) == ("Treasurer", "\u049a\u0430\u0437\u044b\u043d\u0430\u0448\u044b", False)
+    for _ in range(3):
+        c.patch(f"/api/orgs/1/roles/{eid}", headers=tma(20), json={**body, "name": "Cashier"})
+        logic.ai_failed(con, "role", eid, "bad")
+    assert logic.ai_next(con) is None and not roles()[eid]["translating"]                   # 3 failures: left as typed
+
+    # roles from before (src NULL): 50 a night; what they had was typed by hand and stays; official ones never go
+    for i in range(52):
+        con.execute("INSERT INTO org_roles (org_id, name, name_kk, color, level, created_at) VALUES (1, ?, ?, '#FF4FA3', 'member', 0)",
+                    (f"{sec} {i + 10}", "\u0425" if i == 0 else None))
+    con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (1, 'Head', '#3B6BFF', 'head', 1, 0)")
+    old = con.execute("SELECT MIN(id) FROM org_roles WHERE src IS NULL").fetchone()[0]
+    logic.roles_backfill(con)
+    assert con.execute("SELECT COUNT(*) FROM org_roles WHERE src IS NULL").fetchone()[0] == 3  # 2 next night, the official one never
+    assert logic.ai_next(con)[0] == "role"
+    o = con.execute("SELECT src, hand, ai_wait, name_kk FROM org_roles WHERE id = ?", (old,)).fetchone()
+    assert tuple(o) == ("ru", "kk", 1, "\u0425")
+    logic.ai_save(con, "role", old, {"title": f"{sec} 10"}, "ru", tr("y", "Secretary 10"))
+    assert tuple(con.execute("SELECT name_kk, name_en FROM org_roles WHERE id = ?", (old,)).fetchone()) == ("\u0425", "Secretary 10")
     con.close()
 
 

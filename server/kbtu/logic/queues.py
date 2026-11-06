@@ -23,16 +23,20 @@ AI_LIMITS = {"title": 80, "description": 2000}
 AI_ORG_LIMITS = {"description": 600}
 AI_POST_LIMITS = {"title": 120, "body": 2000}
 AI_POST_WAIT = 7200       # a channel's post waits 2 h for its own translations (folded posts, its comments) before AI
-AI_LIMIT = {"event": AI_LIMITS, "org": AI_ORG_LIMITS, "post": AI_POST_LIMITS}
+AI_LIMIT = {"event": AI_LIMITS, "org": AI_ORG_LIMITS, "post": AI_POST_LIMITS, "role": {"title": 24}}
 
 
 def ai_next(con) -> tuple[str, int, dict[str, str]] | None:
-    """("event" | "org" | "post", id, its texts as they are now), or None."""
+    """("event" | "role" | "org" | "post", id, its texts as they are now), or None."""
     e = one(con, """SELECT e.id, e.title, e.description FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.lang IS NULL AND e.ai_tries < ? AND e.status = 'published' AND e.visibility = 'public' AND e.meeting = 0
           AND e.hidden_at IS NULL AND o.status = 'active' AND COALESCE(e.ends_at, e.starts_at) > ? ORDER BY e.updated_at DESC LIMIT 1""", AI_TRIES, core.now())
     if e:
         return "event", e["id"], {"title": e["title"], "description": e["description"]}
+    r = one(con, """SELECT r.* FROM org_roles r JOIN orgs o ON o.id = r.org_id WHERE r.ai_wait = 1 AND r.ai_tries < ? AND r.fixed = 0
+        AND r.src IS NOT NULL AND o.status = 'active' ORDER BY r.id DESC LIMIT 1""", AI_TRIES)
+    if r:  # a club role's title, typed once (teams.save_role)
+        return "role", r["id"], {"title": r[SLOT[r["src"]]] or r["name"]}
     o = one(con, "SELECT id, description FROM orgs WHERE lang IS NULL AND ai_tries < ? AND status = 'active' AND trim(description) != '' ORDER BY id DESC LIMIT 1", AI_TRIES)
     if o:
         return "org", o["id"], {"description": o["description"]}
@@ -51,6 +55,18 @@ def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[st
                          src, rid, was["title"], was["description"])).rowcount
             if not n:
                 return
+        elif kind == "role":  # unless retyped meanwhile; a correction by hand stays; a Russian title another role has: not that one
+            r = one(con, "SELECT * FROM org_roles WHERE id = ? AND ai_wait = 1 AND src = ?", rid, src)
+            if not r or (r[SLOT[src]] or r["name"]) != was["title"]:
+                return
+            hand = set(r["hand"].split(","))
+            for k, x in tr.items():
+                if k not in hand:
+                    try:
+                        con.execute(f"UPDATE org_roles SET {SLOT[k]} = ? WHERE id = ?", (x["title"], rid))
+                    except sqlite3.IntegrityError:
+                        pass
+            con.execute("UPDATE org_roles SET ai_wait = 0 WHERE id = ?", (rid,))
         elif kind == "post":  # unless the channel's own translations came meanwhile
             if not con.execute("UPDATE posts SET i18n = ?, lang = ?, tr_by = 'ai' WHERE id = ? AND title = ? AND body = ? AND tr_by IS NULL",
                                (json.dumps({k: {"title": x.get("title", was["title"]), "body": x.get("body", "")} for k, x in tr.items()}, ensure_ascii=False),
@@ -70,7 +86,7 @@ def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[st
 
 def ai_failed(con, kind: str, rid: int, why: str) -> None:
     with tx(con):
-        con.execute(f"UPDATE {({'event': 'events', 'post': 'posts'}).get(kind, 'orgs')} SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))  # a table from the three above
+        con.execute(f"UPDATE {({'event': 'events', 'post': 'posts', 'role': 'org_roles'}).get(kind, 'orgs')} SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))  # a table from the three above
         _ai_note(con, error=f"{kind} {rid}: {why}"[:200])
 
 
@@ -190,3 +206,4 @@ def _video(con, v: Viewer, body: dict, keep: int | None, key: str = "videoId") -
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
+from .teams import SLOT  # noqa: E402
