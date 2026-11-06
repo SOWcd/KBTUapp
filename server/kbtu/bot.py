@@ -920,8 +920,18 @@ def _sched_file(msg: dict) -> dict | None:
     d = msg.get("document") or {}
     name, mime = str(d.get("file_name") or "").lower(), str(d.get("mime_type") or "").lower()
     # iOS sometimes sends "..._webarchive" (the dot turned into "_"), so the type and that spelling count too
-    return d if (name.endswith(SCHED_FILES) or name.endswith(tuple("_" + e[1:] for e in SCHED_FILES))
-                 or mime in SCHED_MIMES) else None
+    if name.endswith(SCHED_FILES) or name.endswith(tuple("_" + e[1:] for e in SCHED_FILES)) or mime in SCHED_MIMES:
+        return d
+    # Telegram may show a saved page as just "file" (no extension, octet-stream or no mime): a candidate whose content
+    # decides (portal.page_html sniffs it), in a private chat only; a receipt (pdf, image) never is
+    return d if (d and not _file(msg) and (msg.get("chat") or {}).get("type") == "private"
+                 and (mime in ("", "application/octet-stream") or "." not in name)) else None
+
+
+def _sched_named(msg: dict) -> bool:
+    d = msg.get("document") or {}
+    name, mime = str(d.get("file_name") or "").lower(), str(d.get("mime_type") or "").lower()
+    return name.endswith(SCHED_FILES) or name.endswith(tuple("_" + e[1:] for e in SCHED_FILES)) or mime in SCHED_MIMES
 
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
@@ -936,8 +946,8 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     u = _student(con, chat["id"])
     lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
     say = lambda kind, start="", **f: _reply(chat["id"], *texts.bot_message(lang, kind, **f), start, cfg)  # noqa: E731
-    if not u:
-        return say("sched_signin")
+    if not u:  # a file that only might be a page isn't the student's to be told off for: the welcome
+        return say("sched_signin") if _sched_named(msg) else _welcome(con, cfg, msg)
     d = _sched_file(msg) or {}
     if int(d.get("file_size") or 0) > SCHED_MAX:
         return say("sched_big")

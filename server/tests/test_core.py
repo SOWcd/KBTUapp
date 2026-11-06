@@ -5596,6 +5596,10 @@ def test_portal_schedule(env, monkeypatch):
     assert send(51, "F1") == texts.bot_message("ru", "sched_other")[0]            # Bek sends Ali's page: refused
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]   # his own stays
     assert send(50, "F3", "page.html") == texts.bot_message("ru", "sched_not")[0]
+    assert send(50, "F3", "file") == texts.bot_message("ru", "sched_not")[0]      # "file": sniffed, not a page
+    m = {"from": {"id": 50}, "chat": {"id": 50, "type": "private"}, "document": {"file_id": "F1", "file_name": "file", "mime_type": "application/octet-stream"}}
+    assert bot._sched_file(m) and not bot._sched_file({**m, "chat": {"id": -5, "type": "group"}})
+    assert not bot._sched_file({**m, "document": {**m["document"], "mime_type": "application/pdf"}})
     assert send(50, "F1", size=30_000_000) == texts.bot_message("ru", "sched_big")[0]
     assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204                 # login()'s class gone: his first week
     assert send(50, "F1", "Schedule_webarchive") == texts.bot_message("ru", "sched_ok", n=5)[0]   # iOS: the dot came as "_"
@@ -5608,6 +5612,7 @@ def test_portal_schedule(env, monkeypatch):
     ru = texts.SCHED_LANG["ru"]
     assert send(50, "F2", "Schedule.mht") == said(("sched_same", {"language": ru["en"]}), ("sched_nochange", {}))  # from Android: not doubled
     assert len(c.get("/api/me/schedule", headers=tma(50)).json()) == 5
+    assert send(50, "F2", "file") == said(("sched_same", {"language": ru["en"]}), ("sched_nochange", {}))  # nameless: sniffed as an .mht
     assert send(50, "F4") == said(("sched_added", {"language": ru["ru"], "languages": f"{ru['ru']}, {ru['en']}"}))
     assert send(50, "F5") == said(("sched_added", {"language": ru["kk"], "languages": f"{ru['ru']}, {ru['kk']}, {ru['en']}"}), ("sched_changed", {"n": 1}))
     assert send(50, "F5") == said(("sched_same", {"language": ru["kk"]}), ("sched_nochange", {}))
