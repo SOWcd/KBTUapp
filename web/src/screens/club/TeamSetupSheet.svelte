@@ -20,6 +20,7 @@
   import Row from '../../ui/Row.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
 
   let { overlay, org, onchange }: { overlay: Overlay; org: Id; onchange?: () => void } = $props();
 
@@ -35,7 +36,7 @@
   $effect(() => { void load(); });
 
   // one form open at a time: a role or a tag, new (id null) or an edit
-  let kind = $state<'role' | 'tag' | null>(null);
+  let kind = $state<'role' | 'tag' | 'assign' | null>(null);
   let fid = $state<Id | null>(null);
   let fname = $state('');
   // a role's title is typed once in any language; the AI fills the other two ("Translations"), never one corrected by hand
@@ -110,6 +111,32 @@
       void load(); onchange?.();
     } catch (e) { oops(e); } finally { tagging = null; }
   }
+  // one role to many at once (a president, Nov 6): tick who holds it, Save sends them all; those I may not change stay as they are
+  let picked = $state<Id[]>([]);
+  let q = $state('');
+  const mayAssign = (x: TeamMember) => vice && !!mine && x.person.id !== session.me?.id && RANK[mine] > RANK[x.role];
+  const found = $derived(q.trim() ? team.filter((x) => withNick(x.fullName, x.person).toLowerCase().includes(q.trim().toLowerCase())) : team);
+  async function assign() {
+    haptic.select(); q = '';
+    if (!data.team[org]) await loadTeam(org); // Team loads it with the app; this is the rare cold path
+    picked = team.filter((x) => x.roleId === fid).map((x) => x.person.id); kind = 'assign';
+  }
+  // the preview (Astra): who gets it and who loses it on Save, by name; nothing changing, nothing to save
+  const names = (xs: TeamMember[]) => xs.map((x) => withNick(x.fullName, x.person)).join(', ');
+  const gain = $derived(team.filter((x) => mayAssign(x) && x.roleId !== fid && picked.includes(x.person.id)));
+  const lose = $derived(team.filter((x) => mayAssign(x) && x.roleId === fid && !picked.includes(x.person.id)));
+  const preview = $derived([gain.length ? t('ts.assignGain', { names: names(gain) }) : '', lose.length ? t('ts.assignLose', { names: names(lose) }) : '']
+    .filter(Boolean).join('. ') || t('ts.assignNone'));
+  const pick = (x: TeamMember) => { haptic.tap(); picked = picked.includes(x.person.id) ? picked.filter((i) => i !== x.person.id) : [...picked, x.person.id]; };
+  async function saveAssign() {
+    if (fid == null || busy) return;
+    busy = true;
+    try {
+      const r = await api.assignRole(org, fid, picked);
+      data.team[org] = r.team; done(r.setup);
+      if (r.skipped) say(t('ts.assignSkipped', { n: r.skipped }), 'warning_3d'); else say(phrase('say.tsSaved'), 'sparkles_3d');
+    } catch (e) { oops(e); } finally { busy = false; }
+  }
   const toggle = (k: Right, on: boolean) => { haptic.tap(); frights = on ? [...frights, k] : frights.filter((x) => x !== k); };
   const rightName = (k: Right) => t(`right.${k}` as 'right.door');
   // the door is every member's, not a toggle
@@ -120,6 +147,24 @@
 {#snippet dot(c: string)}<span class="dot" style="--c:{c}"></span>{/snippet}
 
 <!-- the open role or tag, in place of its list -->
+{#snippet assigning()}
+  <div class="form">
+    <Group><Row title={fname}>{#snippet lead()}{@render dot(fcolor)}{/snippet}</Row></Group>
+    <SearchField bind:value={q} placeholder={t('ts.assignFind')} />
+    <Group footnote={preview}>
+      {#each found as x (x.person.id)}
+        <Row dense title={withNick(x.fullName, x.person)} accessory="check" checked={picked.includes(x.person.id)} disabled={!mayAssign(x)} onclick={() => pick(x)}>
+          {#snippet lead()}<Avatar person={x.person} size={30} tappable={false} />{/snippet}
+        </Row>
+      {/each}
+    </Group>
+    <div class="fa">
+      <Button kind="primary" size="s" loading={busy} disabled={!gain.length && !lose.length} onclick={saveAssign}>{t('common.save')}</Button>
+      <Button kind="secondary" size="s" onclick={() => (kind = 'role')}>{t('common.cancel')}</Button>
+    </div>
+  </div>
+{/snippet}
+
 {#snippet form()}
   <div class="form">
     {#if ffixed}<Group><Row title={fname}>{#snippet lead()}{@render dot(fcolor)}{/snippet}</Row></Group><!-- an official role's name is the app's own -->
@@ -151,6 +196,9 @@
         <Row title={t('ts.isDept')} accessory="switch" checked={fdept} disabled={!mayDept} onchange={(on) => (fdept = on)} />
       </Group>
     {/if}
+    {#if kind === 'role' && fid != null && !ffixed}
+      <Group><Row title={t('ts.assign')} accessory="chevron" onclick={assign} /></Group>
+    {/if}
     {#if kind === 'tag' && fid != null}
       {@const tag = fid}
       <Group caption={t('ts.tagPeople')}>
@@ -173,6 +221,7 @@
 <Sheet {overlay} icon={UserCog} full title={t('team.setup')}>
   <div class="page">
     {#if kind === 'role'}<section class="sec"><h3 class="cap">{t('ts.roles')}</h3>{@render form()}</section>
+    {:else if kind === 'assign'}<section class="sec"><h3 class="cap">{t('ts.assign')}</h3>{@render assigning()}</section>
     {:else}
       <Group caption={t('ts.roles')} footnote={t('ts.rolesHint')}>
         <!-- the three official roles first: the President, one per club, is the level itself -->

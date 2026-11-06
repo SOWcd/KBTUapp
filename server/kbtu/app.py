@@ -1049,6 +1049,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def edit_role(oid: int, rid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.save_role(con, v, oid, body, rid)
 
+    @app.put("/api/orgs/{oid}/roles/{rid}/people")
+    def assign_role(oid: int, rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.assign_role(con, v, oid, rid, body)
+
     @app.delete("/api/orgs/{oid}/roles/{rid}")
     def delete_role(oid: int, rid: int, con: Con, v: Me):
         return logic.delete_role(con, v, oid, rid)
