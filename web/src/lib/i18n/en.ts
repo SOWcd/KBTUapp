@@ -46,7 +46,6 @@ const en: Dict = {
   'page.forum': "Forum",
   'fc.ph': "What's on your mind?",
   'fc.anon': "Anonymous",
-  'fc.named': "Signed",
   'fc.asAnon': "Nobody will see who wrote it. Only the app's creator can find out, and only in an extreme case (threats, breaking the law); every such look is logged. You can reply in its comments as the mask too.",
   'fc.rules': "No links, @handles or numbers — an AI takes a quick look first.",
   'fc.post': "Publish",

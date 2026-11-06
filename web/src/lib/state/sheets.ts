@@ -131,7 +131,6 @@ export const sheets = {
   forumSkills: (_onsaved?: () => void) => {},
   newAsk: (_onmade?: () => void) => {},
   /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
-  channelPost: (_draft?: { body: string; anon: boolean; why?: string; refused?: { post: Id; kind: 'noise' | 'ad'; appeal: boolean } }) => {},
   /** my anonymous post: a reply in its comments through the bot, and how my replies stand */
   channelReply: (_post: { id: Id; body: string }) => {},
   askPeople: (_ask: Id, _title: string) => {},

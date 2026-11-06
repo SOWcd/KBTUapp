@@ -6,7 +6,8 @@ import { api, type ChannelFeedPost, type ForumWhy } from '../api';
 
 export const PAGE = 50; // the server's FEED_MAX
 // why: the AI's reason for my posts it held (ChannelCompose asks once the post is in; shown under it, to me alone)
-export const channel = $state({ feed: null as ChannelFeedPost[] | null, focus: null as number | null, more: false, why: {} as Record<number, ForumWhy> });
+// writing: the writing window is up (ChannelCompose): the pill it grew out of hides
+export const channel = $state({ writing: 0, feed: null as ChannelFeedPost[] | null, focus: null as number | null, more: false, why: {} as Record<number, ForumWhy> });
 
 // bumped by a change of mine (a post, a delete): a refresh asked before it lands stale (the 30 s poll answering after my
 // delete brought the post back, after my post's answer took it away), so it's dropped; the next one is fresh

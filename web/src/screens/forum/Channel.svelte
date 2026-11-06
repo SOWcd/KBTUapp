@@ -43,6 +43,7 @@
   import Button from '../../ui/Button.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
+  import { compose } from './ChannelCompose.svelte';
 
   const CHANNEL = 'https://t.me/KBTUappForum';
   const me = $derived(session.me);
@@ -140,9 +141,9 @@
   // the channel takes posts from KBTU-confirmed students only (a typed-in ID could be anyone's): the rest sign in first
   function write() {
     haptic.tap();
-    if (!me?.student) asStudent(() => sheets.channelPost());
+    if (!me?.student) asStudent(() => compose());
     else if (me.student.manual) sheets.login();
-    else sheets.channelPost();
+    else compose();
   }
 
   function fail(e: unknown) {
@@ -172,7 +173,7 @@
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
   </span>{/if}</div>
   <!-- the way to write: a card of its own, my face and a quiet prompt, the pen at the end; the whole card a tap -->
-  <button class="compose" onclick={write}>
+  <button class="compose" class:away={channel.writing > 0} data-compose onclick={write}>
     {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
     <span class="prompt ellipsis">{t('fc.share')}</span>
     <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
@@ -261,6 +262,7 @@
   .compose { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); text-align: left;
     transition: transform 450ms var(--ease-bounce); }
   .compose:active { transform: scale(0.98); transition-duration: 80ms; }
+  .compose.away { visibility: hidden; } /* it is the writing window now (ChannelCompose grows out of it and folds back) */
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }

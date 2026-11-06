@@ -1,59 +1,130 @@
+<script module lang="ts">
+  import { flushSync } from 'svelte';
+  import { open } from '../../lib/state/ui.svelte';
+  import { session } from '../../lib/state/session.svelte';
+  import { channel, touched } from '../../lib/state/channel.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { nowTs } from '../../lib/time';
+  import type { ChannelFeedPost, Id } from '../../lib/api';
+  import Self from './ChannelCompose.svelte';
+
+  export type Draft = { body: string; anon: boolean; why?: string };
+  // the words not posted yet: closing the window keeps them, posting clears them. ponytail: in memory only, as the
+  // feed (the posts' words stay out of storage): a relaunch starts empty; localStorage if students ask for more
+  const kept = { body: '', anon: false };
+
+  /** The writing window, out of the Forum tab's "Share with KBTU…" pill. Called in a tap: the field takes the focus in
+   *  that same tap (flushSync mounts the window first), or iOS won't bring the keyboard up. */
+  export function compose(draft?: Draft): void {
+    open(Self, { draft });
+    flushSync();
+    const fields = document.querySelectorAll<HTMLTextAreaElement>('.cw-text'), f = fields[fields.length - 1]; // the last: an old one may still be leaving
+    f?.focus({ preventScroll: true });
+    f?.setSelectionRange(f.value.length, f.value.length);
+  }
+
+  // the bot's signature, as the server makes it (fchannel.signature): the real first name and the last initial, a nick or
+  // not (owner, Nov 2: the nick rule; the app's feed shows the nick)
+  export function signOf(): string {
+    const s = session.me?.student;
+    return s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] : ''}`.trim() : session.me?.name ?? '';
+  }
+
+  /** A stand-in on top of the feed while the server answers (a tap answers in the same frame) */
+  export function stand(text: string, was: boolean, human = false): ChannelFeedPost {
+    const me = session.me;
+    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : signOf(), mine: true,
+      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false };
+    channel.feed = [temp, ...(channel.feed ?? [])];
+    return temp;
+  }
+  /** The stand-in becomes the real one (or just goes, if a refresh brought the real one already: no twin keys) */
+  export function land(temp: ChannelFeedPost, p: { id: Id; status: ChannelFeedPost['status']; at: number; nick: ChannelFeedPost['nick'] }, human = false): void {
+    const feed = channel.feed ?? []; touched();
+    channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
+      : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human } : x));
+  }
+  export const unstand = (temp: ChannelFeedPost): void => { channel.feed = (channel.feed ?? []).filter((x) => x.id !== temp.id); };
+</script>
+
 <script lang="ts">
-  // A new post to the forum channel (the Forum tab's composer row). Whose name it goes out under first (named or the
-  // mask: two parts, not a switch, owner Nov 1), then one card that is the post as it will stand: the face and the
-  // name it goes out under on top, the words under them (owner, Nov 4: the old sheet "looked shabby"). The rules are
-  // checked as I type (lib/forumRules, the server's own), said at the spot, holding Publish; the count only near the
-  // limit. Publish closes the sheet at once and the post stands at the top of the feed, "checking" while the AI looks.
-  // Refused by the AI (no message in it, an ad): the sheet comes back as the verdict, at once: "Not published", the
-  // words, Edit, and Send to a moderator (fchannel.appeal, three a day) usable right away; the AI's own reason, the
-  // piece it stopped at marked and what to change come in when they're ready (/why, phase 2: nobody waits on it).
-  // Held for a moderator: the feed shows the reason under my post (channel.why). A refusal by the rules (a link, the
-  // pace) brings the editor back with the words and why above them until I edit.
-  import { untrack } from 'svelte';
+  // A new post to the forum channel: a glass window at the top that grows out of the Forum tab's pill (owner, Nov 6:
+  // the sheet was ugly; iOS 26's Liquid Glass morph). The pill's glass stretches down into the window: my face stays
+  // where it was, its words fade into the name the post goes out under, the pen turns into Send, and the field and the
+  // Anonymous switch flow in under them; closing folds it back into the pill. Send sits in the top row, so the keyboard
+  // never covers it. The rules are checked as I type (lib/forumRules, the server's own), said at the spot, holding
+  // Send; the count only near the limit. Send closes the window at once and the post stands at the top of the feed,
+  // "checking" while the AI looks. Refused by the AI: the verdict sheet (ChannelRefused). A refusal by the rules (a
+  // link, the pace) brings the window back with the words and why above them until I edit.
+  import { onMount, untrack } from 'svelte';
   import VenetianMask from '@lucide/svelte/icons/venetian-mask';
   import SquarePen from '@lucide/svelte/icons/square-pen';
-  import ShieldAlert from '@lucide/svelte/icons/shield-alert';
-  import Lightbulb from '@lucide/svelte/icons/lightbulb';
-  import { api, ApiErr, type ChannelFeedPost, type ForumWhy, type Id } from '../../lib/api';
-  import { session } from '../../lib/state/session.svelte';
-  import { channel, loadChannel, touched } from '../../lib/state/channel.svelte';
-  import { close, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { sheets } from '../../lib/state/sheets';
-  import { t, type Key } from '../../lib/i18n/index.svelte';
+  import ArrowUp from '@lucide/svelte/icons/arrow-up';
+  import { api, ApiErr } from '../../lib/api';
+  import { loadChannel } from '../../lib/state/channel.svelte';
+  import { close, hideChrome, removeOverlay, say, type Overlay } from '../../lib/state/ui.svelte';
+  import { type Key } from '../../lib/i18n/index.svelte';
   import { broken, type Rule } from '../../lib/forumRules';
   import { haptic } from '../../lib/tg';
-  import { nowTs } from '../../lib/time';
   import { burst } from '../../ui/burst';
   import { grow } from '../../ui/grow';
-  import Sheet from '../../ui/Sheet.svelte';
-  import Button from '../../ui/Button.svelte';
+  import { glass } from '../../ui/glass';
   import Avatar from '../../ui/Avatar.svelte';
   import Notice from '../../ui/Notice.svelte';
-  import Segmented from '../../ui/Segmented.svelte';
-  import Marked from './Marked.svelte';
+  import ChannelRefused from './ChannelRefused.svelte';
 
-  type Refused = { post: Id; kind: 'noise' | 'ad'; appeal: boolean };
-  type Draft = { body: string; anon: boolean; why?: string; refused?: Refused };
   let { overlay, draft }: { overlay: Overlay; draft?: Draft } = $props();
-  let body = $state(untrack(() => draft?.body ?? '')), anon = $state(untrack(() => draft?.anon ?? false));
-  let refused = $state<Refused | null>(untrack(() => draft?.refused ?? null));
-  let ex = $state<ForumWhy | null>(null), asking = $state(false);
+  let body = $state(untrack(() => draft?.body ?? kept.body)), anon = $state(untrack(() => draft?.anon ?? kept.anon));
+  $effect(() => { kept.body = body; kept.anon = anon; });
+  $effect(() => { overlay.title = t('fc.new'); overlay.icon = SquarePen; });
   const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
   const MAX = 1000;
   const rule = $derived(broken(body));
   const ready = $derived(body.trim().length >= 2 && !rule);
   const HINT: Record<Rule, Key> = { link: 'fc.noLink', mention: 'fc.noMention', phone: 'fc.noPhone', signature: 'fc.signature' };
-  // the bot's signature, as the server makes it (fchannel.signature): the real first name and the last initial, a nick or
-  // not (owner, Nov 2: the nick rule; the app's feed shows the nick)
-  const s = $derived(session.me?.student);
-  const sign = $derived(s ? `${s.firstName} ${s.lastName ? [...s.lastName][0] : ''}`.trim() : session.me?.name ?? '');
+  const sign = $derived(session.me ? signOf() : '');
 
-  // the verdict's reason in the AI's words, asked once the verdict is on screen; none: the template stays
-  $effect(() => {
-    const r = untrack(() => refused);
-    if (!r) return;
-    asking = true;
-    api.channelPostWhy(r.post, untrack(() => body)).then((x) => { ex = x.explain; }).catch(() => {}).finally(() => { asking = false; });
+  let win: HTMLDivElement;
+  let out = $state(true);  // folded into the pill: the state it opens from and closes back to (CSS transitions in between)
+  let gone = false, sent = false;
+  const R = 22;  // var(--r-l): the pill's and the window's corners
+  const FULL = `inset(0px 0px 0px 0px round ${R}px)`;
+  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // the pill as a frame of the window: moved to its place and clipped to its size. null: no pill on screen (scrolled
+  // away, another tab), the window just fades
+  function pill(): Keyframe | null {
+    const p = document.querySelector('[data-compose]')?.getBoundingClientRect(), r = win.getBoundingClientRect();
+    if (!p?.width || p.left < -1 || p.right > innerWidth + 1 || p.bottom < 0 || p.top > innerHeight) return null;
+    return { translate: `0 ${p.top - r.top}px`, clipPath: `inset(0px ${r.right - p.right}px ${Math.max(0, r.height - p.height)}px ${p.left - r.left}px round ${R}px)` };
+  }
+
+  function leave() {
+    if (gone) return;
+    gone = true; out = true;
+    (document.activeElement as HTMLElement | null)?.blur?.(); // the keyboard goes with it
+    const from = still() ? null : pill();
+    const a = from ? win.animate([{ translate: '0 0', clipPath: FULL }, from], { duration: 380, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'forwards' })
+      : win.animate([{ opacity: 1 }, { opacity: 0, scale: '0.97' }], { duration: 180, easing: 'ease-in', fill: 'forwards' });
+    a.onfinish = () => removeOverlay(overlay.id);
+  }
+  $effect(() => { if (overlay.closing) untrack(leave); });  // Back, the scrim, a send: the draft stays, nothing to ask
+
+  onMount(() => {
+    channel.writing++;
+    const chrome = hideChrome();
+    // the room down to the keyboard (iOS lays it over the page): the window stops above it
+    const vv = window.visualViewport;
+    const fit = () => { if (vv) win.style.setProperty('--room', `${vv.offsetTop + vv.height - win.getBoundingClientRect().top - 12}px`); };
+    fit(); vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit);
+    const from = still() ? null : pill();
+    if (from) {
+      // the glass stretches down out of the pill on a spring that overshoots a hair, narrowing a touch as it flows
+      win.animate([from, { translate: '0 0', clipPath: FULL }], { duration: 560, easing: 'cubic-bezier(.3,1.12,.4,1)' });
+      win.animate([{ scale: '1 1' }, { scale: '0.985 1.012', offset: 0.35 }, { scale: '1 1' }], { duration: 560, easing: 'ease-out' });
+    } else win.animate([{ opacity: 0, scale: '0.97' }, { opacity: 1, scale: '1' }], { duration: still() ? 1 : 220, easing: 'ease-out' });
+    requestAnimationFrame(() => { out = false; });
+    return () => { channel.writing--; chrome(); vv?.removeEventListener('resize', fit); vv?.removeEventListener('scroll', fit); };
   });
 
   function reason(e: unknown): string {
@@ -61,25 +132,11 @@
     return t(why);
   }
 
-  // a stand-in on top of the feed while the server answers (a tap answers in the same frame)
-  function stand(text: string, was: boolean, human = false): ChannelFeedPost {
-    const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : sign, mine: true,
-      person: !was && session.me ? { id: session.me.id, name: session.me.name, avatar: session.me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hot: false };
-    channel.feed = [temp, ...(channel.feed ?? [])];
-    return temp;
-  }
-  // the stand-in becomes the real one (or just goes, if a refresh brought the real one already: no twin keys)
-  function land(temp: ChannelFeedPost, p: { id: Id; status: ChannelFeedPost['status']; at: number; nick: ChannelFeedPost['nick'] }, human = false) {
-    const feed = channel.feed ?? []; touched();
-    channel.feed = feed.some((x) => x.id === p.id) ? feed.filter((x) => x.id !== temp.id)
-      : feed.map((x) => (x.id === temp.id ? { ...x, id: p.id, status: p.status, at: p.at, nick: p.nick, human } : x));
-  }
-  const unstand = (temp: ChannelFeedPost) => { channel.feed = (channel.feed ?? []).filter((x) => x.id !== temp.id); };
-
   async function post() {
-    if (!ready) return;
+    if (!ready || sent) return;  // once: a second tap while it closes sends nothing
+    sent = true;
     const text = body.trim(), was = anon;
-    const temp = stand(text, was); haptic.select(); close(overlay.id);
+    const temp = stand(text, was); haptic.select(); kept.body = ''; close(overlay.id);
     try {
       const p = await api.newChannelPost(text, was);
       land(temp, p, p.status === 'held' && !!p.ai);
@@ -90,129 +147,105 @@
         if (p.ai) api.channelPostWhy(p.id, text).then((x) => { if (x.explain) channel.why[p.id] = x.explain; }).catch(() => {});
       }
     } catch (e) {
-      unstand(temp); haptic.error();
+      unstand(temp); haptic.error(); kept.body = text; kept.anon = was;  // not gone: the words wait in the window
       const d = e instanceof ApiErr ? e.data : {};
       if (e instanceof ApiErr && (e.message === 'noise' || e.message === 'ad') && typeof d.post === 'number')
-        sheets.channelPost({ body: text, anon: was, refused: { post: d.post, kind: e.message === 'ad' ? 'ad' : 'noise', appeal: d.appeal === true } });
-      else sheets.channelPost({ body: text, anon: was, why: reason(e) });
+        open(ChannelRefused, { body: text, anon: was, refused: { post: d.post, kind: e.message === 'ad' ? 'ad' : 'noise', appeal: d.appeal === true } });
+      else compose({ body: text, anon: was, why: reason(e) });
     }
   }
-
-  // the AI was wrong: a human decides (held, in the moderators' queue); the post stands in the feed "with a moderator"
-  async function appeal() {
-    const r = refused, text = body.trim(), was = anon;
-    if (!r) return;
-    const temp = stand(text, was, true); haptic.select(); close(overlay.id);
-    try {
-      const p = await api.appealChannelPost(r.post, text);
-      land(temp, p, true); haptic.ok(); say(t('fc.appealedSay'), 'thinking_face_3d');
-    } catch (e) {
-      unstand(temp); haptic.error();
-      const out = e instanceof ApiErr && e.code === 'rate_limited';
-      say(t(out ? 'fc.appealsOut' : 'common.error'), 'pleading_face_3d');
-      sheets.channelPost({ body: text, anon: was, refused: { ...r, appeal: !out && !(e instanceof ApiErr && e.code === 'not_found') } });
-    }
-  }
-
-  function edit() { haptic.tap(); refused = null; }
+  // Ctrl/Cmd+Enter sends (a computer); a plain Enter is a new line
+  const key = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } };
 </script>
 
-<Sheet {overlay} icon={refused ? ShieldAlert : SquarePen} title={t(refused ? 'fc.refused' : 'fc.new')}>
-  {#if refused}
-    <!-- the verdict: at once, in plain words; the AI's own reason replaces the template once it comes -->
-    <div class="verdict">
-      <span class="seal" aria-hidden="true"><ShieldAlert size={22} strokeWidth={2} /></span>
-      <h2>{t('fc.refused')}</h2>
-      <p class="reason" aria-live="polite">{ex?.reason ?? t(refused.kind === 'ad' ? 'fc.ad' : 'fc.noise')}</p>
-      {#if asking}<p class="wait">{t('fc.whyLoading')}</p>{/if}
-    </div>
-    <div class="card">
-      <div class="from">
-        {@render face()}
-        <span class="who"><b class="ellipsis">{anon ? t('fc.nickSoon') : sign}</b><span class="sub">{t('fc.toChannel')}</span></span>
-      </div>
-      <p class="words"><Marked text={body} quote={ex?.quote} /></p>
-      {#if ex?.fix}<p class="fix"><Lightbulb size={16} strokeWidth={2} aria-hidden="true" /><span>{ex.fix}</span></p>{/if}
-    </div>
-    {#if refused.appeal}<p class="note">{t('fc.appealNote')}</p>{/if}
-  {:else}
+<div class="scrim" class:out onclick={() => close(overlay.id, true)} role="presentation"></div>
+<div class="cw glass glass-sheet" class:out use:glass bind:this={win} role="dialog" aria-modal="true" aria-label={t('fc.new')}>
+  <!-- the pill's own row, the same places: my face, then who it goes out as (the pill's words fade into it), Send -->
+  <div class="top">
+    {#key anon || !session.me}<span class="face">{#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
+    {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}</span>{/key}
+    <span class="who"><b class="ellipsis">{anon ? t('fc.nickSoon') : sign}</b><span class="sub">{t('fc.toChannel')}</span></span>
+    <span class="ghost ellipsis" aria-hidden="true">{t('fc.share')}</span>
+    <button class="send" class:ready disabled={!ready} onclick={post} aria-label={t('fc.post')}>
+      <span class="ic pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
+      <span class="ic go" aria-hidden="true"><ArrowUp size={20} strokeWidth={2.4} /></span>
+    </button>
+  </div>
+  <div class="rest scroll">
+    <label class="as sw-on">
+      <span class="asi" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
+      <span class="asl">{t('fc.anon')}</span>
+      <input type="checkbox" role="switch" bind:checked={anon} onchange={() => haptic.select()} />
+    </label>
     {#if why}<div class="why"><Notice tone="danger" text={why} /></div>{/if}
-    <!-- whose name first; the card below is the post as it will stand -->
-    <Segmented items={[{ value: 'named', label: t('fc.named') }, { value: 'anon', label: t('fc.anon') }]} value={anon ? 'anon' : 'named'} label={t('fc.anon')}
-      onchange={(v) => { anon = v === 'anon'; haptic.select(); }} />
-    <div class="card edit" class:bad={!!rule}>
-      <div class="from">
-        {@render face()}
-        <span class="who"><b class="ellipsis">{anon ? t('fc.nickSoon') : sign}</b><span class="sub">{t('fc.toChannel')}</span></span>
-      </div>
-      <textarea class="text" bind:value={body} maxlength={MAX} rows="4" placeholder={t('fc.ph')} aria-label={t('fc.ph')} aria-invalid={!!rule} use:grow={300}></textarea>
-      <!-- the rule broken, at the spot (the server's words for it); the count once it's near the limit -->
-      {#if rule || body.length > MAX - 100}<div class="foot">
-        {#if rule}<span class="hint" role="status">{t(HINT[rule])}</span>{/if}
-        {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
-      </div>{/if}
-    </div>
+    <textarea class="cw-text" class:bad={!!rule} bind:value={body} maxlength={MAX} rows="5" placeholder={t('fc.share')} aria-label={t('fc.ph')} aria-invalid={!!rule}
+      onkeydown={key} use:grow></textarea>
+    <!-- the rule broken, at the spot (the server's words for it); the count once it's near the limit -->
+    {#if rule || body.length > MAX - 100}<div class="foot">
+      {#if rule}<span class="hint" role="status">{t(HINT[rule])}</span>{/if}
+      {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
+    </div>{/if}
     <p class="note">{anon ? t('fc.asAnon') : t('fc.rules')}</p>
-  {/if}
-  {#snippet footer()}
-    {#if refused}
-      <div class="two">
-        {#if refused.appeal}<Button kind="secondary" size="l" full onclick={appeal}>{t('fc.appeal')}</Button>{/if}
-        <Button kind="filled" size="l" full onclick={edit}>{t('fc.edit')}</Button>
-      </div>
-    {:else}<Button kind="filled" size="l" full disabled={!ready} onclick={post}>{t('fc.post')}</Button>{/if}
-  {/snippet}
-</Sheet>
-
-{#snippet face()}
-  {#key anon || !session.me}<span class="face">{#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
-  {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}</span>{/key}
-{/snippet}
+  </div>
+</div>
 
 <style>
-  /* the post as it will stand: one card, the face and name on top, a hairline, the words; focus lifts it in the accent */
-  .card { margin-top: var(--s-3); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--line);
-    transition: box-shadow var(--t-base) var(--ease); }
-  .card.edit:focus-within { box-shadow: var(--shadow-card), inset 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft); }
-  .card.edit.bad:focus-within { box-shadow: var(--shadow-card), inset 0 0 0 1px var(--danger), 0 0 0 4px var(--danger-soft); }
-  .from { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); }
-  .from::after { content: ''; position: absolute; left: var(--s-4); right: 0; bottom: 0; height: 0.5px; background: var(--separator); }
+  .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: var(--scrim); transition: opacity 320ms var(--ease); }
+  .scrim.out { opacity: 0; transition-duration: 260ms; }
+  /* the window: the pill's width, under the capsule, as tall as its words up to the keyboard */
+  .cw { position: absolute; z-index: var(--z-sheet); top: calc(var(--head-bottom) + var(--s-2)); left: var(--gutter); right: var(--gutter);
+    max-width: 560px; margin: 0 auto; max-height: min(var(--room, 100%), calc(100% - var(--head-bottom) - var(--s-2) - var(--s-4) - var(--safe-bottom)));
+    display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-l); transform-origin: 50% 0; will-change: transform; }
+
+  /* the top row: the pill's paddings and sizes, so its face and its pen stay put */
+  .top { position: relative; flex: none; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); }
   .face { flex: none; display: flex; animation: swap 320ms var(--ease-bounce); }
   @keyframes swap { from { transform: scale(0.6) rotate(-12deg); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .face { animation: none; } }
   .av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill-2); color: var(--text); }
-  .who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; transition: opacity 260ms var(--ease) 80ms, translate 420ms var(--ease); }
   .who b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); letter-spacing: -0.01em; }
   .sub { font: 450 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
-  /* the words: no box of their own, the card is the field */
-  .text { display: block; width: 100%; min-height: 112px; padding: var(--s-3) var(--s-4) var(--s-4); border: 0; resize: none; background: none; color: var(--text);
-    font: 450 var(--fs-row)/1.42 var(--font-text); letter-spacing: -0.012em; }
-  .text::placeholder { color: var(--text-3); }
-  .text:focus { outline: none; }
-  .foot { display: flex; align-items: baseline; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); font: 500 var(--fs-sub)/1.3 var(--font-text); }
+  /* the pill's words, where they were: they fade as the name comes */
+  .ghost { position: absolute; left: calc(var(--s-4) + 36px + var(--s-3)); right: calc(36px + var(--s-3) * 2); top: 50%; translate: 0 -50%; opacity: 0; pointer-events: none;
+    font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); transition: opacity 160ms var(--ease); }
+  .out .who { opacity: 0; translate: 0 4px; transition-delay: 0s; transition-duration: 140ms; }
+  .out .ghost { opacity: 1; transition-delay: 80ms; }
+
+  /* the pen turns into Send: one round button, the accent while it can send */
+  .send { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--fill-2); color: var(--text-3);
+    transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease), transform 450ms var(--ease-bounce); }
+  .send.ready, .out .send { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 12px -4px var(--accent); }
+  .send:disabled { opacity: 1; }
+  .send::after { content: ''; position: absolute; inset: -4px; } /* 44 to the finger */
+  .ic { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 200ms var(--ease), transform 460ms var(--ease-bounce); }
+  .pen { opacity: 0; transform: rotate(80deg) scale(0.4); }
+  .out .pen { opacity: 1; transform: none; }
+  .out .go { opacity: 0; transform: rotate(-80deg) scale(0.4); }
+
+  /* under the top row: the switch, the words, the rules; they flow in after the glass */
+  .rest { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; transition: opacity 280ms var(--ease) 100ms, translate 420ms var(--ease) 60ms; }
+  .out .rest { opacity: 0; translate: 0 -8px; transition-delay: 0s; transition-duration: 140ms; }
+  .as { position: relative; display: flex; align-items: center; gap: var(--s-3); min-height: 44px; padding: var(--s-1) var(--s-3) var(--s-1) var(--s-4); cursor: pointer; }
+  .as::before, .as::after { content: ''; position: absolute; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
+  .as::before { top: 0; } .as::after { bottom: 0; }
+  .asi { flex: none; width: 36px; display: grid; place-items: center; color: var(--text-2); }
+  .asl { flex: 1; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text); }
+  .why { margin: var(--s-3) var(--s-4) 0; }
+  /* the words: no box of their own, the window is the field */
+  .cw-text { display: block; width: 100%; min-height: 132px; padding: var(--s-3) var(--s-4); border: 0; resize: none; background: none; color: var(--text);
+    font: 450 var(--fs-row)/1.42 var(--font-text); letter-spacing: -0.012em; caret-color: var(--accent); }
+  .cw-text.bad { caret-color: var(--danger); }
+  .cw-text::placeholder { color: var(--text-3); }
+  .cw-text:focus { outline: none; }
+  .foot { display: flex; align-items: baseline; gap: var(--s-2); padding: 0 var(--s-4) var(--s-2); font: 500 var(--fs-sub)/1.3 var(--font-text); }
   .hint { flex: 1; color: var(--danger-text); }
   .count { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
   .count.full { color: var(--warning-text); }
-  .why { margin-bottom: var(--s-3); }
-  .note { margin: var(--s-3) var(--s-4) 0; font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .note { position: relative; padding: var(--s-3) var(--s-4) var(--s-4); font: 450 var(--fs-cap)/1.4 var(--font-text); color: var(--text-3); }
+  .note::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
 
-  /* the verdict: a seal, the word, the reason; calm, centred, no alarm red */
-  .verdict { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4) var(--s-2); text-align: center; }
-  .seal { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--warning-soft); color: var(--warning-text);
-    animation: seal 520ms var(--ease-bounce) backwards; }
-  @keyframes seal { from { transform: scale(0.5); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .seal { animation: none; } }
-  .verdict h2 { margin-top: var(--s-1); font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.02em; color: var(--text); }
-  .reason { max-width: 34ch; font: 450 var(--fs-body)/1.42 var(--font-text); color: var(--text-2); animation: fade 300ms var(--ease); }
-  @keyframes fade { from { opacity: 0; } }
-  .wait { font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); animation: pulse 1.4s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: 0.45; } }
-  @media (prefers-reduced-motion: reduce) { .wait { animation: none; } }
-  .words { padding: var(--s-3) var(--s-4) var(--s-4); font: 450 var(--fs-body)/1.47 var(--font-text); color: var(--text); white-space: pre-line; overflow-wrap: break-word;
-    max-height: 40vh; overflow: auto; }
-  .fix { position: relative; display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-3) var(--s-4); font: 500 var(--fs-sub)/1.4 var(--font-text); color: var(--text);
-    animation: fade 300ms var(--ease); }
-  .fix::before { content: ''; position: absolute; top: 0; left: var(--s-4); right: 0; height: 0.5px; background: var(--separator); }
-  .fix :global(svg) { flex: none; margin-top: 1px; color: var(--warning-text); }
-  .two { display: flex; flex-direction: column; gap: var(--s-2); }
+  @media (prefers-reduced-motion: reduce) {
+    .face { animation: none; }
+    .scrim, .who, .ghost, .send, .ic, .rest { transition-duration: 1ms !important; transition-delay: 0s !important; }
+  }
 </style>
