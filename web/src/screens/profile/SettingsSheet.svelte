@@ -311,7 +311,7 @@
   {:else if kind === 'donate' && donate}
     <!-- owner, Nov 6: a heart, "not a purchase" as a quiet pill, two lines (the page's own title names it); the number with its copy; then the banks -->
     <div class="don">
-      <span class="heart"><Emoji name="blue_heart_3d" size={88} /></span>
+      <span class="heart"><Emoji name="blue_heart_3d" size={64} /></span>
       <span class="pill">{t('don.head')}</span>
       <p class="fs-body dim">{t('don.text')}</p>
     </div>
@@ -322,10 +322,10 @@
     <p class="banks-h fs-sub faint">{t('don.banks')}</p>
     <div class="banks">
       {#each BANKS as [id, name, ios] (id)}
-        <button class="bank" onclick={() => { haptic.tap(); void toBank(name, ios); }}><img src="banks/{id}.webp" alt="" width="54" height="54" /><small>{name}</small></button>
+        <button class="bank" onclick={() => { haptic.tap(); void toBank(name, ios); }}><img src="banks/{id}.webp" alt="" width="48" height="48" /><small>{name}</small></button>
       {/each}
     </div>
-    <p class="foot always">{t('don.safe')}</p>
+    <p class="foot dfoot">{t('don.safe')}</p>
   {/if}
 </Pane>
 
@@ -340,19 +340,20 @@
   .two > .sub { font-size: var(--fs-sub); }
   /* a school's short name stays whole; its long name wraps beside it */
   .short { color: var(--text-3); }
-  .don { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4) 0; text-align: center; }
-  .heart { display: grid; place-items: center; width: 132px; height: 112px; background: radial-gradient(circle, var(--accent-soft), transparent 62%); }
+  .don { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: 0 var(--s-4); text-align: center; }
+  .heart { display: grid; place-items: center; width: 112px; height: 80px; background: radial-gradient(circle, var(--accent-soft), transparent 62%); }
   .pill { padding: 4px 12px; border-radius: var(--r-full); background: var(--surface-2); font: 700 var(--fs-cap)/1.4 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
-  .num-card { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-6); padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5);
+  .num-card { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-4); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5);
     border-radius: var(--r-l); background: var(--surface); }
   .num-card > span { display: flex; flex-direction: column; min-width: 0; }
   .num-card .num { white-space: nowrap; }
   .cp { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: var(--r-m); background: var(--accent); color: var(--on-accent); }
   .cp:active, .bank:active { transform: scale(0.95); }
-  .banks-h { margin: var(--s-6) var(--s-4) var(--s-2); }
-  .banks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4) var(--s-2); padding: var(--s-4) var(--s-2); border-radius: var(--r-l); background: var(--surface); }
+  .banks-h { margin: var(--s-4) var(--s-4) var(--s-2); }
+  .dfoot { margin-top: var(--s-4); } /* one screen, no scroll (owner, Nov 6: "too stretched") */
+  .banks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3) var(--s-2); padding: var(--s-3) var(--s-2); border-radius: var(--r-l); background: var(--surface); }
   .bank { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-  .bank img { width: 54px; height: 54px; border-radius: var(--r-m); box-shadow: var(--shadow-thumb); }
+  .bank img { width: 48px; height: 48px; border-radius: var(--r-m); box-shadow: var(--shadow-thumb); }
   .bank small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-2); }
   .wide { max-width: 60vw; color: var(--text-3); overflow-wrap: anywhere; text-align: right; }
 </style>
