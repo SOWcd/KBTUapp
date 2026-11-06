@@ -372,6 +372,7 @@ def admin_create_org(con, v: Viewer, body: dict) -> dict:
     # a school is never made by hand: KBTU's come from its site (seed_schools)
     if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and body.get("kind", "club") == "club"):
         raise ApiError("bad_input")
+    no_emoji(name)
     return _admin_org(con, _org(con, create_org(con, v.id, name, short, emoji, bool(body.get("official")))))
 
 
@@ -390,6 +391,6 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core  # noqa: E402
-from .clubs import UNDO_WAIT, _official, create_org  # noqa: E402
+from .clubs import UNDO_WAIT, _official, create_org, no_emoji  # noqa: E402
 from .seats import notify  # noqa: E402
 from .teams import team  # noqa: E402

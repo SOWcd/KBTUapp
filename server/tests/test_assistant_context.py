@@ -16,7 +16,7 @@ def test_card_context(env, monkeypatch):
     _board_on(c, cfg)
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, description, links, created_at) VALUES "
-                "(1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 'We build robots.', '[\"https://t.me/itclub\"]', 0)")
+                "(1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 'We build robots.', '[\"https://tiktok.com/@itclub\"]', 0)")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, status, created_at) VALUES (2, 'gone', 'club', 'Gone Club', 'G', 'x', 'hidden', 0)")
     later = int(time.time()) + 86400
     for eid, org, status, extra, title in ((7, 1, "published", "", "Hackathon"), (8, 1, "draft", "", "Secret draft"),
@@ -41,7 +41,7 @@ def test_card_context(env, monkeypatch):
     assert "Dana" not in seen[-1] and "+7700" not in seen[-1]               # the payee's name and phone never go
     assert r["actions"] == [{"type": "event", "id": 7}]
     ask({"kind": "club", "id": 1})
-    assert "We build robots." in seen[-1] and "t.me/itclub" in seen[-1] and "join requests" in seen[-1]
+    assert "We build robots." in seen[-1] and "tiktok.com/@itclub" in seen[-1] and "join requests" in seen[-1]
 
     for eid in (8, 9, 10, 11, 404):                                          # nothing of these reaches the model
         ask({"kind": "event", "id": eid})

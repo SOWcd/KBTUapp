@@ -9,7 +9,8 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import Circle from '@lucide/svelte/icons/circle';
   import { api, ApiErr, type Id, type Round, type RoundSlot } from '../../lib/api';
-  import { social } from '../../lib/social';
+  import { clubDm } from '../../lib/clubdm';
+  import { session } from '../../lib/state/session.svelte';
   import { placeOf } from '../../lib/i18n/index.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, loadAfisha } from '../../lib/state/data.svelte';
@@ -119,9 +120,11 @@
     } catch (x) { haptic.error(); say(x instanceof ApiErr && x.code === 'full' ? t('cast.ivFull') : t('common.error'), 'warning_3d');
       api.roundSlots(r.id).then((y) => (slots = y)).catch(() => {}); }
   }
+  // no time fits: "Message the club" (its President's DM, lib/clubdm), fetched ahead so the tap opens it at once
+  let contact = $state<string | null>(null);
+  $effect(() => { api.org(org).then((x) => (contact = x.contact ?? null)).catch(() => {}); });
   function nothingFits() {
-    const tgLink = club?.links.find((u) => social(u).kind === 'telegram') ?? club?.links[0];
-    if (tgLink) openLink(tgLink); else say(t('cast.ivWrite'), 'raising_hands_3d_default');
+    if (contact && club) openLink(clubDm(contact, club, session.me?.memberships ?? [])); else say(t('cast.ivWrite'), 'raising_hands_3d_default');
   }
 
   function cancelEdit() {

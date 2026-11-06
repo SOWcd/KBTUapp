@@ -236,6 +236,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic._hand_over)
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
+    if kind == "club_emoji":  # emo:<org>, to the President: the name lost its emoji (logic.strip_emoji_names)
+        o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
+        return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
     if kind in ("club_official", "club_unofficial"):  # off:<org>, to the club's President: DMP gave the ✓ or took it (said only while still so)
         o = one(con, "SELECT name, official FROM orgs WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o and bool(o["official"]) == (kind == "club_official") else None
@@ -672,6 +675,7 @@ def _offsite_run(db_path: str, home: Path, date: str, jobs: list) -> None:
 def _chores(cfg: Config, con) -> None:
     """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
     hold the API worker's event loop, /healthz included."""
+    logic.strip_emoji_names(con)  # once (meta): org names from before the no-emoji rule
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going

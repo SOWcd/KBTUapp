@@ -2118,12 +2118,12 @@ def test_club_applications(env, monkeypatch):
     login(c, 60, "boss"); ali = login(c, 61, "ali"); zhan = login(c, 62, "zhan")
     B, A, Z = tma(60, "Boss"), tma(61, "Ali"), tma(62, "Zhan")
     # A4: a name, a description, up to 6 social links; no "why" (the form before the refactor still sends one link)
-    links = ["https://instagram.com/chess.kbtu", "https://t.me/chesskbtu"]
+    links = ["https://instagram.com/chess.kbtu", "https://tiktok.com/@chesskbtu"]
     good = {"name": "Chess Club", "short": "CH", "description": "We play chess every week.", "emoji": "trophy_3d", "cover": 2, "links": links}
     assert c.post("/api/club-applications", headers=A, json={**good, "links": ["javascript:alert(1)"]}).status_code == 400
-    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://t.me/x"] * 7}).status_code == 400
-    assert c.post("/api/club-applications", headers=A, json={**good, "links": "https://t.me/x"}).status_code == 400
-    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://t.me/x"] * 2}).status_code == 400  # keyed in the app
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://tiktok.com/@x"] * 7}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": "https://tiktok.com/@x"}).status_code == 400
+    assert c.post("/api/club-applications", headers=A, json={**good, "links": ["https://tiktok.com/@x"] * 2}).status_code == 400  # keyed in the app
     assert c.post("/api/club-applications", headers=A, json={k: x for k, x in good.items() if k != "links"} | {"link": "javascript:alert(1)"}).status_code == 400
     app = c.post("/api/club-applications", headers=A, json=good).json()
     assert app["links"] == links and app["why"] is None
@@ -2148,9 +2148,9 @@ def test_club_applications(env, monkeypatch):
     assert c.get(f"/api/orgs/{done['orgId']}", headers=A).json()["links"] == links           # the club got them all
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application_decided'").fetchone()
     assert bot._render(con, told)[2] == f"cl_{done['orgId']}"
-    z = c.post("/api/club-applications", headers=Z, json={k: x for k, x in good.items() if k != "links"} | {"name": "Go Club", "link": "https://t.me/go",
+    z = c.post("/api/club-applications", headers=Z, json={k: x for k, x in good.items() if k != "links"} | {"name": "Go Club", "link": "https://tiktok.com/@go",
                                                                                                            "why": "Old form"}).json()
-    assert (z["links"], z["why"]) == (["https://t.me/go"], "Old form")                          # an old client
+    assert (z["links"], z["why"]) == (["https://tiktok.com/@go"], "Old form")                          # an old client
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False}).status_code == 400  # a reason
     assert c.post(f"/api/admin/club-applications/{z['id']}", headers=B, json={"approve": False, "reason": "There is a Go club already"}).json()["status"] == "rejected"
     assert c.get("/api/club-applications/mine", headers=Z).json()["application"]["reason"] == "There is a Go club already"
@@ -2215,7 +2215,7 @@ def test_club_profile(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0), (1, ?, 'member', 0)", (vice["id"], mem["id"]))
     V, M = tma(20, "Vice"), tma(21, "Mem")
     patch = {"name": "IT KBTU", "short": "it", "emoji": "rocket_3d", "cover": 4, "description": "We build things.",
-             "links": ["https://instagram.com/itclub", "https://t.me/itclub"]}
+             "links": ["https://instagram.com/itclub", "https://tiktok.com/@itclub"]}
     assert c.patch("/api/orgs/1", headers=M, json=patch).status_code == 403
     o = c.patch("/api/orgs/1", headers=V, json=patch).json()
     assert (o["name"], o["short"], o["emoji"], o["cover"], o["description"], o["links"], o["recruiting"]) == \

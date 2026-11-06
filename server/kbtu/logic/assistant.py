@@ -17,6 +17,7 @@ import time
 
 from ..db import tx
 from .core import PERSON, ApiError, Viewer, _qs, can, log_action, need_student, now, one, person_ref, rows
+from .clubs import shown_links
 from .oversight import _mod
 
 A_DAY = 30
@@ -137,8 +138,8 @@ def card(con, ctx: object) -> tuple[str, int | None] | None:
                 "registered with the university" if o["official"] else "a student initiative", f"{o['members']} members",
                 f"taking applications in a recruitment round until {_when(o['round'])} (the Apply button on its page)" if o["round"]
                 else "taking join requests (the Apply button on its page)" if o["recruiting"]
-                else "not taking applications now (one can write to it through its links)",
-                o["links"] != "[]" and f"links: {', '.join(json.loads(o['links']))}"]
+                else "not taking applications now (one can write to it with the Message the club button)",
+                (ls := shown_links(o["links"])) and f"links: {', '.join(ls)}"]
         about, eid = o["description"], None
         head = "a club's page"
     facts = "; ".join(str(b) for b in bits if b) + (f". About: {_one_line(about)[:1200]}" if about else "")

@@ -1,7 +1,7 @@
 <script lang="ts">
   // A club, from anywhere its name or logo shows (SPEC §8.3: one sheet for "Subscribe" and "Join"): who they
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
-  // club that closed applications can still be written to: its Telegram, else its first link (§4.5). Its Vice+ change
+  // club can be written to: a DM to its President (lib/clubdm; in the footer once applications are closed). Its Vice+ change
   // the logo and the rest by tapping the logo (testers looked for it here, not in Studio).
   import OfficialMark from '../../ui/OfficialMark.svelte';
   import Bell from '@lucide/svelte/icons/bell';
@@ -40,6 +40,8 @@
   import { dayMonth, relDay } from '../../lib/time';
   import { openLink, haptic } from '../../lib/tg';
   import { compact, APP_FOLDER } from '../../lib/chats';
+  import { clubDm } from '../../lib/clubdm';
+  import { session } from '../../lib/state/session.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
@@ -69,9 +71,13 @@
     api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});
   });
   const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club
-  const contact = $derived(o?.links.find((u) => social(u).kind === 'telegram') ?? o?.links[0]);
+  // "Message the club": a DM to its President (or the next with a @username), the draft naming the club (lib/clubdm)
+  const contact = $derived(fetched?.contact ?? null);
+  const write = () => { if (o && contact) { haptic.tap(); openLink(clubDm(contact, o, session.me?.memberships ?? [])); } };
+  // in the footer while the club takes no applications; otherwise a row under its links (collabs, questions)
   // the second button: apply, the pending application, or "write to the club" once it's closed
   const join = $derived(!!o && joinable && !!(o.round || o.myRequest || o.recruiting || contact));
+  const rowWrite = $derived(!!o && !!contact && !o.myRole && (!join || !!(o.round || o.myRequest || o.recruiting)));
 </script>
 
 {#snippet bell()}{#if o?.subscribed}<BellCheck size={19} />{:else}<Bell size={19} />{/if}{/snippet}
@@ -99,8 +105,9 @@
         </div>
       {/if}
 
-      {#if o.links.length}
+      {#if o.links.length || rowWrite}
         <Group>
+          {#if rowWrite}<Row title={t('join.write')} accessory="external" onclick={write}>{#snippet lead()}<span class="si"><TelegramMark size={20} /></span>{/snippet}</Row>{/if}
           {#each o.links as url (url)}
             {@const s = social(url)}
             <Row title={s.label} accessory="external" onclick={() => openLink(url)}>{#snippet lead()}<span class="si"><SocialIcon kind={s.kind} size={20} /></span>{/snippet}</Row>
@@ -195,7 +202,7 @@
           {:else if o.myRequest || o.recruiting}
             <Button kind={o.myRequest ? 'neutral' : 'primary'} size="l" full onclick={() => toggleJoin(id)}>{o.myRequest ? t('join.sent') : t('join.apply')}</Button>
           {:else}
-            <Button kind="primary" size="l" full icon={social(contact!).kind === 'telegram' ? send : undefined} onclick={() => openLink(contact!)}>{t('join.write')}</Button>
+            <Button kind="primary" size="l" full icon={send} onclick={write}>{t('join.write')}</Button>
           {/if}
         {:else}
           <Button kind={o.subscribed ? 'neutral' : 'primary'} size="l" full icon={bell} onclick={() => toggleSub(id)}>{sub}</Button>

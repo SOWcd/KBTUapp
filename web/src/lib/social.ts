@@ -18,11 +18,12 @@ export function social(url: string): { kind: SocialKind; label: string } {
 
 /** The server's rule for a saved link. */
 export const LINK = /^https:\/\/[A-Za-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/;
+/** Telegram is no social (Nov 6): a club's chats go in its Chats, "Message the club" writes to its President. */
+export const TG_LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.(?:me|dog)(?:\/|$)|^tg:/i;
 
 // The club's editor: pick a network and type the username, or paste a
 // whole link, https:// optional. Saved as full links, as before.
 export const NETS = [
-  { kind: 'telegram', label: 'Telegram', base: 't.me/' },
   { kind: 'instagram', label: 'Instagram', base: 'instagram.com/' },
   { kind: 'tiktok', label: 'TikTok', base: 'tiktok.com/@' },
   { kind: 'youtube', label: 'YouTube', base: 'youtube.com/@' },
@@ -40,7 +41,7 @@ export function linkUrl(d: LinkDraft): string | null {
   const h = net && HANDLE.exec(v);
   if (h) return `https://${net.base}${h[1]}`;
   const u = /^https?:\/\//i.test(v) ? v.replace(/^http:/i, 'https:') : `https://${v}`;
-  return v && LINK.test(u) ? u : null;
+  return v && LINK.test(u) && !TG_LINK.test(u) ? u : null;
 }
 
 /** A saved link → its row: a network's username when the link is just that, else the address without https://. */

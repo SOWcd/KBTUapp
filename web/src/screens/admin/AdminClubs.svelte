@@ -66,7 +66,7 @@
       card = o.id; open = o.id;
       haptic.ok(); say(t('adm.created'), 'party_popper_3d');
       void loadAfisha(); // the club shows in Clubs at once
-    } catch (e) { oops(e); } finally { busy = false; }
+    } catch (e) { if (e instanceof ApiErr && e.message === 'emoji') { haptic.error(); say(t('nc.emoji'), 'warning_3d'); } else oops(e); } finally { busy = false; }
   }
 
   // ---- roles ----

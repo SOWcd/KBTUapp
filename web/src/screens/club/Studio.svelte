@@ -48,6 +48,7 @@
   import Segmented from '../../ui/Segmented.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Notice from '../../ui/Notice.svelte';
   import Crown from '@lucide/svelte/icons/crown';
   import BookUser from '@lucide/svelte/icons/book-user';
   import FileDown from '@lucide/svelte/icons/file-down';
@@ -243,6 +244,11 @@
         </div>
       {/if}
     </header>
+
+    {#if m.role === 'president' && session.me && !session.me.tg.username}
+      <!-- "Message the club" is a DM to the President: without a @username nobody can write (lib/clubdm) -->
+      <Notice tone="warning" title={t('studio.noUserT')} text={t('studio.noUser')} />
+    {/if}
 
     <div class="team"><Group>
       <Row icon={Users} title={t('page.team')} subtitle={removals ? t('team.removals') : undefined} count={removals} accessory="chevron" onclick={() => sheets.team()}>

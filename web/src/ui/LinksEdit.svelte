@@ -3,12 +3,13 @@
   // too; six at most. The caller turns the drafts into links with linkUrl.
   import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';
-  import { social, linkUrl, isHandle, NETS, type LinkDraft } from '../lib/social';
+  import { social, linkUrl, isHandle, NETS, TG_LINK, type LinkDraft } from '../lib/social';
   import { t } from '../lib/i18n/index.svelte';
   import SocialIcon from './SocialIcon.svelte';
 
   let { links = $bindable() }: { links: LinkDraft[] } = $props();
   const urls = $derived(links.map(linkUrl));
+  const tg = $derived(links.some((d) => TG_LINK.test(d.v.trim())));
   let inputs = $state<HTMLInputElement[]>([]);
   async function add(kind: LinkDraft['kind']) {
     links.push({ kind, v: '' });
@@ -26,6 +27,7 @@
     <button class="rm" onclick={() => links.splice(i, 1)} aria-label={t('cm.delete')}><X size={16} /></button>
   </div>
 {/each}
+{#if tg}<p class="t-foot tg">{t('ce.noTg')}</p>{/if}
 {#if links.length < 6}
   <div class="nets">
     {#each [...NETS, { kind: 'web' as const, label: t('ce.site') }] as n (n.kind)}
@@ -42,6 +44,7 @@
   .at { margin-right: -9px; font: 550 15px/1.3 var(--font-text); color: var(--text-3); }
   .rm { flex: none; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
   .rm:active { background: var(--surface); }
+  .tg { margin: -2px 0 8px 4px; color: var(--danger); }
   .nets { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
   .addl { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }

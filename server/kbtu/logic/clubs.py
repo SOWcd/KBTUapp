@@ -11,7 +11,7 @@ from .. import media
 from ..db import tx
 
 from .core import (ApiError, PERSON_COLS, RANK, Viewer, _by_id, _may, _org, _qs, _rights_from, _roles, can, log_action,
-    need_student, one, org_ref, overseer, person_ref, role_in, rows, short_name)
+    _once, need_student, one, org_ref, overseer, person_ref, role_in, rows, short_name)
 
 
 # ---------------------------------------------------------------- orgs
@@ -64,7 +64,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         AND NOT EXISTS (SELECT 1 FROM round_questions WHERE round_id = r.id) AND (SELECT COUNT(*) FROM round_departments WHERE round_id = r.id) <= 1""",
         *[x["id"] for x in live.values()])} if live else set()
     return {o["id"]: {
-        **org_ref(con, o, files), "description": o["description"], "links": json.loads(o["links"]),
+        **org_ref(con, o, files), "description": o["description"], "links": shown_links(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
         "round": {"id": (rid := live[o["id"]]["id"]), "closesAt": live[o["id"]]["closes_at"], "quick": rid in quick} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
@@ -82,7 +82,17 @@ def org(con, v: Viewer, oid: int) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND (status = 'active' OR status = 'hidden' AND ?)", oid, v.role == "admin")
     if not o:
         raise ApiError("not_found")
-    return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')"), "chats": org_chats(con, oid)}
+    return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')"), "chats": org_chats(con, oid),
+            "contact": _contact(con, oid) if v.student else None}
+
+
+def _contact(con, oid: int) -> str | None:
+    """Whom "Message the club" writes to: the President's @username, else the next by rank (Vice, then a Head) who has
+    one. Only to signed-in students (the people list never shows usernames)."""
+    r = one(con, """SELECT u.tg_username FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ?
+        AND m.role IN ('president', 'vice', 'head') AND u.tg_username IS NOT NULL AND u.tg_username != '' AND u.banned_at IS NULL
+        ORDER BY CASE m.role WHEN 'president' THEN 0 WHEN 'vice' THEN 1 ELSE 2 END, m.joined_at, m.user_id LIMIT 1""", oid)
+    return r[0] if r else None
 
 
 def _people(con, oid: int, where: str = "") -> list[dict]:
@@ -264,12 +274,19 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
 CLUB_REAPPLY = 30 * 86400   # after a decline, a new application in 30 days
 COVERS = 6                  # the cover palette (OrgLogo.svelte's COVERS)
 LINK = re.compile(r"https://[A-Za-z0-9.-]+\.[a-z]{2,}(/[^\s]*)?")
+# Telegram is not a social (owner, Nov 6): its chats are linked in the club's Chats, and "Message the club" goes to the President
+TG_LINK = re.compile(r"https://(?:www\.)?(?:t|telegram)\.(?:me|dog)(?:/|$)", re.I)
+
+
+def shown_links(raw: str) -> list[str]:
+    """The club's stored links as shown: t.me ones saved before Nov 6 stay stored, unseen (an edit drops them)."""
+    return [x for x in json.loads(raw) if not TG_LINK.match(x)]
 
 
 def _links_ok(ls: object) -> bool:
     """A club's social links: up to 6 https addresses (the app draws Instagram, Telegram, TikTok... from the host)."""
     return isinstance(ls, list) and len(ls) <= 6 and len(set(map(str, ls))) == len(ls) \
-        and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) for x in ls)  # the app keys them: no twins
+        and all(isinstance(x, str) and len(x) <= 200 and LINK.fullmatch(x) and not TG_LINK.match(x) for x in ls)  # the app keys them: no twins
 
 
 def _club_app(con, a: sqlite3.Row, staff: bool) -> dict:
@@ -619,11 +636,39 @@ _CLUB_WORD = re.compile(r"(?<![^\W_])(?:club|\u043a\u043b\u0443\u0431(?:\u044b|\
 _PAIR = re.compile("[×✕✖⨯⨉⨰⤫╳]|\\s[x\u0445]\\s", re.I)  # a times sign, or x (Latin, Cyrillic) between words; on the NFKC form
 
 
+def _emoji(c: str) -> bool:
+    return unicodedata.category(c) == "So" or 0x1F000 <= ord(c) <= 0x1FAFF or c in "\u200d\ufe0f\u20e3"
+
+
+def no_emoji(name: str) -> None:
+    """Every org name (create, rename, application, the admin's create)."""
+    if any(map(_emoji, name)):
+        raise ApiError("bad_input", "emoji")
+
+
 def _plain(name: str) -> None:
     if _CLUB_WORD.search(name):
         raise ApiError("bad_input", "club_word")
-    if any(unicodedata.category(c) == "So" or 0x1F000 <= ord(c) <= 0x1FAFF or c in "\u200d\ufe0f" for c in name):
-        raise ApiError("bad_input", "emoji")
+    no_emoji(name)
+
+
+def strip_emoji_names(con) -> None:
+    """Once (Nov 6): names from before the rule lose their emoji ("Chess larpers\U0001f976" -> "Chess larpers"; letters
+    like \u00f3 stay), the slug kept, audit-logged, and the club's President told how (the club's look has an emoji)."""
+    if not _once(con, "emoji_names", "1"):
+        return
+    clean = lambda n: re.sub(r"\s+", " ", "".join(c for c in n if not _emoji(c))).strip()  # noqa: E731
+    for o in rows(con, "SELECT id, name, i18n FROM orgs"):
+        if (new := clean(o["name"])) == o["name"] or len(new) < 2:
+            continue  # ponytail: a name that was all emoji stays for the admin to rename by hand
+        tr = {lang: {**f, **({"name": clean(f["name"])} if isinstance(f.get("name"), str) else {})}
+              for lang, f in json.loads(o["i18n"]).items()} if o["i18n"] else None
+        with tx(con):
+            con.execute("UPDATE orgs SET name = ?, i18n = ? WHERE id = ?", (new, tr and json.dumps(tr, ensure_ascii=False), o["id"]))
+            log_action(con, None, "org_edit", f"org:{o['id']}", json.dumps({"emoji": [o["name"], new]}, ensure_ascii=False))
+            for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", o["id"]):
+                notify(con, uid, "club_emoji", f"emo:{o['id']}")
+    core._SHARED.clear()
 
 
 def _rename_ok(con, oid: int | None, name: str) -> None:

@@ -34,7 +34,7 @@ from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFF
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,
     club_applications, create_org, decide_club_application, PATH_STEPS, ask_official, decide_official, official_path, official_requests, undo_official, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
-    people, seed_schools, slug_for, start_by_slug, subscribe, update_org, withdraw)  # noqa: F401
+    people, seed_schools, shown_links, slug_for, start_by_slug, strip_emoji_names, no_emoji, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hide_post, post_shape, post_shapes, posts,
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,

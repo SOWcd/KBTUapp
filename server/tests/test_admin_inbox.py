@@ -12,7 +12,7 @@ from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 from test_review_moderation import _club_event
 
 GOOD = {"name": "Chess Club", "short": "CH", "description": "We play chess every Friday.", "emoji": "laptop_3d", "cover": 0,
-        "links": ["https://t.me/chess"]}
+        "links": ["https://tiktok.com/@chess"]}
 
 
 def _setup(env):
