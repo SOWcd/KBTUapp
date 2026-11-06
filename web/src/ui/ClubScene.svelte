@@ -139,12 +139,14 @@
     <!-- round 11 (owner, Nov 6: round 10 too simple; KMA and Geology are the bar), round 12 (owner: "better, but can be
          much better"; an art director's craft points; .claude/reports/club-lanyards/round12/gen/gen-r12.py): three depths,
          one hero each drawn big and fine in the space under the medallion, the area behind the text calm, light from the
-         upper left, depth by overlap and tone, no bloom. Enactus: their phoenix rising clean over a low district at dawn,
-         their origami bird folded big. Case: the deck's chart on the glass, the table, the laptop with the case's numbers,
-         their folder. KNL: a grand tourer on a wet road at night, its reflection under it. Literature: shelves, the desk,
-         a big open book with its page edges, a quill across it. Tumar: their ornament along the top, the stage, a dombra
-         laid down with its bridge and two strings. Web3: the flag's sun, a network, the steppe, four glass blocks on one
-         grid. Zhyly Zhurek: two cupped hands holding a coral heart with their flame. The badge's band: the far and mid
+         upper left, depth by overlap and tone, no bloom. Round 13 (owner, per club; round13/gen/gen-r13.py): Enactus:
+         their phoenix over a district at dawn, the sun rising, a sprout (their bird once, in the medallion). Case: the
+         night city through the glass, a whiteboard's issue tree, the table, papers, the laptop the one chart. KNL: a
+         supercar on a wet road at night. Literature: a warm library, varied books, lamp light pooled on the desk, the open
+         book's grain and handwriting, the inkwell and quill. Tumar: their ornament, the velvet's folds, two stage lights,
+         the dombra laid down with the kobyz and sybyzgy. Web3: the flag's sun and eagle, a network in depth, the steppe,
+         four blocks engraved with circuits. Zhyly Zhurek: a warm window at sunset, a cup of tea, two cupped hands holding
+         a coral heart with their flame. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
     {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="word bw {look}" src={MARK[look]} alt="" />{/if}
