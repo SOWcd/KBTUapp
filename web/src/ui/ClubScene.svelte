@@ -19,18 +19,12 @@
   import oteWord from '../assets/lanyards/ote-word.webp';
   import animeBack from '../assets/lanyards/anime-back.webp'; // their own art, the mock's frame painted out (new3/cut-new3.py)
   import magWord from '../assets/lanyards/kbtumag-mark.webp';
-  // round 10 (.claude/reports/club-lanyards/round10/gen/gen.sh): each club's colours, its own mark, one quiet motif
-  import enPhoenix from '../assets/lanyards/enactus-phoenix.webp';
+  // round 10's marks (.claude/reports/club-lanyards/round10/gen/gen.sh), on the badge's band over round 11's scenes
   import enLogo from '../assets/lanyards/enactus-logo.webp';
-  import caseBook from '../assets/lanyards/case-book.webp';
   import caseLogo from '../assets/lanyards/case-logo.webp';
-  import knlCar from '../assets/lanyards/knl-car.webp';
   import knlLogo from '../assets/lanyards/knl-logo.webp';
-  import litQuill from '../assets/lanyards/literature-quill.webp';
   import litLogo from '../assets/lanyards/literature-logo.webp';
-  import tumDombra from '../assets/lanyards/tumar-dombra-big.webp';
   import tumLogo from '../assets/lanyards/tumar-logo.webp';
-  import w3Sun from '../assets/lanyards/web3-sun.webp';
   import w3St from '../assets/lanyards/web3-st.webp';
   import zhHeart from '../assets/lanyards/zhurek-heart.webp';
 
@@ -39,6 +33,9 @@
   // the card's layers as pictures (tools/scene-rasters.mjs: decoded once off the main thread, not the SVG re-rasterised at 3x)
   const CARD = import.meta.glob('../assets/lanyards/scenes/*-card.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
   // a layer in this framing: mk-near -> mk-near-card.webp / mk-near-band.svg
+  // round 11's scenes (their files' prefix) and the marks on their badge's band
+  const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh' };
+  const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -138,29 +135,19 @@
     <i class="paper"></i>
     {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
-  {:else if look === 'enactuskbtu'}
-    <!-- Enactus (round 10): their navy, the phoenix from their badges rising behind the medallion; the band: their wordmark -->
-    <img class="mot z far enp" src={enPhoenix} alt="" />{#if !wide}<img class="word enw" src={enLogo} alt="" />{/if}
-  {:else if look === 'caseclubkbtu'}
-    <!-- Case (round 10): their navy, their open book's line drawn large and faint above the strip; the band: their wordmark -->
-    <img class="mot z far csb" src={caseBook} alt="" />{#if !wide}<img class="word csw" src={caseLogo} alt="" />{/if}
-  {:else if look === 'knlknolimits'}
-    <!-- K|NO LIMITS (round 10): night navy and their gold; a grand tourer in gold lines on the strip, its headlight on;
-         the band: their crown and laurel -->
-    <i class="kglow"></i><img class="mot z far kcar" src={knlCar} alt="" />{#if !wide}<img class="word knw" src={knlLogo} alt="" />{/if}
-  {:else if look === 'literatureclub'}
-    <!-- Literature (round 10): their paper, a quill in their maroon behind the medallion; the band: their logo -->
-    <i class="paper"></i><img class="mot z far lq" src={litQuill} alt="" />{#if !wide}<img class="word lw" src={litLogo} alt="" />{/if}
-  {:else if look === 'tumarorchestrakbtu'}
-    <!-- Tumar (round 10): their blue, their dombra in gold laid across the card; the band: their wordmark -->
-    <img class="mot z far tmd" src={tumDombra} alt="" />{#if !wide}<img class="word tmw" src={tumLogo} alt="" />{/if}
-  {:else if look === 'web'}
-    <!-- Web3 + Superteam KZ (round 10): their teal, the flag's sun rising behind the medallion; the band: their St -->
-    <img class="mot z far wsun" src={w3Sun} alt="" />{#if !wide}<img class="word w3w" src={w3St} alt="" />{/if}
-  {:else if look === 'zhylyzhurekkbtu'}
-    <!-- Zhyly Zhurek (round 10): their blush, their heart large and faint behind the medallion, its flame's warmth; the
-         band: the heart -->
-    <i class="zwarm"></i><img class="mot z far zh" src={zhHeart} alt="" />{#if !wide}<img class="word zhw" src={zhHeart} alt="" />{/if}
+  {:else if SCN[look]}
+    <!-- round 11 (owner, Nov 6: round 10 too simple; KMA and Geology are the bar; .claude/reports/club-lanyards/round11/
+         gen/gen-r11.py): each a scene in three depths, the subject in the well under the medallion. Enactus: a business
+         district at dawn, a growth line, their phoenix rising gold out of it, origami birds in flight. Case: a boardroom
+         at night, the deck's chart on the glass, the table, a laptop lit with a chart, the case's folder with their book's
+         line. KNL: the city's lights and their trails, a wet road, a grand tourer in deep navy with gold wheels, its
+         headlight on. Literature: shelves, the desk, an open book, the inkwell and quill under a lamp. Tumar: their
+         ornament's frieze and rosette in gold, two stage lights, the staff's lines with notes, a dombra on the boards.
+         Web3: the flag's sun, a network over the sky, the steppe's ridges, a chain of glass blocks. Zhyly Zhurek: hearts
+         drifting in warm light, two hands holding a heart with their flame. The badge's band: the far and mid layers,
+         their mark on top -->
+    {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
+    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="word bw {look}" src={MARK[look]} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -370,42 +357,22 @@
   .mgw { top: 24px; height: 62px; }
   .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
 
-  /* ---- round 10: one motif each, far, kept off the text (to the right on the card, centred and faint on the band) ---- */
-  .mot { --z: -2; --zs: 1.03; }
-  .sc:not(.wide) .mot { opacity: 0.3; }
+  /* ---- round 11: the seven's grounds under their scenes; their marks on the band ---- */
   .enactuskbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 100, 230, 0.35), transparent 65%), linear-gradient(160deg, rgb(18, 26, 110), rgb(10, 15, 85) 55%, rgb(4, 7, 46)); }
-  .enp { right: -6px; top: -14px; height: 128%; opacity: 0.5; }
-  .sc:not(.wide) .enp { right: auto; left: 50%; top: -10px; height: 150%; transform: translateX(-50%); }
-  .enw { top: 34px; height: 48px; }
   .caseclubkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(120, 140, 230, 0.28), transparent 65%), linear-gradient(160deg, rgb(28, 39, 102), rgb(17, 26, 75) 55%, rgb(8, 13, 41)); }
-  .csb { right: -22px; bottom: 48px; width: 190px; opacity: 0.12; }
-  .sc:not(.wide) .csb { display: none; }
-  .csw { top: 18px; height: 92px; }
-  .knlknolimits { background: radial-gradient(60% 70% at 92% 100%, rgba(227, 196, 126, 0.22), transparent 70%), linear-gradient(165deg, rgb(14, 36, 96), rgb(7, 26, 74) 55%, rgb(2, 10, 34)); }
-  .kglow { inset: 0; background: radial-gradient(40% 50% at 100% 0%, rgba(227, 196, 126, 0.16), transparent 70%); }
-  .kcar { right: 2px; bottom: 40px; width: 150px; opacity: 0.85; }
-  .sc:not(.wide) .kcar { right: auto; left: 50%; bottom: 4px; width: 92%; transform: translateX(-50%); }
-  .knw { top: 12px; height: 84px; }
+  .knlknolimits { background: linear-gradient(165deg, rgb(14, 36, 96), rgb(7, 26, 74) 55%, rgb(2, 10, 34)); }
   .literatureclub { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 252, 246, 0.8), transparent 65%), linear-gradient(160deg, rgb(243, 237, 229), rgb(237, 230, 220) 55%, rgb(226, 216, 202)); }
-  .literatureclub .paper { opacity: 0.3; }
-  .lq { right: 34px; top: 6px; height: 140px; opacity: 0.22; }
-  .sc:not(.wide) .lq { display: none; }
-  .lw { top: 18px; height: 100px; }
-  .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
   .tumarorchestrakbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(230, 194, 122, 0.2), transparent 65%), linear-gradient(160deg, rgb(20, 56, 143), rgb(11, 36, 112) 55%, rgb(4, 17, 58)); }
-  .tmd { right: -36px; bottom: 36px; width: 220px; opacity: 0.22; }
-  .sc:not(.wide) .tmd { display: none; }
-  .tmw { top: 22px; height: 80px; }
   .web { background: radial-gradient(60% 80% at 100% 0%, rgba(255, 228, 92, 0.22), transparent 65%), linear-gradient(160deg, rgb(74, 163, 186), rgb(42, 127, 151) 55%, rgb(15, 70, 86)); }
-  .wsun { right: -70px; top: -80px; width: 230px; opacity: 0.28; }
-  .sc:not(.wide) .wsun { right: auto; left: 50%; top: -60px; width: 260px; margin-left: -130px; opacity: 0.22; }
-  .w3w { top: 24px; height: 76px; }
   .zhylyzhurekkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.6), transparent 65%), linear-gradient(160deg, rgb(251, 239, 234), rgb(246, 226, 220) 55%, rgb(237, 203, 196)); }
-  .zwarm { inset: 0; background: radial-gradient(34% 46% at 82% 48%, rgba(255, 170, 120, 0.3), transparent 70%); }
-  .sc:not(.wide) .zwarm { background: radial-gradient(40% 50% at 50% 50%, rgba(255, 170, 120, 0.35), transparent 70%); }
-  .zh { right: -16px; top: 0; height: 150px; opacity: 0.2; }
-  .sc:not(.wide) .zh { display: none; }
-  .zhw { top: 14px; height: 96px; }
+  .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
+  .bw.enactuskbtu { top: 30px; height: 50px; }
+  .bw.caseclubkbtu { top: 16px; height: 90px; }
+  .bw.knlknolimits { top: 12px; height: 84px; }
+  .bw.literatureclub { top: 14px; height: 100px; filter: none; }
+  .bw.tumarorchestrakbtu, .bw.web { top: 22px; height: 76px; }
+  .bw.zhylyzhurekkbtu { top: 12px; height: 96px; filter: drop-shadow(0 4px 12px rgba(120, 40, 60, 0.25)); }
+  .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
   @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals, .fall, .ash { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }
