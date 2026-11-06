@@ -23,6 +23,7 @@
   <div class="acts">
     <Button kind="primary" size="l" full onclick={() => (location.href = link)}>{t('tgo.open')}</Button>
     <Button kind="plain" size="m" onclick={oncontinue}>{t('tgo.browser')}</Button>
+    <a class="show t-foot" href="/show">{t('tgo.show')}</a>
   </div>
 </main>
 
@@ -33,4 +34,5 @@
   h1 { max-width: 320px; text-wrap: balance; }
   .qr { width: 176px; height: 176px; flex: none; margin-top: var(--s-2); padding: 10px; border-radius: var(--r-l); background: white; }
   .acts { width: min(100%, 360px); display: flex; flex-direction: column; align-items: center; gap: var(--s-2); margin-top: var(--s-4); }
+  .show { color: var(--text-2); margin-top: var(--s-2); text-decoration: none; }
 </style>

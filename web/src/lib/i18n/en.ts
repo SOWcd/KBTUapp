@@ -1314,6 +1314,7 @@ const en: Dict = {
   'tgo.title': 'KBTU App lives in Telegram',
   'tgo.open': 'Open in Telegram',
   'tgo.browser': 'Continue in the browser',
+  'tgo.show': 'Looking for the big screen?',
   'pay.title': "Payment",
   'pay.lead': "Send {price} by Kaspi and send us the receipt. The ticket comes at once.",
   'pay.to': "Recipient",

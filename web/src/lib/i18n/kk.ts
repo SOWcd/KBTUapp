@@ -1314,6 +1314,7 @@ const kk: Dict = {
   'tgo.title': 'KBTU App Telegram-да жұмыс істейді',
   'tgo.open': 'Telegram-да ашу',
   'tgo.browser': 'Браузерде жалғастыру',
+  'tgo.show': 'Үлкен экранды іздеп жүрсіз бе?',
   'pay.title': "Төлем",
   'pay.lead': "{price} соманы Kaspi арқылы аударып, чекті жібер. Билет бірден келеді.",
   'pay.to': "Алушы",

@@ -104,7 +104,7 @@
       </section>
     {/if}
     <!-- the same pairing code: another organizer's way to the controls; anyone else's scan changes nothing -->
-    <div class="corner"><div class="mini"><Qr text={pairLink} tone={QR_TONE} /></div><span>{t('scr.organizers')}</span>
+    <div class="corner"><div class="mini"><Qr text={pairLink} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div><span>{t('scr.organizers')}</span>
       <button class="again" onclick={again}>{t('scr.again')}</button></div>
   {/if}
 </div>

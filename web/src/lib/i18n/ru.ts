@@ -1334,6 +1334,7 @@ const ru = {
   'tgo.title': 'KBTU App работает в Telegram',
   'tgo.open': 'Открыть в Telegram',
   'tgo.browser': 'Продолжить в браузере',
+  'tgo.show': 'Ищете большой экран?',
   'pay.title': "Оплата",
   'pay.lead': "Переведи {price} на Kaspi и пришли чек. Билет придёт сразу.",
   'pay.to': "Получатель",
