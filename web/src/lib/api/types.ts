@@ -16,10 +16,11 @@ export interface ClubApplication {
   status: 'pending' | 'approved' | 'rejected'; reason: string | null; orgId: Id | null; createdAt: Ts; decidedAt: Ts | null; reapplyAt: Ts | null;
   applicant?: { person: PersonRef; fullName: string; username: string | null; course: number | null; school: string | null } | null;
 }
-/** The path to the official ✓ (server clubs.py, official_path): a student initiative's five steps and its latest request */
-export type PathStep = 'members' | 'profile' | 'round' | 'event' | 'collab';
+/** The Ascent (server clubs.py, official_path): a student initiative's checklist, any order, locking nothing; members
+ *  and events count toward the profile and the top; at the top it may ask DMP for the ✓ (request: the latest) */
+export type PathStep = 'profile' | 'round' | 'channel' | 'collab' | 'top';
 export interface OfficialRequest { id: Id; status: 'pending' | 'approved' | 'rejected'; reason: string | null; createdAt: Ts; decidedAt: Ts | null; againAt: Ts | null }
-export interface OfficialPath { steps: Record<PathStep, boolean>; request: OfficialRequest | null }
+export interface OfficialPath { steps: Record<PathStep, boolean>; members: number; events: number; request: OfficialRequest | null }
 export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
@@ -182,6 +183,7 @@ export interface Org extends OrgRef {
   myRights?: Right[];           // what I may do in it (§2)
   canBroadcast: boolean;
   canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
+  top?: boolean;                // a student initiative at the Ascent's top: an official club's tools, no ✓ (server clubs.py)
 }
 
 /** The club's own profile (Vice+, SPEC §2): only what is sent changes. */

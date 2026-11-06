@@ -78,6 +78,10 @@ def log_action(con, actor: int | None, action: str, target: str, data: str = "{}
     con.execute("INSERT INTO audit_log (actor_id, action, target, data, at) VALUES (?, ?, ?, ?, ?)", (actor, action, target, data, now()))
 
 
+# an orgs row with an official club's tools: official, KBTU's own office or school, or a club at the Ascent's top (clubs.py)
+FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
+
+
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
 MOD_DONE = ("report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
             "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "chat_approve", "chat_decline", "chat_remove")

@@ -74,6 +74,7 @@
   const oversee = $derived(!!data.orgs.find((o) => o.id === org)?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
   const official = $derived(!!(data.orgs.find((o) => o.id === org) ?? mine?.org)?.official);
+  const full = $derived(official || !!data.orgs.find((o) => o.id === org)?.top); // the Ascent's top: an official club's tools
   // a student initiative: no @KBTUevents, its followers told once a week (KBTU's own offices are as official)
   const initiative = $derived(!official && (data.orgs.find((o) => o.id === org) ?? mine?.org)?.kind === 'club');
   // a choice question's options, typed with commas: "S, M, L"
@@ -91,9 +92,9 @@
 
   let saved = $state<EventFull | null>(null); // the server's copy when editing
   // a club that lost the ✓ still sees its paid or partner event's rows, to switch them off (the server allows only that)
-  const canPrice = $derived((official || !!saved?.price) && may(mine, 'money'));
+  const canPrice = $derived((full || !!saved?.price) && may(mine, 'money'));
   // a partner's event (Oct 29): an outside host's, posted by an official club or DMP; the link out instead of tickets
-  const canPartner = $derived(official || oversee || !!saved?.guestHost);
+  const canPartner = $derived(full || oversee || !!saved?.guestHost);
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
@@ -576,7 +577,7 @@
       <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
-      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting ? (official ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
+      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting ? (full ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
         {#if canPrice}<Row icon={Ticket} title={t('ex.price')} value={tried && priceBad ? '' : priceVal} invalid={tried && priceBad} accessory="chevron" onclick={() => open('price')} />
         {:else}<Row icon={Ticket} title={t('ex.price')} value={t('ex.free')} />{/if}
         <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : +f.seats > 0 ? f.seats : t('ex.unlimited')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />

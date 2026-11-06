@@ -7,7 +7,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import (ApiError, Viewer, _by_id, _may, _org, _qs, _rights, can, log_action, media_shape, need_student, one,
+from .core import (FULL_TOOLS, ApiError, Viewer, _by_id, _may, _org, _qs, _rights, can, log_action, media_shape, need_student, one,
     org_ref, rows)
 
 
@@ -69,7 +69,7 @@ def posts(con, v: Viewer, scope: str) -> list[dict]:
         elif scope.startswith("org:"):
             sql += " AND org_id = ?"; args.append(int(scope[4:]))
         elif scope == "all":  # a student initiative's posts reach its own members and followers; an official org's (or KBTU's own office's) everyone
-            sql += """ AND (org_id IN (SELECT id FROM orgs WHERE official = 1 OR kind != 'club') OR featured_until > ? OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
+            sql += f""" AND (org_id IN (SELECT id FROM orgs WHERE {FULL_TOOLS}) OR featured_until > ? OR org_id IN (SELECT org_id FROM subscriptions WHERE user_id = ?)
                 OR org_id IN (SELECT org_id FROM org_members WHERE user_id = ?))"""  # a featured post is for everyone
             args += [core.now(), v.id, v.id]
         else:

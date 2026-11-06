@@ -1,6 +1,7 @@
-"""The path to the official ✓ (logic/clubs.py, official_path): each step checks itself (members settled, logo and
-description, a round that took someone, an event with people outside the team scanned in, a collab with an official
-club); only the President or a Vice asks, once, again 30 days after a no; only the admin decides; Undo takes it back."""
+"""The Ascent (logic/clubs.py, official_path): a checklist in any order that locks nothing (a ready profile, a round
+that took someone, a Telegram channel, a collab with an official club; the top: all of them and two events with
+guests, an official club's tools without the ✓, the owner told once). At the top the President or a Vice may ask for the ✓, once, again 30 days
+after a no; only the admin decides; Undo takes it back."""
 from __future__ import annotations
 
 import dataclasses
@@ -10,14 +11,14 @@ from fastapi.testclient import TestClient
 from kbtu import app as server, bot, db, logic
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
-ADMIN, PRES, VICE, HEAD, A, B, C, D = 60, 61, 62, 63, 64, 65, 66, 67
+ADMIN, PRES, VICE, HEAD, A, B, C, D, E = 60, 61, 62, 63, 64, 65, 66, 67, 68
 DAY = 86400
 
 
 def _setup(env):
     c, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({ADMIN}))))
-    ids = {tg: login(c, tg, f"p{tg}")["id"] for tg in (ADMIN, PRES, VICE, HEAD, A, B, C, D)}
+    ids = {tg: login(c, tg, f"p{tg}")["id"] for tg in (ADMIN, PRES, VICE, HEAD, A, B, C, D, E)}
     con = db.connect(cfg.db_path)
     oid = logic.create_org(con, None, "Chess Club", "CH", "crown_3d", False)
     for tg, role in ((PRES, "president"), (VICE, "vice"), (HEAD, "head")):
@@ -25,8 +26,32 @@ def _setup(env):
     return c, con, ids, oid
 
 
+def _path(c, oid, who=PRES):
+    return c.get(f"/api/orgs/{oid}/official-path", headers=tma(who)).json()["path"]
+
+
 def _steps(c, oid, who=PRES):
-    return c.get(f"/api/orgs/{oid}/official-path", headers=tma(who)).json()["path"]["steps"]
+    return _path(c, oid, who)["steps"]
+
+
+def _members(con, ids, oid, *tgs):
+    for tg in tgs:
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (oid, ids[tg]))
+
+
+def _profile(con, oid):
+    fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, created_at) VALUES ('l', 'org_logo', 'image/webp', 1, 'ab/l', 0)").lastrowid
+    con.execute("UPDATE orgs SET logo_file_id = ?, description = 'We play chess every Friday.' WHERE id = ?", (fid, oid))
+
+
+def _channel(con, oid):
+    con.execute("INSERT INTO chats (title, kind, url, org_id, created_at) VALUES ('Chess', 'channel', 'https://t.me/kbtu_chess', ?, 0)", (oid,))
+
+
+def _round(con, ids, oid, stage="yes"):
+    rid = con.execute("INSERT INTO rounds (org_id, title, closes_at, status, created_at) VALUES (?, 'Fall', 0, 'done', 0)", (oid,)).lastrowid
+    con.execute("INSERT INTO round_apps (round_id, user_id, departments, answers, stage, created_at, updated_at) VALUES (?, ?, '[]', '{}', ?, 0, 0)",
+                (rid, ids[E], stage))
 
 
 def _event(con, oid, ago=DAY):
@@ -41,59 +66,51 @@ def _came(con, eid, uid, manual=0):
 
 
 def _all_done(con, ids, oid):
-    """Every step, the quick way (each one's own test is below)."""
+    """Every level, the quick way (each one's own test is below)."""
     con.execute("UPDATE org_members SET joined_at = 0 WHERE org_id = ?", (oid,))
-    fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, created_at) VALUES ('l', 'org_logo', 'image/webp', 1, 'ab/l', 0)").lastrowid
-    con.execute("UPDATE orgs SET logo_file_id = ?, description = 'We play chess every Friday.' WHERE id = ?", (fid, oid))
-    rid = con.execute("INSERT INTO rounds (org_id, title, closes_at, status, created_at) VALUES (?, 'Fall', 0, 'done', 0)", (oid,)).lastrowid
-    con.execute("INSERT INTO round_apps (round_id, user_id, departments, answers, stage, created_at, updated_at) VALUES (?, ?, '[]', '{}', 'yes', 0, 0)",
-                (rid, ids[A]))
-    eid = _event(con, oid)
-    for tg in (A, B, C):
-        _came(con, eid, ids[tg])
+    _members(con, ids, oid, D, E)
+    _profile(con, oid)
+    _round(con, ids, oid)
+    _channel(con, oid)
     off = logic.create_org(con, None, "Debate", "DB", "crown_3d", True)
+    for _ in range(2):
+        eid = _event(con, oid)
+        for tg in (A, B, C):
+            _came(con, eid, ids[tg])
     con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (eid, off))
 
 
-def test_each_step(env):
+def test_each_level(env):
     c, con, ids, oid = _setup(env)
-    assert _steps(c, oid) == {**dict.fromkeys(logic.PATH_STEPS, False), "members": True}  # 3 KBTU students, at once (owner, Nov 5)
+    assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, False)
     assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(A)).status_code == 403  # not in the club
-    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ?", (logic.now() - 4 * DAY, oid))  # in the club before its events below
-    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids[HEAD],))
-    assert not _steps(c, oid)["members"]  # a banned one doesn't
-    con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ids[HEAD],))
-    # the logo and a description
-    fid = con.execute("INSERT INTO files (sha256, kind, mime, bytes, path, created_at) VALUES ('l', 'org_logo', 'image/webp', 1, 'ab/l', 0)").lastrowid
-    con.execute("UPDATE orgs SET logo_file_id = ?, description = 'hi' WHERE id = ?", (fid, oid))
-    assert not _steps(c, oid)["profile"]
+    # 1. the profile: a logo, a description of 10+ and 5 members in the app (a banned one doesn't count)
+    _profile(con, oid)
+    con.execute("UPDATE orgs SET description = 'hi' WHERE id = ?", (oid,))
+    _members(con, ids, oid, D, E)
+    assert not _steps(c, oid)["profile"] and _path(c, oid)["members"] == 5
     con.execute("UPDATE orgs SET description = 'We play chess every Friday.' WHERE id = ?", (oid,))
     assert _steps(c, oid)["profile"]
-    # a round with results out that took someone
-    rid = con.execute("INSERT INTO rounds (org_id, title, closes_at, status, created_at) VALUES (?, 'Fall', 0, 'closed', 0)", (oid,)).lastrowid
-    con.execute("INSERT INTO round_apps (round_id, user_id, departments, answers, stage, created_at, updated_at) VALUES (?, ?, '[]', '{}', 'no', 0, 0)", (rid, ids[A]))
-    con.execute("UPDATE rounds SET status = 'done' WHERE id = ?", (rid,))
-    assert not _steps(c, oid)["round"]  # nobody accepted
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids[HEAD],))
+    assert not _steps(c, oid)["profile"]
+    con.execute("UPDATE users SET banned_at = NULL WHERE id = ?", (ids[HEAD],))
+    con.execute("UPDATE org_members SET joined_at = ? WHERE org_id = ?", (logic.now() - 4 * DAY, oid))  # in the club before its events below
+    # 2. a round with results out that took someone
+    _round(con, ids, oid, "no")
+    assert not _steps(c, oid)["round"]
     con.execute("UPDATE round_apps SET stage = 'yes'")
     assert _steps(c, oid)["round"]
-    # an event over with 3 outsiders scanned: the team, a check-in by hand and one still to come don't count
-    eid = _event(con, oid)
-    for tg in (PRES, VICE, HEAD, A, B):
-        _came(con, eid, ids[tg])
-    _came(con, eid, ids[C], manual=1)
-    assert not _steps(c, oid)["event"]  # 2 outsiders scanned
+    # any order: a round done counts without the profile
+    con.execute("UPDATE orgs SET description = '' WHERE id = ?", (oid,))
+    assert _steps(c, oid) == {**dict.fromkeys(logic.PATH_STEPS, False), "round": True}
+    con.execute("UPDATE orgs SET description = 'We play chess every Friday.' WHERE id = ?", (oid,))
+    # a Telegram channel linked (a group isn't one)
+    con.execute("INSERT INTO chats (title, kind, url, org_id, created_at) VALUES ('Chat', 'group', 'https://t.me/kbtu_chess_chat', ?, 0)", (oid,))
+    assert not _steps(c, oid)["channel"]
+    _channel(con, oid)
+    assert _steps(c, oid)["channel"]
+    # 3. a collab: an accepted official co-host (pending or unofficial doesn't do)
     later = _event(con, oid, ago=-DAY)
-    for tg in (A, B, C):
-        _came(con, later, ids[tg])
-    assert not _steps(c, oid)["event"]  # not over yet
-    _came(con, eid, ids[D])
-    assert _steps(c, oid)["event"]
-    # an outsider who joined after the event still counts; one in the team before it doesn't
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, ids[D], logic.now()))
-    assert _steps(c, oid)["event"]
-    con.execute("UPDATE org_members SET joined_at = 0 WHERE user_id = ?", (ids[D],))
-    assert not _steps(c, oid)["event"]
-    # a collab: an accepted official co-host (pending or unofficial doesn't do)
     other = logic.create_org(con, None, "Debate", "DB", "crown_3d", False)
     con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'pending', 0)", (later, other))
     assert not _steps(c, oid)["collab"]
@@ -101,22 +118,71 @@ def test_each_step(env):
     assert not _steps(c, oid)["collab"]
     con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (other,))
     assert _steps(c, oid)["collab"]
-    # the other way round: we co-host an official club's event
-    con.execute("DELETE FROM event_cohosts")
-    theirs = _event(con, other)
-    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (theirs, oid))
+    con.execute("DELETE FROM event_cohosts")  # the other way round: we co-host an official club's event
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (_event(con, other), oid))
     assert _steps(c, oid)["collab"]
+    # 4. the top: two events over with 3 outsiders scanned each: the team, a check-in by hand, one still to come don't count
+    eid = _event(con, oid)
+    for tg in (PRES, VICE, HEAD, A, B):
+        _came(con, eid, ids[tg])
+    _came(con, eid, ids[C], manual=1)
+    for tg in (A, B, C):
+        _came(con, later, ids[tg])
+    assert _path(c, oid)["events"] == 0
+    _came(con, eid, ids[D])  # D joined the club before the event: a member, not a guest
+    con.execute("UPDATE org_members SET joined_at = 0 WHERE user_id = ?", (ids[D],))
+    assert _path(c, oid)["events"] == 0
+    con.execute("UPDATE org_members SET joined_at = ? WHERE user_id = ?", (logic.now(), ids[D]))  # joined after: counts
+    assert _path(c, oid)["events"] == 1 and not _steps(c, oid)["top"]
+    two = _event(con, oid)
+    for tg in (A, B, C):
+        _came(con, two, ids[tg])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_top'").fetchone()[0] == 0
+    assert _steps(c, oid)["top"]
+    # the top is kept: the founder hears once, the clubs list shows it, losing a member takes nothing back
+    assert con.execute("SELECT top_at FROM orgs WHERE id = ?", (oid,)).fetchone()[0]
+    _steps(c, oid)
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_top'").fetchone()[0] == 0  # no founder in this test
+    con.execute("DELETE FROM org_members WHERE user_id = ?", (ids[E],))
+    assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, True)
+    assert logic.path_top(con, oid) and not logic.path_top(con, other)
+    assert next(o for o in c.get("/api/orgs", headers=tma(A)).json() if o["id"] == oid)["top"] is True
     # an official club sees no path
-    assert c.get(f"/api/orgs/{other}/official-path", headers=tma(PRES)).status_code == 403
     con.execute("UPDATE orgs SET official = 1 WHERE id = ?", (oid,))
-    assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(PRES)).json()["path"] is None
+    assert _path(c, oid) is None
+
+
+def test_founder_told_once(env):
+    c, con, ids, oid = _setup(env)
+    con.execute("UPDATE users SET is_founder = 1, role = 'admin' WHERE id = ?", (ids[ADMIN],))
+    _all_done(con, ids, oid)
+    _steps(c, oid); _steps(c, oid)
+    told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'club_top'").fetchall()
+    assert [r["user_id"] for r in told] == [ids[ADMIN]] and told[0]["ref"] == f"top:{oid}"
+    text, _, start = bot._render(con, dict(told[0]))
+    assert "Chess" in text and "lanyard" in text and start == f"cl_{oid}"
+
+
+def test_nothing_locked(env):
+    """The path locks nothing (owner, Nov 6): a fresh initiative opens a round and makes an event; a price is an official
+    club's tool, and the top's."""
+    c, con, ids, oid = _setup(env)
+    rnd = {"title": "Fall", "closesAt": logic.now() + 7 * DAY, "departments": []}
+    ev = {"title": "Blitz", "place": "305", "startsAt": logic.now() + 2 * DAY, "emoji": "crown_3d", "color": "#3B6BFF"}
+    assert c.post(f"/api/orgs/{oid}/round", headers=tma(PRES), json=rnd).status_code == 200
+    assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=ev).status_code == 200
+    paid = {**ev, "price": 1000, "payToName": "Chess Club", "payPhone": "87011234567"}
+    assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=paid).status_code == 403
+    con.execute("UPDATE orgs SET top_at = 1 WHERE id = ?", (oid,))
+    assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=paid).status_code == 200
 
 
 def test_request_lifecycle(env, monkeypatch):
     c, con, ids, oid = _setup(env)
     ask = lambda who=PRES: c.post(f"/api/orgs/{oid}/official-path", headers=tma(who))  # noqa: E731
-    assert ask().status_code == 400  # steps not done
+    assert ask().status_code == 400  # not at the top
     _all_done(con, ids, oid)
+    _steps(c, oid)  # the top, seen in Studio
     assert ask(HEAD).status_code == 403 and ask(A).status_code == 403  # the President or a Vice only
     r = ask(VICE)
     assert r.status_code == 200 and r.json()["path"]["request"]["status"] == "pending"
@@ -134,7 +200,7 @@ def test_request_lifecycle(env, monkeypatch):
     assert [x["key"] for x in inbox["items"] if x["kind"] == "opath"] == [f"opath:{rid}"]
     assert decide(approve=False, reason="x").status_code == 400  # a no needs its reason
     assert decide(approve=False, reason="Not yet, come in spring").status_code == 200
-    p = c.get(f"/api/orgs/{oid}/official-path", headers=tma(HEAD)).json()["path"]
+    p = _path(c, oid, HEAD)
     assert p["request"]["status"] == "rejected" and p["request"]["reason"] == "Not yet, come in spring"
     assert decide(approve=True).status_code == 409  # decided already
     assert ask().status_code == 429  # 30 days after a no
@@ -143,17 +209,17 @@ def test_request_lifecycle(env, monkeypatch):
     no = next(d for d in done if d["action"] == "opath_no")
     assert no["undo"] and no["text"].startswith("Chess")
     assert c.post(f"/api/admin/done/{no['id']}/undo", headers=tma(ADMIN)).status_code in (200, 204)
-    assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(PRES)).json()["path"]["request"]["status"] == "pending"
+    assert _path(c, oid)["request"]["status"] == "pending"
     assert decide(approve=True).status_code == 200
     assert con.execute("SELECT official FROM orgs WHERE id = ?", (oid,)).fetchone()[0] == 1
-    assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(PRES)).json()["path"] is None
+    assert _path(c, oid) is None
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_official' AND sent_at IS NULL").fetchone()[0] == 1
     # Undo the yes: the ✓ back off, the message unsent, the request waits
     yes = next(d for d in c.get("/api/admin/inbox", headers=tma(ADMIN)).json()["done"] if d["action"] == "opath_yes")
     assert c.post(f"/api/admin/done/{yes['id']}/undo", headers=tma(ADMIN)).status_code in (200, 204)
     assert con.execute("SELECT official FROM orgs WHERE id = ?", (oid,)).fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_official'").fetchone()[0] == 0
-    assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(PRES)).json()["path"]["request"]["status"] == "pending"
+    assert _path(c, oid)["request"]["status"] == "pending"
     # a no again, then 31 days later the club may ask again
     assert decide(approve=False, reason="Not yet, come in spring").status_code == 200
     t = logic.now() + 31 * DAY

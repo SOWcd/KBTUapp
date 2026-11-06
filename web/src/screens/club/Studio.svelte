@@ -18,10 +18,8 @@
   import X from '@lucide/svelte/icons/x';
   import { fold } from '../../ui/fold';
   import { fitTitle, largeTitle } from '../../ui/title';
-  import CircleCheck from '@lucide/svelte/icons/circle-check';
-  import Circle from '@lucide/svelte/icons/circle';
-  import Clock from '@lucide/svelte/icons/clock';
-  import { api, type CohostInvite, type EventCard, type Id, type OfficialPath, type PathStep, type Round } from '../../lib/api';
+  import Ascent from './Ascent.svelte';
+  import { api, type CohostInvite, type EventCard, type Id, type OfficialPath, type Round } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { ui, say } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
@@ -112,7 +110,7 @@
     }
     catch { coAsks = [x, ...coAsks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  // Head+ of a student initiative: the path to the official ✓ (server clubs.py, official_path), its marks read on each visit
+  // Head+ of a student initiative: the Ascent (server clubs.py, official_path), its levels read on each visit
   let path = $state<OfficialPath | null>(null);
   $effect(() => {
     const org = m?.org.id;
@@ -120,10 +118,6 @@
     if (org && staff && !m?.org.official) api.officialPath(org).then((x) => { if (m?.org.id === org) path = x; }).catch(() => {});
     else path = null;
   });
-  const STEPS: PathStep[] = ['members', 'profile', 'round', 'event', 'collab'];
-  const stepsDone = $derived(path ? STEPS.filter((k) => path!.steps[k]).length : 0);
-  const pathReq = $derived(path?.request ?? null);
-  const canAsk = $derived(stepsDone === 5 && pathReq?.status !== 'pending' && !(pathReq?.againAt && pathReq.againAt > nowTs()));
   const presVice = $derived(m?.role === 'president' || m?.role === 'vice');
   async function askOfficial() {
     if (!m || !path) return;
@@ -287,18 +281,7 @@
       </Group>
     {/if}
 
-    {#if path}
-      <Group caption={t('op.title')} note={t('op.of', { n: stepsDone })} footnote={pathReq?.againAt && pathReq.againAt > nowTs() ? t('op.again', { when: dayMonth(pathReq.againAt) }) : canAsk && !presVice ? t('op.byPres') : undefined}>
-        {#each STEPS as k (k)}
-          <Row dense title={t(`op.${k}`)}>
-            {#snippet lead()}<span class="mark" class:on={path!.steps[k]}>{#if path!.steps[k]}<CircleCheck size={22} />{:else}<Circle size={22} />{/if}</span>{/snippet}
-          </Row>
-        {/each}
-        {#if pathReq?.status === 'pending'}<Row icon={Clock} title={t('op.pending')} />
-        {:else if pathReq?.status === 'rejected'}<Row icon={X} title={t('op.no')} subtitle={pathReq.reason ?? undefined} />{/if}
-        {#if canAsk && presVice}<Row tone="action" title={t('op.ask')} onclick={askOfficial} />{/if}
-      </Group>
-    {/if}
+    {#if path}<Ascent {path} {presVice} onask={askOfficial} />{/if}
 
     {#if dmp}
       <Group caption={t('tab.dmp')}>
@@ -404,8 +387,6 @@
   .bar { height: 6px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
   .acts { display: flex; gap: var(--s-2); }
-  .mark { display: flex; color: var(--text-3); }
-  .mark.on { color: var(--success-text); }
   .yn { display: flex; align-items: center; gap: var(--s-2); }
   .cov { width: 30px; height: 30px; border-radius: var(--r-xs); object-fit: cover; }
   /* 320 px: halves of 126 cut "Attendees" in Russian and Kazakh; tighter padding and each by its own word fit both */

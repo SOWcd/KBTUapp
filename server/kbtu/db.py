@@ -1257,6 +1257,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE org_roles ADD COLUMN hand TEXT NOT NULL DEFAULT '';
     ALTER TABLE org_roles ADD COLUMN ai_wait INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE org_roles ADD COLUMN ai_tries INTEGER NOT NULL DEFAULT 0;"""),
+    # the Ascent (owner, Nov 6; logic/clubs.py): when a student initiative reached the top, kept once reached (an
+    # official club's tools without the ✓)
+    (132, "ALTER TABLE orgs ADD COLUMN top_at INTEGER;"),
 ]
 
 

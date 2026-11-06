@@ -7,7 +7,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import (ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
+from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
     _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
     overseer, person_ref, role_in, rows, short_name, taken)
 
@@ -301,7 +301,7 @@ def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = N
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:
         return {}
-    if not (org["official"] or price is None) or not can(con, v, org["id"], "money"):  # a club that lost the ✓ may still go free
+    if not (org["official"] or org["top_at"] or price is None) or not can(con, v, org["id"], "money"):  # a club that lost the ✓ may still go free
         raise ApiError("forbidden", "price")
     if e and any(new[k] != old[k] for k in ("price", "pay_to_name", "pay_phone")) \
             and one(con, "SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE r.event_id = ?", e["id"]):
@@ -329,7 +329,7 @@ def _partner(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None
     old = {k: e[k] for k in new} if e else dict.fromkeys(new)
     if new == old:
         return {}
-    if not (org["official"] or overseer(con, v) or host is None):  # off again needs no ✓ (a club that lost it)
+    if not (org["official"] or org["top_at"] or overseer(con, v) or host is None):  # off again needs no ✓ (a club that lost it)
         raise ApiError("forbidden", "partner")
     if host and e and one(con, "SELECT 1 FROM registrations WHERE event_id = ?", e["id"]):
         raise ApiError("conflict", "taken")
@@ -499,7 +499,7 @@ def _tell_after(con, e: sqlite3.Row) -> int | None:
     """None: an event published now may tell the club's followers; else when the next one may. A club without the ✓:
     once per rolling week, from the last time they were told (meta told:<org>, so deleting a cancelled event buys no
     other), or before that was kept, its last public event published (cancelled ones too)."""
-    if one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0]:  # an office (DMP, the app's) is KBTU's own
+    if one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0]:  # a club at the top too; an office (DMP, the app's) is KBTU's own
         return None
     t = one(con, """SELECT COALESCE((SELECT CAST(value AS INTEGER) FROM meta WHERE key = ?), (SELECT MAX(published_at) FROM events
         WHERE org_id = ? AND id != ? AND visibility = 'public' AND guest_host IS NULL AND status != 'draft'))""",
