@@ -1178,7 +1178,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
 def schedule(con, v: Viewer) -> list[dict]:
     if not v.student:
         return []
-    got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins", v.id)
+    got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? AND weekday < 7 ORDER BY weekday, begins", v.id)
     return [{"weekday": c["weekday"], "begins": c["begins"], "ends": c["ends"], "subject": c["subject"], "kind": c["kind"],
              "room": c["room"], "teacher": c["teacher"], "names": n or None} for c, n in zip(got, _names(got))]
 
@@ -1262,6 +1262,7 @@ def save_schedule(con, uid: int, lessons: list, lang: str | None = None) -> dict
     languages before and after, classes added, removed and moved."""
     q = "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins, id"
     saved = rows(con, q, uid)
+    lessons = [x for x in lessons if x.weekday < 7]  # no Sunday classes (the online duplicates)
     got, new, names = _merge(saved, lessons, lang)
     with tx(con):
         if not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", uid):

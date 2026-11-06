@@ -353,7 +353,7 @@ export async function dropSchedule(): Promise<void> {
     haptic.ok(); say(t('pd.deleted'), 'sparkles_3d');
   } catch {
     // the server's own word, not the week from before: it may have deleted it, or a newer upload may have come
-    data.schedule = await api.schedule().catch(() => before);
+    data.schedule = await api.schedule().then(joinClasses).catch(() => before);
     haptic.error(); say(t('common.error'), 'warning_3d');
   }
 }

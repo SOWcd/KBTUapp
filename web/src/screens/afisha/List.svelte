@@ -115,6 +115,27 @@
   }
 </script>
 
+{#snippet clRow(it: Extract<Item, { c: ClassItem }>)}
+            {@const hours = Math.round((it.end - it.at) / 3600)}
+                  {@const k = lessonKind(it.c.kind)}
+                  <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
+                  {@const isLive = it.key === live?.key}
+                  <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
+                       onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
+                    <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
+                    <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
+                    <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
+                      <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
+                        {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
+                        {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
+                    {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
+                    {#if floorOf(it.c.room) != null}<span class="cl-r on"><Button kind="tinted" size="s" onclick={() => sheets.map(it.c.room!)}>{#snippet icon()}<MapIcon size={14} />{/snippet}{it.c.room}</Button></span>
+                    {:else if atBldg2(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(BLDG2_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</Button></span>
+                    {:else if atDorm(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(DORM_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{t('list.dorm')}</Button></span>
+                    {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
+                  </div>
+{/snippet}
+
 {#snippet status(e: EventCard)}
   {@const st = e.my?.status}
   {@const cancelled = e.status === 'cancelled'}
@@ -205,7 +226,9 @@
       {/if}
       <!-- the day's classes folded into one line above its events (owner, Nov 3: classes between the events buried
            them); the line says what matters now (on now, next within the hour), a tap opens the rows -->
-      {#if cls.length}
+      {#if cls.length === 1}
+        <div class="list cls">{@render clRow(cls[0] as Extract<Item, { c: ClassItem }>)}</div>
+      {:else if cls.length}
         {@const first = cls[0] as Extract<Item, { c: ClassItem }>}
         {@const last = cls[cls.length - 1] as Extract<Item, { c: ClassItem }>}
         {@const nowCl = day.d === today ? cls.find((x) => x.key === live?.key || x.key === next?.key) as Extract<Item, { c: ClassItem }> | undefined : undefined}
@@ -221,26 +244,7 @@
         {#if folds[day.d]}
           <div class="list cls" transition:slide={{ duration: 280, easing: cubicOut }}>
             {#each cls as it (it.key)}
-              {#if 'c' in it}
-            {@const hours = Math.round((it.end - it.at) / 3600)}
-                  {@const k = lessonKind(it.c.kind)}
-                  <!-- a class: a slim row, its times where the covers are; a tap: "I won't go" (the capsule leaves it out), or back -->
-                  {@const isLive = it.key === live?.key}
-                  <div class="row cl" class:past={it.end < now} class:skip={skipped.has(it.key)} class:live={isLive} role="button" tabindex="0"
-                       onclick={(ev) => { if (!(ev.target as HTMLElement).closest('.cl-r')) void skipClass(it.key, it.c); }} onkeydown={(ev) => ev.key === 'Enter' && skipClass(it.key, it.c)}>
-                    <span class="cl-t num"><b>{it.c.begins}</b>{it.c.ends}</span>
-                    <!-- the timetable's own name, the same as the capsule's (owner, Nov 2: the short "PE" here, in full there) -->
-                    <span class="cl-s"><b class="ellipsis">{subjectOf(it.c)}</b>
-                      <small class="ellipsis">{#if isLive && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span>
-                        {:else if it.key === next?.key && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span>
-                        {:else if k}<i class="cl-k {k}">{t(`list.kind.${k}Long`)}</i>{:else if it.c.kind}{it.c.kind}{/if}{#if hours > 1}<span class="num">&nbsp;· ×{hours}</span>{/if}{#if skipped.has(it.key)}&nbsp;· {t('skip.tag')}{/if}</small></span>
-                    {#if isLive && live}<i class="prog" style="width:calc((100% - 90px) * {Math.min(1, (now - live.b) / Math.max(60, live.e - live.b))})"></i>{/if}
-                    {#if floorOf(it.c.room) != null}<span class="cl-r on"><Button kind="tinted" size="s" onclick={() => sheets.map(it.c.room!)}>{#snippet icon()}<MapIcon size={14} />{/snippet}{it.c.room}</Button></span>
-                    {:else if atBldg2(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(BLDG2_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{[bldg2Room(it.c.room!), t('list.bldg2')].filter(Boolean).join(' · ')}</Button></span>
-                    {:else if atDorm(it.c.room)}<span class="cl-r on" title={it.c.room}><Button kind="tinted" size="s" onclick={() => openLink(DORM_2GIS)}>{#snippet icon()}<TwoGisMark size={14} />{/snippet}{t('list.dorm')}</Button></span>
-                    {:else if it.c.room}<span class="cl-r ellipsis">{it.c.room}</span>{/if}
-                  </div>
-              {/if}
+              {#if 'c' in it}{@render clRow(it)}{/if}
             {/each}
           </div>
         {/if}

@@ -211,7 +211,7 @@ def parse(html: str) -> Week:
         title = next((n.words() for n in col.all() if n.has("text-sm", "font-medium")), "")
         day, lang = DAYS.get(title.strip().lower(), (i if i <= 7 else None, None))
         langs += [lang] if lang else []
-        if not day:
+        if not day or day > 6:  # no classes on Sunday: its column is the online duplicate
             continue
         for b in col.all():
             top, height = _px(b.style, "top"), _px(b.style, "height")

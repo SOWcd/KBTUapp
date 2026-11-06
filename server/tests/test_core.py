@@ -7760,3 +7760,16 @@ def test_support_contacts(env):
     con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (a["id"],))
     assert [p["username"] for p in logic.account.support(con)] == ["Sowers"]
     con.close()
+
+
+def test_no_sunday_classes(env):
+    c, cfg = env
+    me = login(c, 80, "sun")
+    con = db.connect(cfg.db_path)
+    L = lambda d, t, s: types.SimpleNamespace(weekday=d, begins=t, ends="10:50", subject=s, code=None, kind="lecture", room="1", teacher=None)  # noqa: E731
+    with db.tx(con):
+        logic.save_schedule(con, me["id"], [L(1, "09:00", "Mon"), L(7, "09:00", "Sun")])  # an import drops Sunday
+        con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind) VALUES (?, 7, '12:00', '12:50', 'Old', 'lecture')", (me["id"],))
+    assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(80)).json()] == ["Mon"]  # a stored one is hidden
+    assert not con.execute("SELECT 1 FROM schedule_classes WHERE subject = 'Sun'").fetchall()
+    con.close()
