@@ -23,6 +23,6 @@ def test_frames_match_the_web():
 
     from kbtu.logic.account import FRAMES
     web = Path(__file__).resolve().parents[2] / "web"
-    picker = re.search(r"const FRAMES = \[null, ([^\]]+)\]", (web / "src/screens/profile/SettingsList.svelte").read_text())
+    picker = re.search(r"const FRAMES = \[null, ([^\]]+)\]", (web / "src/screens/profile/LookPage.svelte").read_text())
     assert picker and re.findall(r"'(\w+)'", picker.group(1)) == list(FRAMES)
     assert {p.stem for p in (web / "public/frames").glob("*.svg")} == set(FRAMES)
