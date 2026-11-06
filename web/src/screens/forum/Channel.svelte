@@ -227,7 +227,7 @@
                 {#each p.reactions as r (r.emoji)}<span class="r"><span class="e">{glyph(r.emoji)}</span>{compact(r.n)}</span>{/each}
               </span>{/if}
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
-              {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} />{/each}</span>{/if}
+              {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="talk"><Button kind="tinted" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
                 {#snippet icon()}<TelegramMark size={16} />{/snippet}{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}
               </Button></span>
@@ -330,11 +330,12 @@
   .r { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border-radius: var(--r-full); background: var(--fill);
     color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); font-variant-numeric: tabular-nums; }
   .e { font-size: var(--fs-sub); line-height: 1; }
-  .faces { display: flex; margin-left: auto; }
+  /* as many faces as the row has room for, the newest first and on top: the ones that don't fit wrap to a second
+     line, out of sight (whole faces only, never a cut one) */
+  .faces { flex: 1; min-width: 24px; display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; height: 24px; padding: 2px; overflow: hidden; }
+  .f { display: flex; }
+  .f + .f { margin-left: -6px; }
   .faces :global(.av) { box-shadow: 0 0 0 1.5px var(--surface-solid); }
-  .faces :global(.av + .av) { margin-left: -6px; }
-  .faces :global(.av:first-child) { z-index: 2; } /* the newest on top */
-  .faces :global(.av:nth-child(2)) { z-index: 1; }
   .talk { flex: none; display: flex; margin-left: auto; }
   .faces + .talk { margin-left: 0; }
   .n { margin-left: 2px; opacity: 0.7; font-variant-numeric: tabular-nums; }

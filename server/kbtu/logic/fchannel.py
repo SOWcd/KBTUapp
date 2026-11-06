@@ -20,8 +20,7 @@ from ..db import tx
 from .core import ApiError, PERSON, PERSON_COLS, Viewer, avatar_of, log_action, need_student, one, person_ref, rows, short_name, shown_name
 
 BODY_MAX = 1000
-POSTS_A_DAY = 5           # owner, Nov 1: one a day was too strict; a pace, not a ration
-POST_GAP = 10 * 60        # and one at a time: ten minutes between a person's posts
+POSTS_A_GAP, POST_GAP = 2, 10 * 60  # a pace: at most two posts in any ten minutes (owner, Nov 6: no daily cap, nobody hit it)
 CHANNEL_AN_HOUR = 20     # live posts in the channel an hour; past it, a moderator lets the next ones out (a burst can't flood it)
 MOD_RECENT = 7 * 86400   # live posts the moderators' list shows, to take one down
 UNDO_WINDOW = 60         # a moderator's take-down leaves the channel after it: Undo inside keeps the message and its comments
@@ -198,7 +197,7 @@ def _talked(con, ids: list[int]) -> set[int]:
         GROUP BY p.id HAVING COUNT(DISTINCT c.user_id) >= ?""", *ids, _now() - TALK_AGE, TALK_MIN)}
 
 
-FACES = 3  # the newest commenters a card shows
+FACES = 10  # the newest commenters a card has room for at most (the card shows as many as fit)
 
 
 def _faces(con, ids: list[int]) -> dict[int, list[dict]]:
@@ -229,7 +228,7 @@ def _top(raw: str | None) -> list[dict]:
 
 
 def reserve(con, v: Viewer, body: dict) -> int:
-    """A new post, held ('check') before the AI is asked, the day's allowance counted in the same transaction (posts
+    """A new post, held ('check') before the AI is asked, the pace counted in the same transaction (posts
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""
     need_student(v)
     anon = body.get("anon", False)
@@ -239,12 +238,11 @@ def reserve(con, v: Viewer, body: dict) -> int:
     if not _meaningful(text):
         raise ApiError("bad_input", "short")
     with tx(con):
-        # the pace: five a day, ten minutes apart; a post the AI called noise counts toward the day, not the ten minutes
-        # (its author rewrites it now: told why, ChannelCompose gives the words back); an ad counts toward both
-        # one I deleted myself (gone, no why) frees the ten minutes: rewritten as anonymous (owner, Nov 5)
-        n, last = one(con, """SELECT COUNT(*), MAX(CASE WHEN why IS NOT 'noise' AND NOT (status = 'gone' AND why IS NULL) THEN created_at END) FROM fchan_posts
-                             WHERE user_id = ? AND created_at > ?""", v.id, _now() - 86400)
-        if n >= POSTS_A_DAY or last and last > _now() - POST_GAP:
+        # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
+        # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (owner, Nov 6: a
+        # delete refunds nothing, else post-delete-post floods the channel)
+        n = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE user_id = ? AND created_at > ? AND why IS NOT 'noise'", v.id, _now() - POST_GAP)[0]
+        if n >= POSTS_A_GAP:
             raise ApiError("rate_limited", "posts")
         if _repeat(con, v.id, text):
             raise ApiError("bad_input", "duplicate")
