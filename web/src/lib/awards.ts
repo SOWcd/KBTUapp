@@ -89,11 +89,19 @@ export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.c
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
 export function artOf(a: Pick<Achievement, 'code' | 'emoji' | 'level' | 'levels'>): string {
   const p = MEDAL_ART[a.code], l = Math.max(1, a.level), of = Math.max(1, a.levels.length), z = ZNAKI[a.emoji];
+  const v = a.code === 'first_in' ? 'firstin' : VECTOR[a.emoji];
+  if (v) return `layer_vb_${v}`;
   if (z) return `layer_zn_${z.glyph}_${z.metal}`;
   return !p ? a.emoji : p === 'rc' ? 'layer_rc' + (of > 1 ? l : '') : `layer_${p}_${'bsgl'[metalOf(l, of)]}`;
 }
+// ponytail: a temporary swap (owner): the earlier vector set (public/medals/vb-*, from .claude/reports/badges/vector-claude)
+// in place of the shield pins for the creator's two awards, and First in under its one gold rim at every level.
+// Upgrade path: delete this map and the vb branches once the final art lands.
+const VECTOR: Record<string, string> = { face_with_tears_of_joy_3d: 'laugh', waving_hand_3d_default: 'hello' };
 /** a layered medal's files back to front, each with its depth (+ near, against the tilt; - far; 0 the still rim) */
 export function layersOf(art: string): [string, number][] | null {
+  const vb = /^layer_vb_([a-z]+)$/.exec(art);
+  if (vb) return [[`vb-${vb[1]}-field`, -1], [`vb-${vb[1]}-art`, 0.5], [`vb-${vb[1]}-near`, 1], [`vb-${vb[1]}-rim`, 0]];
   const rc = /^layer_rc(\d)$/.exec(art);
   if (rc) { const m = 'bsgl'[metalOf(+rc[1], 9)]; return [[`rc-field-${m}`, -1], [`rc-net-${rc[1]}`, 0.5], [`rc-core-${m}`, 1], [`rc-rim-${m}`, 0]]; }
   // a drawn pin, built as Recruiter's (owner, Nov 4): its own field and constellation, Recruiter's light, and the coin's
@@ -117,7 +125,7 @@ export const PIN_SHAPE = 'shield' as 'shield' | 'round';
 /** a drawn pin (ZNAKI): Recruiter's craft, in PIN_SHAPE */
 export const isDrawnPin = (a: Pick<Achievement, 'emoji'>): boolean => a.emoji in ZNAKI;
 /** round: a medal, an owner's coin, or a drawn pin when pins are round; the rest of the pins are shields */
-export const isRound = (a: Pick<Achievement, 'code' | 'levels' | 'emoji'>): boolean => isMedal(a) || isCoin(a) || (PIN_SHAPE === 'round' && isDrawnPin(a));
+export const isRound = (a: Pick<Achievement, 'code' | 'levels' | 'emoji'>): boolean => isMedal(a) || isCoin(a) || (PIN_SHAPE === 'round' && isDrawnPin(a)) || artOf({ ...a, level: 1, levels: [] }).startsWith('layer_vb_');
 /** the drawn pins by their emoji name (an Admin row's variant too): the enamel, the glyph (public/medals/zn-*), the
  *  frame's metal (g gold, s silver, r rose gold), and the year of its moment if it has one */
 export const ZNAKI: Record<string, { field: string; glyph: string; metal: 'g' | 's' | 'r'; year?: number }> = {

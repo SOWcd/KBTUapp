@@ -13,7 +13,8 @@
 
   const hidden = $derived(a.secret && a.level === 0);
   const medal = $derived(isMedal(a));
-  const zn = $derived(ZNAKI[a.emoji]);
+  const vb = $derived(artOf(a).startsWith('layer_vb_')); // the temporary vector set: round, no shield
+  const zn = $derived(vb ? undefined : ZNAKI[a.emoji]);
   const layers = $derived(layersOf(artOf(a)));
   const legend = $derived(size >= 160 && a.level > 0 ? legendOf(artOf(a)) : null);
   // the light on the metal (round 4, owner: "charm"): a specular band over the rim and the relief alone (masked by their
@@ -42,7 +43,7 @@
 {#if isCoin(a)}<span class="medal pic" class:none={a.level === 0} style="width:{size}px;height:{size}px"><img src={`emoji/${a.emoji}.webp`} srcset={`emoji/sm/${a.emoji}.webp 192w, emoji/${a.emoji}.webp 512w`} sizes="{size}px" alt="" width={size} height={size} decoding="async" draggable="false" /></span>
 {:else if !medal && !layers}<Pin color={zn?.field ?? 'rgb(47, 91, 234)'} emoji={a.emoji} metal={zn?.metal} year={a.level ? yearOf(a.at, zn?.year) : undefined} off={a.level === 0} {hidden} {size} />
 {:else if layers && !hidden}<span class="medal lay" class:shield={!!zn && PIN_SHAPE === 'shield'} class:none={a.level === 0} style="width:{size}px;height:{size}px">
-  {#if size >= 96 && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
+  {#if size >= 96 && !vb && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
   {#each layers as [n, z] (n)}<img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />{/each}
   {#if legend}<img src={`medals/${legend}.svg`} alt="" draggable="false" />{/if}
   {#if lit}<i class="glint" style="-webkit-mask-image:{metalMask};mask-image:{metalMask}"></i>{/if}

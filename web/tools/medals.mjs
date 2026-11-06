@@ -444,6 +444,6 @@ const zpin = (name, k, colors, nodes, ties, web, orbits) => {
 })();
 
 // the files this tool owns are rewritten whole: drop the ones a rename left behind
-for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));
+for (const n of readdirSync(out)) if (/\.svg$/.test(n) && !n.startsWith("vb-") && !(n.slice(0, -4) in files)) unlinkSync(new URL(n, out));
 for (const [n, s] of Object.entries(files)) writeFileSync(new URL(`${n}.svg`, out), s);
 console.log(Object.keys(files).length, 'files');
