@@ -19,6 +19,20 @@
   import oteWord from '../assets/lanyards/ote-word.webp';
   import animeBack from '../assets/lanyards/anime-back.webp'; // their own art, the mock's frame painted out (new3/cut-new3.py)
   import magWord from '../assets/lanyards/kbtumag-mark.webp';
+  // round 10 (.claude/reports/club-lanyards/round10/gen/gen.sh): each club's colours, its own mark, one quiet motif
+  import enPhoenix from '../assets/lanyards/enactus-phoenix.webp';
+  import enLogo from '../assets/lanyards/enactus-logo.webp';
+  import caseBook from '../assets/lanyards/case-book.webp';
+  import caseLogo from '../assets/lanyards/case-logo.webp';
+  import knlCar from '../assets/lanyards/knl-car.webp';
+  import knlLogo from '../assets/lanyards/knl-logo.webp';
+  import litQuill from '../assets/lanyards/literature-quill.webp';
+  import litLogo from '../assets/lanyards/literature-logo.webp';
+  import tumDombra from '../assets/lanyards/tumar-dombra-big.webp';
+  import tumLogo from '../assets/lanyards/tumar-logo.webp';
+  import w3Sun from '../assets/lanyards/web3-sun.webp';
+  import w3St from '../assets/lanyards/web3-st.webp';
+  import zhHeart from '../assets/lanyards/zhurek-heart.webp';
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -124,6 +138,29 @@
     <i class="paper"></i>
     {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
+  {:else if look === 'enactuskbtu'}
+    <!-- Enactus (round 10): their navy, the phoenix from their badges rising behind the medallion; the band: their wordmark -->
+    <img class="mot z far enp" src={enPhoenix} alt="" />{#if !wide}<img class="word enw" src={enLogo} alt="" />{/if}
+  {:else if look === 'caseclubkbtu'}
+    <!-- Case (round 10): their navy, their open book's line drawn large and faint above the strip; the band: their wordmark -->
+    <img class="mot z far csb" src={caseBook} alt="" />{#if !wide}<img class="word csw" src={caseLogo} alt="" />{/if}
+  {:else if look === 'knlknolimits'}
+    <!-- K|NO LIMITS (round 10): night navy and their gold; a grand tourer in gold lines on the strip, its headlight on;
+         the band: their crown and laurel -->
+    <i class="kglow"></i><img class="mot z far kcar" src={knlCar} alt="" />{#if !wide}<img class="word knw" src={knlLogo} alt="" />{/if}
+  {:else if look === 'literatureclub'}
+    <!-- Literature (round 10): their paper, a quill in their maroon behind the medallion; the band: their logo -->
+    <i class="paper"></i><img class="mot z far lq" src={litQuill} alt="" />{#if !wide}<img class="word lw" src={litLogo} alt="" />{/if}
+  {:else if look === 'tumarorchestrakbtu'}
+    <!-- Tumar (round 10): their blue, their dombra in gold laid across the card; the band: their wordmark -->
+    <img class="mot z far tmd" src={tumDombra} alt="" />{#if !wide}<img class="word tmw" src={tumLogo} alt="" />{/if}
+  {:else if look === 'web'}
+    <!-- Web3 + Superteam KZ (round 10): their teal, the flag's sun rising behind the medallion; the band: their St -->
+    <img class="mot z far wsun" src={w3Sun} alt="" />{#if !wide}<img class="word w3w" src={w3St} alt="" />{/if}
+  {:else if look === 'zhylyzhurekkbtu'}
+    <!-- Zhyly Zhurek (round 10): their blush, their heart large and faint behind the medallion, its flame's warmth; the
+         band: the heart -->
+    <i class="zwarm"></i><img class="mot z far zh" src={zhHeart} alt="" />{#if !wide}<img class="word zhw" src={zhHeart} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -332,6 +369,43 @@
   .kbtumag .paper { opacity: 0.3; }
   .mgw { top: 24px; height: 62px; }
   .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
+
+  /* ---- round 10: one motif each, far, kept off the text (to the right on the card, centred and faint on the band) ---- */
+  .mot { --z: -2; --zs: 1.03; }
+  .sc:not(.wide) .mot { opacity: 0.3; }
+  .enactuskbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 100, 230, 0.35), transparent 65%), linear-gradient(160deg, rgb(18, 26, 110), rgb(10, 15, 85) 55%, rgb(4, 7, 46)); }
+  .enp { right: -6px; top: -14px; height: 128%; opacity: 0.5; }
+  .sc:not(.wide) .enp { right: auto; left: 50%; top: -10px; height: 150%; transform: translateX(-50%); }
+  .enw { top: 34px; height: 48px; }
+  .caseclubkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(120, 140, 230, 0.28), transparent 65%), linear-gradient(160deg, rgb(28, 39, 102), rgb(17, 26, 75) 55%, rgb(8, 13, 41)); }
+  .csb { right: -22px; bottom: 48px; width: 190px; opacity: 0.12; }
+  .sc:not(.wide) .csb { display: none; }
+  .csw { top: 18px; height: 92px; }
+  .knlknolimits { background: radial-gradient(60% 70% at 92% 100%, rgba(227, 196, 126, 0.22), transparent 70%), linear-gradient(165deg, rgb(14, 36, 96), rgb(7, 26, 74) 55%, rgb(2, 10, 34)); }
+  .kglow { inset: 0; background: radial-gradient(40% 50% at 100% 0%, rgba(227, 196, 126, 0.16), transparent 70%); }
+  .kcar { right: 2px; bottom: 40px; width: 150px; opacity: 0.85; }
+  .sc:not(.wide) .kcar { right: auto; left: 50%; bottom: 4px; width: 92%; transform: translateX(-50%); }
+  .knw { top: 12px; height: 84px; }
+  .literatureclub { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 252, 246, 0.8), transparent 65%), linear-gradient(160deg, rgb(243, 237, 229), rgb(237, 230, 220) 55%, rgb(226, 216, 202)); }
+  .literatureclub .paper { opacity: 0.3; }
+  .lq { right: 34px; top: 6px; height: 140px; opacity: 0.22; }
+  .sc:not(.wide) .lq { display: none; }
+  .lw { top: 18px; height: 100px; }
+  .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
+  .tumarorchestrakbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(230, 194, 122, 0.2), transparent 65%), linear-gradient(160deg, rgb(20, 56, 143), rgb(11, 36, 112) 55%, rgb(4, 17, 58)); }
+  .tmd { right: -36px; bottom: 36px; width: 220px; opacity: 0.22; }
+  .sc:not(.wide) .tmd { display: none; }
+  .tmw { top: 22px; height: 80px; }
+  .web { background: radial-gradient(60% 80% at 100% 0%, rgba(255, 228, 92, 0.22), transparent 65%), linear-gradient(160deg, rgb(74, 163, 186), rgb(42, 127, 151) 55%, rgb(15, 70, 86)); }
+  .wsun { right: -70px; top: -80px; width: 230px; opacity: 0.28; }
+  .sc:not(.wide) .wsun { right: auto; left: 50%; top: -60px; width: 260px; margin-left: -130px; opacity: 0.22; }
+  .w3w { top: 24px; height: 76px; }
+  .zhylyzhurekkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.6), transparent 65%), linear-gradient(160deg, rgb(251, 239, 234), rgb(246, 226, 220) 55%, rgb(237, 203, 196)); }
+  .zwarm { inset: 0; background: radial-gradient(34% 46% at 82% 48%, rgba(255, 170, 120, 0.3), transparent 70%); }
+  .sc:not(.wide) .zwarm { background: radial-gradient(40% 50% at 50% 50%, rgba(255, 170, 120, 0.35), transparent 70%); }
+  .zh { right: -16px; top: 0; height: 150px; opacity: 0.2; }
+  .sc:not(.wide) .zh { display: none; }
+  .zhw { top: 14px; height: 96px; }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
   @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .win, .spw, .motes, .petals, .fall, .ash { animation: none; } .win { opacity: 0.6; } .spark { display: none; } }

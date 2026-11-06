@@ -23,6 +23,14 @@ import jccFlower from '../assets/lanyards/jcc-flower.webp'; // round 5: their sa
 import oteMark from '../assets/lanyards/ote-mark.webp';
 import animeLily from '../assets/lanyards/anime-lily.webp';
 import magMark from '../assets/lanyards/kbtumag-mark.webp';
+// round 10 (.claude/reports/club-lanyards/round10/gen/gen.sh): seven clubs' own marks, cut off their grounds
+import enactusBird from '../assets/lanyards/enactus-bird.webp';
+import caseMark from '../assets/lanyards/case-mark.webp';
+import knlCrown from '../assets/lanyards/knl-crown.webp';
+import litTurtle from '../assets/lanyards/literature-turtle.webp';
+import tumarDombra from '../assets/lanyards/tumar-dombra.webp';
+import web3St from '../assets/lanyards/web3-st.webp';
+import zhurekHeart from '../assets/lanyards/zhurek-heart.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -275,6 +283,23 @@ export const CLUB_LOOKS = {
   kbtumag: { strap: 'MAG', strip: 'Mag', short: 'Mag', bg: ['#F3E9DB', '#EADCCB', '#DDCAB4'],
     straps: ['#3E0A12', '#6E1424', '#F3E7D7'], holo: ['#5A1220', '#3E0A12', '#F3E7D7'], role: '#7A1628', qr: ['#3E0A12', '#6E1424'], plate: ['#FBF5EC', '#EFE3D2'],
     mark: magMark, ink: ['#24060B', 'rgba(36, 6, 11, 0.68)'] },
+  // round 10 (Nov 6): one pass each, their colours, their mark, one quiet motif (ui/ClubScene)
+  enactuskbtu: { strap: 'ENACTUS', strip: 'ENACTUS', bg: ['#121A6E', '#0A0F55', '#04072E'], straps: ['#E5A90F', '#FFC521', '#060A46'],
+    holo: ['#FFD95A', '#FFC521', '#060A46'], role: '#FFC521', qr: ['#060A46', '#1B2380'], plate: ['#121A6E', '#060A46'], mark: enactusBird },
+  caseclubkbtu: { strap: 'CASE', strip: 'CASE CLUB', bg: ['#1C2766', '#111A4B', '#080D29'], straps: ['#0A1035', '#25327A', '#FFFFFF'],
+    holo: ['#FFFFFF', '#D9DEEE', '#111A4B'], role: '#C9D3FF', qr: ['#111A4B', '#25327A'], plate: ['#25327A', '#111A4B'], mark: caseMark },
+  knlknolimits: { strap: 'KNL', strip: 'K|NO LIMITS', short: 'KNL', bg: ['#0E2460', '#071A4A', '#020A22'], straps: ['#081A4C', '#13307A', '#E3C47E'],
+    holo: ['#F3DEA6', '#C9A355', '#071A4A'], role: '#E3C47E', qr: ['#051642', '#0E2A6E'], plate: ['#0E2460', '#051642'], mark: knlCrown },
+  literatureclub: { strap: 'LITERATURE', strip: 'LITERATURE', bg: ['#F3EDE5', '#EDE6DC', '#E2D8CA'], straps: ['#4E1414', '#6B1F1F', '#EDE6DC'],
+    holo: ['#7A2424', '#5A1818', '#EDE6DC'], role: '#6B1F1F', qr: ['#6B1F1F', '#3E1010'], plate: ['#F3EDE5', '#EDE6DC'], mark: litTurtle,
+    ink: ['#2A0C0C', 'rgba(42, 12, 12, 0.68)'] },
+  tumarorchestrakbtu: { strap: 'TUMAR', strip: 'TUMAR', short: 'Tumar', bg: ['#14388F', '#0B2470', '#04113A'], straps: ['#081C5A', '#163A96', '#E6C27A'],
+    holo: ['#F2DDA8', '#CFA24A', '#0B2470'], role: '#E6C27A', qr: ['#0B2470', '#081C5A'], plate: ['#14388F', '#0B2470'], mark: tumarDombra },
+  web: { strap: 'WEB3', strip: 'WEB3 CLUB', short: 'Web3', bg: ['#4AA3BA', '#2A7F97', '#0F4656'], straps: ['#1E6A80', '#4AA3BA', '#FFFFFF'],
+    holo: ['#FFFFFF', '#DDF1F6', '#1E6A80'], role: '#FFE98A', qr: ['#0F4656', '#174E60'], plate: ['#4AA3BA', '#2A7F97'], mark: web3St },
+  zhylyzhurekkbtu: { strap: 'ZHYLY\nZHUREK', strip: 'ZHYLY ZHUREK', bg: ['#FBEFEA', '#F6E2DC', '#EDCBC4'], straps: ['#B73F55', '#E06A7C', '#FFF4F0'],
+    holo: ['#E06A7C', '#B73F55', '#FFF4F0'], role: '#B23A50', qr: ['#8E2840', '#5E1626'], plate: ['#FBEFEA', '#F4EBDC'], mark: zhurekHeart,
+    ink: ['#3A1018', 'rgba(58, 16, 24, 0.66)'] },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh
