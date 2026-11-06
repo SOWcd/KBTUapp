@@ -18,7 +18,7 @@
   import { onMount } from 'svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
   import X from '@lucide/svelte/icons/x';
-  import { haptic, inTelegram, tg } from '../lib/tg';
+  import { haptic, inTelegram, onAndroid, tg } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
   import { glass } from './glass';
   import { unsent } from './guard';
@@ -156,7 +156,7 @@
 </script>
 
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={() => close(overlay.id, true)} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>
   {:else if !inTelegram}<button class="x" onclick={() => close(overlay.id, true)} aria-label={t('common.close')}><X size={22} /></button>{/if}<!-- no Back button in a browser: the only way out -->
@@ -180,6 +180,10 @@
   }
   .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; animation-play-state: paused !important; }
   .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  /* Android (a user's video, Nov 6: the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
+     person's card opened over the member list): the sheet stays solid there, as under power saving. ponytail: no glass on
+     Android sheets; a one-off blurred snapshot behind them is the upgrade */
+  .flat { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: var(--glass-solid); }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
   .sheet:focus { outline: none; }
   .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
