@@ -83,7 +83,7 @@ const en: Dict = {
   'fc.deleteText': "It leaves the channel too.",
   'fc.postedSay': "Done, your post is in the channel!",
   'fc.heldSay': "A moderator will take a look",
-  'fc.slow': "Not so often: one post per 10 minutes, up to five a day",
+  'fc.slow': "Not so often: at most two posts in 10 minutes",
   'fc.links': "Take out the links, @handles and numbers",
   'fc.modLive': "In the channel this week",
   'fc.whyAi': "The AI flagged it",
