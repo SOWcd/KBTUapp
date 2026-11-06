@@ -32,7 +32,7 @@ const files = [...['scenes', 'schools', 'sower'].flatMap((d) => readdirSync(new 
 // within a quarter of an 8-bit step of the q .85 picture on average and its 99.9th percentile within 6 (12 at least) of
 // it, both against the lossless render at the shown size: 2715 -> 2167 KB. q .65 for most; [quality, size] here.
 const ENC = { 'schools/ise-earth-card.svg': [0.75, 1], 'schools/smsgt-field-card.svg': [0.75, 1], 'scenes/ch-crest-card.svg': [Q, 1],
-  'scenes/kn-jersey-card.svg': [Q, 1], 'sower/far-card.svg': [0.5, 0.8], 'scenes/bcl-bokeh-card.svg': [Q, 0.67], 'schools/seogi-dusk-card.svg': [Q, 0.75],
+  'scenes/kn-jersey-card.svg': [Q, 1], 'sower/far-card.svg': [0.5, 0.8], 'sower/near-card.svg': [Q, 1], 'scenes/bcl-bokeh-card.svg': [Q, 0.67], 'schools/seogi-dusk-card.svg': [Q, 0.75],
   ...Object.fromEntries(['scenes/cr-spectrum', 'schools/kma-moon', 'schools/law-shelf', 'schools/sce-sky', 'schools/sss-sky'].map((n) => [`${n}-card.svg`, [0.75, 0.75]])) };
 const [quality, less] = [(f) => ENC[f]?.[0] ?? 0.65, (f) => ENC[f]?.[1] ?? 1];
 const scale = (f) => 3 * (OVERSCAN[f] ?? ZS) * less(f);

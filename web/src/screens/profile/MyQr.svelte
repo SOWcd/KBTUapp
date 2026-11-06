@@ -182,8 +182,8 @@
   /* SOWER: as on the card (Hero) */
   .sower { --role: rgb(192, 193, 190); }
   .sower .pass { background: rgb(30, 30, 30); }
-  .sower .strap { background: linear-gradient(90deg, rgb(30, 30, 30), rgb(64, 64, 62) 50%, rgb(30, 30, 30)); box-shadow: inset 1px 0 0 rgba(232, 232, 231, 0.35), inset -1px 0 0 rgba(232, 232, 231, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3); }
-  .sower .strap span { color: rgb(232, 232, 231); letter-spacing: 0.3em; }
+  .sower .strap { background: linear-gradient(90deg, rgb(206, 206, 202), rgb(246, 246, 244) 50%, rgb(206, 206, 202)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); } /* the strip's white paper: graphite vanished on the dark page */
+  .sower .strap span { color: rgb(30, 30, 30); letter-spacing: 0.3em; }
   /* the template's clubs (CLUB_LOOKS as CSS variables, Hero's): the body goes on from the band's last colour, no seam */
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
