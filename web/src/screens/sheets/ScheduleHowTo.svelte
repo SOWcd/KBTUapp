@@ -5,13 +5,15 @@
   // schedule is there (no longer right after the sign-in: one thing at a time, the onboarding plan of Oct 31).
   // Oct 30 (owner): the portal is the big button (Nov 2: the pinned one; no "open the bot", the steps say it), and
   // the iPhone way is shown as his own screen recording (public/howto: his face, his classes' teachers and his contacts blurred, the upload sped up, 14 s, no sound).
-  // This phone's own steps come first. `addLang` (the Week sheet's "Add a language"): the lead says to switch the
-  // portal's language first; the same page sent again adds that language's names (Oct 30).
+  // Nov 6 (owner): only this phone's own steps (a computer still sees both), and the recording is an animated WebP:
+  // an <img> loops by itself where Telegram's iOS webview never played the mp4, muted and play() or not.
+  // `addLang` (the Week sheet's "Add a language"): the lead says to switch the portal's language first; the same page
+  // sent again adds that language's names (Oct 30).
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import ExternalLink from '@lucide/svelte/icons/external-link';
-  import { overlays, type Overlay } from '../../lib/state/ui.svelte';
+  import type { Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, onAndroid, openLink } from '../../lib/tg';
+  import { haptic, onAndroid, onIos, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
@@ -21,41 +23,18 @@
   const PORTAL = 'https://uninet.kbtu.kz/student/schedule';
   const toPortal = () => { haptic.tap(); openLink(PORTAL); };
   const steps = (os: 'iphone' | 'android') => ([1, 2, 3] as const).map((i) => t(`sched.${os}${i}`));
-  const order = onAndroid ? (['android', 'iphone'] as const) : (['iphone', 'android'] as const);
-  // Nov 2: the recording never moved on an iPhone in Telegram. Svelte leaves `muted` out of the cloned HTML and sets
-  // the property afterwards, so WebKit met an unmuted autoplay video and refused it, and nothing ever called play().
-  // Now play() is ours: muted (attribute too), while the sheet is on top, the app in front and the video in view;
-  // paused otherwise (battery). `loop` keeps it seamless: the same element, no poster between rounds.
-  const top = $derived(!overlay.closing && !overlays.some((o) => o.id > overlay.id && !o.closing));
-  function autoplay(el: HTMLVideoElement, on: boolean) {
-    let seen = false;
-    el.muted = el.defaultMuted = true;
-    const sync = () => { if (on && seen && !document.hidden) el.play().catch(() => {}); else el.pause(); };
-    const io = new IntersectionObserver(([e]) => { seen = e.isIntersecting; sync(); });
-    io.observe(el);
-    document.addEventListener('visibilitychange', sync);
-    return {
-      update(v: boolean) { on = v; sync(); },
-      destroy() { io.disconnect(); document.removeEventListener('visibilitychange', sync); el.pause(); },
-    };
-  }
+  const oss = onIos ? (['iphone'] as const) : onAndroid ? (['android'] as const) : (['iphone', 'android'] as const);
 </script>
 
 <Sheet {overlay} title={t(addLang ? 'sched.addLang' : 'sched.howTitle')} icon={CalendarDays}>
   <p class="t-callout lead">{t(addLang ? 'sched.langLead' : 'sched.howLead')}</p>
   <div class="oss">
-    {#each order as os (os)}
+    {#each oss as os (os)}
+      {#if os === 'iphone'}
+        <img class="phone" src="howto/schedule-iphone.webp" width="360" height="780" alt={t('sched.video')} />
+      {/if}
       <Group caption={t(`sched.${os}`)}>
-        {#if os === 'iphone'}
-          <div class="how">
-            <!-- muted + playsinline: iOS plays it in place; play() comes from use:autoplay -->
-            <video class="phone" src="howto/schedule-iphone.mp4" poster="howto/schedule-iphone.jpg" muted loop playsinline preload="auto"
-              disablepictureinpicture aria-label={t('sched.video')} use:autoplay={top}></video>
-            <ol class="steps">{#each steps(os) as s, i (i)}<li><b class="num">{i + 1}</b><span>{s}</span></li>{/each}</ol>
-          </div>
-        {:else}
-          {#each steps(os) as s, i (i)}<Row dense title={s}>{#snippet lead()}<b class="n num">{i + 1}</b>{/snippet}</Row>{/each}
-        {/if}
+        {#each steps(os) as s, i (i)}<Row dense title={s}>{#snippet lead()}<b class="n num">{i + 1}</b>{/snippet}</Row>{/each}
       </Group>
     {/each}
   </div>
@@ -68,17 +47,13 @@
 </Sheet>
 
 <style>
-  .lead { color: var(--text-2); margin: var(--s-1) 0 0; }
+  .lead { color: var(--text-2); margin: var(--s-1) 0 0; text-align: center; }
   .oss { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-5); }
-  .how { display: grid; grid-template-columns: minmax(0, 132px) 1fr; gap: 14px; align-items: center; padding: var(--s-3); }
   /* the recording in a phone's outline: rounded like the screen it came from */
-  .phone { width: 100%; aspect-ratio: 590 / 1278; border-radius: var(--r-m); background: #000; object-fit: cover;
-    box-shadow: 0 0 0 3px var(--line-2), 0 10px 30px rgba(0, 0, 0, 0.35); }
-  .steps { list-style: none; margin: 0; padding: 0; }
-  .steps li { display: flex; align-items: center; gap: var(--s-3); padding: 9px 0; }
-  .steps li + li { box-shadow: inset 0 0.5px 0 var(--separator); }
-  .n, .steps b { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); font: 700 var(--fs-sub)/1 var(--font-text); }
-  .steps span { font: 500 var(--fs-sub)/1.3 var(--font-text); }
-  .note { margin: 14px var(--s-1) 0; }
+  .phone { display: block; width: min(42vw, 156px); height: auto; aspect-ratio: 360 / 780; margin: 0 auto;
+    border-radius: var(--r-xl); background: var(--line-2); object-fit: cover;
+    box-shadow: 0 0 0 4px var(--line-2), var(--shadow-thumb); }
+  .n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); font: 700 var(--fs-sub)/1 var(--font-text); }
+  .note { margin: 14px var(--s-1) 0; text-align: center; }
   .acts { display: flex; }
 </style>

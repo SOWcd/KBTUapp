@@ -974,7 +974,7 @@ const ru = {
   'sched.android1': "Открой «Расписание» на портале",
   'sched.android2': "⋮ → Скачать страницу",
   'sched.android3': "Отправь файл боту KBTU App",
-  'sched.privacy': "Храним только пары. Файл удаляем сразу, оценки и ID к нам не попадают.",
+  'sched.privacy': "Храним только пары, файл сразу удаляем.",
   'sched.portal': "Открыть портал",
   'sched.video': "Как это выглядит на iPhone",
   'sched.weekTitle': "Моя неделя",
