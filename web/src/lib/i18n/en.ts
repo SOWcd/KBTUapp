@@ -1722,7 +1722,7 @@ const en: Dict = {
   'app.channel': "Channel",
   'app.channelSub': "news",
   'app.group': "Group",
-  'app.groupSub': "topics: bugs, ideas",
+  'app.groupSub': "bugs & ideas",
   'app.support': "Support & ideas",
   'app.creator': "creator",
   'app.mainAdmin': "main admin",
