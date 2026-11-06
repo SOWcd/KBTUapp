@@ -133,6 +133,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     q = c.get("/api/forum-posts/mod", headers=M).json()
     assert [x["id"] for x in q["held"]] == [p["id"]] and q["held"][0]["author"] is None and q["held"][0]["why"] == "ai"
     assert c.get("/api/forum-posts/mod", headers=A).status_code == 403
+    assert q["revealed"] == 0
     # only the owner reveals, and it's in the audit log
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=M).status_code == 403
     login(c, 5, "adm")  # an admin who isn't the owner: no
@@ -140,6 +141,7 @@ def test_post_moderation_reveal_and_delete(env, monkeypatch):
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=tma(5)).status_code == 403
     assert c.post(f"/api/forum-posts/{p['id']}/reveal", headers=X).json()["id"] == ann["id"]
     assert [r[0] for r in con.execute("SELECT target FROM audit_log WHERE action = 'reveal_anon'")] == [f"fchan:{p['id']}"]
+    assert c.get("/api/forum-posts/mod", headers=M).json()["revealed"] == 1
     # the moderator lets it out: the bot sends it, signed with no name
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=M, json={"ok": True}).status_code == 204
     tick(cfg, tg, con)

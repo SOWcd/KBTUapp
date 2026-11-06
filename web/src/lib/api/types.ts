@@ -82,7 +82,7 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
 export type ChannelModPost = ChannelPost & { why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
 /** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
-export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
+export interface ChannelMod { revealed: number /* anonymous authors revealed, all time */; held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
   replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */

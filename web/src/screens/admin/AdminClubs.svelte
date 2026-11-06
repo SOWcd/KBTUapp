@@ -88,6 +88,8 @@
   // the ✓ (§4.6): turning it on congratulates the President through the bot, as DMP's switch does
   async function official(o: AdminOrg, ev: Event) {
     const el = ev.currentTarget as HTMLInputElement;
+    const ask = el.checked ? { title: t('reg.officialOnAsk', { name: o.name }), ok: t('reg.officialOnOk') } : { title: t('reg.officialOffAsk', { name: o.name }), ok: t('reg.officialOffOk') };
+    if (!(await sheets.ask({ ...ask, cancel: t('common.cancel'), danger: !el.checked }))) { el.checked = o.official; return; }
     try {
       const on = (await api.setOfficial(o.id, el.checked)).official;
       orgs = orgs!.map((x) => (x.id === o.id ? { ...x, official: on } : x));

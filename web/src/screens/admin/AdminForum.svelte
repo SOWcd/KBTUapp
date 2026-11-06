@@ -122,6 +122,7 @@
 <Sheet {overlay} full title={t('adm.forumChannel')} icon={MessagesSquare}>
   {#if mod}
     <div class="col">
+      <p class="mm">{t('fc.revealed', { n: mod.revealed })}</p>
       <!-- what waits for a decision is in Admin → Inbox; here what is out, and what was taken down -->
       {#if mod.live.length}<Group caption={t('fc.modLive')}>{#each mod.live as p (p.id)}{@render row(p, 'live')}{/each}</Group>{/if}
       {#if mod.removed.length}<Group caption={t('fc.modRemoved')}>{#each mod.removed as p (p.id)}{@render row(p, 'removed')}{/each}</Group>{/if}

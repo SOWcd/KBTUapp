@@ -652,7 +652,9 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     shape = lambda p: _shape(p) | {"why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
-            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
+            "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con),
+            # the trust signal: how many anonymous authors were ever revealed (the audit log is never deleted)
+            "revealed": one(con, "SELECT COUNT(*) FROM audit_log WHERE action = 'reveal_anon'")[0]}
 
 
 def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
