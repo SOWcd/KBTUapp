@@ -1608,6 +1608,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_undo(aid: int, con: Con, v: Me):
         media.drop(photos, logic.inbox.undo(con, v, aid))
 
+    @app.get("/api/admin/notifications")
+    def admin_notifications(con: Con, v: Me):
+        return logic.staff_mutes(con, v)
+
+    @app.put("/api/admin/notifications/{kind}")
+    def admin_set_notification(kind: str, con: Con, v: Me, body: dict = Body(...)):
+        return logic.set_staff_mute(con, v, kind, body.get("on"))
+
     @app.get("/api/admin/people")
     def admin_people(con: Con, v: Me, q: str = ""):
         return logic.find_people(con, v, q)

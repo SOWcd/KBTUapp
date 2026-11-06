@@ -496,6 +496,12 @@ def full(con, v: Viewer, e: sqlite3.Row) -> dict:
             **({"video": video_shape(x)} if head and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["video_id"])) else {})}
 
 
+# Staff work items (to admins, moderators): each may mute one for themselves (Admin -> My notifications); the value
+# is the switch (both backup messages are one). Moderators get the last four only (the callers pick who).
+STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path", "backup_failed": "backup", "backup_ok": "backup",
+               "chat_suggested": "chat_suggested", "tgc_queue": "tgc_queue", "fch_appeal": "fch_appeal", "fch_reply_queue": "fch_reply_queue"}
+
+
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from .clubs import org, orgs  # noqa: E402

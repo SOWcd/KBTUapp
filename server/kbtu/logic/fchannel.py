@@ -333,8 +333,7 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
         # the moderators hear: a template with the count and a button into Admin, at most once an hour each (the ref);
         # all of them, an appealing moderator too (review: the one who got no notice was the anonymous author)
         from .tgcomments import _mods
-        for uid in _mods(con):
-            notify(con, uid, "fch_appeal", f"fq:{_now() // 3600}")
+        notify_staff(con, _mods(con), "fch_appeal", f"fq:{_now() // 3600}")
     return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
 
 
@@ -865,8 +864,7 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
     with tx(con):
         if u["id"] != r["author"] and con.execute("INSERT OR IGNORE INTO fchan_reply_reports (reply_id, user_id, at) VALUES (?, ?, ?)",
                                                   (r["id"], u["id"], _now())).rowcount:
-            for uid in _mods(con):
-                notify(con, uid, "fch_reply_queue", f"rq:{r['id']}")
+            notify_staff(con, _mods(con), "fch_reply_queue", f"rq:{r['id']}")
             n = one(con, """SELECT COUNT(*) FROM fchan_reply_reports x JOIN students s ON s.user_id = x.user_id AND s.manual = 0
                 WHERE x.reply_id = ? AND s.verified_at < ?""", r["id"], _now() - REPORTER_AGE)[0]
             if n >= REPLY_HIDE_AT:
@@ -1012,4 +1010,4 @@ def _now() -> int:
 # the other domains', imported last: they import this one too
 from . import core  # noqa: E402
 from .oversight import _mod, _owner  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import notify, notify_staff  # noqa: E402

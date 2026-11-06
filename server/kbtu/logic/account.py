@@ -1021,6 +1021,7 @@ _DEL_GONE = {
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
+    ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }

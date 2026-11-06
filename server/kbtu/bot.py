@@ -95,6 +95,15 @@ async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Respo
     return await _tg(cfg, http, "sendMessage", body)
 
 
+def _appeal_kind(n: int) -> str:
+    """The appeals message by Russian plural: 1 alone, 21/31…, 2–4/22…, the rest (kk, en: one text past 1)."""
+    if n == 1:
+        return "fch_appeal"
+    if n % 10 == 1 and n % 100 != 11:
+        return "fch_appeal_one"
+    return "fch_appeal_few" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "fch_appeal_many"
+
+
 def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
@@ -123,7 +132,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, n=n), "capps") if n else None
     if kind == "fch_appeal":  # fq:<hour>, to moderators: refused posts their authors sent for a look, waiting in Admin
         n = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'held' AND appealed_at IS NOT NULL")[0]
-        return (*texts.bot_message(lang, kind, n=n), "capps") if n else None
+        return (*texts.bot_message(lang, _appeal_kind(n), n=n), "capps") if n else None
     if kind == "sid_check":  # sc:<student id>, to its holder: someone else typed it; quiet once they changed theirs
         held = one(con, "SELECT 1 FROM students WHERE user_id = ? AND student_id = ?", m["user_id"], ref[1])
         return (*texts.bot_message(lang, kind, sid=ref[1]), "me") if held else None
@@ -638,12 +647,10 @@ def offsite_round(cfg: Config, con) -> None:
     alert = one(con, "SELECT value FROM meta WHERE key = 'offsite_alert'")
     admins = lambda: rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL")  # noqa: E731
     if alert and done("offsite_db"):
-        for (uid,) in admins():
-            logic.notify(con, uid, "backup_ok", f"bo:{date}")
+        logic.notify_staff(con, [r[0] for r in admins()], "backup_ok", f"bo:{date}")
         con.execute("DELETE FROM meta WHERE key = 'offsite_alert'")
     elif not alert and local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
-        for (uid,) in admins():
-            logic.notify(con, uid, "backup_failed", f"bf:{date}")
+        logic.notify_staff(con, [r[0] for r in admins()], "backup_failed", f"bf:{date}")
         con.execute("INSERT INTO meta (key, value) VALUES ('offsite_alert', ?)", (date,))
     # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
     jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]

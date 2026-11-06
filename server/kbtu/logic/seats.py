@@ -12,7 +12,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from .core import (ApiError, HOLD, NO_END, PERSON_COLS, RANK, Viewer, _free_seat, _roles, at_least, can, card, cards,
-    full, log_action, need_student, one, person_ref, rows, taken)
+    STAFF_KINDS, full, log_action, need_student, one, person_ref, rows, taken)
 
 
 # ------------------------------------------------------------ volunteers
@@ -423,6 +423,20 @@ def notify(con, uid: int, kind: str, ref: str, payload: str = "{}", after: int |
     """Queue a bot message (§7). (user, kind, ref) is unique, so a repeat is a no-op."""
     con.execute("INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after) VALUES (?, ?, ?, ?, ?)",
                 (uid, kind, ref, payload, after or core.now()))
+
+
+def notify_staff(con, uids, kind: str, ref: str) -> None:
+    """A staff work item to those of `uids` who haven't muted it. None of them the bot can write to (muted all, or no
+    DMs: the Postman skips those), the owner gets it too (his own mute aside): nothing waits unheard."""
+    uids = list(uids)
+    if not uids:
+        return
+    muted = {r[0] for r in rows(con, "SELECT user_id FROM staff_mutes WHERE kind = ?", STAFF_KINDS[kind])}
+    to = [u for u in uids if u not in muted]
+    if not to or not one(con, f"SELECT 1 FROM users WHERE id IN ({','.join('?' * len(to))}) AND can_dm = 1 AND banned_at IS NULL AND tg_id > 0", *to):
+        to += [r[0] for r in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0") if r[0] not in to]
+    for uid in to:
+        notify(con, uid, kind, ref)
 
 
 def add_seats(con, v: Viewer, eid: int, n: object) -> dict:

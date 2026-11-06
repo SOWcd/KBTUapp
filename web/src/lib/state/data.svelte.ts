@@ -1,6 +1,6 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type TeamMember } from '../api';
+import { api, ApiErr, type AdminStats, type Inbox, type ClassItem, type EventCard, type Chats, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type StaffMute, type TeamMember } from '../api';
 import { joinClasses } from '../classes';
 import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
@@ -27,6 +27,8 @@ export const data = $state({
   registry: null as RegistryOrg[] | null,     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
   inbox: null as Inbox | null,                // the staff's Admin → Inbox: loaded with the app, again each time Admin opens
   adminStats: null as AdminStats | null,      // the admins' Admin → stats card: with the inbox (moderators never see it)
+  staffMutes: null as StaffMute[] | null,     // Admin → My notifications: with the inbox's first load, again as the page opens
+  staffMutesFailed: false,
   error: false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
@@ -110,10 +112,22 @@ export async function loadAfisha(): Promise<void> {
 export async function loadInbox(withStats = false): Promise<void> {
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
   if (withStats && session.me.role === 'admin') api.adminStats().then((s) => (data.adminStats = s)).catch(() => {});
+  if (withStats && !data.staffMutes) loadStaffMutes();
   try {
     data.inbox = await api.inbox();
     if (session.me && session.me.counters.inbox !== data.inbox.items.length) session.me.counters.inbox = data.inbox.items.length;
   } catch { /* the list keeps what it had */ }
+}
+
+/** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
+ *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
+let muteTaps = 0;
+export const mutedTap = () => void muteTaps++;
+export function loadStaffMutes(): void {
+  if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') return;
+  const at = muteTaps;
+  data.staffMutesFailed = false;
+  api.staffMutes().then((l) => { if (muteTaps === at) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
 }
 
 // whose chats we hold: "for you" depends on my school and course, so a new me asks again
