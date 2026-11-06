@@ -7,7 +7,7 @@
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
   import type { PersonCard } from '../../lib/api';
-  import { hero, QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars, SOWER } from '../../lib/awards';
+  import { hero, QR_LOOK, lookOf, STRAP, banded, clubLook, lookVars } from '../../lib/awards';
   import SowerArt from '../../ui/SowerArt.svelte';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -72,7 +72,7 @@
 <div class="scrim" bind:this={scrim} onclick={() => close(overlay.id)} role="presentation"></div>
 <div class="wrap" bind:this={wrap}>
   <div class="page">
-  <div class="stage {look} {look === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!clubLook(look)} style={lookVars(look)}>
+  <div class="stage {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
     <!-- the card and its clip tilt as one (owner, Oct 29: the clip hung still above the slot) -->
     <div class="card" bind:this={pass} use:glass role="group" aria-label={t('me.qr')}
          onpointerdown={press} onpointerup={release} onpointercancel={release} onpointerleave={release}>
@@ -179,14 +179,11 @@
   .studex { --role: rgba(255, 255, 255, 0.92); }
   .studex .pass { background: linear-gradient(180deg, #13295C, #081633); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER (round 5b): as on the card (Hero) */
-  .sower { --role: rgb(212, 218, 232); }
-  .sower .pass { background: rgb(0, 0, 0); }
-  .sower .strap { background: linear-gradient(90deg, rgb(18, 18, 22), rgb(42, 42, 49) 50%, rgb(18, 18, 22)); box-shadow: inset 1px 0 0 rgba(199, 166, 255, 0.7), inset -1px 0 0 rgba(166, 255, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3); }
-  .sower .strap span { color: rgb(232, 234, 240); letter-spacing: 0.3em; }
-  .sw-gold { --role: rgb(232, 196, 120); }
-  .sw-gold .strap { background: linear-gradient(90deg, rgb(10, 8, 6), rgb(30, 26, 18) 50%, rgb(10, 8, 6)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.75), inset -1px 0 0 rgba(232, 196, 120, 0.75), 0 2px 6px rgba(0, 0, 0, 0.3); }
-  .sw-gold .strap span { color: rgb(232, 196, 120); }
+  /* SOWER: as on the card (Hero) */
+  .sower { --role: rgb(192, 193, 190); }
+  .sower .pass { background: rgb(30, 30, 30); }
+  .sower .strap { background: linear-gradient(90deg, rgb(30, 30, 30), rgb(64, 64, 62) 50%, rgb(30, 30, 30)); box-shadow: inset 1px 0 0 rgba(232, 232, 231, 0.35), inset -1px 0 0 rgba(232, 232, 231, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sower .strap span { color: rgb(232, 232, 231); letter-spacing: 0.3em; }
   /* the template's clubs (CLUB_LOOKS as CSS variables, Hero's): the body goes on from the band's last colour, no seam */
   .club .pass { background: linear-gradient(180deg, var(--c2) 124px, var(--c3)); color: var(--ink); }
   .club .strap { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }

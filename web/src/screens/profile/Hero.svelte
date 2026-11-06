@@ -22,7 +22,7 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
   import LanyardBand from '../../ui/LanyardBand.svelte';
   import LanyardHolo from '../../ui/LanyardHolo.svelte';
-  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook, SOWER } from '../../lib/awards';
+  import { lookOf, STRAP, banded, clubLook, lookVars, orgOfLook } from '../../lib/awards';
   import SowerArt from '../../ui/SowerArt.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -228,7 +228,7 @@
 {#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
 
 <section class="h">
-<div class="hang {face} {face === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
+<div class="hang {face}" class:club={!!club} style={lookVars(face)} class:rest={!live || !seen || covered}>
   <div class="swing" bind:this={swing}>
     <div class="strap" bind:this={strap} aria-hidden="true"><span>{STRAP[face]}</span></div>
     <!-- on mine a tap on the card shows its back (the medallion is the button for screen readers and keyboards) -->
@@ -393,16 +393,12 @@
   .moments .id { text-shadow: 0 1px 2px rgba(40, 16, 8, 0.6), 0 0 14px rgba(40, 16, 8, 0.55); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone (round 5b, owner: "redo everything"; ui/SowerArt, lib/awards.ts SOWER): holo, black titanium
-     and holographic foil; gold, black lacquer and gold leaf */
-  .sower { --role: rgb(212, 218, 232); }
-  .sower .meta { color: rgba(255, 255, 255, 0.66); }
-  .sower .badge { background: rgb(0, 0, 0); }
-  .sower .strap { background: linear-gradient(90deg, rgb(18, 18, 22), rgb(42, 42, 49) 50%, rgb(18, 18, 22)); box-shadow: inset 1px 0 0 rgba(199, 166, 255, 0.7), inset -1px 0 0 rgba(166, 255, 224, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3); }
-  .sower .strap span { color: rgb(232, 234, 240); letter-spacing: 0.3em; }
-  .sw-gold { --role: rgb(232, 196, 120); }
-  .sw-gold .strap { background: linear-gradient(90deg, rgb(10, 8, 6), rgb(30, 26, 18) 50%, rgb(10, 8, 6)); box-shadow: inset 1px 0 0 rgba(232, 196, 120, 0.75), inset -1px 0 0 rgba(232, 196, 120, 0.75), 0 2px 6px rgba(0, 0, 0, 0.3); }
-  .sw-gold .strap span { color: rgb(232, 196, 120); }
+  /* SOWER, the creator's alone (ui/SowerArt, lib/awards.ts SOWER): his photo's graphite and white paper */
+  .sower { --role: rgb(192, 193, 190); }
+  .sower .meta { color: rgba(232, 232, 231, 0.7); }
+  .sower .badge { background: rgb(30, 30, 30); }
+  .sower .strap { background: linear-gradient(90deg, rgb(30, 30, 30), rgb(64, 64, 62) 50%, rgb(30, 30, 30)); box-shadow: inset 1px 0 0 rgba(232, 232, 231, 0.35), inset -1px 0 0 rgba(232, 232, 231, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .sower .strap span { color: rgb(232, 232, 231); letter-spacing: 0.3em; }
   /* the template's clubs (lib/awards.ts CLUB_LOOKS, as CSS variables): the card under the band, the strap, the photo's
      ring; the role's colour comes as --role itself */
   .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }

@@ -1,13 +1,13 @@
 <script lang="ts">
   // The strip at the bottom of a lanyard's card: whose badge it is and its number, each in its own colours (owner,
   // Oct 20: "the bottom is the same on every card"). The shimmer follows the tilt (--gx, set by `glass` above it).
-  import { clubLook, SOWER, type Look } from '../lib/awards';
+  import { clubLook, type Look } from '../lib/awards';
 
   let { look, no }: { look: Look; no: string } = $props();
   const club = $derived(clubLook(look)); // the template's clubs: their word on their colours (lookVars)
 </script>
 
-<div class="holo {look}" class:club={!!club} class:swg={look === 'sower' && SOWER === 'gold'}>
+<div class="holo {look}" class:club={!!club}>
   {#if club}<b class="w ch" class:long={club.strip.length > 12}>{club.strip}</b>
   {:else if look === 'sower'}<b class="w sw">SOWER</b>
   {:else if look === 'studex'}<b class="w sx"><i>STUD</i>EX</b>
@@ -37,16 +37,11 @@
     background-size: 260% 100%, 200% 100%, 100% 100%; background-position: calc(50% + var(--gx, 0) * 110%) 0, calc(50% + var(--gx, 0) * 40%) 0, 0 0;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(23, 48, 100, 0.16), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
   .studex span { font-variant-numeric: tabular-nums; }
-  /* SOWER (round 5b, lib/awards.ts SOWER): black glass in a hairline of holographic foil sliding with the tilt, the name in
-     silver; or (gold) in gold leaf */
-  .sower { border: 1px solid transparent; color: rgba(232, 234, 240, 0.75);
-    background: linear-gradient(180deg, rgb(23, 23, 28), rgb(5, 5, 7)) padding-box,
-      linear-gradient(100deg, rgb(142, 197, 255), rgb(199, 166, 255) 17%, rgb(255, 179, 217) 33%, rgb(255, 230, 166) 50%, rgb(166, 255, 224) 67%, rgb(142, 197, 255) 83%, rgb(199, 166, 255)) border-box;
-    background-size: 100% 100%, 300% 100%; background-position: 0 0, calc(50% + var(--gx, 0) * 60%) 0; box-shadow: 0 6px 16px -6px rgba(160, 140, 255, 0.35); }
-  .sower .sw { color: transparent; -webkit-background-clip: text; background-clip: text; background-image: linear-gradient(180deg, rgb(255, 255, 255), rgb(169, 174, 188)); }
-  .swg { background: linear-gradient(180deg, rgb(21, 18, 12), rgb(5, 4, 3)) padding-box, linear-gradient(100deg, rgb(122, 82, 16), rgb(246, 217, 138) 40%, rgb(255, 244, 208) 50%, rgb(216, 167, 67) 60%, rgb(122, 82, 16)) border-box;
-    background-size: 100% 100%, 260% 100%; background-position: 0 0, calc(50% + var(--gx, 0) * 60%) 0; color: rgba(232, 196, 120, 0.8); box-shadow: 0 6px 16px -6px rgba(200, 150, 60, 0.35); }
-  .swg .sw { background-image: linear-gradient(180deg, rgb(255, 240, 200), rgb(232, 196, 120) 55%, rgb(184, 137, 62)); }
+  /* SOWER: the white paper his photo's hand is cut from, one light sliding with the tilt, the name in graphite ink */
+  .sower { color: rgba(30, 30, 30, 0.72); background: linear-gradient(100deg, transparent 38%, rgba(255, 255, 255, 0.7) 50%, transparent 62%) calc(50% + var(--gx, 0) * 120%) 0 / 260% 100% no-repeat,
+    linear-gradient(180deg, rgb(242, 242, 240), rgb(222, 222, 219));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), inset 0 -1px 2px rgba(0, 0, 0, 0.14), 0 4px 12px -6px rgba(0, 0, 0, 0.6); }
+  .sower .sw { color: rgb(30, 30, 30); }
   .sx { gap: 0; font: 900 16px/1 var(--font-display); letter-spacing: -0.03em; color: #173064; }
   .sx i { font-style: normal; color: rgb(214, 38, 27); }
   .sw { font: 900 13px/1 var(--font-display); letter-spacing: 0.34em; }

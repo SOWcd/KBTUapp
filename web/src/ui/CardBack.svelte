@@ -5,7 +5,7 @@
   // nothing to tap). The text and the QR are the caller's: this only draws them.
   import type { Snippet } from 'svelte';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-  import { banded, clubLook, lookVars, QR_LOOK, SOWER, type Look } from '../lib/awards';
+  import { banded, clubLook, lookVars, QR_LOOK, type Look } from '../lib/awards';
   import LanyardBand from './LanyardBand.svelte';
   import SowerArt from './SowerArt.svelte';
   import OrgMedal from './OrgMedal.svelte';
@@ -23,7 +23,7 @@
   } = $props();
 </script>
 
-<div class="cb {look} {look === 'sower' ? 'sw-' + SOWER : ''}" class:club={!!clubLook(look)} style={lookVars(look)}>
+<div class="cb {look}" class:club={!!clubLook(look)} style={lookVars(look)}>
   <!-- the lanyard's own art on this side too (owner, Nov 3: the back was a bare colour) -->
   {#if look === 'sower'}<SowerArt wide />{/if}
   {#if banded(look)}<LanyardBand {look} wide qr />{/if}
@@ -50,8 +50,7 @@
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .faces { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
-  .sower { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 130, 170, 0.2), transparent 60%), linear-gradient(160deg, rgb(27, 28, 33), rgb(0, 0, 0)); }
-  .sw-gold { background: radial-gradient(80% 110% at 100% 0%, rgba(120, 90, 30, 0.26), transparent 60%), linear-gradient(160deg, rgb(21, 18, 12), rgb(0, 0, 0)); }
+  .sower { background: rgb(30, 30, 30); }
   .studex { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .cheer { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
   .knights { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
@@ -62,8 +61,7 @@
   .moments { --role: rgb(244, 217, 190); }
   .faces { --role: rgb(255, 155, 214); }
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .sower { --role: rgb(212, 218, 232); }
-  .sw-gold { --role: rgb(232, 196, 120); }
+  .sower { --role: rgb(192, 193, 190); }
   /* no tilt reaches the back (the face's glass writes --gx): its depth layers stand still, so they are painted with the
      side, not each kept as a layer of its own */
   .cb :global(.z) { will-change: auto; }
@@ -88,7 +86,7 @@
   .meta { display: block; margin-top: 1px; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .moments .meta { color: rgba(255, 255, 255, 0.84); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
-  .sower .meta { color: rgba(255, 255, 255, 0.66); }
+  .sower .meta { color: rgba(232, 232, 231, 0.7); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
   /* the anime club's art where this side sets the name (mid-right): its mist moved under it, its swirl's ink haloed */
@@ -97,6 +95,9 @@
   /* kbtu.mag: its issues stand where this side sets the name: quieter here, the name haloed in their cream */
   .kbtumag :global(.near) { opacity: 0.45; }
   .kbtumag .bside { text-shadow: 0 0 3px rgba(243, 233, 219, 0.95), 0 0 9px rgba(243, 233, 219, 0.85); }
+  /* SOWER: the hand stands where this side sets the name: quieter here, the name lifted off it */
+  .sower :global(.near) { opacity: 0.6; }
+  .sower .bside { text-shadow: 0 1px 2px rgba(14, 14, 14, 0.8), 0 0 10px rgba(14, 14, 14, 0.7); }
   .japanesecultureclub .bside { text-shadow: 0 0 3px rgba(227, 176, 194, 0.95), 0 0 9px rgba(227, 176, 194, 0.85); } /* as on the face (Hero) */
   @media (max-width: 359px) { .plate { width: 124px; height: 124px; } }
 </style>

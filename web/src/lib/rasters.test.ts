@@ -4,7 +4,7 @@ import made from '../../tools/scene-rasters.json';
 // The card draws its layers as pictures made from the SVGs, the picker its minis made from the card's components
 // (tools/scene-rasters.mjs). A source changed without making its pictures again would leave the old art on screen: each
 // hash here is the one its pictures were made from.
-const SVGS = import.meta.glob(['/src/assets/lanyards/{scenes,schools}/*-card.svg', '/src/assets/lanyards/{kbtu-rosette,kbtu-facade,sower-rosette}.svg'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const SVGS = import.meta.glob(['/src/assets/lanyards/{scenes,schools,sower}/*-card.svg', '/src/assets/lanyards/{kbtu-rosette,kbtu-facade}.svg'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const PICS = import.meta.glob('/src/assets/lanyards/**/*.webp', { query: '?url', import: 'default', eager: true }) as Record<string, string>;
 const ALL_SVG = import.meta.glob('/src/assets/lanyards/**/*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const MINI_SRC = ['/src/ui/LanyardBand.svelte', '/src/ui/ClubScene.svelte', '/src/ui/SchoolScene.svelte', '/src/ui/KbtuMark.svelte', '/src/lib/awards.ts', '/tools/minis/Minis.svelte'];
