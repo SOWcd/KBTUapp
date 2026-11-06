@@ -10,6 +10,7 @@
   import ScrollText from '@lucide/svelte/icons/scroll-text';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Users from '@lucide/svelte/icons/users';
+  import Bell from '@lucide/svelte/icons/bell';
   import { untrack, type Component } from 'svelte';
   import { api, type StaffRow } from '../../lib/api';
   import { MANUAL, manualMedal, manualTitle } from '../../lib/awards';
@@ -31,6 +32,7 @@
   import AdminStats from './AdminStats.svelte';
   import AdminAwards from './AdminAwards.svelte';
   import AdminPeople from './AdminPeople.svelte';
+  import AdminNotify from './AdminNotify.svelte';
   import AwardPane from './AwardPane.svelte';
   import PersonPane from './PersonPane.svelte';
 
@@ -113,6 +115,7 @@
       {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
+      {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
     </Group>
   </div>
 </Sheet>

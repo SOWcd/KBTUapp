@@ -248,7 +248,9 @@ export interface Api {
   myGrants(): Promise<GrantItem[]>;
   staff(): Promise<Staff>;                                // admin: the app's team and the banned
   staffFind(username: string): Promise<StaffRow>;          // admin: anyone who opened the app, by @username
-  staffSearch(q: string): Promise<StaffRow[]>;                 // admin → People: by name, @username, student ID or id
+  staffSearch(q: string): Promise<StaffRow[]>;
+  staffMutes(): Promise<import('./types').StaffMute[]>;   // staff: my work-item notifications
+  setStaffMute(kind: string, on: boolean): Promise<import('./types').StaffMute[]>;                 // admin → People: by name, @username, student ID or id
   inbox(): Promise<import('./types').Inbox>;               // staff: everything waiting, and what was done lately
   undoDone(id: Id): Promise<void>;                         // a Done row taken back (each undo keeps its own rules)
   adminDeleteEvent(id: Id): Promise<void>;                 // admin: hidden now, gone in a day (Undo till then)

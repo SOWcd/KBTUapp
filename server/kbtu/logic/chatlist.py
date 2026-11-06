@@ -196,8 +196,8 @@ def suggest_chat(con, uid: int, url: str, kind: str, tg_chat: int | None, peek: 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""", (title, "channel" if kind == "channel" else "group", int(kind == "forum"),
                                                                        url, tg_chat, peek.get("photo"), peek.get("members"), about, uid, core.now())).lastrowid
         con.execute("INSERT OR IGNORE INTO chat_asks (chat_id, user_id) VALUES (?, ?)", (cid, uid))
-        for (aid,) in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')"):
-            notify(con, aid, "chat_suggested", f"cs:{(core.now() + 5 * 3600) // 86400}")
+        notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')")], "chat_suggested",
+                     f"cs:{(core.now() + 5 * 3600) // 86400}")
     return title
 
 
@@ -575,5 +575,5 @@ def photo_free(con, path: str) -> bool:
 # when a function runs
 from . import core  # noqa: E402
 from .clubs import orgs  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import notify, notify_staff  # noqa: E402
 from .teams import invite  # noqa: E402

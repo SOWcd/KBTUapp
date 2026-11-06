@@ -9,7 +9,7 @@ import time
 
 from ..db import tx
 
-from .core import (ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by_id, _org, _qs, log_action, one, org_ref, overseer, person_ref,
+from .core import (STAFF_KINDS, ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by_id, _org, _qs, log_action, one, org_ref, overseer, person_ref,
     rows, short_name, shown_name)
 
 
@@ -166,6 +166,30 @@ def _mod(v: Viewer) -> None:
     """Moderators filter content: the report queue, taking things down and back; the admin too."""
     if v.role not in ("admin", "moderator"):
         raise ApiError("forbidden")
+
+
+# ---------------------------------------------------------------- my staff notifications (Admin -> My notifications)
+
+_MOD_MUTES = ("chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue")  # what moderators get; admins all of them
+
+
+def staff_mutes(con, v: Viewer) -> list[dict]:
+    """The work items I get, each on or off (seats.notify_staff)."""
+    _mod(v)
+    off = {r[0] for r in rows(con, "SELECT kind FROM staff_mutes WHERE user_id = ?", v.id)}
+    kinds = dict.fromkeys(STAFF_KINDS.values()) if v.role == "admin" else _MOD_MUTES
+    return [{"kind": k, "on": k not in off} for k in kinds]
+
+
+def set_staff_mute(con, v: Viewer, kind: object, on: object) -> list[dict]:
+    _mod(v)
+    if not isinstance(on, bool) or kind not in [m["kind"] for m in staff_mutes(con, v)]:
+        raise ApiError("bad_input")
+    if on:
+        con.execute("DELETE FROM staff_mutes WHERE user_id = ? AND kind = ?", (v.id, kind))
+    else:
+        con.execute("INSERT OR IGNORE INTO staff_mutes (user_id, kind) VALUES (?, ?)", (v.id, kind))
+    return staff_mutes(con, v)
 
 
 # ---------------------------------------------------------------- the app's team

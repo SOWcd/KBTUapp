@@ -55,6 +55,7 @@ export type TgcRule = 'abuse' | 'fake' | 'spam' | 'pdata' | 'disrupt' | 'other';
 /** Something the admin took down from the reports in the last 30 days, still down: Restore undoes it. */
 /** The app's team: the owner (admin + founder), admins, moderators; and who is banned (why). */
 export interface StaffRow { person: PersonRef; username: string | null; role: PlatformRole; owner: boolean; banReason: string | null; banned?: boolean }
+export interface StaffMute { kind: string; on: boolean } // Admin → My notifications: a work item the bot sends me, on or off
 export interface Staff { team: StaffRow[]; banned: StaffRow[]; owner: boolean /* me: may give the admin role, reads the log */ }
 export interface AuditRow { id: Id; actor: PersonRef | null; action: string; target: string; targetName: string | null; data: Record<string, unknown>; at: Ts }
 /** An anonymous post's random nick: indexes the app words in its language (i18n/nicks.ts); null on a named post or one

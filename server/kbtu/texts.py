@@ -312,7 +312,11 @@ BOT = {
         "fch_reply_removed": ("Модератор снял этот ответ.", None),
         "fch_reply_deleted": ("Автор удалил этот ответ.", None),
         "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
-        "fch_appeal": ("🛡 Авторы просят проверить посты, которые не пропустил ИИ: {n}.", "Открыть"),
+        # by Russian plural (bot._appeal_kind): exactly one; 21, 31…; 2–4; the rest
+        "fch_appeal": ("🛡 {n} пост ждёт твоего решения: автор не согласен с ИИ. Открой и реши: выпустить его или нет.", "Открыть"),
+        "fch_appeal_one": ("🛡 {n} пост ждёт твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
+        "fch_appeal_few": ("🛡 {n} поста ждут твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
+        "fch_appeal_many": ("🛡 {n} постов ждут твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
     },
     "kk": {
         "exit": ("🚪 <b>ҚБТУ-дан шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығуға дейін апарады.", "🚪 Шығуды табу"),
@@ -456,7 +460,10 @@ BOT = {
         "fch_reply_removed": ("Бұл жауапты модератор алып тастады.", None),
         "fch_reply_deleted": ("Бұл жауапты авторы өшірді.", None),
         "fch_reply_queue": ("🛡 Пікірлердегі авторлардың анонимді жауаптары модераторды күтуде (шағым немесе тексеру): {n}.", "Ашу"),
-        "fch_appeal": ("🛡 Авторлар ЖИ өткізбеген посттарды тексеруді сұрайды: {n}.", "Ашу"),
+        "fch_appeal": ("🛡 {n} пост сенің шешіміңді күтуде: авторы ЖИ-мен келіспейді. Ашып, шеш: шығару ма, жоқ па.", "Ашу"),
+        "fch_appeal_one": ("🛡 {n} пост сенің шешіміңді күтуде: авторлары ЖИ-мен келіспейді. Ашып, әрқайсысын шеш: шығару ма, жоқ па.", "Ашу"),
+        "fch_appeal_few": ("🛡 {n} пост сенің шешіміңді күтуде: авторлары ЖИ-мен келіспейді. Ашып, әрқайсысын шеш: шығару ма, жоқ па.", "Ашу"),
+        "fch_appeal_many": ("🛡 {n} пост сенің шешіміңді күтуде: авторлары ЖИ-мен келіспейді. Ашып, әрқайсысын шеш: шығару ма, жоқ па.", "Ашу"),
     },
     "en": {
         "exit": ("🚪 <b>Looking for the way out of KBTU?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
@@ -600,7 +607,10 @@ BOT = {
         "fch_reply_removed": ("A moderator removed this reply.", None),
         "fch_reply_deleted": ("The author deleted this reply.", None),
         "fch_reply_queue": ("🛡 Authors' anonymous replies in the comments wait for a moderator (reports or a check): {n}.", "Open"),
-        "fch_appeal": ("🛡 Authors ask for a look at posts the AI refused: {n}.", "Open"),
+        "fch_appeal": ("🛡 {n} post waits for your decision: its author disagrees with the AI. Open it and decide: publish it or not.", "Open"),
+        "fch_appeal_one": ("🛡 {n} posts wait for your decision: their authors disagree with the AI. Open them and decide on each: publish or not.", "Open"),
+        "fch_appeal_few": ("🛡 {n} posts wait for your decision: their authors disagree with the AI. Open them and decide on each: publish or not.", "Open"),
+        "fch_appeal_many": ("🛡 {n} posts wait for your decision: their authors disagree with the AI. Open them and decide on each: publish or not.", "Open"),
     },
 }
 

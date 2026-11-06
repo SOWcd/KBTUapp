@@ -311,8 +311,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
         _new_club_ok(con, name, short)
         aid = con.execute("""INSERT INTO club_applications (user_id, name, short, description, emoji, cover, links, why, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (v.id, name, short, about, emoji, cover, json.dumps(links), why, core.now())).lastrowid
-        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
-            notify(con, uid, "club_application", f"capp:{aid}")
+        notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL")], "club_application", f"capp:{aid}")
     return _club_app(con, one(con, "SELECT * FROM club_applications WHERE id = ?", aid), False)
 
 
@@ -427,8 +426,7 @@ def ask_official(con, v: Viewer, oid: int) -> dict | None:
             raise ApiError("bad_input", "steps")
         rid = con.execute("INSERT INTO official_requests (org_id, created_at) VALUES (?, ?)", (oid, core.now())).lastrowid
         log_action(con, v.id, "opath_ask", f"opath:{rid}", json.dumps({"title": o["name"]}))
-        for (uid,) in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL"):
-            notify(con, uid, "club_path", f"opath:{rid}")
+        notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role = 'admin' AND banned_at IS NULL")], "club_path", f"opath:{rid}")
     return official_path(con, v, oid)
 
 
@@ -792,5 +790,5 @@ def seed_schools(con, root: Path) -> None:
 from . import core, oversight  # noqa: E402
 from .chatlist import org_chats  # noqa: E402
 from .oversight import DMP_COLS, _admin, staff  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import notify, notify_staff  # noqa: E402
 from .teams import _ordered, banned  # noqa: E402

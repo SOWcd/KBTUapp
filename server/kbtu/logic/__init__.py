@@ -18,7 +18,7 @@ from .core import (NAME, STUDENT_ID, ApiError, DOOR_EARLY, DOOR_LATE, GOV_SLUG, 
 from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _ics_text, _receipt_flags,
     _receipt_slot, _remind, _ticket_code, _vevent, _visible, _volunteers_view, add_receipt, add_seats, cal_feed,
     cal_token, reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event, guard_join, guard_read, guard_token,
-    event_ics, events, ics_sig, notify, past_events, promote, receipt_open, receipt_path, register, review_receipt,
+    event_ics, events, ics_sig, notify, notify_staff, STAFF_KINDS, past_events, promote, receipt_open, receipt_path, register, review_receipt,
     set_saved, sweep_holds, title_in, unregister, volunteer_apply, volunteer_decide, volunteer_leave,
     volunteers_list)  # noqa: F401
 from .queues import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note, _video,
@@ -45,7 +45,7 @@ from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _ch
 from .oversight import (DMP_COLS, QUIET_FOR, STAFF_ROLES, _STAFF, _admin, _admin_org, _dmp_person, _mod, _month,
     _overseer_only, _owner, _staff_row, _touchable, admin_create_org, admin_hide_org, admin_org_events, admin_orgs,
     admin_set_role, audit, ban_info, find_anyone, find_people, find_user, registry, registry_export, registry_memos,
-    registry_roster, registry_search, set_ban, set_official, set_role, set_staff, staff)  # noqa: F401
+    registry_roster, registry_search, set_ban, set_official, set_role, set_staff, set_staff_mute, staff, staff_mutes)  # noqa: F401
 from .moderation import (COMMENTS_A_MINUTE, REPORTS_A_DAY, REPORT_NOTE, TAKEDOWN_KEEP, _about, _moderates, _thread,
     add_comment, close_gone, comments, delete_comment, purge_takedowns, report, report_queue, resolve_report, restore,
     set_comments_on, taken_down)  # noqa: F401

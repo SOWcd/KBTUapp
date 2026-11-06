@@ -196,8 +196,7 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None) -> str |
                 notify(con, c["author_id"], "tgc_removed", f"tr:{cid}")
             return "delete"
         if reports >= ALERT_AT:  # many at once: the moderators now, not in the hour's digest
-            for uid in _mods(con):
-                notify(con, uid, "tgc_queue", f"ta:{cid}")
+            notify_staff(con, _mods(con), "tgc_queue", f"ta:{cid}")
         if n >= DELETE_AT or verdict is False or reports >= ALERT_AT:
             con.execute("UPDATE tgc_comments SET status = 'queued', ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
             return "queue"
@@ -415,8 +414,7 @@ def sweep(con) -> None:
     con.execute("DELETE FROM meta WHERE key >= 'tgcok:' AND key < 'tgcok;' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
     con.execute("DELETE FROM meta WHERE key >= 'tgcedit:' AND key < 'tgcedit;' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))
     if one(con, "SELECT 1 FROM tgc_comments WHERE (status = 'queued' OR review = 1) AND decided_at > ?", now() - 3600):
-        for uid in _mods(con):
-            notify(con, uid, "tgc_queue", f"tq:{now() // 3600}")
+        notify_staff(con, _mods(con), "tgc_queue", f"tq:{now() // 3600}")
 
 
 def now() -> int:
@@ -427,4 +425,4 @@ def now() -> int:
 from . import core  # noqa: E402
 from .core import _once  # noqa: E402
 from .oversight import _admin, _mod  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import notify, notify_staff  # noqa: E402

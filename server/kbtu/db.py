@@ -1245,6 +1245,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     END;"""),
     # The forum feed's public page walks channel messages in order, without sorting all live posts on every poll.
     (128, "CREATE INDEX IF NOT EXISTS fchan_posts_by_message ON fchan_posts(status, tg_msg, id);"),
+    # a staff member's muted work items (Admin -> My notifications; logic.seats.STAFF_KINDS): a row is off
+    (129, """CREATE TABLE IF NOT EXISTS staff_mutes (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind    TEXT NOT NULL,
+        PRIMARY KEY (user_id, kind)
+    ) STRICT, WITHOUT ROWID;"""),
 ]
 
 
