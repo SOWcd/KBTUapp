@@ -5,6 +5,7 @@
 // cylinder ~9.5% thick: the drawn art in front, polished metal with guilloché and the app's mark behind, a milled
 // edge). It all swings as one pendulum from the neck; the ribbon's lower part follows the swing and the turn, its top
 // stays put. RoomEnvironment lights the metal and the satin alike. Renders only while something moves.
+import { onAndroid } from '../lib/tg';
 import {
   BoxGeometry, BufferAttribute, CanvasTexture, Color, CylinderGeometry, DoubleSide, Group,
   LinearMipmapLinearFilter, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, NeutralToneMapping, PerspectiveCamera, PMREMGenerator,
@@ -28,8 +29,8 @@ const canvas2d = (w: number, h: number) => { const c = document.createElement('c
 
 /** Mounts the medal into `host`; resolves once the first frame is drawn. Throws without WebGL. */
 export async function mountCoin(host: HTMLElement, o: { src: string; tint: string; ribbon: string[]; size: number; state: CoinState; onLand?: () => void }): Promise<() => void> {
-  const renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(3, devicePixelRatio || 1)); // 3x phones too: at 2 the edge stepped (owner, Nov 3: "no pixels")
+  const renderer = new WebGLRenderer({ antialias: !onAndroid, alpha: true, powerPreference: 'low-power' });
+  renderer.setPixelRatio(Math.min(onAndroid ? 2 : 3, devicePixelRatio || 1)); // Android: 3x + MSAA lost the medal's face and the page's layers (video, Nov 6) // 3x phones too: at 2 the edge stepped (owner, Nov 3: "no pixels")
   const w = Math.round(o.size * W), up = Math.round(o.size * UP), h = up + Math.round(o.size * DOWN);
   renderer.setSize(w, h);
   renderer.toneMapping = NeutralToneMapping; // ACES pushed the blue enamel toward lavender and the gold to cream

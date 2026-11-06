@@ -15,7 +15,7 @@
   // wider in most of them than in English: the Russian one ends ~9 px further right (two iPhones), close
   // enough to touch. So outside English and Kazakh (short words) the window gives up 10 px more on the left.
   import { onMount, type Component } from 'svelte';
-  import { inTelegram, tg } from '../lib/tg';
+  import { inTelegram, onAndroid, tg } from '../lib/tg';
   import { countdown } from '../lib/time';
   import { glass } from './glass';
   import { chrome } from './chrome';
@@ -83,7 +83,7 @@
   });
 </script>
 
-<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} style:--cap-tint={tint} use:glass={{ bloom: true }} use:chrome>
+<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} class:flat={onAndroid} style:--cap-tint={tint} use:glass={{ bloom: true }} use:chrome>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <!-- live status -->
   <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live?.title}>
@@ -106,6 +106,9 @@
     transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base);
     animation: capIn 400ms cubic-bezier(.2, .9, .25, 1.2) backwards;
   }
+  /* Android (a user's video, Nov 6): the pill's live blur over a sheet or the WebGL medal dropped its title for seconds */
+  .cap.flat { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .cap.flat > .tone-base { background: var(--glass-solid); }
   .cap.wide { width: min(174px, calc(100vw - 208px)); }
   .cap.boot { width: min(152px, calc(100vw - 230px)); }
   .cap > .tone-base { background: var(--glass-clear); }
