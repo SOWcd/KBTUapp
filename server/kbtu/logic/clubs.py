@@ -87,11 +87,12 @@ def org(con, v: Viewer, oid: int) -> dict:
 
 
 def _contact(con, oid: int) -> str | None:
-    """Whom "Message the club" writes to: the President's @username, else the next by rank (Vice, then a Head) who has
-    one. Only to signed-in students (the people list never shows usernames)."""
-    r = one(con, """SELECT u.tg_username FROM org_members m JOIN users u ON u.id = m.user_id WHERE m.org_id = ?
-        AND m.role IN ('president', 'vice', 'head') AND u.tg_username IS NOT NULL AND u.tg_username != '' AND u.banned_at IS NULL
-        ORDER BY CASE m.role WHEN 'president' THEN 0 WHEN 'vice' THEN 1 ELSE 2 END, m.joined_at, m.user_id LIMIT 1""", oid)
+    """Whom "Message the club" writes to: the President's @username, else a Vice's (public roles, owner Nov 6; never a
+    Head's). None for a club that hides its members. Only to signed-in students (the people list never shows usernames)."""
+    r = one(con, """SELECT u.tg_username FROM orgs o JOIN org_members m ON m.org_id = o.id JOIN users u ON u.id = m.user_id
+        WHERE o.id = ? AND o.members_hidden = 0 AND m.role IN ('president', 'vice') AND u.tg_username IS NOT NULL
+        AND u.tg_username != '' AND u.banned_at IS NULL
+        ORDER BY m.role = 'vice', m.joined_at, m.user_id LIMIT 1""", oid)
     return r[0] if r else None
 
 
@@ -655,16 +656,19 @@ def _plain(name: str) -> None:
 def strip_emoji_names(con) -> None:
     """Once (Nov 6): names from before the rule lose their emoji ("Chess larpers\U0001f976" -> "Chess larpers"; letters
     like \u00f3 stay), the slug kept, audit-logged, and the club's President told how (the club's look has an emoji)."""
-    if not _once(con, "emoji_names", "1"):
+    if one(con, "SELECT 1 FROM meta WHERE key = 'emoji_names'"):  # done: no write lock every bot round
         return
     clean = lambda n: re.sub(r"\s+", " ", "".join(c for c in n if not _emoji(c))).strip()  # noqa: E731
-    for o in rows(con, "SELECT id, name, i18n FROM orgs"):
-        if (new := clean(o["name"])) == o["name"] or len(new) < 2:
-            continue  # ponytail: a name that was all emoji stays for the admin to rename by hand
-        tr = {lang: {**f, **({"name": clean(f["name"])} if isinstance(f.get("name"), str) else {})}
-              for lang, f in json.loads(o["i18n"]).items()} if o["i18n"] else None
-        with tx(con):
-            con.execute("UPDATE orgs SET name = ?, i18n = ? WHERE id = ?", (new, tr and json.dumps(tr, ensure_ascii=False), o["id"]))
+    with tx(con):  # the marker, the reads and the writes at once: a failure leaves it to the next round, a rename can't race
+        if not _once(con, "emoji_names", "1"):
+            return
+        for o in rows(con, "SELECT id, name, i18n FROM orgs"):
+            if (new := clean(o["name"])) == o["name"] or len(new) < 2:
+                continue  # ponytail: a name that was all emoji stays for the admin to rename by hand
+            tr = {lang: {**f, **({"name": clean(f["name"])} if isinstance(f.get("name"), str) else {})}
+                  for lang, f in json.loads(o["i18n"]).items()} if o["i18n"] else None
+            con.execute("UPDATE orgs SET name = ?, i18n = ? WHERE id = ?",
+                        (new, None if tr is None else json.dumps(tr, ensure_ascii=False), o["id"]))
             log_action(con, None, "org_edit", f"org:{o['id']}", json.dumps({"emoji": [o["name"], new]}, ensure_ascii=False))
             for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", o["id"]):
                 notify(con, uid, "club_emoji", f"emo:{o['id']}")

@@ -24,7 +24,7 @@ def test_no_telegram_socials(env):
 
 
 def test_contact_by_rank(env):
-    """The President's @username, else a Vice's, else a Head's; none: null; a guest (no KBTU sign-in) gets none."""
+    """The President's @username, else a Vice's; never a Head's; none for a club hiding its members; a guest gets none."""
     c, cfg = env
     pres, vice, head = login(c, 20, "pres"), login(c, 21, "vice"), login(c, 22, "head")
     login(c, 30, "ali")
@@ -33,14 +33,15 @@ def test_contact_by_rank(env):
     contact = lambda h=tma(30): c.get("/api/orgs/1", headers=h).json()["contact"]  # noqa: E731
     for uid in (pres, vice, head):
         name(uid["id"], None)
-    assert contact() is None
     name(head["id"], "head_u")
-    assert contact() == "head_u"
+    assert contact() is None
     name(vice["id"], "vice_u")
     assert contact() == "vice_u"
     name(pres["id"], "pres_u")
     assert contact() == "pres_u"
     assert c.get("/api/orgs/1", headers=tma(99, "Guest")).json()["contact"] is None
+    con.execute("UPDATE orgs SET members_hidden = 1 WHERE id = 1")
+    assert contact() is None
 
 
 def test_no_emoji_in_names(env):
@@ -80,3 +81,22 @@ def test_strip_emoji_names_once(env):
     con.execute("UPDATE orgs SET name = 'X \U0001f976' WHERE id = 2")
     logic.strip_emoji_names(con)  # once: the meta key
     assert con.execute("SELECT name FROM orgs WHERE id = 2").fetchone()[0] == "X \U0001f976"
+
+
+def test_strip_emoji_empty_i18n_and_atomic(env, monkeypatch):
+    """An empty translation map is written back as "{}"; a failure midway leaves no marker, so the next round redoes it."""
+    c, cfg = env
+    pres = login(c, 20, "pres")
+    con = _club(cfg, pres["id"])
+    con.execute("UPDATE orgs SET name = 'Chess \U0001f976', i18n = '{}' WHERE id = 1")
+    real = logic.clubs.notify
+    monkeypatch.setattr(logic.clubs, "notify", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    try:
+        logic.strip_emoji_names(con)
+    except RuntimeError:
+        pass
+    assert con.execute("SELECT name FROM orgs WHERE id = 1").fetchone()[0] == "Chess \U0001f976"
+    assert not con.execute("SELECT 1 FROM meta WHERE key = 'emoji_names'").fetchone()
+    monkeypatch.setattr(logic.clubs, "notify", real)
+    logic.strip_emoji_names(con)
+    assert tuple(con.execute("SELECT name, i18n FROM orgs WHERE id = 1").fetchone()) == ("Chess", "{}")

@@ -164,7 +164,7 @@ export interface AdminEvent { id: Id; title: string; status: 'draft' | 'publishe
 export interface Org extends OrgRef {
   description: string;
   links: string[];              // socials: Instagram, TikTok, YouTube, a site (lib/social.ts names them); never Telegram (its chats are `chats`)
-  contact?: string | null;      // "Message the club": the President's @username, else the next by rank's; api.org only, to students
+  contact?: string | null;      // "Message the club": the President's @username, else a Vice's; none for a club hiding its members; api.org only, to students
   subscribers: number;
   members: number;
   upcoming: number;

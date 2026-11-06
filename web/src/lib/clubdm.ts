@@ -1,4 +1,4 @@
-// "Message the club" (Nov 6): a Telegram DM to its President (else the next by rank with a @username, the server's
+// "Message the club" (Nov 6): a Telegram DM to its President (else a Vice with a @username, the server's
 // Org.contact) with a draft that names the club, and my own club when I'm in a team (collabs).
 import type { Id, Membership } from './api/types';
 import { t } from './i18n/index.svelte';
