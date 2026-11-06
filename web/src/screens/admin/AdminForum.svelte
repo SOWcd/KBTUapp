@@ -93,9 +93,11 @@
     <span class="mm">{ago(p.at)}{kind === 'held' && p.why ? ' · ' + whyLine(p.why, p.aiWhy) : ''}</span>
     <p class="mt selectable">{p.body}</p>
     <span class="mb">
+      {#if p.own}<i class="mm">{t('fc.ownPost')}</i>
+      {:else}
       {#if kind === 'held'}<Button kind="tinted" size="s" onclick={() => decide(p, true, true)}>{t('fc.release')}</Button>{/if}
       {#if kind === 'removed'}<Button kind="tinted" size="s" onclick={() => restore(p)}>{t(p.undo ? 'fc.undo' : 'fc.restore')}</Button>
-      {:else}<Button kind="gray" size="s" onclick={() => decide(p, false, kind === 'held')}>{t('fc.takeDown')}</Button>{/if}
+      {:else}<Button kind="gray" size="s" onclick={() => decide(p, false, kind === 'held')}>{t('fc.takeDown')}</Button>{/if}{/if}
       {#if kind === 'live'}<Button kind="gray" size="s" onclick={() => republish(p)}>{t('fc.republish')}</Button>{/if}
       {#if owner && p.anon}<Button kind="plain" size="s" onclick={() => reveal(p)}>{t('fc.reveal')}</Button>{/if}
     </span>

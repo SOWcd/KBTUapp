@@ -1017,3 +1017,22 @@ def test_couch_critic(env, monkeypatch):
     # the author's mask reply: the bot's, under the post, on no one's row
     con.execute("INSERT INTO fchan_replies (post_id, body, status, created_at) VALUES (?, 'thanks all', 'live', 0)", (ps[0]["id"],))
     assert [profiles.critic(con, u) for u in (1, 2)] == [0, 1]
+
+
+def test_own_held_post_only_founder_decides(env, monkeypatch):
+    c, cfg, said, _ = setup(env, monkeypatch, verdict="person")
+    mod, boss = login(c, 1, "mod"), login(c, 2, "boss")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
+    con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))
+    con.commit()
+    ids = []
+    for u in (1, 2):
+        p = c.post("/api/forum-posts", headers=tma(u), json={"body": f"Prof. Abenov takes bribes {u}"}).json()
+        assert p["status"] == "held"
+        ids.append(p["id"])
+    q = c.get("/api/forum-posts/mod", headers=tma(1)).json()["held"]
+    assert {x["id"]: x["own"] for x in q} == {ids[0]: True, ids[1]: False}
+    assert c.post(f"/api/forum-posts/{ids[0]}/mod", headers=tma(1), json={"ok": True}).status_code == 403
+    assert c.post(f"/api/forum-posts/{ids[1]}/mod", headers=tma(2), json={"ok": True}).status_code == 204
+    con.close()

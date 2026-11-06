@@ -80,7 +80,7 @@ export interface ChannelFeedPost { id: Id; body: string; status: 'live' | 'held'
   hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */ }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
-export type ChannelModPost = ChannelPost & { why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
+export type ChannelModPost = ChannelPost & { own?: boolean /* mine, and I'm not the founder: another moderator decides */; why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
 /** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
 export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
   replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }

@@ -95,6 +95,7 @@ const en: Dict = {
   'fc.signature': "The last line looks like a signature: drop the dash at its start",
   'fc.release': "Publish",
   'fc.takeDown': "Remove",
+  'fc.ownPost': "Another moderator decides your own post",
   'fc.reveal': "Who wrote it?",
   'fc.revealAsk': "Reveal the author?",
   'fc.revealText': "Only to deal with a broken rule. It goes into the audit log.",

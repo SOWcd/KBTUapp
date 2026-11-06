@@ -655,7 +655,8 @@ def mod_queue(con, v: Viewer) -> dict:
                            ORDER BY gone_at DESC LIMIT 50""", _now() - MOD_RECENT)
     ids = {p["user_id"] for p in held + live + removed if not p["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
-    shape = lambda p: _shape(p) | {"why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    me_owner = _owner(con, v)
+    shape = lambda p: _shape(p) | {"own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
@@ -669,7 +670,7 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status IN ('held', 'live')", pid)
         if not p or p["status"] == "live" and ok:  # gone, or published meanwhile: by whom, when the log says
             raise core.decided(con, f"fchan:{pid}") if one(con, "SELECT 1 FROM fchan_posts WHERE id = ?", pid) else ApiError("not_found")
-        if p["user_id"] == v.id:  # their own: another moderator decides
+        if p["user_id"] == v.id and not _owner(con, v):  # their own: another moderator decides (the founder alone may)
             raise ApiError("forbidden")
         if ok:
             con.execute("UPDATE fchan_posts SET status = 'live', why = NULL WHERE id = ?", (pid,))
@@ -697,7 +698,7 @@ def mod_restore(con, v: Viewer, pid: int) -> None:
         p = one(con, "SELECT user_id, tg_msg FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why = 'moderator'", pid)
         if not p:
             raise ApiError("not_found")
-        if p["user_id"] == v.id:
+        if p["user_id"] == v.id and not _owner(con, v):
             raise ApiError("forbidden")
         # only a delete not yet due is dropped: one the bot already took is under way, so the post goes out anew
         kept = bool(p["tg_msg"]) and con.execute("DELETE FROM tg_unpost WHERE msg_id = ? AND at > ?", (p["tg_msg"], _now())).rowcount > 0
@@ -968,7 +969,7 @@ def _mod_reply(con, v: Viewer, rid: int, where: str):
     r = one(con, "SELECT r.*, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND " + where, rid)
     if not r:
         raise core.decided(con, f"fchanr:{rid}") if one(con, "SELECT 1 FROM fchan_replies WHERE id = ?", rid) else ApiError("not_found")
-    if r["user_id"] == v.id:  # their own post's: another moderator decides
+    if r["user_id"] == v.id and not _owner(con, v):  # their own post's: another moderator decides (the founder alone may)
         raise ApiError("forbidden")
     return r
 

@@ -244,8 +244,9 @@
             <ForumWho anon={p.anon} nick={p.nick} author={p.author} />
             {#if p.why}<i class="meta">{whyLine(p.why, p.aiWhy)}</i>{/if}
             <p class="text selectable">{p.body}</p>
-            {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
-              t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
+            {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
+            {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
+              t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
           </div>
         {:else if it.kind === 'freply'}
           {@const r = it.data}
