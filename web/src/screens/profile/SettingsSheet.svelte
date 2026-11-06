@@ -12,6 +12,8 @@
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import User from '@lucide/svelte/icons/user';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
+  import IdCard from '@lucide/svelte/icons/id-card';
+  import LookPage from './LookPage.svelte';
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import { fitTitle } from '../../ui/title';
@@ -38,11 +40,11 @@
 
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
+  type Kind = 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate' | 'look';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], name: ['set.nameId', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
-    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
+    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart], look: ['look.change', IdCard] };
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -207,7 +209,7 @@
 <!-- a correction that can't be undone: said once, above the choices (the final confirm says it again) -->
 {#snippet once()}<div class="once"><Notice tone="danger" title={t('pd.onceTitle')} text={t('pd.onceBig')} /></div>{/snippet}
 
-<Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} bare={kind === 'donate'}>
+<Pane {overlay} title={t(TITLE[kind][0])} icon={TITLE[kind][1]} bare={kind === 'donate' || kind === 'look'}>
   {#if kind === 'notify' && me}
     {#each SWITCHES as [k, title, hint], i (k)}
       <div class:sw={i > 0}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
@@ -316,6 +318,8 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
+  {:else if kind === 'look'}
+    <LookPage />
   {:else if kind === 'donate' && donate}
     <!-- owner, Nov 6 (v2): one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->

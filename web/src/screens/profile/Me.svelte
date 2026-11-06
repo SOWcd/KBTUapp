@@ -32,6 +32,7 @@
   import { onMount } from 'svelte';
   import { haptic, on, openLink } from '../../lib/tg';
   import Hero from './Hero.svelte';
+  import { myShown } from '../../lib/state/looks.svelte';
   import Invite from './Invite.svelte';
   import Emoji from '../../ui/Emoji.svelte';
   import AppCard from './AppCard.svelte';
@@ -50,11 +51,7 @@
   const me = $derived(session.me);
   const card = $derived(data.myCard); // loaded with the app (and kept for the next launch); coming into view refreshes it
   $effect(() => { if (ui.tab === 'profile' && me?.student) void untrack(loadMyCard); });
-  // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
-  const shown = $derived<PersonCard | null>(card ? { ...card, skin: ui.tryOn?.id ?? me?.skin, frame: me?.frame } : (me?.student ? {
-    id: me.id, name: me.name, nick: me.nick, realName: me.nick ? `${me.student.firstName} ${[...me.student.lastName][0] ?? ''}`.trim() : undefined, avatar: me.avatar, founder: me.founder, staff: me.role === 'user' ? null : me.role, no: me.no, course: me.student.course, school: me.student.school, bio: me.bio,
-    attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: ui.tryOn?.id ?? me.skin, frame: me.frame,
-  } : null));
+  const shown = $derived(myShown()); // at once from what the app knows (looks.svelte.ts)
 
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
   const friends = $derived(data.friends?.friends ?? []);
