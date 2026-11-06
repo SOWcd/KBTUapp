@@ -315,7 +315,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind in ("round_interview", "round_iv_nudge", "round_iv_remind"):  # iv: / ivn: / ivr:<application>[:<slot>:<when>]
         a = one(con, """SELECT a.*, r.org_id, r.status AS rstatus, o.name FROM round_apps a JOIN rounds r ON r.id = a.round_id
             JOIN orgs o ON o.id = r.org_id WHERE a.id = ?""", int(ref[1]))
-        if not a or a["stage"] == "withdrawn" or a["rstatus"] == "done":
+        if not a or a["stage"] == "withdrawn" or a["rstatus"] == "done" or a["sent_at"]:  # their result went out
             return None
         if kind == "round_iv_nudge" and a["slot_id"]:  # picked a time already
             return None
@@ -327,12 +327,14 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                     f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), f"iv_{a['org_id']}")
     if kind in ("round_yes", "round_no"):  # ry: / rn:<application>, the results, to each applicant
-        a = one(con, """SELECT a.*, r.org_id, r.decline_text, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
+        a = one(con, """SELECT a.*, r.org_id, r.decline_text, r.group_link, o.name, t.name AS dept FROM round_apps a JOIN rounds r ON r.id = a.round_id
             JOIN orgs o ON o.id = r.org_id LEFT JOIN org_tags t ON t.id = a.taken_tag WHERE a.id = ?""", int(ref[1]))
         if not a:
             return None
         if kind == "round_yes":
-            return (*texts.bot_message(lang, kind + ("_dept" if a["dept"] else ""), org=a["name"], dept=a["dept"] or ""), f"cl_{a['org_id']}")
+            # the club's group: its invite waits in the app (the club's sheet), the bot only says so (AGENTS.md: templates only)
+            key = kind + ("_dept" if a["dept"] else "") + ("_group" if a["group_link"] else "")
+            return (*texts.bot_message(lang, key, org=a["name"], dept=a["dept"] or ""), f"cl_{a['org_id']}")
         if a["decline_text"]:  # the club's own words are in the app, never in the bot's message (AGENTS.md: templates only)
             return (*texts.bot_message(lang, "round_no_why", org=a["name"]), f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), "clubs")

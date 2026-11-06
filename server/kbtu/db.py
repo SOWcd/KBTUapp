@@ -1263,6 +1263,13 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the Ascent (owner, Nov 6; logic/clubs.py): when a student initiative reached the top, kept once reached (an
     # official club's tools without the ✓)
     (132, "ALTER TABLE orgs ADD COLUMN top_at INTEGER;"),
+    # recruitment results in parts (club presidents, Nov 6: "I have to close the round to send results"): each
+    # application's own sent_at (told exactly once; a done round's are backfilled), and the round's optional Telegram
+    # group invite (https://t.me/... only), shown in the app to the accepted, never by the bot. 133 is left to another branch.
+    (134, """ALTER TABLE round_apps ADD COLUMN sent_at INTEGER;
+    ALTER TABLE rounds ADD COLUMN group_link TEXT;
+    UPDATE round_apps SET sent_at = (SELECT r.sent_at FROM rounds r WHERE r.id = round_apps.round_id)
+        WHERE stage != 'withdrawn' AND round_id IN (SELECT id FROM rounds WHERE status = 'done');"""),
 ]
 
 

@@ -27,6 +27,7 @@
   import Answers, { missing } from './Answers.svelte';
   import Chip from '../../ui/Chip.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import TelegramMark from '../../ui/TelegramMark.svelte';
 
   let { overlay, org, source = 'club' }: { overlay: Overlay; org: Id; source?: string } = $props();
 
@@ -162,7 +163,7 @@
       </Group>{/if}
       {#if r.nextText}<p class="t-body nexttx selectable">{r.nextText}</p>{/if}
       {#if sent}
-        {#if r.status === 'done' && r.declineText}<p class="t-callout nexttx">{r.declineText}</p>{:else}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
+        {#if r.mine?.stage === 'yes'}<p class="t-callout nexttx">{t('cast.youreIn')}</p>{:else if r.mine?.stage === 'no' && r.declineText}<p class="t-callout nexttx">{r.declineText}</p>{:else if !final}<p class="t-foot note">{t('cast.botTells')}</p>{/if}
       {/if}
     </div>
 
@@ -208,7 +209,7 @@
     </fieldset>
     {/if}
 
-    {#if sent && r.open && !editing}<Group><Row tone="destructive" title={t('join.withdraw')} onclick={withdraw} /></Group>{/if}
+    {#if sent && r.open && !editing && !final}<Group><Row tone="destructive" title={t('join.withdraw')} onclick={withdraw} /></Group>{/if}
     </div>
   {/if}
 
@@ -221,7 +222,11 @@
         <Button kind="neutral" size="l" onclick={cancelEdit}>{t('common.cancel')}</Button>
         <Button kind="primary" size="l" full loading={busy} disabled={snap === saved} onclick={send}>{t('cast.save')}</Button>
       </div>
-    {:else if r?.open}
+    {:else if r?.mine?.stage === 'yes' && r.groupLink}
+      <!-- accepted: the club's group, one tap (the bot only says it's here) -->
+      {@const link = r.groupLink}
+      <Button kind="primary" size="l" full onclick={() => { haptic.tap(); openLink(link); }}>{#snippet icon()}<TelegramMark size={20} />{/snippet}{t('cast.joinGroup')}</Button>
+    {:else if r?.open && r.mine?.stage === 'sent'}
       <Button kind="secondary" size="l" full onclick={() => { haptic.select(); editing = true; }}>{t('cast.change')}</Button>
     {/if}
   {/snippet}

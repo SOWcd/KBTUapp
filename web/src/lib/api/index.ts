@@ -87,7 +87,8 @@ export interface Api {
   roundApps(id: Id): Promise<RoundApp[]>;
   voteApp(id: Id, body: { verdict: 'no' | 'maybe' | 'next'; stars?: number | null; note?: string }): Promise<{ stage: AppStage }>;
   decideApp(id: Id, body: { stage: AppStage; tagId?: Id | null }): Promise<{ stage: AppStage; takenTag: Id | null }>;
-  sendRound(id: Id): Promise<{ accepted: number; declined: number }>;
+  /** the results decided so far (the round goes on); final: the undecided get a no and the round ends */
+  sendRound(id: Id, final: boolean): Promise<{ accepted: number; declined: number }>;
   // interviews: the team's slots and invitations, an invited applicant's time
   roundSlots(id: Id): Promise<RoundSlot[]>;
   addSlots(id: Id, body: { date: string; from: string; to: string; minutes: number; capacity: number; place: string }): Promise<RoundSlot[]>;

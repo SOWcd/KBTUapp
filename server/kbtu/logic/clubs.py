@@ -89,8 +89,9 @@ def org(con, v: Viewer, oid: int) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND (status = 'active' OR status = 'hidden' AND ?)", oid, v.role == "admin")
     if not o:
         raise ApiError("not_found")
+    from ..casting import group_link  # imports logic: here, not at the top
     return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')"), "chats": org_chats(con, oid),
-            "contact": _contact(con, oid) if v.student else None}
+            "contact": _contact(con, oid) if v.student else None, "groupLink": group_link(con, v, oid)}
 
 
 def _contact(con, oid: int) -> str | None:

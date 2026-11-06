@@ -166,6 +166,7 @@ export interface AdminEvent { id: Id; title: string; status: 'draft' | 'publishe
 export interface Org extends OrgRef {
   description: string;
   links: string[];              // socials: Instagram, TikTok, YouTube, a site (lib/social.ts names them); never Telegram (its chats are `chats`)
+  groupLink?: string | null;    // the group invite of the round that took me (api.org only, members)
   contact?: string | null;      // "Message the club": the President's @username, else a Vice's; none for a club hiding its members; api.org only, to students
   subscribers: number;
   members: number;
@@ -394,7 +395,8 @@ export interface RoundQuestion { id?: Id; kind: RoundKind; text: string; options
 export interface RoundDepartment { tagId: Id; name?: string; color?: string; about: string; places?: number | null }
 export interface RoundInput { title: string; picks: number; closesAt: Ts; resultsBy?: Ts | null; declineText?: string;
   /** the club's own "what's next" (≤ 300): auditions in person, dates, place; shown under the student's steps */
-  nextText?: string; departments: RoundDepartment[]; questions: RoundQuestion[] }
+  nextText?: string; /** the group's invite (https://t.me/... only), shown in the app to the accepted */ groupLink?: string | null;
+  departments: RoundDepartment[]; questions: RoundQuestion[] }
 export type AppStage = 'new' | 'maybe' | 'next' | 'yes' | 'no';
 /** The live round as I see it: a student its form and my application ('sent' until the results, then yes or no); the
  *  casting team its counts by stage too. */
@@ -403,13 +405,14 @@ export interface Round { id: Id; title: string; picks: number; closesAt: Ts; res
   departments: (RoundDepartment & { name: string; color: string })[]; questions: (RoundQuestion & { id: Id })[];
   mine: { departments: Id[]; answers: Record<string, string | string[]>; stage: 'sent' | 'yes' | 'no'; invited: boolean;
     slot: { id: Id; startsAt: Ts; minutes: number; place: string } | null } | null;
-  team?: boolean; counts?: Partial<Record<AppStage, number>>; declineText?: string }
+  team?: boolean; counts?: Partial<Record<AppStage, number>>; declineText?: string; groupLink?: string | null /* the team, and me once accepted */ }
 /** One application as the casting team sees it: the profile, picks and answers, the team's votes, and what only the app knows. */
 export interface RoundApp { id: Id; person: PersonRef; fullName: string; course: number | null; school: string | null; email: string | null; username: string | null;
   departments: Id[]; answers: Record<string, string | string[]>; stage: AppStage; takenTag: Id | null; at: Ts; source: string | null;
   votes: { by: string; mine: boolean; verdict: 'no' | 'maybe' | 'next'; stars: number | null; note: string }[];
   came: number; lastEvent: string | null; friends: number; before: boolean; since: Ts;
-  invited: boolean; slot: { id: Id; startsAt: Ts; minutes: number; place: string } | null; showed: boolean | null /* came to the interview */ }
+  invited: boolean; slot: { id: Id; startsAt: Ts; minutes: number; place: string } | null; showed: boolean | null /* came to the interview */;
+  sent: boolean /* their result went out: it stands */ }
 /** An interview time: the team sees who booked it; an invited applicant the ones with room, and theirs (`mine`). */
 export interface RoundSlot { id: Id; startsAt: Ts; minutes: number; capacity: number; place: string; left: number; mine?: boolean;
   people?: { appId: Id; person: PersonRef; fullName: string; showed: boolean | null }[] }

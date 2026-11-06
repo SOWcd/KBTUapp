@@ -822,8 +822,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return casting.showed(con, v, aid, body)
 
     @app.post("/api/rounds/{rid}/send")
-    def round_send(rid: int, con: Con, v: Me):
-        return casting.send(con, v, rid)
+    def round_send(rid: int, con: Con, v: Me, body: dict | None = Body(None)):
+        return casting.send(con, v, rid, (body or {}).get("final", True) is not False)  # no body: the old final send
 
     @app.get("/api/orgs/{oid}/memo")
     def org_memo(oid: int, con: Con, v: Me, later: bool = False):

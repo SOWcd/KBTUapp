@@ -4,7 +4,8 @@
   // a department filter, "review one by one" (the next new one after each verdict). An application opens in place:
   // the profile, the picks in order, the answers, what only the app knows (the club's events they came to, friends in
   // the club, an earlier try, in the app since), the team's votes with who; my verdict with stars and a note; the
-  // decision: into a department, or no. The results go out in one tap; "Share" passes the round on as our bot's card.
+  // decision: into a department, or no. The results go out in parts while the round goes on (each one told once; the
+  // button counts the new ones); "Finish" ends it once the intake is closed; "Share" passes the round on as our bot's card.
   import Star from '@lucide/svelte/icons/star';
   import Share from '@lucide/svelte/icons/share';
   import Pencil from '@lucide/svelte/icons/pencil';
@@ -100,14 +101,27 @@
     if (!r || !(await sheets.ask({ title: t('cast.closeAsk'), text: t('cast.closeText'), ok: t('cast.closeGo'), cancel: t('common.cancel') }))) return;
     try { r = await api.updateRound(r.id, { close: true }); haptic.ok(); studioChanged(); } catch { say(t('common.error'), 'warning_3d'); }
   }
+  // the decided ones not told yet: what "Send the results · n" sends; the undecided wait for a later send
+  const fresh = $derived(apps.filter((a) => !a.sent && (a.stage === 'yes' || a.stage === 'no')));
+  const waiting = $derived(apps.filter((a) => !a.sent && a.stage !== 'yes' && a.stage !== 'no').length);
   async function sendResults() {
-    if (!r) return;
-    const yes = apps.filter((a) => a.stage === 'yes').length, no = apps.length - yes, untouched = apps.filter((a) => a.stage === 'new').length;
-    const text = t('cast.sendText', { yes, no }) + (untouched ? ' ' + t('cast.sendUntouched', { n: untouched }) : '');
+    if (!r || !fresh.length) return;
+    const yes = fresh.filter((a) => a.stage === 'yes').length, no = fresh.length - yes;
+    const text = t('cast.sendText', { yes, no }) + (waiting ? ' ' + t('cast.sendLater', { n: waiting }) : '');
     if (!(await sheets.ask({ title: t('cast.sendAsk'), text, ok: t('cast.sendGo'), cancel: t('common.cancel') }))) return;
+    const going = [...fresh];
+    for (const a of going) a.sent = true;  // optimistic: the count goes to zero at once
+    haptic.ok(); burst(); say(t('cast.sentDone', { n: yes }), 'party_popper_3d');
+    try { await api.sendRound(r.id, false); studioChanged(); }
+    catch { for (const a of going) a.sent = false; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  async function finish() {
+    if (!r) return;
+    const text = waiting ? t('cast.finishText', { n: waiting }) : t('cast.finishNone');
+    if (!(await sheets.ask({ title: t('cast.finishAsk'), text, ok: t('cast.finishGo'), cancel: t('common.cancel'), danger: waiting > 0 }))) return;
     try {
-      const res = await api.sendRound(r.id);
-      haptic.ok(); burst(); say(t('cast.sentDone', { n: res.accepted }), 'party_popper_3d');
+      await api.sendRound(r.id, true);
+      haptic.ok(); say(t('cast.finished'), 'party_popper_3d');
       studioChanged(); close(overlay.id);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
@@ -183,6 +197,7 @@
         </div>{/if}
       </Notice>
     {/if}
+    {#if a.sent}<Notice tone="accent" icon={Check} text={t('cast.told') + ' · ' + (a.stage === 'yes' ? (a.takenTag ? t('cast.takeInto', { name: depName(a.takenTag) }) : t('cast.take')) : t('cast.v.no'))} />{/if}
     <div class="wrap">{#each a.departments as id, i (id)}<Tag><i class="dot" style:--c={depColor(id)}></i>{a.departments.length > 1 ? i + 1 + '. ' : ''}{depName(id)}</Tag>{/each}</div>
 
     <div class="facts">
@@ -204,6 +219,7 @@
       </Group>
     {/if}
 
+    {#if !a.sent}
     <h3 class="cap">{t('cast.myVote')}</h3>
     <!-- engine: a star rating (five taps, the chosen ones filled) -->
     <div class="stars">{#each [1, 2, 3, 4, 5] as n (n)}<button class:on={(stars ?? 0) >= n} onclick={() => (stars = stars === n ? null : n)} aria-label={String(n)}><Star size={24} /></button>{/each}</div>
@@ -224,6 +240,7 @@
       {/each}
       <Chip selected={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</Chip>
     </div>
+    {/if}
   {:else if r}
     <p class="hint">{r.open ? t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) }) : t('cast.intakeClosed')} · {tn('cast.apps', apps.length)}</p>
     {#if apps.length}
@@ -306,8 +323,9 @@
 
   {#snippet footer()}
     {#if r && !cur}
-      {#if r.open}<Button kind="plain" full onclick={closeIntake}>{t('cast.closeGo')}</Button>{/if}
-      <Button kind="primary" size="l" full disabled={!apps.length} onclick={sendResults}>{t('cast.sendGo')}</Button>
+      {#if r.open}<Button kind="plain" full onclick={closeIntake}>{t('cast.closeGo')}</Button>
+      {:else}<Button kind="plain" full onclick={finish}>{t('cast.finishGo')}</Button>{/if}
+      <Button kind="primary" size="l" full disabled={!fresh.length} onclick={sendResults}>{fresh.length ? t('cast.sendN', { n: fresh.length }) : t('cast.sendGo')}</Button>
     {/if}
   {/snippet}
 </Sheet>

@@ -3282,6 +3282,66 @@ def test_casting(env):
     assert sorted(x[0] for x in con.execute("SELECT stage FROM round_apps WHERE round_id = ?", (rid,))) == ["no", "yes"]
 
 
+def test_casting_in_parts(env):
+    """Results in parts (club presidents, Nov 6): a send tells only those decided and not told yet, the round stays open
+    and keeps taking applications; nobody hears twice; a later send covers the new decisions only; the told can't be
+    changed or re-applied. The group invite (https://t.me/... only) reaches the accepted in the app, never the declined;
+    the bot's message only says it's there."""
+    c, cfg = env
+    for tg, name in ((20, "pres"), (10, "ann"), (11, "bob"), (12, "cat"), (13, "dan")):
+        login(c, tg, name)
+    con = db.connect(cfg.db_path)
+    uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (10, 11, 12, 13)}
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'jp', 'club', 'Japan', 'JP', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'president', 0 FROM users WHERE tg_id = 20")
+    body = {"title": "Recruiting", "picks": 1, "closesAt": int(time.time()) + 7 * 86400, "departments": [], "questions": []}
+    for bad in ("http://t.me/+abc", "https://evil.com/t.me/x", "https://t.me/", "https://t.me/+a b", "t.me/+abc"):
+        assert c.post("/api/orgs/1/round", headers=tma(20), json={**body, "groupLink": bad}).status_code == 400, bad
+    link = "https://t.me/+AbC_d-12"
+    r = c.post("/api/orgs/1/round", headers=tma(20), json={**body, "groupLink": link}).json()
+    rid = r["id"]
+    assert r["groupLink"] == link
+    for tg in (10, 11, 12):
+        c.post(f"/api/rounds/{rid}/apply", headers=tma(tg), json={"departments": [], "answers": {}})
+    apps = {a["fullName"]: a["id"] for a in c.get(f"/api/rounds/{rid}/apps", headers=tma(20)).json()}
+    decide = lambda name, stage: c.post(f"/api/round-apps/{apps[name]}/decide", headers=tma(20), json={"stage": stage})  # noqa: E731
+    decide("Testov Ann", "yes"), decide("Testov Bob", "no")                   # Cat: still undecided
+
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": False}).json() == {"accepted": 1, "declined": 1}
+    live = c.get("/api/orgs/1/round", headers=tma(20)).json()
+    assert live["status"] == "open" and live["open"]                             # the round goes on
+    told = lambda: sorted((x[0], x[1]) for x in con.execute("SELECT kind, user_id FROM bot_outbox WHERE kind IN ('round_yes', 'round_no')"))  # noqa: E731
+    assert told() == sorted([("round_yes", uid[10]), ("round_no", uid[11])])
+    assert con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (uid[10],)).fetchone()
+    ann = c.get("/api/orgs/1/round", headers=tma(10)).json()
+    assert ann["mine"]["stage"] == "yes" and ann["groupLink"] == link            # the accepted see the group
+    bob = c.get("/api/orgs/1/round", headers=tma(11)).json()
+    assert bob["mine"]["stage"] == "no" and "groupLink" not in bob
+    cat = c.get("/api/orgs/1/round", headers=tma(12)).json()
+    assert cat["mine"]["stage"] == "sent" and "groupLink" not in cat
+    assert c.get("/api/orgs/1", headers=tma(10)).json()["groupLink"] == link     # and in the club's card, as a member
+    assert c.get("/api/orgs/1", headers=tma(11)).json()["groupLink"] is None
+    row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_yes'").fetchone()
+    text, button, start = bot._render(con, row)
+    assert link not in text and start == "cl_1" and button == texts.bot_message(row["lang"], "round_yes_group", org="")[1]  # a template and a button into the app
+    # a told result stands: no change, no re-applying, no withdrawing
+    assert decide("Testov Bob", "yes").status_code == 409
+    assert c.post(f"/api/rounds/{rid}/apply", headers=tma(11), json={"departments": [], "answers": {}}).status_code == 409
+    c.delete(f"/api/rounds/{rid}/apply", headers=tma(11))
+    assert c.get("/api/orgs/1/round", headers=tma(11)).json()["mine"]["stage"] == "no"
+
+    # nothing new decided: a send tells nobody; then Dan applies late, Cat and Dan are decided, a later send covers them alone
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": False}).json() == {"accepted": 0, "declined": 0}
+    c.post(f"/api/rounds/{rid}/apply", headers=tma(13), json={"departments": [], "answers": {}})
+    apps = {a["fullName"]: a["id"] for a in c.get(f"/api/rounds/{rid}/apps", headers=tma(20)).json()}
+    decide("Testov Cat", "no"), decide("Testov Dan", "yes")
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": False}).json() == {"accepted": 1, "declined": 1}
+    assert len(told()) == 4 and len(set(told())) == 4                              # each one heard exactly once
+    # finishing: the round is over, nobody hears again
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).json() == {"accepted": 0, "declined": 0}
+    assert len(told()) == 4 and c.get("/api/orgs/1/round", headers=tma(20)).json() is None
+
+
 def test_casting_whole_club(env):
     """Casting audit (Nov 2): a club without departments recruits for the whole club (accepted join without a tag);
     one department: nothing to pick; picks never exceed the departments; the round's own "what's next" (in person,

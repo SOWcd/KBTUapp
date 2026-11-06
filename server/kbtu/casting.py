@@ -4,6 +4,8 @@ a student applies in a minute (name, year, school, KBTU email and Telegram are t
 `picks` departments in order (no departments: a round for the whole club; one: nothing to pick); the casting team (the "casting" right: HR, heads) screens the applications one by one
 (no / maybe / next, stars, a note: the team's only), takes the shortlisted into a department or says no, and sends the
 results in one tap: the accepted are members at once with their department's tag, the rest get the club's own words.
+The results go in parts while the round stays open (each applicant is told once, when the team has decided on them);
+finishing the round tells the undecided "no" and ends it.
 Interviews: the team adds time slots (one by one, or groups), invites the shortlisted, who pick a time in the app (the
 bot: the invitation, a nudge after 48 hours, reminders the evening before and an hour before); the team marks who came.
 The board counts each department's taken against its places and shows the funnel. Sixty days after the results the
@@ -21,6 +23,7 @@ KINDS = ("short", "long", "one", "many", "link")
 VERDICTS = ("no", "maybe", "next")
 SOURCES = ("club", "join", "link", "qr", "channel", "friend", "bot")
 LIMIT = {"short": 200, "long": 2000, "link": 300}
+GROUP = re.compile(r"https://t\.me/[\w+/-]{2,120}")  # a Telegram group's invite or @name: nothing else goes to the accepted
 DAY, ASTANA = 86400, 5 * 3600
 
 
@@ -47,12 +50,13 @@ def view(con, v: Viewer, oid: int) -> dict | None:
     if not r and not team and v.student:  # the results went out: my "no" with the club's own words, here (the bot never quotes them)
         r = one(con, """SELECT r.* FROM rounds r JOIN round_apps a ON a.round_id = r.id AND a.user_id = ? WHERE r.org_id = ? AND r.status = 'done'
             AND a.stage = 'no' AND r.decline_text != '' AND r.sent_at > ? ORDER BY r.sent_at DESC""", v.id, oid, now() - 60 * DAY)
-    if not r or not (team or _accepting(r) or r["status"] == "done"):
+    mine = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ?", r["id"], v.id) if r and v.student else None
+    told = bool(mine and (mine["sent_at"] or r["status"] == "done"))  # my result went out (a round goes on taking others)
+    if not r or not (team or _accepting(r) or r["status"] == "done" or told):
         return None
     deps = rows(con, """SELECT d.tag_id, d.about, d.places, t.name, t.color FROM round_departments d JOIN org_tags t ON t.id = d.tag_id
         WHERE d.round_id = ? ORDER BY d.pos""", r["id"])
     qs = rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", r["id"])
-    mine = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ?", r["id"], v.id) if v.student else None
     # the club's own "what's next" (in-person auditions, dates, place): shown in the app like its description, never by the bot
     out = {"id": r["id"], "title": r["title"], "picks": r["picks"], "closesAt": r["closes_at"], "resultsBy": r["results_by"],
            "open": _accepting(r), "status": r["status"], "nextText": r["next_text"],
@@ -60,11 +64,13 @@ def view(con, v: Viewer, oid: int) -> dict | None:
            "departments": [{"tagId": d["tag_id"], "name": d["name"], "color": d["color"], "about": d["about"], "places": d["places"]} for d in deps],
            "questions": [{"id": q["id"], "kind": q["kind"], "text": q["text"], "options": json.loads(q["options"]) if q["options"] else None,
                           "required": bool(q["required"]), "tagId": q["tag_id"]} for q in qs],
-           "mine": {"departments": json.loads(mine["departments"]), "answers": json.loads(mine["answers"]), "stage": _seen(mine["stage"], r),
+           "mine": {"departments": json.loads(mine["departments"]), "answers": json.loads(mine["answers"]), "stage": _seen(mine, r),
                     "invited": bool(mine["invited_at"]), "slot": _slot(con, mine["slot_id"])}
            if mine and mine["stage"] != "withdrawn" else None}
-    if r["status"] == "done":
+    if told and mine["stage"] == "no":
         out["declineText"] = r["decline_text"]
+    if told and mine["stage"] == "yes" or team:  # the group's invite: the accepted only, in the app
+        out["groupLink"] = r["group_link"]
     if team:
         counts = dict(rows(con, "SELECT stage, COUNT(*) FROM round_apps WHERE round_id = ? GROUP BY stage", r["id"]))
         out |= {"counts": counts, "declineText": r["decline_text"], "team": True}
@@ -76,9 +82,18 @@ def _slot(con, sid: int | None) -> dict | None:
     return {"id": s["id"], "startsAt": s["starts_at"], "minutes": s["minutes"], "place": s["place"]} if s else None
 
 
-def _seen(stage: str, r) -> str:
-    """What the applicant sees: 'sent' until the results go out, then 'yes' or 'no' (the team's steps stay theirs)."""
-    return stage if r["status"] == "done" and stage in ("yes", "no") else "sent"
+def _seen(a, r) -> str:
+    """What the applicant sees: 'sent' until their result goes out, then 'yes' or 'no' (the team's steps stay theirs)."""
+    return a["stage"] if (a["sent_at"] or r["status"] == "done") and a["stage"] in ("yes", "no") else "sent"
+
+
+def group_link(con, v: Viewer, oid: int) -> str | None:
+    """The club's group invite for a member it took through a round (the latest round that has one)."""
+    if not (v.student and role_in(con, v, oid)):
+        return None
+    r = one(con, """SELECT r.group_link FROM rounds r JOIN round_apps a ON a.round_id = r.id WHERE r.org_id = ? AND a.user_id = ?
+        AND a.stage = 'yes' AND a.sent_at IS NOT NULL AND r.group_link IS NOT NULL ORDER BY r.id DESC LIMIT 1""", oid, v.id)
+    return r[0] if r else None
 
 
 def _clean(con, oid: int, body: dict) -> dict:
@@ -88,6 +103,7 @@ def _clean(con, oid: int, body: dict) -> dict:
         picks, closes = int(body.get("picks") or 2), int(body["closesAt"])
         results = int(body["resultsBy"]) if body.get("resultsBy") is not None else None
         decline, nxt = str(body.get("declineText") or "").strip(), str(body.get("nextText") or "").strip()
+        group = str(body.get("groupLink") or "").strip() or None
         deps = [(int(d["tagId"]), str(d.get("about") or "").strip(), int(d["places"]) if d.get("places") else None) for d in body["departments"]]
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
@@ -96,11 +112,11 @@ def _clean(con, oid: int, body: dict) -> dict:
     tags = {r[0] for r in rows(con, "SELECT id FROM org_tags WHERE org_id = ?", oid)}
     picks = max(1, min(picks, 3, len(deps) or 1))  # never more than there are departments
     ok = (0 < len(title) <= 80 and now() < closes <= now() + 120 * 86400 and (results is None or results >= closes)
-          and len(decline) <= 500 and len(nxt) <= 300 and len(deps) <= 12 and len(set(ids)) == len(ids) and set(ids) <= tags
+          and (group is None or GROUP.fullmatch(group)) and len(decline) <= 500 and len(nxt) <= 300 and len(deps) <= 12 and len(set(ids)) == len(ids) and set(ids) <= tags
           and all(len(a) <= 200 and (p is None or 0 < p <= 500) for _, a, p in deps))
     if not ok:
         raise ApiError("bad_input")
-    return {"title": title, "picks": picks, "closes": closes, "results": results, "decline": decline, "next": nxt, "deps": deps, "qs": qs}
+    return {"title": title, "picks": picks, "closes": closes, "results": results, "decline": decline, "next": nxt, "group": group, "deps": deps, "qs": qs}
 
 
 def clean_questions(raw, deps: list[int]) -> list[tuple]:
@@ -150,8 +166,8 @@ def open_round(con, v: Viewer, oid: int, body: dict) -> dict:
     with tx(con):
         if _live(con, oid):
             raise ApiError("conflict")  # one round at a time
-        rid = con.execute("""INSERT INTO rounds (org_id, title, picks, closes_at, results_by, decline_text, next_text, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (oid, f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], v.id, now())).lastrowid
+        rid = con.execute("""INSERT INTO rounds (org_id, title, picks, closes_at, results_by, decline_text, next_text, group_link, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (oid, f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], f["group"], v.id, now())).lastrowid
         _save_parts(con, rid, f)
         for (uid,) in rows(con, """SELECT s.user_id FROM subscriptions s WHERE s.org_id = ?
                 AND s.user_id NOT IN (SELECT user_id FROM org_members WHERE org_id = ?)""", oid, oid):
@@ -185,8 +201,8 @@ def update_round(con, v: Viewer, rid: int, body: dict) -> dict:
             if applied:
                 f["qs"] = [(q["kind"], q["text"], json.loads(q["options"]) if q["options"] else [], bool(q["required"]), q["tag_id"])
                            for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)]
-            con.execute("UPDATE rounds SET title = ?, picks = ?, closes_at = ?, results_by = ?, decline_text = ?, next_text = ?, status = 'open' WHERE id = ?",
-                        (f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], rid))
+            con.execute("""UPDATE rounds SET title = ?, picks = ?, closes_at = ?, results_by = ?, decline_text = ?, next_text = ?, group_link = ?,
+                status = 'open' WHERE id = ?""", (f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], f["group"], rid))
             _save_parts(con, rid, f)
     return view(con, v, r["org_id"])
 
@@ -202,6 +218,8 @@ def apply(con, v: Viewer, rid: int, body: dict) -> dict:
         raise ApiError("conflict", "member")
     if banned(con, r["org_id"], v.id):
         raise ApiError("forbidden", "banned")
+    if one(con, "SELECT 1 FROM round_apps WHERE round_id = ? AND user_id = ? AND sent_at IS NOT NULL", rid, v.id):
+        raise ApiError("closed")  # told already: their result stands
     deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", rid)}
     try:
         picked = [int(x) for x in body["departments"]]
@@ -227,7 +245,7 @@ def withdraw(con, v: Viewer, rid: int) -> dict | None:
     r = _get(con, rid)
     if r["status"] == "done":
         raise ApiError("closed")
-    con.execute("UPDATE round_apps SET stage = 'withdrawn', updated_at = ? WHERE round_id = ? AND user_id = ?", (now(), rid, v.id))
+    con.execute("UPDATE round_apps SET stage = 'withdrawn', updated_at = ? WHERE round_id = ? AND user_id = ? AND sent_at IS NULL", (now(), rid, v.id))
     return view(con, v, r["org_id"])
 
 
@@ -263,7 +281,7 @@ def apps(con, v: Viewer, rid: int) -> list[dict]:
              "email": a["email"], "username": a["tg_username"], "departments": json.loads(a["departments"]), "answers": json.loads(a["answers"]),
              "stage": a["stage"], "takenTag": a["taken_tag"], "at": a["created_at"], "source": a["source"], "votes": votes.get(a["id"], []),
              "came": came.get(a["user_id"], (0, None))[0], "lastEvent": came.get(a["user_id"], (0, None))[1], "friends": friends.get(a["user_id"], 0),
-             "before": a["user_id"] in before, "since": a["since"], "invited": bool(a["invited_at"]), "slot": _slot(con, a["slot_id"]),
+             "before": a["user_id"] in before, "since": a["since"], "invited": bool(a["invited_at"]), "slot": _slot(con, a["slot_id"]), "sent": bool(a["sent_at"]),
              "showed": None if a["came"] is None else bool(a["came"])} for a in found]
 
 
@@ -272,8 +290,8 @@ def _app(con, v: Viewer, app_id: int):
     if not a:
         raise ApiError("not_found")
     _may(con, v, a["org_id"], "casting")
-    if a["rstatus"] == "done" or a["stage"] == "withdrawn":
-        raise ApiError("closed")
+    if a["rstatus"] == "done" or a["stage"] == "withdrawn" or a["sent_at"]:
+        raise ApiError("closed")  # a result that went out stands
     return a
 
 
@@ -307,26 +325,31 @@ def decide(con, v: Viewer, app_id: int, body: dict) -> dict:
     return {"stage": stage, "takenTag": tag if stage == "yes" else None}
 
 
-def send(con, v: Viewer, rid: int) -> dict:
-    """The results in one tap: the accepted are members at once with their department's tag, everyone else who
-    applied hears the club's own words (or the app's); the round is over. The bot sends at its own pace."""
+def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
+    """The results decided so far, in one tap: the accepted are members at once with their department's tag, the
+    declined hear the club's own words (or the app's); each applicant is told once, the undecided wait for a later send
+    and the round goes on. final (the old one-tap results, a cached client's too): the undecided hear "no" and the round
+    is over. The bot sends at its own pace."""
     r = _get(con, rid)
     _may(con, v, r["org_id"], "casting")
     oid = r["org_id"]
     with tx(con):
-        if not con.execute("UPDATE rounds SET status = 'done', sent_at = ?, closes_at = MIN(closes_at, ?) WHERE id = ? AND status != 'done'",
-                           (now(), now(), rid)).rowcount:
+        live = """UPDATE rounds SET sent_at = ?, status = CASE WHEN ? THEN 'done' ELSE status END,
+            closes_at = CASE WHEN ? THEN MIN(closes_at, ?) ELSE closes_at END WHERE id = ? AND status != 'done'"""
+        if not con.execute(live, (now(), final, final, now(), rid)).rowcount:
             raise ApiError("conflict")
         yes = no = 0
-        for a in rows(con, "SELECT * FROM round_apps WHERE round_id = ? AND stage != 'withdrawn'", rid):
+        decided = "" if final else "AND stage IN ('yes', 'no')"
+        for a in rows(con, f"SELECT * FROM round_apps WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}", rid):
             if a["stage"] == "yes" and not banned(con, oid, a["user_id"]):
                 con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now()))
                 if a["taken_tag"] and not dept_of(con, oid, a["user_id"]):  # one already in a department stays there
                     con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) VALUES (?, ?)", (a["taken_tag"], a["user_id"]))
+                con.execute("UPDATE round_apps SET sent_at = ? WHERE id = ?", (now(), a["id"]))
                 notify(con, a["user_id"], "round_yes", f"ry:{a['id']}")
                 yes += 1
             else:
-                con.execute("UPDATE round_apps SET stage = 'no' WHERE id = ?", (a["id"],))
+                con.execute("UPDATE round_apps SET stage = 'no', taken_tag = NULL, sent_at = ? WHERE id = ?", (now(), a["id"]))
                 notify(con, a["user_id"], "round_no", f"rn:{a['id']}")
                 no += 1
     return {"accepted": yes, "declined": no}

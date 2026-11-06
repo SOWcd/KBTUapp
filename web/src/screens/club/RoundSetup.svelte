@@ -3,7 +3,8 @@
   // departments (optional: none is a round for the whole club) are the club's tags (a new one right here), each with a line about it and maybe places; how many a
   // student may pick; up to six questions of the club's own, from templates or written (in any one language: the screen
   // around them is in the student's language already); the deadline and "results by"; "what's next" (in-person
-  // auditions: dates, place) shown under the student's steps; the club's own words for a no.
+  // auditions: dates, place) shown under the student's steps; the club's own words for a no; the group's invite for the
+  // accepted (https://t.me/... only: the app shows it to them, the bot never posts it).
   // Once someone has applied the questions stay as they are (answers would stop matching them).
   import { untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
@@ -43,6 +44,9 @@
   let qs = $state<RoundQuestion[]>(r0?.questions.map((q) => ({ ...q })) ?? []);
   let decline = $state(r0?.declineText ?? '');
   let next = $state(r0?.nextText ?? '');
+  let group = $state(r0?.groupLink ?? '');
+  // the server takes https://t.me/... only; a bare t.me/... gets its https here
+  const groupUrl = $derived(group.trim() && !/^https?:\/\//.test(group.trim()) ? 'https://' + group.trim() : group.trim());
   const locked = $derived(!!r0 && Object.values(r0.counts ?? {}).some((n) => (n ?? 0) > 0)); // someone applied: the questions stay
   let busy = $state(false), tried = $state(false);
 
@@ -66,13 +70,13 @@
   const closes = $derived(fromInputs(closeDate, closeTime));
   const results = $derived(resultsDate ? fromInputs(resultsDate, '20:00') : null);
   const err = $derived(!title.trim() ? 'title' : !Number.isFinite(closes) || closes <= nowTs() ? 'when' : results != null && results < closes ? 'results'
-    : unfinished(qs) ? 'qs' : '');
+    : unfinished(qs) ? 'qs' : groupUrl && !/^https:\/\/t\.me\/[\w+/-]{2,120}$/.test(groupUrl) ? 'group' : '');
 
   async function save() {
     tried = true;
     if (err) { haptic.error(); return; }
     busy = true;
-    const input = { title: title.trim(), picks: Math.min(picks, Math.max(1, deps.length)), closesAt: closes, resultsBy: results, declineText: decline.trim(), nextText: next.trim(),
+    const input = { title: title.trim(), picks: Math.min(picks, Math.max(1, deps.length)), closesAt: closes, resultsBy: results, declineText: decline.trim(), nextText: next.trim(), groupLink: groupUrl || null,
       departments: deps.map((d) => ({ tagId: d.tagId, about: d.about.trim(), places: +d.places > 0 ? +d.places : null })),
       questions: toSave(qs) };
     try {
@@ -130,6 +134,9 @@
 
     <Field label={t('cast.next')} multiline rows={3} maxlength={300} bind:value={next} placeholder={t('cast.nextPh')} />
     <Field label={t('cast.decline')} multiline rows={3} maxlength={500} bind:value={decline} placeholder={t('cast.declinePh')} />
+    <Field label={t('cast.group')} bind:value={group} maxlength={140} inputmode="url" placeholder="https://t.me/+…"
+      error={tried && err === 'group' ? t('cast.groupBad') : undefined} />
+    <p class="hint">{t('cast.groupHint')}</p>
   </div>
 
   {#snippet footer()}

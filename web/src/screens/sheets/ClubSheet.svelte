@@ -208,6 +208,10 @@
           <Button kind={o.subscribed ? 'neutral' : 'primary'} size="l" full icon={bell} onclick={() => toggleSub(id)}>{sub}</Button>
         {/if}
       </div>
+    {:else if o && fetched?.groupLink}
+      <!-- a member the club took through a round: its group, one tap (the bot's "you're in" leads here) -->
+      {@const link = fetched.groupLink}
+      <Button kind="primary" size="l" full icon={send} onclick={() => tap(link)}>{t('cast.joinGroup')}</Button>
     {/if}
   {/snippet}
 </Sheet>
