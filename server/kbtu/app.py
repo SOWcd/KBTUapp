@@ -1698,7 +1698,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             e = logic.event(con, v, ref)
             if e["status"] != "published":
                 raise ApiError("closed")
-            caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"])
+            caption, button = texts.share_event(lang, e["title"], e["startsAt"], e["place"],
+                                                  " × ".join([e["org"]["name"], *([e["coHost"]["name"]] if e["coHost"] else [])]), e["price"], e["taken"])
             # the photo, else the video's poster (a photo of the same name)
             cover = logic.one(con, """SELECT COALESCE(f.path, x.path) AS path FROM events e LEFT JOIN files f ON f.id = e.cover_file_id
                 LEFT JOIN videos x ON x.id = e.video_id AND x.status = 'ready' WHERE e.id = ? AND COALESCE(f.path, x.path) IS NOT NULL""", ref)

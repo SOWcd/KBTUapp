@@ -3498,7 +3498,11 @@ def test_share_poster(env):
     assert r.status_code == 200 and r.content[:2] == b"\xff\xd8"
     assert c.get("/og/poster.jpg?c=zz&e=party_popper_3d").status_code == 404
     assert c.get("/og/poster.jpg?c=3B6BFF&e=../index").status_code == 404
-    assert "·" not in texts.share_event("ru", "T", 0, "")[0] and "· Hall" in texts.share_event("en", "T", 0, "Hall")[0]
+    assert "📍" not in texts.share_event("ru", "T", 0, "")[0] and "📍 Hall" in texts.share_event("en", "T", 0, "Hall")[0]
+    assert "📍" not in texts.share_event("ru", "T", 0, "\u041c\u0435\u0441\u0442\u043e \u0443\u0442\u043e\u0447\u043d\u044f\u0435\u0442\u0441\u044f")[0]
+    full = texts.share_event("ru", "A<b>", 0, "222", "StudEx × Genius", 1500, 89)[0]
+    assert full.split("\n") == ["<b>A&lt;b&gt;</b>", "StudEx × Genius", "📅 1 \u044f\u043d\u0432\u0430\u0440\u044f, 05:00 · 📍 222", "🎟 1\u00a0500\u00a0₸ · \u0438\u0434\u0443\u0442 89", "\u041f\u043e\u0439\u0434\u0451\u0448\u044c \u0441\u043e \u043c\u043d\u043e\u0439? 👀"]
+    assert texts.share_event("en", "T", 0, "", "", None, 9)[0].split("\n")[1:] == ["📅 Jan 1, 05:00", "🎟 Free", "Coming with me? 👀"]
 
 
 def test_delete_cancelled_event(env):

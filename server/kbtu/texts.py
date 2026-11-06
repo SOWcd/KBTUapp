@@ -17,10 +17,11 @@ MONTHS = {
     "en": ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
 }
 
+# (the ask, the button, free, "{n} going", a place that means "unknown")
 SHARE_EVENT = {
-    "ru": ("Пойдёшь со мной? 👀", "🎟 Открыть в KBTU App"),
-    "kk": ("Менімен барасың ба? 👀", "🎟 KBTU App-та ашу"),
-    "en": ("Coming with me? 👀", "🎟 Open in KBTU App"),
+    "ru": ("Пойдёшь со мной? 👀", "🎟 Открыть в KBTU App", "Бесплатно", "идут {n}", "уточняется"),
+    "kk": ("Менімен барасың ба? 👀", "🎟 KBTU App-та ашу", "Тегін", "баратындар {n}", "нақтыланады"),
+    "en": ("Coming with me? 👀", "🎟 Open in KBTU App", "Free", "{n} going", "to be confirmed"),
 }
 
 
@@ -155,11 +156,13 @@ def when(ts: int, lang: str) -> str:
     return f"{day}, {t.tm_hour:02d}:{t.tm_min:02d}"
 
 
-def share_event(lang: str, title: str, starts_at: int, place: str) -> tuple[str, str]:
-    """(HTML caption, button text) for an event card."""
-    ask, button = SHARE_EVENT[lang]
-    where = f" · {html.escape(place)}" if place else ""  # no place yet: no dangling dot
-    caption = f"<b>{html.escape(title)}</b>\n🗓 {when(starts_at, lang)}{where}\n\n{ask}"
+def share_event(lang: str, title: str, starts_at: int, place: str, org: str = "", price: int | None = None, going: int = 0) -> tuple[str, str]:
+    """(HTML caption, button text) for an event card: only the event's own public fields, each line only when its data exists."""
+    ask, button, free, n_going, tba = SHARE_EVENT[lang]
+    e = html.escape
+    when_where = " · ".join([f"📅 {when(starts_at, lang)}", *([f"📍 {e(place)}"] if place and tba not in place.lower() else [])])
+    cost = " · ".join([f"🎟 {price:,}".replace(",", "\u00a0") + "\u00a0₸" if price else f"🎟 {free}", *([n_going.format(n=going)] if going >= 10 else [])])
+    caption = "\n".join([f"<b>{e(title)}</b>", *([e(org)] if org else []), when_where, cost, ask])
     return caption, button
 
 
