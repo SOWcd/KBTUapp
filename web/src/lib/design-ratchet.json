@@ -218,7 +218,7 @@
  "screens/sheets/ScheduleHowTo.svelte": {
   "font": 0,
   "radius": 0,
-  "hex": 1,
+  "hex": 0,
   "mix": 0,
   "weight": 0,
   "legacy": 0

@@ -958,7 +958,7 @@ const en: Dict = {
   'sched.android1': "Open Schedule on the portal",
   'sched.android2': "⋮ → Download page",
   'sched.android3': "Send the file to KBTU App bot",
-  'sched.privacy': "We keep only your classes. The file is deleted at once; grades and your ID never reach us.",
+  'sched.privacy': "We keep only your classes; the file is deleted at once.",
   'sched.portal': "Open the portal",
   'sched.video': "How it looks on an iPhone",
   'sched.weekTitle': "My week",

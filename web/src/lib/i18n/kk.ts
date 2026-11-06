@@ -958,7 +958,7 @@ const kk: Dict = {
   'sched.android1': "Порталда «Кестені» аш",
   'sched.android2': "⋮ → Бетті жүктеу",
   'sched.android3': "Файлды KBTU App ботына жібер",
-  'sched.privacy': "Тек сабақтарды сақтаймыз. Файлды бірден өшіреміз, бағалар мен ID бізге келмейді.",
+  'sched.privacy': "Тек сабақтарды сақтаймыз, файлды бірден өшіреміз.",
   'sched.portal': "Порталды ашу",
   'sched.video': "iPhone-да қалай көрінеді",
   'sched.weekTitle': "Менің аптам",

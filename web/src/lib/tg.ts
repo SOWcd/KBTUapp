@@ -61,6 +61,9 @@ export const onComputer = inTelegram ? !/^(ios|android)/.test(W!.platform)
 /** An Android phone (Telegram's android / android_x, or a plain browser saying so): its own steps come first. */
 export const onAndroid = inTelegram ? /^android/.test(W!.platform) : typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
 
+/** An iPhone or iPad (Telegram's ios, or a plain browser saying so). */
+export const onIos = inTelegram ? W!.platform === 'ios' : typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+
 function can(v: string): boolean {
   try { return inTelegram && W!.isVersionAtLeast(v); } catch { return false; }
 }
