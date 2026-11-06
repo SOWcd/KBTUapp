@@ -15,7 +15,7 @@ def test_mutes(env):
     con.execute("UPDATE users SET can_dm = 1")
     assert c.get("/api/admin/notifications", headers=tma(4)).status_code == 403
     kinds = [x["kind"] for x in c.get("/api/admin/notifications", headers=tma(3)).json()]
-    assert kinds == ["chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue"]          # a moderator's own kinds
+    assert kinds == ["chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue", "event_reported"]  # a moderator's own kinds
     assert c.put("/api/admin/notifications/club_application", headers=tma(3), json={"on": False}).status_code == 400
     assert "backup" in [x["kind"] for x in c.get("/api/admin/notifications", headers=tma(2)).json()]
     put = lambda uid, kind, on: c.put(f"/api/admin/notifications/{kind}", headers=tma(uid), json={"on": on})  # noqa: E731

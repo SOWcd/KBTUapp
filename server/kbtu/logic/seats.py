@@ -375,9 +375,11 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
     # starts_at's bound makes it an index range, not a scan of every event ever (review 12): a year back, wider than the
     # 31-day cap (organizing.clean_event) so a long event published before the cap still shows while it runs
-    sql = "SELECT * FROM events WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
+    sql = "SELECT * FROM events e WHERE starts_at > ? AND status != 'draft' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) > ?"
     args: list = [core.now() - 366 * 86400, NO_END, core.now()]
-    if org is not None:
+    if org is None:
+        sql += " AND " + on_afisha(); args += on_afisha_args(v)
+    else:
         # a club's page: its own and the ones it co-hosts (accepted, cohosts.py)
         sql += " AND (org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))"; args += [org, org]
     if frm is not None:
@@ -391,10 +393,33 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
 
 
 def past_events(con, v: Viewer) -> list[dict]:
-    found = rows(con, """SELECT * FROM events WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?
-        ORDER BY starts_at DESC LIMIT 50""", NO_END, core.now())
+    found = rows(con, f"""SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?
+        AND {on_afisha()} ORDER BY starts_at DESC LIMIT 50""", NO_END, core.now(), *on_afisha_args(v))
     roles, hidden = _roles(con, v), _hidden_orgs(con)
     return cards(con, v, [e for e in found if _visible(con, v, e, roles, hidden)], share=True)
+
+
+def afisha_ok(o: str) -> str:
+    """SQL: the org `o` (its alias) puts its events on the general afisha by itself (owner, Nov 6: no pre-moderation, so
+    a student initiative's don't): an official club, a school, a council, KBTU's own office.
+    ponytail: today "official"; the club path's top level ("Path to the top", clubs.py) is to join it here."""
+    return f"({o}.official = 1 OR {o}.kind != 'club')"
+
+
+def on_afisha(e: str = "e") -> str:
+    """SQL: the event `e` is on the general afisha (no club asked) for the viewer (on_afisha_args): its host or an
+    accepted, active co-host is afisha_ok, or it's mine whoever hosts it (my club's, signed up for, saved). The rest
+    open on their club's page and by link. In the query, so a LIMIT counts only these."""
+    mine = "SELECT org_id FROM org_members WHERE user_id = ?"
+    return f"""(EXISTS (SELECT 1 FROM orgs h WHERE h.id = {e}.org_id AND {afisha_ok('h')}) OR {e}.org_id IN ({mine})
+        OR EXISTS (SELECT 1 FROM event_cohosts x JOIN orgs c ON c.id = x.org_id WHERE x.event_id = {e}.id AND x.status = 'accepted'
+                   AND c.status = 'active' AND ({afisha_ok('c')} OR c.id IN ({mine})))
+        OR {e}.id IN (SELECT event_id FROM registrations WHERE user_id = ? AND status != 'cancelled')
+        OR {e}.id IN (SELECT event_id FROM saved_events WHERE user_id = ?))"""
+
+
+def on_afisha_args(v: Viewer) -> list[int]:
+    return [v.id if v.student else 0] * 4  # a guest's old rows don't count (_roles)
 
 
 def _event(con, v: Viewer, eid: int) -> sqlite3.Row:

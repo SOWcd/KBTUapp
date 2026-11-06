@@ -14,6 +14,9 @@ import { clearCache } from './cache';
 
 export const data = $state({
   events: [] as EventCard[],
+  // events opened outside the afisha (a club's page, a link: an initiative's are only there, server seats.on_afisha),
+  // kept for the session so their buttons work; never saved on the phone
+  opened: [] as EventCard[],
   eventsReady: false,
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   orgs: [] as Org[],
@@ -139,8 +142,12 @@ export function loadChats(): void {
 
 /** An event the app holds: the Afisha's, else a club's in Studio (drafts, team-only ones) */
 export function eventById(id: Id): EventCard | undefined {
-  return data.events.find((e) => e.id === id) ?? Object.values(data.studio).flat().find((e) => e.id === id);
+  return data.events.find((e) => e.id === id) ?? Object.values(data.studio).flat().find((e) => e.id === id)
+    ?? data.opened.find((e) => e.id === id);
 }
+function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened.push(d); return d; }
+/** The app's card, or the server's for one it doesn't hold yet (kept: opened) */
+const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
 
 // An event's details (the text, album, updates), asked for the moment a finger touches its card: the sheet opens a beat
 // later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
@@ -155,7 +162,7 @@ export function prefetchEvent(id: Id): void {
 export function eventDetails(id: Id): Promise<EventFull> {
   const a = ahead.get(id);
   ahead.delete(id);
-  return a && Date.now() - a.at < 10_000 ? a.p : api.event(id);
+  return (a && Date.now() - a.at < 10_000 ? a.p : api.event(id)).then(keepOpened);
 }
 
 // a person's card, fetched from the touch (B4: the card opened as a plain one, then jumped into its skin) and kept for
@@ -179,8 +186,10 @@ export function forgetPeople(): void { people.clear(); }
 
 export function put(card: EventCard): void {
   data.kept++;
-  const i = data.events.findIndex((e) => e.id === card.id);
-  if (i >= 0) data.events[i] = card;
+  for (const list of [data.events, data.opened]) {
+    const i = list.findIndex((e) => e.id === card.id);
+    if (i >= 0) list[i] = card;
+  }
 }
 
 function errorText(e: unknown): string {
@@ -209,7 +218,7 @@ const flying = new Set<Id>();
 export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
   // a guest's "I'm going" finishes by itself after the sign-in, also when the app reopened from Microsoft
   asStudent(async () => {
-    const before = eventById(id);
+    const before = await cardFor(id);
     if (!before || before.status === 'cancelled') return;
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
@@ -271,7 +280,7 @@ export function declineInvite(id: Id, note?: string): void {
 
 export function toggleSaved(id: Id): void {
   asStudent(async () => {
-    const e = eventById(id); if (!e) return;
+    const e = await cardFor(id); if (!e) return;
     const on = !e.saved;
     e.saved = on; // optimistic
     haptic.tap();

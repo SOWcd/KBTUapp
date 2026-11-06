@@ -63,7 +63,7 @@ def test_followers_told_weekly(env, monkeypatch):
     clock[0] += 3600
     b = _publish(c, oid, "Two")
     assert b["told"] is False and b["tellAfter"] == t0 + 7 * 86400 and told() == 1
-    assert {x["id"] for x in c.get("/api/events", headers=tma(31)).json()} >= {a["id"], b["id"]}
+    assert {x["id"] for x in c.get("/api/events", headers=tma(31), params={"org": oid}).json()} >= {a["id"], b["id"]}  # its page (not the afisha: test_afisha)
     for x in (a, b):  # cancelled and deleted: the week still counts
         c.post(f"/api/events/{x['id']}/cancel", headers=tma(20)); c.delete(f"/api/events/{x['id']}", headers=tma(20))
     assert _publish(c, oid, "Three")["told"] is False and told() == 1

@@ -88,9 +88,10 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int]]:
     known = "; ".join(f"{r['school']} ({said(r)}): {where(r)}" for r in facts if r["kind"] == "dean")
     lines.append(f"Schools' dean's offices: {known}. Other schools' dean's offices: unknown." if known else "Schools' dean's offices: unknown.")
     rooms |= {r["room"] for r in facts if r["room"] and ROOM.match(r["room"])}
-    evs = rows(con, """SELECT e.id, e.title, e.starts_at, e.place, o.name AS org FROM events e JOIN orgs o ON o.id = e.org_id
+    # the afisha's own (seats.on_afisha: an initiative's event only with an official co-host, or if it's mine)
+    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, o.name AS org FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden'
-          AND e.starts_at BETWEEN ? AND ? ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400)
+          AND e.starts_at BETWEEN ? AND ? AND {on_afisha()} ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400, *on_afisha_args(v))
     lines.append("Coming events (id, title, when, where, by): " + ("; ".join(
         f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or 'place to be announced'}, {e['org']}"
         for e in evs) or "none this week"))
@@ -534,3 +535,6 @@ def sweep(con) -> None:
     con.execute("DELETE FROM assist_marks WHERE day < ?", ((now() - KEEP) // 86400,))
     con.execute("DELETE FROM assist_sent WHERE day < ?", ((now() - KEEP) // 86400,))
     con.execute("DELETE FROM assist_votes WHERE day < ?", (now() // 86400 - 2,))
+
+
+from .seats import on_afisha, on_afisha_args  # noqa: E402  (seats imports the other domains last too)
