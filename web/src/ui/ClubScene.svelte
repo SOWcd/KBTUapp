@@ -145,11 +145,12 @@
          mid-engine supercar on a wet track at night, gold wheels, the kerb and floodlights. Literature: the book bigger
          and higher, the lamp's light on the shelves, the quill across the page, reading glasses. Tumar: each instrument
          its own place (the kobyz at the back, the dombra before it, the sybyzgy on the boards). Web3: three blocks
-         chained in gold under the flag's sun on the steppe at dusk. Zhyly Zhurek: two cups of tea, their steam meeting
-         in one heart. The badge's band: the far and mid
+         chained in gold under the flag's sun on the steppe at dusk. Round 15: KNL's car on the badge's band too; Tumar's kobyz
+         upright on the left, the dombra on the right; Web3 back to round 13's scene, richer (far blocks, the top block's
+         links to the network); Zhyly Zhurek back to the warm window, two cups of tea whose steam meets in one heart. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
-    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="word bw {look}" src={MARK[look]} alt="" />{/if}
+    {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{/if}
   {/if}
   <i class="gloss"></i>
 </div>
@@ -370,7 +371,7 @@
   .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
   .bw.enactuskbtu { top: 30px; height: 50px; }
   .bw.caseclubkbtu { top: 16px; height: 90px; }
-  .bw.knlknolimits { top: 12px; height: 84px; }
+  .bw.knlknolimits { top: 8px; height: 58px; } /* round 15: over the car on the band */
   .bw.literatureclub { top: 14px; height: 100px; filter: none; }
   .bw.tumarorchestrakbtu, .bw.web { top: 22px; height: 76px; }
   .bw.zhylyzhurekkbtu { top: 12px; height: 96px; filter: drop-shadow(0 4px 12px rgba(120, 40, 60, 0.25)); }
