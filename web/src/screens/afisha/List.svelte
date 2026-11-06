@@ -139,7 +139,7 @@
   {/if}
 {/snippet}
 
-<div class="page scroll">
+<div class="page scroll stagger">
   <header class="hd">
     <span><p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
       <h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
