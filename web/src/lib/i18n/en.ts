@@ -1810,7 +1810,7 @@ const en: Dict = {
   'set.about': "About the app",
   'set.donate': "Support the app",
   'don.head': "This is not a purchase",
-  'don.text': "A significant part of the app's development is paid from the creator's own pocket. We'll be grateful for any help.",
+  'don.text': "The app runs largely on its creator's own money. Thank you for any help.",
   'don.bank': "Transfer by number",
   'don.banks': "No fee — open your bank",
   'don.safe': "We never ask for money in private messages",
