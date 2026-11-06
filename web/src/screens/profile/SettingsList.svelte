@@ -10,11 +10,18 @@
   // Settings under my lanyard (Me's gear or my photo; Me runs the way in and out, this is the list). The phone's own
   // way (owner, Oct 30: "like Apple"): a short label, its value in grey, an end mark: › a page or a sheet, ⇅ a menu at
   // the row, ↗ out of the app, an accent label with no mark does it now. No subtitles; few words.
-  // Sections (each a unit Me animates, [data-unit]): the lanyard (the carousel of skins; my photo and nick), the app,
-  // then privacy and about. A guest: the app and about.
+  // Sections (each a unit Me animates, [data-unit]), what students look for first on top (owner, Nov 6: nobody found
+  // where to change the name): my data (photo, name, nick, school, course, city, phone), the lanyard (the carousel of
+  // skins), the app, then privacy and about. A guest: the app and about.
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+  import School from '@lucide/svelte/icons/school';
+  import User from '@lucide/svelte/icons/user';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import Phone from '@lucide/svelte/icons/phone';
+  import { cityName } from '../../lib/i18n/cities';
+  import { fmtPhone, kzPhone } from '../../lib/phone';
   import { nameOf, schoolOf, schoolShort } from '../../lib/short';
   import Languages from '@lucide/svelte/icons/languages';
   import Bell from '@lucide/svelte/icons/bell';
@@ -47,6 +54,9 @@
 
   const me = $derived(session.me);
   const s = $derived(me?.settings);
+  const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
+  // the course is picked a tap deeper while it can still be (the ID's year up to the 6th), else it's just shown
+  const courseFix = $derived(!!me?.student?.fixable?.includes('course') && (me.student.courseMin ?? 6) < 6);
   const bells = $derived(s ? [s.nRemind, s.nNewEvents].filter(Boolean).length : 0);
 
   // the lanyards: my clubs' by my role in them (owner, Oct 13: "no chaos"), then every other club's under a lock (owner,
@@ -193,12 +203,23 @@
 <div class="set-list" role="region" aria-label={t('me.settings')} tabindex="-1">
   {#if me?.student}
     <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
-    <div data-unit>
-      <div class="pick first">
-        <Group caption={t('look.skin')}>
-          <Row icon={IdCard} title={t('look.change')} value={wornName} accessory="disclosure" open={looks} onclick={() => { haptic.tap(); looks = !looks; if (!looks) ui.tryOn = null; }} />
-        </Group>
-      </div>
+    <div data-unit class="first">
+      <Group caption={t('set.myData')} footnote={t('look.nickFoot')}>
+        <Row icon={ImageIcon} title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
+        <Row icon={User} title={t('set.name')} value={[me.student.firstName, me.student.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('name'); }} />
+        {#if me.nick}<Row icon={AtSign} title={t('look.nick')} value={me.nick} menu={[{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]} />
+        {:else}<Row icon={AtSign} title={t('look.nick')} value={t('look.noNick')} accessory="chevron" onclick={() => { haptic.tap(); void editNick(); }} />{/if}
+        <Row icon={School} title={t('look.school')} value={schoolShort(me.student.school) || t('look.noSchool')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('school'); }} />
+        {#if courseFix}<Row icon={GraduationCap} title={t('pd.course')} value={String(me.student.course ?? '')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('course'); }} />
+        {:else if me.student.course}<Row icon={GraduationCap} title={t('pd.course')} value={String(me.student.course)} />{/if}
+        <Row icon={MapPin} title={t('pd.city')} value={me.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('city'); }} />
+        {#if phone}<Row icon={Phone} title={t('pd.phoneShort')} value={phone} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('phone'); }} />{/if}
+      </Group>
+    </div>
+    <div data-unit class="sec">
+      <Group caption={t('look.skin')}>
+        <Row icon={IdCard} title={t('look.change')} value={wornName} accessory="disclosure" open={looks} onclick={() => { haptic.tap(); looks = !looks; if (!looks) ui.tryOn = null; }} />
+      </Group>
       {#if looks}
       <div class="looks" transition:slide={{ duration: 320, easing: cubicOut }}>
       {#if skins.length || me.founder}
@@ -233,14 +254,6 @@
       </div>
       {/if}
     </div>
-    <div data-unit>
-      <Group footnote={t('look.nickFoot')}>
-        <Row icon={ImageIcon} title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
-        {#if me.nick}<Row icon={AtSign} title={t('look.nick')} value={me.nick} menu={[{ label: t('look.nickEdit'), onselect: () => void editNick() }, { label: t('look.dropNick'), destructive: true, onselect: () => setNick(null) }]} />
-        {:else}<Row icon={AtSign} title={t('look.nick')} value={t('look.noNick')} accessory="chevron" onclick={() => { haptic.tap(); void editNick(); }} />{/if}
-        <Row icon={GraduationCap} title={t('look.school')} value={schoolShort(me.student.school) || t('look.noSchool')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('school'); }} />
-      </Group>
-    </div>
   {:else}
     <div class="spacer"></div>
   {/if}
@@ -259,7 +272,7 @@
     </Group>
   </div>
 
-  <div data-unit class="gap">
+  <div data-unit class="sec">
     <Group>
       {#if me?.student}<Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} />{/if}
       <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
@@ -272,16 +285,14 @@
 <style>
   /* Me's stagger child, but it rises by its units (Me): no second animation on top */
   .set-list { animation: none; display: flex; flex-direction: column; outline: none; }
-  /* the sections' captions where Settings' headings stood */
+  /* the sections' captions where Settings' headings stood: one rhythm between groups (iOS's) */
   .first { margin-top: 20px; }
   .sec { margin-top: 28px; }
   .sec.first { margin-top: 20px; }
   .spacer { height: 44px; } /* a guest: the check sits where the student's gear does, never on the first title */
-  .gap { margin-top: 28px; }
 
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
-  .pick { margin-bottom: var(--s-4); }
-  .looks { margin-top: calc(-1 * var(--s-2)); padding-bottom: var(--s-2); }
+  .looks { margin-top: var(--s-2); padding-bottom: var(--s-2); }
   .sub { margin: var(--s-3) 0 var(--s-2); font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
   .sub.first { margin-top: 0; }
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }

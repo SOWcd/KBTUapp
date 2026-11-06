@@ -1,7 +1,8 @@
 <script lang="ts">
   // A page pushed in from the right (ui/Pane) from the settings under my lanyard (Me), the phone's own way: the
-  // notification switches with a footnote under each, Privacy (my phone and my city, each its own page with what can be
-  // done to it; whether friends see where I'm going; who sees what; the policy; deleting the account) and About.
+  // notification switches with a footnote under each; my name and ID (Settings' "My data" opens it, its school,
+  // course, city and phone pages too); Privacy (whether friends see where I'm going; who sees what; the policy;
+  // deleting the account) and About.
   // A row that leaves the app (the browser, Telegram) ends in ↗, one that stays in it in ›.
   import Lock from '@lucide/svelte/icons/lock';
   import Bell from '@lucide/svelte/icons/bell';
@@ -35,12 +36,11 @@
 
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'notify' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
+  type Kind = 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
-  const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
+  const TITLE: Record<Kind, [Key, typeof Lock]> = { notify: ['me.notifications', Bell], name: ['set.nameId', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
     sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
-  // where "‹ Back" goes: Privacy for its own pages, else Settings
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -205,37 +205,27 @@
       <div class:sw={i > 0}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
     <p class="foot always">{t('set.always')}</p>
-  {:else if kind === 'privacy'}
-    <!-- my data: one row each, what can be done to it a tap deeper -->
-    {#if me?.student}
-      {@const st = me.student}
-      <!-- who I am: each name part one row, its Latin form under it; correctable once (›), then a plain row -->
-      <Group>
-        {#each PARTS as [p, cyr, lat] (p)}
-          {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
-          {#if can}<Row title={t(TITLE[p][0])} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings(p); }}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>
-          {:else if st[cyr] || st[lat]}<Row title={t(TITLE[p][0])}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>{/if}
-        {/each}
+  {:else if kind === 'name' && me?.student}
+    {@const st = me.student}
+    <!-- who I am: each name part one row, its Latin form under it; correctable once (›), then a plain row -->
+    <Group>
+      {#each PARTS as [p, cyr, lat] (p)}
+        {@const can = st.fixable?.includes(cyr) || st.fixable?.includes(lat)}
+        {#if can}<Row title={t(TITLE[p][0])} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings(p); }}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>
+        {:else if st[cyr] || st[lat]}<Row title={t(TITLE[p][0])}>{#snippet detail()}{@render two(st[cyr], st[lat])}{/snippet}</Row>{/if}
+      {/each}
+    </Group>
+    <div class="gap">
+      <Group footnote={st.fixable.length < ALL && st.consent !== 'staff' ? t('pd.support') : undefined}>
+        <!-- the ID once too; the email is the Microsoft login, never edited -->
+        {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
+        {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
+        <!-- the email whole, on two lines if it must (owner, Oct 31) -->
+        {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
       </Group>
-    {/if}
-    {#if me?.student || phone || me?.city}
-      <div class:gap={me?.student}>
-        <Group footnote={me?.student && me.student.fixable.length < ALL && me.student.consent !== 'staff' ? t('pd.support') : undefined}>
-          {#if me?.student}
-            {@const st = me.student}
-            <!-- the ID once too; the year up from the ID's; the email is the Microsoft login, never edited -->
-            {#if st.fixable?.includes('studentId')}{@render link(t('pd.sid'), () => void fix('studentId', 'pd.sid'), st.studentId)}
-            {:else}<Row title={t('pd.sid')} value={st.studentId} />{/if}
-            {#if courses.length > 1 && st.fixable?.includes('course')}{@render link(t('pd.course'), () => sheets.settings('course'), String(st.course ?? ''))}
-            {:else if st.course}<Row title={t('pd.course')} value={String(st.course)} />{/if}
-            <!-- the email whole, on two lines if it must (owner, Oct 31) -->
-            {#if st.email}<Row title={t('pd.email')}>{#snippet detail()}<span class="wide">{st.email}</span>{/snippet}</Row>{/if}
-          {/if}
-          {#if phone}{@render link(t('pd.phoneShort'), () => sheets.settings('phone'), phone)}{/if}
-          {#if me?.student || me?.city}{@render link(t('pd.city'), () => sheets.settings('city'), (me?.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone')))}{/if}
-        </Group>
-      </div>
-    {/if}
+    </div>
+  {:else if kind === 'privacy'}
+    <!-- my data moved up to Settings' first group (owner, Nov 6); here what others see of me -->
     {#if me?.student}
       <!-- friends only: my profile's events, Afisha's faces, "bring a friend" (the server's showGoing); and off, nobody can
            send me a friend request (my friends and the requests waiting stay) -->
@@ -244,7 +234,7 @@
         <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
       </Group></div>
     {/if}
-    <div class:gap={phone || me?.city || me?.student}><Group>
+    <div class:gap={me?.student}><Group>
       {@render link(t('set.whoSees'), () => sheets.settings('sees'))}
       {@render link(t('set.policy'), () => page('privacy'), '', true)}
     </Group></div>
