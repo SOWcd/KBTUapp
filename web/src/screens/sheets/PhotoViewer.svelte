@@ -13,8 +13,8 @@
   import { glass } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
 
-  let { overlay, photos, start = 0, onremove, ongone }: {
-    overlay: Overlay; photos: AlbumPhoto[]; start?: number; onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>; ongone?: (p: AlbumPhoto) => void;
+  let { overlay, photos, start = 0, onremove, ongone, from }: {
+    overlay: Overlay; photos: AlbumPhoto[]; start?: number; onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>; ongone?: (p: AlbumPhoto) => void; from?: Element;
   } = $props();
 
   let list = $state<AlbumPhoto[]>([]);
@@ -27,6 +27,12 @@
     list = photos; at = start;
     requestAnimationFrame(() => { strip.scrollLeft = start * strip.clientWidth; });
     root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+    // a person's photo grows out of their avatar (transform and opacity only; not under reduced motion or lowfx)
+    if (from && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.documentElement.classList.contains('lowfx')) {
+      const r = from.getBoundingClientRect(), w = strip.clientWidth, h = strip.clientHeight;
+      const s = r.width / Math.min(w, h);
+      strip.animate([{ transform: `translate(${r.left + r.width / 2 - w / 2}px, ${r.top + r.height / 2 - h / 2}px) scale(${s})` }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    }
     haptic.soft();
     return hideChrome();
   });
@@ -40,7 +46,8 @@
   $effect(() => { overlay.title = list.length > 1 ? `${at + 1} / ${list.length}` : ''; overlay.icon = Images; }); // the capsule's title
 
   // zoom: the photo on show scales and pans by transform; the strip holds still while it's zoomed in
-  let z = $state(1), x = $state(0), y = $state(0), held = $state(false);
+  let z = $state(1), x = $state(0), y = $state(0), held = $state(false), dy = $state(0);
+  let drag: { x: number; y: number } | null = null, tapTimer: ReturnType<typeof setTimeout> | undefined, moved = false;
   const pts = new Map<number, { x: number; y: number }>();
   let pinch: { d: number; z: number } | null = null, pan: { x: number; y: number; px: number; py: number } | null = null, lastTap = 0;
   const shown = () => strip.children[at]?.querySelector('img') as HTMLImageElement | null;
@@ -55,6 +62,8 @@
   }
   function down(e: PointerEvent) {
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved = false;
+    if (pts.size === 1 && z === 1) drag = { x: e.clientX, y: e.clientY }; else drag = null;
     if (pts.size === 2) { pinch = { d: dist(), z }; pan = null; held = true; }
     else if (z > 1) { pan = { x, y, px: e.clientX, py: e.clientY }; held = true; }
   }
@@ -62,13 +71,21 @@
     if (!pts.has(e.pointerId)) return;
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && pts.size === 2) { z = Math.min(4, Math.max(1, (pinch.z * dist()) / pinch.d)); clamp(); }
-    else if (pan) { x = pan.x + e.clientX - pan.px; y = pan.y + e.clientY - pan.py; clamp(); }
+    else if (drag && pts.size === 1) {
+      const ddy = e.clientY - drag.y;
+      if (dy > 0 || (ddy > 10 && ddy > Math.abs(e.clientX - drag.x))) { dy = Math.max(0, ddy); moved = true; }
+    } else if (pan) { x = pan.x + e.clientX - pan.px; y = pan.y + e.clientY - pan.py; clamp(); }
   }
   function up(e: PointerEvent) {
     if (!pts.delete(e.pointerId)) return;
     if (pts.size < 2) pinch = null;
     if (!pts.size) { pan = null; held = false; }
+    if (drag && dy > 0) { drag = null; if (dy > 100 && e.type === 'pointerup') close(overlay.id); else dy = 0; return; }
+    drag = null;
     if (e.type !== 'pointerup') return;
+    clearTimeout(tapTimer);
+    // a single tap on a person's lone photo leaves (after the double-tap window)
+    if (list.length === 1 && z === 1 && e.timeStamp - lastTap > 300 && !moved) tapTimer = setTimeout(() => close(overlay.id), 300);
     // a double tap: in at the tapped point, or back out
     if (e.timeStamp - lastTap > 300) { lastTap = e.timeStamp; return; }
     lastTap = 0;
@@ -109,7 +126,9 @@
 </script>
 
 <div class="viewer" bind:this={root}>
+  <div class="bd" style:opacity={1 - Math.min(dy, 300) / 400}></div>
   <div class="strip" class:zoomed={z > 1} role="presentation" bind:this={strip} onscroll={() => (at = Math.round(strip.scrollLeft / strip.clientWidth))}
+    style:transform={dy ? `translateY(${dy}px)` : null} style:transition={dy ? 'none' : 'transform 200ms var(--ease)'}
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
     {#each list as p, i (p.id)}
       <div class="slide" class:bare={!acts}><img src={p.url} alt="" decoding="async" draggable="false" class:held
@@ -129,7 +148,8 @@
 </div>
 
 <style>
-  .viewer { position: absolute; inset: 0; z-index: var(--z-sheet); background: #000; color: #fff; }
+  .viewer { position: absolute; inset: 0; z-index: var(--z-sheet); color: #fff; }
+  .bd { position: absolute; inset: 0; background: #000; }
   .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior: contain; scrollbar-width: none;
     touch-action: pan-x; }
   .strip::-webkit-scrollbar { display: none; }

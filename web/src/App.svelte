@@ -64,7 +64,7 @@
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id });
   sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
-  sheets.photos = (photos, start, onremove, ongone) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone });
+  sheets.photos = (photos, start, onremove, ongone, from) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone, from });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
