@@ -141,12 +141,12 @@
          one hero each drawn big and fine in the space under the medallion, the area behind the text calm, light from the
          upper left, depth by overlap and tone, no bloom. Round 13 (owner, per club; round13/gen/gen-r13.py): Enactus:
          their phoenix over a district at dawn, the sun rising, a sprout (their bird once, in the medallion). Case: the
-         night city through the glass, a whiteboard's issue tree, the table, papers, the laptop the one chart. KNL: a
-         supercar on a wet road at night. Literature: a warm library, varied books, lamp light pooled on the desk, the open
-         book's grain and handwriting, the inkwell and quill. Tumar: their ornament, the velvet's folds, two stage lights,
-         the dombra laid down with the kobyz and sybyzgy. Web3: the flag's sun and eagle, a network in depth, the steppe,
-         four blocks engraved with circuits. Zhyly Zhurek: a warm window at sunset, a cup of tea, two cupped hands holding
-         a coral heart with their flame. The badge's band: the far and mid
+         night city through the glass, a whiteboard's issue tree, the table, papers, the laptop the one chart. Round 14 (round14/gen/gen-r14.py): KNL: a
+         mid-engine supercar on a wet track at night, gold wheels, the kerb and floodlights. Literature: the book bigger
+         and higher, the lamp's light on the shelves, the quill across the page, reading glasses. Tumar: each instrument
+         its own place (the kobyz at the back, the dombra before it, the sybyzgy on the boards). Web3: three blocks
+         chained in gold under the flag's sun on the steppe at dusk. Zhyly Zhurek: two cups of tea, their steam meeting
+         in one heart. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
     {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="word bw {look}" src={MARK[look]} alt="" />{/if}
