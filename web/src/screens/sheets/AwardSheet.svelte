@@ -193,7 +193,7 @@
   $effect(() => { if (overlay.closing) leave(); });
 </script>
 
-<div class="scrim" bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
+<div class="scrim" class:flat={onAndroid && !!gl} bind:this={scrim} style:--glow={glow || GLOW[0]} onclick={() => leave()} role="presentation"></div>
 <div class="wrap theme-dark" bind:this={wrap}>
   <div class="page">
   <div class="stage" bind:this={stage} class:dim={!landed} class:hangs={!!gl} class:lit={lit} class:spins={layered || !!gl} style:--glow={glow} use:glass role="presentation" onpointerdown={grab} onpointermove={move} onpointerup={drop} onpointercancel={drop}>
@@ -279,6 +279,9 @@
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet);
     background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.88);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  /* Android + the WebGL medal (a user's video, Nov 6: the capsule's title, the name under the medal and the x went missing
+     for seconds): a full-screen blur re-rastered under a canvas that redraws every frame overran the GPU; solid there */
+  .scrim.flat { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
   .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; padding-bottom: var(--close-room); }
   .wrap > :global(*) { pointer-events: auto; }
