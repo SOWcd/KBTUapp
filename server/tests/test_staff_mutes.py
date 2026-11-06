@@ -12,6 +12,7 @@ def test_mutes(env):
     con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (owner,))
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (adm,))
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod,))
+    con.execute("UPDATE users SET can_dm = 1")
     assert c.get("/api/admin/notifications", headers=tma(4)).status_code == 403
     kinds = [x["kind"] for x in c.get("/api/admin/notifications", headers=tma(3)).json()]
     assert kinds == ["chat_suggested", "tgc_queue", "fch_appeal", "fch_reply_queue"]          # a moderator's own kinds
@@ -31,6 +32,10 @@ def test_mutes(env):
     put(2, "backup", False)
     logic.notify_staff(con, [owner, adm], "backup_failed", "bf:x")
     assert sent("backup_failed", "bf:x") == {owner}                                            # both backup messages, one switch
+    con.execute("UPDATE users SET can_dm = 0 WHERE id = ?", (adm,))
+    put(1, "chat_suggested", False)
+    logic.notify_staff(con, [owner, adm], "chat_suggested", "cs:1")
+    assert sent("chat_suggested", "cs:1") == {adm, owner}                                      # the one left can't get DMs: the owner too
     logic.notify_staff(con, [], "tgc_queue", "tq:1")
     assert not sent("tgc_queue", "tq:1")                                                       # nobody to tell: not the owner either
     # deleting the account takes the mutes along
