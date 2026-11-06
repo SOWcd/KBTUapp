@@ -24,7 +24,7 @@
  "scenes/knl-near-card.svg": "7037d89d33b0",
  "scenes/lit-far-card.svg": "1947592b147b",
  "scenes/lit-mid-card.svg": "08254ded78a7",
- "scenes/lit-near-card.svg": "c64010282c16",
+ "scenes/lit-near-card.svg": "278d59105400",
  "scenes/mag-detail-card.svg": "601f9c34e0c9",
  "scenes/mag-far-card.svg": "3c87de0467b1",
  "scenes/mag-ground-card.svg": "828c8104256a",
@@ -46,11 +46,11 @@
  "scenes/tm-far-card.svg": "955ef835a784",
  "scenes/tm-mid-card.svg": "3773225f07e9",
  "scenes/tm-near-card.svg": "ff58d7b8a928",
- "scenes/w3-far-card.svg": "3d36f86f10bd",
- "scenes/w3-mid-card.svg": "ccbbadec483d",
- "scenes/w3-near-card.svg": "d984da6c3197",
- "scenes/zh-far-card.svg": "70fb527a5538",
- "scenes/zh-mid-card.svg": "9a06fe294ae4",
+ "scenes/w3-far-card.svg": "dee635dccdcf",
+ "scenes/w3-mid-card.svg": "3179a79464ff",
+ "scenes/w3-near-card.svg": "d3a283654b24",
+ "scenes/zh-far-card.svg": "c1781472d6b9",
+ "scenes/zh-mid-card.svg": "fcdb4f4af017",
  "scenes/zh-near-card.svg": "8d1f253cc476",
  "schools/bs-board-card.svg": "ef428f88753b",
  "schools/bs-king-card.svg": "325e9ddb5256",
@@ -84,5 +84,5 @@
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
  "sower-rosette.svg": "94f0a7baa83c",
- "minis": "2f8cc8d0a3e5"
+ "minis": "31e6edc088a8"
 }

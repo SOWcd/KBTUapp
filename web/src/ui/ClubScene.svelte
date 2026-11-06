@@ -147,7 +147,9 @@
          its own place (the kobyz at the back, the dombra before it, the sybyzgy on the boards). Web3: three blocks
          chained in gold under the flag's sun on the steppe at dusk. Round 15: KNL's car on the badge's band too; Tumar's kobyz
          upright on the left, the dombra on the right; Web3 back to round 13's scene, richer (far blocks, the top block's
-         links to the network); Zhyly Zhurek back to the warm window, two cups of tea whose steam meets in one heart. The badge's band: the far and mid
+         links to the network); Zhyly Zhurek back to the warm window, two cups of tea whose steam meets in one heart. Round 16: Web3 rethought: the flag's sun rising over
+         the steppe's engraved strata, its rays running on into a network, the eagle near; Zhyly Zhurek's view a town with
+         lit windows, a garland of heart lights, a knitted runner. The badge's band: the far and mid
          layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
     {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" />{#if look === 'knlknolimits'}<img class="l" src={L('knl-near')} alt="" />{/if}<img class="word bw {look}" src={MARK[look]} alt="" />{/if}
@@ -360,19 +362,20 @@
   .mgw { top: 24px; height: 62px; }
   .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
 
-  /* ---- round 11: the seven's grounds under their scenes; their marks on the band ---- */
-  .enactuskbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 100, 230, 0.35), transparent 65%), linear-gradient(160deg, rgb(18, 26, 110), rgb(10, 15, 85) 55%, rgb(4, 7, 46)); }
-  .caseclubkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(120, 140, 230, 0.28), transparent 65%), linear-gradient(160deg, rgb(28, 39, 102), rgb(17, 26, 75) 55%, rgb(8, 13, 41)); }
-  .knlknolimits { background: linear-gradient(165deg, rgb(14, 36, 96), rgb(7, 26, 74) 55%, rgb(2, 10, 34)); }
-  .literatureclub { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 252, 246, 0.8), transparent 65%), linear-gradient(160deg, rgb(243, 237, 229), rgb(237, 230, 220) 55%, rgb(226, 216, 202)); }
-  .tumarorchestrakbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(230, 194, 122, 0.2), transparent 65%), linear-gradient(160deg, rgb(20, 56, 143), rgb(11, 36, 112) 55%, rgb(4, 17, 58)); }
-  .web { background: radial-gradient(60% 80% at 100% 0%, rgba(255, 228, 92, 0.22), transparent 65%), linear-gradient(160deg, rgb(74, 163, 186), rgb(42, 127, 151) 55%, rgb(15, 70, 86)); }
-  .zhylyzhurekkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.6), transparent 65%), linear-gradient(160deg, rgb(251, 239, 234), rgb(246, 226, 220) 55%, rgb(237, 203, 196)); }
+  /* ---- round 11: the seven's grounds under their scenes; their marks on the band. Round 16: the grounds scoped to .sc:
+     the mark's img carries the look's class too and wore the ground as a box on the badge's band ---- */
+  .sc.enactuskbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 100, 230, 0.35), transparent 65%), linear-gradient(160deg, rgb(18, 26, 110), rgb(10, 15, 85) 55%, rgb(4, 7, 46)); }
+  .sc.caseclubkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(120, 140, 230, 0.28), transparent 65%), linear-gradient(160deg, rgb(28, 39, 102), rgb(17, 26, 75) 55%, rgb(8, 13, 41)); }
+  .sc.knlknolimits { background: linear-gradient(165deg, rgb(14, 36, 96), rgb(7, 26, 74) 55%, rgb(2, 10, 34)); }
+  .sc.literatureclub { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 252, 246, 0.8), transparent 65%), linear-gradient(160deg, rgb(243, 237, 229), rgb(237, 230, 220) 55%, rgb(226, 216, 202)); }
+  .sc.tumarorchestrakbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(230, 194, 122, 0.2), transparent 65%), linear-gradient(160deg, rgb(20, 56, 143), rgb(11, 36, 112) 55%, rgb(4, 17, 58)); }
+  .sc.web { background: radial-gradient(60% 80% at 100% 0%, rgba(255, 228, 92, 0.22), transparent 65%), linear-gradient(160deg, rgb(74, 163, 186), rgb(42, 127, 151) 55%, rgb(15, 70, 86)); }
+  .sc.zhylyzhurekkbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 255, 255, 0.6), transparent 65%), linear-gradient(160deg, rgb(251, 239, 234), rgb(246, 226, 220) 55%, rgb(237, 203, 196)); }
   .bw { filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35)); }
   .bw.enactuskbtu { top: 30px; height: 50px; }
   .bw.caseclubkbtu { top: 16px; height: 90px; }
   .bw.knlknolimits { top: 8px; height: 58px; } /* round 15: over the car on the band */
-  .bw.literatureclub { top: 14px; height: 100px; filter: none; }
+  .bw.literatureclub { top: 14px; height: 100px; filter: drop-shadow(0 0 3px rgba(246, 241, 233, 0.95)) drop-shadow(0 0 8px rgba(246, 241, 233, 0.9)); } /* round 16: lifted off the shelves by a feathered paper glow */
   .bw.tumarorchestrakbtu, .bw.web { top: 22px; height: 76px; }
   .bw.zhylyzhurekkbtu { top: 12px; height: 96px; filter: drop-shadow(0 4px 12px rgba(120, 40, 60, 0.25)); }
   .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
