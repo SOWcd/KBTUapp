@@ -154,6 +154,8 @@ def role_tr(r) -> tuple[str, set[str]]:
     if r["src"]:
         return r["src"], set(filter(None, r["hand"].split(",")))
     src = ai.lang_of(r["name"])
+    if src != "ru" and r[SLOT[src]] not in (None, "", r["name"]):  # that slot holds another title: the name stays the Russian one
+        src = "ru"
     return src, {k for k in ("kk", "en") if k != src and r[SLOT[k]]}
 
 
@@ -161,14 +163,15 @@ def normalize_role(con, r) -> None:
     """A role from before into the typed-once shape (src, hand); what it lacks waits for the AI (queues.ai_next)."""
     src, hand = role_tr(r)
     need = [k for k in SLOT if k != src and k not in hand]  # ru, when typed in another language, holds that text till then
-    con.execute(f"UPDATE org_roles SET src = ?, hand = ?, ai_wait = ?, {SLOT[src]} = ? WHERE id = ?",
+    con.execute(f"UPDATE org_roles SET src = ?, hand = ?, ai_wait = ?, {SLOT[src]} = ? WHERE id = ? AND src IS NULL",
                 (src, ",".join(sorted(hand)), int(bool(need)), r[SLOT[src]] or r["name"], r["id"]))
 
 
 def roles_backfill(con, n: int = 50) -> None:
     """Nightly (stats_day): a batch of roles from before gets normalized, so the translator fills their titles."""
-    for r in rows(con, "SELECT * FROM org_roles WHERE src IS NULL AND fixed = 0 ORDER BY id LIMIT ?", n):
-        normalize_role(con, r)
+    with tx(con):  # read and written under the write lock: a manager's save meanwhile waits, never lost
+        for r in rows(con, "SELECT * FROM org_roles WHERE src IS NULL AND fixed = 0 ORDER BY id LIMIT ?", n):
+            normalize_role(con, r)
 
 
 def team_setup(con, v: Viewer, oid: int) -> dict:

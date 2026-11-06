@@ -66,7 +66,7 @@ from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MA
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
     admin_stats, ai_retry, day_of, memo, memo_again, memo_item, memo_opened, memo_sent, memo_sign, memo_week,
     saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
-from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, roles_backfill, _ask_removal, _below, _manage, _named, _ordered,
+from .teams import (HEX, INVITE_TTL, MAP_DRAFT, PRESIDENT_LINK_TTL, normalize_role, roles_backfill, _ask_removal, _below, _manage, _named, _ordered,
     _remove, accept_invite, banned, decide_removal, delete_role, delete_tag, dept_of, invite, map_graph,
     TEAM_LINK_TTL, members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off, team_setup, transfer, unban, update_member)  # noqa: F401
 from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_AT, KEEP, MY_SKILLS, NAME_MAX,

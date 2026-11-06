@@ -4242,6 +4242,30 @@ def test_role_titles(env):
     assert tuple(o) == ("ru", "kk", 1, "\u0425")
     logic.ai_save(con, "role", old, {"title": f"{sec} 10"}, "ru", tr("y", "Secretary 10"))
     assert tuple(con.execute("SELECT name_kk, name_en FROM org_roles WHERE id = ?", (old,)).fetchone()) == ("\u0425", "Secretary 10")
+
+    # review: a Kazakh name with another Kazakh title (kk "SMM") stays the Russian slot's, its letters aside; the AI's
+    # answer for the "wrong" language still ends the wait, never holding the queue
+    con.execute("DELETE FROM org_roles WHERE src IS NULL OR ai_wait = 1")
+    kz = "\u0416\u0435\u0442\u0435\u043a\u0448\u0456"
+    odd = con.execute("INSERT INTO org_roles (org_id, name, name_kk, color, level, created_at) VALUES (1, ?, 'SMM', '#FF4FA3', 'member', 0)", (kz,)).lastrowid
+    logic.roles_backfill(con)
+    assert tuple(con.execute("SELECT src, hand, ai_wait FROM org_roles WHERE id = ?", (odd,)).fetchone()) == ("ru", "kk", 1)
+    assert logic.ai_next(con) == ("role", odd, {"title": kz})
+    logic.ai_save(con, "role", odd, {"title": kz}, "kk", {"ru": {"title": "x"}, "en": {"title": "Lead"}})
+    assert tuple(con.execute("SELECT name, name_kk, name_en, ai_wait FROM org_roles WHERE id = ?", (odd,)).fetchone()) == (kz, "SMM", "Lead", 0)
+    assert logic.ai_next(con) is None
+    # an answer that never matches the row counts a try: three and it's left, the queue moves on
+    c.patch(f"/api/orgs/1/roles/{odd}", headers=tma(20), json={**body, "name": "Mentor"})
+    for _ in range(3):
+        assert logic.ai_next(con)[1] == odd
+        logic.ai_save(con, "role", odd, {"title": "not it"}, "en", tr("x", "x"))
+    assert logic.ai_next(con) is None
+    # the nightly batch never overwrites a save that normalized the row meanwhile
+    late = con.execute("INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (1, 'Late', '#FF4FA3', 'member', 0)").lastrowid
+    stale = logic.one(con, "SELECT * FROM org_roles WHERE id = ?", late)
+    con.execute("UPDATE org_roles SET src = 'en', hand = 'kk', name_kk = 'K' WHERE id = ?", (late,))
+    logic.normalize_role(con, stale)
+    assert tuple(con.execute("SELECT src, hand, name_kk FROM org_roles WHERE id = ?", (late,)).fetchone()) == ("en", "kk", "K")
     con.close()
 
 

@@ -56,10 +56,12 @@ def ai_save(con, kind: str, rid: int, was: dict[str, str], src: str, tr: dict[st
             if not n:
                 return
         elif kind == "role":  # unless retyped meanwhile; a correction by hand stays; a Russian title another role has: not that one
-            r = one(con, "SELECT * FROM org_roles WHERE id = ? AND ai_wait = 1 AND src = ?", rid, src)
-            if not r or (r[SLOT[src]] or r["name"]) != was["title"]:
+            r = one(con, "SELECT * FROM org_roles WHERE id = ? AND ai_wait = 1", rid)
+            if not r or not r["src"] or (r[SLOT[r["src"]]] or r["name"]) != was["title"]:
+                if r:  # a try counted: a row that never matches can't hold the queue
+                    con.execute("UPDATE org_roles SET ai_tries = ai_tries + 1 WHERE id = ?", (rid,))
                 return
-            hand = set(r["hand"].split(","))
+            hand = set(r["hand"].split(",")) | {r["src"]}  # the row's own language, whatever the letters said (`src`)
             for k, x in tr.items():
                 if k not in hand:
                     try:
