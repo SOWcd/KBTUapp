@@ -1260,6 +1260,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     # always-open recruitment (club presidents, Nov 6): the club's own questions for any-time join requests (JSON, as a
     # round's: kind, text, options, required) and each request's answers (JSON [{q, a}], the question's text kept with it)
     (131, "ALTER TABLE orgs ADD COLUMN join_questions TEXT; ALTER TABLE join_requests ADD COLUMN answers TEXT;"),
+    # the Ascent (owner, Nov 6; logic/clubs.py): when a student initiative reached the top, kept once reached (an
+    # official club's tools without the ✓)
+    (132, "ALTER TABLE orgs ADD COLUMN top_at INTEGER;"),
 ]
 
 

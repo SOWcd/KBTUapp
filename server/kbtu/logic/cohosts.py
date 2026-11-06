@@ -12,7 +12,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import ApiError, Viewer, at_least, can, full, one, org_ref, role_in, rows
+from .core import FULL_TOOLS, ApiError, Viewer, at_least, can, full, one, org_ref, role_in, rows
 
 
 COHOST_INVITES_A_DAY = 10  # a host club's invites (each one messages the other club's leaders)
@@ -55,7 +55,7 @@ def _fits(e: sqlite3.Row) -> bool:
 
 def _free_ok(con, e: sqlite3.Row) -> bool:
     """A collab with an initiative is free (owner, Nov 4; collab-review M1): only an official host's event has a price."""
-    return not e["price"] or bool(one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0])
+    return not e["price"] or bool(one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0])
 
 
 def _over(e: sqlite3.Row) -> bool:
@@ -91,7 +91,7 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
             raise ApiError("conflict", "declined")  # they said no to this one: not asked again
         if one(con, "SELECT 1 FROM org_mutes WHERE org_id = ? AND muted_org_id = ?", oid, e["org_id"]):
             raise ApiError("conflict", "declined")  # "Don't suggest again": the same answer as a no (collab-review S2)
-        if not one(con, "SELECT official OR kind != 'club' FROM orgs WHERE id = ?", e["org_id"])[0]:
+        if not one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0]:
             week = f"cohost_wk:{e['org_id']}:{(core.now() + 5 * 3600) // (7 * 86400)}"  # an Almaty week (from Thursday)
             sent = one(con, "SELECT value FROM meta WHERE key = ?", week)
             if sent and int(sent[0]) >= INITIATIVE_INVITES_A_WEEK:

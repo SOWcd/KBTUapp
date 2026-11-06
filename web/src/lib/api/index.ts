@@ -219,8 +219,8 @@ export interface Api {
   applyClub(input: ClubApplicationInput): Promise<ClubApplication>;
   clubApplications(): Promise<ClubApplication[]>;         // admin: pending first
   decideClubApplication(id: Id, approve: boolean, reason?: string): Promise<ClubApplication>;
-  officialPath(org: Id): Promise<OfficialPath | null>;   // the club's team: the steps to the ✓ (null: official already)
-  askOfficial(org: Id): Promise<OfficialPath | null>;    // its President or a Vice, all five done
+  officialPath(org: Id): Promise<OfficialPath | null>;   // the club's team: the Ascent's checklist (null: official already)
+  askOfficial(org: Id): Promise<OfficialPath | null>;    // its President or a Vice, at the top: asks DMP for the ✓
   decideOfficial(id: Id, approve: boolean, reason?: string): Promise<OfficialRequest>; // admin
   feature(postId: Id, days: number): Promise<Post>;      // admin: on top of List for everyone; 0 ends it
   /** Admin → Awards: give a person a manual award (the bot sends them its card); undo: ungrant(its id) */

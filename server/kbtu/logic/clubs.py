@@ -70,6 +70,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "joinQuestions": _join_qs(o),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
+        "top": bool(o["top_at"]) and not o["official"],  # the Ascent's top: its own block in the clubs list
     } for o in found}
 
 
@@ -427,32 +428,62 @@ def undo_club_refusal(con, v: Viewer, aid: int) -> None:
         log_action(con, v.id, "capp_undo", f"capp:{aid}")
 
 
-# ---------------------------------------------------------------- the path to the official ✓ (Nov 4)
-# A student initiative's five steps, any order, each read live when Studio opens (one query, every fact once); all
-# done, its President or a Vice asks the admin, who gives the ✓ (or says no with a reason the club reads in Studio).
+# ---------------------------------------------------------------- the Ascent (owner, Nov 6; was the path to the ✓)
+# A student initiative's checklist, any order, each read live when Studio opens (one query, every fact once). It never
+# locks a tool (owner, Nov 6): a checklist and a reward. A collab with an official club puts that event in the afisha
+# (its co-host's right); the top (every step, and two events with guests) gives the full tools of an official club but
+# no ✓ (orgs.top_at, kept once reached; the owner makes its lanyard by hand). The ✓ is DMP's own decision: a club at the
+# top may ask (ask_official), the path never asks for it.
 
-PATH_STEPS = ("members", "profile", "round", "event", "collab")
-PATH_MIN = 3             # members in the app, and people outside the team at one event
-PATH_SETTLED = 0  # owner, Nov 5: "in the club 3+ days" confused presidents (22 fresh members, the step still open); was 3 days
+PATH_STEPS = ("profile", "round", "channel", "collab", "top")
+PATH_MEMBERS = 5   # members in the app for a ready profile
+PATH_GUESTS = 3    # people outside the team scanned at the door for an event to count
+PATH_EVENTS = 2    # such events for the top
 
 
-def _path_steps(con, oid: int) -> dict[str, bool]:
-    r = con.execute("""SELECT
+def _path_facts(con, oid: int) -> sqlite3.Row:
+    return con.execute("""SELECT
         (SELECT COUNT(*) FROM org_members m JOIN students s ON s.user_id = m.user_id JOIN users u ON u.id = m.user_id
-          WHERE m.org_id = :o AND u.banned_at IS NULL AND m.joined_at <= :t - :settled) >= :n AS members,
-        (SELECT logo_file_id IS NOT NULL AND length(trim(description)) >= 10 FROM orgs WHERE id = :o) AS profile,
+          WHERE m.org_id = :o AND u.banned_at IS NULL) AS members,
+        (SELECT logo_file_id IS NOT NULL AND length(trim(description)) >= 10 FROM orgs WHERE id = :o) AS look,
         EXISTS (SELECT 1 FROM rounds r JOIN round_apps a ON a.round_id = r.id WHERE r.org_id = :o AND r.status = 'done' AND a.stage = 'yes') AS round,
-        -- an event over, with people scanned at the door who weren't in the club when it started (joining after counts)
-        EXISTS (SELECT 1 FROM events e WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
-          AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND (SELECT COUNT(*) FROM registrations g WHERE g.event_id = e.id
-            AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0 AND NOT EXISTS (SELECT 1 FROM org_members m
-              WHERE m.org_id = :o AND m.user_id = g.user_id AND m.joined_at < e.starts_at)) >= :n) AS event,
+        EXISTS (SELECT 1 FROM chats WHERE org_id = :o AND kind = 'channel') AS channel,
         -- an accepted co-host row with an official club, whichever of the two hosted
         EXISTS (SELECT 1 FROM event_cohosts c JOIN events e ON e.id = c.event_id
           JOIN orgs x ON x.id = CASE WHEN e.org_id = :o THEN c.org_id ELSE e.org_id END
-          WHERE c.status = 'accepted' AND :o IN (e.org_id, c.org_id) AND x.official = 1 AND e.status = 'published' AND e.hidden_at IS NULL) AS collab""",
-        {"o": oid, "t": core.now(), "settled": PATH_SETTLED, "n": PATH_MIN}).fetchone()
-    return {k: bool(r[k]) for k in PATH_STEPS}
+          WHERE c.status = 'accepted' AND :o IN (e.org_id, c.org_id) AND x.official = 1 AND e.status = 'published' AND e.hidden_at IS NULL) AS collab,
+        -- own events over, with people scanned at the door who weren't in the club when it started (joining after counts)
+        (SELECT COUNT(*) FROM events e WHERE e.org_id = :o AND e.status = 'published' AND e.hidden_at IS NULL AND e.guest_host IS NULL
+          AND COALESCE(e.ends_at, e.starts_at + 3 * 3600) <= :t AND (SELECT COUNT(*) FROM registrations g WHERE g.event_id = e.id
+            AND g.checked_in_at IS NOT NULL AND g.checkin_manual = 0 AND NOT EXISTS (SELECT 1 FROM org_members m
+              WHERE m.org_id = :o AND m.user_id = g.user_id AND m.joined_at < e.starts_at)) >= :g) AS events,
+        (SELECT top_at FROM orgs WHERE id = :o) AS top_at""",
+        {"o": oid, "t": core.now(), "g": PATH_GUESTS}).fetchone()
+
+
+def _path_steps(con, oid: int) -> tuple[dict[str, bool], sqlite3.Row]:
+    """Each step done or not, any order; the top needs every other one too (and, once reached, stays)."""
+    f = _path_facts(con, oid)
+    out = {"profile": bool(f["look"]) and f["members"] >= PATH_MEMBERS, "round": bool(f["round"]), "channel": bool(f["channel"]),
+           "collab": bool(f["collab"])}
+    out["top"] = all(out.values()) and f["events"] >= PATH_EVENTS
+    return ({k: True for k in out} if f["top_at"] is not None else out), f
+
+
+def path_top(con, oid: int) -> bool:
+    """A student initiative at the top: an official club's tools, no ✓. After the merge, the afisha's check for an
+    unofficial club's events (seats.py, afisha_ok) lets a top club's own events in by this (or orgs.top_at)."""
+    return bool(one(con, "SELECT top_at IS NOT NULL FROM orgs WHERE id = ?", oid)[0])
+
+
+def _reached_top(con, oid: int) -> None:
+    """Once: the top kept, the owner told (the lanyard is made by hand)."""
+    with tx(con):
+        if con.execute("UPDATE orgs SET top_at = ? WHERE id = ? AND top_at IS NULL", (core.now(), oid)).rowcount:
+            log_action(con, None, "path_top", f"org:{oid}")
+            for (uid,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
+                notify(con, uid, "club_top", f"top:{oid}")
+    core._SHARED.clear()  # the clubs list's block
 
 
 def _official_request(r: sqlite3.Row | None) -> dict | None:
@@ -461,18 +492,23 @@ def _official_request(r: sqlite3.Row | None) -> dict | None:
 
 
 def official_path(con, v: Viewer, oid: int) -> dict | None:
-    """The card in Studio, for the club's team: the steps and the latest request. None: official, or not a club."""
+    """The ladder in Studio, for the club's team: each level, the counts toward the next, and the latest request for
+    the ✓. None: official, or not a club."""
     if not role_in(con, v, oid):
         raise ApiError("forbidden")
     o = _org(con, oid)
     if o["official"] or o["kind"] != "club":
         return None
+    steps, f = _path_steps(con, oid)
+    if steps["top"] and not o["top_at"]:
+        _reached_top(con, oid)
     last = one(con, "SELECT * FROM official_requests WHERE org_id = ? ORDER BY id DESC LIMIT 1", oid)
-    return {"steps": _path_steps(con, oid), "request": _official_request(last)}
+    return {"steps": steps, "members": f["members"], "events": f["events"], "request": _official_request(last)}
 
 
 def ask_official(con, v: Viewer, oid: int) -> dict | None:
-    """All five done: the President or a Vice asks. One pending request per club; after a no, again in 30 days."""
+    """At the top, the President or a Vice may ask DMP for the ✓ (not a level). One pending request per club; after a
+    no, again in 30 days."""
     if role_in(con, v, oid) not in ("president", "vice"):
         raise ApiError("forbidden")
     o = _org(con, oid)
@@ -484,7 +520,7 @@ def ask_official(con, v: Viewer, oid: int) -> dict | None:
             raise ApiError("conflict", "pending")
         if last and last["status"] == "rejected" and last["decided_at"] + CLUB_REAPPLY > core.now():
             raise ApiError("rate_limited")
-        if not all(_path_steps(con, oid).values()):
+        if not o["top_at"]:
             raise ApiError("bad_input", "steps")
         rid = con.execute("INSERT INTO official_requests (org_id, created_at) VALUES (?, ?)", (oid, core.now())).lastrowid
         log_action(con, v.id, "opath_ask", f"opath:{rid}", json.dumps({"title": o["name"]}))
