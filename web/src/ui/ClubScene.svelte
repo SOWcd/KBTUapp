@@ -136,16 +136,16 @@
     {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
   {:else if SCN[look]}
-    <!-- round 11 (owner, Nov 6: round 10 too simple; KMA and Geology are the bar; .claude/reports/club-lanyards/round11/
-         gen/gen-r11.py): each a scene in three depths, the subject in the well under the medallion. Enactus: a business
-         district at dawn, a growth line, their phoenix rising gold out of it, origami birds in flight. Case: a boardroom
-         at night, the deck's chart on the glass, the table, a laptop lit with a chart, the case's folder with their book's
-         line. KNL: the city's lights and their trails, a wet road, a grand tourer in deep navy with gold wheels, its
-         headlight on. Literature: shelves, the desk, an open book, the inkwell and quill under a lamp. Tumar: their
-         ornament's frieze and rosette in gold, two stage lights, the staff's lines with notes, a dombra on the boards.
-         Web3: the flag's sun, a network over the sky, the steppe's ridges, a chain of glass blocks. Zhyly Zhurek: hearts
-         drifting in warm light, two hands holding a heart with their flame. The badge's band: the far and mid layers,
-         their mark on top -->
+    <!-- round 11 (owner, Nov 6: round 10 too simple; KMA and Geology are the bar), round 12 (owner: "better, but can be
+         much better"; an art director's craft points; .claude/reports/club-lanyards/round12/gen/gen-r12.py): three depths,
+         one hero each drawn big and fine in the space under the medallion, the area behind the text calm, light from the
+         upper left, depth by overlap and tone, no bloom. Enactus: their phoenix rising clean over a low district at dawn,
+         their origami bird folded big. Case: the deck's chart on the glass, the table, the laptop with the case's numbers,
+         their folder. KNL: a grand tourer on a wet road at night, its reflection under it. Literature: shelves, the desk,
+         a big open book with its page edges, a quill across it. Tumar: their ornament along the top, the stage, a dombra
+         laid down with its bridge and two strings. Web3: the flag's sun, a network, the steppe, four glass blocks on one
+         grid. Zhyly Zhurek: two cupped hands holding a coral heart with their flame. The badge's band: the far and mid
+         layers, their mark on top -->
     {#if wide}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="l z near" src={L(SCN[look] + '-near')} alt="" />
     {:else}<img class="l z far" src={L(SCN[look] + '-far')} alt="" /><img class="l" src={L(SCN[look] + '-mid')} alt="" /><img class="word bw {look}" src={MARK[look]} alt="" />{/if}
   {/if}
