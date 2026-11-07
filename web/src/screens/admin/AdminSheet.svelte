@@ -3,6 +3,8 @@
   // top (iOS Settings: while typed, the page steps aside for People, Clubs and Awards); "To decide" first whenever
   // something waits (where it stands is fixed for this opening, so a decided last card doesn't jump the page); the
   // admins' numbers card; then the places, one group of rows. A moderator gets the queue and his two places only.
+  // Events in the same search (owner, Nov 7): a tap runs one as its organizers do in Studio (EventManage, staff).
+  // The map's flaws: a quiet row at the very bottom (owner, Nov 7: the card on top pulled from moderation).
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Building from '@lucide/svelte/icons/building-2';
   import MedalIcon from '@lucide/svelte/icons/medal';
@@ -11,10 +13,13 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Users from '@lucide/svelte/icons/users';
   import Bell from '@lucide/svelte/icons/bell';
+  import MapPinned from '@lucide/svelte/icons/map-pinned';
   import { untrack, type Component } from 'svelte';
-  import { api, type StaffRow } from '../../lib/api';
+  import { api, staffEvents, type EventCard, type StaffRow } from '../../lib/api';
   import { MANUAL, manualMedal, manualTitle } from '../../lib/awards';
-  import { data } from '../../lib/state/data.svelte';
+  import { data, eventById } from '../../lib/state/data.svelte';
+  import { relDay } from '../../lib/time';
+  import Poster from '../../ui/Poster.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { open, type Overlay } from '../../lib/state/ui.svelte';
@@ -46,13 +51,24 @@
   let q = $state('');
   const s = $derived(q.trim().toLowerCase().replace(/^@/, ''));
   let people = $state<StaffRow[] | null>(null);
+  let events = $state<EventCard[] | null>(null);
   $effect(() => {
     const k = s;
-    people = null;
+    people = null; events = null;
     if (k.length < 2 && !/^\d+$/.test(k)) return;
-    const id = setTimeout(() => api.staffSearch(k).then((l) => { if (s === k) people = l; }).catch(() => { if (s === k) people = []; }), 300);
+    const id = setTimeout(() => {
+      api.staffSearch(k).then((l) => { if (s === k) people = l; }).catch(() => { if (s === k) people = []; });
+      if (admin && k.length >= 2) api.adminFindEvents(k).then((l) => { if (s === k) events = l; }).catch(() => { if (s === k) events = []; });
+    }, 300);
     return () => clearTimeout(id);
   });
+  /** An event from the search, run as its organizers do: its routes go as staff (api staffEvents) while it's open. */
+  function manage(e: EventCard) {
+    if (!eventById(e.id)) data.opened.push(e);
+    staffEvents.add(e.id);
+    sheets.manage(e.id, true);
+  }
+  const status = (e: EventCard) => (e.status === 'draft' ? t('studio.draft') : e.status === 'cancelled' ? t('event.cancelled') : '');
   const clubs = $derived(s ? data.orgs.filter((o) => o.name.toLowerCase().includes(s) || o.short?.toLowerCase() === s).slice(0, 8) : []);
   const awards = $derived(s ? MANUAL.filter((a) => (!a.creator || owner) && manualTitle(a).toLowerCase().includes(s)) : []);
   const go = (f: () => unknown) => { haptic.tap(); f(); };
@@ -79,6 +95,15 @@
           {/each}
         </Group>
       {/if}
+      {#if events?.length}
+        <Group caption={t('adm.events')}>
+          {#each events as e (e.id)}
+            <Row dense title={e.title} subtitle={[e.org.name, relDay(e.startsAt), status(e)].filter(Boolean).join(' · ')} accessory="chevron" onclick={() => go(() => manage(e))}>
+              {#snippet lead()}<Poster item={e} size={36} radius={10} dim={e.status !== 'published'} />{/snippet}
+            </Row>
+          {/each}
+        </Group>
+      {/if}
       {#if clubs.length}
         <Group caption={t('adm.clubs')}>
           {#each clubs as o (o.id)}
@@ -97,7 +122,7 @@
           {/each}
         </Group>
       {/if}
-      {#if people && !people.length && !clubs.length && !awards.length}<EmptyState inline text={t('adm.nothingFound')} />{/if}
+      {#if people && !people.length && !events?.length && !clubs.length && !awards.length}<EmptyState inline text={t('adm.nothingFound')} />{/if}
     </div>
   {/if}
 
@@ -117,6 +142,10 @@
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
       {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
     </Group>
+    {#if data.inbox?.flaws}
+      <Group><Row title={t('mf.title')} value={String(data.inbox.flaws)} accessory="chevron" onclick={() => go(() => sheets.mapFlaws())}>
+        {#snippet lead()}<span class="gi"><MapPinned size={22} strokeWidth={1.9} /></span>{/snippet}</Row></Group>
+    {/if}
   </div>
 </Sheet>
 

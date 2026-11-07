@@ -8,7 +8,7 @@ import type { Graph } from '../route';
 
 export * from './types';
 export { ApiErr } from './errors';
-export { localize, original, translated } from './client';
+export { localize, original, staffEvents, translated } from './client';
 
 export interface Api {
   me(): Promise<Me>;
@@ -42,6 +42,7 @@ export interface Api {
   // admin (pilot): clubs and their teams; who = @username or a Telegram ID of someone who opened the app once
   adminOrgs(): Promise<AdminOrg[]>;
   adminOrgEvents(org: Id): Promise<AdminEvent[]>;
+  setRegUntil(id: Id, until: Ts | 'now' | null): Promise<EventFull>; // registration closes now / then / at the start
   adminCreateOrg(i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg>;
   adminSetRole(org: Id, who: string, role: OrgRole | 'none'): Promise<AdminOrg>;
   adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete
@@ -256,6 +257,7 @@ export interface Api {
   staff(): Promise<Staff>;                                // admin: the app's team and the banned
   staffFind(username: string): Promise<StaffRow>;          // admin: anyone who opened the app, by @username
   staffSearch(q: string): Promise<StaffRow[]>;
+  adminFindEvents(q: string): Promise<EventCard[]>;      // the admin: any event by its title, upcoming first
   staffMutes(): Promise<import('./types').StaffMute[]>;   // staff: my work-item notifications
   setStaffMute(kind: string, on: boolean): Promise<import('./types').StaffMute[]>;                 // admin → People: by name, @username, student ID or id
   inbox(): Promise<import('./types').Inbox>;               // staff: everything waiting, and what was done lately

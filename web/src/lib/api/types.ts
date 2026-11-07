@@ -604,13 +604,13 @@ export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
 export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
 
 /** Admin → Inbox (server logic/inbox.py): everything waiting for the staff, by role; hidden: already out of sight,
- *  a person waits for the verdict. `flaws` is the map's open flaws as one card. */
+ *  a person waits for the verdict. `flaws`: the map's open flaws, a count for Admin's quiet bottom row (the admin's). */
 type InboxOf<K extends string, D> = { kind: K; key: string; at: Ts; hidden: boolean; data: D };
 export type InboxItem = InboxOf<'report', ReportItem> | InboxOf<'capp', ClubApplication> | InboxOf<'opath', OfficialRequest & { org: OrgRef; members: number }> | InboxOf<'fpost', ChannelModPost>
-  | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest> | InboxOf<'flaws', { count: number }>;
+  | InboxOf<'freply', ChannelModReply> | InboxOf<'chat', Chat & { at: Ts }> | InboxOf<'claim', RosterRequest>;
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
-export interface Inbox { items: InboxItem[]; done: DoneRow[] }
+export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }
 
 export interface PersonCard extends PersonRef {
   forum?: ForumMe;              // their skills and "open to projects", for those who see the forum

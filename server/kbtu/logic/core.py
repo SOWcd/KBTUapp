@@ -7,7 +7,7 @@ import re
 import sqlite3
 import time
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt (§4.3)
@@ -50,6 +50,10 @@ class Viewer:
     id: int
     role: str                   # platform role: user / moderator / admin
     student: bool               # signed in with KBTU (only students act, §2)
+    # Admin → an event (app.viewer, X-Staff-Event): the app's admin acting as that event's organizers, in this one request
+    # on that event's own routes; `used` collects the rights lent, and the request's audit line names them
+    staff_org: int = 0
+    used: list = field(default_factory=list, compare=False, hash=False)
 
 
 def titled(r, key: str = "title") -> dict:
@@ -189,9 +193,19 @@ def rights_of(con, uid: int, oid: int) -> frozenset[str]:
     return _rights_from(m["role"], m["rights"]) if m else frozenset()
 
 
+# what the admin may do on another club's event from Admin: run it (edit, updates, attendees, cancel); never its money
+# (prices, receipts) nor its door (who came is the organizers' at the door)
+STAFF_RIGHTS = frozenset({"events"})
+
+
 def can(con, v: Viewer, oid: int | None, right: str) -> bool:
-    """I may do this in this club (students only act, §2)."""
-    return bool(v.student and oid and right in rights_of(con, v.id, oid))
+    """I may do this in this club (students only act, §2); or, from Admin, the admin on that one event (STAFF_RIGHTS)."""
+    if v.student and oid and right in rights_of(con, v.id, oid):
+        return True
+    if oid and oid == v.staff_org and right in STAFF_RIGHTS:
+        v.used.append(right)
+        return True
+    return False
 
 
 def _may(con, v: Viewer, oid: int, right: str) -> None:

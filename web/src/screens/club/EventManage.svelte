@@ -13,7 +13,7 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
-  import { api, ApiErr, type Attendee, type Id, type PersonRef } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -21,6 +21,8 @@
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
+  import Notice from '../../ui/Notice.svelte';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { inner, may } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
@@ -29,11 +31,14 @@
   import Row from '../../ui/Row.svelte';
   import Avatar from '../../ui/Avatar.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money
+  let { overlay, id, staff = false }: { overlay: Overlay; id: Id; staff?: boolean } = $props();
 
   const e = $derived(eventById(id));
   const mem = $derived(session.me?.memberships.find((m) => m.org.id === e?.org.id));
-  const head = $derived(may(mem, 'events'));
+  const head = $derived(staff || may(mem, 'events'));
+  // Admin put it in staffEvents before opening; it leaves with this screen, so the event's own sheet is a student's again
+  $effect(() => () => { if (staff) staffEvents.delete(id); });
   const started = $derived(!!e && e.startsAt <= nowTs());
   const live = $derived(e?.status === 'published');
 
@@ -84,6 +89,17 @@
         openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
   }
+  // Admin's one quick action (organizers asked to stop sign-ups): closes now, the toast's Undo puts the old deadline back
+  const regClosed = $derived(!!e?.regUntil && e.regUntil <= nowTs());
+  const regOn = (r: EventCard['regUntil']) => { const x = eventById(id); if (x) x.regUntil = r; };
+  async function setReg(until: number | 'now' | null, done: string, was: EventCard['regUntil']) {
+    try { regOn((await api.setRegUntil(id, until)).regUntil); studioChanged(); haptic.ok(); say(done, 'locked_3d', () => void setReg(was ?? null, t(!was || was > nowTs() ? 'mg.regOpened' : 'mg.regClosed'), e?.regUntil)); }
+    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  async function closeReg() {
+    if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t('mg.closeRegText'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
+    void setReg('now', t('mg.regClosed'), e?.regUntil);
+  }
   async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
@@ -94,6 +110,7 @@
 <Sheet {overlay} icon={SlidersHorizontal} full title={t('mg.title')}>
   {#if e}
     <div class="pg">
+      {#if staff}<Notice icon={ShieldCheck} text={t('mg.asStaff')} />{/if}
       <Group>
         <Row title={e.title} subtitle="{relDay(e.startsAt)}, {time(e.startsAt)} · {placeOf(e.place)}" accessory="chevron" onclick={() => sheets.event(id)}>
           {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
@@ -132,7 +149,7 @@
       {/if}
 
       <Group>
-        {#if live && !e.guestHost}<!-- a partner's event has no door -->
+        {#if live && !e.guestHost && !staff}<!-- a partner's event has no door; Admin never works the door -->
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
         {/if}
@@ -142,14 +159,20 @@
           {#if crewN != null && live && !inner(e) && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
             <Row icon={ScanLine} title={t('crew.title')} count={crewN} accessory="chevron" onclick={() => sheets.crew(id, (n) => (crewN = n))} />
           {/if}
-          {#if live && !price && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
+          {#if live && !price && !e.guestHost && !staff}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
           <Row icon={Pencil} title={t('studio.edit')} accessory="chevron" onclick={() => sheets.editor(e.org.id, id)} />
-          {#if e.status !== 'cancelled'}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
+          {#if e.status !== 'cancelled' && !staff}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
           {#if e.needsVolunteers}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         {/if}
         <Row icon={Eye} title={t('mg.asStudents')} accessory="chevron" onclick={() => sheets.event(id)} />
       </Group>
 
+      {#if staff && live && !e.guestHost && (!started || e.lateSignup)}
+        <Group>
+          {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
+          {:else}<Row tone="destructive" title={t('mg.closeReg')} onclick={closeReg} />{/if}
+        </Group>
+      {/if}
       {#if head && live && !started}<Group><Row tone="destructive" title={t('studio.cancelEvent')} onclick={cancelEvent} /></Group>{/if}
       {#if head && e.status === 'cancelled'}<Group><Row tone="destructive" title={t('studio.deleteEvent')} onclick={removeEvent} /></Group>{/if}
     </div>

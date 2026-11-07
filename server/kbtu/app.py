@@ -96,14 +96,28 @@ async def conn(request: Request) -> AsyncIterator[sqlite3.Connection]:
 # every route's connection and caller (create() keeps the pool and the config in app.state)
 Con = Annotated[sqlite3.Connection, Depends(conn)]
 
-def viewer(request: Request, con: Con) -> Viewer:
+def viewer(request: Request, con: Con) -> Iterator[Viewer]:
     cfg = request.app.state.cfg
     head = request.headers.get("authorization", "")
     tg = auth.check_init_data(head[4:], cfg.bot_token) if head.startswith("tma ") else None
     if not tg:
         raise ApiError("forbidden", "init_data")
     request.state.tg = tg
-    return _upsert(con, tg, cfg.admins)
+    v = _upsert(con, tg, cfg.admins)
+    if (eid := request.headers.get("x-staff-event")) is None:
+        yield v
+        return
+    # Admin → an event: the app's admin acts as its organizers (logic.can, STAFF_RIGHTS), only on that event's own
+    # routes and only for this request; anyone else sending it, or on another route, is refused
+    e = logic.one(con, "SELECT org_id FROM events WHERE id = ?", int(eid)) if eid.isascii() and eid.isdigit() and len(eid) < 12 else None
+    if v.role != "admin" or not e or str(request.path_params.get("eid")) != eid:
+        raise ApiError("forbidden", "staff")
+    v = Viewer(v.id, v.role, v.student, staff_org=e["org_id"])
+    yield v
+    # reached only when the route answered: every write and every list of people (attendees, a meeting's answers, the
+    # volunteers) the owner's log names; the event's own card alone isn't
+    if v.used and (request.method != "GET" or request.scope["route"].path != "/api/events/{eid}"):
+        logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}"}))
 
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
     """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
@@ -1647,6 +1661,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.get("/api/admin/people")
     def admin_people(con: Con, v: Me, q: str = ""):
         return logic.find_people(con, v, q)
+
+    @app.get("/api/admin/events")
+    def admin_find_events(con: Con, v: Me, q: str = ""):
+        return logic.admin_find_events(con, v, q)
+
+    @app.put("/api/events/{eid}/reg-until")
+    def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.set_reg_until(con, v, eid, body.get("until"))
 
     @app.delete("/api/admin/events/{eid}", status_code=204)
     def admin_delete_event(eid: int, con: Con, v: Me):

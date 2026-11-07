@@ -319,6 +319,9 @@ def audit(con, v: Viewer) -> list[dict]:
         elif kind == "org" and tid.isdigit():
             o = one(con, "SELECT name FROM orgs WHERE id = ?", int(tid))
             named = o["name"] if o else None
+        elif kind == "event" and tid.isdigit():
+            e = one(con, "SELECT title FROM events WHERE id = ?", int(tid))
+            named = e["title"] if e else None
         out.append({"id": a["id"], "actor": person_ref(p) if p else None, "action": a["action"], "target": a["target"],
                     "targetName": named, "data": json.loads(a["data"] or "{}"), "at": a["at"]})
     return out

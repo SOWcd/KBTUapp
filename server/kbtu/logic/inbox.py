@@ -1,5 +1,5 @@
 """Admin → Inbox (review Nov 3): everything that waits for the app's staff in one typed list, one request, filtered by
-role (a moderator never gets club applications, roster claims or the map's flaws); its count is the Admin shield's
+role (a moderator never gets club applications or roster claims; the admin also gets the map's open flaws as a count); its count is the Admin shield's
 badge. And "Done": what the staff decided lately, who and when, with the Undo where there is one."""
 from __future__ import annotations
 
@@ -39,11 +39,10 @@ def inbox(con, v: Viewer) -> dict:
             items.append(_item("opath", r["id"], r["createdAt"], False, r))
         for r in roster_requests(con, v):
             items.append(_item("claim", r["id"], 0, False, r))
-        f = one(con, "SELECT COUNT(*), MIN(created_at) FROM map_flaws WHERE done_at IS NULL")
-        if f[0]:
-            items.append(_item("flaws", "all", f[1], False, {"count": f[0]}))
     items.sort(key=lambda x: (not x["hidden"], not x.pop("harm"), x["at"]))
-    return {"items": items, "done": done(con, v)}
+    # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide (owner, Nov 7)
+    flaws = one(con, "SELECT COUNT(*) FROM map_flaws WHERE done_at IS NULL")[0] if admin else 0
+    return {"items": items, "done": done(con, v), "flaws": flaws}
 
 
 def _item(kind: str, key, at: int, hidden: bool, data: dict, harm: bool = False) -> dict:
@@ -73,8 +72,7 @@ def count(con, v: Viewer) -> int:
         from .. import roster  # it imports kbtu.logic itself
         n += one(con, "SELECT COUNT(*) FROM club_applications WHERE status = 'pending'")[0]
         n += one(con, "SELECT COUNT(*) FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.status = 'pending' AND o.official = 0")[0]
-        n += len(roster.requests(con, v))
-        n += one(con, "SELECT EXISTS (SELECT 1 FROM map_flaws WHERE done_at IS NULL)")[0]
+        n += len(roster.requests(con, v))  # the map's flaws aren't counted: a quiet row at Admin's bottom (owner, Nov 7)
     return n
 
 

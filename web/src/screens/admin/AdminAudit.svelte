@@ -14,7 +14,7 @@
 
   const KNOWN = ['staff_role', 'ban', 'unban', 'report_remove', 'report_keep', 'restore', 'post_hide', 'feature', 'grant', 'ungrant', 'grant_link', 'grant_link_used', 'grant_link_revoked',
     'official', 'org_create', 'org_edit', 'org_hide', 'role_change', 'presidency_transfer', 'president_handover', 'president_link',
-    'receipt_reject', 'registry_search', 'registry_roster', 'registry_export', 'attendees_export', 'delete_my_data', 'first50',
+    'receipt_reject', 'registry_search', 'registry_roster', 'registry_export', 'attendees_export', 'staff_event', 'delete_my_data', 'first50',
     'link_create', 'link_delete', 'link_revoke'] as const;
   const label = (a: string) => ((KNOWN as readonly string[]).includes(a) ? t(`audit.a.${a as (typeof KNOWN)[number]}`) : a);
   // the few details worth a line: a role's change, a ban's reason
@@ -23,6 +23,7 @@
     if (r.action === 'staff_role' && d.to) return `${t(`staff.role.${d.from as 'user'}`)} → ${t(`staff.role.${d.to as 'user'}`)}`;
     if (r.action === 'ban' && d.reason) return d.reason;
     if (r.action.startsWith('link_')) return `/${d.slug}`;
+    if (r.action === 'staff_event') return (d.do ?? '').replace('/api/events/{eid}', '');  // what was done: "PUT /reg-until"
     return '';
   };
 </script>

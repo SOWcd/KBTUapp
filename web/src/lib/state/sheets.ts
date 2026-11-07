@@ -51,7 +51,7 @@ export const sheets = {
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */
-  manage: (_id: Id) => {},
+  manage: (_id: Id, _staff?: boolean) => {},
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (_org: Id) => {},
   /** the clubs' rosters (PLAN 95): the claims I confirm */

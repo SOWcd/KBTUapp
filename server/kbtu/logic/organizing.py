@@ -564,6 +564,34 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
 EVENT_UNDO = 86400  # Admin's delete: hidden at once, gone for good a day later (Admin → Done has the Undo till then)
 
 
+def set_reg_until(con, v: Viewer, eid: int, until: object) -> dict:
+    """Registration closes now ("now"), at a time up to the start, or stays open to the start (null): Admin's "Close
+    registration" and its Undo (the editor's "Sign-up until" sets the same column)."""
+    with tx(con):
+        e = _staff_event(con, v, eid, "events")
+        if e["status"] == "cancelled":
+            raise ApiError("closed")
+        at = core.now() if until == "now" else until
+        if not (at is None or isinstance(at, int) and not isinstance(at, bool) and 0 < at <= e["starts_at"]):
+            raise ApiError("bad_input")
+        con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (at, core.now(), eid))
+    return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
+
+
+def admin_find_events(con, v: Viewer, q: str) -> list[dict]:
+    """Admin's search: events whose title has `q` (any club, any status), upcoming first (the soonest), then the past
+    (the latest). ponytail: titles filtered in Python (SQLite's LIKE folds ASCII only); an FTS index past ~50k events."""
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    k = " ".join(str(q or "").split()).casefold()
+    if len(k) < 2:
+        return []
+    ids = [r[0] for r in rows(con, """SELECT id, title FROM events e WHERE memo_only = 0 AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || e.id)
+        ORDER BY starts_at < ?, CASE WHEN starts_at >= ? THEN starts_at END, starts_at DESC""", core.now(), core.now()) if k in r[1].casefold()][:20]
+    found = {e["id"]: e for e in rows(con, f"SELECT * FROM events WHERE id IN ({_qs(ids)})", *ids)} if ids else {}
+    return cards(con, v, [found[i] for i in ids])
+
+
 def admin_delete_event(con, v: Viewer, eid: int) -> None:
     """The admin deletes a club's event (a test, a mistake; paid and photographed too): hidden from everyone at once
     (hidden_at), deleted with its receipts and photos by the bot's round after EVENT_UNDO (events_gone)."""

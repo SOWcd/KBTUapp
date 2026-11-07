@@ -6,7 +6,7 @@
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-  import { api, ApiErr, type Attendee, type Id } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic } from '../../lib/tg';
   import { eventById } from '../../lib/state/data.svelte';
@@ -42,11 +42,13 @@
   const ev = $derived(eventById(id));
   const price = $derived(ev?.price ?? 0);
   // a co-host's event team reads short names only: no receipts, no file, no profiles (server cohosts.py)
-  const host = $derived(!ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
+  // the app's admin from Admin (staffEvents) reads it as the host's team does; not the door, not the receipts (money)
+  const staff = $derived(staffEvents.has(id));
+  const host = $derived(staff || !ev || may(session.me?.memberships.find((m) => m.org.id === ev.org.id), 'events'));
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
   const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
-  const doorOpen = $derived(!!ev && Date.now() / 1000 >= ev.startsAt - 3 * 3600 && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
+  const doorOpen = $derived(!staff && !!ev && Date.now() / 1000 >= ev.startsAt - 3 * 3600 && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
   async function mark(a: Attendee) {
@@ -89,14 +91,14 @@
     {#if shown.length}
       <Group>
         {#each shown as a (a.person.id)}
-          {@const acts = !!a.receipt || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
+          {@const acts = (!!a.receipt && !staff) || undoFor === a.person.id || (!a.checkedInAt && a.status === 'going' && doorOpen)}
           <!-- a row with buttons at its end can't be a button itself: then the avatar opens the person -->
           <Row dense title={a.fullName} subtitle={a.person.name + (a.free ? ' · ' + t('att.free') : '') + (a.walkIn ? ' · ' + t('att.walkIn') : '') + (a.manual ? ' · ' + t('att.manual') : '')}
             {...(acts ? { trailing: end } : { detail: end, onclick: host ? () => sheets.person(a.person.id) : undefined })}>
             {#snippet lead()}<Avatar person={a.person} size={36} tappable={acts && host} />{/snippet}
           </Row>
           {#snippet end()}
-            {#if a.receipt}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : 'gray'} label={t('rc.title')}
+            {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : 'gray'} label={t('rc.title')}
               onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
             {#if a.checkedInAt}
               {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}

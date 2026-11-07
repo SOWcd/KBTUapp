@@ -44,13 +44,14 @@ def test_inbox_by_role_and_count(env):
     con.execute("INSERT INTO map_flaws (user_id, ver, floor, u, v, body, created_at) VALUES (?, 'main', 1, 0.5, 0.5, 'wrong door', 5)", (ids["mod"],))
     adm = c.get("/api/admin/inbox", headers=tma(60)).json()
     mod = c.get("/api/admin/inbox", headers=tma(61)).json()
-    assert {x["key"] for x in adm["items"]} == {f"report:comment:{cid}", f"chat:{chat}", f"capp:{app['id']}", "flaws:all"}
+    assert {x["key"] for x in adm["items"]} == {f"report:comment:{cid}", f"chat:{chat}", f"capp:{app['id']}"}
+    assert adm["flaws"] == 1 and mod["flaws"] == 0  # the map's flaws: a quiet count, not a card nor the badge
     assert {x["key"] for x in mod["items"]} == {f"report:comment:{cid}", f"chat:{chat}"}   # clubs and the map are the admin's
-    assert c.get("/api/me", headers=tma(60)).json()["counters"]["inbox"] == 4
+    assert c.get("/api/me", headers=tma(60)).json()["counters"]["inbox"] == 3
     assert c.get("/api/me", headers=tma(61)).json()["counters"]["inbox"] == 2
     assert c.get("/api/me", headers=tma(63)).json()["counters"]["inbox"] == 0
     assert c.get("/api/admin/inbox", headers=tma(63)).status_code == 403
-    assert [x["key"] for x in adm["items"]][:2] == [f"chat:{chat}", "flaws:all"]  # the oldest first
+    assert [x["key"] for x in adm["items"]][0] == f"chat:{chat}"  # the oldest first
 
 
 def test_second_decision_names_the_first(env):

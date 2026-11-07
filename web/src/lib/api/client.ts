@@ -17,13 +17,21 @@ function first(path: string): Promise<Response> | undefined {
   return f.auth === tg.initData && Date.now() - f.at < 20_000 ? p : undefined;
 }
 
+/** Events the admin opened from Admin: their own routes go as their organizers' (server app.viewer, X-Staff-Event),
+ *  each write in the owner's log. Only Admin adds to it. */
+export const staffEvents = new Set<Id>();
+const staffOf = (path: string): Record<string, string> => {
+  const id = /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1];
+  return id && staffEvents.has(+id) ? { 'X-Staff-Event': id } : {};
+};
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let r: Response;
   const raw = body instanceof Blob; // a file goes as the body itself (POST /api/photos)
   try {
     r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
       method,
-      headers: { Authorization: `tma ${tg.initData}`, ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+      headers: { Authorization: `tma ${tg.initData}`, ...staffOf(path), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
     }));
   } catch {
@@ -116,6 +124,7 @@ export const server: Api = {
   orgs: () => call('GET', '/orgs'),
   adminOrgs: () => call('GET', '/admin/orgs'),
   adminOrgEvents: (org) => call('GET', `/admin/orgs/${org}/events`),
+  setRegUntil: (id, until) => call('PUT', `/events/${id}/reg-until`, { until }),
   team: (org) => call('GET', `/orgs/${org}/members`),
   people: (org) => call('GET', `/orgs/${org}/people`),
   invite: (org, dept) => call('POST', `/orgs/${org}/invites`, dept ? { dept } : {}),
@@ -324,6 +333,7 @@ export const server: Api = {
   staff: () => call('GET', '/admin/staff'),
   staffFind: (username) => call('GET', '/admin/staff/find?username=' + encodeURIComponent(username)),
   staffSearch: (q) => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
+  adminFindEvents: (q) => call('GET', '/admin/events?q=' + encodeURIComponent(q)),
   staffMutes: () => call('GET', '/admin/notifications'),
   setStaffMute: (kind, on) => call('PUT', `/admin/notifications/${kind}`, { on }),
   inbox: () => call('GET', '/admin/inbox'),

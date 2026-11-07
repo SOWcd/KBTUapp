@@ -105,7 +105,7 @@
   sheets.assistant = (ctx) => asStudent(() => lazy(() => import('./screens/assistant/Assistant.svelte'), { ctx }));
   sheets.attendees = (id) => lazy(() => import('./screens/club/Attendees.svelte'), { id });
   sheets.screens = (code, event) => lazy(() => import('./screens/club/ScreenSheet.svelte'), { code, event });
-  sheets.manage = (id) => lazy(() => import('./screens/club/EventManage.svelte'), { id });
+  sheets.manage = (id, staff) => lazy(() => import('./screens/club/EventManage.svelte'), { id, staff });
   sheets.memo = (org) => lazy(() => import('./screens/club/MemoSheet.svelte'), { org });
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.rosterRequests = (ondone, org) => lazy(() => import('./screens/club/RosterRequests.svelte'), { ondone, org });

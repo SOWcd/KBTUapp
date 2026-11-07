@@ -133,10 +133,10 @@
 
   // what a decided card was about, after its verdict on the slim line
   const what = (it: InboxItem): string => it.kind === 'report' ? it.data.text : it.kind === 'capp' ? it.data.name : it.kind === 'opath' ? it.data.org.name : it.kind === 'chat' ? it.data.title
-    : it.kind === 'claim' ? it.data.name : it.kind === 'flaws' ? '' : it.data.body;
+    : it.kind === 'claim' ? it.data.name : it.data.body;
   const tagOf = (it: InboxItem): string =>
     it.kind === 'report' ? t(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? t('adm.cappTag') : it.kind === 'opath' ? t('adm.k.opath') : it.kind === 'fpost' ? t('adm.rep.fpost')
-      : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : it.kind === 'claim' ? t('adm.k.claim') : t('mf.title');
+      : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : t('adm.k.claim');
   function more(it: InboxItem): MenuItem[] {
     if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: t('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
     if (it.kind === 'fpost' && owner && it.data.anon) { const id = it.data.id; return [{ label: t('fc.reveal'), onselect: () => reveal(id) }]; }
@@ -289,11 +289,6 @@
             {@render two(t('ro.confirm'), () => decide(it, t('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
               t('ro.decline'), () => decide(it, t('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
           </div>
-        {:else}
-          <div class="card flaws" out:fold>
-            {@render head(it, [])}
-            <div class="flat"><Row title={t('adm.flawsN', { n: it.data.count })} accessory="chevron" onclick={() => { haptic.tap(); sheets.mapFlaws(); }} /></div>
-          </div>
         {/if}
       {/each}
     </div>
@@ -354,8 +349,6 @@
   .cb > :global(.fld) { align-self: stretch; }
   .cb > .btns { align-self: stretch; }
   .cb p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; }
-  .flaws { padding-bottom: 0; overflow: hidden; }
-  .flat { margin: 0 calc(-1 * var(--s-4)); }
   .ok { display: inline-flex; color: var(--success); }
   .slim { animation: settle 260ms var(--ease-spring); }
   @keyframes settle { from { opacity: 0; transform: scale(0.98); } }
