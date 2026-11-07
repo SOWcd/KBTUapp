@@ -158,7 +158,8 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
             raise ApiError("conflict", "pick")  # none open or several: the app asks which
         sid = live[0]["session"]
     s = _mine(con, v, sid)
-    con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, r["code"]))
+    if not con.execute("UPDATE qr_screens SET session_id = ?, paired_by = ? WHERE code = ? AND session_id IS NULL", (sid, v.id, r["code"])).rowcount:
+        return bind(con, key, v, code, sid)  # another scan bound it first: the session it really got, if mine (or gone: rotated)
     return _row(con, key, s)
 
 
@@ -277,11 +278,12 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
         con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (sid, uid, t))
         if out:  # leaving: the last time counts (out and back in, out again)
             con.execute("UPDATE qr_marks SET left_at = ? WHERE session_id = ? AND user_id = ?", (t, sid, uid))
+        came = student
         if student:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
-            if s["event_id"] and not out:  # an event's own session: that event's check-in too
-                logic.screen_came(con, s["event_id"], uid, t)
-    return {"title": s["title"], "done": student, "left": out}
+            if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
+                came = logic.screen_came(con, s["event_id"], uid, t)
+    return {"title": s["title"], "done": came, "left": out}
 
 
 def became_student(con, uid: int) -> None:

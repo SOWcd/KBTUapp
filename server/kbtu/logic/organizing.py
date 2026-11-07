@@ -141,7 +141,7 @@ def meeting_answers(con, v: Viewer, eid: int) -> list[dict]:
         answer = "yes" if p["status"] in ("going", "hold") else "no" if p["status"] == "cancelled" else "none"
         came = p["checked_in_at"] is not None
         out.append({"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "role": p["role"],
-                    "answer": answer, "note": p["note"] if answer == "no" else None, "came": came, "probation": bool(p["probation"])})
+                    "answer": answer, "note": p["note"], "came": came, "probation": bool(p["probation"])})
     return sorted(out, key=lambda x: (-RANK[x["role"]], x["fullName"]))
 
 
@@ -706,21 +706,21 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
     return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
 
 
-def screen_came(con, eid: int, uid: int, t: int) -> None:
+def screen_came(con, eid: int, uid: int, t: int) -> bool:
     """A counted scan of an event's big-screen QR (checkin.py): that person came, as the door scanner would say. A ticket
     they hold is checked in; a free public event registers them on the spot (walk_in); a paid one needs a ticket and a
     team-only one counts its members only, a leaders' meeting only those already on its list (the scan still shows in
     the session's own list). Only within the door's window (as the scanner): a session started days off counts no one,
-    nor does a hidden or a partner's event."""
+    nor does a hidden or a partner's event. True: they count as came (now or before)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or e["status"] != "published" or e["hidden_at"] or e["guest_host"] \
             or not e["starts_at"] - DOOR_EARLY <= t <= (e["ends_at"] or e["starts_at"] + DOOR_LATE):
-        return
+        return False
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r or r["status"] != "going":
         if e["price"] or e["visibility"] == "leaders" \
                 or e["visibility"] == "members" and not one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid):
-            return
+            return False
         if r:
             con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                         (t, r["id"]))
@@ -730,6 +730,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> None:
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r["checked_in_at"]:
         _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
+    return True
 
 
 def checkin(con, v: Viewer, eid: int, raw: str) -> dict:

@@ -482,7 +482,7 @@
         {#each meetGroups as [title, list] (title)}
           <Group caption="{t(title)} · {list.length}">
             {#each list as a (a.person.id)}
-              <Row dense title={withNick(a.fullName, a.person)} subtitle={a.answer === 'no' ? (a.note ?? t('meet.noWhy')) : undefined} />
+              <Row dense title={withNick(a.fullName, a.person)} subtitle={a.answer === 'no' ? (a.note ?? t('meet.noWhy')) : a.note ? t('meet.saidNo', { why: a.note }) : undefined} />
             {/each}
           </Group>
         {/each}

@@ -2289,6 +2289,7 @@ def test_meetings(env):
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 7200, int(time.time()) - 3600, ev["id"]))
     ans = {a["person"]["id"]: a for a in c.get(f"/api/events/{ev['id']}/meeting", headers=H).json()}
     assert ans[mem["id"]]["came"] and not ans[mem2["id"]]["came"]
+    assert ans[mem["id"]]["note"] == "Exam at 6"                     # said no (why), came: the reason stays (codex ideas2 3)
     # a tag's meeting expects only the tag's people
     tagged = c.post("/api/orgs/1/events", headers=H, json={**body, "meetingTag": 5, "startsAt": start + 86400, "endsAt": start + 90000}).json()
     c.post(f"/api/events/{tagged['id']}/publish", headers=H)
@@ -6789,6 +6790,16 @@ def test_screen_pairing(env, monkeypatch):
     assert c.post(f"/api/screens/{sid}/unpair", headers=tma(9)).json()["screens"] == 0
     assert c.get("/api/screen", headers=me).status_code == 403                               # back to a new pairing QR
     assert c.get("/api/screen", headers={"X-Screen": two["secret"]}).json()["session"] == sid2
+    # two binds of one pairing QR at once (codex ideas2 2): the loser is not told its session got the screen
+    sid3 = checkin.new(con, "Third", [], vol)
+    race = c.post("/api/screen/pair").json()
+    real = checkin._mine
+    def first_wins(con_, v, s_id, cohost=True):  # the other request binds it between our read and our write
+        con_.execute("UPDATE qr_screens SET session_id = ? WHERE code = ?", (sid2, race["code"]))
+        return real(con_, v, s_id, cohost)
+    monkeypatch.setattr(checkin, "_mine", first_wins)
+    assert c.post("/api/screens/bind", headers=tma(9), json={"code": race["code"], "session": sid3}).json()["session"] == sid2
+    monkeypatch.setattr(checkin, "_mine", real)
     monkeypatch.setattr(checkin, "PAIR_PER_IP", 1)
     other = {"cf-connecting-ip": "203.0.113.9"}
     assert c.post("/api/screen/pair", headers=other).status_code == 200
@@ -6842,8 +6853,9 @@ def test_event_screen(env):
     con.execute("UPDATE events SET starts_at = starts_at + 7 * 86400 WHERE id = 1")
     login(c, 5, "eve")
     k = _paired(c, 9)                                                                        # a laptop on the event's session
-    assert c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]}).json()["done"]
+    assert not c.post("/api/checkin", headers=tma(5), json={"p": c.get("/api/screen", headers=k).json()["param"]}).json()["done"]  # not told "checked in"
     assert not con.execute("SELECT 1 FROM registrations r JOIN users u ON u.id = r.user_id WHERE u.tg_id = 5").fetchone()
+    assert con.execute("SELECT done_at FROM qr_marks m JOIN users u ON u.id = m.user_id WHERE u.tg_id = 5").fetchone()[0]
     con.close()
 
 
