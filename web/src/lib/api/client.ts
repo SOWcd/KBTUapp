@@ -102,7 +102,7 @@ export const server: Api = {
   dmOn: (event?: Id) => call('POST', '/me/dm', { event }),
 
   events: (q = {}) => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
-  pastEvents: () => call('GET', '/events/past'),
+  pastEvents: (org) => call('GET', '/events/past' + query({ org })),
   event: (id) => call('GET', `/events/${id}`),
   addSeats: (id, add) => call('POST', `/events/${id}/seats`, { add }),
   changePlace: (id, place) => call('POST', `/events/${id}/place`, { place }),

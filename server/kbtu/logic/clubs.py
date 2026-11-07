@@ -56,6 +56,11 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     for o, n in rows(con, f"""SELECT c.org_id, COUNT(*) FROM event_cohosts c JOIN events e ON e.id = c.event_id JOIN orgs o ON o.id = c.org_id AND o.status = 'active' WHERE c.org_id IN ({q})
             AND c.status = 'accepted' AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ? GROUP BY c.org_id""", *ids, core.now()):
         upcoming[o] = upcoming.get(o, 0) + n  # and the ones it co-hosts (cohosts.py)
+    # its latest public event that ended in the last 30 days: the Clubs list's line when nothing is coming. One query for
+    # all (SQLite's bare columns follow MAX); the same for every viewer, so public ones only
+    last = {r["org_id"]: r for r in rows(con, f"""SELECT org_id, id, title, i18n, MAX(starts_at) AS starts_at FROM events
+        WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL AND visibility = 'public' AND starts_at > ?
+        AND COALESCE(ends_at, starts_at + ?) <= ? GROUP BY org_id""", *ids, core.now() - 30 * 86400, core.NO_END, core.now())}
     files = _by_id(con, "files", (o["logo_file_id"] for o in found))
     # a recruitment round taking applications (casting.py); whether I applied to it is mine (org_shapes)
     live = {r["org_id"]: r for r in rows(con, f"SELECT id, org_id, closes_at FROM rounds WHERE org_id IN ({q}) AND status = 'open' AND closes_at > ?", *ids, core.now())}
@@ -68,6 +73,8 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
         "round": {"id": (rid := live[o["id"]]["id"]), "closesAt": live[o["id"]]["closes_at"], "quick": rid in quick} if o["id"] in live else None,
         "subscribers": subs.get(o["id"], 0), "members": members.get(o["id"], 0), "upcoming": upcoming.get(o["id"], 0),
+        "last": {"id": e["id"], "title": e["title"], "startsAt": e["starts_at"], **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {})}
+        if (e := last.get(o["id"])) else None,
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "joinQuestions": _join_qs(o),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
         "top": bool(o["top_at"]) and not o["official"],  # the Ascent's top: its own block in the clubs list

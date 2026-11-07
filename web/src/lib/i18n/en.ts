@@ -1682,6 +1682,7 @@ const en: Dict = {
   'ce.hideMembers': "Hide the member list",
   'ce.hideMembersNote': "The President and Vice always show. Everyone else is seen by your own team only: for clubs whose members are better kept private.",
   'club.upcoming': "Coming up",
+  'club.recent': "Recent",
   'club.noEvents': "No events yet",
   'club.myRole': "You're on the team · {role}",
   'clubs.nothing': "Nothing found",

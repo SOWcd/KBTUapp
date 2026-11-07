@@ -102,7 +102,8 @@
     .sort((a, b) => +!(a.official || a.kind !== 'club') - +!(b.official || b.kind !== 'club') || +!a.gov - +!b.gov || (a.round?.closesAt ?? Infinity) - (b.round?.closesAt ?? Infinity) || byWeight(a, b)));
   const recruitLine = (o: Org) => (o.round ? t('cast.recruiting', { when: dayMonth(o.round.closesAt) }) : t('clubs.openNow'));
   const canApply = (o: Org) => !!session.me?.student && !o.myRole;
-  const sub = (o: Org) => next.get(o.id) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
+  // the row's line: what's next, else its latest event of the last 30 days (quiet, no dot), else its people
+  const sub = (o: Org) => next.get(o.id) ?? (o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : null) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
 
   // stuck under the capsule: the bar's ground reaches up to the capsule, so no row shows between them (a sentinel just
   // above the bar: once it's under the capsule's line, the bar is stuck)

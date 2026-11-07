@@ -47,6 +47,7 @@
 
   let fetched = $state<Org | null>(null);
   let fetchedEvents = $state<EventCard[] | null>(null);
+  let past = $state<EventCard[] | null>(null); // its latest few that are over (Recent), asked with the page
   // the club's news, every post (the circles on Afisha keep 30 days): newest first here, played oldest first
   let posts = $state<Post[] | null>(null);
   function play(p: Post) {
@@ -68,6 +69,7 @@
   $effect(() => {
     api.org(id).then((x) => (fetched = x)).catch(() => {});
     api.events({ org: id }).then((x) => (fetchedEvents = x)).catch(() => {}); // the afisha's copy stays
+    api.pastEvents(id).then((x) => (past = x)).catch(() => (past = []));
     api.posts({ org: id }).then((x) => (posts = x)).catch(() => {});
   });
   const joinable = $derived(o?.kind === 'club' || o?.kind === 'school' || o?.kind === 'council'); // a school is joined like a club
@@ -164,13 +166,21 @@
         </Section>
       {/if}
 
-      <Section title={t('club.upcoming')}>
-        {#if events?.length}
-          <div class="list">{#each events as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
-        {:else if events}
-          <Group><EmptyState inline text={t('club.noEvents')} /></Group>
-        {/if}
-      </Section>
+      <!-- nothing coming but something recent: Recent alone, no empty Coming up above it -->
+      {#if events?.length || (events && past && !past.length)}
+        <Section title={t('club.upcoming')}>
+          {#if events.length}
+            <div class="list">{#each events as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
+          {:else}
+            <Group><EmptyState inline text={t('club.noEvents')} /></Group>
+          {/if}
+        </Section>
+      {/if}
+      {#if past?.length}
+        <Section title={t('club.recent')}>
+          <div class="list">{#each past as e (e.id)}<EventRow {e} showDate dateLine={relDay(e.startsAt)} />{/each}</div>
+        </Section>
+      {/if}
       {#if posts?.length}
         <Section title={t('page.news')}>
           <Group>

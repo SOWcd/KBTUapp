@@ -392,9 +392,12 @@ def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: i
     return cards(con, v, [e for e in rows(con, sql + " ORDER BY starts_at", *args) if _visible(con, v, e, roles, hidden)], share=True)
 
 
-def past_events(con, v: Viewer) -> list[dict]:
+def past_events(con, v: Viewer, org: int | None = None) -> list[dict]:
+    """The afisha's past events, or a club's latest few (its page's "Recent": its own and the ones it co-hosts)."""
+    where, args, n = (on_afisha(), on_afisha_args(v), 50) if org is None else ("""(org_id = ? OR id IN (SELECT x.event_id FROM event_cohosts x
+        JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted'))""", [org, org], 6)
     found = rows(con, f"""SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(ends_at, starts_at + ?) <= ?
-        AND {on_afisha()} ORDER BY starts_at DESC LIMIT 50""", NO_END, core.now(), *on_afisha_args(v))
+        AND {where} ORDER BY starts_at DESC LIMIT {n}""", NO_END, core.now(), *args)
     roles, hidden = _roles(con, v), _hidden_orgs(con)
     return cards(con, v, [e for e in found if _visible(con, v, e, roles, hidden)], share=True)
 

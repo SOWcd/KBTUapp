@@ -171,6 +171,7 @@ export interface Org extends OrgRef {
   subscribers: number;
   members: number;
   upcoming: number;
+  last?: { id: Id; title: string; startsAt: Ts } | null; // its latest public event ended in the last 30 days (the Clubs list's line)
   recruiting: boolean;          // takes join applications any time (Studio's "always open" switch)
   joinQuestions?: (RoundQuestion & { id: Id })[]; // the club's own questions for them (as a round's; id: the position)
   membersHidden: boolean;       // the club hides its member list from outsiders
