@@ -113,6 +113,9 @@ def test_hot_reads_use_indexes(env):
     con.execute("INSERT INTO orgs (slug, kind, name, short, emoji, created_at) VALUES ('oo', 'club', 'O', 'O', 'x', 0)")
     uid = con.execute("SELECT id FROM users WHERE tg_id = 7").fetchone()[0]
     v = logic.Viewer(uid, "user", True)
+    login(c, 8, "B")  # two members: a listed club
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT id, ?, 'member', 0 FROM orgs WHERE slug = 'oo'",
+                    [(uid,), (con.execute("SELECT id FROM users WHERE tg_id = 8").fetchone()[0],)])
     plans = _plans(con, lambda: (logic.events(con, v), logic.posts(con, v, "all"), logic.orgs(con, v), logic.profiles._counts(con, uid)))
     for table, sql in [("e", "FROM events e WHERE starts_at >"), ("posts", "FROM posts WHERE"), ("join_requests", "FROM join_requests WHERE user_id")]:
         found = [p for s, p in plans if sql in s]

@@ -14,6 +14,8 @@ def test_last_and_recent(env):
     con = db.connect(cfg.db_path)
     org = logic.create_org(con, None, "Crystal", "CR", "crown_3d", True)
     logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = ?", (PRES,)).fetchone()[0], org, "president", "test")
+    login(c, 40, "mate")
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 40").fetchone()[0], org, "member", "test")  # two: a listed club
     now = logic.core.now()
 
     def ev(title, ago, **kw):

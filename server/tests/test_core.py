@@ -2317,10 +2317,10 @@ def test_shared_cards_never_leak(env):
     """The Afisha's and Clubs' shared part is kept per worker (core.shared): warm from a member's request, a team-only
     event still never reaches a non-member, and nobody's own marks (ticket, saved, role) reach anyone else."""
     c, cfg = env
-    pres, mem, ali = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali")
+    pres, mem, ali, bob = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali"), login(c, 73, "bob")
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (mem["id"], "member")])
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (mem["id"], "member"), (bob["id"], "member")])
     P, M, A = tma(70, "Pres"), tma(71, "Mem"), tma(72, "Ali")
     body = {"title": "Sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
     team = c.post("/api/orgs/1/events", headers=P, json={**body, "visibility": "members"}).json()
@@ -5456,6 +5456,10 @@ def test_student_government_mark(env):
     big = logic.create_org(con, None, "Chess Club", "CH", "trophy_3d", True, "chess")
     gov = logic.create_org(con, None, "Student Government", "SG", "trophy_3d", True, logic.GOV_SLUG)
     con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) SELECT id, ?, 0 FROM users", (big,))
+    login(c, 32, "o1")
+    login(c, 33, "o2")
+    for o in (big, gov):  # a club of one isn't listed
+        con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT ?, id, 'member', 0 FROM users WHERE tg_id = ?", [(o, 32), (o, 33)])
     con.close()
     found = [o for o in c.get("/api/orgs", headers=h).json() if o["id"] in (big, gov)]
     assert [(o["id"], o.get("gov")) for o in found] == [(gov, True), (big, None)]   # first though followed less

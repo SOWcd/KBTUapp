@@ -88,7 +88,11 @@ def _join_qs(o: sqlite3.Row) -> list[dict]:
 
 
 def orgs(con, v: Viewer) -> list[dict]:
-    found = org_shapes(con, v, rows(con, "SELECT * FROM orgs WHERE status = 'active' AND kind NOT IN ('office','app')"), share=True)
+    # a club of one person isn't a club yet (owner, Nov 7): off the registry for everyone but that person and the admin.
+    # Its page (org) and its events stay reachable. One subquery for all, never per card
+    found = org_shapes(con, v, rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
+        AND (kind != 'club' OR ? OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= 2
+             OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?))""", v.role == "admin", v.id), share=True)
     return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 
