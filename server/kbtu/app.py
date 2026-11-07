@@ -901,6 +901,23 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def volunteer_decide(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.volunteer_decide(con, v, eid, uid, body.get("yes"))
 
+    # a host club's member asks to come as a guest; its President or a Vice answers (seats.team_ask)
+    @app.post("/api/events/{eid}/team-ask")
+    def team_ask(eid: int, con: Con, v: Me):
+        return logic.team_ask(con, v, eid)
+
+    @app.delete("/api/events/{eid}/team-ask")
+    def team_unask(eid: int, con: Con, v: Me):
+        return logic.team_unask(con, v, eid)
+
+    @app.get("/api/events/{eid}/team-asks")
+    def team_asks(eid: int, con: Con, v: Me):
+        return logic.team_asks(con, v, eid)
+
+    @app.put("/api/events/{eid}/team-asks/{uid}", status_code=204)
+    def team_decide(eid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.team_decide(con, v, eid, uid, body.get("yes"))
+
     @app.post("/api/events/{eid}/chat")
     def chat_start(eid: int, con: Con, v: Me):
         token = logic.chat_start(con, v, eid)  # the bot comes in as an admin that may add people, pin and delete

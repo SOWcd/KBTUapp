@@ -44,16 +44,18 @@ def test_member_cant_sign_up(env):
     c, cfg = env
     con = _club(c, cfg)
     free, paid, team = _event(c), _event(c, **PAID), _event(c, visibility="members")
+    logic.set_role(con, None, _uid(con, 11), 1, "member", "test")
     for eid in (free, paid):
-        r = _go(c, eid, 20)
+        r = _go(c, eid, 11)
         assert r.get("error") == "forbidden" and r.get("message") == "team", r
-    assert _go(c, team, 20)["my"]["status"] == "going"  # a team-only event is the team's own
+    assert _go(c, team, 11)["my"]["status"] == "going"  # a team-only event is the team's own
     assert _go(c, free, 10)["my"]["status"] == "going"
+    assert _go(c, free, 20)["my"]["status"] == "going"  # the President needs nobody's yes (seats.team_guest)
     # one who left the club to sign up is a guest; rejoining hands the seat back
-    logic.set_role(con, None, _uid(con, 20), 1, "none", "test")
-    assert _go(c, free, 20)["my"]["status"] == "going"
-    logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
-    assert tuple(_reg(con, free, 20)) == ("cancelled", "removed")
+    logic.set_role(con, None, _uid(con, 11), 1, "none", "test")
+    assert _go(c, free, 11)["my"]["status"] == "going"
+    logic.set_role(con, None, _uid(con, 11), 1, "member", "test")
+    assert tuple(_reg(con, free, 11)) == ("cancelled", "removed")
 
 
 def test_joining_frees_the_seat_for_the_waitlist(env):

@@ -19,6 +19,7 @@
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import UsersRound from '@lucide/svelte/icons/users-round';
+  import Hourglass from '@lucide/svelte/icons/hourglass';
   import Pencil from '@lucide/svelte/icons/pencil';
   import BookOpen from '@lucide/svelte/icons/book-open';
   import Eye from '@lucide/svelte/icons/eye';
@@ -46,7 +47,7 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf } from '../../lib/map';
-  import { api, ApiErr, translated, type AlbumPhoto, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
+  import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, goingBusy, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
@@ -126,6 +127,23 @@
   const coMem = $derived(e?.coHost ? session.me?.memberships.find((m) => m.org.id === e.coHost!.id) ?? null : null);
   const coCrew = $derived(!preview && !!e && e.status === 'published' && !crew && may(coMem, 'events'));
   const coLead = $derived(!preview && !!coMem && RANK[coMem.role] >= RANK.vice);
+  // the host club's own people come as guests by its President's or a Vice's yes (server seats.team_ask): ask, or
+  // take the ask back while it waits; a yes turns this back into the usual Going
+  const teamOnly = $derived(!preview && !!e && !going && st !== 'hold' && !e.guestHost && onTeam(e, session.me?.memberships));
+  const askable = $derived(teamOnly && !cancelled && !over && !e?.externalUrl && !shut && !regShut);
+  function setAsk(a: EventCard['teamAsk']) { const card = eventById(id); if (card) card.teamAsk = a; if (detail) detail = { ...detail, teamAsk: a }; }
+  async function teamAsk() {
+    const was = e?.teamAsk;
+    haptic.tap(); setAsk('pending'); // at once; back if the server says no
+    try { await api.teamAsk(id); haptic.ok(); say(t('ta.sent'), 'raising_hands_3d_default'); }
+    catch { setAsk(was); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+  async function teamUnask() {
+    if (!(await sheets.ask({ title: t('ta.unaskAsk'), ok: t('ta.unask'), cancel: t('common.cancel') }))) return;
+    setAsk(undefined);
+    try { await api.teamUnask(id); haptic.soft(); }
+    catch { setAsk('pending'); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function leaveCohost() {
     if (!e?.coHost || !(await sheets.ask({ title: t('co.leaveAsk', { club: nameOf(e.org) }), text: t('co.leaveText'), ok: t('co.leave'), cancel: t('common.cancel'), danger: true }))) return;
     const was = e.coHost, card = eventById(id);
@@ -541,6 +559,7 @@
 
   {#snippet footer()}
     {#if e && soon}
+      {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
       <div class="actions btns" inert={!!preview}>
         <span class="sv" class:on={e.saved}><Button kind="gray" size="l" round on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)}>
           {#snippet icon()}<Bookmark size={20} fill={e.saved ? 'currentColor' : 'none'} />{/snippet}</Button></span>
@@ -569,7 +588,11 @@
           <Button kind="neutral" size="l" full disabled>{t('event.over')}</Button>
         {:else if e.externalUrl}
           <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('event.external')}</Button>
-        {:else if !going && st !== 'hold' && !e.guestHost && onTeam(e, session.me?.memberships)}
+        {:else if teamOnly && askable && e.teamAsk === 'pending'}
+          <Button kind="neutral" size="l" full onclick={teamUnask}>{#snippet icon()}<Hourglass size={18} />{/snippet}{t('ta.pending')}</Button>
+        {:else if teamOnly && askable}
+          <Button kind="secondary" size="l" full onclick={teamAsk}>{t('ta.ask')}</Button>
+        {:else if teamOnly}
           <Button kind="neutral" size="l" full disabled>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('event.team')}</Button>
         {:else if going && inner(e)}
           <!-- a club's own event: no ticket, just the answer, changeable until it starts -->
@@ -665,6 +688,7 @@
 
   /* the footer: save and share, then the one primary action */
   .actions { display: flex; gap: 8px; align-items: center; }
+  .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .sv.on :global(.btn) { color: var(--warning); }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .yes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; border-radius: var(--r-full);

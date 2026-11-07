@@ -203,6 +203,18 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not o or not p or not one(con, "SELECT 1 FROM join_requests WHERE org_id = ? AND user_id = ? AND status = 'pending'", int(ref[1]), int(ref[2])):
             return None
         return (*texts.bot_message(lang, kind, org=o["name"], name=logic.short_name(p)), f"jr_{ref[1]}")
+    if kind == "team_ask":  # ta:<event>:<member>:<day>, to the club's President and Vices; gone once answered, withdrawn or too late
+        e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
+        p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))
+        if not e or not p or not logic.signup_open(e) or not one(con, "SELECT 1 FROM team_asks WHERE event_id = ? AND user_id = ? AND status = 'pending'", e["id"], p["id"]):
+            return None
+        return (*texts.bot_message(lang, kind, name=logic.short_name(p), title=logic.title_in(e, lang)), f"mg_{e['id']}")
+    if kind in ("team_ask_yes", "team_ask_no"):  # tad:<event>:<day>, to the member; quiet if it changed since or sign-up is over
+        e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
+        if not e or not logic.signup_open(e) or not one(con, "SELECT 1 FROM team_asks WHERE event_id = ? AND user_id = ? AND status = ?",
+                                                        e["id"], m["user_id"], kind.rsplit("_", 1)[1]):
+            return None
+        return (*texts.bot_message(lang, kind, **ev(e)), f"ev_{e['id']}")
     if kind == "roster_claim":  # rq:<row>:<student>, to the club's President (or DMP): it's them under another name?
         r = one(con, "SELECT r.title, o.name FROM roster_pending r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.claimed_by = ?", int(ref[1]), int(ref[2]))
         p = one(con, logic.PERSON + " WHERE u.id = ?", int(ref[2]))

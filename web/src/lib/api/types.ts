@@ -354,7 +354,12 @@ export interface EventCard {
   savedBy?: number;             // Studio, the club's Head+: how many saved it ("Save" with a purpose)
   needsVolunteers?: number | null;  // how many volunteers it asks for; null: none
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
+  teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
+  teamAsk?: 'pending' | 'yes' | 'no';  // the host club's member: my ask to come as a guest (none: never asked)
 }
+
+/** A host club's member asking to come to its public event as a guest (server seats.team_asks) */
+export interface TeamAsk { person: PersonRef; createdAt: Ts }
 
 export interface EventFull extends EventCard {
   description: string;

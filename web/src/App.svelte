@@ -8,7 +8,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
@@ -291,7 +291,7 @@
     say(phrase(key, { name }), h < 5 ? 'crescent_moon_3d' : h < 12 ? 'sparkles_3d' : h < 18 ? 'waving_hand_3d_default' : 'partying_face_3d');
   }
 
-  // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications),
+  // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner), fr_<token> (a friend's
   // one-time link, §4.7), friends (Profile with the Friends sheet: the bot's request message) ----
   function deepLink(p = tg.startParam) {
@@ -389,7 +389,7 @@
     if (ref) keepRef(Number(ref[1]), ref[2]);
     const qr = p.match(/^u_(\d+_[A-Z2-7]{10})$/); // someone's profile QR (the invite sheet shows it too): noted for them as an invite
     if (qr) void api.refer(qr[1]).catch(() => {});
-    const m = p.match(/^(ev|tk|cl|jr|u|tm|st)_(\d+)(?:_[A-Z2-7]{10})?$/);
+    const m = p.match(/^(ev|tk|cl|jr|u|tm|st|mg)_(\d+)(?:_[A-Z2-7]{10})?$/);
     // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
     // (the Team once the Studio pane is open: two chunk loads at once, lazy() opens only the later one, and Team reads
     // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
@@ -402,7 +402,9 @@
       if (!session.me?.memberships.some((x) => x.org.id === org)) { sheets.club(org); return; }
       ui.tab = 'club'; ui.club = org; void lazy(studioPage, { org });
     };
-    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team, st: studio })[m[1] as 'ev'](Number(m[2]));
+    // mg_<event>: the bot's "a member asks to come as a guest": the event's organizer screen, its asks on top
+    const manage = (ev: number) => asStudent(() => { void eventDetails(ev).then(() => sheets.manage(ev), () => sheets.event(ev)); });
+    if (m) ({ ev: sheets.event, tk: sheets.ticket, cl: sheets.club, jr: sheets.joinInbox, u: sheets.person, tm: team, st: studio, mg: manage })[m[1] as 'ev'](Number(m[2]));
     // a link the app doesn't know (cut, mistyped, or from something since gone): said, not silently dropped (owner, Oct 30)
     else if (p) say(t('link.unknown'), 'thinking_face_3d');
   }

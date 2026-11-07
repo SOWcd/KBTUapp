@@ -451,6 +451,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
     receipts = {c["registration_id"]: c for c in rows(con, f"SELECT registration_id, status, flags, reviewed_at FROM receipts WHERE registration_id IN ({_qs(regs)}) ORDER BY id", *regs)}  # the last one wins
     rated = dict(rows(con, f"SELECT event_id, score FROM event_ratings WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))
     saved = {r[0] for r in rows(con, f"SELECT event_id FROM saved_events WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
+    asks = dict(rows(con, f"SELECT event_id, status FROM team_asks WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))  # seats.team_ask
     friends: dict[int, list] = {}
     if v.student:  # §3: friends see where you go only if you allow it; guests see nobody
         for p in rows(con, f"""SELECT {PERSON_COLS}, r.event_id AS ev FROM registrations r JOIN users u ON u.id = r.user_id
@@ -467,7 +468,8 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
                   "free": bool(reg["free"]),
                   "ics": f"/api/events/{e['id']}/ics?k={ics_sig(e['id'])}" if reg["status"] == "going" else None,
                   "rating": rated.get(e["id"]) if reg["checked_in_at"] else None, "note": reg["note"]}
-        out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], [])})
+        out.append({**part[e["id"]], "my": my, "saved": e["id"] in saved, "friends": friends.get(e["id"], []),
+                    **({"teamAsk": a} if (a := asks.get(e["id"])) else {})})
     return out
 
 

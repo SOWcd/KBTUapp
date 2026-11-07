@@ -172,6 +172,7 @@
   const openRow = (e: EventCard) => (e.status === 'draft' ? sheets.editor(e.org.id, e.id) : staff && ours(e) ? sheets.manage(e.id) : sheets.event(e.id));
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
+  const guesting = $derived(events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e))); // our own people asking to come as guests
   // the week the coming Wednesday's memo to DMP covers (from Thursday on, the week after next; as the server's _next_week)
   const dayNow = $derived(dayNo(nowTs()));
   const nextWeek = $derived.by(() => { const mon = dayNow + (((2 - ((dayNow + 3) % 7)) % 7) + 7) % 7 + 5; return events.filter((e) => ours(e) && e.status !== 'cancelled' && dayNo(e.startsAt) >= mon && dayNo(e.startsAt) < mon + 7).length; });
@@ -185,7 +186,7 @@
   let presOk = $state<number[]>((() => { try { return JSON.parse(localStorage.getItem(PRES) ?? '[]'); } catch { return []; } })());
   function iAmPres(id: number) { haptic.tap(); presOk = [...presOk, id]; try { localStorage.setItem(PRES, JSON.stringify(presOk)); } catch { /* blocked */ } }
   const alone = $derived(m?.role === 'president' && !presOk.includes(m.org.id) && (data.orgs.find((x) => x.id === m.org.id)?.members ?? 2) <= 1);
-  const todo = $derived(coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0);
+  const todo = $derived(coAsks.length > 0 || claims > 0 || alone || fresh > 0 || memoDue || askRecruit || asking.length > 0 || checking.length > 0 || volunteering.length > 0 || guesting.length > 0);
   // DMP picked (DMP is an org in Studio with wider rights): its registry of every club (the month's numbers,
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
@@ -293,6 +294,9 @@
         {/each}
         {#each volunteering as e (e.id)}
           <Row icon={HandHeart} title={e.title} subtitle={t('studio.todoVol')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(e.id, e.needsVolunteers ?? 0)} />
+        {/each}
+        {#each guesting as e (e.id)}
+          <Row icon={UsersRound} title={e.title} subtitle={t('ta.caption')} count={e.teamAsks} accessory="chevron" onclick={() => sheets.manage(e.id)} />
         {/each}
       </Group>
     {/if}

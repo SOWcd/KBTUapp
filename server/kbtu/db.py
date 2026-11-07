@@ -1293,6 +1293,17 @@ MIGRATIONS: list[tuple[int, str]] = [
     (137, """ALTER TABLE events ADD COLUMN door_open_at INTEGER;
     UPDATE events SET door_open_at = starts_at - 10800 WHERE status = 'published' AND starts_at - 10800 <= CAST(strftime('%s', 'now') AS INTEGER)
       AND CAST(strftime('%s', 'now') AS INTEGER) < starts_at - 1800 AND EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = events.id AND r.checked_in_at IS NOT NULL);"""),
+    # a host club's member asks its President or a Vice to come to its public event as a guest (owner, Nov 7; seats.team_ask):
+    # one row per person per event; 'yes' lets them sign up and keeps their seat from seats.joined
+    (138, """CREATE TABLE team_asks (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','yes','no')),
+      created_at INTEGER NOT NULL,
+      decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_at INTEGER,
+      PRIMARY KEY (event_id, user_id)
+    ) STRICT;"""),
 ]
 
 

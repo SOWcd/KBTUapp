@@ -510,9 +510,12 @@ ANSWER_MAX = 200  # one answer to an event's question at sign-up
 
 # a host club's member's guest seat at its own upcoming public event: a free event's, or a waitlist place anywhere (a
 # paid seat or hold stays: money; a check-in stays: it's history). Migration 135 ran the same rule once over old data.
+# A President's or a Vice's seat stays, and so does a member's whom one of them let in (team_ask).
 TEAM_SEATS = """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND e.org_id = ?
     AND e.status = 'published' AND e.visibility = 'public' AND e.starts_at > ? AND r.checked_in_at IS NULL
-    AND (r.status = 'waitlist' OR r.status IN ('going', 'hold') AND e.price IS NULL)"""
+    AND (r.status = 'waitlist' OR r.status IN ('going', 'hold') AND e.price IS NULL)
+    AND NOT EXISTS (SELECT 1 FROM team_asks a WHERE a.event_id = e.id AND a.user_id = r.user_id AND a.status = 'yes')
+    AND NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = e.org_id AND m.user_id = r.user_id AND m.role IN ('president', 'vice'))"""
 
 
 def joined(con, oid: int, uid: int) -> None:
@@ -533,6 +536,70 @@ def refill(con) -> None:
                 AND id IN (SELECT event_id FROM registrations WHERE cancel_reason = 'removed')
                 AND id IN (SELECT event_id FROM registrations WHERE status = 'waitlist')""", core.now()):
             promote(con, e)
+
+
+# A host club's member comes to its public event as a guest only by its President's or a Vice's yes (owner, Nov 7):
+# they ask once per event (team_asks), each President and Vice hears it from the bot and answers on the event's
+# Studio screen. A President or a Vice needs nobody's yes (they'd be answering themselves). Their role, not a right:
+# the app's admin has no path here. ponytail: a yes can't be taken back; a no can be asked again (one ping a day).
+def team_guest(con, e: sqlite3.Row, uid: int) -> bool | None:
+    """None: not of the host club; True: of it and may sign up (President, Vice, or let in); False: needs a yes."""
+    m = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], uid)
+    if not m:
+        return None
+    return m["role"] in ("president", "vice") or bool(one(
+        con, "SELECT 1 FROM team_asks WHERE event_id = ? AND user_id = ? AND status = 'yes'", e["id"], uid))
+
+
+def team_ask(con, v: Viewer, eid: int) -> dict:
+    """A member asks to come as a guest; asking again while it waits changes nothing."""
+    need_student(v)
+    with tx(con):
+        e = _event(con, v, eid)
+        if e["status"] != "published" or e["visibility"] != "public" or not signup_open(e) or e["external_url"] or e["guest_host"]:
+            raise ApiError("closed")
+        if team_guest(con, e, v.id) is not False:
+            raise ApiError("conflict")  # not of the club, or may sign up already
+        if con.execute("""INSERT INTO team_asks (event_id, user_id, created_at) VALUES (?, ?, ?) ON CONFLICT (event_id, user_id)
+                DO UPDATE SET status = 'pending', created_at = excluded.created_at, decided_by = NULL, decided_at = NULL
+                WHERE status = 'no'""", (eid, v.id, core.now())).rowcount:
+            for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('president', 'vice')", e["org_id"]):
+                notify(con, uid, "team_ask", f"ta:{eid}:{v.id}:{core.now() // 86400}")  # asked again after a no: one ping a day
+    return card(con, v, e)
+
+
+def team_unask(con, v: Viewer, eid: int) -> dict:
+    """Withdraw my ask while it waits."""
+    need_student(v)
+    e = _event(con, v, eid)
+    con.execute("DELETE FROM team_asks WHERE event_id = ? AND user_id = ? AND status = 'pending'", (eid, v.id))
+    return card(con, v, e)
+
+
+def _team_decider(con, v: Viewer, eid: int) -> None:
+    e = one(con, "SELECT org_id FROM events WHERE id = ?", eid)
+    if not e or core.role_in(con, v, e["org_id"]) not in ("president", "vice"):
+        raise ApiError("forbidden")
+
+
+def team_asks(con, v: Viewer, eid: int) -> list[dict]:
+    """The asks waiting on the event, oldest first (of those still in the club): its President and Vices only."""
+    _team_decider(con, v, eid)
+    return [{"person": person_ref(p), "createdAt": p["at"]} for p in rows(con, f"""SELECT {PERSON_COLS}, a.created_at AS at FROM team_asks a
+        JOIN users u ON u.id = a.user_id LEFT JOIN students s ON s.user_id = u.id
+        JOIN events e ON e.id = a.event_id JOIN org_members m ON m.org_id = e.org_id AND m.user_id = a.user_id
+        WHERE a.event_id = ? AND a.status = 'pending' ORDER BY a.created_at""", eid)]
+
+
+def team_decide(con, v: Viewer, eid: int, uid: int, yes: object) -> None:
+    if not isinstance(yes, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        _team_decider(con, v, eid)
+        if not con.execute("UPDATE team_asks SET status = ?, decided_by = ?, decided_at = ? WHERE event_id = ? AND user_id = ? AND status = 'pending'",
+                           ("yes" if yes else "no", v.id, core.now(), eid, uid)).rowcount:
+            raise ApiError("conflict")  # withdrawn, or another one answered first
+        notify(con, uid, "team_ask_yes" if yes else "team_ask_no", f"tad:{eid}:{core.now() // 86400}")
 
 
 def _answers(e: sqlite3.Row, given: object) -> str | None:
@@ -575,7 +642,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if r and r["status"] in ("going", "hold", "waitlist"):
             return card(con, v, e)
-        if e["visibility"] == "public" and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+        if e["visibility"] == "public" and team_guest(con, e, v.id) is False:
             raise ApiError("forbidden", "team")  # the host club's own people run it, never its guests (owner, Nov 7); co-hosts' may
         if e["needs_phone"] and phone is not None:
             if not (phone := kz_phone(phone)):

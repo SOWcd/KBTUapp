@@ -16,7 +16,7 @@
   import { onMount } from 'svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import DoorClosed from '@lucide/svelte/icons/door-closed';
-  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -33,6 +33,9 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Avatar from '../../ui/Avatar.svelte';
+  import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
+  import X from '@lucide/svelte/icons/x';
 
   // staff: opened from Admin, the app's admin runs it as its organizers do (api staffEvents), never its door or money
   let { overlay, id, staff = false }: { overlay: Overlay; id: Id; staff?: boolean } = $props();
@@ -122,6 +125,15 @@
     try { await api.openDoor(id); haptic.ok(); say(t('door.opened'), 'party_popper_3d'); }
     catch { setDoor(was); haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
+  // the club's own people asking to come as guests (server seats.team_ask): the President and the Vices answer here
+  let asks = $state<TeamAsk[]>([]);
+  $effect(() => { void data.rev; if (opener && !staff) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
+  async function decide(x: TeamAsk, yes: boolean) {
+    haptic.tap();
+    asks = asks.filter((y) => y !== x); // at once; back if the server says no
+    try { await api.teamDecide(id, x.person.id, yes); haptic.ok(); say(t(yes ? 'ta.saidYes' : 'ta.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); studioChanged(); }
+    catch { asks = [x, ...asks]; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
@@ -138,6 +150,18 @@
           {#snippet lead()}<Poster item={e} size={56} radius={16} dim={e.status === 'cancelled'} />{/snippet}
         </Row>
       </Group>
+
+      {#if asks.length}
+        <Group caption={t('ta.caption')}>
+          {#each asks as x (x.person.id)}
+            <Row dense title={x.person.name}>
+              {#snippet lead()}<Avatar person={x.person} size={36} />{/snippet}
+              {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('ta.no')} onclick={() => decide(x, false)} />
+                <Button kind="tinted" size="s" onclick={() => decide(x, true)}>{t('ta.yes')}</Button></span>{/snippet}
+            </Row>
+          {/each}
+        </Group>
+      {/if}
 
       {#if head && price && list}
         <Group caption={t('mg.money')}>
@@ -210,4 +234,5 @@
   .pg { display: flex; flex-direction: column; gap: var(--gap-group); margin-top: var(--s-1); }
   .sum { margin-left: auto; color: var(--text-3); }
   .sum.short { color: var(--warning-text); }
+  .yn { display: flex; align-items: center; gap: var(--s-2); }
 </style>
