@@ -28,7 +28,7 @@
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
   import { t, i18n, type Key } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink, tg } from '../../lib/tg';
+  import { haptic, openLink } from '../../lib/tg';
   import Emoji from '../../ui/Emoji.svelte';
   import { fmtPhone, kzPhone } from '../../lib/phone';
   import Pane from '../../ui/Pane.svelte';
@@ -174,13 +174,18 @@
   // thanks can ever depend on it (.claude/reports/donate-review.md)
   const donate = $derived(session.donate ? fmtPhone(session.donate) : '');
   // owner, Nov 6: a transfer inside one bank is free, so the page lists every bank the number has (the same number in
-  // each); a tap copies it and opens that bank's app. ponytail: banks publish no "transfer to this number" link, so the
-  // App Store page (its Open button) on iOS and a Play search elsewhere; the bank's own link if one turns up.
-  const BANKS = [['kaspi', 'Kaspi', 1195076505], ['halyk', 'Halyk', 440635615], ['freedom', 'Freedom', 1619733462], ['forte', 'Forte', 6474132802],
-    ['bereke', 'Bereke', 6449958451], ['bcc', 'BCC', 743617904], ['homecredit', 'Home Credit', 6443964296], ['alatau', 'Alatau', 1441936010]] as const;
-  async function toBank(name: string, ios: number) {
+  // each); a tap copies it and opens that bank's app (Nov 7: the app itself, not its store page). Each link is the
+  // bank's own universal / app link, checked in its apple-app-site-association and assetlinks.json (Nov 7): the bank's
+  // domain or its AppsFlyer OneLink, which falls back to the bank's store page when the app isn't installed (Forte's
+  // falls to a 404 on its site, Kaspi's and Halyk's to the site). It opens the app's home only: never a transfer link
+  // with a number or an amount (Telegram's rules), and nothing of ours is in it.
+  const BANKS = [['kaspi', 'Kaspi', 'https://kaspi.kz/'], ['halyk', 'Halyk', 'https://homebank.kz/'],
+    ['freedom', 'Freedom', 'https://freedombank.onelink.me/PcDG/'], ['forte', 'Forte', 'https://forte.kz/app/'],
+    ['bereke', 'Bereke', 'https://berekebank.onelink.me/lyyx/'], ['bcc', 'BCC', 'https://bcc-kz.onelink.me/DHqP/'],
+    ['homecredit', 'Home Credit', 'https://homekz.onelink.me/vrwF/'], ['alatau', 'Alatau', 'https://app.alataucitybank.kz/sFFz/']] as const;
+  async function toBank(url: string) {
     await copyDonate();
-    openLink(/^(ios|macos)$/.test(tg.platform) ? `https://apps.apple.com/kz/app/id${ios}` : `https://play.google.com/store/search?q=${encodeURIComponent(name + ' bank')}&c=apps`);
+    openLink(url);
   }
   // the page names itself in its own centred heading, so the capsule shows the icon alone (owner, Nov 6: the title twice)
   $effect(() => { overlay.mark = kind === 'donate'; });
@@ -337,8 +342,8 @@
       </div>
       <p class="fs-sub faint banks-h">{t('don.banks')}</p>
       <div class="banks">
-        {#each BANKS as [id, name, ios] (id)}
-          <button class="bank" onclick={() => { haptic.tap(); void toBank(name, ios); }}><img src="banks/{id}.webp" alt="" width="46" height="46" /><small>{name}</small></button>
+        {#each BANKS as [id, name, url] (id)}
+          <button class="bank" onclick={() => { haptic.tap(); void toBank(url); }}><img src="banks/{id}.webp" alt="" width="46" height="46" /><small>{name}</small></button>
         {/each}
       </div>
       <p class="fs-sub faint dfoot">{t('don.safe')}</p>
