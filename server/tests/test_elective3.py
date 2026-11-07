@@ -31,18 +31,16 @@ def test_announce3(env, monkeypatch, capsys):
     def tg(request: httpx.Request) -> httpx.Response:
         method, body = request.url.path.rsplit("/", 1)[1], json.loads(request.content or b"{}")
         calls.append((method, body))
-        if method == "forwardMessage":  # a channel the bot isn't in: refused, our gist goes instead
-            return httpx.Response(400, json={"ok": False, "description": "Bad Request: chat not found"})
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 7}})
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    sent = [(m, b) for m, b in calls if m in ("forwardMessage", "sendMessage") and b.get("chat_id") == 30]
-    assert [m for m, _ in sent] == ["forwardMessage", "sendMessage", "sendMessage"]
-    assert sent[1][1]["reply_markup"]["inline_keyboard"][0][0]["url"] == "https://t.me/KBTUstartup/2016"
-    assert [k["callback_data"] for k in sent[2][1]["reply_markup"]["inline_keyboard"][0]] == ["an:y", "an:n"]
+    sent = [b for m, b in calls if m == "sendMessage" and b.get("chat_id") == 30]
+    assert len(sent) == 1  # one message: the post in short, its link, the question
+    rows = sent[0]["reply_markup"]["inline_keyboard"]
+    assert rows[0][0]["url"] == "https://t.me/KBTUstartup/2016" and [k["callback_data"] for k in rows[1]] == ["an:y", "an:n"]
     assert con.execute("SELECT sent_at FROM bot_outbox WHERE kind = 'elective3'").fetchone()[0]
 
     edits = []
@@ -55,11 +53,13 @@ def test_announce3(env, monkeypatch, capsys):
         async def post(self, *a, **k):
             return None
     tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
-                                                                    "message": {"message_id": 5, "chat": {"id": 30}}}))
+                                                                    "message": {"message_id": 5, "chat": {"id": 30}, "text": "post",
+                                                                                "reply_markup": {"inline_keyboard": rows}}}))
     ok = lambda: {r[0]: r[1] for r in con.execute("SELECT id, announce_ok FROM users")}  # noqa: E731
     tap(30, "an:y")
     tap(30, "an:y")                                                                  # idempotent
-    assert ok()[ids["ann"]] == 1 and edits[-1]["text"] == texts.bot_message("ru", "announce_yes")[0]
+    assert ok()[ids["ann"]] == 1 and edits[-1]["text"] == "post\n\n" + texts.bot_message("ru", "announce_yes")[0]
+    assert edits[-1]["reply_markup"]["inline_keyboard"] == rows[:1]  # the link stays, the buttons go
     tap(31, "an:n")      # a forged tap on ann's message: only ben's own answer changes
     assert ok()[ids["ann"]] == 1 and ok()[ids["ben"]] == 0
     tap(30, "an:n")
