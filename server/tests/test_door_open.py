@@ -54,7 +54,9 @@ def test_shut_until_opened_by_president_or_vice(env):
     assert con.execute("SELECT actor_id FROM audit_log WHERE action = 'door_open' AND target = ?", (f"event:{eid}",)).fetchone()[0] == _uid(con, 21)
     was = con.execute("SELECT door_open_at FROM events WHERE id = ?", (eid,)).fetchone()[0]
     assert open_(20).status_code == 200 and con.execute("SELECT door_open_at FROM events WHERE id = ?", (eid,)).fetchone()[0] == was  # once
-    assert _scan(c, eid, con, 10) == "ok"
+    logic.door_round(con)
+    assert _sent(con, eid) == []                          # open, but nobody let in yet: the organizers may not be there
+    assert _scan(c, eid, con, 10) == "ok"                 # the first ticket in: now the guests hear it
     logic.door_round(con)
     logic.door_round(con)
     assert _sent(con, eid) == [_uid(con, 11)]             # who is in already doesn't hear it; once each
@@ -78,6 +80,10 @@ def test_opens_by_itself_at_t30(env):
     assert _sent(con, eid) == []
     _start(con, eid, 29 * 60)
     logic.door_round(con)
+    assert _sent(con, eid) == []                           # open by itself, nobody in yet: quiet
+    logic.screen_came(con, eid, _uid(con, 11), int(time.time()))  # the big screen's first check-in counts as the first scan
+    assert con.execute("SELECT checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, 11))).fetchone()[0]
+    logic.door_round(con)
     logic.door_round(con)
     assert _sent(con, eid) == [_uid(con, 10)]
     m = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'door_open'").fetchone()
@@ -86,8 +92,6 @@ def test_opens_by_itself_at_t30(env):
     con.execute("UPDATE users SET n_remind = 0 WHERE id = ?", (_uid(con, 10),))
     assert bot._render(con, m) is None                     # reminders off: quiet
     con.execute("UPDATE users SET n_remind = 1 WHERE id = ?", (_uid(con, 10),))
-    logic.screen_came(con, eid, _uid(con, 11), int(time.time()))
-    assert con.execute("SELECT checked_in_at FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, 11))).fetchone()[0]
     assert walk().status_code == 200
     assert _scan(c, eid, con, 10) == "ok"
     assert bot._render(con, m) is None                     # in already by the time it goes
@@ -98,7 +102,8 @@ def test_opens_by_itself_at_t30(env):
 
 
 def test_deploy_keeps_a_door_already_in_use(env):
-    """Migration 137: an event the old 3-hour rule already let people into keeps its door open, and nobody is told."""
+    """Migration 137: an event the old 3-hour rule already let people into keeps its door open (its guests hear it,
+    as the first scan is behind it); one nobody came to yet goes shut until T-30."""
     c, cfg = env
     con = _team(c, cfg)
     busy, idle = _event(c), _event(c)
@@ -108,10 +113,10 @@ def test_deploy_keeps_a_door_already_in_use(env):
         _start(con, eid, 2 * 3600)
     con.execute("UPDATE registrations SET checked_in_at = ? WHERE event_id = ? AND user_id = ?", (int(time.time()) - 60, busy, _uid(con, 10)))
     con.executescript(f"BEGIN;\n{dict(db.MIGRATIONS)[137].split(';', 1)[1]}\nCOMMIT;")  # its UPDATE (the column is there)
-    assert _scan(c, busy, con, 11) == "ok"
     assert _scan(c, idle, con, 11) == "not_open"
     logic.door_round(con)
-    assert _sent(con, busy) == [] and _sent(con, idle) == []
+    assert _sent(con, busy) == [_uid(con, 11)] and _sent(con, idle) == []
+    assert _scan(c, busy, con, 11) == "ok"
 
 
 def test_admin_never_opens_the_door(env):

@@ -1126,14 +1126,14 @@ def open_door(con, v: Viewer, eid: int) -> dict:
 
 
 def door_round(con) -> None:
-    """The postman's round (bot._chores): each guest going and not yet in hears once that the door is open, until the
-    start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
+    """The postman's round (bot._chores): once the open door has let its first person in (a scan, by name, the big
+    screen, a walk-in: the organizers are at the door, owner Nov 7), each guest going and not yet in hears it once,
+    until the start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
     t = core.now()
-    for e in rows(con, """SELECT * FROM events WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(guest_host, '') = ''
-            AND starts_at > ? AND starts_at <= ?""", t, t + DOOR_EARLY):
-        # ponytail: exactly T-3h marks a door migration 137 kept open (people already in at deploy): no surprise message;
-        # a President's tap landing on that very second stays quiet too
-        if door_shut(e, t) or e["door_open_at"] == e["starts_at"] - 3 * 3600:
+    for e in rows(con, """SELECT * FROM events e WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(guest_host, '') = ''
+            AND starts_at > ? AND starts_at <= ?
+            AND EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = e.id AND r.checked_in_at IS NOT NULL)""", t, t + DOOR_EARLY):
+        if door_shut(e, t):
             continue
         ref = f"door:{e['id']}"
         guests = rows(con, """SELECT r.user_id FROM registrations r WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL
