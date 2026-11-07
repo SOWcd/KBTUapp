@@ -19,6 +19,7 @@ export const data = $state({
   // kept for the session so their buttons work; never saved on the phone
   opened: [] as EventCard[],
   eventsReady: false,
+  past: [] as EventCard[], // Afisha's "Past": the events I was signed up for or came to, newest first (with the Afisha)
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   orgs: [] as Org[],
   schedule: [] as ClassItem[],
@@ -101,7 +102,8 @@ export async function loadAfisha(): Promise<void> {
   loadChats();
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
-    const [events, orgs, schedule, posts] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all')]);
+    const [events, orgs, schedule, posts, past] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true)]);
+    if (past.status === 'fulfilled') data.past = past.value;
     if (events.status === 'fulfilled') data.events = events.value;
     if (orgs.status === 'fulfilled') data.orgs = orgs.value;
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
@@ -144,7 +146,7 @@ export function loadChats(): void {
 /** An event the app holds: the Afisha's, else a club's in Studio (drafts, team-only ones) */
 export function eventById(id: Id): EventCard | undefined {
   return data.events.find((e) => e.id === id) ?? Object.values(data.studio).flat().find((e) => e.id === id)
-    ?? data.opened.find((e) => e.id === id);
+    ?? data.opened.find((e) => e.id === id) ?? data.past.find((e) => e.id === id);
 }
 function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened.push(d); return d; }
 /** The app's card, or the server's for one it doesn't hold yet (kept: opened) */

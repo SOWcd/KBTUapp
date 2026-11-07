@@ -687,6 +687,7 @@ const en: Dict = {
   'list.dorm': "Dorm",
   'list.bldg2': "B2",
   'list.freeDay': 'Free day',
+  'list.past': 'Past',
 
   'feed.end': "That's every event",
   'feed.endText': "New ones appear every day. Follow clubs: the bot tells you first.",
@@ -2488,6 +2489,7 @@ const en: Dict = {
   'upd.delete': "Delete",
   // one-tap rating after the event
   'rate.ask': "How was it?",
+  'rate.mine': "Your rating",
   'rate.thanks': "Thanks! Your rating is in",
   'rate.anon': "Anonymous: the club sees only the average and comments without names",
   'rate.comment': "What stood out?",
@@ -2557,6 +2559,7 @@ const en: Dict = {
   'album.title': "Photos",
   'album.add': "Add",
   'album.addMine': "Add photos",
+  'album.see': "See the photos",
   'album.empty': "Nothing yet. Were you there? Add your shots: every student will see them",
   'album.full': "You can't add more photos",
   'album.remove': "Remove",

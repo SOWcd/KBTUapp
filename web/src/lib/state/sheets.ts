@@ -31,8 +31,8 @@ export const sheets = {
   /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
   cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
   club: (_id: Id) => {},
-  /** `from`: the tapped poster, which grows into the sheet's header */
-  event: (_id: Id, _from?: Element | null) => {},
+  /** `from`: the tapped poster, which grows into the sheet's header; `album`: its guests' album opened over it (the bot's ph_) */
+  event: (_id: Id, _from?: Element | null, _album?: boolean) => {},
   /** the event sheet for an unsaved editor form: what students will see */
   preview: (_e: EventFull) => {},
   ticket: (_id: Id) => {},

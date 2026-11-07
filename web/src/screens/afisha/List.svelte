@@ -37,6 +37,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Tag from '../../ui/Tag.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
+  import EventRow from '../../ui/EventRow.svelte';
   import { fitTitle, largeTitle } from '../../ui/title';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
@@ -99,6 +100,9 @@
   const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
   const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
   const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
+
+  const past = $derived(data.past); // "Past": mine that ended, newest first (the server's order)
+  let allPast = $state(false);
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -244,6 +248,15 @@
     {/if}
   {/each}
 
+  {#if past.length}
+    <!-- where I've been: the events I was signed up for or came to, newest first (their albums, my rating) -->
+    <h2 class="sec">{t('list.past')}</h2>
+    <div class="past">
+      {#each allPast ? past : past.slice(0, 5) as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} />{/each}
+      {#if past.length > 5 && !allPast}<span class="lnk"><Button kind="plain" size="s" onclick={() => (allPast = true)}>{t('common.more')}</Button></span>{/if}
+    </div>
+  {/if}
+
   {#if data.eventsReady && shown.length < 6}
     <!-- the first weeks of the pilot: a short list should read as "more is coming", not as an empty app -->
     <EmptyState icon={Sparkles} title={t('list.moreSoon')} text={t('list.moreSoonText')} action={{ label: t('list.toClubs'), onclick: () => { ui.tab = 'club'; } }} />
@@ -259,6 +272,8 @@
   .ttl { font: 800 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.035em; }
   .tools { flex: none; display: flex; gap: var(--s-2); }
   .off { margin: 12px 4px 0; color: var(--text-2); }
+  .past { display: flex; flex-direction: column; gap: 8px; }
+  .lnk { align-self: center; }
 
   /* Luma's section titles: bold, the second line grey at the same size */
   .sec { margin: 26px 0 12px; font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; }

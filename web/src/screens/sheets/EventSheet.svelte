@@ -24,6 +24,7 @@
   import Eye from '@lucide/svelte/icons/eye';
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import Camera from '@lucide/svelte/icons/camera';
+  import Images from '@lucide/svelte/icons/images';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Link from '@lucide/svelte/icons/link';
@@ -65,7 +66,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
-  let { overlay, id, preview, from }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null } = $props();
+  // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
+  let { overlay, id, preview, from, album }: { overlay: Overlay; id: Id; preview?: EventFull; from?: Element | null; album?: boolean } = $props();
 
   let detail = $state<EventFull | null>(null);
   $effect(() => { if (!preview) eventDetails(id).then((d) => (detail = d)).catch(() => {}); });
@@ -195,9 +197,10 @@
   $effect(() => { if (detail) rated = detail.myRating; });
   let note = $state('');
   let noted = $state(false);
+  let rating = $state(false); // rated before: one quiet line until tapped to change (the full faces again)
   async function rateIt(score: number, comment?: string) {
     const was = rated;
-    rated = score; haptic.select();
+    rated = score; rating = true; haptic.select();
     try {
       detail = await api.rate(id, score, comment);
       if (comment) { noted = true; haptic.ok(); say(t('rate.saved'), 'sparkles_3d'); }
@@ -231,6 +234,9 @@
   }
 
   const hidePhoto = (p: AlbumPhoto) => { if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
+  const viewAlbum = (i = 0) => sheets.photos(photos, i, removePhoto, hidePhoto);
+  let albumDone = false;
+  $effect(() => { if (album && detail && !albumDone) { albumDone = true; if (detail.photos.length) viewAlbum(); } });
 
   async function removeUpdate(u: EventUpdate) {
     if (!(await sheets.ask({ title: t('upd.deleteAsk'), ok: t('upd.delete'), cancel: t('common.cancel'), danger: true }))) return;
@@ -302,7 +308,35 @@
     {#if soon}
     <div class="page">
 
-    {#if detail && (detail.canRate || detail.myRating != null)}
+    {#if detail && !e.meeting && (photos.length || detail.canAddPhotos)}
+      <!-- the guests' album first, right under the header (after the event it's what the sheet is about) -->
+      <section class="album">
+        <!-- engine: Section could take a trailing action (here "Add"); its header in Group's caption size -->
+        <div class="al-h"><h3 class="fs-t3">{t('album.title')}{#if photos.length}<span class="n num">{photos.length}</span>{/if}</h3>
+          <!-- after the event the bar's own "Add photos" does it -->
+          {#if detail.canAddPhotos && !over}<Button kind="tinted" size="s" disabled={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<ImagePlus size={16} />{/snippet}{t('album.add')}</Button>{/if}</div>
+        {#if shown || adding}
+          <div class="mosaic n{Math.min(shown, 3)}">
+            {#each photos.slice(0, shown) as p, i (p.id)}
+              <button class="ph" style="background-color:{p.color ?? 'var(--surface-2)'}" onclick={() => viewAlbum(i)}>
+                <img src={p.thumb} alt="" loading="lazy" decoding="async" />
+                {#if i === shown - 1 && photos.length > shown}<span class="more num">+{photos.length - shown}</span>{/if}
+              </button>
+            {/each}
+            {#each { length: adding } as _, i (i)}<span class="ph wait"></span>{/each}
+          </div>
+        {:else}
+          <EmptyState inline text={t('album.empty')} />
+        {/if}
+        <input type="file" accept="image/*" multiple hidden bind:this={picker} onchange={addPhotos} />
+      </section>
+    {/if}
+
+    {#if detail && rated && !rating}
+      <!-- rated before: one quiet line; a tap brings the faces back to change it -->
+      <button class="mine" disabled={!detail.canRate} onclick={() => { rating = true; haptic.tap(); }}>
+        <span>{t('rate.mine')}</span><Emoji name={FACES[rated - 1]} size={22} /></button>
+    {:else if detail && (detail.canRate || detail.myRating != null)}
       <section class="rate">
         <b class="rq">{rated ? t('rate.thanks') : t('rate.ask')}</b>
         <div class="faces">
@@ -327,28 +361,6 @@
           <div class="rs-row"><span class="rf"><Emoji name={FACES[4 - i]} size={18} /></span><span class="rbar"><span style="width:{r.count ? (n / r.count) * 100 : 0}%"></span></span><span class="rn num">{n}</span></div>
         {/each}
         {#each r.comments.slice(0, 20) as c, i (i)}<p class="rc"><Emoji name={FACES[c.score - 1]} size={18} />{c.body}</p>{/each}
-      </section>
-    {/if}
-
-    {#if detail && !e.meeting && (photos.length || detail.canAddPhotos)}
-      <section class="album">
-        <!-- engine: Section could take a trailing action (here "Add"); its header in Group's caption size -->
-        <div class="al-h"><h3 class="fs-t3">{t('album.title')}{#if photos.length}<span class="n num">{photos.length}</span>{/if}</h3>
-          {#if detail.canAddPhotos}<Button kind="tinted" size="s" disabled={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<ImagePlus size={16} />{/snippet}{t('album.add')}</Button>{/if}</div>
-        {#if shown || adding}
-          <div class="mosaic n{Math.min(shown, 3)}">
-            {#each photos.slice(0, shown) as p, i (p.id)}
-              <button class="ph" style="background-color:{p.color ?? 'var(--surface-2)'}" onclick={() => sheets.photos(photos, i, removePhoto, hidePhoto)}>
-                <img src={p.thumb} alt="" loading="lazy" decoding="async" />
-                {#if i === shown - 1 && photos.length > shown}<span class="more num">+{photos.length - shown}</span>{/if}
-              </button>
-            {/each}
-            {#each { length: adding } as _, i (i)}<span class="ph wait"></span>{/each}
-          </div>
-        {:else}
-          <EmptyState inline text={t('album.empty')} />
-        {/if}
-        <input type="file" accept="image/*" multiple hidden bind:this={picker} onchange={addPhotos} />
       </section>
     {/if}
 
@@ -551,6 +563,8 @@
           {/if}
         {:else if over && detail?.canAddPhotos && !e.meeting}
           <Button kind="primary" size="l" full loading={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<Camera size={18} />{/snippet}{t('album.addMine')}</Button>
+        {:else if over && photos.length && !e.meeting}
+          <Button kind="secondary" size="l" full onclick={() => viewAlbum()}>{#snippet icon()}<Images size={18} />{/snippet}{t('album.see')}</Button>
         {:else if over}
           <Button kind="neutral" size="l" full disabled>{t('event.over')}</Button>
         {:else if e.externalUrl}
@@ -659,6 +673,8 @@
   /* one tap after the event: bespoke (the faces), on a group's surface */
   .rate { display: flex; flex-direction: column; gap: 10px; padding: var(--s-4); border-radius: var(--r-group); background: var(--surface); text-align: center; }
   .rq { font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.015em; }
+  .mine { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 var(--s-1); color: var(--text-2); font: 500 var(--fs-body)/1.2 var(--font-text); }
+  .mine:disabled { opacity: 1; }
   .faces { display: flex; justify-content: space-between; gap: 6px; }
   .faces button { flex: 1; aspect-ratio: 1; max-width: 62px; border-radius: var(--r-m); display: flex; align-items: center; justify-content: center; background: var(--fill);
     line-height: 1; transition: transform 260ms cubic-bezier(.2, 1.6, .4, 1), opacity var(--t-base), background-color var(--t-base); }

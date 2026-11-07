@@ -53,7 +53,7 @@
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
-  sheets.event = (id, from) => lazy(eventSheet, { id, from });
+  sheets.event = (id, from, album) => lazy(eventSheet, { id, from, album });
   sheets.preview = (e) => lazy(eventSheet, { id: e.id, preview: e });
   sheets.myQr = (link, p) => lazy(() => import('./screens/profile/MyQr.svelte'), { link, p });
   sheets.badgeQr = (award, code) => lazy(() => import('./screens/admin/BadgeQr.svelte'), { award, code });
@@ -64,7 +64,9 @@
   const ticketView = () => import('./screens/sheets/TicketView.svelte');
   sheets.ticket = (id) => lazy(ticketView, { id });
   sheets.stories = (groups, start, at) => lazy(() => import('./screens/sheets/Stories.svelte'), { groups, start, at });
-  sheets.photos = (photos, start, onremove, ongone, from) => lazy(() => import('./screens/sheets/PhotoViewer.svelte'), { photos, start, onremove, ongone, from });
+  // named, so its chunk is kept once loaded and opens in the tap's frame (an arrow made here each call never was)
+  const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
+  sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
@@ -332,8 +334,11 @@
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
-    const ph = p.match(/^ph_(\d+)$/); // the bot's "photos are in the album": the event, the album open over it
-    if (ph) { const id = Number(ph[1]); sheets.event(id); api.event(id).then((e) => { if (e.photos.length) sheets.photos(e.photos, 0); }).catch(() => {}); return; }
+    // the bot's "photos are in the album" / "add yours": the event, its album open over it. The sheet opens the album
+    // itself once its details are in (it used to be a second fetch and a second lazy() here, which any other sheet
+    // opening meanwhile silently dropped: only the latest lazy() opens)
+    const ph = p.match(/^ph_(\d+)$/);
+    if (ph) { sheets.event(Number(ph[1]), null, true); return; }
     const cp = p.match(/^cp_(\d+)$/); // the bot's "someone replied" under a post: its thread
     if (cp) { asStudent(() => sheets.comments('post', Number(cp[1]), t('cm.title'))); return; }
     const cm = p.match(/^cm_(\d+)$/); // the bot's question / answer card: the event and its thread

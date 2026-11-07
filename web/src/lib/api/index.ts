@@ -27,7 +27,7 @@ export interface Api {
   dmOn(event?: Id): Promise<Me>;
 
   events(q?: { from?: Ts; to?: Ts; org?: Id }): Promise<EventCard[]>;
-  pastEvents(org?: Id): Promise<EventCard[]>; // org: a club's latest few
+  pastEvents(org?: Id, mine?: boolean): Promise<EventCard[]>; // org: a club's latest few; mine: the ones I was signed up for or came to
   event(id: Id): Promise<EventFull>;
   register(id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[]): Promise<EventCard>; // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   addSeats(id: Id, add: number): Promise<EventFull>;

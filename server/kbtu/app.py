@@ -526,8 +526,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.events(con, v, frm, to, org)
 
     @app.get("/api/events/past")
-    def list_past(con: Con, v: Me, org: int | None = None):
-        return logic.past_events(con, v, org)
+    def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False):
+        return logic.past_events(con, v, org, mine)
 
     @app.post("/api/me/unlocked")
     def seen_unlock(con: Con, v: Me, body: dict = Body(...)):

@@ -1259,7 +1259,7 @@ def test_calendar_file(env):
     assert c.get("/api/me", headers={"Authorization": "tma auth_date=1&hash=%C3%A9"}).status_code == 403
 
 
-def test_album(env):
+def test_album(env, monkeypatch):
     """The guests' album: who came adds up to 10 photos from the start until a week after the end, the team too;
     the one who added it or the club's Head+ take one out; guests see none; deleting my data takes mine out."""
     import io
@@ -1300,7 +1300,20 @@ def test_album(env):
     assert c.get("/api/events/1", headers=P).json()["canAddPhotos"] is True                 # the team brings its own
     assert c.delete(f"/api/events/1/photos/{first}", headers=Z).status_code == 403
     assert len(c.delete(f"/api/events/1/photos/{first}", headers=P).json()["photos"]) == 9  # the club's Head+
-    con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
+    # Afisha's "Past": mine (signed up or came), ended; the admin's photo call to who came, once each
+    assert [e["id"] for e in c.get("/api/events/past?mine=1", headers=Z).json()] == [1]
+    assert c.get("/api/events/past?mine=1", headers=tma(93, "Guest")).json() == []
+    from kbtu import admin
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    con.execute("UPDATE users SET can_dm = 1")
+    admin.main(["photo-call", "1", "--send"])
+    admin.main(["photo-call", "1", "--send"])
+    call = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_call'").fetchall()
+    assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and bot._render(con, call[0])[2] == "ph_1"
+    con.execute("UPDATE events SET album_open = 0 WHERE id = 1")
+    assert bot._render(con, call[0]) is None                                                 # the team's only now: quiet
+    con.execute("UPDATE events SET album_open = 1, ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
+    assert bot._render(con, call[0]) is None                                                 # a week on: no adding, quiet
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False               # a week after the end: closed
     assert delete_now(c, cfg, A) is None
     left = c.get("/api/events/1", headers=P).json()["photos"]

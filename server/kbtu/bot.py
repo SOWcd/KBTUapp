@@ -277,6 +277,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         e = one(con, "SELECT id, title, i18n FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL", int(ref[1]))
         n = one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", int(ref[1]))[0]
         return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang), n=n), f"ph_{e['id']}") if e and n else None
+    if kind == "photo_call":  # ph2:<event>, admin photo-call: those who came, once; quiet once guests can't add (closed, a week on)
+        e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND album_open = 1", int(ref[1]))
+        return (*texts.bot_message(lang, kind, title=logic.title_in(e, lang)), f"ph_{e['id']}") if e and logic.now() <= logic.end_of(e) + logic.ALBUM_FOR else None
     if kind in ("comment_question", "comment_answer"):  # cq:<event>:<hour> to the club's Head+ · ca:<event>:<answer> to askers
         e = one(con, "SELECT e.id, e.title, e.i18n, o.name FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL",
                 int(ref[1]))

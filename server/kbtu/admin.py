@@ -60,7 +60,9 @@
   .venv/bin/python -m kbtu.admin announce3 [--send|--test]   owner's one-off (Nov 7): the incubator's elective post (bot.ELECTIVE)
                                 to the 3rd years the bot can write to, with "more like it?" Yes/No; counts only; --send queues
                                 it (once per person: a second run reaches only the new ones)
-  .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
+  .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
+                                who came, once each (ref ph2:<event>); a dry run prints how many
+  .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
 A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
@@ -371,6 +373,20 @@ def main(args: list[str]) -> None:
                 for uid in to:
                     notify(con, uid, "elective3", "elective3:2016")
         print(f"3rd years the bot can write to, not sent yet: {len(to)}" + (" (queued)" if args[1:] else " (dry run; --send queues)"))
+    elif cmd == "photo-call" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--send"]):
+        e = one(con, "SELECT id, title, album_open FROM events WHERE id = ? AND status = 'published'", int(args[1]))
+        if not e:
+            sys.exit("no published event with that id")
+        if not e["album_open"]:
+            sys.exit("its album is the team's only (Photos from participants off): guests can't add, nothing to call for")
+        to = [r[0] for r in rows(con, """SELECT r.user_id FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ?
+            AND r.checked_in_at IS NOT NULL AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+            AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'photo_call' AND b.ref = ?)""", e["id"], f"ph2:{e['id']}")]
+        if args[2:]:
+            with db.tx(con):
+                for uid in to:
+                    notify(con, uid, "photo_call", f"ph2:{e['id']}")
+        print(f"{e['title']!r}: came and not called yet {len(to)}" + (" (queued)" if args[2:] else " (dry run; --send queues)"))
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"
