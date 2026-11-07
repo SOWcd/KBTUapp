@@ -20,6 +20,7 @@ import httpx
 
 from . import ai, media
 from .logic import ApiError, now, one, photo_free, rows, tx, wipe_post
+from .logic.clubs import stories_open
 
 FIRST_TAKE = 5            # on a first link: at most the last 5 posts ...
 FIRST_DAYS = 30           # ... of the last 30 days
@@ -186,6 +187,8 @@ def take(con, channel: int, m: Msg) -> int | None:
             _counted(con, channel, into, m)
             return into
         if pid is None:
+            if not stories_open(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid)):
+                return None  # a student initiative below the Ascent's collab step posts no stories, mirrored ones neither
             t, b = _split(m.text, title)
             pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, comments_on, created_at,
                     tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, 0, ?, ?, ?, ?)""",

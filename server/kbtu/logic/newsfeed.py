@@ -94,6 +94,8 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
     need_student(v)
     _may(con, v, oid, "posts")
     o = _org(con, oid)
+    if not stories_open(con, o):
+        raise ApiError("forbidden", "ascent")  # Studio's composer says which Ascent step opens them
     title, text = str(body.get("title") or "").strip(), str(body.get("body") or "").strip()
     tag, audience = body.get("tag"), body.get("audience") or "public"
     if title and not _worded(title):
@@ -247,7 +249,7 @@ def react(con, v: Viewer, pid: int, kind: str, on: bool) -> dict:
 # when a function runs
 from . import core  # noqa: E402
 from .account import _drop_unused  # noqa: E402
-from .clubs import orgs  # noqa: E402
+from .clubs import orgs, stories_open  # noqa: E402
 from .moderation import _thread, comments  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .seats import notify  # noqa: E402

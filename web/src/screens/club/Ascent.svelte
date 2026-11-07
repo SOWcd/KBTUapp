@@ -25,7 +25,7 @@
   const count = (k: PathStep) => k === 'profile' ? t('op.members', { n: Math.min(path.members, 5) }) : k === 'top' ? t('op.events', { n: Math.min(path.events, 2) }) : '';
 </script>
 
-<section class="asc">
+<section class="asc" id="ascent">
   <h3 class="cap">{t('op.title')}<span class="note">{path.steps.top ? t('op.atTop') : t('op.level', { n: level })}</span></h3>
   <ol class="card">
     {#each STEPS as k, i (k)}

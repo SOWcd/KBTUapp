@@ -80,8 +80,9 @@ def test_news_for_everyone_is_official(env):
     con, oid = _club(c, cfg, False)
     _, off = con, logic.create_org(con, None, "Debate", "DB", "crown_3d", True)
     logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], off, "president", "test")
-    for o, title in ((oid, "Initiative news"), (off, "Official news")):
-        assert c.post(f"/api/orgs/{o}/posts", headers=tma(20), json={"title": title, "body": "x"}).status_code == 200
+    # an initiative's own posts open at the Ascent's collab (test_official_path): one from before, as the app had them
+    con.execute("INSERT INTO posts (org_id, author_id, audience, title, body, created_at) VALUES (?, NULL, 'public', 'Initiative news', 'x', 0)", (oid,))
+    assert c.post(f"/api/orgs/{off}/posts", headers=tma(20), json={"title": "Official news", "body": "x"}).status_code == 200
     seen = lambda uid: {p["title"] for p in c.get("/api/posts", headers=tma(uid), params={"scope": "all"}).json()}  # noqa: E731
     assert seen(31) == {"Official news"}
     assert seen(30) == seen(20) == {"Initiative news", "Official news"}  # a follower; a member
@@ -151,10 +152,10 @@ def test_review_fixes(env):
     assert e["told"] is True and [r[0]["id"] for r in logic.channel_due(con)] == [e["id"]]
     _publish(c, 90, "DMP day 2")
     assert c.post("/api/orgs/90/posts", headers=tma(20), json={"title": "DMP news", "body": "x"}).status_code == 200
-    p = c.post(f"/api/orgs/{oid}/posts", headers=tma(20), json={"title": "Featured", "body": "x"}).json()
+    pid = con.execute("INSERT INTO posts (org_id, author_id, audience, title, body, created_at) VALUES (?, NULL, 'public', 'Featured', 'x', 0)", (oid,)).lastrowid
     seen = lambda: {x["title"] for x in c.get("/api/posts", headers=tma(31), params={"scope": "all"}).json()}  # noqa: E731
     assert seen() == {"DMP news"}
-    con.execute("UPDATE posts SET featured_until = ? WHERE id = ?", (logic.core.now() + 3600, p["id"]))
+    con.execute("UPDATE posts SET featured_until = ? WHERE id = ?", (logic.core.now() + 3600, pid))
     assert seen() == {"DMP news", "Featured"}
     # nobody to tell: the week isn't spent
     lone = logic.create_org(con, None, "Lonely", "LO", "crown_3d", False)

@@ -483,6 +483,12 @@ def path_top(con, oid: int) -> bool:
     return bool(one(con, "SELECT top_at IS NOT NULL FROM orgs WHERE id = ?", oid)[0])
 
 
+def stories_open(con, o: sqlite3.Row) -> bool:
+    """A club may post stories (newsfeed.create_post, the channel mirror): official, not a club, or a student initiative
+    past the Ascent's collab step (owner, Nov 7: an official club vouched for it, it's on the afisha). Old posts stay."""
+    return bool(o["official"] or o["kind"] != "club" or o["top_at"]) or _path_steps(con, o["id"])[0]["collab"]
+
+
 def _reached_top(con, oid: int) -> None:
     """Once: the top kept, the owner told (the lanyard is made by hand)."""
     with tx(con):

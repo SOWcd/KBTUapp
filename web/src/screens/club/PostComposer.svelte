@@ -28,6 +28,8 @@
   import Chip from '../../ui/Chip.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import IconButton from '../../ui/IconButton.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Lock from '@lucide/svelte/icons/lock';
 
   let { overlay, org, post }: { overlay: Overlay; org: Id; post?: Post } = $props();
   const mine = $derived([...(session.me?.memberships ?? [])].filter((m) => m.role !== 'member').sort(byRank));
@@ -36,6 +38,12 @@
   // "Important" messages the club's members (once a day per club), so it's Vice+'s
   const vice = $derived(may(mine.find((m) => m.org.id === pick), 'team'));
   const events = $derived(may(mine.find((m) => m.org.id === pick), 'events'));
+  // a student initiative writes news from the Ascent's collab step on (server clubs.stories_open): till then, which step
+  const locked = $derived(!post && !!mine.find((m) => m.org.id === pick)?.storiesLocked);
+  function toAscent() {
+    close(overlay.id);
+    requestAnimationFrame(() => document.getElementById('ascent')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
   const broadcast = $derived(!!data.orgs.find((o) => o.id === pick)?.canBroadcast || club?.kind === 'office' || club?.kind === 'app');
 
   const was = untrack(() => post); // the post as it was when the form opened
@@ -86,7 +94,7 @@
       haptic.ok(); burst(); say(t('post.published'), 'party_popper_3d');
       void loadNews();
       close(overlay.id);
-    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'link_title' ? 'post.linkTitle' : 'common.error'), 'warning_3d'); }
+    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'link_title' ? 'post.linkTitle' : e instanceof ApiErr && e.message === 'ascent' ? 'post.locked' : 'common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 
@@ -111,6 +119,9 @@
 </script>
 
 <Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
+  {#if locked}
+    <EmptyState icon={Lock} title={t('post.locked')} text={t('op.collab')} action={{ label: t('op.title'), onclick: toAscent }} />
+  {:else}
   <div class="stack">
     <!-- the club chosen in Studio, no picker -->
     {#if club}
@@ -147,9 +158,11 @@
 
     <Group footnote={t('post.pinNote')}><Row title={t('post.pin')} accessory="switch" checked={pinned} onchange={(on) => (pinned = on)} /></Group>
   </div>
+  {/if}
 
   {#snippet footer()}
-    {#if was}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !changed} onclick={save}>{t('common.save')}</Button>
+    {#if locked}<!-- no button: nothing to write yet -->
+    {:else if was}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !changed} onclick={save}>{t('common.save')}</Button>
     {:else}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !(title.trim() || body.trim() || photo)} onclick={publish}>{t('post.publish')}</Button>{/if}
   {/snippet}
 </Sheet>

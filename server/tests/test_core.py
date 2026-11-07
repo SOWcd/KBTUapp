@@ -1058,7 +1058,7 @@ def test_posts(env):
     head, mem, dmp = login(c, 51, "head"), login(c, 52, "mem"), login(c, 53, "dmp")
     H, M, D = tma(51, "Head"), tma(52, "Mem"), tma(53, "Dmp")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")  # posts: official (clubs.stories_open)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, can_broadcast, created_at) VALUES (2, 'dmp', 'office', 'DMP', 'DM', 'sparkles_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'head', 0), (1, ?, 'member', 0), (2, ?, 'head', 0)", (head["id"], mem["id"], dmp["id"]))
     post = {"title": "Hackathon teams", "body": "Sign up by Friday", "tag": "recruiting", "pinned": True}
@@ -2833,7 +2833,7 @@ def test_team_two(env):
     for uid, name in ((20, "pres"), (21, "vic"), (22, "hed"), (10, "ann"), (11, "bob"), (12, "cat")):
         login(c, uid, name)
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     for tg, role in ((20, "president"), (21, "vice"), (22, "head"), (10, "member"), (11, "member"), (12, "member")):
         con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, ?, 0 FROM users WHERE tg_id = ?", (role, tg))
     uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (20, 21, 22, 10, 11, 12)}
@@ -3466,7 +3466,7 @@ def test_important_post(env):
     vice, head, mem = login(c, 61, "vice"), login(c, 62, "head"), login(c, 63, "mem")
     V, H = tma(61, "Vice"), tma(62, "Head")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0), (1, ?, 'head', 0), (1, ?, 'member', 0)",
                 (vice["id"], head["id"], mem["id"]))
     con.commit()
@@ -4971,7 +4971,7 @@ def test_channel_mirror(env, tmp_path):
     c, cfg = env
     pres, ali = login(c, 80, "pres"), login(c, 81, "ali")
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main) VALUES
         (1, 'Open Mic News', 'channel', 'https://t.me/Mic_News', 0, 'org', 1, 1), (2, 'Open Mic Team', 'channel', 'https://t.me/+Secret1', 0, 'org', 1, 0)""")
@@ -5091,7 +5091,7 @@ def test_userbot_reads_telethon_messages(env):
     from kbtu import mirror, userbot
     c, cfg = env
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
     mirror.joined(con, 500, "mic_news")
     png = io.BytesIO(); Image.new("RGB", (40, 30), "blue").save(png, "PNG")
@@ -7211,7 +7211,7 @@ def test_mirror_gone_wipes_the_post(env, tmp_path):
     from kbtu import mirror
     _, cfg = env
     con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
     mirror.joined(con, 500, "mic_news")
     pics = []
@@ -7290,8 +7290,8 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
     H, Mo, R = tma(51, "Head"), tma(52, "Mod"), tma(53, "Rival")
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (mod["id"],))
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'art', 'club', 'Art Club', 'AR', 'laptop_3d', 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (2, 'art', 'club', 'Art Club', 'AR', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'head', 0), (2, ?, 'head', 0)", (head["id"], rival["id"]))
     disk = tmp_path / "media"   # the route's photos: next to the database
     disk.mkdir(exist_ok=True)

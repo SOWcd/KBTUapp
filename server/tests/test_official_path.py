@@ -177,6 +177,31 @@ def test_nothing_locked(env):
     assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=paid).status_code == 200
 
 
+def test_stories_open_at_collab(env):
+    """Stories (club posts) are an official club's, and an initiative's from the Ascent's collab step on (owner, Nov 7):
+    below it a 403 the composer names, the old posts stay, and the step opens them by itself."""
+    c, con, ids, oid = _setup(env)
+    post = {"title": "Walked", "body": "", "tag": "important"}
+    con.execute("INSERT INTO posts (org_id, author_id, audience, title, body, created_at) VALUES (?, ?, 'public', 'Old', '', 0)", (oid, ids[PRES]))
+
+    def mine():
+        return next(m for m in c.get("/api/me", headers=tma(PRES)).json()["memberships"] if m["org"]["id"] == oid)
+    assert mine()["storiesLocked"] is True
+    r = c.post(f"/api/orgs/{oid}/posts", headers=tma(PRES), json=post)
+    assert r.status_code == 403 and "ascent" in r.text
+    assert con.execute("SELECT COUNT(*) FROM posts WHERE org_id = ?", (oid,)).fetchone()[0] == 1  # the old one kept
+    off = logic.create_org(con, None, "Debate", "DB", "crown_3d", True)
+    con.execute("INSERT INTO event_cohosts (event_id, org_id, status, created_at) VALUES (?, ?, 'accepted', 0)", (_event(con, oid, ago=-DAY), off))
+    assert "storiesLocked" not in mine()
+    assert c.post(f"/api/orgs/{oid}/posts", headers=tma(PRES), json=post).status_code == 200
+    # an initiative at the top, and an official club, write as before
+    con.execute("DELETE FROM event_cohosts")
+    con.execute("UPDATE orgs SET top_at = 1 WHERE id = ?", (oid,))
+    assert c.post(f"/api/orgs/{oid}/posts", headers=tma(PRES), json=post).status_code == 200
+    con.execute("UPDATE orgs SET top_at = NULL, official = 1 WHERE id = ?", (oid,))
+    assert c.post(f"/api/orgs/{oid}/posts", headers=tma(PRES), json=post).status_code == 200
+
+
 def test_request_lifecycle(env, monkeypatch):
     c, con, ids, oid = _setup(env)
     ask = lambda who=PRES: c.post(f"/api/orgs/{oid}/official-path", headers=tma(who))  # noqa: E731

@@ -435,7 +435,10 @@ def me(con, v: Viewer) -> dict:
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [{"org": org_ref(con, m), "role": m["role"], **core.titled(m), "rights": _ordered(_rights_from(m["role"], m["rights"])),
                          "oversee": bool(m["can_oversee"] and m["role"] != "member"),
-                         **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {})} for m in members],
+                         **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
+                         # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
+                         **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
+                            and m["kind"] == "club" and not stories_open(con, m) else {})} for m in members],
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
@@ -1314,7 +1317,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import chatlist, core, fchannel, inbox, profiles  # noqa: E402
-from .clubs import TRANSLIT, orgs  # noqa: E402
+from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
 from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
