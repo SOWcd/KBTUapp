@@ -89,7 +89,7 @@
         openLink(`https://t.me/Sowers?text=${encodeURIComponent(t('studio.deletePaidMsg', { title: e?.title ?? '' }))}`);
     }
   }
-  // Admin's one quick action (organizers asked to stop sign-ups): closes now, the toast's Undo puts the old deadline back
+  // "Close registration" (organizers asked to stop sign-ups; theirs and Admin's alike): closes now, the toast's Undo puts the old deadline back
   const regClosed = $derived(!!e?.regUntil && e.regUntil <= nowTs());
   const regOn = (r: EventCard['regUntil']) => { const x = eventById(id); if (x) x.regUntil = r; };
   async function setReg(until: number | 'now' | null, done: string, was: EventCard['regUntil']) {
@@ -167,7 +167,7 @@
         <Row icon={Eye} title={t('mg.asStudents')} accessory="chevron" onclick={() => sheets.event(id)} />
       </Group>
 
-      {#if staff && live && !e.guestHost && (!started || e.lateSignup)}
+      {#if head && live && !e.guestHost && (!started || e.lateSignup)}
         <Group>
           {#if regClosed}<Row title={t('mg.openReg')} onclick={() => setReg(null, t('mg.regOpened'), e.regUntil)} />
           {:else}<Row tone="destructive" title={t('mg.closeReg')} onclick={closeReg} />{/if}

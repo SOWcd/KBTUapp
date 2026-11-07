@@ -76,9 +76,12 @@ def test_admin_finds_and_runs_an_event_audited(env):
 
 def test_organizers_own_event_not_logged_and_bounds(env):
     c, con, ids = _setup(env)
+    # the same "Close registration" in the organizers' own Studio screen
     assert c.put("/api/events/1/reg-until", headers=tma(62), json={"until": "now"}).status_code == 200
+    assert c.post("/api/events/1/registration", headers=tma(63), json={}).status_code == 409
     assert c.put("/api/events/1/reg-until", headers=tma(62), json={"until": True}).status_code == 400
     assert c.put("/api/events/1/reg-until", headers=tma(62), json={"until": None}).status_code == 200
+    assert c.post("/api/events/1/registration", headers=tma(63), json={}).status_code == 200
     assert not _staff_lines(con)
 
 
