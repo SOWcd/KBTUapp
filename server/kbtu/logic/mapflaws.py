@@ -45,6 +45,13 @@ def listing(con, v: Viewer) -> list[dict]:
         ORDER BY done_at IS NOT NULL, CASE WHEN done_at IS NULL THEN created_at ELSE -done_at END LIMIT 200""")]
 
 
+def mine(con, v: Viewer) -> list[dict]:
+    """My own open flaws, as pins on the map (where I already marked them); never anyone else's."""
+    need_student(v)
+    return [{"id": r["id"], "ver": r["ver"], "floor": r["floor"], "u": r["u"], "v": r["v"], "px": r["px"], "py": r["py"], "body": r["body"]}
+            for r in rows(con, "SELECT * FROM map_flaws WHERE user_id = ? AND done_at IS NULL ORDER BY id LIMIT 100", v.id)]
+
+
 def done(con, v: Viewer, fid: int, on: object = True) -> None:
     if v.role != "admin":
         raise ApiError("forbidden")

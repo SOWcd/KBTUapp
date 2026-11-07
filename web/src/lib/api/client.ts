@@ -278,6 +278,7 @@ export const server: Api = {
   channelReplyRestore: (id) => call('POST', `/forum-replies/${id}/restore`),
   mapFlaw: (f) => call('POST', '/map/flaws', f),
   mapFlaws: () => call('GET', '/map/flaws'),
+  mapFlawsMine: () => call('GET', '/map/flaws/mine'),
   mapFlawDone: (id, done) => call('POST', `/map/flaws/${id}/done`, { done }),
   assistant: (q, history, context) => call('POST', '/assistant', { q, history, context }),
   assistantVote: (mark, vote) => call('POST', '/assistant/vote', { mark, vote }),

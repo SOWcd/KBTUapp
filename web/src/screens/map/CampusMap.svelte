@@ -19,6 +19,7 @@
   // turn white on, look at it, and that's it; the app stays dark"). The panel carries the theme as a class (tokens.css).
   import { flushSync, onMount, tick, untrack } from 'svelte';
   import X from '@lucide/svelte/icons/x';
+  import Check from '@lucide/svelte/icons/check';
   import Search from '@lucide/svelte/icons/search';
   import Sun from '@lucide/svelte/icons/sun';
   import Moon from '@lucide/svelte/icons/moon';
@@ -239,18 +240,43 @@
   // a long press in place: "something's wrong here" (owner, Oct 29: the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
   let holdT: ReturnType<typeof setTimeout> | undefined;
+  // where it was marked (Nov 7: the spot was saved, but nothing showed where): a pin at the pressed point while the note
+  // is written, a check on it once saved, and my own open ones on the floor as small pins; a tap on one shows its words.
+  // Only mine, never anyone else's (the admin's list has all of them)
+  type Flaw = { id: number; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string };
+  let mine = $state<Flaw[]>([]);
+  let draft = $state<{ ver: Ver; f: number; u: number; v: number } | null>(null);
+  let okId = $state(0), seen = $state(0), okT = 0, pressFlaw = 0;
+  const canFlaw = () => !!session.me?.student && session.board; // where the policy's section 12 is in force (BOARD), for everyone it covers
+  $effect(() => { if (canFlaw()) api.mapFlawsMine().then((l) => (mine = l), () => {}); });
+  /** mine on this floor of this map: its own spot, or on another map through the 2023 plan's units */
+  const flawsHere = $derived(mine.flatMap((m) => {
+    if (m.floor !== cur) return [];
+    const [u, v] = m.ver === ver ? [m.u, m.v] : m.px != null && m.py != null ? fromPlan(ver, m.px, m.py) : [-1, -1];
+    return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [{ id: m.id, u, v, body: m.body }] : [];
+  }));
   function flaw(at: { x: number; y: number }) {
     const W = stage.clientWidth * s, u = (at.x - x) / W, v = (at.y - y) / (W * AR);
-    if (u < 0 || u > 1 || v < 0 || v > 1 || !session.me?.student || !session.board) return; // where the policy's section 12 is in force (BOARD), for everyone it covers
-    haptic.soft(); press = null; lastTap = 0;
-    const [px, py] = toPlan(ver, u, v);
-    void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: cur }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
-      .then((body) => body ? api.mapFlaw({ ver, floor: cur, u, v, px, py, body }).then(() => { haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d'); }) : undefined)
-      .catch(() => say(t('common.error'), 'warning_3d'));
+    if (u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return;
+    haptic.soft(); press = null; lastTap = 0; seen = 0;
+    const [px, py] = toPlan(ver, u, v), f = cur, vr = ver;
+    draft = { ver: vr, f, u, v };
+    // zoomed in, a spot low on the screen comes up above the sheet the note is written in
+    if (!out() && at.y > stage.clientHeight * 0.4) zoomTo(s, ...clamped(s, x, y - (at.y - stage.clientHeight * 0.3)), 420);
+    void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: f }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
+      .then((body) => body ? api.mapFlaw({ ver: vr, floor: f, u, v, px, py, body }).then(() => {
+        haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d');
+        const id = -Date.now(); // the server answers 204: mine until the next visit lists it with its own id
+        mine = [...mine, { id, ver: vr, floor: f, u, v, px, py, body }];
+        okId = id; clearTimeout(okT); okT = window.setTimeout(() => (okId = 0), 1400);
+      }) : undefined)
+      .catch(() => say(t('common.error'), 'warning_3d'))
+      .finally(() => (draft = null));
   }
   function down(e: PointerEvent) {
     menu = false; clearTimeout(settleT); clearTimeout(glideT); touched++; halt(); framed = null; // a finger first: the glide gives way
     press = pts.size ? null : { ...local(e), t: performance.now() };
+    pressFlaw = Number((e.target as Element).closest<HTMLElement>('[data-flaw]')?.dataset.flaw ?? 0);
     clearTimeout(holdT);
     if (press && !rt.route) { const at = { x: press.x, y: press.y }; holdT = setTimeout(() => flaw(at), 600); }
     stage.setPointerCapture(e.pointerId);
@@ -289,7 +315,9 @@
       if (Math.hypot(x - tx, y - ty) > 0.5) zoomTo(s, tx, ty, 380);
     }
     // a double tap: two taps, the second let go within 300 ms of the first and near it, zooms in (or back out)
-    if (tap && !pts.size && p) {
+    // a tap on my own pin shows what I wrote there; any other tap puts it away
+    if (tap && !pts.size && (pressFlaw || seen)) { if (pressFlaw) haptic.tap(); seen = pressFlaw && pressFlaw !== seen ? pressFlaw : 0; }
+    if (tap && !pts.size && p && !pressFlaw) {
       if (lastTap && performance.now() - lastTap < 300 && Math.hypot(p.x - tapAt.x, p.y - tapAt.y) < 40) { haptic.tap(); zoomTo(...around(s > 1.5 ? 1 / s : 2.5, p.x, p.y), 380); lastTap = 0; }
       else { lastTap = performance.now(); tapAt = p; }
     } else if (!tap) lastTap = 0;
@@ -741,6 +769,11 @@
       {:else}
         {@html shown}
       {/if}
+      {#each flawsHere as m (m.id)}
+        <span class="pin mark" class:ok={m.id === okId} data-flaw={m.id} style:left="{m.u * 100}%" style:top="{m.v * 100}%"><Check size={11} strokeWidth={3.4} /></span>
+        {#if m.id === seen}<span class="pin memo" style:left="{m.u * 100}%" style:top="{m.v * 100}%">{m.body}</span>{/if}
+      {/each}
+      {#if draft && draft.f === cur && draft.ver === ver}<span class="pin mark draft" style:left="{draft.u * 100}%" style:top="{draft.v * 100}%"></span>{/if}
     </div>
   </div>
   <!-- the top row: the floors, the map's look at its end (owner, Oct 24: a lift panel on the right covered the plan) -->
@@ -874,8 +907,21 @@
   @keyframes flagIn { from { opacity: 0; transform: translate(-50%, calc(-100% - 10px)) scale(0.7); } }
   .pin.badge { transform: translate(-50%, -130%); padding: 5px 9px; border-radius: 10px; background: #f5b13d; color: #1d1300; font: 800 13px/1 var(--font-text); white-space: nowrap;
     box-shadow: 0 6px 16px -4px rgba(245, 177, 61, 0.7); }
+  /* "something's wrong here": the spot being marked, a check once it's sent, then a small dot of mine (a 28 px target) */
+  .pin.mark { width: 28px; height: 28px; display: grid; place-items: center; pointer-events: auto; color: white; }
+  .pin.mark::before { content: ''; position: absolute; inset: 9px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 0 2px white, 0 1px 5px rgba(0, 0, 0, 0.35); transition: inset 0.45s var(--ease-spring); }
+  .pin.mark :global(svg) { position: relative; opacity: 0; transform: scale(0.4); transition: opacity 0.2s, transform 0.35s var(--ease-spring); }
+  .pin.mark.ok::before, .pin.mark.draft::before { inset: 3px; box-shadow: 0 0 0 3px white, 0 4px 14px rgba(0, 0, 0, 0.35); }
+  .pin.mark.ok :global(svg) { opacity: 1; transform: none; }
+  .pin.mark.draft { pointer-events: none; animation: drop 0.45s var(--ease-bounce); }
+  .pin.mark.draft::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; border: 2px solid var(--warning); animation: ripple 1.8s var(--ease-spring) infinite; }
+  @keyframes drop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } }
+  .pin.memo { transform: translate(-50%, calc(-100% - 12px)); width: max-content; max-width: 220px; padding: 8px 11px; border-radius: var(--r-s); background: var(--surface-solid); color: var(--text);
+    font: 600 var(--fs-sub)/1.35 var(--font-text); text-align: center; overflow-wrap: anywhere; box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.35); animation: noteIn 0.3s var(--ease-spring); }
+  @keyframes noteIn { from { opacity: 0; transform: translate(-50%, calc(-100% - 6px)) scale(0.92); } }
+  :global(html.lowfx) .pin.mark.draft::after,
   :global(html.lowfx) .way polyline.run, :global(html.lowfx) .spot::before, :global(html.lowfx) .spot::after, :global(html.lowfx) .pin.end::before { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .way polyline.run, .spot::before, .spot::after, .pin.end::before, .pin.flag, .pin.mark.draft::after { animation: none; } }
 
   /* right edge: the look button, the floors as a lift panel, "whole floor" (owner, Oct 24 mockup) */
   .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }

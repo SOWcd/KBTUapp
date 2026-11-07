@@ -199,6 +199,7 @@ export interface Api {
   channelReplyRestore(id: Id): Promise<void>;                                           // a take-down undone
   mapFlaw(f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void>; // a long press on the map
   mapFlaws(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]>; // the admin
+  mapFlawsMine(): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]>; // my own open ones, pins on the map
   mapFlawDone(id: Id, done: boolean): Promise<void>;
   assistant(q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply>; // the students' assistant; context: the card it was asked from (the server reads its facts)
   assistantVote(mark: string, vote: 'up' | 'down'): Promise<void>; // 👍/👎 on an answer's signed topic

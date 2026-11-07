@@ -1316,6 +1316,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def map_flaws(con: Con, v: Me):
         return logic.mapflaws.listing(con, v)
 
+    @app.get("/api/map/flaws/mine")
+    def map_flaws_mine(con: Con, v: Me):
+        return logic.mapflaws.mine(con, v)
+
     @app.post("/api/map/flaws/{fid}/done", status_code=204)
     def map_flaw_done(fid: int, con: Con, v: Me, body: dict = Body(default={})):
         logic.mapflaws.done(con, v, fid, body.get("done", True))

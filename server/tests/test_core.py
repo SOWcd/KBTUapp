@@ -6921,8 +6921,11 @@ def test_map_flaws(env):
     assert c.get("/api/map/flaws", headers=tma(1)).status_code == 403
     got = c.get("/api/map/flaws", headers=tma(4)).json()
     assert [(x["floor"], x["body"], x["done"]) for x in got] == [(1, "the WC door doesn't exist", None)]
+    assert [x["body"] for x in c.get("/api/map/flaws/mine", headers=tma(1)).json()] == ["the WC door doesn't exist"]
+    assert c.get("/api/map/flaws/mine", headers=tma(4)).json() == []                               # never another's, the admin's either
     c.post(f"/api/map/flaws/{got[0]['id']}/done", headers=tma(4))
     assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["done"]
+    assert c.get("/api/map/flaws/mine", headers=tma(1)).json() == []                               # fixed: off the map
     c.post("/api/map/flaws", headers=tma(1), json={**flaw, "body": "\x1b]0;title\x07the\n\u202estair"})   # the admin's terminal
     assert c.get("/api/map/flaws", headers=tma(4)).json()[0]["body"] == "]0;title the stair"
     for _ in range(8):
