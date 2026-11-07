@@ -340,6 +340,7 @@ def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> 
         else:
             con.execute("""INSERT INTO org_members (org_id, user_id, role, joined_at, role_id) VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (org_id, user_id) DO UPDATE SET role = excluded.role, role_id = excluded.role_id""", (oid, uid, role, core.now(), _official(con, oid, role)))
+            joined(con, oid, uid)
         log_action(con, actor, "role_change", f"user:{uid}", json.dumps({"org": oid, "role": role, "by": by}))
 
 
@@ -419,5 +420,5 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 # when a function runs
 from . import core  # noqa: E402
 from .clubs import UNDO_WAIT, _official, create_org, no_emoji  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import joined, notify  # noqa: E402
 from .teams import team  # noqa: E402

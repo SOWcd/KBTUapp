@@ -658,6 +658,7 @@ const en: Dict = {
   'event.live': "Happening now",
   'event.liveOpen': "On now · sign-up open",
   'event.youGo': "You're going",
+  'event.team': "You're on the team",
   'event.cancelReg': 'Cancel registration',
   'event.full': 'Full',
   'event.notify': 'Notify me if a seat frees up',

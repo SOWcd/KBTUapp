@@ -50,3 +50,7 @@ export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefine
 /** A club's own event (team-only, a club meeting) or DMP's leaders meeting: people come, nobody checks tickets, so it has
  *  none; the organizers mark who came by name */
 export const inner = (e: { visibility?: string }): boolean => e.visibility === 'members' || e.visibility === 'leaders';
+
+/** The host club's own people at its public event: the team, never a guest (owner, Nov 7; server seats.register) */
+export const onTeam = (e: { org: { id: unknown }; visibility?: string }, ms: { org: { id: unknown } }[] | undefined): boolean =>
+  !inner(e) && !!ms?.some((m) => m.org.id === e.org.id);

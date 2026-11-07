@@ -658,6 +658,7 @@ const ru = {
   'event.live': "Идёт сейчас",
   'event.liveOpen': "Идёт · можно записаться",
   'event.youGo': 'Ты идёшь',
+  'event.team': 'Ты в команде',
   'event.cancelReg': 'Отменить запись',
   'event.full': 'Мест нет',
   'event.notify': 'Сообщить, если освободится',

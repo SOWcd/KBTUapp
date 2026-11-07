@@ -658,6 +658,7 @@ const kk: Dict = {
   'event.live': "Қазір өтуде",
   'event.liveOpen': "Өтуде · жазылуға болады",
   'event.youGo': 'Сен барасың',
+  'event.team': 'Сен командадасың',
   'event.cancelReg': 'Жазылудан бас тарту',
   'event.full': 'Орын жоқ',
   'event.notify': 'Орын босаса, хабарла',

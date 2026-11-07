@@ -569,13 +569,14 @@ def test_delete_my_data(env):
     con = db.connect(cfg.db_path)
     t0 = int(time.time())
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "head")])
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     for eid, at in ((1, t0 + 86400), (2, t0 - 2 * 86400)):  # one ahead, one over
         con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, seats, created_by, created_at, updated_at)
             VALUES (?, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', 1, ?, 0, 0)""", (eid, at, ali["id"]))
     A, Z = tma(21, "Ali"), tma(22, "Zhan")
-    c.post("/api/events/1/registration", headers=A)     # the only seat
+    c.post("/api/events/1/registration", headers=A)     # the only seat (a guest then: the club's own can't sign up)
     c.post("/api/events/1/registration", headers=Z)     # waitlist
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'head', 0)", (ali["id"],))  # written directly: keeps the seat
     c.put("/api/events/1/saved", headers=A)
     c.put("/api/orgs/1/subscription", headers=A)
     c.patch("/api/me", headers=A, json={"bio": "hi"})
@@ -1403,7 +1404,7 @@ def test_member_link(env):
     pres, ali, zhan, dana = login(c, 90, "pres"), login(c, 91, "ali"), login(c, 92, "zhan"), login(c, 93, "dana")
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (ali["id"], "member")])
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Hack', '305', ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (int(time.time()) + 86400, pres["id"]))
     code = {u["id"]: logic._qr_code(con, u["id"], "link_code") for u in (pres, ali, dana)}
@@ -1411,6 +1412,7 @@ def test_member_link(env):
     P, A, Z, D = tma(90, "Pres"), tma(91, "Ali"), tma(92, "Zhan"), tma(93, "Dana")
     by = lambda u: con.execute("SELECT invited_by FROM registrations WHERE user_id = ?", (u["id"],)).fetchone()[0]  # noqa: E731
     c.post("/api/events/1/registration", headers=A, json={"ref": code[ali["id"]]})
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (ali["id"],))  # a guest's seat from before he joined
     eve = login(c, 94, "eve")
     c.post("/api/events/1/registration", headers=tma(94, "Eve"), json={"ref": logic._qr_code(con, ali["id"])})
     assert by(eve) is None                                                                              # a badge's secret isn't a link
@@ -2320,7 +2322,7 @@ def test_shared_cards_never_leak(env):
     pres, mem, ali, bob = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali"), login(c, 73, "bob")
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (mem["id"], "member"), (bob["id"], "member")])
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, ?, 0)", [(pres["id"], "president"), (bob["id"], "member")])
     P, M, A = tma(70, "Pres"), tma(71, "Mem"), tma(72, "Ali")
     body = {"title": "Sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF"}
     team = c.post("/api/orgs/1/events", headers=P, json={**body, "visibility": "members"}).json()
@@ -2328,6 +2330,7 @@ def test_shared_cards_never_leak(env):
     for e in (team, pub):
         c.post(f"/api/events/{e['id']}/publish", headers=P)
     assert c.post(f"/api/events/{pub['id']}/registration", headers=M, json={}).json()["my"]["status"] == "going"
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (mem["id"],))  # joined after (directly: keeps it)
     assert c.put(f"/api/events/{pub['id']}/saved", headers=M).status_code == 204
     warm = {x["id"]: x for x in c.get("/api/events", headers=M).json()}
     assert warm.keys() == {team["id"], pub["id"]} and warm[pub["id"]]["saved"] and warm[pub["id"]]["my"]["ticketCode"]
@@ -2356,7 +2359,11 @@ def test_teambuilding_thunder(env):
         e = c.post("/api/orgs/1/events", headers=P, json={"title": "Sync", "place": "305", "startsAt": start, "emoji": "laptop_3d",
                                                             "color": "#3B6BFF", "visibility": visibility}).json()
         c.post(f"/api/events/{e['id']}/publish", headers=P)
-        assert c.post(f"/api/events/{e['id']}/registration", headers=M, json={}).json()["my"]["status"] == "going"
+        if visibility == "public":  # a seat from before he joined (the club's own can't sign up to its public events)
+            con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, 0, 0)",
+                        (e["id"], mem["id"], f"T{e['id']}"))
+        else:
+            assert c.post(f"/api/events/{e['id']}/registration", headers=M, json={}).json()["my"]["status"] == "going"
         if visibility == "members":
             ref = con.execute("SELECT kind, ref FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' ORDER BY id DESC", (mem["id"],)).fetchone()
             text, button, link = bot._render(con, {"user_id": mem["id"], "kind": ref[0], "ref": ref[1], "lang": "ru"})

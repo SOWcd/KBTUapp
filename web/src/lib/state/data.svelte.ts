@@ -6,6 +6,7 @@ import { t, type Key, subjectOf } from '../i18n/index.svelte';
 import { say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
 import { sheets } from './sheets';
+import { onTeam } from '../perms';
 import { haptic, requestWriteAccess } from '../tg';
 import { burst } from '../../ui/burst';
 import { SvelteSet } from 'svelte/reactivity';
@@ -196,6 +197,7 @@ function errorText(e: unknown): string {
   if (e instanceof ApiErr) {
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
+    if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile
   }
   return t('common.error');
@@ -222,6 +224,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     if (!before || before.status === 'cancelled') return;
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
+    if (!leaving && onTeam(before, session.me?.memberships)) { haptic.tap(); say(t('event.team'), 'raising_hands_3d_default'); return; }
     // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })

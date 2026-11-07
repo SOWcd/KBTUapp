@@ -220,6 +220,7 @@ def decide_join(con, v: Viewer, rid: int, accept: bool) -> None:
             raise ApiError("conflict")  # withdrawn, or another Vice answered first
         if accept:
             con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (r["org_id"], r["user_id"], core.now()))
+            joined(con, r["org_id"], r["user_id"])
         notify(con, r["user_id"], "join_decided", f"jr:{rid}:{'yes' if accept else 'no'}")
 
 
@@ -936,5 +937,5 @@ def seed_schools(con, root: Path) -> None:
 from . import core, oversight  # noqa: E402
 from .chatlist import org_chats  # noqa: E402
 from .oversight import DMP_COLS, _admin, staff  # noqa: E402
-from .seats import notify, notify_staff  # noqa: E402
+from .seats import joined, notify, notify_staff  # noqa: E402
 from .teams import _ordered, banned  # noqa: E402

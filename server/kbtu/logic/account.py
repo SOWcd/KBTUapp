@@ -944,6 +944,7 @@ def _hand_over(con, uid: int) -> None:
             continue  # no admin to take it: it waits for one (the admin panel's "Assign")
         con.execute("""INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', ?)
             ON CONFLICT (org_id, user_id) DO UPDATE SET role = 'president', role_id = NULL, probation = 0""", (oid, new, core.now()))
+        joined(con, oid, new)
         log_action(con, None, "president_handover", f"org:{oid}")
         notify(con, new, "club_handover", f"ho:{oid}")
 
@@ -1322,7 +1323,7 @@ from .moderation import _about  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
-from .seats import _remind, _ticket_code, notify, promote  # noqa: E402
+from .seats import _remind, _ticket_code, joined, notify, promote  # noqa: E402
 from .teams import _ordered  # noqa: E402
 
 

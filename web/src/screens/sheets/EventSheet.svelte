@@ -49,7 +49,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, eventDetails, goingBusy, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
-  import { may, withNick, inner, RANK } from '../../lib/perms';
+  import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonth, parts, at, duration, ago, multiDay, daySpan } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -555,6 +555,8 @@
           <Button kind="neutral" size="l" full disabled>{t('event.over')}</Button>
         {:else if e.externalUrl}
           <Button kind="primary" size="l" full onclick={() => openLink(e.externalUrl!)}>{#snippet icon()}<ExternalLink size={18} />{/snippet}{t('event.external')}</Button>
+        {:else if !going && st !== 'hold' && !e.guestHost && onTeam(e, session.me?.memberships)}
+          <Button kind="neutral" size="l" full disabled>{#snippet icon()}<UsersRound size={18} />{/snippet}{t('event.team')}</Button>
         {:else if going && inner(e)}
           <!-- a club's own event: no ticket, just the answer, changeable until it starts -->
           <div class="ans btns">

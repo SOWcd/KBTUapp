@@ -597,6 +597,7 @@ def accept_invite(con, v: Viewer, token: str) -> dict:
             raise ApiError("not_found")
         if member:
             con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (o["id"], v.id, core.now()))
+            joined(con, o["id"], v.id)
             if r["dept_id"] and dept_of(con, o["id"], v.id) is None:
                 con.execute("INSERT OR IGNORE INTO member_tags (tag_id, user_id) SELECT id, ? FROM org_tags WHERE id = ? AND department = 1", (v.id, r["dept_id"]))
         else:
@@ -621,4 +622,4 @@ from .clubs import _official, org_shape  # noqa: E402
 from .forum import asks  # noqa: E402
 from .oversight import QUIET_FOR, _admin  # noqa: E402
 from .queues import AI_TRIES  # noqa: E402
-from .seats import notify  # noqa: E402
+from .seats import joined, notify  # noqa: E402

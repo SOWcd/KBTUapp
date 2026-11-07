@@ -1274,6 +1274,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     # used only through a fresh signed code (profiles.claim_qr), never by its bare token, and only while the screen
     # keeps renewing its lease (lease_until: a killed or offline screen stops the code within seconds)
     (134, "ALTER TABLE grant_links ADD COLUMN qr INTEGER NOT NULL DEFAULT 0; ALTER TABLE grant_links ADD COLUMN lease_until INTEGER;"),
+    # the host club's own people are never its guests (owner, Nov 7): their seats at its upcoming public events go back
+    # as seats.joined does (seats.TEAM_SEATS: a free event's, a waitlist place; a paid seat or hold stays), their 2-hour
+    # reminders with them; seats.refill moves the waitlists in at the start that follows
+    (135, """UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', hold_until = NULL, waitlisted_at = NULL,
+        updated_at = CAST(strftime('%s', 'now') AS INTEGER)
+      WHERE checked_in_at IS NULL AND (status = 'waitlist' OR status IN ('going', 'hold')
+          AND event_id IN (SELECT id FROM events WHERE price IS NULL))
+        AND EXISTS (SELECT 1 FROM events e JOIN org_members m ON m.org_id = e.org_id AND m.user_id = registrations.user_id
+          WHERE e.id = registrations.event_id AND e.status = 'published' AND e.visibility = 'public'
+            AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER));
+    DELETE FROM bot_outbox WHERE kind = 'remind_2h' AND sent_at IS NULL AND EXISTS (SELECT 1 FROM registrations r
+      WHERE r.user_id = bot_outbox.user_id AND r.cancel_reason = 'removed' AND bot_outbox.ref LIKE 'event:' || r.event_id || ':%');"""),
 ]
 
 

@@ -504,6 +504,33 @@ def promote(con, e: sqlite3.Row) -> None:
 ANSWER_MAX = 200  # one answer to an event's question at sign-up
 
 
+# a host club's member's guest seat at its own upcoming public event: a free event's, or a waitlist place anywhere (a
+# paid seat or hold stays: money; a check-in stays: it's history). Migration 135 ran the same rule once over old data.
+TEAM_SEATS = """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND e.org_id = ?
+    AND e.status = 'published' AND e.visibility = 'public' AND e.starts_at > ? AND r.checked_in_at IS NULL
+    AND (r.status = 'waitlist' OR r.status IN ('going', 'hold') AND e.price IS NULL)"""
+
+
+def joined(con, oid: int, uid: int) -> None:
+    """Someone is now in club oid (any path that adds a member, inside its transaction): their guest seats at its own
+    upcoming events go back ('removed', no message: they're the team) and the waitlist moves into them."""
+    for e in rows(con, TEAM_SEATS, uid, oid, core.now()):
+        con.execute("""UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed', hold_until = NULL, waitlisted_at = NULL, updated_at = ?
+            WHERE event_id = ? AND user_id = ?""", (core.now(), e["id"], uid))
+        con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (uid, f"event:{e['id']}:%"))
+        promote(con, e)
+
+
+def refill(con) -> None:
+    """At start: the upcoming events migration 135 took team seats from hand them to their waitlists (a migration is SQL,
+    promote() is not); after that it finds nothing to move."""
+    with tx(con):
+        for e in rows(con, """SELECT * FROM events WHERE status = 'published' AND starts_at > ?
+                AND id IN (SELECT event_id FROM registrations WHERE cancel_reason = 'removed')
+                AND id IN (SELECT event_id FROM registrations WHERE status = 'waitlist')""", core.now()):
+            promote(con, e)
+
+
 def _answers(e: sqlite3.Row, given: object) -> str | None:
     """The answers to an event's questions, one per question in order, each {q: the question's words as the form showed
     them, a: the answer}: a question changed since the form loaded refuses the lot (the app reloads it), a required one
@@ -544,6 +571,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, v.id)
         if r and r["status"] in ("going", "hold", "waitlist"):
             return card(con, v, e)
+        if e["visibility"] == "public" and one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id):
+            raise ApiError("forbidden", "team")  # the host club's own people run it, never its guests (owner, Nov 7); co-hosts' may
         if e["needs_phone"] and phone is not None:
             if not (phone := kz_phone(phone)):
                 raise ApiError("bad_input", "phone")
