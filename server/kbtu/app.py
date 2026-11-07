@@ -1257,11 +1257,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if a and await screen(f"{a['title']}\n{a['body']}") is False:
             await run_in_threadpool(logic.hide_ask, con, body["id"], "reports")
 
-    async def eu_ai(con, msgs: list[dict], **kw) -> str:
+    async def eu_ai(con, msgs: list[dict], whole: float = 30, **kw) -> str:
         """The assistant's model call: the providers the policy's section 5 names for it (ai.ASSIST_PROVIDERS); none answered: 503."""
         # a bad answer is asked once more (Oct 31: GLM was down for hours and DeepSeek's one malformed reply was "busy")
         try:
-            async with asyncio.timeout(30):  # the whole chain: a link's own timeout is 25 s, and two may be slow
+            async with asyncio.timeout(whole):  # the whole chain: a link's own timeout is 25 s, and two may be slow
                 for last in (False, True):
                     try:
                         return (await llm.chat(cfg, ai_http(), msgs, con=con, only=assist_only, chain=ai.chain(cfg), **kw))[0]
@@ -1316,7 +1316,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/orgs/{oid}/events/fill")
     async def event_fill(oid: int, con: Con, v: BoardWrite, body: dict = Body(...)):
         msgs = logic.assistant.fill_prompt(con, v, oid, body.get("text"))
-        text = await eu_ai(con, msgs, max_tokens=1500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30)
+        # a long announcement's form is long (Nov 7: cut at 1500 tokens, then no time left to ask again): room for both
+        text = await eu_ai(con, msgs, whole=70, max_tokens=3500, temperature=0.1, check=logic.assistant.fill_answered, timeout=30)
         return logic.assistant.filled(text)
 
     # the map's flaws (logic/mapflaws.py): a long press on the plan reports one, the admin's list fixes them

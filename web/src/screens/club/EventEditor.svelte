@@ -385,9 +385,11 @@
   // a new event from the announcement the club already wrote (the owner, Oct 30): the AI fills what the text says,
   // the rest stays as it was; the form is the preview. With the forum's switch (its policy section names the AI host).
   let filling = $state(false);
+  let fillLeft = ''; // the pasted announcement when the AI failed: the next try opens with it, nothing to paste again
   async function fillFromText() {
-    const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000 });
+    const text = await sheets.askText({ title: t('ed.fillTitle'), text: t('ed.fillText'), ok: t('ed.fillGo'), cancel: t('common.cancel'), placeholder: t('ed.fillPh'), max: 4000, value: fillLeft });
     if (!text) return;
+    fillLeft = text;
     touch(); filling = true;
     try {
       const x = await api.eventFill(org, text);
@@ -395,7 +397,7 @@
       Object.assign(f, rest);
       if (price && canPrice) { f.paid = true; f.price = String(price); }
       const got = Object.keys(x).length > 0;
-      if (got) haptic.ok(); else haptic.error();
+      if (got) { haptic.ok(); fillLeft = ''; } else haptic.error();
       say(t(got ? 'ed.filled' : 'ed.fillNone'), got ? 'sparkles_3d' : 'thinking_face_3d');
     } catch (e) {
       haptic.error();
