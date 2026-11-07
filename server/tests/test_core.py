@@ -128,8 +128,10 @@ def test_core_loop(env):
     assert ticket["status"] == "going"
     assert con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'seat_free'", (zhan["id"],)).fetchone()
 
-    # the door: ok, then already, then a code that isn't ours
+    # the door: shut an hour before, opened early by the President; then ok, then already, then a code that isn't ours
     scan = lambda code: c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": code}).json()
+    assert scan("KBTU" + ticket["ticketCode"])["result"] == "not_open"
+    assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
     code = ticket["ticketCode"]
     assert re.fullmatch(r"[2-9A-HJKMNP-Z]{6}", code)  # short, nothing to mix up (no 0/O, 1/I/L)
     first = scan("KBTU" + code)  # what the ticket QR holds
@@ -2538,6 +2540,7 @@ def test_paid_events(env):
     ticket = c.post(f"/api/events/{eid}/receipt", headers=tma(11), content=shot.getvalue()).json()["my"]["ticketCode"]
     att = c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()
     assert att[0]["receipt"]["flags"] == ["duplicate"] and not att[0]["receipt"]["reviewed"]
+    assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
     assert c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": ticket}).json()["flagged"] is True
     c.post(f"/api/receipts/{att[0]['receipt']['id']}/review", headers=tma(20), json={"reject": False})
     assert c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()[0]["receipt"]["reviewed"] is True

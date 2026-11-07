@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt (§4.3)
 log = logging.getLogger("kbtu.logic")
 NO_END = 3 * 3600       # an event without an end counts as 3 h long
-DOOR_EARLY = 3 * 3600   # check-in opens 3 h before the start (§4.4) …
+DOOR_AUTO = 30 * 60     # the door (check-in) opens by itself 30 min before the start (owner, Nov 7) …
+DOOR_EARLY = 4 * 3600   # … or earlier, from 4 h before, when the club's President or a Vice opens it (organizing.open_door) …
 DOOR_LATE = 6 * 3600    # … and, without an end, closes 6 h after the start
 RANK = {"member": 1, "head": 2, "vice": 3, "president": 4}
 # A club role's rights (SPEC §2): the toggles of its editor. Each needs a level; the
@@ -273,6 +274,17 @@ def person_ref(p: sqlite3.Row) -> dict:
             **({"i18n": {k: {"name": x} for k, x in GONE.items()}} if not p["first_name"] and not p["tg_first_name"] else name_i18n(p))}
 
 
+def door_at(e) -> int:
+    """When the event's door opens: the early opening, unless the event moved since (more than 4 h off), else T-30."""
+    early = e["door_open_at"]
+    return early if early is not None and e["starts_at"] - DOOR_EARLY <= early < e["starts_at"] - DOOR_AUTO else e["starts_at"] - DOOR_AUTO
+
+
+def door_shut(e, t: int) -> str | None:
+    """Why the door is shut now: "not_open" (before it opens), "closed" (after the end), None when open."""
+    return "not_open" if t < door_at(e) else "closed" if t > (e["ends_at"] or e["starts_at"] + DOOR_LATE) else None
+
+
 def _door_ref(p: sqlite3.Row) -> dict:
     """The door checks the real short name beside a nick, and without one."""
     return {**person_ref(p), "realName": short_name(p)}
@@ -485,7 +497,7 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
         "firstYear": bool(e["first_year"]), "needsPhone": bool(e["needs_phone"]), "needsVolunteers": e["volunteers"], "externalUrl": e["external_url"], "guestHost": e["guest_host"],
         # its own questions at sign-up ("questions" is Studio's count)
         "form": json.loads(e["questions"]) if e["questions"] else None, "price": e["price"], "visibility": e["visibility"],
-        "regUntil": e["reg_until"], "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
+        "regUntil": e["reg_until"], "doorAt": door_at(e) if e["starts_at"] else None, "lateSignup": bool(e["late_signup"]), "freeFirst": e["free_first"] if e["price"] else None,
         "freeLeft": max(0, e["free_first"] - free.get(e["id"], 0)) if e["price"] and e["free_first"] else None,
         "leadersFrom": e["leaders_from"], "meeting": bool(e["meeting"]),
         "video": video_shape(x) if (x := videos.get(e["video_id"])) and x["status"] == "ready" else None,

@@ -48,13 +48,13 @@
   const paid = $derived((list ?? []).filter((a) => a.receipt).length);
   const read = $derived((list ?? []).reduce((n, a) => n + (a.receipt?.amount ?? 0), 0)); // what OCR read off the receipts
   const flagged = (a: Attendee) => !!a.receipt?.flags.length && !a.receipt.reviewed;
-  const doorOpen = $derived(!staff && !!ev && Date.now() / 1000 >= ev.startsAt - 3 * 3600 && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
+  const doorOpen = $derived(!staff && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
   async function mark(a: Attendee) {
     try {
       const r = await api.checkinPerson(id, a.person.id);
-      if (r.result !== 'ok' && r.result !== 'already') { haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : 'common.error'), 'pleading_face_3d'); return; }
+      if (r.result !== 'ok' && r.result !== 'already') { haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : r.result === 'not_open' ? 'scan.notOpen' : 'common.error'), 'pleading_face_3d'); return; }
       a.checkedInAt = r.at; a.manual = r.result === 'ok';
       haptic.ok();
       undoFor = a.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);

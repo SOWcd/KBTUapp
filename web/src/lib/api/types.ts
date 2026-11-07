@@ -342,6 +342,7 @@ export interface EventCard {
   guestHost?: string | null;    // a partner's event (Oct 29): "With <host>", the link out instead of tickets
   price: number | null;
   regUntil?: Ts | null;         // registration closes; null = open until the start
+  doorAt?: Ts | null;           // check-in opens: at T-30 by itself, earlier when the President or a Vice opened it
   lateSignup?: boolean;         // sign-up stays open from the start until the end (free, uncapped, public)
   freeFirst?: number | null;    // a paid event: how many 1st-year students come free (the first to register)
   freeLeft?: number | null;     // ... of them still free
@@ -533,7 +534,7 @@ export interface JoinRequest { id: Id; person: PersonRef; fullName: string; cour
  *  `late` = minutes after the start. */
 export type CheckinResult =
   | { result: 'ok' | 'already'; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
-  | { result: 'other_event' | 'cancelled' | 'not_found' | 'closed' | 'paid' };
+  | { result: 'other_event' | 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
   names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in (Oct 30) */ }

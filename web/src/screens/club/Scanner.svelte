@@ -50,7 +50,7 @@
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
   $effect(() => { overlay.title = names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
-  const MSG = { other_event: 'scan.other', cancelled: 'scan.cancelled', not_found: 'scan.notFound', closed: 'scan.closed', paid: 'scan.paid' } as const;
+  const MSG = { other_event: 'scan.other', cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
   async function check(raw: string) {
     if (busy || !raw.trim()) return;

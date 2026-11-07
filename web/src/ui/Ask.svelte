@@ -3,15 +3,19 @@
   // down count as "no". Destructive actions are always confirmed here, never by a system dialog. With `input`, a few
   // words to write first (at least 2 characters), handed to `done`; with `input.tel`, a phone number (+7XXXXXXXXXX);
   // `input.value` fills it in (an edit), `input.line` makes it one line (a nick: Enter saves).
-  import { untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import Sheet from './Sheet.svelte';
   import Button from './Button.svelte';
   import { close, type Overlay } from '../lib/state/ui.svelte';
   import { fmtPhone, kzPhone } from '../lib/phone';
 
-  type Props = { overlay: Overlay; title: string; text?: string; ok: string; cancel: string; danger?: boolean;
+  type Props = { overlay: Overlay; title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number;
     input?: { placeholder: string; max: number; tel?: boolean; value?: string; line?: boolean }; done: (yes: boolean, written: string) => void };
-  let { overlay, title, text = '', ok, cancel, danger = false, input, done }: Props = $props();
+  let { overlay, title, text = '', ok, cancel, danger = false, wait = 0, input, done }: Props = $props();
+
+  // wait: "ok" stays dim this long (a second confirm: a double tap must not pass both)
+  let ready = $state(untrack(() => !wait));
+  onMount(() => { if (!wait) return; const id = setTimeout(() => (ready = true), wait); return () => clearTimeout(id); });
 
   let written = $state(untrack(() => input?.value ?? ''));
   const said = $derived(input?.tel ? kzPhone(written) ?? '' : written.trim().replace(/\s+/g, ' '));
@@ -33,7 +37,7 @@
   {#snippet footer()}
     <div class="row btns">
       <Button kind="neutral" size="l" full onclick={() => answer(false)}>{cancel}</Button>
-      <Button kind={danger ? 'danger' : 'primary'} size="l" full disabled={!!input && said.length < 2} onclick={() => answer(true)}>{ok}</Button>
+      <Button kind={danger ? 'danger' : 'primary'} size="l" full disabled={!ready || !!input && said.length < 2} onclick={() => answer(true)}>{ok}</Button>
     </div>
   {/snippet}
 </Sheet>

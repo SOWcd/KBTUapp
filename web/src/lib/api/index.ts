@@ -43,6 +43,7 @@ export interface Api {
   adminOrgs(): Promise<AdminOrg[]>;
   adminOrgEvents(org: Id): Promise<AdminEvent[]>;
   setRegUntil(id: Id, until: Ts | 'now' | null): Promise<EventFull>; // registration closes now / then / at the start
+  openDoor(id: Id): Promise<EventFull>; // the President or a Vice opens check-in early (from 4 h before the start)
   adminCreateOrg(i: { name: string; short: string; emoji: string; official: boolean }): Promise<AdminOrg>;
   adminSetRole(org: Id, who: string, role: OrgRole | 'none'): Promise<AdminOrg>;
   adminHideOrg(org: Id, hidden: boolean): Promise<AdminOrg>;          // hide, never delete

@@ -397,8 +397,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     # a moderator's take-down (hidden_at) or the admin's hidden club: nobody can open it, so nobody hears of it (a cancel still goes)
     if not e or (kind != "event_cancelled" and (e["status"] != "published" or e["hidden_at"] or e["org_status"] == "hidden")):
         return None
-    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok"):  # a club's own event has no ticket
+    if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
+    if kind.startswith("door_open") and (not reminders() or not one(  # reminders off, or cancelled or in since it was queued
+            con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going' AND checked_in_at IS NULL", e["id"], m["user_id"])):
+        return None
     co = one(con, "SELECT o.name FROM event_cohosts x JOIN orgs o ON o.id = x.org_id WHERE x.event_id = ? AND x.status = 'accepted' AND o.status = 'active'",
              e["id"]) if kind == "new_event" else None  # a co-hosted event names both clubs
     # queued for a co-host's follower (payload co): quiet once that club no longer co-hosts it
@@ -407,7 +410,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             WHERE x.event_id = ? AND x.org_id = ? AND x.status = 'accepted' AND o.status = 'active'""", e["id"], via):
         return None
     text, button = texts.bot_message(lang, kind, org=e["org_name"] + (f" × {co[0]}" if co else ""), **ev(e))
-    return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok') else 'ev'}_{e['id']}"
+    return text, button, f"{'tk' if kind in ('remind_2h', 'seat_free', 'going_ok', 'door_open') else 'ev'}_{e['id']}"
 
 
 def purge(cfg: Config, con) -> None:
@@ -701,6 +704,7 @@ def _chores(cfg: Config, con) -> None:
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
+    logic.door_round(con)  # the door is open (early, or at T-30): each guest going hears it once
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago

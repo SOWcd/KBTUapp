@@ -1672,6 +1672,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_reg_until(con, v, eid, body.get("until"))
 
+    @app.post("/api/events/{eid}/door-open")
+    def open_door(eid: int, con: Con, v: Me):
+        return logic.open_door(con, v, eid)
+
     @app.delete("/api/admin/events/{eid}", status_code=204)
     def admin_delete_event(eid: int, con: Con, v: Me):
         logic.admin_delete_event(con, v, eid)  # hidden now, gone a day later (the Undo's day)

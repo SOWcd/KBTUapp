@@ -1288,6 +1288,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       WHERE r.user_id = bot_outbox.user_id AND r.cancel_reason = 'removed' AND bot_outbox.ref LIKE 'event:' || r.event_id || ':%');"""),
     # (Nov 7) the 3rd years' answer under the incubator's elective post (admin announce3): more like it? NULL: never asked
     (136, "ALTER TABLE users ADD COLUMN announce_ok INTEGER;"),
+    # the door opened early by the club's President or a Vice (organizing.open_door); NULL: at T-30 by itself (core.door_at)
+    # deploy: a door the old 3-hour rule already let people through stays open (exactly T-3h: organizing.door_round stays quiet)
+    (137, """ALTER TABLE events ADD COLUMN door_open_at INTEGER;
+    UPDATE events SET door_open_at = starts_at - 10800 WHERE status = 'published' AND starts_at - 10800 <= CAST(strftime('%s', 'now') AS INTEGER)
+      AND CAST(strftime('%s', 'now') AS INTEGER) < starts_at - 1800 AND EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = events.id AND r.checked_in_at IS NOT NULL);"""),
 ]
 
 

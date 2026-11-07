@@ -7,7 +7,7 @@ import sqlite3
 
 from ..db import tx
 
-from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
+from .core import (FULL_TOOLS, ApiError, DOOR_EARLY, DOOR_LATE, door_shut, PERSON, PERSON_COLS, PROFILE_QR, RANK, TWO_GIS, Viewer, _door_ref,
     _may, _org, _qs, at_least, can, card, cards, friend_ids, full, log_action, media_shape, need_student, one, org_ref,
     overseer, person_ref, role_in, rows, short_name, taken)
 
@@ -714,7 +714,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
     nor does a hidden or a partner's event. True: they count as came (now or before)."""
     e = one(con, "SELECT * FROM events WHERE id = ?", eid)
     if not e or e["status"] != "published" or e["hidden_at"] or e["guest_host"] \
-            or not e["starts_at"] - DOOR_EARLY <= t <= (e["ends_at"] or e["starts_at"] + DOOR_LATE):
+            or door_shut(e, t):
         return False
     r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r or r["status"] != "going":
@@ -738,8 +738,8 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
         t = core.now()
-        if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
-            return {"result": "closed"}
+        if shut := door_shut(e, t):
+            return {"result": shut}
         badge = PROFILE_QR.search(str(raw))
         if badge:  # a scanner-only helper lets in who is going, never registers anyone (collab-review H1)
             r = _walk_in(con, e, int(badge[1]), badge[2], t, walk=can(con, v, e["org_id"], "door") or co_runs(con, v, eid) or crew_kind(con, v, e) != "scan")
@@ -970,8 +970,8 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
         if uid == v.id and not runs(con, v, e):
             raise ApiError("forbidden")  # the door is every member's: marking myself as came is for whoever runs the event
         t = core.now()
-        if t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
-            return {"result": "closed"}
+        if shut := door_shut(e, t):
+            return {"result": shut}
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
         if _team_door(e) and (not r or r["status"] != "going") and (uid in _expected(con, e) or (e["meeting_tag"] or e["for_board"]) and one(  # §2b: came anyway
                 con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ? AND role IN ('president', 'vice')", e["org_id"], uid)):  # a department's: its Vice+ too
@@ -1042,7 +1042,7 @@ def add_door_guest(con, v: Viewer, eid: int, name: object) -> dict:
     with tx(con):
         e = _staff_event(con, v, eid, "door", cohost=True, helper=("door",))
         t = core.now()
-        if e["status"] != "published" or t < e["starts_at"] - DOOR_EARLY or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
+        if e["status"] != "published" or door_shut(e, t):
             raise ApiError("conflict", "closed")
         if e["price"]:
             raise ApiError("conflict", "paid")
@@ -1102,6 +1102,46 @@ def link_door_guests(con, uid: int) -> None:
             _came(con, one(con, "SELECT * FROM events WHERE id = ?", g["event_id"]), uid, lambda g=g: con.execute(
                 """UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE event_id = ? AND user_id = ?""",
                 (g["created_at"], g["added_by"], core.now(), g["event_id"], uid)))
+
+
+# ---------------------------------------------------------------- the door's opening (owner, Nov 7)
+
+def open_door(con, v: Viewer, eid: int) -> dict:
+    """The host club's President or a Vice opens the door early, from 4 h before the start (it opens by itself at T-30,
+    core.door_at). Their role, not a right: the app's admin (X-Staff-Event lends "events") never opens it. Every guest
+    hears of it (door_round); once open it stays open."""
+    with tx(con):
+        e = one(con, "SELECT * FROM events WHERE id = ?", eid)
+        if not e or role_in(con, v, e["org_id"]) not in ("president", "vice"):
+            raise ApiError("forbidden")
+        t = core.now()
+        if e["status"] != "published" or e["hidden_at"] or e["guest_host"] or t > (e["ends_at"] or e["starts_at"] + DOOR_LATE):
+            raise ApiError("closed")
+        if t < e["starts_at"] - DOOR_EARLY:
+            raise ApiError("closed", "early")
+        if door_shut(e, t) == "not_open":
+            con.execute("UPDATE events SET door_open_at = ?, updated_at = ? WHERE id = ?", (t, t, eid))
+            log_action(con, v.id, "door_open", f"event:{eid}", json.dumps({"before": e["starts_at"] - t}))
+    return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
+
+
+def door_round(con) -> None:
+    """The postman's round (bot._chores): each guest going and not yet in hears once that the door is open, until the
+    start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
+    t = core.now()
+    for e in rows(con, """SELECT * FROM events WHERE status = 'published' AND hidden_at IS NULL AND COALESCE(guest_host, '') = ''
+            AND starts_at > ? AND starts_at <= ?""", t, t + DOOR_EARLY):
+        # ponytail: exactly T-3h marks a door migration 137 kept open (people already in at deploy): no surprise message;
+        # a President's tap landing on that very second stays quiet too
+        if door_shut(e, t) or e["door_open_at"] == e["starts_at"] - 3 * 3600:
+            continue
+        ref = f"door:{e['id']}"
+        guests = rows(con, """SELECT r.user_id FROM registrations r WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = r.user_id AND b.kind = 'door_open' AND b.ref = ?)""", e["id"], ref)
+        if guests:
+            with tx(con):  # one commit for a hall of guests
+                for (uid,) in guests:
+                    notify(con, uid, "door_open", ref)
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only

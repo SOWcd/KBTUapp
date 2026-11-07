@@ -125,6 +125,7 @@ export const server: Api = {
   adminOrgs: () => call('GET', '/admin/orgs'),
   adminOrgEvents: (org) => call('GET', `/admin/orgs/${org}/events`),
   setRegUntil: (id, until) => call('PUT', `/events/${id}/reg-until`, { until }),
+  openDoor: (id) => call('POST', `/events/${id}/door-open`),
   team: (org) => call('GET', `/orgs/${org}/members`),
   people: (org) => call('GET', `/orgs/${org}/people`),
   invite: (org, dept) => call('POST', `/orgs/${org}/invites`, dept ? { dept } : {}),

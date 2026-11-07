@@ -13,6 +13,9 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
+  import { onMount } from 'svelte';
+  import DoorOpen from '@lucide/svelte/icons/door-open';
+  import DoorClosed from '@lucide/svelte/icons/door-closed';
   import { api, ApiErr, staffEvents, type Attendee, type EventCard, type Id, type PersonRef } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
@@ -100,6 +103,25 @@
     if (!(await sheets.ask({ title: t('mg.closeRegAsk'), text: t('mg.closeRegText'), ok: t('mg.closeRegGo'), cancel: t('common.cancel'), danger: true }))) return;
     void setReg('now', t('mg.regClosed'), e?.regUntil);
   }
+  // the door (owner, Nov 7): shut until T-30, or until the club's President or a Vice opens it, from 4 h before (server
+  // organizing.open_door; the app's admin never). An hour or more ahead asks twice, the second "Open" after 2 s.
+  const doorAt = $derived(e?.doorAt ?? (e ? e.startsAt - 1800 : 0));
+  let tick = $state(nowTs());  // a ticking now: "opens at" turns into "open since" at T-30 with the screen open
+  onMount(() => { const i = setInterval(() => (tick = nowTs()), 10_000); return () => clearInterval(i); });
+  const doorOpen = $derived(doorAt <= tick);
+  const opener = $derived(mem?.role === 'president' || mem?.role === 'vice');
+  const setDoor = (at: number) => { const x = eventById(id); if (x) x.doorAt = at; };
+  async function openDoor() {
+    if (!e) return;
+    haptic.tap();
+    const ask = { ok: t('door.openGo'), cancel: t('common.cancel') };
+    if (!(await sheets.ask({ ...ask, title: t('door.openAsk'), text: t('door.openText') }))) return;
+    if (e.startsAt - nowTs() > 3600 && !(await sheets.ask({ ...ask, title: t('door.openSure'), text: t('door.openSureText'), wait: 2000 }))) return;
+    const was = doorAt;
+    tick = nowTs(); setDoor(tick);
+    try { await api.openDoor(id); haptic.ok(); say(t('door.opened'), 'party_popper_3d'); }
+    catch { setDoor(was); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   async function cancelEvent() {
     if (!(await sheets.ask({ title: t('studio.cancelAsk'), text: t('studio.cancelText'), ok: t('studio.cancelGo'), cancel: t('tk.keep'), danger: true }))) return;
     try { await api.cancelEvent(id); studioChanged(); haptic.warn(); say(t('say.eventCancelled'), 'crying_face_3d'); }
@@ -149,6 +171,11 @@
       {/if}
 
       <Group>
+        {#if live && !e.guestHost && (e.endsAt ?? e.startsAt + 6 * 3600) > nowTs()}
+          {#if doorOpen}<Row icon={DoorOpen} title={t('door.openedAt', { time: time(doorAt) })} />
+          {:else if opener && !staff && e.startsAt - 4 * 3600 <= tick}<Row icon={DoorClosed} title={t('door.open')} subtitle={t('door.openAt', { time: time(doorAt) })} accessory="chevron" onclick={openDoor} />
+          {:else}<Row icon={DoorClosed} title={t('door.openAt', { time: time(doorAt) })} />{/if}
+        {/if}
         {#if live && !e.guestHost && !staff}<!-- a partner's event has no door; Admin never works the door -->
           {#if inner(e)}<Row icon={UserCheck} title={t('studio.marks')} accessory="chevron" onclick={() => sheets.scanner(id, true)} />
           {:else}<Row icon={ScanLine} title={t('studio.scanner')} accessory="chevron" onclick={() => sheets.scanner(id)} />{/if}
