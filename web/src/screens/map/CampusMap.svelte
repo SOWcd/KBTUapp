@@ -107,20 +107,14 @@
   const MAX = 8;
   const paint = (ease = '') => {
     plan.style.transition = ease; plan.style.transform = `translate3d(${x}px,${y}px,0) scale(${s / base})`;
-    if (!pts.size) tiers();
-  };
-  /** our map's zoom tiers. Not while fingers move it (Nov 7, Low Power Mode lag): each tier's fade repainted the whole
-   *  plan every frame of the pinch; it fades in at the let-go instead, with the settle's own redraw */
-  function tiers() {
     const px = stage.clientWidth * s / 1000; // our map's px a unit
     plan.classList.toggle('mid', px >= 0.7); // room numbers and door signs (Oct 28: far off they were specks)
     plan.classList.toggle('near', px >= 1.1); // fine detail: windows, doors, WC fixtures
-  }
+  };
   /** lay the plan out at the scale it is shown at, in the same place on screen, so the browser draws it sharp */
   function settle() {
     clearTimeout(settleT);
     if (base !== s) { base = s; plan.style.width = `${s * 100}%`; paint(); }
-    tiers();
     pickTiles();
   }
   const settleSoon = (ms: number) => { clearTimeout(settleT); settleT = window.setTimeout(settle, ms); };
@@ -859,11 +853,10 @@
     --m-wall: #d70b19; --m-col: #b9d3bd; --m-col-line: #3a4a3d; --m-ink: #1c1c1e; --m-soft: #a1a1a6; --m-part: #a3192b; --m-dot: #c7c7cc; }
   .theme-dark .plan { --m-wall: #e5484d; --m-col: #3d5444; --m-col-line: #8fb59a; --m-ink: #e5e5ea; --m-soft: #6e6e73; --m-part: #d4525f; --m-dot: #48484a; }
   /* the SVG carries light-theme colours of its own (so it reads on its own); the theme's win here */
-  /* no hit testing through ~1,700 shapes on every touch (the stage takes the fingers, the pins are spans) */
-  .plan :global(svg) { display: block; width: 100%; height: 100%; pointer-events: none; }
+  .plan :global(svg) { display: block; width: 100%; height: 100%; }
   .plan :global(.fine) { opacity: 0; transition: opacity 0.25s; }
   .plan:global(.near) :global(.fine) { opacity: 1; }
-  .plan:global(.near) :global(.shade) { display: none; } /* the soft shadow (a baked picture of its blur since Nov 7: the live blur, redrawn over a plan laid out 8x wide, made zooming lag); up close it's off screen anyway */
+  .plan:global(.near) :global(.shade) { display: none; } /* the soft shadow's blur, redrawn over a plan laid out 8x wide, made zooming lag; up close it's off screen anyway */
   .plan :global(.mid) { opacity: 0; transition: opacity 0.25s; }
   .plan:global(.mid) :global(.mid) { opacity: 1; }
   .plan :global(.w) { fill: var(--m-wall); }
