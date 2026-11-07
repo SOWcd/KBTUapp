@@ -310,7 +310,10 @@
   .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; perspective: 1100px; } /* the card's turn in depth */
 
   /* the two-sided card: the face and the back share one 3D turn; each hides its own back side */
-  .card { position: relative; transform-style: preserve-3d; }
+  /* WebKit hit-tests the 3D context's root flat at z = 0: on a tilted card the half leaning back fell behind it and its
+     taps landed on .card (iOS: a person's photo did nothing). The root takes no taps; its two sides do */
+  .card { position: relative; transform-style: preserve-3d; pointer-events: none; }
+  .badge, .back { pointer-events: auto; }
   .card.flipped { transform: rotateY(180deg); }
   .badge, .back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
   /* the face turned away also goes invisible at the half turn: WebKit draws a layered child (JCC's sakura, the art's
