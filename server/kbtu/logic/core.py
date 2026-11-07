@@ -496,8 +496,20 @@ def _event_parts(con, evs: list[sqlite3.Row]) -> dict[int, dict]:
 def full(con, v: Viewer, e: sqlite3.Row) -> dict:
     head = can(con, v, e["org_id"], "events")  # the club's team only: the app's admin sees the event as a student does
     c = card(con, v, e)
-    # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all
-    pay = head or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
+    # the treasurer's Kaspi name and phone: only to who pays (a held or taken seat) and the club's team, never to all;
+    # the admin from Admin (staff_org) runs the event but gets none of the club's own: no Kaspi details, no DMP memo,
+    # no rating comments
+    lent = v.staff_org == e["org_id"]
+    pay = head and not lent or can(con, v, e["org_id"], "money") or (c["my"] or {}).get("status") in ("hold", "going")
+    out = _full(con, v, e, c, head, pay)
+    if lent:
+        out["memo"] = None
+        if out["ratings"]:
+            out["ratings"]["comments"] = []
+    return out
+
+
+def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dict:
     return {**c, **({"i18n": json.loads(e["i18n"])} if e["i18n"] else {}), "description": e["description"],
             "payToName": e["pay_to_name"] if pay else None, "payPhone": e["pay_phone"] if pay else None, "meetingTag": e["meeting_tag"], "forBoard": bool(e["for_board"]),
             "memo": json.loads(e["memo"]) if head and e["memo"] else None, "cohost": cohost_view(con, e) if head else None,

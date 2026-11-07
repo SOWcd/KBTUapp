@@ -80,3 +80,40 @@ def test_organizers_own_event_not_logged_and_bounds(env):
     assert c.put("/api/events/1/reg-until", headers=tma(62), json={"until": True}).status_code == 400
     assert c.put("/api/events/1/reg-until", headers=tma(62), json={"until": None}).status_code == 200
     assert not _staff_lines(con)
+
+
+def test_staff_gets_none_of_the_clubs_own(env):
+    """The admin runs the event but gets no Kaspi details, DMP memo, rating comments or receipts, can't rotate the
+    organizers' chat link or invite a co-host (review, Nov 7)."""
+    c, con, ids = _setup(env)
+    con.execute("""UPDATE events SET price = 2000, pay_to_name = 'Dana S', pay_phone = '+77011234567', memo = '{"room": "305"}' WHERE id = 1""")
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'TCK001', 0, 0)", (ids["ali"],))
+    con.execute("INSERT INTO files (id, sha256, kind, mime, bytes, path, created_at) VALUES (900, 'x', 'receipt', 'image/webp', 1, 'r/x', 0)")
+    con.execute("""INSERT INTO receipts (registration_id, file_id, via, amount, receipt_no, sender_name, recipient_name, created_at)
+        VALUES ((SELECT id FROM registrations WHERE event_id = 1), 900, 'app', 2000, 'R-1', 'Ali T', 'Dana S', 0)""")
+    for uid in (ids["ali"], ids["mod"], ids["other"]):
+        con.execute("INSERT INTO event_ratings (event_id, user_id, score, comment, created_at) VALUES (1, ?, 4, 'nice', 0)", (uid,))
+    org = c.get("/api/events/1", headers=tma(62)).json()
+    assert org["payPhone"] and org["memo"] and org["ratings"]["comments"]  # control: the club's own team
+    adm = c.get("/api/events/1", headers=_as(60)).json()
+    assert adm["payToName"] is None and adm["payPhone"] is None and adm["memo"] is None
+    assert adm["ratings"]["count"] == 3 and adm["ratings"]["comments"] == []
+    assert c.get("/api/events/1/attendees", headers=tma(62)).json()[0]["receipt"]["no"] == "R-1"
+    a = c.get("/api/events/1/attendees", headers=_as(60)).json()[0]
+    assert a["receipt"] is None and a["fullName"]  # the people, as organizers see them; not the money
+    assert c.post("/api/events/1/chat", headers=_as(60)).status_code == 403
+    assert c.put("/api/events/1/cohost", headers=_as(60), json={"orgId": 2}).status_code == 403
+    assert con.execute("SELECT chat_token FROM events WHERE id = 1").fetchone()[0] is None
+
+
+def test_phone_not_asked_after_signups(env):
+    """needsPhone can't be switched on once people are in: the export would hand out phones they gave elsewhere."""
+    c, con, ids = _setup(env)
+    start = con.execute("SELECT starts_at FROM events WHERE id = 1").fetchone()[0]
+    body = {"title": "Hack", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "needsPhone": True}
+    assert c.post("/api/events/1/registration", headers=tma(63), json={}).status_code == 200
+    r = c.patch("/api/events/1", headers=tma(62), json=body)
+    assert r.status_code == 409 and r.json()["message"] == "needs_phone"
+    assert c.patch("/api/events/1", headers=tma(62), json={**body, "needsPhone": False}).status_code == 200
+    assert c.delete("/api/events/1/registration", headers=tma(63)).status_code in (200, 204)
+    assert c.patch("/api/events/1", headers=tma(62), json=body).status_code == 200  # nobody in: fine

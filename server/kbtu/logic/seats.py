@@ -95,6 +95,8 @@ def _chat_ok(con, e: sqlite3.Row, uid: int) -> bool:
 
 def chat_start(con, v: Viewer, eid: int) -> str:
     """The token for "Create chat" (the organizers'): a new one each time, the old link stops working."""
+    if v.staff_org:  # the admin from Admin: a new token would cut the organizers' own link
+        raise ApiError("forbidden", "staff")
     e = _staff_event(con, v, eid, "events")
     if e["status"] == "cancelled":
         raise ApiError("closed")

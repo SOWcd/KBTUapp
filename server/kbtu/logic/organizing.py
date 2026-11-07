@@ -399,6 +399,8 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
         _meeting_ok(con, v, e["org_id"], f, bool(f["price"] if "price" in f else e["price"]), (e["meeting"], e["meeting_tag"], e["for_board"]), e["visibility"])
         if f["seats"] is not None and f["seats"] < taken(con, eid):
             raise ApiError("conflict")  # seats can't drop below who is already in
+        if f["needs_phone"] and not e["needs_phone"] and one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND status != 'cancelled'", eid):
+            raise ApiError("conflict", "needs_phone")  # those in never agreed to give it here (the export sends it)
         f["cover_file_id"], f["cover_focus"], f["memo"] = _cover(con, v, body, e["cover_file_id"]), _focus(body, e["cover_focus"]), _memo(body, e["memo"])
         f["video_id"], f["wide_video_id"] = _video(con, v, body, e["video_id"]), _video(con, v, body, e["wide_video_id"], "wideVideoId")
         _slides(con, v, body, e, f["cover_file_id"])
@@ -659,7 +661,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
             "receipt": {"id": p["rid"], "flags": [x for x in p["flags"].split(",") if x], "reviewed": p["reviewed_at"] is not None, "at": p["sent_at"],
                         "amount": p["amount"], "no": p["receipt_no"], "sender": p["sender_name"], "recipient": p["recipient_name"], "paidAt": p["paid_at"]}
-            if p["rid"] and paid else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
+            if p["rid"] and paid and not v.staff_org else None, "answers": json.loads(p["answers"]) if p["answers"] else None} for p in found]
     if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
         out = [{**a, "person": _door_ref(p), "fullName": short_name(p), "by": None, "byCame": False, "answers": None} for a, p in zip(out, found)]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731

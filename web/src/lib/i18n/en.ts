@@ -2279,6 +2279,7 @@ const en: Dict = {
   'ed.need': "Fill this in",
   'ed.past': "That time has passed",
   'ed.badSeats': "Fewer seats than people already in",
+  'ed.phoneLocked': "The phone can only be asked for before the first sign-up",
   'ed.leaveAsk': "Leave without saving?",
   'ed.leaveText': "Your changes will be lost.",
   'ed.leaveGo': "Leave",
