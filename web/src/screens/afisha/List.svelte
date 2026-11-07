@@ -14,14 +14,10 @@
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import CalendarCheck from '@lucide/svelte/icons/calendar-check';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { onMount } from 'svelte';
   import type { ClassItem, EventCard } from '../../lib/api';
-  import { slide } from 'svelte/transition';
-  import { cubicOut } from 'svelte/easing';
-  import { haptic } from '../../lib/tg';
   import { data, skipped, classKey, skipClass, prefetchEvent } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -103,9 +99,6 @@
   const left = $derived(classesLeft(data.schedule, now).filter((x) => !skipped.has(classKey(today, x.c))));
   const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
   const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
-
-  // which days' classes are open (folded by default: the events lead)
-  let folds = $state<Record<number, boolean>>({});
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -217,41 +210,16 @@
     {@const ask = day.d === today && !!session.me?.student && !data.schedule.length}
     {#if day.items.length || ask || data.schedule.length}
       {@const [a, b] = head(day.d)}
-      {@const cls = day.items.filter((x) => 'c' in x)}
-      {@const evs = day.items.filter((x) => !('c' in x))}
       <div class="day">
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
       {#if ask}
         <div class="ask"><Group><Row icon={CalendarPlus} title={t('sched.cardTitle')} subtitle={t('sched.cardSub')} accessory="chevron" onclick={() => sheets.schedHowTo()} /></Group></div>
       {/if}
-      <!-- the day's classes folded into one line above its events (owner, Nov 3: classes between the events buried
-           them); the line says what matters now (on now, next within the hour), a tap opens the rows -->
-      {#if cls.length === 1}
-        <div class="list cls">{@render clRow(cls[0] as Extract<Item, { c: ClassItem }>)}</div>
-      {:else if cls.length}
-        {@const first = cls[0] as Extract<Item, { c: ClassItem }>}
-        {@const last = cls[cls.length - 1] as Extract<Item, { c: ClassItem }>}
-        {@const nowCl = day.d === today ? cls.find((x) => x.key === live?.key || x.key === next?.key) as Extract<Item, { c: ClassItem }> | undefined : undefined}
-        <button class="fold" class:open={folds[day.d]} class:past={day.d === today && last.end < now} aria-expanded={!!folds[day.d]}
-                onclick={() => { haptic.tap(); folds[day.d] = !folds[day.d]; }}>
-          <span class="cl-t num"><b>{first.c.begins}</b>{last.c.ends}</span>
-          <span class="cl-s"><b class="ellipsis">{tn('list.classes', cls.length)}</b>
-            <small class="ellipsis">{#if nowCl && nowCl.key === live?.key && live}<span class="soon num">{t('list.nowLeft', { n: Math.max(1, Math.ceil((live.e - now) / 60)) })}</span> · {subjectOf(nowCl.c)}
-              {:else if nowCl && next}<span class="soon num">{t('cap.inMin', { n: Math.ceil((next.b - now) / 60) })}</span> · {subjectOf(nowCl.c)}
-              {:else}{cls.map((x) => subjectOf((x as Extract<Item, { c: ClassItem }>).c)).join(' · ')}{/if}</small></span>
-          <ChevronRight class="chev" size={18} />
-        </button>
-        {#if folds[day.d]}
-          <div class="list cls" transition:slide={{ duration: 280, easing: cubicOut }}>
-            {#each cls as it (it.key)}
-              {#if 'c' in it}{@render clRow(it)}{/if}
-            {/each}
-          </div>
-        {/if}
-      {/if}
+      <!-- classes and events in one line of time (owner, Nov 7: no folded "N classes" block); a class first at a tie -->
       <div class="list">
-        {#each evs as it (it.key)}
-          {#if 'e' in it}
+        {#each day.items as it (it.key)}
+          {#if 'c' in it}{@render clRow(it)}
+          {:else}
             {@const e = it.e}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
             <div class="row" class:cancelled={e.status === 'cancelled'}>
@@ -358,13 +326,6 @@
   .av :global(.av) { box-shadow: 0 0 0 1.5px var(--bg); }
 
   /* a class: its times in the covers' column, the room at the row's end */
-  /* a day's classes in one line: the first start and the last end in the covers' column, a chevron that turns open */
-  .fold { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 8px 0; text-align: left; color: inherit; }
-  .fold.past { opacity: 0.5; }
-  .fold :global(.chev) { flex: none; color: var(--text-3); transition: transform var(--t-fast) var(--ease); }
-  .fold.open :global(.chev) { transform: rotate(90deg); }
-  .fold + .list:not(.cls) .row:first-child::before, .cls + .list .row:first-child::before { content: ''; position: absolute; top: 0; left: 90px; right: 0; height: 0.5px; background: var(--separator); }
-  .cls .row:first-child::before { content: ''; position: absolute; top: 0; left: 90px; right: 0; height: 0.5px; background: var(--separator); }
   .cl { min-height: 56px; padding: 8px 0; cursor: pointer; }
   .cl.past, .cl.skip { opacity: 0.5; }
   .cl.skip .cl-s b { text-decoration: line-through; }

@@ -991,7 +991,6 @@ const ru = {
   'list.nowLeft': "Сейчас · ещё {n} мин",
   'list.at': "в {time}",
   'list.week': { one: "{n} на этой неделе", few: "{n} на этой неделе", many: "{n} на этой неделе", other: "{n} на этой неделе" },
-  'list.classes': { one: "{n} пара", few: "{n} пары", many: "{n} пар", other: "{n} пары" },
   'list.kind.lectureLong': "Лекция",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Лабораторная",
