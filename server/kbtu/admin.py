@@ -57,6 +57,9 @@
   .venv/bin/python -m kbtu.admin claim new <code> --until YYYY-MM-DD   a link many open for an award (the volunteers'
                                 init26 in their chat): each signed-in student gets it once, at once, until that day ends
                                 (Almaty); prints the t.me link. claim close <token>: it stops now
+  .venv/bin/python -m kbtu.admin announce3 [--send]   owner's one-off (Nov 7): the incubator's elective post (bot.ELECTIVE)
+                                to the 3rd years the bot can write to, with "more like it?" Yes/No; counts only; --send queues
+                                it (once per person: a second run reaches only the new ones)
   .venv/bin/python -m kbtu.admin redelete                         after restoring a copy: the accounts deleted since
                                 (deletions.log beside the database) are deleted again (DEPLOY.md, restore)
 
@@ -354,6 +357,15 @@ def main(args: list[str]) -> None:
     elif cmd == "claim" and len(args) == 3 and args[1] == "close":
         n = con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ? AND multi = 1 AND expires_at > ?", (now(), args[2], now())).rowcount
         print("closed" if n else "no open claim link with that token")
+    elif cmd == "announce3" and args[1:] in ([], ["--send"]):
+        to = [r[0] for r in rows(con, """SELECT u.id FROM users u JOIN students s ON s.user_id = u.id WHERE s.course = 3
+            AND s.consent_version != 'staff' AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+            AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'elective3' AND b.ref = 'elective3:2016')""")]
+        if args[1:]:
+            with db.tx(con):
+                for uid in to:
+                    notify(con, uid, "elective3", "elective3:2016")
+        print(f"3rd years the bot can write to, not sent yet: {len(to)}" + (" (queued)" if args[1:] else " (dry run; --send queues)"))
     elif cmd == "redelete":
         home = Path(config.load().db_path).resolve().parent
         log = home / "deletions.log"

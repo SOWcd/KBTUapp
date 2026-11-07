@@ -171,6 +171,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         text = texts.bot_message(lang, "contact_ask" if a else "contact_ask_plain", name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         return text, None, [[{"text": yes, "callback_data": f"ct:{c['id']}:y"}, {"text": no, "callback_data": f"ct:{c['id']}:n"}]]
+    if kind == "elective3":  # elective3:2016, under the incubator's post (_elective): more like it? Yes/No (_tapped, an:)
+        yes, no = texts.bot_message(lang, "announce_buttons")
+        return texts.bot_message(lang, "announce_ask")[0], None, [[{"text": yes, "callback_data": "an:y"}, {"text": no, "callback_data": "an:n"}]]
     if kind == "contact_ok":  # co:<contact>:to|from: accepted; each side gets the other's Telegram
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND status = 'accepted'", int(ref[1]))
         other = c and (c["to_id"] if ref[2] == "to" else c["from_id"])
@@ -749,6 +752,23 @@ def _answered(con, m, status: int, answer: dict) -> None:
         _mark(con, m, False, str(answer.get("description", status))[:200])
 
 
+ELECTIVE = ("@KBTUstartup", 2016)  # owner's one-off exception (Nov 7): the incubator's post to the 3rd years, as is
+
+
+async def _elective(cfg: Config, http: httpx.AsyncClient, m) -> httpx.Response | None:
+    """elective3's first message: the channel's post forwarded, or, if Telegram won't, our gist with its link.
+    A refused send comes back for send_due to handle; None: sent, the question goes next."""
+    if m["kind"] != "elective3":
+        return None
+    r = await _tg(cfg, http, "forwardMessage", {"chat_id": m["tg_id"], "from_chat_id": ELECTIVE[0], "message_id": ELECTIVE[1]})
+    if r.status_code not in (200, 403, 429):  # 403/429: the user blocked us / too fast, same for the gist
+        log.warning("elective3: forward refused (%s), the gist instead", str(r.json().get("description"))[:100])
+        text, button = texts.bot_message(m["lang"], "elective3_gist")
+        r = await _send(cfg, http, {"chat_id": m["tg_id"], "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True},
+                                    "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{ELECTIVE[0][1:]}/{ELECTIVE[1]}"}]]}})
+    return None if r.json().get("ok") else r
+
+
 async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
     con = db.connect(cfg.db_path)  # one connection, used by one thread at a time (check_same_thread=False)
     try:
@@ -772,7 +792,9 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             elif button:
                 body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
             try:
-                r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
+                r = await _elective(cfg, http, m)  # ponytail: its question refused after the forward (429) forwards again; rare at GAP
+                if r is None:
+                    r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
                 if r is None:
                     r = await _send(cfg, http, body)
                 answer = r.json()
@@ -1073,11 +1095,15 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery", json={"callback_query_id": cq["id"]})
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
-    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?", data):  # the forum's cards: Accept/Decline an offer, stop the pings
+    # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
+    if f := re.fullmatch(r"(ct|ps):(\d+)(?::([yn]))?|an:([yn])", data):
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
         if not u or not msg:
             return
-        if f[1] == "ps":
+        if f[4]:
+            con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[4] == "y"), u["id"]))
+            said = "announce_yes" if f[4] == "y" else "announce_no"
+        elif f[1] == "ps":
             con.execute("UPDATE users SET ask_pings = 0 WHERE id = ?", (u["id"],))
             said = "ask_stopped"
         else:

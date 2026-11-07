@@ -99,8 +99,7 @@ def test_migration_135(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (_uid(con, 10),))
     assert _go(c, team, 10)["my"]["status"] == "going"
     con.execute("UPDATE events SET starts_at = starts_at - 86400, ends_at = ends_at - 86400 WHERE id = ?", (past,))
-    n, sql = db.MIGRATIONS[-1]
-    assert n == 135
+    sql = dict(db.MIGRATIONS)[135]
     con.executescript(f"BEGIN;\n{sql}\nCOMMIT;")
     assert tuple(_reg(con, free, 10)) == ("cancelled", "removed")
     assert _reg(con, free, 11)["status"] == "going"  # not a member

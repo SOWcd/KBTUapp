@@ -1286,6 +1286,8 @@ MIGRATIONS: list[tuple[int, str]] = [
             AND e.starts_at > CAST(strftime('%s', 'now') AS INTEGER));
     DELETE FROM bot_outbox WHERE kind = 'remind_2h' AND sent_at IS NULL AND EXISTS (SELECT 1 FROM registrations r
       WHERE r.user_id = bot_outbox.user_id AND r.cancel_reason = 'removed' AND bot_outbox.ref LIKE 'event:' || r.event_id || ':%');"""),
+    # (Nov 7) the 3rd years' answer under the incubator's elective post (admin announce3): more like it? NULL: never asked
+    (136, "ALTER TABLE users ADD COLUMN announce_ok INTEGER;"),
 ]
 
 
