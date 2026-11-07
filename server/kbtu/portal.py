@@ -3,7 +3,7 @@
 whole week in its computer layout, hidden on a phone: a column per day, each class a block placed by its top and height
 in pixels (an hour a fixed height from the first hour's label), with its kind as an icon's title, the course, the
 teacher, the room, and for a long one its times. The student's name sits in the top bar ("Surname I."): the caller
-checks it against the Microsoft one. The student ID on the page is never read. Only the standard library."""
+checks it against the Microsoft one. The student ID in the top bar is read (Week.sid) for the caller; the page itself is never kept. Only the standard library."""
 from __future__ import annotations
 
 import email
@@ -186,6 +186,7 @@ class Week:
     name: str | None        # as the top bar shows it, for the caller's check
     lessons: list[Lesson]
     lang: str | None = None  # the page's language (en / ru / kk) by its day names; None: names it doesn't know
+    sid: str | None = None   # the student ID in the top bar, for the caller to compare with the account's
 
 
 def parse(html: str) -> Week:
@@ -195,6 +196,8 @@ def parse(html: str) -> Week:
     p.close()
     nodes = list(p.root.all())
     name = next((n.words() for n in nodes if n.tag == "span" and n.has("text-sm", "md:block", "text-text-heading")), None)
+    bar = next((n.words() for n in nodes if n.tag == "span" and n.has("hidden", "md:inline", "text-sm", "text-text-body")), "")
+    sid = (re.match(r"\s*(\d{2}[A-Za-z]{1,2}\d{4,7})(?!\w)", bar[:200], re.ASCII) or [None, None])[1]
     # the computer layout: a row of columns, the hours first (the phone's own shows one day)
     grid = next((n for n in nodes if n.has("flex") and any("min-w-[800px]" in c for c in n.cls)), None)
     if not grid:
@@ -240,7 +243,7 @@ def parse(html: str) -> Week:
                 raise NotSchedule("many")
     if not out:
         raise NotSchedule("empty")
-    return Week(name, sorted(out, key=lambda x: (x.weekday, x.begins)), max(DAY_NAMES, key=langs.count) if langs else None)
+    return Week(name, sorted(out, key=lambda x: (x.weekday, x.begins)), max(DAY_NAMES, key=langs.count) if langs else None, sid and sid.upper())
 
 
 def guess_lang(names: list[str]) -> str | None:

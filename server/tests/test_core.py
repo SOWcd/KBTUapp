@@ -5574,6 +5574,9 @@ def test_portal_schedule(env, monkeypatch):
     c, cfg = env
     login(c, 50, "ali")                                                  # Ali Testov
     login(c, 51, "bek")                                                  # Bek Testov: someone else
+    _con = db.connect(cfg.db_path)  # the page's own ID (00X000000): here only the schedule changes
+    _con.execute("UPDATE students SET student_id = '00X000000' WHERE user_id = (SELECT id FROM users WHERE tg_id = 50)")
+    _con.close()
     files = {"F1": archive, "F2": mht, "F3": b"<html><body>no grid</body></html>", "F4": portal_page("ru").encode(),
              "F5": portal_page("kk").replace("10:00&ndash;11:40", "11:00&ndash;12:40").encode()}           # in Kazakh, PE an hour later
     class Resp:
@@ -5621,7 +5624,7 @@ def test_portal_schedule(env, monkeypatch):
     assert got[0]["names"] == {"en": "Physical Education", "ru": "Physical Education (ru)", "kk": "Physical Education (kk)"}
     assert all(len(x["names"]) == 3 for x in got)
     dump = "\n".join(con.iterdump())
-    assert "00X000000" not in dump and "Phone Only Course" not in dump           # the student ID is never kept; the phone layout ignored
+    assert "Phone Only Course" not in dump                                       # the phone layout ignored
     assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})
 
     # the Week sheet's "Delete schedule": nothing of the week stays anywhere in the database; Bek's stays; again is fine;
@@ -5633,6 +5636,60 @@ def test_portal_schedule(env, monkeypatch):
     assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]
     assert c.delete("/api/me/schedule", headers=tma(52)).status_code == 204 and c.get("/api/me/schedule", headers=tma(52)).json() == []
+
+
+def test_schedule_page_sid(env):
+    """The student ID on the page (the name matched): equal, nothing; another number of the same year and degree,
+    written over silently with the audit line (old value); another year, left; held by another account, left and the
+    founder gets a notice with no ID in it; five a day; an unconfirmed account's never."""
+    c, cfg = env
+    login(c, 50, "ali")
+    login(c, 51, "bek")
+    login(c, 52, "fon")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1, role = 'admin' WHERE tg_id = 52")
+    con.execute("UPDATE students SET student_id = '24B000002' WHERE user_id = (SELECT id FROM users WHERE tg_id = 51)")
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 50").fetchone()[0]
+    con.execute("UPDATE students SET student_id = '24B000009' WHERE user_id = ?", (uid,))
+    sid = lambda: con.execute("SELECT student_id FROM students WHERE user_id = ?", (uid,)).fetchone()[0]  # noqa: E731
+    audits = lambda: con.execute("SELECT data FROM audit_log WHERE action = 'identity_fix'").fetchall()  # noqa: E731
+
+    class Resp:
+        def __init__(self, body):
+            self.body, self.content = body, body if isinstance(body, bytes) else b""
+        def json(self):
+            return self.body
+
+    def send(x):
+        class Http:
+            async def get(self, url, params=None):
+                if url.endswith("/getFile"):
+                    return Resp({"ok": True, "result": {"file_path": "p"}})
+                return Resp(portal_page().replace("00X000000", x).encode())
+        msg = {"message_id": 1, "from": {"id": 50}, "chat": {"id": 50, "type": "private"}, "date": logic.now(),
+               "document": {"file_id": "F", "file_name": "page.html", "file_size": 9000}}
+        return asyncio.run(bot._schedule(cfg, Http(), con, msg))["text"]
+    send("24B000009")
+    plain = send("24B000009")                                            # the week already in: the plain answer
+    send("23B000001")                                                    # another year: left, a line says so
+    assert sid() == "24B000009" and not audits()
+    assert send("24B000001") == plain                                    # same year: written over, no extra word to the student
+    assert sid() == "24B000001" and len(audits()) == 1
+    assert '"old": "24B000009"' in audits()[0][0] and '"new": "24B000001"' in audits()[0][0]
+    send("24B000001")                                                    # equal: nothing more
+    assert len(audits()) == 1
+    send("24B000002")                                                     # held by Bek: unchanged, the founder told
+    assert sid() == "24B000001" and len(audits()) == 1
+    told = con.execute("SELECT b.ref, u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'sid_page_clash'").fetchall()
+    assert [t[1] for t in told] == [52] and "24B000002" not in told[0][0] and "24B000001" not in told[0][0]
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'sid_page_taken'").fetchone()[0] == 1
+    for x in ("24B000003", "24B000004", "24B000005"):                   # 1 year + 1 fix + 1 taken + these: the 5th is the last
+        send(x)
+    assert sid() == "24B000004"
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (uid,))
+    con.execute("DELETE FROM audit_log")
+    send("24B000006")                                                    # unconfirmed: the name is self-typed
+    assert sid() == "24B000004"
 
 
 def test_schedule_languages(env):

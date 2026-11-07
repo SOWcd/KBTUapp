@@ -28,6 +28,8 @@ import httpx
 from . import ai, casting, db, llm, logic, media, mirror, offsite, portal, receipt, texts, tgc, userbot, video
 from .config import Config
 from .logic import now, one, rows
+from .logic.account import _Taken
+from .logic.core import ApiError
 
 log = logging.getLogger("kbtu.bot")
 
@@ -240,6 +242,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "club_path":  # opath:<id>, to the admins while it waits
         r = one(con, "SELECT o.name FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.id = ? AND r.status = 'pending' AND o.official = 0", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=r["name"]), "capps") if r else None
+    if kind == "sid_page_clash":  # sp:<user>:<day>, to the founder: a schedule page's student ID is another account's; the audit log has who
+        return (*texts.bot_message(lang, kind), "") if one(con, "SELECT 1 FROM students WHERE user_id = ?", int(ref[1])) else None
     if kind == "club_top":  # top:<org>, to the founder: a student initiative reached the Ascent's top (its lanyard is made by hand)
         o = one(con, "SELECT name FROM orgs WHERE id = ? AND top_at IS NOT NULL AND official = 0", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
@@ -939,7 +943,7 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one), each class
     keeping its names in the languages sent before (the portal switched to another language, the page sent again: Oct
     30). The answer has counts and language names only. The file is read in memory and never kept; nothing of the page
-    goes to the log; the student ID on it isn't read."""
+    goes to the log. The student ID on it, once the name matched, may correct the account's (_page_sid)."""
     chat = msg.get("chat") or {}
     if chat.get("type") != "private":
         return None
@@ -967,6 +971,7 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     got = await asyncio.to_thread(logic.save_schedule, con, u["id"], week.lessons, week.lang)
     if got is None:  # the account deleted while the page was read: its week doesn't come back
         return say("sched_signin")
+    await asyncio.to_thread(_page_sid, con, u["id"], week.sid)
     page, words = got["lang"], texts.pick(texts.SCHED_LANG, lang)
     same, changes = page in got["had"], got["added"] + got["removed"] + got["moved"]
     if not got["was"] or not page or not same and len(got["has"]) < 2:
@@ -976,6 +981,34 @@ async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dic
     if changes or same:
         said += " " + texts.bot_message(lang, "sched_changed" if changes else "sched_nochange", n=changes)[0]
     return _reply(chat["id"], said, texts.bot_message(lang, "sched_ok", n=len(week.lessons))[1], "sched", cfg)
+
+
+def _page_sid(con, uid: int, sid: str | None) -> None:
+    """The student ID on a page whose name matched, written over the account's when it differs, silently, with the
+    audit line `kbtu.admin fix sid` leaves (old and new). A saved page is plain HTML anyone can edit, so it is trusted
+    no further than a typo: the same year and degree letter only (those decide the perks: a 1st-year bachelor's free
+    seats); another year is left, an audit line says so. One held by another account is left and the founder hears
+    (no ID in the notice or the log). Five a day, like Settings: the profile would tell which IDs are registered."""
+    s = one(con, "SELECT student_id, consent_version, manual FROM students WHERE user_id = ?", uid)
+    if not sid or not s or s["manual"] or s["consent_version"] == "staff" or s["student_id"] == sid:
+        return  # unconfirmed: its name is self-typed, so a page "matching" it proves nothing; staff: a placeholder ID
+    tries = one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_page_taken', 'sid_page_year')
+        OR action = 'identity_fix' AND actor_id IS NULL AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", now() - 86400)[0]
+    if tries >= 5:
+        return
+    if re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", sid):
+        with db.tx(con):
+            logic.log_action(con, None, "sid_page_year", f"user:{uid}")
+        return
+    try:
+        logic.fix_identity(con, uid, "student_id", sid, admin=True)
+    except _Taken:
+        with db.tx(con):
+            logic.log_action(con, None, "sid_page_taken", f"user:{uid}")
+            for (f,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
+                logic.notify(con, f, "sid_page_clash", f"sp:{uid}:{now() // 86400}")
+    except ApiError:  # an ID the app doesn't take (a course out of range): left
+        pass
 
 
 def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg: Config | None = None, keys: list | None = None) -> dict:

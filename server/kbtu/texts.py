@@ -274,6 +274,7 @@ BOT = {
         "sched_not": ("🤔 В этом файле нет расписания на неделю. Открой на портале «Расписание» и сохрани именно эту страницу.", None),
         "sched_bad": ("Не получилось прочитать файл. Сохрани страницу ещё раз (iPhone: «Веб-архив», Android: «Скачать страницу») и пришли сюда.", None),
         "sched_other": ("🔒 Это расписание другого студента: имя на странице не совпадает с твоим. Загрузить можно только своё.", None),
+        "sid_page_clash": ("🪪 Номер студенческого на странице расписания занят другим аккаунтом. Смотри журнал: sid_page_taken.", None),
         "sched_big": ("Файл слишком большой — сохрани только страницу расписания.", None),
         # the page sent again (Oct 30): its language, then what changed in the week (counts only)
         "sched_same": ("🗓 Это тот же язык — {language}.", None),
@@ -432,6 +433,7 @@ BOT = {
         "sched_not": ("🤔 Бұл файлда апталық кесте жоқ. Порталда «Кестені» ашып, дәл сол бетті сақта.", None),
         "sched_bad": ("Файлды оқи алмадым. Бетті қайта сақта (iPhone: «Веб-архив», Android: «Бетті жүктеу») да, осында жібер.", None),
         "sched_other": ("🔒 Бұл басқа студенттің кестесі: беттегі аты сенікімен сәйкес емес. Тек өз кестеңді жүктей аласың.", None),
+        "sid_page_clash": ("🪪 Кесте бетіндегі студент нөмірін басқа аккаунт алып қойған. Журналды қара: sid_page_taken.", None),
         "sched_big": ("Файл тым үлкен — тек кесте бетін сақта.", None),
         "sched_same": ("🗓 Бұл сол тіл — {language}.", None),
         "sched_added": ("🗓 Жаңа тіл қосылды: {language}. Кесте тілдері: {languages}.", None),
@@ -584,6 +586,7 @@ BOT = {
         "sched_not": ("🤔 There's no week's schedule in this file. Open Schedule on the portal and save that page.", None),
         "sched_bad": ("Couldn't read the file. Save the page again (iPhone: Web Archive, Android: Download page) and send it here.", None),
         "sched_other": ("🔒 This is another student's schedule: the name on the page isn't yours. Only your own can be loaded.", None),
+        "sid_page_clash": ("🪪 A schedule page carries a student ID another account holds. See the audit log: sid_page_taken.", None),
         "sched_big": ("The file is too big: save just the schedule page.", None),
         "sched_same": ("🗓 Same language: {language}.", None),
         "sched_added": ("🗓 New language added: {language}. Your schedule's languages: {languages}.", None),
