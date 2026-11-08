@@ -11,8 +11,8 @@
   // way (owner, Oct 30: "like Apple"): a short label, its value in grey, an end mark: › a page or a sheet, ⇅ a menu at
   // the row, ↗ out of the app, an accent label with no mark does it now. No subtitles; few words.
   // Sections (each a unit Me animates, [data-unit]), what students look for first on top (owner, Nov 6: nobody found
-  // where to change the name): my data (photo, name, nick, school, course, city, phone), the lanyard (the carousel of
-  // skins), the app, then privacy and about. A guest: the app and about.
+  // where to change the name): the lanyard first (its editor opens here in place, under the badge: `editing`, Me runs
+  // it), my data (photo, name, nick, school, course, city, phone), the app, then privacy and about. A guest: the app and about.
   import ImageIcon from '@lucide/svelte/icons/image';
   import AtSign from '@lucide/svelte/icons/at-sign';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
@@ -46,7 +46,9 @@
   import Row from '../../ui/Row.svelte';
   import ThemeGlyph, { glyph } from './ThemeGlyph.svelte';
   import { lookData } from '../../lib/state/looks.svelte';
+  import LookPage from './LookPage.svelte';
 
+  let { editing = false, onlanyard }: { editing?: boolean; onlanyard: () => void } = $props();
   const me = $derived(session.me);
   const s = $derived(me?.settings);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
@@ -149,9 +151,15 @@
 </script>
 
 <div class="set-list" role="region" aria-label={t('me.settings')} tabindex="-1">
+  {#if me?.student && editing}
+    <div data-unit class="first"><LookPage /></div>
+  {:else}
   {#if me?.student}
     <input bind:this={file} type="file" accept="image/*" hidden onchange={(e) => void upload(e.currentTarget.files?.[0])} />
     <div data-unit class="first">
+      <Group><Row icon={IdCard} title={t('look.lanyard')} value={wornName} accessory="chevron" onclick={() => { haptic.tap(); onlanyard(); }} /></Group>
+    </div>
+    <div data-unit class="sec">
       <Group caption={t('set.myData')} footnote={t('look.nickFoot')}>
         <Row icon={ImageIcon} title={t('look.photo')} value={me.photo.telegram ? 'Telegram' : t('look.own')} menu={photoItems()} />
         <Row icon={User} title={t('set.name')} value={[me.student.firstName, me.student.lastName].filter(Boolean).join(' ')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('name'); }} />
@@ -162,11 +170,6 @@
         {:else if me.student.course}<Row icon={GraduationCap} title={t('pd.course')} value={String(me.student.course)} />{/if}
         <Row icon={MapPin} title={t('pd.city')} value={me.city ? cityName(me.city.name, i18n.lang) : t('pd.cityNone')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('city'); }} />
         {#if phone}<Row icon={Phone} title={t('pd.phoneShort')} value={phone} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('phone'); }} />{/if}
-      </Group>
-    </div>
-    <div data-unit class="sec">
-      <Group caption={t('look.skin')}>
-        <Row icon={IdCard} title={t('look.change')} value={wornName} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('look'); }} />
       </Group>
     </div>
   {:else}
@@ -195,6 +198,7 @@
       {#if session.donate}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
+  {/if}
 </div>
 
 <style>

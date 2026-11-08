@@ -1,47 +1,28 @@
 <script lang="ts">
-  // The «Change badge» page (Settings): my badge pinned on top, the lanyards and frames under it in rows that swipe
-  // sideways, so choosing never scrolls the page. A tap applies at once (the preview is the profile's own Hero).
+  // The lanyard's editor: Settings' first row opens it in place under my badge (Me), the lanyards and frames in rows
+  // that swipe sideways. A tap puts it on the badge above at once as a draft (ui.look); Me's check saves it, Back drops it.
   import Lock from '@lucide/svelte/icons/lock';
   import { onDestroy } from 'svelte';
-  import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { say, ui } from '../../lib/state/ui.svelte';
-  import { lookData, myShown } from '../../lib/state/looks.svelte';
+  import { ui } from '../../lib/state/ui.svelte';
+  import { lookData } from '../../lib/state/looks.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import { banded, clubLook, lookVars, type Look } from '../../lib/awards';
-  import Hero from './Hero.svelte';
   // each lanyard's card art at the swatch's size, one small picture (tools/scene-rasters.mjs draws them from LanyardBand)
   const MINI = import.meta.glob('../../assets/lanyards/minis/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
   const me = $derived(session.me);
   const L = $derived(lookData());
-  const shown = $derived(myShown());
+  const frame = $derived(ui.look ? ui.look.frame : me?.frame ?? null);
   onDestroy(() => { ui.tryOn = null; });
 
-  let busy = false;
-  const oops = () => { haptic.error(); say(t('common.error'), 'warning_3d'); };
-  // no toast on a skin (owner, Oct 29): the badge above turns at once; a failure puts the old one back
-  async function pickSkin(id: number | 'sower' | null) {
-    if (busy || !me || id === me.skin) return;
-    const was = me;
-    busy = true;
-    session.me = { ...me, skin: id };
-    try { session.me = await api.updateMe({ skin: id }); } catch { session.me = was; oops(); } finally { busy = false; }
-  }
-  // the frame: in place at once, back on a failure (as the lanyard)
+  const pickSkin = (id: number | 'sower' | null) => { if (ui.look) ui.look = { ...ui.look, skin: id }; };
+  const pickFrame = (f: string | null) => { if (ui.look) ui.look = { ...ui.look, frame: f }; };
   const FRAMES = [null, 'flowers', 'space', 'hearts', 'sparkles', 'laurel', 'leaves', 'snow', 'notes', 'neon', 'blossom', 'gold'] as const;
-  async function pickFrame(f: string | null) {
-    if (busy || !me || (me.frame ?? null) === f) return;
-    const was = me;
-    busy = true;
-    session.me = { ...me, frame: f };
-    try { session.me = await api.updateMe({ frame: f }); } catch { session.me = was; oops(); } finally { busy = false; }
-  }
 </script>
 
 {#if me}
-  <div class="pin">{#if shown}<div class="hero"><Hero p={shown} qr={null} live shelf={false} /></div>{/if}</div>
   <div class="looks">
     {#if L.skins.length || me.founder}
       <!-- each lanyard drawn small, as it hangs above (names alone said nothing; with many clubs the row scrolls) -->
@@ -50,7 +31,7 @@
         <div class="skins" role="radiogroup" aria-label={t(label)}>
           {#each ks as k (k.id ?? 'kbtu')}
             <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={L.worn === k.id} class:on={L.worn === k.id} class:locked={'locked' in k && k.locked}
-                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: L.kindOf(k) === 'school' }; else { ui.tryOn = null; void pickSkin(k.id); } }}>
+                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: L.kindOf(k) === 'school' }; else { ui.tryOn = null; pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones (Nov 2);
                    now a picture each (perf round 3), the locked ones keep their plain colours as before -->
@@ -66,7 +47,7 @@
     <h3 class="sub">{t('look.frame')}</h3>
     <div class="frames" role="radiogroup" aria-label={t('look.frame')}>
       {#each FRAMES as f (f ?? 'none')}
-        <button class="fr" role="radio" aria-checked={(me.frame ?? null) === f} class:on={(me.frame ?? null) === f} onclick={() => { haptic.select(); void pickFrame(f); }}>
+        <button class="fr" role="radio" aria-checked={frame === f} class:on={frame === f} onclick={() => { haptic.select(); pickFrame(f); }}>
           <span class="fb"><span class="fp"></span>{#if f}<img src="frames/{f}.svg" alt="" draggable="false" />{/if}</span>
           <b class="ellipsis">{t(f ? `look.frame.${f}` : 'look.frameNone')}</b>
         </button>
@@ -76,11 +57,7 @@
 {/if}
 
 <style>
-  /* the badge stays in view; the picker rows swipe sideways under it */
-  .pin { position: sticky; top: 0; z-index: 2; background: var(--bg); padding-bottom: var(--s-2); }
-  .hero { display: flex; justify-content: center; }
   /* the lanyards, small: strap, clip and card in each one's colours (Hero.svelte's, scaled down); bleeds to the edges */
-  .looks { margin-bottom: -28px; } /* the pane tail would make the picker scroll for nothing */
   .sub { margin: var(--s-2) 0 var(--s-1); font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
   .sub.first { margin-top: 0; }
   .skins { display: flex; gap: 10px; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter) 6px; scrollbar-width: none; }

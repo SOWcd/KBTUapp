@@ -19,7 +19,7 @@
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { data, loadMyCard } from '../../lib/state/data.svelte';
   import { untrack, flushSync, type Component } from 'svelte';
-  import { say, ui, open, close, removeOverlay } from '../../lib/state/ui.svelte';
+  import { say, ui, open, close, removeOverlay, overlays } from '../../lib/state/ui.svelte';
   import { calm } from '../../ui/fold';
   import SettingsMode from './SettingsMode.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -82,7 +82,10 @@
   let phase = $state<'idle' | 'entering' | 'on' | 'leaving'>('idle');
   let set = $state(false);   // after the swap: the away blocks gone, the list in
   let hold = $state(false);  // a fade runs: the page takes no taps
-  let List = $state<Component<Record<string, never>, { photoMenu: (at: Element) => void }> | null>(null);
+  let List = $state<Component<{ editing: boolean; onlanyard: () => void }, { photoMenu: (at: Element) => void }> | null>(null);
+  // the lanyard's editor in place of the list (its first row), under the same badge: a second overlay over the
+  // settings' (etok), so Back returns to the list; the check saves and leaves the settings (owner, Nov 8)
+  let edit = $state(false), etok = 0;
   let list = $state<{ photoMenu: (at: Element) => void }>();
   let lift = $state<HTMLDivElement>(), gear = $state<HTMLButtonElement>(), shield = $state<HTMLButtonElement>();
   let tok = 0, run = 0, pending = false, liftA: Animation | undefined, fades: Animation[] = [];
@@ -138,11 +141,53 @@
       liftA?.cancel();
       liftA = lift.animate([{ transform: `translateY(${cur + clamp(d)}px)` }, { transform: 'translateY(-6px)' }], { duration: 380, easing: SPRING, fill: 'forwards' });
     }
-    all('[data-unit]').forEach((u, i) => u.animate(q ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }],
-      { duration: q ? 150 : 380, delay: q ? 0 : 45 * i, easing: EASE, fill: 'backwards' }));
+    rise(q);
     page?.querySelector<HTMLElement>('.set-list')?.focus({ preventScroll: true });
     if (pending) { out(); return; }
     setTimeout(() => { if (r === run) phase = 'on'; }, q ? 150 : 515);
+  }
+  const rise = (q: boolean) => all('[data-unit]').forEach((u, i) => u.animate(q ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }],
+    { duration: q ? 150 : 380, delay: q ? 0 : 45 * i, easing: EASE, fill: 'backwards' }));
+  // the list and the editor swap in one frame, the new one rising as the list did
+  function swapEdit(on: boolean) {
+    edit = on;
+    flushSync();
+    if (page) page.scrollTop = 0;
+    rise(calm());
+  }
+  function lanyard() {
+    if (phase !== 'on' || edit || !me) return;
+    ui.look = { skin: me.skin, frame: me.frame ?? null };
+    etok = open(SettingsMode, { title: 'look.lanyard', onclose: unedit });
+    swapEdit(true);
+  }
+  const dirty = () => !!ui.look && !!me && (ui.look.skin !== me.skin || ui.look.frame !== (me.frame ?? null));
+  // a locked lanyard tried on (owner, Oct 31): said it isn't mine, and mine turns back
+  function untry() {
+    if (ui.tryOn) { say(t(ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
+  }
+  // Back (or Escape) in the editor: to the list; a change not saved asks first (iOS's "Discard changes?")
+  async function unedit() {
+    if (dirty()) {
+      const o = overlays.find((x) => x.id === etok);
+      if (o) o.closing = false;
+      if (!(await sheets.ask({ title: t('look.discard'), ok: t('look.discardGo'), cancel: t('common.cancel'), danger: true })) || !edit) return;
+    }
+    haptic.soft();
+    ui.tryOn = null; ui.look = null;
+    removeOverlay(etok); etok = 0;
+    swapEdit(false);
+  }
+  // the check in the editor: saved at once (back on a failure), and the settings close onto the profile
+  function save() {
+    const was = session.me, next = ui.look;
+    if (was && next && dirty()) {
+      session.me = { ...was, ...next };
+      api.updateMe(next).then((m) => (session.me = m), () => { session.me = was; haptic.error(); say(t('common.error'), 'warning_3d'); });
+    }
+    ui.look = null;
+    removeOverlay(etok); etok = 0;
+    close(tok, true);
   }
   // the check, Back or Escape (SettingsMode's onclose); Back in the enter's fade waits for its swap, never reverses mid-fade
   function leave() {
@@ -153,8 +198,7 @@
     const r = ++run, q = calm();
     phase = 'leaving'; hold = true; pending = false;
     haptic.soft();
-    // a lanyard tried on but not mine to wear (owner, Oct 31): said so, and mine turns back
-    if (ui.tryOn) { say(t(ui.tryOn.school ? (session.me?.student?.school ? 'look.lockedSchool' : 'look.noSchoolYet') : 'look.locked', { name: ui.tryOn.name }), 'locked_3d'); ui.tryOn = null; }
+    untry();
     icons(false, q);
     fades = all('[data-unit]').map((u) => u.animate(q ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px)' }],
       { duration: q ? 150 : 140, easing: IN, fill: 'forwards' }));
@@ -163,7 +207,7 @@
   // always back at the top: the lanyard stays put, or slides down from under the capsule when the list was scrolled
   function swapOut() {
     const q = calm(), y0 = top();
-    set = false; fades = [];
+    set = false; edit = false; fades = [];
     flushSync();
     if (page) page.scrollTop = 0;
     const d = y0 - top(); // measured with the -6 lift still on: the layout's shift alone
@@ -185,6 +229,8 @@
     run++;
     fades.forEach((a) => a.cancel()); fades = []; liftA?.cancel(); liftA = undefined;
     set = false; hold = false; pending = false; phase = 'idle';
+    edit = false; ui.look = null; ui.tryOn = null;
+    if (etok) { removeOverlay(etok); etok = 0; }
     if (tok) { removeOverlay(tok); tok = 0; }
   }
   $effect(() => { if (ui.tab !== 'profile') untrack(() => { if (phase !== 'idle') reset(); }); });
@@ -203,13 +249,13 @@
     {/if}
     <!-- settings in place; in them, the check that ends them (a tap while the motion runs is ignored) -->
     <button class="gear" class:done={phase === 'entering' || phase === 'on'} bind:this={gear} aria-label={t(phase === 'entering' || phase === 'on' ? 'me.done' : 'me.settings')}
-      onclick={() => { if (phase === 'idle') enter(); else if (phase === 'on') close(tok, true); }}>
+      onclick={() => { if (phase === 'idle') enter(); else if (phase === 'on') { if (edit) save(); else close(tok, true); } }}>
       <span class="gi"><SettingsIcon size={19} /></span><span class="gi c"><Check size={20} strokeWidth={2.4} /></span></button>
   </div>
   {#if me?.student}
     <!-- my photo: settings, or in them the photo's menu at it -->
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
-      onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on') list?.photoMenu(el); }} /></div>{/if}
+      onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on' && !edit) list?.photoMenu(el); }} /></div>{/if}
     <!-- two squares (owner, Nov 1): my friends as a cluster of faces, and my invite -->
     {#if rest}<div class="duo" data-away>
       <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
@@ -283,7 +329,7 @@
   {/if}
   <!-- last before the tail, so no block's stagger delay shifts -->
   <!-- a failure inside the list shows itself instead of a blank page (Nov 2: Settings came up empty on phones) -->
-  {#if set && List}<svelte:boundary onerror={(e) => console.error(e)}><List bind:this={list} />
+  {#if set && List}<svelte:boundary onerror={(e) => console.error(e)}><List bind:this={list} editing={edit} onlanyard={lanyard} />
     {#snippet failed(error, retry)}<p class="t-foot crash">{String((error as Error)?.message ?? error).slice(0, 300)} <button class="t-foot" onclick={retry}>↻</button></p>{/snippet}
   </svelte:boundary>{/if}
   <div class="tail"></div>

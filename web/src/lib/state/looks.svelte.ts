@@ -34,15 +34,19 @@ export function lookData() {
   const sorted = [...orgs.filter((k) => isMine(k) && k.id !== null), ...orgs.filter((k) => k.id === null), ...orgs.filter((k) => !isMine(k))];
   const rows = ([['look.gClubs', sorted], ['look.gSchools', swatches.filter((k) => kindOf(k) === 'school')]] as const).filter(([, ks]) => ks.length);
   // a locked one can be tried on: the lanyard wears it, the check then says it isn't mine (Me) and turns it back
-  const worn = ui.tryOn?.id ?? me?.skin;
+  const worn = skinNow();
   return { skins, swatches, rows, kindOf, worn, wornName: swatches.find((k) => k.id === (worn ?? null))?.name ?? 'KBTU' };
 }
 
 // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
 export function myShown(): PersonCard | null {
   const me = session.me, card = data.myCard;
-  return card ? { ...card, skin: ui.tryOn?.id ?? me?.skin, frame: me?.frame } : (me?.student ? {
+  return card ? { ...card, skin: skinNow(), frame: frameNow() } : (me?.student ? {
     id: me.id, name: me.name, nick: me.nick, realName: me.nick ? `${me.student.firstName} ${[...me.student.lastName][0] ?? ''}`.trim() : undefined, avatar: me.avatar, founder: me.founder, staff: me.role === 'user' ? null : me.role, no: me.no, course: me.student.course, school: me.student.school, bio: me.bio,
-    attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: ui.tryOn?.id ?? me.skin, frame: me.frame,
+    attended: -1, clubs: me.memberships, past: [], showcase: [], shelf: [], awards: { achievements: [], badges: [] }, friendship: 'none', friendsSince: null, going: [], skin: skinNow(), frame: frameNow(),
   } : null);
 }
+
+// what the lanyard wears now: a locked one tried on, else the edit not yet saved (ui.look), else mine
+const skinNow = () => ui.tryOn?.id ?? (ui.look ? ui.look.skin : session.me?.skin);
+const frameNow = () => (ui.look ? ui.look.frame : session.me?.frame);

@@ -25,6 +25,7 @@ export const ui = $state({
   tab: start.tab,
   club: start.club,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one); kept across launches
   tryOn: null as { id: number; name: string; school?: boolean } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
+  look: null as { skin: number | 'sower' | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
   gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
   gate: false,             // the new policy's gate is up (App, ConsentGate): the app waits behind it
