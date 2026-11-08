@@ -83,7 +83,7 @@ async def identity(token: str) -> dict | None:
             log.warning("ms: graph %s", r.status_code)
             return None
         c, me = claims(token), r.json()
-        # the sign-in name is always the directory's own (s_nurmatov@kbtu.kz); "mail" can be a student's own outside
+        # the sign-in name is always the directory's own (s_student@kbtu.kz); "mail" can be a student's own outside
         # address (refused because of it)
         email = (me.get("userPrincipalName") or "").lower()
         why = ("tenant" if c.get("tid") != KBTU else "app" if c.get("appid", c.get("azp")) != CLIENT
