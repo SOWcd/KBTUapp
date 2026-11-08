@@ -908,7 +908,7 @@ const kk: Dict = {
   'set.name': "Аты-жөні",
   'set.nameId': "Аты-жөні мен студенттік",
   'look.lanyard': "Ланъярд",
-  'look.discard': "Өзгерістерді болдырмау керек пе?",
+  'look.discard': "Өзгерістерден бас тартасыз ба?",
   'look.discardGo': "Болдырмау",
   'look.photo': "Фото",
   'look.fromTg': "Telegram-нан",
