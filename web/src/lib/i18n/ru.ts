@@ -692,7 +692,6 @@ const ru = {
 
   'list.title': 'События',
   'list.yours': 'Твои события',
-  'list.yoursNone': 'Пока никуда не идёшь. Выбери событие ниже.',
   'list.moreSoon': "Скоро будет больше событий",
   'list.moreSoonText': "Клубы только приходят в KBTU App. Подпишись на свои — бот напишет, как только появится новое.",
   'list.toClubs': "К клубам",
@@ -1009,8 +1008,8 @@ const ru = {
   'list.kind.lectureLong': "Лекция",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Лабораторная",
-  'sched.cardTitle': "Добавь расписание — 1 минута",
-  'sched.cardSub': "Сохрани страницу портала и отправь нашему боту — пары появятся здесь",
+  'sched.cardTitle': "Пары в Афише",
+  'sched.cardSub': "Отправь боту страницу расписания — займёт минуту",
   'sched.howTitle': "Пары",
   'sched.howLead': "Вся неделя пар — прямо в приложении.",
   'sched.iphone': "iPhone · Safari",

@@ -692,7 +692,6 @@ const kk: Dict = {
 
   'list.title': 'Іс-шаралар',
   'list.yours': 'Сенің іс-шараларың',
-  'list.yoursNone': 'Әзірге ешқайда бармайсың. Төменнен іс-шара таңда.',
   'list.moreSoon': "Жақында іс-шаралар көбейеді",
   'list.moreSoonText': "Клубтар KBTU App-қа енді келіп жатыр. Өз клубтарыңа жазыл — жаңасы шыққанда бот жазады.",
   'list.toClubs': "Клубтарға",
@@ -989,8 +988,8 @@ const kk: Dict = {
   'list.kind.lectureLong': "Дәріс",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Зертханалық",
-  'sched.cardTitle': "Кестеңді қос — 1 минут",
-  'sched.cardSub': "Портал бетін сақтап, ботымызға жібер — сабақтар осында шығады",
+  'sched.cardTitle': "Сабақтар Афишада",
+  'sched.cardSub': "Кесте бетін ботқа жібер — бір минут қана",
   'sched.howTitle': "Кесте",
   'sched.howLead': "Бүкіл апталық сабақтар — қосымшада.",
   'sched.iphone': "iPhone · Safari",

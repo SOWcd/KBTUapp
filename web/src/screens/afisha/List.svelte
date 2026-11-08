@@ -1,6 +1,6 @@
 <script lang="ts">
   // Afisha, one screen, in Luma's manner (owner, Nov 2: mock A with B's covers on top). The date and Today with a quiet
-  // pill (the assistant, "In a row"), the news circles; "Your events": big covers swiped sideways, the next one peeking
+  // pill (the assistant, "In a row"), the news circles; "Your events" (only when I go somewhere): big covers swiped sideways, the next one peeking
   // in (the events I'm going to this week, their Ticket and Route on the cover); then "Events" over its grey count, the
   // featured post, and the days ("Tomorrow / Tuesday"): rows with a square cover, the club, a bold title, time and place
   // with thin icons, classes as slim rows in time order between them, the one on now live in place (the capsule above
@@ -12,7 +12,6 @@
   import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import Sparkles from '@lucide/svelte/icons/sparkles';
-  import CalendarCheck from '@lucide/svelte/icons/calendar-check';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -101,6 +100,9 @@
   const live = $derived(left[0] && left[0].b <= now ? { key: classKey(today, left[0].c), ...left[0] } : null);
   const next = $derived.by(() => { const x = left.find((y) => y.b > now); return x && x.b - now <= 3600 ? { key: classKey(today, x.c), ...x } : null; });
 
+  // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
+  const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
+
   const past = $derived(data.past); // "Past": mine that ended, newest first (the server's order)
   let allPast = $state(false);
 
@@ -172,8 +174,8 @@
   <StoryRow />
   {#if offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
-  <h2 class="sec">{t('list.yours')}</h2>
   {#if going.length}
+    <h2 class="sec">{t('list.yours')}</h2>
     <div class="heroes" class:one={going.length === 1}>
       {#each going as e (e.id)}
         <!-- an event I'm going to: its cover, how soon, the way there and the ticket -->
@@ -194,12 +196,14 @@
         </section>
       {/each}
     </div>
-  {:else}
-    <!-- one sentence that names the way on -->
-    <div class="none"><EmptyState icon={CalendarCheck} title={t('list.yoursNone')} /></div>
+  {/if}
+  {#if askSched}
+    <!-- no timetable yet: one card at the top, under my events (owner, Nov 8: an empty "Your events" over this card in
+         today's list read as two empty states); no plans at all: no section, the events below are the way on -->
+    <div class="ask"><Group><Row icon={CalendarPlus} title={t('sched.cardTitle')} subtitle={t('sched.cardSub')} accessory="chevron" onclick={() => sheets.schedHowTo()} /></Group></div>
   {/if}
 
-  <h2 class="sec two">{t('list.title')}<span class="num">{tn('list.week', weekCount)}</span></h2>
+  <h2 class="sec two">{t('list.title')}{#if weekCount}<span class="num">{tn('list.week', weekCount)}</span>{/if}</h2>
 
   {#if featured}
     <div class="pin"><Card onclick={() => (openPost = !openPost)}>
@@ -210,15 +214,11 @@
   {/if}
 
   {#each shownDays as day (day.d)}
-    <!-- no timetable yet: today's place asks for it (PLAN 26) instead of a "free day" we can't know (onboarding plan) -->
-    {@const ask = day.d === today && !!session.me?.student && !data.schedule.length}
-    {#if day.items.length || ask || data.schedule.length}
+    <!-- without a timetable an empty day isn't shown: not a "free day" we can't know (the card above asks for it) -->
+    {#if day.items.length || data.schedule.length}
       {@const [a, b] = head(day.d)}
       <div class="day">
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
-      {#if ask}
-        <div class="ask"><Group><Row icon={CalendarPlus} title={t('sched.cardTitle')} subtitle={t('sched.cardSub')} accessory="chevron" onclick={() => sheets.schedHowTo()} /></Group></div>
-      {/if}
       <!-- classes and events in one line of time (owner, Nov 7: no folded "N classes" block); a class first at a tie -->
       <div class="list">
         {#each day.items as it (it.key)}
@@ -243,7 +243,7 @@
           {/if}
         {/each}
       </div>
-      {#if !day.items.length && !ask}<p class="free t-foot">{t('list.freeDay')}</p>{/if}
+      {#if !day.items.length}<p class="free t-foot">{t('list.freeDay')}</p>{/if}
       </div>
     {/if}
   {/each}
@@ -289,15 +289,17 @@
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* "Your events": covers side by side, the next one peeks in */
-  .heroes { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); scroll-padding: 0 var(--gutter); scrollbar-width: none; }
+  /* "Your events": covers side by side, the next one peeks in; room below for the covers' glow (the scroller clipped
+     it into a hard band) */
+  .heroes { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)) -28px; padding: 0 var(--gutter) 28px; scroll-padding: 0 var(--gutter); scrollbar-width: none; }
   .heroes::-webkit-scrollbar { display: none; }
   .hero { position: relative; flex: none; width: calc(100% - 28px); height: 210px; scroll-snap-align: start; overflow: hidden; border-radius: var(--r-xl);
     box-shadow: inset 0 0 0 1px var(--line), 0 18px 36px -24px var(--c, transparent); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   .heroes.one .hero { width: 100%; }
   .hero :global(.poster) { position: absolute; inset: 0; }
-  .hero :global(.poster .emoji) { width: 104px; height: 104px; margin-bottom: 38%; filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.4)); }
+  /* an emoji cover: its mark in the top corner, clear of the title and the buttons (centred, it sat on "tomorrow · 18:30") */
+  .hero :global(.poster .emoji) { position: absolute; top: 16px; right: 16px; width: 64px; height: 64px; filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35)); }
   .shade { position: absolute; inset: 35% 0 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.64)); pointer-events: none; }
   .hero-tx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 3px; padding: 16px; color: var(--on-accent); pointer-events: none; }
   .when { font: 600 var(--fs-sub)/1.2 var(--font-text); opacity: 0.85; }
@@ -363,7 +365,6 @@
   .cl-r.on :global(.btn) { max-width: 100%; }
   .free { padding: 6px 0 0 90px; }
 
-  .ask { margin: 6px 0; }
-  .none :global(.empty) { padding: var(--s-2) var(--s-6) var(--s-4); } /* under its heading: no screen's worth of air */
+  .ask { margin-top: 20px; }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

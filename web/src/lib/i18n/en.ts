@@ -692,7 +692,6 @@ const en: Dict = {
 
   'list.title': 'Events',
   'list.yours': 'Your events',
-  'list.yoursNone': 'No plans yet. Pick an event below.',
   'list.moreSoon': "More events are coming",
   'list.moreSoonText': "Clubs are only arriving in KBTU App. Follow yours: the bot writes as soon as there's something new.",
   'list.toClubs': "To clubs",
@@ -989,8 +988,8 @@ const en: Dict = {
   'list.kind.lectureLong': "Lecture",
   'list.kind.practiceLong': "Practice",
   'list.kind.labLong': "Lab",
-  'sched.cardTitle': "Add your schedule: 1 minute",
-  'sched.cardSub': "Save the portal's page and send it to our bot: your classes show here",
+  'sched.cardTitle': "Your classes here",
+  'sched.cardSub': "Send the bot your timetable page: it takes a minute",
   'sched.howTitle': "Classes",
   'sched.howLead': "Your whole week of classes, right in the app.",
   'sched.iphone': "iPhone · Safari",
