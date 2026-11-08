@@ -2270,8 +2270,6 @@ const en: Dict = {
   'seats.added': "+{n} seats: the waitlist is in",
   'ed.firstYear': "For first-years",
   'ed.firstYearHint': "Adds a \"1st year\" tag",
-  'ed.albumOpen': "Photos from participants",
-  'ed.albumOpenHint': "Those who came can add their shots. Off: only the team",
   'ed.needsPhone': "Phone number needed",
   'ed.needsPhoneHint': "Asked at sign-up if we don't have it yet. It goes into this event's guest list file",
   'ed.preview': "Preview",

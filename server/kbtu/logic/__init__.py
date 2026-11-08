@@ -34,7 +34,7 @@ from .clubs import (CLUB_REAPPLY, COVERS, KBTU, LINK, LINKS_MAX, LINK_WORDS, OFF
     _links_ok, _my_request, _official, _people, _request_state, _slug_free, add_link, apply, apply_club,
     club_applications, create_org, decide_club_application, delete_org, PATH_STEPS, path_top, ask_official, decide_official, official_path, official_requests, undo_official, undo_club_refusal, decide_join, drop_link, fill_abbrs, guess_abbr, initials,
     join_requests, my_club_application, name_slugs, org, org_by_slug, org_links, org_name, org_shape, org_shapes, orgs,
-    people, seed_schools, shown_links, slug_for, start_by_slug, strip_emoji_names, no_emoji, subscribe, update_org, withdraw)  # noqa: F401
+    listed, people, seed_schools, shown_links, slug_for, start_by_slug, strip_emoji_names, no_emoji, subscribe, update_org, withdraw)  # noqa: F401
 from .newsfeed import (POST_TAGS, _tg_i18n, _tg_shape, create_post, feature, hide_post, post_shape, post_shapes, posts,
     react, read_posts, unread_broadcasts, update_post, wipe_post)  # noqa: F401
 from .chatlist import (HANDLE, INVITE, ORG_CHATS, SAME_CHAT, TG_LINK, _chat, _chats_audit, _closed, _owned, _unlink,
@@ -62,7 +62,7 @@ from .organizing import (ALBUM_EACH, ALBUM_FOR, ALBUM_MAX, ALBUM_TEAM, GUESTS_MA
     attendees, attendees_export, can_add_album_photo, cancel_event, change_place, checkin, checkin_by_name,
     admin_delete_event, clean_event, create_event, decline, delete_event, events_gone, undo_delete_event, delete_update, door, door_guests, event_invites, invite_friend,
     kz_phone, leaders_answers, link_door_guests, meeting_answers, org_events, post_update, publish_event, rate_event,
-    remove_album_photo, screen_came, shade, undo_checkin, undo_door_guest, update_event, set_reg_until, admin_find_events, open_door, door_round)  # noqa: F401
+    remove_album_photo, screen_came, shade, undo_checkin, undo_door_guest, update_event, set_reg_until, open_door, door_round)  # noqa: F401
 from .daily import (MEMO_ASKS, _AI_EVENTS, _AI_ORGS, _memo, _memo_sender, _next_week, _room_no, admin_ai, admin_day,
     admin_stats, ai_retry, day_of, memo, memo_again, memo_item, memo_opened, memo_sent, memo_sign, memo_week,
     saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
@@ -76,5 +76,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import assistant, cohosts, crew, fchannel, inbox, mapflaws, tgcomments  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import assistant, cohosts, crew, fchannel, inbox, mapflaws, search, tgcomments  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers took these from the old module)

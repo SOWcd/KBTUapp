@@ -45,17 +45,15 @@ def test_staff_path_refused_to_everyone_else(env):
     assert c.put("/api/events/1/reg-until", headers=_as(60, "1 "), json=close).status_code == 403
     assert c.post("/api/orgs/1/events", headers=_as(60), json={}).status_code == 403  # not an event's own route
     assert c.get("/api/events/1/door", headers=_as(60)).status_code == 403            # never the door
-    assert c.get("/api/admin/events?q=hack", headers=tma(63)).status_code == 403
-    assert c.get("/api/admin/events?q=hack", headers=tma(61)).status_code == 403
     assert con.execute("SELECT reg_until FROM events WHERE id = 1").fetchone()[0] is None
     assert not _staff_lines(con)
 
 
 def test_admin_finds_and_runs_an_event_audited(env):
     c, con, ids = _setup(env)
-    found = c.get("/api/admin/events?q=HAC", headers=tma(60)).json()
+    found = c.get("/api/search?q=HAC", headers=tma(60)).json()["events"]
     assert [e["id"] for e in found] == [1]
-    assert c.get("/api/admin/events?q=night", headers=tma(60)).json()[0]["id"] == 2
+    assert c.get("/api/search?q=night", headers=tma(60)).json()["events"][0]["id"] == 2
     # reading the event isn't logged; the attendee list (personal data) and every write are
     assert c.get("/api/events/1", headers=_as(60)).status_code == 200
     assert c.get("/api/events/1/attendees", headers=_as(60)).status_code == 200
@@ -120,3 +118,36 @@ def test_phone_not_asked_after_signups(env):
     assert c.patch("/api/events/1", headers=tma(62), json={**body, "needsPhone": False}).status_code == 200
     assert c.delete("/api/events/1/registration", headers=tma(63)).status_code in (200, 204)
     assert c.patch("/api/events/1", headers=tma(62), json=body).status_code == 200  # nobody in: fine
+
+
+def test_one_search_every_name_scoped_by_who(env):
+    """The one search (logic/search.py): an event by a translated title, any case in Cyrillic, yo as ye; a club by its
+    translated name; the admin finds drafts, hidden events and hidden clubs, a student only what they may open."""
+    import json
+    c, con, ids = _setup(env)
+    ru = "\u041a\u043e\u0448\u043c\u0430\u0440 \u043d\u0430 \u0443\u043b\u0438\u0446\u0435 \u0422\u043e\u043b\u0435 \u0411\u0438"  # Koshmar na ulice Tole Bi
+    con.execute("UPDATE events SET title = 'A Nightmare on Tole Bi Street', i18n = ? WHERE id = 2", (json.dumps({"ru": {"title": ru}}),))
+    con.execute("UPDATE orgs SET i18n = ? WHERE id = 2", (json.dumps({"ru": {"name": "\u0411\u0438 \u041a\u043b\u0451\u0431"}}),))  # Bi Klyob
+    find = lambda q, uid=60: c.get("/api/search", params={"q": q}, headers=tma(uid)).json()  # noqa: E731
+    up = "\u041a\u041e\u0428\u041c\u0410\u0420"  # KOSHMAR, upper case
+    for q in (ru, up, "\u0442\u043e\u043b\u0435 \u0431\u0438", "nightmare"):  # the Russian title, upper, lower, the English
+        assert [e["id"] for e in find(q)["events"]] == [2], q
+    assert [o["id"] for o in find("\u043a\u043b\u0435\u0431")["clubs"]] == [2]      # yo typed as ye
+    assert [e["id"] for e in find(up, 63)["events"]] == [2]                          # a student finds a public one too
+    con.execute("UPDATE events SET status = 'draft' WHERE id = 1")
+    assert [e["id"] for e in find("hack")["events"]] == [1]                         # the admin: a draft
+    assert find("hack", 63)["events"] == [] and find("hack", 61)["events"] == []     # a student, a moderator: no
+    assert [e["id"] for e in find("hack", 62)["events"]] == [1]                     # its own club's team: yes
+    con.execute("UPDATE events SET status = 'published', hidden_at = 1 WHERE id = 1")
+    assert find("hack", 63)["events"] == [] and [e["id"] for e in find("hack")["events"]] == [1]
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'member', 0)", (ids["ali"],))
+    assert [o["id"] for o in find("b club", 63)["clubs"]] == [2]
+    con.execute("UPDATE orgs SET status = 'hidden' WHERE id = 2")
+    assert find("b club", 63) == {"events": [], "clubs": []}                        # a hidden club and its events: gone
+    assert [o["id"] for o in find("b club")["clubs"]] == [2] and [e["id"] for e in find("nightmare")["events"]] == [2]
+    assert find("x")["events"] == []                                                # one letter: nothing
+    # people (Admin, Awards, the DMP registry): a Cyrillic name in any case, yo as ye, either order
+    con.execute("UPDATE students SET first_name = ?, last_name = ? WHERE user_id = ?", ("\u0410\u043b\u0438\u044f", "\u0401\u043b\u043a\u0438\u043d\u0430", ids["ali"]))  # Aliya Yolkina
+    for path in ("/api/admin/people", "/api/admin/badges/people"):
+        got = c.get(path, params={"q": "\u0435\u043b\u043a\u0438\u043d\u0430 \u0430\u043b\u0438"}, headers=tma(60)).json()  # "elkina ali"
+        assert [p["person"]["id"] for p in got] == [ids["ali"]], path

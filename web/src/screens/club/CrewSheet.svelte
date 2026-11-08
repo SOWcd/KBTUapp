@@ -8,6 +8,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/search';
   import { haptic } from '../../lib/tg';
   import { RANK } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
@@ -36,8 +37,7 @@
     const out: PersonRef[] = [];
     for (const p of [...(data.friends?.friends ?? []).map((r) => r.person), ...[e?.org, e?.coHost].flatMap((o) => (o && data.team[o.id]) || []).map((r) => r.person)])
       if (!seen.has(p.id)) { seen.add(p.id); out.push(p); }
-    const s = q.trim().toLowerCase();
-    return (s ? out.filter((p) => p.name.toLowerCase().includes(s)) : out).slice(0, 30);
+    return (q.trim() ? out.filter((p) => hit(q, [p.name, p.realName])) : out).slice(0, 30);
   });
 
   const KIND = { scan: 'crew.scan', door: 'crew.door' } as const;

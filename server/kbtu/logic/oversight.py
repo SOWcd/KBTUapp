@@ -106,9 +106,9 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     q = str(q or "").strip()
     if len(q) < 2 or len(q) > 60:
         raise ApiError("bad_input")
-    like = "%" + q.replace("%", "").replace("_", "") + "%"
-    found = rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id
-        WHERE s.student_id LIKE ? OR (s.last_name || ' ' || s.first_name) LIKE ? OR (s.first_name || ' ' || s.last_name) LIKE ? LIMIT 30""", like, like, like)
+    k = search.fold(q)
+    found = [p for p in rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id""")
+             if search.hit(k, (p["student_id"],)) or search.person_hit(k, p)][:30]
     log_action(con, v.id, "registry_search", "registry", json.dumps({"q": q, "found": len(found)}))  # a look at personal data (§9)
     ids = [p["id"] for p in found]
     of: dict[int, list] = {}
@@ -235,14 +235,7 @@ def find_people(con, v: Viewer, q: object) -> list[dict]:
     q = str(q or "").strip().lstrip("@")
     if not (2 <= len(q) or q.isdigit()) or len(q) > 64:
         raise ApiError("bad_input")
-    like = "%" + re.sub(r"([\\%_])", r"\\\1", q) + "%"
-    found = rows(con, _STAFF.replace("SELECT ", "SELECT u.banned_at, ", 1) + r""" WHERE u.tg_id > 0 AND (lower(u.tg_username) = lower(?) OR u.id = ?
-            OR s.user_id IS NOT NULL AND (upper(s.student_id) = upper(?)
-            OR s.first_name || ' ' || s.last_name LIKE ? ESCAPE '\' OR s.last_name || ' ' || s.first_name LIKE ? ESCAPE '\'
-            OR coalesce(s.first_lat, '') || ' ' || coalesce(s.last_lat, '') LIKE ? ESCAPE '\'
-            OR coalesce(s.last_lat, '') || ' ' || coalesce(s.first_lat, '') LIKE ? ESCAPE '\' OR u.nick LIKE ? ESCAPE '\'))
-        ORDER BY lower(u.tg_username) = lower(?) DESC, s.last_name, s.first_name LIMIT 20""",
-                 q, int(q) if q.isdigit() else -1, q, *[like] * 5, q)
+    found = search.people(rows(con, _STAFF.replace("SELECT ", "SELECT u.banned_at, s.student_id, ", 1) + " WHERE u.tg_id > 0 ORDER BY s.last_name, s.first_name"), q)
     return [{**_staff_row(p), "banned": p["banned_at"] is not None} for p in found]
 
 
@@ -418,7 +411,7 @@ def admin_set_role(con, v: Viewer, oid: int, body: dict) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, search  # noqa: E402
 from .clubs import UNDO_WAIT, _official, create_org, no_emoji  # noqa: E402
 from .seats import joined, notify  # noqa: E402
 from .teams import team  # noqa: E402

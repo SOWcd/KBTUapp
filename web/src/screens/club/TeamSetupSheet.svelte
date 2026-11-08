@@ -10,6 +10,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/search';
   import { haptic } from '../../lib/tg';
   import { inLang, isAbove, may, RANK, RIGHTS, ROLE_NAME, TEAM_COLORS, withNick } from '../../lib/perms';
   import Sheet from '../../ui/Sheet.svelte';
@@ -115,7 +116,7 @@
   let picked = $state<Id[]>([]);
   let q = $state('');
   const mayAssign = (x: TeamMember) => vice && !!mine && x.person.id !== session.me?.id && RANK[mine] > RANK[x.role];
-  const found = $derived(q.trim() ? team.filter((x) => withNick(x.fullName, x.person).toLowerCase().includes(q.trim().toLowerCase())) : team);
+  const found = $derived(q.trim() ? team.filter((x) => hit(q, [withNick(x.fullName, x.person)])) : team);
   async function assign() {
     haptic.select(); q = '';
     if (!data.team[org]) await loadTeam(org); // Team loads it with the app; this is the rare cold path

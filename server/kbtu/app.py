@@ -1681,9 +1681,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_people(con: Con, v: Me, q: str = ""):
         return logic.find_people(con, v, q)
 
-    @app.get("/api/admin/events")
-    def admin_find_events(con: Con, v: Me, q: str = ""):
-        return logic.admin_find_events(con, v, q)
+    # the one search (logic/search.py): events and clubs by any of their names, what the searcher may see (Admin: all)
+    @app.get("/api/search")
+    def find_all(con: Con, v: Me, q: str = ""):
+        return {"events": logic.search.events(con, v, q[:80]), "clubs": logic.search.clubs(con, v, q[:80])}
 
     @app.put("/api/events/{eid}/reg-until")
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):

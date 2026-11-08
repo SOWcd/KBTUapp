@@ -498,14 +498,8 @@ def badge_people(con, v: Viewer, q: object) -> list[dict]:
     q = str(q or "").strip().lstrip("@")
     if not (2 <= len(q) or q.isdigit()) or len(q) > 64:  # an app id may be one digit
         raise ApiError("bad_input")
-    like = "%" + re.sub(r"([\\%_])", r"\\\1", q) + "%"
-    # ponytail: SQLite's LIKE folds ASCII case only: a lower-case Cyrillic name misses its capitalized row (the Latin spelling still finds it); a lower() column if it bites
-    found = rows(con, PERSON.replace("SELECT ", "SELECT u.tg_username, ", 1) + r""" WHERE s.user_id IS NOT NULL AND (
-            lower(u.tg_username) = lower(?) OR upper(s.student_id) = upper(?) OR u.id = ?
-            OR s.first_name || ' ' || s.last_name LIKE ? ESCAPE '\' OR s.last_name || ' ' || s.first_name LIKE ? ESCAPE '\'
-            OR coalesce(s.first_lat, '') || ' ' || coalesce(s.last_lat, '') LIKE ? ESCAPE '\'
-            OR coalesce(s.last_lat, '') || ' ' || coalesce(s.first_lat, '') LIKE ? ESCAPE '\' OR u.nick LIKE ? ESCAPE '\')
-        ORDER BY s.last_name, s.first_name LIMIT 20""", q, q, int(q) if q.isdigit() else -1, *[like] * 5)
+    found = search.people(rows(con, PERSON.replace("SELECT ", "SELECT u.tg_username, s.student_id, ", 1)
+                               + " WHERE s.user_id IS NOT NULL ORDER BY s.last_name, s.first_name"), q)
     return [_badge_row(con, p) for p in found]
 
 
@@ -929,7 +923,7 @@ def use_friend_link(con, v: Viewer, token: str) -> dict:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import core  # noqa: E402
+from . import core, search  # noqa: E402
 from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402

@@ -22,6 +22,7 @@
   import { loadAfisha, loadInbox, phrase } from '../../lib/state/data.svelte';
   import { loadMe } from '../../lib/state/session.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/clubs';
   import { ROLE_NAME } from '../../lib/perms';
   import { PICK_EMOJI } from '../../lib/emoji';
   import EmojiPick from '../../ui/EmojiPick.svelte';
@@ -45,7 +46,7 @@
   let kind = $state<'club' | 'school' | 'registry'>('club');
   const ofKind = $derived((orgs ?? []).filter((o) => (o.kind === 'school') === (kind === 'school')));
   const schools = $derived((orgs ?? []).filter((o) => o.kind === 'school').length);
-  const shown = $derived(ofKind.filter((o) => !q.trim() || o.name.toLowerCase().includes(q.trim().toLowerCase())));
+  const shown = $derived(ofKind.filter((o) => !q.trim() || hit(o, q)));
   let card = $state<number | null>(null); // the club opened in the list
   const oops = (e: unknown) => {
     haptic.error();

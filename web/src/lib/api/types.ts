@@ -379,7 +379,6 @@ export interface EventFull extends EventCard {
   photos: AlbumPhoto[];          // the guests' album (students only), in the order added
   wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)
   canAddPhotos: boolean;        // came (checked in) or the team, from the start until a week after the end, room left
-  albumOpen?: boolean;          // "Photos from participants": off = only the team adds (absent for non-students)
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
   comments: number;             // questions and comments under the event (§4.10)
   commentsOn: boolean;
@@ -464,7 +463,6 @@ export interface EventInput {
   firstYear: boolean;
   needsPhone?: boolean;        // sign-up asks for the phone if none is kept
   form?: Question[] | null;    // the questions at sign-up; left out: kept; [] or null: none
-  albumOpen?: boolean;         // "Photos from participants" (who came adds to the album); left out = on
   volunteers?: number | null;  // how many volunteers it needs; null: none
   volunteersSenior?: boolean;  // not year 1
   visibility?: 'public' | 'members' | 'leaders';  // left out: kept as it is; leaders only from an oversight org

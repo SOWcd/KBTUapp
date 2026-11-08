@@ -1304,6 +1304,8 @@ MIGRATIONS: list[tuple[int, str]] = [
       decided_at INTEGER,
       PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
+    # guests' photos always on (owner, Nov 8): "Photos from participants" is gone; the column stays, unread
+    (139, "UPDATE events SET album_open = 1 WHERE album_open = 0;"),
 ]
 
 

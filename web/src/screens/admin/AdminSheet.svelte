@@ -15,7 +15,9 @@
   import Bell from '@lucide/svelte/icons/bell';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
   import { untrack, type Component } from 'svelte';
-  import { api, staffEvents, type EventCard, type StaffRow } from '../../lib/api';
+  import { api, staffEvents, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
+  import { hit } from '../../lib/clubs';
+  import { hit as match } from '../../lib/search';
   import { MANUAL, manualMedal, manualTitle } from '../../lib/awards';
   import { data, eventById } from '../../lib/state/data.svelte';
   import { relDay } from '../../lib/time';
@@ -51,14 +53,14 @@
   let q = $state('');
   const s = $derived(q.trim().toLowerCase().replace(/^@/, ''));
   let people = $state<StaffRow[] | null>(null);
-  let events = $state<EventCard[] | null>(null);
+  let found = $state<{ events: EventCard[]; clubs: OrgRef[] } | null>(null);
   $effect(() => {
     const k = s;
-    people = null; events = null;
+    people = null; found = null;
     if (k.length < 2 && !/^\d+$/.test(k)) return;
     const id = setTimeout(() => {
       api.staffSearch(k).then((l) => { if (s === k) people = l; }).catch(() => { if (s === k) people = []; });
-      if (admin && k.length >= 2) api.adminFindEvents(k).then((l) => { if (s === k) events = l; }).catch(() => { if (s === k) events = []; });
+      if (admin && k.length >= 2) api.search(k).then((l) => { if (s === k) found = l; }).catch(() => { if (s === k) found = { events: [], clubs: [] }; });
     }, 300);
     return () => clearTimeout(id);
   });
@@ -69,8 +71,10 @@
     sheets.manage(e.id, true);
   }
   const status = (e: EventCard) => (e.status === 'draft' ? t('studio.draft') : e.status === 'cancelled' ? t('event.cancelled') : '');
-  const clubs = $derived(s ? data.orgs.filter((o) => o.name.toLowerCase().includes(s) || o.short?.toLowerCase() === s).slice(0, 8) : []);
-  const awards = $derived(s ? MANUAL.filter((a) => (!a.creator || owner) && manualTitle(a).toLowerCase().includes(s)) : []);
+  // clubs: the ones held at once, then the server's (hidden ones too, every language's name)
+  const events = $derived(found?.events);
+  const clubs = $derived(found ? found.clubs.slice(0, 8) : s ? data.orgs.filter((o) => hit(o, s)).slice(0, 8) : []);
+  const awards = $derived(s ? MANUAL.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
   const go = (f: () => unknown) => { haptic.tap(); f(); };
 </script>
 

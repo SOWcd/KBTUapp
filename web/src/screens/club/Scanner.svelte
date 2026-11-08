@@ -16,6 +16,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { eventById } from '../../lib/state/data.svelte';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/search';
   import { relDay, time } from '../../lib/time';
   import { haptic, inTelegram, scanQr, closeScanner, tg } from '../../lib/tg';
   import Avatar from '../../ui/Avatar.svelte';
@@ -74,8 +75,7 @@
   let who = $state('');
   let undoFor = $state<number | null>(null); // just checked in by hand: "Undo" on the result for a few seconds
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
-  const norm = (s: string) => s.toLowerCase().replace(/\u0451/g, '\u0435'); // Russian yo → ye
-  const found = $derived((people ?? []).filter((d) => !who.trim() || norm(withNick(d.person.realName, d.person)).includes(norm(who.trim()))).slice(0, 40));
+  const found = $derived((people ?? []).filter((d) => !who.trim() || hit(who, [withNick(d.person.realName, d.person)])).slice(0, 40));
   async function openByName() {
     byName = true;
     try { people = await api.door(id); } catch { people = []; }

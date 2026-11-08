@@ -30,7 +30,6 @@
   import TagIcon from '@lucide/svelte/icons/tag';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import Phone from '@lucide/svelte/icons/phone';
-  import Images from '@lucide/svelte/icons/images';
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Handshake from '@lucide/svelte/icons/handshake';
@@ -56,6 +55,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/clubs';
   import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay } from '../../lib/time';
   import { haptic, inTelegram } from '../../lib/tg';
   import { shrink } from '../../lib/photo';
@@ -98,7 +98,7 @@
   // a new event starts on a random emoji and colour: fewer look alike when nobody picks
   const any = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
   const blank = { emoji: any(EMOJI), color: any(COLORS), cover: null as Media | null, slides: [] as Media[], videoId: null as Id | null, wideVideoId: null as Id | null, title: '', date: dateInput(nowTs() + 7 * 86400), start: '18:00',
-    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, albumOpen: true, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
+    end: '', endDate: '', place: '', placeUrl: '', description: '', seats: '', firstYear: false, needsPhone: false, vol: false, volN: '5', volSenior: false, teamOnly: false, leaders: false, leadersFrom: 'president' as 'president' | 'vice' | 'head',
     meeting: false, meetingTag: null as Id | null, forBoard: false,
     partner: false, host: '', link: '',
     form: [] as { label: string; kind: 'text' | 'choice'; opts: string; required: boolean }[], // the questions at sign-up
@@ -288,7 +288,7 @@
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
           end: e.endsAt ? time(e.endsAt) : '', endDate: multiDay(e.startsAt, e.endsAt) ? dateInput(e.endsAt) : '', place: e.place, placeUrl: e.placeUrl ?? '', description: e.description,
-          seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, albumOpen: e.albumOpen ?? true, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
+          seats: e.seats ? String(e.seats) : '', firstYear: e.firstYear, needsPhone: !!e.needsPhone, vol: !!e.volunteers, volN: String(e.volunteers?.need ?? 5), volSenior: !!e.volunteers?.senior, teamOnly: e.visibility === 'members', leaders: e.visibility === 'leaders', leadersFrom: e.leadersFrom ?? 'president',
           meeting: !!e.meeting, meetingTag: e.meetingTag ?? null, forBoard: !!e.forBoard,
           partner: !!e.guestHost, host: e.guestHost ?? '', link: e.guestHost ? e.externalUrl ?? '' : '',
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
@@ -328,7 +328,7 @@
     title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba ? '' : f.place.trim(),
     memo: Object.keys(f.memo).length ? $state.snapshot(f.memo) : null,
     placeUrl: f.placeUrl.trim() || null, emoji: f.emoji, color: f.color, seats: f.seats && !isMeeting ? +f.seats : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
-    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, albumOpen: f.albumOpen, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
+    firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
     ...(canPartner ? { guestHost: f.partner ? f.host.trim() : null, externalUrl: f.partner ? f.link.trim() : null } : {}),
@@ -418,8 +418,8 @@
   const onAfisha = $derived(co?.status === 'accepted' && (co.org.official || co.org.kind !== 'club'));
   const coVal = $derived(!co || co.status === 'declined' ? t('ex.no') : co.status === 'pending' ? t('co.pendingShort', { club: coShort(co.org) }) : coShort(co.org));
   const coFound = $derived.by(() => {
-    const q = coQ.trim().toLowerCase();
-    return data.orgs.filter((o) => o.kind === 'club' && o.id !== org && o.id !== co?.org.id && (!q || nameOf(o).toLowerCase().includes(q) || o.name.toLowerCase().includes(q))).slice(0, 8);
+    const q = coQ.trim();
+    return data.orgs.filter((o) => o.kind === 'club' && o.id !== org && o.id !== co?.org.id && (!q || hit(o, q))).slice(0, 8);
   });
   const coSay = (x: unknown) => say(t(x instanceof ApiErr && x.message === 'declined' ? 'co.declinedOnce' : x instanceof ApiErr && x.code === 'rate_limited' ? 'co.limit'
     : x instanceof ApiErr && x.message === 'cohost' ? 'co.bad' : 'common.error'), 'pleading_face_3d');
@@ -605,7 +605,6 @@
         <Row icon={GraduationCap} title={t('ed.firstYear')} accessory="switch" checked={f.firstYear} onchange={(v) => (f.firstYear = v)} />
         <Row icon={Phone} title={t('ed.needsPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} />
       {/if}
-      <Row icon={Images} title={t('ed.albumOpen')} accessory="switch" checked={f.albumOpen} onchange={(v) => (f.albumOpen = v)} />
     </Group>
 
     <Group caption={t('ex.more')}>

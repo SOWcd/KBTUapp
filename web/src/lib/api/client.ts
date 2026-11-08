@@ -338,7 +338,7 @@ export const server: Api = {
   staff: () => call('GET', '/admin/staff'),
   staffFind: (username) => call('GET', '/admin/staff/find?username=' + encodeURIComponent(username)),
   staffSearch: (q) => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
-  adminFindEvents: (q) => call('GET', '/admin/events?q=' + encodeURIComponent(q)),
+  search: (q) => call('GET', '/search?q=' + encodeURIComponent(q)),
   staffMutes: () => call('GET', '/admin/notifications'),
   setStaffMute: (kind, on) => call('PUT', `/admin/notifications/${kind}`, { on }),
   inbox: () => call('GET', '/admin/inbox'),

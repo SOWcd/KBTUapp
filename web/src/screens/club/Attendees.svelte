@@ -14,6 +14,7 @@
   import { may } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
+  import { hit } from '../../lib/search';
   import { time } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardList from '@lucide/svelte/icons/clipboard-list';
@@ -33,8 +34,7 @@
   const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
   $effect(() => { void load(); });
   let q = $state('');
-  const norm = (s: string) => s.toLowerCase().replace(/\u0451/g, '\u0435'); // Russian yo → ye
-  const shown = $derived((list ?? []).filter((a) => !q.trim() || norm(a.fullName + ' ' + (a.person.nick ?? '')).includes(norm(q.trim()))));
+  const shown = $derived((list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick])));
   const going = $derived((list ?? []).filter((a) => a.status === 'going').length);
   const came = $derived((list ?? []).filter((a) => a.checkedInAt).length);
   const title = $derived(eventById(id)?.title ?? '');

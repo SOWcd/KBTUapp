@@ -1311,9 +1311,7 @@ def test_album(env, monkeypatch):
     admin.main(["photo-call", "1", "--send"])
     call = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_call'").fetchall()
     assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and bot._render(con, call[0])[2] == "ph_1"
-    con.execute("UPDATE events SET album_open = 0 WHERE id = 1")
-    assert bot._render(con, call[0]) is None                                                 # the team's only now: quiet
-    con.execute("UPDATE events SET album_open = 1, ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
+    con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
     assert bot._render(con, call[0]) is None                                                 # a week on: no adding, quiet
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False               # a week after the end: closed
     assert delete_now(c, cfg, A) is None
@@ -1323,7 +1321,7 @@ def test_album(env, monkeypatch):
 
 def test_album_reports(env):
     """A photo can be reported: gone for the reporter at once, for everyone after two people, the admin's queue
-    shows its thumb and "take down" deletes it; "Photos from participants" off = only the team adds; who added it shows."""
+    shows its thumb and "take down" deletes it; who added it shows."""
     import dataclasses
     import io
     from PIL import Image
@@ -1383,10 +1381,10 @@ def test_album_reports(env):
     assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 404
     e = c.get("/api/events/1", headers=P).json()
     body = {k: e[k] for k in ("title", "description", "startsAt", "endsAt", "place", "placeUrl", "emoji", "color", "seats", "firstYear")}
-    assert c.patch("/api/events/1", headers=P, json={**body, "albumOpen": False}).status_code == 200
-    assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False                # who came: no more
-    assert c.get("/api/events/1", headers=P).json()["canAddPhotos"] is True                 # the team still adds
-    assert c.get("/api/events/1", headers=P).json()["albumOpen"] is False
+    was = c.get("/api/events/1", headers=A).json()["canAddPhotos"]
+    assert c.patch("/api/events/1", headers=P, json={**body, "albumOpen": False}).status_code == 200  # the old switch: ignored
+    assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is was                  # guests' photos are always on
+    assert "albumOpen" not in c.get("/api/events/1", headers=P).json()
 
 
 def test_bring_a_friend(env):

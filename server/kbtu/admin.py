@@ -374,11 +374,9 @@ def main(args: list[str]) -> None:
                     notify(con, uid, "elective3", "elective3:2016")
         print(f"3rd years the bot can write to, not sent yet: {len(to)}" + (" (queued)" if args[1:] else " (dry run; --send queues)"))
     elif cmd == "photo-call" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--send"]):
-        e = one(con, "SELECT id, title, album_open FROM events WHERE id = ? AND status = 'published'", int(args[1]))
+        e = one(con, "SELECT id, title FROM events WHERE id = ? AND status = 'published'", int(args[1]))
         if not e:
             sys.exit("no published event with that id")
-        if not e["album_open"]:
-            sys.exit("its album is the team's only (Photos from participants off): guests can't add, nothing to call for")
         to = [r[0] for r in rows(con, """SELECT r.user_id FROM registrations r JOIN users u ON u.id = r.user_id WHERE r.event_id = ?
             AND r.checked_in_at IS NOT NULL AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
             AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = u.id AND b.kind = 'photo_call' AND b.ref = ?)""", e["id"], f"ph2:{e['id']}")]

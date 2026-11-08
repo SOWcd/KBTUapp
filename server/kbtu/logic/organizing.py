@@ -226,7 +226,6 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
             "emoji": emoji, "color": color, "seats": seats, "reg_until": None if late else reg_until, "late_signup": int(late), "first_year": int(bool(i.get("firstYear"))),
             "needs_phone": int(i.get("needsPhone") is True),  # sign-up asks for the phone once, kept for next time (PLAN 71)
             **({"questions": clean_questions(i["form"])} if "form" in i else {}),  # the questions at sign-up; left out: kept as they are
-            "album_open": int(i.get("albumOpen") is not False),  # "Photos from participants" (off: the team's only)
             "meeting": int(meeting), "meeting_tag": tag, "for_board": int(board), "volunteers": vol, "volunteers_senior": int(bool(vol and i.get("volunteersSenior"))),
             **({"visibility": visibility, "leaders_from": leaders} if visibility else {})}
 
@@ -584,20 +583,6 @@ def set_reg_until(con, v: Viewer, eid: int, until: object) -> dict:
     return full(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
 
 
-def admin_find_events(con, v: Viewer, q: str) -> list[dict]:
-    """Admin's search: events whose title has `q` (any club, any status), upcoming first (the soonest), then the past
-    (the latest). ponytail: titles filtered in Python (SQLite's LIKE folds ASCII only); an FTS index past ~50k events."""
-    if v.role != "admin":
-        raise ApiError("forbidden")
-    k = " ".join(str(q or "").split()).casefold()
-    if len(k) < 2:
-        return []
-    ids = [r[0] for r in rows(con, """SELECT id, title FROM events e WHERE memo_only = 0 AND NOT EXISTS (SELECT 1 FROM meta WHERE key = 'evdel:' || e.id)
-        ORDER BY starts_at < ?, CASE WHEN starts_at >= ? THEN starts_at END, starts_at DESC""", core.now(), core.now()) if k in r[1].casefold()][:20]
-    found = {e["id"]: e for e in rows(con, f"SELECT * FROM events WHERE id IN ({_qs(ids)})", *ids)} if ids else {}
-    return cards(con, v, [found[i] for i in ids])
-
-
 def admin_delete_event(con, v: Viewer, eid: int) -> None:
     """The admin deletes a club's event (a test, a mistake; paid and photographed too): hidden from everyone at once
     (hidden_at), deleted with its receipts and photos by the bot's round after EVENT_UNDO (events_gone)."""
@@ -867,7 +852,7 @@ def _album_view(con, v: Viewer, e: sqlite3.Row) -> dict:
         ORDER BY p.sort""", e["id"], v.id)
     by = lambda f: f["nick"] or (f"{f['first_name']} {f['last_name'][:1]}" if f["first_name"] else None)  # noqa: E731
     return {"photos": [{**media_shape(f), "canDelete": head or f["added_by"] == v.id, "by": by(f), "mine": f["added_by"] == v.id} for f in ps],
-            "canAddPhotos": _album_room(con, v, e) > 0, "albumOpen": bool(e["album_open"])}
+            "canAddPhotos": _album_room(con, v, e) > 0}
 
 
 def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
@@ -876,7 +861,7 @@ def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
         return 0
     co = one(con, ACCEPTED, e["id"])
     team = at_least(role_in(con, v, e["org_id"]), "member") or bool(co and at_least(role_in(con, v, co["org_id"]), "member"))
-    if not team and (not e["album_open"] or not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id)):
+    if not team and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND checked_in_at IS NOT NULL", e["id"], v.id):
         return 0
     mine = one(con, "SELECT COUNT(*) AS n FROM event_photos WHERE event_id = ? AND added_by = ?", e["id"], v.id)["n"]
     total = one(con, "SELECT COUNT(*) AS n FROM event_photos WHERE event_id = ?", e["id"])["n"]
