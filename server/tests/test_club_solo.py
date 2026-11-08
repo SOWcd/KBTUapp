@@ -7,8 +7,9 @@ from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 PRES, FAN, SECOND = 20, 30, 40
 
 
-def test_solo_club_hidden(env):
+def test_solo_club_hidden(env, monkeypatch):
     c, cfg = env
+    monkeypatch.setattr(logic.clubs, "CLUB_MIN", 5)
     for t, n in ((PRES, "pres"), (FAN, "fan"), (SECOND, "second")):
         login(c, t, n)
     con = db.connect(cfg.db_path)
@@ -20,4 +21,9 @@ def test_solo_club_hidden(env):
     assert c.get(f"/api/orgs/{org}", headers=tma(FAN)).status_code == 200  # a direct link works
     logic.set_role(con, None, uid(SECOND), org, "member", "test")
     logic.core._SHARED.clear()
-    assert org in ids(FAN)  # two people: a club
+    assert org not in ids(FAN)  # two: still under CLUB_MIN
+    for t in range(50, 50 + logic.clubs.CLUB_MIN - 2):
+        login(c, t, f"m{t}")
+        logic.set_role(con, None, uid(t), org, "member", "test")
+    logic.core._SHARED.clear()
+    assert org in ids(FAN)  # CLUB_MIN people: a club
