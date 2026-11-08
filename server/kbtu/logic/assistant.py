@@ -77,7 +77,7 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int]]:
              f"The student: school {school or 'unknown'}{f' ({_name(dean, lang)})' if dean else ''}, year {s['course'] if s and s['course'] else 'unknown'}."]
     rooms: set[str] = set()
     for label, wd in (("today", local.tm_wday + 1), ("tomorrow", (local.tm_wday + 1) % 7 + 1)):
-        cls = rows(con, "SELECT begins, ends, subject, kind, room FROM schedule_classes WHERE user_id = ? AND weekday = ? AND weekday < 7 ORDER BY begins", v.id, wd)
+        cls = rows(con, "SELECT begins, ends, subject, kind, room FROM schedule_classes WHERE user_id = ? AND weekday = ? ORDER BY begins", v.id, wd)
         lines.append(f"Their classes {label}: " + ("; ".join(f"{c['begins']}-{c['ends']} {c['subject']}{' (' + c['kind'] + ')' if c['kind'] else ''}"
                                                               f"{', room ' + c['room'] if c['room'] else ''}" for c in cls) or "none (or the timetable isn't loaded)"))
         rooms |= {c["room"].lower() for c in cls if c["room"]}  # "260A" as the portal writes it; the answer's is lowered

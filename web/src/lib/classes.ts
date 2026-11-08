@@ -10,7 +10,7 @@ const mins = (hm: string): number => { const [h, m] = hm.split(':').map(Number);
 
 export function joinClasses(list: ClassItem[]): ClassItem[] {
   const out: ClassItem[] = [];
-  for (const c of list.filter((x) => x.weekday < 7).sort((a, b) => a.weekday - b.weekday || mins(a.begins) - mins(b.begins))) {
+  for (const c of [...list].sort((a, b) => a.weekday - b.weekday || mins(a.begins) - mins(b.begins))) {
     const prev = out[out.length - 1], gap = prev ? mins(c.begins) - mins(prev.ends) : -1;
     if (prev && prev.weekday === c.weekday && prev.subject === c.subject && prev.room === c.room && gap >= 0 && gap <= 10)
       out[out.length - 1] = { ...prev, ends: c.ends };

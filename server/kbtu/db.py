@@ -1316,6 +1316,8 @@ MIGRATIONS: list[tuple[int, str]] = [
           || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1)
           || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) WHERE ticket_code GLOB 'old:*';"""] * 8)
      + "\nUPDATE registrations SET status = 'unset' WHERE ticket_code GLOB 'old:*';"),
+    # Sunday classes are the portal's online duplicates of the week's (owner, Nov 8): the import drops them, the old ones go
+    (141, "DELETE FROM schedule_classes WHERE weekday = 7;"),
 ]
 
 

@@ -1183,7 +1183,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
 def schedule(con, v: Viewer) -> list[dict]:
     if not v.student:
         return []
-    got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? AND weekday < 7 ORDER BY weekday, begins", v.id)
+    got = rows(con, "SELECT * FROM schedule_classes WHERE user_id = ? ORDER BY weekday, begins", v.id)
     return [{"weekday": c["weekday"], "begins": c["begins"], "ends": c["ends"], "subject": c["subject"], "kind": c["kind"],
              "room": c["room"], "teacher": c["teacher"], "names": n or None} for c, n in zip(got, _names(got))]
 
