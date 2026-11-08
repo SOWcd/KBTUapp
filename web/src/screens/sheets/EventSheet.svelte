@@ -26,6 +26,7 @@
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import Camera from '@lucide/svelte/icons/camera';
   import Images from '@lucide/svelte/icons/images';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import UserPlus from '@lucide/svelte/icons/user-plus';
   import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Link from '@lucide/svelte/icons/link';
@@ -252,9 +253,12 @@
   }
 
   const hidePhoto = (p: AlbumPhoto) => { if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
-  const viewAlbum = (i = 0) => sheets.photos(photos, i, removePhoto, hidePhoto);
+  // a tile opens its photo, grown out of the tile; the header, "+N" and the bar open all of them, a grid (owner, Nov 8)
+  let mosaic = $state<HTMLDivElement>();
+  const viewAlbum = (i = 0) => sheets.photos(photos, i, removePhoto, hidePhoto, (p) => mosaic?.querySelector(`[data-id="${p.id}"]`));
+  const allPhotos = () => sheets.album(() => photos, removePhoto, hidePhoto, detail?.canAddPhotos ? () => picker?.click() : undefined, () => adding);
   let albumDone = false;
-  $effect(() => { if (album && detail && !albumDone) { albumDone = true; if (detail.photos.length) viewAlbum(); } });
+  $effect(() => { if (album && detail && !albumDone) { albumDone = true; if (detail.photos.length) allPhotos(); } });
 
   async function removeUpdate(u: EventUpdate) {
     if (!(await sheets.ask({ title: t('upd.deleteAsk'), ok: t('upd.delete'), cancel: t('common.cancel'), danger: true }))) return;
@@ -330,13 +334,14 @@
       <!-- the guests' album first, right under the header (after the event it's what the sheet is about) -->
       <section class="album">
         <!-- engine: Section could take a trailing action (here "Add"); its header in Group's caption size -->
-        <div class="al-h"><h3 class="fs-t3">{t('album.title')}{#if photos.length}<span class="n num">{photos.length}</span>{/if}</h3>
+        <div class="al-h">{#if photos.length}<button class="al-all" onclick={allPhotos}><h3 class="fs-t3">{t('album.title')}<span class="n num">{photos.length}</span></h3><ChevronRight size={18} /></button>
+          {:else}<h3 class="fs-t3">{t('album.title')}</h3>{/if}
           <!-- after the event the bar's own "Add photos" does it -->
           {#if detail.canAddPhotos && !over}<Button kind="tinted" size="s" disabled={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<ImagePlus size={16} />{/snippet}{t('album.add')}</Button>{/if}</div>
         {#if shown || adding}
-          <div class="mosaic n{Math.min(shown, 3)}">
+          <div class="mosaic n{Math.min(shown, 3)}" bind:this={mosaic}>
             {#each photos.slice(0, shown) as p, i (p.id)}
-              <button class="ph" style="background-color:{p.color ?? 'var(--surface-2)'}" onclick={() => viewAlbum(i)}>
+              <button class="ph" data-id={p.id} style="background-color:{p.color ?? 'var(--surface-2)'}" onclick={() => (i === shown - 1 && photos.length > shown ? allPhotos() : viewAlbum(i))}>
                 <img src={p.thumb} alt="" loading="lazy" decoding="async" />
                 {#if i === shown - 1 && photos.length > shown}<span class="more num">+{photos.length - shown}</span>{/if}
               </button>
@@ -583,7 +588,7 @@
         {:else if over && detail?.canAddPhotos && !e.meeting}
           <Button kind="primary" size="l" full loading={adding > 0} onclick={() => picker?.click()}>{#snippet icon()}<Camera size={18} />{/snippet}{t('album.addMine')}</Button>
         {:else if over && photos.length && !e.meeting}
-          <Button kind="secondary" size="l" full onclick={() => viewAlbum()}>{#snippet icon()}<Images size={18} />{/snippet}{t('album.see')}</Button>
+          <Button kind="secondary" size="l" full onclick={allPhotos}>{#snippet icon()}<Images size={18} />{/snippet}{t('album.see')}</Button>
         {:else if over}
           <Button kind="neutral" size="l" full disabled>{t('event.over')}</Button>
         {:else if e.externalUrl}
@@ -654,6 +659,9 @@
   .album { display: flex; flex-direction: column; gap: 10px; }
   .al-h { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 0 var(--s-1); }
   .al-h .n { margin-left: var(--s-2); font-weight: 450; color: var(--text-3); }
+  .al-all { display: flex; align-items: center; gap: 2px; color: var(--text-3); }
+  .al-all h3 { color: var(--text); }
+  .al-all:active { opacity: 0.6; }
   .mosaic { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border-radius: var(--r-l); overflow: hidden; }
   .mosaic.n1 { grid-template-columns: 1fr; }
   .mosaic.n2 { grid-template-columns: 1fr 1fr; }

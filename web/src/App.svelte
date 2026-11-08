@@ -67,6 +67,8 @@
   // named, so its chunk is kept once loaded and opens in the tap's frame (an arrow made here each call never was)
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
+  const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
+  sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
@@ -96,7 +98,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
-  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
+  const warmPages = () => { [feedPage, newsPage, friendsPage, settingsList, photoViewer, albumGrid].forEach(warm); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void channelPage(); void loadChannel(); };
   sheets.editor = (org, id) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id });

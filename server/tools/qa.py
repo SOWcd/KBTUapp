@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import colorsys
 import json
 import os
 import subprocess
@@ -65,14 +66,16 @@ def seed(path: str) -> None:
                                        (40, 90, "Physics", "lab", "162a", None), (120, 170, "Linear Algebra", "lecture", "256", None)):
         con.execute("INSERT INTO schedule_classes (user_id, weekday, begins, ends, subject, kind, room, teacher) VALUES (2, ?, ?, ?, ?, ?, ?, ?)",
                     (t0.tm_wday + 1, hm(b), hm(e), subj, kind, room, who))
-    # yesterday's event with an album: Ali and Bota came; Ali added two shots, Bota one (pictures drawn here)
+    # yesterday's event with an album: Ali and Bota came and added 22 shots between them, wide, tall and square, so the
+    # grid scrolls (pictures drawn here)
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, created_by, created_at,
             updated_at, published_at) VALUES (3, 1, 'published', 'Karaoke night', 'Atrium', ?, ?, 'microphone_3d', '#7A2253', '#5C193E', 60, 1,
             ?, ?, ?)""", (now - day - 3 * 3600, now - day, now - 3 * day, now - 3 * day, now - 3 * day))
-    for n, (uid, rgb) in enumerate(((2, (230, 90, 60)), (2, (60, 140, 220)), (3, (90, 200, 120)))):
+    shots = [(2 if n % 3 else 3, tuple(int(c * 255) for c in colorsys.hsv_to_rgb(n / 22, 0.65, 0.9)), ((1200, 900), (900, 1200), (1000, 1000))[n % 3]) for n in range(22)]
+    for n, (uid, rgb, size) in enumerate(shots):
         con.execute("""INSERT OR IGNORE INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at, checked_in_at)
             VALUES (3, ?, 'going', ?, ?, ?, ?)""", (uid, f"QA-K{uid}", now - 2 * day, now - 2 * day, now - day - 3 * 3600))
-        im = Image.linear_gradient("L").resize((1200, 900)).convert("RGB")
+        im = Image.linear_gradient("L").resize(size).convert("RGB")
         im = Image.composite(Image.new("RGB", im.size, rgb), Image.new("RGB", im.size, (20, 20, 30)), Image.linear_gradient("L").resize(im.size))
         f = media.store(im, f"qa-photo-{n}".encode(), Path(path).resolve().parent / "media")
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
