@@ -443,12 +443,13 @@ def event(con, v: Viewer, eid: int) -> dict:
     return full(con, v, _event(con, v, eid))
 
 
-def _ticket_code(con) -> str:
-    """6 characters to read out and type at the door, no 0/O or 1/I/L (12 were too long, his QR
-    didn't scan). ~30 bits is enough: only a club's door staff can check a code, and the scanner shows the
-    holder's face. The QR holds 'KBTU' + this, 10 characters: the smallest QR there is (§4.4)."""
+def _ticket_code(con, eid: int) -> str:
+    """4 characters to read out and type at the door, no 0/O or 1/I/L, unique within the event (owner, Nov 8; 6 were
+    long to type). ~20 bits is enough: only the event's door staff can check a code, and the scanner shows the holder's
+    face. Stored as '<event id>-<code>', so the column's global UNIQUE is per-event uniqueness and the door finds a
+    code by (event, code) alone; the API and the QR ('KBTU' + code, the smallest QR there is, §4.4) carry the code."""
     while True:
-        c = "".join(secrets.choice("23456789ABCDEFGHJKMNPQRSTUVWXYZ") for _ in range(6))
+        c = f"{eid}-" + "".join(secrets.choice("23456789ABCDEFGHJKMNPQRSTUVWXYZ") for _ in range(4))
         if not one(con, "SELECT 1 FROM registrations WHERE ticket_code = ?", c):
             return c
 
@@ -668,7 +669,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None
             con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, answers, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con), hold, wait, inviter, int(free), given, core.now(), core.now()))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (eid, v.id, status, _ticket_code(con, eid), hold, wait, inviter, int(free), given, core.now(), core.now()))
         if status == "going":
             _remind(con, v.id, e)
     return card(con, v, e)

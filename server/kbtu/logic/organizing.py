@@ -109,7 +109,7 @@ def decline(con, v: Viewer, eid: int, note: object = None) -> dict:
         unregister(con, v, eid)
     elif not r:
         con.execute("""INSERT INTO registrations (event_id, user_id, status, cancel_reason, ticket_code, created_at, updated_at)
-            VALUES (?, ?, 'cancelled', 'self', ?, ?, ?)""", (eid, v.id, _ticket_code(con), core.now(), core.now()))
+            VALUES (?, ?, 'cancelled', 'self', ?, ?, ?)""", (eid, v.id, _ticket_code(con, eid), core.now(), core.now()))
     con.execute("UPDATE registrations SET note = ? WHERE event_id = ? AND user_id = ?", (why or None, eid, v.id))
     return card(con, v, one(con, "SELECT * FROM events WHERE id = ?", eid))
 
@@ -691,7 +691,7 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
                     (t, r["id"]))
     else:
         con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                    (e["id"], uid, _ticket_code(con), t, t))
+                    (e["id"], uid, _ticket_code(con, e["id"]), t, t))
     return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
 
 
@@ -715,7 +715,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> bool:
                         (t, r["id"]))
         else:
             con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                        (eid, uid, _ticket_code(con), t, t))
+                        (eid, uid, _ticket_code(con, eid), t, t))
         r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
     if not r["checked_in_at"]:
         _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, updated_at = ? WHERE id = ?", (t, t, r["id"])))
@@ -735,12 +735,11 @@ def checkin(con, v: Viewer, eid: int, raw: str) -> dict:
             if isinstance(r, str):
                 return {"result": r}
         else:
-            c = re.sub(r"[\s-]+", "", str(raw)).upper()  # typed as "7k4 m2p", or the QR's KBTU<code> (KBTU-<code> before Oct 5)
-            r = one(con, "SELECT * FROM registrations WHERE ticket_code IN (?, ?)", c, c.removeprefix("KBTU"))
+            c = re.sub(r"[\s-]+", "", str(raw)).upper()  # typed as "k7 m2", or the QR's KBTU<code> (KBTU-<code> before Oct 5)
+            # a code means something only within its event (seats._ticket_code): another event's is simply not found
+            r = one(con, "SELECT * FROM registrations WHERE ticket_code IN (?, ?)", f"{eid}-{c}", f"{eid}-{c.removeprefix('KBTU')}")
             if not r:
                 return {"result": "not_found"}
-            if r["event_id"] != eid:
-                return {"result": "other_event"}
             if r["status"] != "going":
                 return {"result": "cancelled"}
         if r["user_id"] == v.id and not runs(con, v, e):  # as checkin_by_name (a walk-in rolls back)
@@ -968,7 +967,7 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int) -> dict:
                 con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, walk_in = 1, updated_at = ? WHERE id = ?", (t, r["id"]))
             else:
                 con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                            (eid, uid, _ticket_code(con), t, t))
+                            (eid, uid, _ticket_code(con, eid), t, t))
             r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
         if not r:
             return {"result": "not_found"}
@@ -1086,7 +1085,7 @@ def link_door_guests(con, uid: int) -> None:
             con.execute("UPDATE door_guests SET user_id = ? WHERE id = ?", (uid, g["id"]))
             if not r:
                 con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at)
-                    VALUES (?, ?, 'going', ?, 1, ?, ?)""", (g["event_id"], uid, _ticket_code(con), core.now(), core.now()))
+                    VALUES (?, ?, 'going', ?, 1, ?, ?)""", (g["event_id"], uid, _ticket_code(con, g["event_id"]), core.now(), core.now()))
             # as a check-in at the door: the rating ask and the levels it brings (written directly, they were lost)
             _came(con, one(con, "SELECT * FROM events WHERE id = ?", g["event_id"]), uid, lambda g=g: con.execute(
                 """UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE event_id = ? AND user_id = ?""",

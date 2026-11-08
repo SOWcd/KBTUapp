@@ -128,7 +128,7 @@
             </div>
             <div class="facts foot">
               <div><i>{t('tk.holder')}</i><b class="ellipsis">{holder}</b></div>
-              <div class="code"><i>{t('tk.code')}</i><b class="num">{my.ticketCode.replace(/^(\w{3})(\w{3})$/, '$1 $2')}</b></div>
+              <div class="code"><i>{t('tk.code')}</i><b class="num">{my.ticketCode.replace(/^(\w{2})(\w{2})$/, '$1 $2')}</b></div>
             </div>
           {:else}
             <p class="void">{e.status === 'cancelled' ? t('event.cancelledLong') : t('tk.none')}</p>

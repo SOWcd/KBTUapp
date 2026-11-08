@@ -25,7 +25,7 @@ def _start(con, eid, in_s):
 
 
 def _scan(c, eid, con, tg):
-    code = con.execute("SELECT ticket_code FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, tg))).fetchone()[0]
+    code = con.execute("SELECT ticket_code FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, tg))).fetchone()[0].partition("-")[2]
     return c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": "KBTU" + code}).json()["result"]
 
 

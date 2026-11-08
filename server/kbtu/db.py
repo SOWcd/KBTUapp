@@ -1306,6 +1306,16 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;"""),
     # guests' photos always on (owner, Nov 8): "Photos from participants" is gone; the column stays, unread
     (139, "UPDATE events SET album_open = 1 WHERE album_open = 0;"),
+    # ticket codes are 4 characters, unique within their event (owner, Nov 8; seats._ticket_code): stored as
+    # '<event id>-<code>', so the column's own UNIQUE (not droppable without a rebuild) keeps them apart per event.
+    # Every ticket gets a new one, the old 6-character codes stop working (owner). OR IGNORE skips a row whose draw
+    # collides in its event; it draws again on the next pass; a row still unset after 8 passes (~never) fails the CHECK
+    # below and with it the whole step
+    (140, "UPDATE registrations SET ticket_code = 'old:' || id;\n" + "\n".join([
+        """UPDATE OR IGNORE registrations SET ticket_code = event_id || '-' || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1)
+          || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1)
+          || substr('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 1 + abs(random() % 31), 1) WHERE ticket_code GLOB 'old:*';"""] * 8)
+     + "\nUPDATE registrations SET status = 'unset' WHERE ticket_code GLOB 'old:*';"),
 ]
 
 

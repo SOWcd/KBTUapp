@@ -112,10 +112,10 @@ def test_no_self_checkin_by_scanner(env):
     start = int(time.time()) - 600
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Talk', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (start, start + 7200, pres["id"]))
-    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'MMM234', 0, 0)", (mem["id"],))
-    assert c.post("/api/events/1/checkin", headers=tma(71, "Mem"), json={"code": "KBTUMMM234"}).status_code == 403
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', '1-MMM2', 0, 0)", (mem["id"],))
+    assert c.post("/api/events/1/checkin", headers=tma(71, "Mem"), json={"code": "KBTUMMM2"}).status_code == 403
     assert con.execute("SELECT checked_in_at FROM registrations WHERE user_id = ?", (mem["id"],)).fetchone()[0] is None
-    assert c.post("/api/events/1/checkin", headers=tma(70, "Pres"), json={"code": "KBTUMMM234"}).json()["result"] == "ok"
+    assert c.post("/api/events/1/checkin", headers=tma(70, "Pres"), json={"code": "KBTUMMM2"}).json()["result"] == "ok"
 
 
 def test_deleted_author_still_leaves_the_group(env, monkeypatch):

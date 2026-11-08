@@ -2320,7 +2320,6 @@ const en: Dict = {
   'scan.came': "{came} of {going} came",
   'scan.ok': "Checked in",
   'scan.already': "Already checked in at {time}",
-  'scan.other': "Ticket for another event",
   'scan.cancelled': "Registration cancelled or unpaid",
   'scan.notFound': "Ticket or badge not found",
   'scan.closed': "Check-in is closed: the event is over",

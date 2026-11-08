@@ -51,7 +51,7 @@
   // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
   $effect(() => { overlay.title = names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
-  const MSG = { other_event: 'scan.other', cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
+  const MSG = { cancelled: 'scan.cancelled', not_found: 'scan.notFound', not_open: 'scan.notOpen', closed: 'scan.closed', paid: 'scan.paid' } as const;
 
   async function check(raw: string) {
     if (busy || !raw.trim()) return;
@@ -170,7 +170,7 @@
       <!-- engine: Field should pass autocapitalize and spellcheck (a ticket code: capitals, no spelling); set here on its input until then -->
       <form class="manual" onsubmit={(ev) => { ev.preventDefault(); void check(code); }}
         {@attach (f) => { const i = f.querySelector('input'); i?.setAttribute('autocapitalize', 'characters'); i?.setAttribute('spellcheck', 'false'); }}>
-        <Field label={t('scan.code')} bind:value={code} autocomplete="off" enterkeyhint="done" placeholder="7K4 M2P" />
+        <Field label={t('scan.code')} bind:value={code} autocomplete="off" enterkeyhint="done" placeholder="K7 M2" />
         <Button kind="secondary" size="l" type="submit" loading={busy} disabled={!code.trim()}>{t('scan.mark')}</Button>
       </form>
     {/if}

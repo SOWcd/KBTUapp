@@ -134,10 +134,10 @@ def test_core_loop(env):
     assert scan("KBTU" + ticket["ticketCode"])["result"] == "not_open"
     assert c.post(f"/api/events/{eid}/door-open", headers=tma(20)).status_code == 200
     code = ticket["ticketCode"]
-    assert re.fullmatch(r"[2-9A-HJKMNP-Z]{6}", code)  # short, nothing to mix up (no 0/O, 1/I/L)
+    assert re.fullmatch(r"[2-9A-HJKMNP-Z]{4}", code)  # short, nothing to mix up (no 0/O, 1/I/L)
     first = scan("KBTU" + code)  # what the ticket QR holds
     assert first["result"] == "ok" and first["came"] == 1 and first["person"]["name"] == "Zhan T"
-    assert scan(f" {code[:3].lower()} - {code[3:]}")["result"] == "already"  # typed by hand
+    assert scan(f" {code[:2].lower()} - {code[2:]}")["result"] == "already"  # typed by hand
     assert scan("KBTU-" + code)["result"] == "already"  # the QR before Oct 5
     assert scan("KBTU-NOPE")["result"] == "not_found"
     assert [a["fullName"] for a in c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()] == ["Testov Zhan"]

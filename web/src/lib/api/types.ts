@@ -537,7 +537,7 @@ export interface JoinRequest { id: Id; person: PersonRef; fullName: string; cour
  *  `late` = minutes after the start. */
 export type CheckinResult =
   | { result: 'ok' | 'already'; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; flagged?: boolean /* a receipt to look at (§4.3) */ }
-  | { result: 'other_event' | 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
+  | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
   names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in (Oct 30) */ }
