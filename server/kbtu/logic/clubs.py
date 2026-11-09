@@ -68,6 +68,11 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     quick = {r[0] for r in rows(con, f"""SELECT r.id FROM rounds r WHERE r.id IN ({_qs([x["id"] for x in live.values()])})
         AND NOT EXISTS (SELECT 1 FROM round_questions WHERE round_id = r.id) AND (SELECT COUNT(*) FROM round_departments WHERE round_id = r.id) <= 1""",
         *[x["id"] for x in live.values()])} if live else set()
+    # the last CLUB_QUIET: what makes a club quiet (no event, post or open round) and what Popular's rank counts
+    cut = core.now() - CLUB_QUIET
+    events = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published'
+        AND MAX(created_at, COALESCE(starts_at, 0)) > ? GROUP BY org_id""", *ids, cut))
+    posts = dict(rows(con, f"SELECT org_id, COUNT(*) FROM posts WHERE org_id IN ({q}) AND hidden_at IS NULL AND created_at > ? GROUP BY org_id", *ids, cut))
     return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": shown_links(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
@@ -78,6 +83,10 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         "recruiting": bool(o["recruiting"]), "membersHidden": bool(o["members_hidden"]), "joinQuestions": _join_qs(o),
         "canBroadcast": bool(o["can_broadcast"]), "canOversee": bool(o["can_oversee"]),
         "top": bool(o["top_at"]) and not o["official"],  # the Ascent's top: its own block in the clubs list
+        "category": o["category"],
+        "quiet": o["kind"] == "club" and not o["official"] and o["created_at"] <= cut
+        and not (events.get(o["id"]) or posts.get(o["id"]) or o["id"] in live),
+        "rank": members.get(o["id"], 0) + 5 * events.get(o["id"], 0) + 2 * posts.get(o["id"], 0),  # Popular's order
     } for o in found}
 
 
@@ -88,20 +97,17 @@ def _join_qs(o: sqlite3.Row) -> list[dict]:
 
 
 CLUB_MIN = 5  # owner, Nov 8: a club of fewer isn't in the registry (official ones too)
-CLUB_QUIET = 60 * 86400  # owner, Nov 9: an initiative with no event, post or open round this long isn't in it either
+CLUB_QUIET = 30 * 86400  # no event, post or open round this long: "quiet" (_org_parts), at the end of All clubs; new clubs get this long too
+CATEGORIES = ("it", "art", "sport", "business", "science", "volunteer")  # types.ts OrgCategory; the Clubs tab's tiles
 
 
 def listed(con, v: Viewer) -> list[sqlite3.Row]:
     """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet (owner,
-    Nov 7-8), or an initiative gone quiet (CLUB_QUIET): off the registry for everyone but its own (the admin too: one interface; search still finds it for them); its page (org) and its events stay reachable.
-    One subquery for all, never per card."""
-    cut = core.now() - CLUB_QUIET
+    Nov 7-8): off the registry for everyone but its own (the admin too: one interface); its page (org) and its events
+    stay reachable. One subquery for all, never per card."""
     return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
         AND (kind != 'club' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?)
-             OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ? AND (o.official = 1 OR o.created_at > ?
-                 OR EXISTS (SELECT 1 FROM events e WHERE e.org_id = o.id AND e.status = 'published' AND MAX(e.created_at, COALESCE(e.starts_at, 0)) > ?)
-                 OR EXISTS (SELECT 1 FROM posts p WHERE p.org_id = o.id AND p.hidden_at IS NULL AND p.created_at > ?)
-                 OR EXISTS (SELECT 1 FROM rounds r WHERE r.org_id = o.id AND r.status = 'open')))""", v.id, CLUB_MIN, cut, cut, cut)
+             OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?)""", v.id, CLUB_MIN)
 
 
 def orgs(con, v: Viewer) -> list[dict]:
@@ -251,6 +257,8 @@ def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
     if "joinQuestions" in body:  # the always-open applications' own questions, as a round's (casting.py)
         from ..casting import clean_questions
         sets["join_questions"] = json.dumps(clean_questions(body["joinQuestions"], []), ensure_ascii=False) if isinstance(body["joinQuestions"], list) else bad
+    if "category" in body:
+        sets["category"] = body["category"] if body["category"] is None or body["category"] in CATEGORIES else bad
     if "membersHidden" in body:
         sets["members_hidden"] = body["membersHidden"] if isinstance(body["membersHidden"], bool) else bad
     if "name" in body:  # no "KBTU" in it; an acronym it carried becomes the abbr, unless one is sent too; "Club" stays

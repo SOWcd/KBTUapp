@@ -1318,6 +1318,8 @@ MIGRATIONS: list[tuple[int, str]] = [
      + "\nUPDATE registrations SET status = 'unset' WHERE ticket_code GLOB 'old:*';"),
     # Sunday classes are the portal's online duplicates of the week's (owner, Nov 8): the import drops them, the old ones go
     (141, "DELETE FROM schedule_classes WHERE weekday = 7;"),
+    # a club's interest (the Clubs tab's tiles): it/art/sport/business/science/volunteer, NULL none; checked in clubs.update_org
+    (143, "ALTER TABLE orgs ADD COLUMN category TEXT;"),
 ]
 
 

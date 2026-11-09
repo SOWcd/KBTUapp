@@ -1,30 +1,34 @@
 <script lang="ts">
-  // The Clubs tab, top down (the owner's mockup, Nov 8):
-  //   My clubs     one strip of logos, my role under each; a club I'm in opens its Studio, one I follow its page
-  //   search       always there, sticks under the capsule; typing turns the tab into the results
-  //   Recruiting   open rounds as cards in a row (RecruitCard); my own clubs aren't here
-  //   the catalog  official, initiatives, schools and offices: each under its heading, nothing behind a control
-  //   two rows     create a club, KBTU's chats (a club's own chats stay on its page)
-  // The Student Government first wherever it shows.
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
-  import SearchField from '../../ui/SearchField.svelte';
+  // The Clubs tab, top down (the owner's v3, Nov 9): my clubs; open rounds as cards, at most 8, official first (every
+  // round is behind "All"); interests; popular; rows to all clubs, schools and KBTU's chats. The search waits above the
+  // top until the list is pulled down (PullSearch, as on every tab but Profile); typing turns the tab into the results.
+  import Code from '@lucide/svelte/icons/code';
+  import Palette from '@lucide/svelte/icons/palette';
+  import Trophy from '@lucide/svelte/icons/trophy';
+  import Briefcase from '@lucide/svelte/icons/briefcase';
+  import FlaskConical from '@lucide/svelte/icons/flask-conical';
+  import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
+  import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+  import PullSearch from '../../ui/PullSearch.svelte';
   import { data, loadChats, chatsFor } from '../../lib/state/data.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
-  import { dayMonthShort, nowTs, time, weekdayShort } from '../../lib/time';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
-  import { type Org, type OrgRef } from '../../lib/api';
-  import { asStudent, session } from '../../lib/state/session.svelte';
-  import { byWeight, hit, roundDue } from '../../lib/clubs';
+  import ChatAvatar from '../../ui/ChatAvatar.svelte';
+  import { type OrgCategory, type OrgRef } from '../../lib/api';
+  import { session } from '../../lib/state/session.svelte';
+  import { byWeight, clubSub, hit, nextByOrg, roundDue, waitsDmp } from '../../lib/clubs';
   import { byRank, roleLabel } from '../../lib/perms';
   import Row from '../../ui/Row.svelte';
   import { nameOf } from '../../lib/short';
   import { SvelteSet } from 'svelte/reactivity';
   import { haptic } from '../../lib/tg';
+  import ClubPoster from '../../ui/ClubPoster.svelte';
   import ClubRow from '../../ui/ClubRow.svelte';
   import RecruitCard from '../../ui/RecruitCard.svelte';
 
@@ -34,24 +38,8 @@
 
   const SCHOOLISH = new Set(['school', 'office']);
   const clubsOnly = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
-  const bySize = (a: Org, b: Org) => +!a.gov - +!b.gov || b.members - a.members || b.subscribers - a.subscribers || a.name.localeCompare(b.name, 'ru');
   const found = $derived(searching ? [...data.orgs].filter((o) => hit(o, q)).sort(byWeight) : []);
-
-  // the catalog, each part under its own heading. Initiatives: the Ascent's top (server clubs.py) first, then by size
-  const catalog = $derived([
-    { key: 'official', title: t('clubs.headOfficial'), orgs: clubsOnly.filter((o) => o.official).sort(bySize) },
-    { key: 'initiatives', title: t('clubs.headInitiatives'), orgs: clubsOnly.filter((o) => !o.official).sort((a, b) => +!a.top - +!b.top || bySize(a, b)) },
-    { key: 'schools', title: t('clubs.schoolsOffices'), orgs: data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')) },
-  ].filter((part) => part.orgs.length));
-
-  // what's next at each club: its soonest event
-  const next = $derived.by(() => {
-    const m = new Map<number, string>(), now = nowTs();
-    for (const e of [...data.events].sort((a, b) => a.startsAt - b.startsAt))
-      if (e.status !== 'cancelled' && e.startsAt > now && !m.has(e.org.id))
-        m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
-    return m;
-  });
+  const next = $derived(nextByOrg(data.events));
 
   // My clubs: the ones I'm in (by my rank; lead: President or Vice there), then the ones I follow
   type Mine = { org: OrgRef; role: string | null; lead: boolean };
@@ -63,14 +51,6 @@
   });
   const openMine = (x: Mine) => { haptic.tap(); if (x.role) sheets.studio(x.org.id); else sheets.club(x.org.id); };
   const allMine = () => { haptic.tap(); sheets.myClubs(mine.map((x) => ({ org: x.org, role: x.role, sub: `${x.role ?? t('clubs.following')} · ${next.get(x.org.id) ?? t('clubs.nothingSoon')}` }))); };
-
-  // Recruiting: time-limited rounds only, the soonest deadline first (a club taking applications any time says so on its
-  // catalog row: 31 of them would flood the strip)
-  const mineIds = $derived(new Set(mine.map((x) => x.org.id)));
-  const rounds = $derived(data.orgs.flatMap((o) => (o.round && !mineIds.has(o.id) && !o.myRole ? [{ org: o, round: o.round }] : []))
-    .sort((a, b) => a.round.closesAt - b.round.closesAt || byWeight(a.org, b.org)));
-  const allRounds = () => { haptic.tap(); sheets.myClubs(rounds.map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) })), t('clubs.recruitingNow')); };
-  const openLine = (o: Org) => (o.recruiting && !o.round && !o.myRole ? t('clubs.openNow') : ''); // takes applications any time
   // a strip name: the short one when the full one runs past the logo's column (StoryRow's rule), measured once each
   const tight = new SvelteSet<number>();
   let pen: CanvasRenderingContext2D | null = null;
@@ -81,114 +61,121 @@
     pen.font = getComputedStyle(node).font;
     if (pen.measureText(nameOf(o)).width > 70) tight.add(o.id);
   };
-  // the row's line: what's next, else its latest event of the last 30 days (quiet, no dot), else its people
-  const sub = (o: Org) => next.get(o.id) ?? (o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : null) ?? (o.members ? tn('club.members', o.members) : tn('clubs.subscribers', o.subscribers));
-  const waiting = (o: Org) => !!o.top && !o.official; // at the Ascent's top: its line says it's waiting for DMP
 
-  // stuck under the capsule: the bar's ground reaches up to it, so no row shows between them (a sentinel just above the
-  // bar: once it's under the capsule's line, the bar is stuck)
-  let stuck = $state(false);
-  function sentinel(el: HTMLElement) {
-    const top = Math.round((document.querySelector('.cap.glass')?.getBoundingClientRect().bottom ?? 46) + 8);
-    const io = new IntersectionObserver(([e]) => { stuck = !e.isIntersecting && e.boundingClientRect.top < top; }, { rootMargin: `-${top}px 0px 0px 0px` });
-    io.observe(el);
-    return () => io.disconnect();
-  }
+  // Recruiting: every open round but those of clubs I'm in. The strip: 8, official first, then by members; "All": each, soonest first
+  const memberOf = $derived(new Set((session.me?.memberships ?? []).map((m) => m.org.id)));
+  const rounds = $derived(data.orgs.flatMap((o) => (o.round && !memberOf.has(o.id) && !o.myRole ? [{ org: o, round: o.round }] : [])));
+  const strip = $derived([...rounds].sort((a, b) => +!a.org.official - +!b.org.official || b.org.members - a.org.members || a.round.closesAt - b.round.closesAt).slice(0, 8));
+  const allRounds = () => { haptic.tap(); sheets.myClubs([...rounds].sort((a, b) => a.round.closesAt - b.round.closesAt).map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) })), t('clubs.recruitingNow')); };
+
+  // interests: the ones with a live club in them. Popular: the server's rank
+  const live = $derived(clubsOnly.filter((o) => !o.quiet));
+  const INTERESTS = [{ key: 'it', icon: Code, tint: 'blue' }, { key: 'art', icon: Palette, tint: 'pink' }, { key: 'sport', icon: Trophy, tint: 'orange' },
+    { key: 'business', icon: Briefcase, tint: 'indigo' }, { key: 'science', icon: FlaskConical, tint: 'teal' }, { key: 'volunteer', icon: HeartHandshake, tint: 'green' }] as const;
+  const interests = $derived(INTERESTS.filter((i) => live.some((o) => o.category === i.key)));
+  const openInterest = (key: OrgCategory) => { haptic.tap(); sheets.clubList(key); };
+  const popular = $derived([...live].sort((a, b) => b.rank - a.rank).slice(0, 8));
+
+  const chatFaces = $derived(data.chats ? (data.chats.forYou.length ? data.chats.forYou : data.chats.all).slice(0, 3) : []);
 </script>
 
 <div class="page scroll stagger">
-  {#if mine.length && !searching}
-    <Section title={t('clubs.mineTitle')} onmore={allMine}>
-      <div class="strip hscroll">
-        {#each mine as x (x.org.id)}
-          <button class="mc" onclick={() => openMine(x)}>
-            <OrgLogo org={x.org} size={64} />
-            <b class="ellipsis" {@attach fit(x.org)}>{tight.has(x.org.id) ? x.org.abbr : nameOf(x.org)}</b>
-            <small class={['ellipsis', { lead: x.lead }]}>{x.role ?? t('clubs.following')}</small>
-          </button>
-        {/each}
-      </div>
-    </Section>
-  {/if}
-
-  <i class="sent" {@attach sentinel} aria-hidden="true"></i>
-  <div class={['find', { stuck }]}><SearchField bind:value={q} placeholder={t('clubs.search')} /></div>
+  <PullSearch bind:value={q} placeholder={t('clubs.search')} />
 
   {#if searching}
     <Section title={t('clubs.found')} count={found.length}>
       <Group>
-        {#each found as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.kind === 'school' && o.abbr ? o.name : sub(o)} hot={next.has(o.id)} />
+        {#each found as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.kind === 'school' && o.abbr ? o.name : clubSub(o, next)} hot={!waitsDmp(o) && next.has(o.id)} />
         {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
       </Group>
     </Section>
   {:else}
-    {#if rounds.length}
-      <Section title={t('clubs.recruitingNow')} onmore={allRounds}>
-        <div class="cards hscroll">
-          {#each rounds as r (r.org.id)}<RecruitCard org={r.org} round={r.round} />{/each}
+    {#if mine.length}
+      <Section title={t('clubs.mineTitle')} onmore={allMine}>
+        <div class="strip hscroll">
+          {#each mine as x (x.org.id)}
+            <button class="mc" onclick={() => openMine(x)}>
+              <OrgLogo org={x.org} size={64} />
+              <b class="ellipsis" {@attach fit(x.org)}>{tight.has(x.org.id) ? x.org.abbr : nameOf(x.org)}</b>
+              <small class={['ellipsis', { lead: x.lead }]}>{x.role ?? t('clubs.following')}</small>
+            </button>
+          {/each}
         </div>
       </Section>
     {/if}
 
-    {#each catalog as part (part.key)}
-      <Section title={part.title} count={part.orgs.length}>
-        <Group footnote={part.key === 'initiatives' ? t('clubs.initiativeNote') : undefined}>
-          {#each part.orgs as o (o.id)}
-            {#if part.key === 'schools'}
-              <ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : sub(o)}>
-                {#snippet end()}<span class="chev"><ChevronRight size={18} /></span>{/snippet}
-              </ClubRow>
-            {:else}
-              <ClubRow org={o} sub={waiting(o) ? t('clubs.awaitsDmp') : [openLine(o), next.get(o.id) ?? (openLine(o) ? '' : sub(o))].filter(Boolean).join(' · ')} hot={!waiting(o) && next.has(o.id)} />
-            {/if}
-          {/each}
-        </Group>
+    {#if strip.length}
+      <Section title={t('clubs.recruitingNow')} onmore={allRounds} moreLabel={t('clubs.allN', { n: rounds.length })} loud>
+        <div class="shelf hscroll">
+          {#each strip as r (r.org.id)}<RecruitCard org={r.org} round={r.round} />{/each}
+        </div>
       </Section>
-    {/each}
-  {/if}
+    {/if}
 
-  <div class="rows">
-    <Group>
-      <Row tone="add" title={t('create.button')} accessory="chevron" onclick={() => asStudent(() => sheets.createClub(), 'newclub')} />
+    {#if interests.length}
+      <Section title={t('clubs.interests')}>
+        <div class="ints">
+          {#each interests as i (i.key)}
+            <button class="int" style:--c="var(--tile-{i.tint})" onclick={() => openInterest(i.key)}>
+              <span class="ic"><i.icon size={20} strokeWidth={2} /></span>
+              <b>{t(`clubs.cat.${i.key}`)}</b>
+            </button>
+          {/each}
+        </div>
+      </Section>
+    {/if}
+
+    {#if popular.length}
+      <Section title={t('clubs.popular')}>
+        <div class="shelf hscroll">
+          {#each popular as o (o.id)}<ClubPoster org={o} sub={tn('club.members', o.members)} />{/each}
+        </div>
+      </Section>
+    {/if}
+
+    <div class="rows">
+      <Group>
+        <Row title={t('clubs.allClubs')} icon={LayoutGrid} tile="gray" value={String(clubsOnly.length)} accessory="chevron" onclick={() => sheets.clubList('all')} />
+        <Row title={t('clubs.schoolsOffices')} icon={GraduationCap} tile="gray" value={String(data.orgs.length - clubsOnly.length)} accessory="chevron" onclick={() => sheets.clubList('schools')} />
+      </Group>
       {#if data.chats?.all.length}
-        <Row title={t('chats.sheet')} accessory="chevron" onclick={() => sheets.chats(data.chats!.all)}>
-          {#snippet lead()}<span class="tg"><TelegramMark size={20} /></span>{/snippet}
-        </Row>
+        <Group>
+          <Row title={t('chats.sheet')} accessory="chevron" onclick={() => sheets.chats(data.chats!.all)}>
+            {#snippet lead()}<span class="tg"><TelegramMark size={18} /></span>{/snippet}
+            {#snippet detail()}<span class="faces">{#each chatFaces as c (c.id)}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={28} />{/each}</span>{/snippet}
+          </Row>
+        </Group>
       {/if}
-    </Group>
-  </div>
+    </div>
+  {/if}
   <div class="tail"></div>
 </div>
 
 <style>
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
-  /* the sections a screen's section apart (28), the first right under the capsule */
+  /* the sections a screen's section apart (28), the first right under the capsule (PullSearch's two nodes before it) */
   .page > :global(.sec) { margin-top: var(--s-7); }
-  .page > :global(.sec:first-child) { margin-top: var(--s-1); }
+  .page > :global(.hold + .sec) { margin-top: var(--s-1); }
 
-  /* My clubs: the page's edges bled; the 5th logo peeks */
   .strip { gap: 14px; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 0; scroll-padding: 0 var(--gutter); }
   .mc { flex: none; width: 70px; display: flex; flex-direction: column; align-items: center; text-align: center; scroll-snap-align: start; }
   .mc b { width: 100%; margin-top: 7px; font: 600 var(--fs-cap)/1.25 var(--font-text); }
   .mc small { width: 100%; font: 500 var(--fs-micro)/1.3 var(--font-text); color: var(--text-3); }
   .mc small.lead { color: var(--accent-text); font-weight: 600; }
 
-  /* the search: sticks under the capsule on the page's own ground (a sticky top counts from the page's padding edge) */
-  .sent { display: block; height: 0; }
-  .find { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); margin: var(--s-6) calc(-1 * var(--gutter)) 0;
-    padding: 0 var(--gutter) var(--s-2); background: var(--bg); }
-  .sent:first-child + .find { margin-top: var(--s-1); }
-  .find::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: calc(var(--head-bottom) + var(--s-2)); background: var(--bg);
-    opacity: 0; transition: opacity var(--t-fast) var(--ease); pointer-events: none; }
-  .find.stuck::before { opacity: 1; }
-  .find.stuck { box-shadow: 0 0.5px 0 var(--separator); }
+  .shelf { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--s-2); scroll-padding: 0 var(--gutter); }
 
-  /* Recruiting: cards in a row */
-  .cards { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--s-2); scroll-padding: 0 var(--gutter); }
+  /* interests: quiet tiles on the card surface, only the small glyph carries the colour */
+  .ints { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
+  .int { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; height: 84px; padding: 0 var(--s-1); border-radius: var(--r-m); background: var(--surface); box-shadow: var(--shadow-card); }
+  .ic { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-s); color: var(--c); }
+  .ic::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--c); opacity: 0.13; }
+  .int b { max-width: 100%; font: 600 var(--fs-sub)/1.1 var(--font-text); letter-spacing: -0.01em; }
+  @media (max-width: 360px) { .int b { font-size: var(--fs-micro); } }
 
-  .chev { display: flex; margin-right: 2px; color: var(--text-3); opacity: 0.6; pointer-events: none; } /* the tap is the row's */
-
-  .rows { margin-top: var(--s-3); }
-  .tg { width: 30px; display: grid; place-items: center; color: var(--text-2); }
+  .rows { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-7); }
+  .tg { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-xs); background: var(--tile-blue); color: var(--on-accent); }
+  .faces { display: flex; }
+  .faces :global(.ca + .ca) { margin-left: -8px; }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

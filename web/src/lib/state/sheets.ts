@@ -1,6 +1,6 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
 // event row opens the event). App wires them up; components call these, so no import cycles.
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
+import type { AlbumPhoto, AttendeeReceipt, Chat, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot } from '../api';
 import type { Manual, ShelfItem } from '../awards';
 import type { AskCtx } from './assistant.svelte';
 import type { StoryGroup } from '../posts';
@@ -130,6 +130,7 @@ export const sheets = {
   /** a club of mine: its Studio pushed over the Clubs tab (the tab's Mine row, the bot's links) */
   studio: (_org: Id) => {},
   /** all my clubs as rows (the Clubs tab's "All" circle, 3+ of them); role: mine there (a club I only follow: null) */
+  clubList: (_view: 'all' | 'schools' | OrgCategory) => {},
   myClubs: (_rows: { org: OrgRef; role: string | null; sub: string }[], _title?: string) => {},
   /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
   schedHowTo: () => {},
