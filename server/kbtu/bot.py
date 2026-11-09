@@ -1139,6 +1139,10 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict) -> None:
         await _tg(cfg, http, "editMessageText", {**body, "message_id": msg["message_id"], "reply_markup": body.get("reply_markup", {"inline_keyboard": []})})
 
 
+HELLO_EVERY = 60            # a group's bare /start@bot gets one answer a minute
+_hello: dict[int, float] = {}  # ponytail: per worker and never pruned (a few bytes a group); a table if it's ever abused
+
+
 async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     """In a group: "/start ec_<token>" (sent by Telegram when the organizer added the bot by the app's "Create chat")
     links it to the event and makes its join-request link; a group turned supergroup keeps its event."""
@@ -1151,6 +1155,16 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" (PLAN 86)
         if cid := logic.bot_added(con, int((msg.get("from") or {}).get("id") or 0), chat, cid=int(words[1][3:])):
             await chat_card(cfg, http, con, cid, chat["id"])
+        return
+    if len(words) == 1 and words[0].lower() == f"/start@{cfg.bot_username}".lower():  # someone just asks: am I on duty here?
+        t = time.time()
+        if t - int(msg.get("date") or 0) <= FRESH and t - _hello.get(chat["id"], 0) > HELLO_EVERY:
+            _hello[chat["id"]] = t
+            lang = (msg.get("from") or {}).get("language_code")
+            on = one(con, "SELECT 1 FROM chats WHERE tg_chat_id = ? AND status IN ('live', 'org')", chat["id"])
+            text, button = texts.bot_message(lang if lang in ("kk", "en") else "ru", "group_on" if on else "group_off")
+            await _send(cfg, http, {"chat_id": chat["id"], "text": text, "parse_mode": "HTML", "reply_markup": {"inline_keyboard": [[
+                {"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp"}]]}})
         return
     if len(words) != 2 or not re.fullmatch(r"/start(@\w+)?", words[0]) or not words[1].startswith("ec_"):
         return

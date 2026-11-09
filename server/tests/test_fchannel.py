@@ -464,6 +464,7 @@ def test_old_board_cleaned_up(env):
     for col in ("section", "section_ai", "section_try"):  # 106's
         con.execute(f"ALTER TABLE chats DROP COLUMN {col}")
     con.execute("DROP TABLE chat_asks")
+    con.execute("ALTER TABLE qr_sessions DROP COLUMN lease_until")  # 144's
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
