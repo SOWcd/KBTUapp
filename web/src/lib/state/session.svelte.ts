@@ -18,12 +18,13 @@ function banned(d: Record<string, unknown>) {
 }
 if (typeof window !== 'undefined') addEventListener('kb:banned', (e) => banned((e as CustomEvent).detail ?? {}));
 
-export async function loadMe(): Promise<void> {
+/** quiet: a background refresh; a failure leaves the screens as they are (no error page while coming back on a poor network). */
+export async function loadMe(quiet = false): Promise<void> {
   try {
     session.me = await api.me(); session.failed = false; session.banned = null; session.policy = session.me.consentNow ?? session.policy; session.board = !!session.me.board; session.channel = !!session.me.forumChannel; session.boardKnown = true; session.tgComment = !!session.me.tgComment; session.donate = session.me.donate ?? ''; session.support = session.me.support ?? [];
     if (session.me.avatar) new Image().src = session.me.avatar; // the profile tab opens with its photo in place
   } catch (x) {
-    session.failed = true;
+    if (!quiet) session.failed = true;
     if (x instanceof ApiErr && x.code === 'forbidden' && x.message === 'banned') banned(x.data);
   }
   session.ready = true;

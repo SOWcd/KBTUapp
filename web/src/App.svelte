@@ -15,7 +15,7 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
+  import { backButton, haptic, on, onComputer, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { api, ApiErr, localize, type Id } from './lib/api';
   import { dayNo, nowTs, parts, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -506,7 +506,20 @@
   onMount(() => {
     const away = () => { if (document.hidden) { clearTimeout(keepTimer); keep(true); } };
     document.addEventListener('visibilitychange', away);
-    return () => document.removeEventListener('visibilitychange', away);
+    // back after 30 s or more: the app's data again, quietly (every loader keeps its last copy if it fails). Telegram's
+    // events and the page's both land here; the first one back clears leftAt, so one return is one refresh. Not the Gallery:
+    // its first page would cut the list of a viewer left open, and it reloads as it opens.
+    // ponytail: a tap in the moment of the refetch can be overwritten by the older answer until the next load; a per-list tap counter if it shows
+    let leftAt = 0;
+    const left = () => { leftAt ||= Date.now(); };
+    const back = () => {
+      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); }
+      leftAt = 0;
+    };
+    const seen = () => (document.hidden ? left() : back());
+    document.addEventListener('visibilitychange', seen);
+    const offs = [on('deactivated', left), on('activated', back)];
+    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
   });
 
   // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
@@ -519,16 +532,19 @@
     const st = !!session.me?.student;
     if (st !== wasStudent) untrack(() => {
       // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
-      void loadFriends(); void loadMyCard(); void loadNews();
+      loadMine();
       void loadGallery();
-      const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
-      if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
-      if (session.me?.oversee) void loadRegistry();
       void loadInbox(true); // staff only (it checks)
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
   });
+  function loadMine() {
+    void loadFriends(); void loadMyCard(); void loadNews();
+    const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
+    if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
+    if (session.me?.oversee) void loadRegistry();
+  }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
   async function tgComment() {
