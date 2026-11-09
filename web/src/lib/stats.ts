@@ -9,9 +9,15 @@ export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
 type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 'do.donate';
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
-type Key = Screen | Action | Source | `err.${Screen}` | `open.${'ios' | 'android' | 'desktop' | 'web'}.${Bucket}`;
+type Long = Bucket | 6;
+type Key = Screen | Action | Source | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
+  | `open.${'ios' | 'android' | 'desktop' | 'web'}.${Bucket}`;
 
-const EVERY = 60_000;
+const EVERY = 60_000, GAP = 30_000; // GAP: hidden this long, the next showing is a new session
+const OPEN_EDGES = [1000, 2000, 3000, 5000, 8000];
+const min = 60_000;
+export const SESS_EDGES = [min / 2, min, 3 * min, 5 * min, 10 * min, 20 * min];
+export const DAY_EDGES = [min, 5 * min, 10 * min, 20 * min, 40 * min, 60 * min];
 const bag = new Map<Key, number>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -20,15 +26,39 @@ export function count(key: Key): void {
   timer ??= setTimeout(flush, EVERY);
 }
 
+// What stays on this device only and is never sent as it is: today's visible time, the open session, today's uniq flags.
+// A blocked or empty storage only costs these numbers.
+type Kept = { d: number; ms: number; v: number; at: number; u: string[] };
+const KEY = 'kb-stats';
+const today = () => Math.floor((Date.now() / 1000 + 5 * 3600) / 86400); // Almaty's calendar
+let kept: Kept = { d: today(), ms: 0, v: 0, at: 0, u: [] };
+let canKeep = false;
+try { const j = JSON.parse(localStorage.getItem(KEY) || 'null'); if (j && typeof j.d === 'number' && Array.isArray(j.u)) kept = j; } catch { /* blocked or corrupted */ }
+function save(): void {
+  try { localStorage.setItem(KEY, JSON.stringify(kept)); canKeep = true; } catch { canKeep = false; }
+}
+
+/** A new calendar day: one key with yesterday's (or the last used day's) visible time, and the flags start over. */
+function roll(): void {
+  const d = today();
+  if (d === kept.d) return;
+  if (kept.ms > 0) count(`time.${bucketOf(kept.ms, DAY_EDGES) as Long}`);
+  kept = { ...kept, d, ms: 0, u: [] };
+}
+
 export function flush(): void {
   clearTimeout(timer);
   timer = undefined;
-  if (!bag.size) return;
-  const body = JSON.stringify(Object.fromEntries(bag));
+  roll();
+  if (bag.size && tg.initData) {
+    // ponytail: uniq.* is per device, not per person (two phones count twice): the share of people it gives is close, not
+    // exact; per person would need an id next to the numbers, which this feature must never have
+    if (canKeep) for (const k of [...bag.keys()]) if (/^(tab|sheet|do)\./.test(k) && !kept.u.includes(k)) { kept.u.push(k); bag.set(`uniq.${k}` as Key, 1); }
+    // keepalive, not sendBeacon: a beacon can't carry the Authorization header
+    void fetch('/api/stats', { method: 'POST', keepalive: true, headers: { Authorization: `tma ${tg.initData}`, 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(bag)) }).catch(() => {});
+  }
   bag.clear();
-  if (!tg.initData) return;
-  // keepalive, not sendBeacon: a beacon can't carry the Authorization header
-  void fetch('/api/stats', { method: 'POST', keepalive: true, headers: { Authorization: `tma ${tg.initData}`, 'Content-Type': 'application/json' }, body }).catch(() => {});
+  save();
 }
 
 /** The class of the launch's startapp parameter, for where people come from; its value never leaves this function. */
@@ -42,9 +72,9 @@ export function launchedFrom(p: string): Source {
 }
 
 /** The histogram's bucket: under 1, 2, 3, 5, 8 seconds, or more (logic/stats.py BUCKETS). */
-export function bucketOf(ms: number): Bucket {
-  const i = [1000, 2000, 3000, 5000, 8000].findIndex((edge) => ms < edge);
-  return (i < 0 ? 5 : i) as Bucket;
+export function bucketOf(ms: number, edges = OPEN_EDGES): number {
+  const i = edges.findIndex((edge) => ms < edge);
+  return i < 0 ? edges.length : i;
 }
 
 let hid = document.hidden; // opened in the background: its time says nothing about loading
@@ -52,9 +82,37 @@ const platform = !inTelegram ? 'web' : onIos ? 'ios' : onAndroid ? 'android' : '
 
 /** The first useful frame is on the screen: the app's open time, counted from navigation start. */
 export function painted(): void {
-  if (!hid) count(`open.${platform}.${bucketOf(performance.now())}`);
+  if (!hid) count(`open.${platform}.${bucketOf(performance.now()) as Bucket}`);
 }
 
-document.addEventListener('visibilitychange', () => { if (document.hidden) { hid = true; flush(); } });
-addEventListener('pagehide', flush);
-on('deactivated', flush);
+let shownAt = 0; // 0: not on the screen now
+
+/** Back on the screen (or the app opened): hidden long enough, the last session ends here, also one a closed app left behind. */
+function shown(): void {
+  if (shownAt) return;
+  roll();
+  if (kept.at && Date.now() - kept.at >= GAP) {
+    if (kept.v > 0) count(`sess.${bucketOf(kept.v, SESS_EDGES) as Long}`);
+    kept.v = 0;
+  }
+  kept.at = 0;
+  shownAt = Date.now();
+}
+
+function away(): void {
+  if (shownAt) {
+    const ms = Math.max(0, Date.now() - shownAt);
+    shownAt = 0;
+    roll();
+    kept.ms += ms; kept.v += ms; kept.at = Date.now();
+  }
+  flush();
+}
+
+save();
+roll();
+if (!document.hidden) shown();
+document.addEventListener('visibilitychange', () => { if (document.hidden) { hid = true; away(); } else shown(); });
+addEventListener('pagehide', away);
+on('deactivated', away);
+on('activated', shown);

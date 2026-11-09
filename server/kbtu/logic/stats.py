@@ -16,11 +16,17 @@ ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.dona
 SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "from.other")  # the startapp's class, never its value
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint
-KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *(f"err.{s}" for s in SCREENS),
-                  *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS)))))
+SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
+DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
+USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
+KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
+                  *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
+                  *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
+ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
 
 KEEP_DAYS = 180
-MAX_IN_BATCH = 30   # of one key in one batch; a launch is one open.* sample
+WINDOW = 30  # what `visits` keeps
+MAX_IN_BATCH = 30   # of one key in one batch
 BATCH_COST, DAY_BUDGET = 5, 600  # one person's whole day: far above a real one, so one client can't skew the totals much
 # ponytail: per worker and in memory only (user id -> counts spent today, never stored), so the ceiling is the budget
 # times WEB_CONCURRENCY; a shared table would put a person into this feature's data, the one thing it must not have
@@ -39,7 +45,7 @@ def add(con, uid: int, body: dict) -> None:
     day = _today()
     if day != _spent_day:
         _spent, _spent_day = {}, day
-    counts = {k: min(n, 1 if k.startswith("open.") else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0}
+    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0}
     cost = sum(counts.values()) + BATCH_COST
     if not counts or _spent.get(uid, 0) + cost > DAY_BUDGET:
         return
@@ -62,14 +68,34 @@ def week(con) -> None:
         notify(con, uid, "usage_week", f"uw:{day}")
 
 
-def _percentile(bars: list[int], share: float) -> str:
+def _percentile(bars: list[int], share: float, labels: tuple = BUCKETS) -> str:
     """The bucket holding that share of the samples, by its upper edge: a histogram doesn't know more."""
     need, seen = sum(bars) * share, 0
-    for label, n in zip(BUCKETS, bars):
+    for label, n in zip(labels, bars):
         seen += n
         if seen >= need:
             return label
-    return BUCKETS[-1]
+    return labels[-1]
+
+
+def _pct(part: int, whole: int) -> str:
+    return f"{round(100 * part / whole)}%"
+
+
+def _retention(con, upto: int) -> dict:
+    """From what the privacy policy already allows, read only: `visits` (the days someone opened the app, kept 30 days,
+    for statistics the creator alone sees) and users.created_at. Only totals leave this function."""
+    lo = upto - WINDOW
+    active = lambda days: one(con, "SELECT COUNT(DISTINCT user_id) FROM visits WHERE day >= ? AND day < ?", upto - days, upto)[0]  # noqa: E731
+    back = []
+    for n in (1, 7, 30):  # of those who joined on a day whose n-th day after it is inside the window: came back on that day
+        new, came = one(con, """SELECT COUNT(*), COALESCE(SUM(EXISTS (SELECT 1 FROM visits v WHERE v.user_id = u.id AND v.day = (u.created_at + 18000) / 86400 + ?)), 0)
+            FROM users u WHERE u.tg_id > 0 AND u.created_at >= ? AND u.created_at < ?""", n, (lo - n) * 86400 - 18000, (upto - n) * 86400 - 18000)
+        back.append(f"D{n}: {_pct(came, new)} ({came}/{new})" if new else f"D{n}: —")
+    per_person = [r[0] for r in rows(con, "SELECT COUNT(*) FROM visits WHERE day >= ? AND day < ? GROUP BY user_id", lo, upto)]
+    bands = (("1", 1, 1), ("2-3", 2, 3), ("4-7", 4, 7), ("8-15", 8, 15), ("16+", 16, 99))
+    spread = [f"{name}: {_pct(sum(a <= n <= b for n in per_person), len(per_person))}" for name, a, b in bands] if per_person else []
+    return {"dau": active(1), "wau": active(7), "mau": active(WINDOW), "retention": "\n".join(back), "spread": "\n".join(spread) or "—"}
 
 
 def fields(con, days: int, upto: int | None = None) -> dict:
@@ -83,7 +109,18 @@ def fields(con, days: int, upto: int | None = None) -> dict:
         bars = [got.get(f"open.{p}.{b}", 0) for b in range(len(BUCKETS))]
         if sum(bars):
             opens.append(f"{p}: {_percentile(bars, .5)} / {_percentile(bars, .75)} ({sum(bars)})")
-    return {"days": days, "active": one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", (upto - days) * 86400 - 5 * 3600)[0],
+    def spread(prefix: str, labels: tuple) -> str:
+        bars = [got.get(f"{prefix}.{b}", 0) for b in range(len(labels))]
+        if not sum(bars):
+            return "—"
+        return " · ".join(f"{a} {n}" for a, n in zip(labels, bars)) + f"\np50 {_percentile(bars, .5, labels)}, p75 {_percentile(bars, .75, labels)}"
+    # uniq.* is per device and day, `visits` per person and day: the share of those active on the days of the window
+    seen = upto - min(days, WINDOW)
+    active_days = one(con, "SELECT COUNT(*) FROM visits WHERE day >= ? AND day < ?", seen, upto)[0]
+    used = {k: one(con, "SELECT COALESCE(SUM(n), 0) FROM usage_days WHERE key = ? AND day >= ? AND day < ?", f"uniq.{k}", seen, upto)[0] for k in USES}
+    uses = "\n".join(f"{k} {_pct(used[k], active_days)}" for k in sorted(USES, key=lambda k: -used[k])) if active_days else "—"
+    return {**_retention(con, upto), "sessions": spread("sess", SESSIONS), "day_times": spread("time", DAY_TIMES), "uses": uses,
+            "days": days, "active": one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", (upto - days) * 86400 - 5 * 3600)[0],
             "top": lines(most[:10]), "bottom": lines(most[:-11:-1]), "actions": lines(ACTIONS, 3),
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),

@@ -61,6 +61,9 @@ def test_no_person_is_stored(env):
 def test_web_names_match_the_allowlist():
     src = (Path(__file__).parents[2] / "web/src/lib/stats.ts").read_text(encoding="utf-8")
     assert set(re.findall(r"'((?:tab|sheet|do|from)\.[a-z]+)'", src)) == {*stats.SCREENS, *stats.ACTIONS, *stats.SOURCES}
+    edges = lambda name: len(re.search(rf"{name} = \[(.*?)\]", src).group(1).split(","))  # noqa: E731  (one bucket more than edges)
+    assert edges("SESS_EDGES") + 1 == len(stats.SESSIONS) and edges("DAY_EDGES") + 1 == len(stats.DAY_TIMES)
+    assert {"uniq.do.qr", "uniq.tab.club", "sess.6", "time.6"} <= stats.KEYS and "uniq.from.qr" not in stats.KEYS and "sess.7" not in stats.KEYS
 
 
 def _people(c, con):
@@ -125,3 +128,43 @@ def test_retention(env, monkeypatch):
     con.executemany("INSERT INTO usage_days (day, key, n) VALUES (?, 'tab.club', 1)", [(MONDAY - 181,), (MONDAY - 180,), (MONDAY,)])
     logic.stats_day(con)
     assert [r[0] for r in con.execute("SELECT day FROM usage_days ORDER BY day")] == [MONDAY - 180, MONDAY]
+
+
+def test_samples_are_one_a_batch(env):
+    c, _ = env
+    stats._spent.clear()
+    con = db.connect(DB[0])
+    post(c, 6, {"sess.1": 9, "time.3": 9, "uniq.sheet.map": 9})
+    assert totals(con) == {"sess.1": 1, "time.3": 1, "uniq.sheet.map": 1}
+
+
+def test_retention_and_people_from_visits(env, monkeypatch):
+    c, _ = env
+    con = db.connect(DB[0])
+    set_clock(monkeypatch, lambda: at(MONDAY))
+    a, b, d = (login(c, i, n)["id"] for i, n in ((31, "ana"), (32, "ben"), (33, "dan")))
+    con.execute("DELETE FROM visits")
+    con.execute("UPDATE users SET created_at = ? WHERE id IN (?, ?)", (at(MONDAY - 8), a, b))  # both joined 8 days ago
+    con.execute("UPDATE users SET created_at = ? WHERE id = ?", (at(MONDAY - 200), d))
+    day = MONDAY - 8
+    con.executemany("INSERT INTO visits (day, user_id) VALUES (?, ?)", [(day, a), (day, b), (day + 1, a), (day + 7, b), (MONDAY - 1, a), *((MONDAY - 1 - i, d) for i in range(16))])
+    f = stats.fields(con, 7, MONDAY)
+    assert (f["dau"], f["wau"], f["mau"]) == (3, 3, 3)
+    assert f["retention"].split("\n") == ["D1: 50% (1/2)", "D7: 100% (2/2)", "D30: —"]    # D30: nobody joined 30 days before the window's days
+    assert f["spread"].split("\n") == ["1: 0%", "2-3: 67%", "4-7: 0%", "8-15: 0%", "16+: 33%"]  # ben 2, ana 3, dan 16
+
+
+def test_digest_shows_length_time_and_uses(env, monkeypatch):
+    c, _ = env
+    con = db.connect(DB[0])
+    ids = [login(c, 41 + i, f"eva{i}")["id"] for i in range(4)]
+    set_clock(monkeypatch, lambda: at(MONDAY))
+    last = MONDAY - 1
+    con.execute("DELETE FROM visits")
+    con.executemany("INSERT INTO visits (day, user_id) VALUES (?, ?)", [(last, i) for i in ids])
+    con.executemany("INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)", [(last, "sess.2", 3), (last, "sess.6", 1), (last, "time.4", 2), (last, "uniq.sheet.event", 1), (last, "uniq.do.qr", 3)])
+    f = stats.fields(con, 7, MONDAY)
+    assert f["sessions"] == "≤30s 0 · ≤1m 0 · ≤3m 3 · ≤5m 0 · ≤10m 0 · ≤20m 0 · 20m+ 1\np50 ≤3m, p75 ≤3m"
+    assert f["day_times"].endswith("p50 ≤40m, p75 ≤40m")
+    assert f["uses"].split("\n")[:2] == ["do.qr 75%", "sheet.event 25%"]
+    assert all(("{%s}" % k) in texts.BOT[lang]["usage_week"][0] for lang in ("ru", "kk", "en") for k in f)
