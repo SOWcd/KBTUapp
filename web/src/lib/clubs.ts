@@ -34,3 +34,5 @@ export function clubSub(o: Org, next: Map<number, string>): string {
   const now = next.get(o.id) ?? (open ? '' : o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : o.members ? tn('club.members', o.members) : '');
   return [open, now].filter(Boolean).join(' · ');
 }
+/** "Ali is in it" / "Ali and 3 more": my friends in a club. */
+export const friendsIn = (o: Org) => (o.friendsN === 1 ? t('clubs.friendIn', { name: o.friends[0].name }) : t('clubs.friendsIn', { name: o.friends[0].name, n: o.friendsN - 1 }));

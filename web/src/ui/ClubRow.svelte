@@ -7,9 +7,11 @@
   import type { Org } from '../lib/api';
   import { sheets } from '../lib/state/sheets';
   import OrgLogo from './OrgLogo.svelte';
+  import FriendsLine from './FriendsLine.svelte';
   import GovMark from './GovMark.svelte';
 
-  let { org: o, name, sub = '', hot = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; end?: Snippet } = $props();
+  // social: my friends in it take the line, when there are any
+  let { org: o, name, sub = '', hot = false, social = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; social?: boolean; end?: Snippet } = $props();
 </script>
 
 <div class="row">
@@ -17,7 +19,8 @@
   <OrgLogo org={o} size={40} />
   <span class="txt">
     <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
-    {#if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
+    {#if social && o.friends.length}<small><FriendsLine org={o} /></small>
+    {:else if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
   </span>
   <span class="end">
     {#if end}{@render end()}{:else}<span class="chev"><ChevronRight size={18} /></span>{/if}

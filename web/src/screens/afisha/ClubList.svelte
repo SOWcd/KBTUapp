@@ -39,7 +39,7 @@
 
   const schools = $derived(data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')));
   const interest = $derived(clubs.filter((o) => o.category === view && !o.quiet).sort((a, b) => b.rank - a.rank));
-  const lead = (o: Org) => (o.round ? `${tn('club.members', o.members)} · ${roundDue(o.round.closesAt)}` : tn('club.members', o.members));
+  const lead = (o: Org) => next.get(o.id) ?? (o.round ? `${tn('club.members', o.members)} · ${roundDue(o.round.closesAt)}` : tn('club.members', o.members));
 </script>
 
 {#snippet go()}<span class="chev"><ChevronRight size={18} /></span>{/snippet}
@@ -50,7 +50,7 @@
     {#each parts as p (p.key)}
       <div class="part"><Section title={p.title} count={p.orgs.length}>
         <Group footnote={p.key === 'initiatives' ? t('clubs.initiativeNote') : undefined}>
-          {#each p.orgs as o (o.id)}<ClubRow org={o} sub={p.key === 'quiet' ? '' : clubSub(o, next)} hot={p.key !== 'quiet' && !waitsDmp(o) && next.has(o.id)} />{/each}
+          {#each p.orgs as o (o.id)}<ClubRow org={o} sub={p.key === 'quiet' ? '' : clubSub(o, next)} hot={p.key !== 'quiet' && !waitsDmp(o) && next.has(o.id)} social />{/each}
         </Group>
       </Section></div>
     {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
@@ -62,10 +62,10 @@
   {:else}
     {#if interest[0]}<ClubPoster org={interest[0]} sub={lead(interest[0])} wide />{/if}
     {#if interest.length > 1}
-      <div class="shelf hscroll">{#each interest.slice(1, 4) as o (o.id)}<ClubPoster org={o} sub={tn('club.members', o.members)} />{/each}</div>
+      <div class="shelf hscroll">{#each interest.slice(1, 4) as o (o.id)}<ClubPoster org={o} sub={next.get(o.id) ?? tn('club.members', o.members)} />{/each}</div>
     {/if}
     {#if interest.length > 4}
-      <div class="part"><Group>{#each interest.slice(4) as o (o.id)}<ClubRow org={o} sub={clubSub(o, next)} hot={next.has(o.id)} />{/each}</Group></div>
+      <div class="part"><Group>{#each interest.slice(4) as o (o.id)}<ClubRow org={o} sub={clubSub(o, next)} hot={next.has(o.id)} social />{/each}</Group></div>
     {/if}
   {/if}
 </Pane>

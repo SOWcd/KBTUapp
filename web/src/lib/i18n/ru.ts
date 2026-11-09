@@ -1715,6 +1715,8 @@ const ru = {
   'club.myRole': "Ты в команде · {role}",
   'clubs.nothing': "Ничего не нашлось",
   'clubs.openNow': 'Набор открыт',
+  'clubs.friendIn': "Состоит {name}",
+  'clubs.friendsIn': "Состоят {name} и ещё {n}",
   'clubs.allN': "Все {n}",
   'clubs.allClubs': "Все клубы",
   'clubs.quiet': "Пока тихо",

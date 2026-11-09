@@ -11,7 +11,7 @@
   import LayoutGrid from '@lucide/svelte/icons/layout-grid';
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { data, loadChats, chatsFor } from '../../lib/state/data.svelte';
+  import { data, loadChats, chatsFor, currentCastings } from '../../lib/state/data.svelte';
   import Section from '../../ui/Section.svelte';
   import Group from '../../ui/Group.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -31,6 +31,8 @@
   import ClubPoster from '../../ui/ClubPoster.svelte';
   import ClubRow from '../../ui/ClubRow.svelte';
   import RecruitCard from '../../ui/RecruitCard.svelte';
+  import CastingCard from '../../ui/CastingCard.svelte';
+  import { castingStatus } from '../../lib/posts';
 
   let q = $state('');
   const searching = $derived(!!q.trim());
@@ -62,11 +64,13 @@
     if (pen.measureText(nameOf(o)).width > 70) tight.add(o.id);
   };
 
-  // Recruiting: every open round but those of clubs I'm in. The strip: 8, official first, then by members; "All": each, soonest first
+  // Recruiting: castings (come in person) first, then every open round, none of clubs I'm in. The strip: 8 in all, rounds
+  // official first, then by members; "All": each one, the rounds soonest first
   const memberOf = $derived(new Set((session.me?.memberships ?? []).map((m) => m.org.id)));
   const rounds = $derived(data.orgs.flatMap((o) => (o.round && !memberOf.has(o.id) && !o.myRole ? [{ org: o, round: o.round }] : [])));
-  const strip = $derived([...rounds].sort((a, b) => +!a.org.official - +!b.org.official || b.org.members - a.org.members || a.round.closesAt - b.round.closesAt).slice(0, 8));
-  const allRounds = () => { haptic.tap(); sheets.myClubs([...rounds].sort((a, b) => a.round.closesAt - b.round.closesAt).map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) })), t('clubs.recruitingNow')); };
+  const castings = $derived(currentCastings().filter((p) => !memberOf.has(p.org.id)));
+  const strip = $derived([...rounds].sort((a, b) => +!a.org.official - +!b.org.official || b.org.members - a.org.members || a.round.closesAt - b.round.closesAt).slice(0, Math.max(0, 8 - castings.length)));
+  const allRounds = () => { haptic.tap(); sheets.myClubs([...castings.map((p) => ({ org: p.org, role: null, sub: `${t('casting.come')} · ${castingStatus(p.casting!)}` })), ...[...rounds].sort((a, b) => a.round.closesAt - b.round.closesAt).map((r) => ({ org: r.org, role: null, sub: roundDue(r.round.closesAt) }))], t('clubs.recruitingNow')); };
 
   // interests: the ones with a live club in them. Popular: the server's rank
   const live = $derived(clubsOnly.filter((o) => !o.quiet));
@@ -104,11 +108,13 @@
       </Section>
     {/if}
 
-    {#if strip.length}
-      <Section title={t('clubs.recruitingNow')} onmore={allRounds} moreLabel={t('clubs.allN', { n: rounds.length })} loud>
-        <div class="shelf hscroll">
+    {#if strip.length || castings.length}
+      <Section title={t('clubs.recruitingNow')} onmore={allRounds} moreLabel={t('clubs.allN', { n: rounds.length + castings.length })} loud>
+        <!-- keyed: castings come in after the rounds, and scroll snap would stay on the card it had, hiding them -->
+        {#key castings.length}<div class="shelf hscroll">
+          {#each castings.slice(0, 8) as p (p.id)}<div class="cast"><CastingCard post={p} /></div>{/each}
           {#each strip as r (r.org.id)}<RecruitCard org={r.org} round={r.round} />{/each}
-        </div>
+        </div>{/key}
       </Section>
     {/if}
 
@@ -128,7 +134,7 @@
     {#if popular.length}
       <Section title={t('clubs.popular')}>
         <div class="shelf hscroll">
-          {#each popular as o (o.id)}<ClubPoster org={o} sub={tn('club.members', o.members)} />{/each}
+          {#each popular as o (o.id)}<ClubPoster org={o} sub={next.get(o.id) ?? tn('club.members', o.members)} />{/each}
         </div>
       </Section>
     {/if}
@@ -164,6 +170,9 @@
   .mc small.lead { color: var(--accent-text); font-weight: 600; }
 
   .shelf { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) var(--s-2); scroll-padding: 0 var(--gutter); }
+
+  .cast { flex: none; width: 262px; display: flex; scroll-snap-align: start; }
+  .cast :global(.cc) { height: 100%; }
 
   /* interests: quiet tiles on the card surface, only the small glyph carries the colour */
   .ints { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }

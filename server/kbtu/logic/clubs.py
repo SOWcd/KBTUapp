@@ -36,8 +36,16 @@ def org_shapes(con, v: Viewer, found: list[sqlite3.Row], share: bool = False) ->
     live = [i for i in ids if part[i]["round"]]
     applied = {r[0] for r in rows(con, f"""SELECT r.org_id FROM round_apps a JOIN rounds r ON r.id = a.round_id WHERE a.user_id = ? AND r.org_id IN ({_qs(live)})
         AND r.status != 'done' AND a.stage != 'withdrawn'""", v.id, *live)} if v.student and live else set()
+    # my friends in each club: friends already see each other's clubs (profiles.person); a club hiding its members, or a
+    # friend who hides where they go, shows nobody. One query for the whole list; two faces and the total are all a card needs
+    pals: dict[int, list] = {}
+    if v.student:
+        for p in rows(con, f"""SELECT {PERSON_COLS}, m.org_id AS in_org FROM org_members m JOIN orgs o ON o.id = m.org_id JOIN users u ON u.id = m.user_id
+                LEFT JOIN students s ON s.user_id = u.id WHERE m.org_id IN ({q}) AND o.members_hidden = 0 AND u.show_going = 1 AND u.banned_at IS NULL
+                AND m.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?) ORDER BY m.joined_at, u.id""", *ids, v.id, v.id):
+            pals.setdefault(p["in_org"], []).append(person_ref(p))
     return [{
-        **part[o["id"]], "round": {**r, "applied": o["id"] in applied} if (r := part[o["id"]]["round"]) else None,
+        **part[o["id"]], "friends": pals.get(o["id"], [])[:2], "friendsN": len(pals.get(o["id"], [])), "round": {**r, "applied": o["id"] in applied} if (r := part[o["id"]]["round"]) else None,
         "myRequest": _request_state(asked.get(o["id"])), "subscribed": o["id"] in subscribed,
         "myRole": mine[o["id"]]["role"] if o["id"] in mine else None,
         **({"myTitle": mine[o["id"]]["title"], "myTitleKk": mine[o["id"]]["title_kk"], "myTitleEn": mine[o["id"]]["title_en"]} if o["id"] in mine else {"myTitle": None}),

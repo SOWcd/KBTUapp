@@ -1695,6 +1695,8 @@ const en: Dict = {
   'club.myRole': "You're on the team · {role}",
   'clubs.nothing': "Nothing found",
   'clubs.openNow': 'Recruiting now',
+  'clubs.friendIn': "{name} is a member",
+  'clubs.friendsIn': "{name} and {n} more",
   'clubs.allN': "All {n}",
   'clubs.allClubs': "All clubs",
   'clubs.quiet': "Quiet for now",

@@ -87,6 +87,34 @@ def test_category_set_by_lead_and_filled_by_ai(env):
     con.close()
 
 
+def test_friends_in_a_club(env):
+    """Only my friends, read for the list; a club hiding its members or a friend hiding where they go shows nobody."""
+    c, cfg = env
+    for t, n in ((PRES, "pres"), (FAN, "fan"), (SECOND, "second")):
+        login(c, t, n)
+    con = db.connect(cfg.db_path)
+    uid = lambda t: con.execute("SELECT id FROM users WHERE tg_id = ?", (t,)).fetchone()[0]  # noqa: E731
+    org = logic.create_org(con, None, "Pals", "PA", "crown_3d", False)
+    logic.set_role(con, None, uid(PRES), org, "president", "test")
+    logic.set_role(con, None, uid(SECOND), org, "member", "test")
+    a, b = sorted((uid(FAN), uid(PRES)))
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (a, b))
+
+    def seen(t):
+        logic.core._SHARED.clear()
+        o = next(x for x in c.get("/api/orgs", headers=tma(t)).json() if x["id"] == org)
+        return [p["id"] for p in o["friends"]], o["friendsN"]
+
+    assert seen(FAN) == ([uid(PRES)], 1)                   # my friend, and not the stranger beside them
+    assert seen(SECOND) == ([], 0)                         # not friends with anyone there
+    con.execute("UPDATE users SET show_going = 0 WHERE id = ?", (uid(PRES),))
+    assert seen(FAN) == ([], 0)                            # hides where they go
+    con.execute("UPDATE users SET show_going = 1 WHERE id = ?", (uid(PRES),))
+    con.execute("UPDATE orgs SET members_hidden = 1 WHERE id = ?", (org,))
+    assert seen(FAN) == ([], 0)                            # the club hides its members
+    con.close()
+
+
 def test_one_official_presidency_on_handover(env):
     c, cfg = env
     for t, n in ((PRES, "pres"), (SECOND, "second")):
