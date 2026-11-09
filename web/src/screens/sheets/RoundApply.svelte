@@ -18,6 +18,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { dayMonth, time } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
   import ClipboardPen from '@lucide/svelte/icons/clipboard-pen';
@@ -84,6 +85,7 @@
     const sending = snap; // what's typed while it goes isn't saved yet
     try {
       r = await api.applyRound(r.id, { departments: picks, answers: payload(), source });
+      if (!sent) count('do.casting');
       try { localStorage.removeItem(key()); } catch { /* blocked */ }
       const first = !sent;
       sent = true; editing = false; saved = sending;

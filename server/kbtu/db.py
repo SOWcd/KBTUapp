@@ -1343,6 +1343,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       charge_id TEXT PRIMARY KEY,
       amount INTEGER NOT NULL CHECK (amount > 0),
       created_at INTEGER NOT NULL) WITHOUT ROWID;"""),
+    # anonymous usage counters (logic/stats.py): daily totals only, no person in them
+    (147, """CREATE TABLE usage_days (
+      day INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      n INTEGER NOT NULL,
+      PRIMARY KEY (day, key)) WITHOUT ROWID;"""),
 ]
 
 

@@ -374,6 +374,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if a["decline_text"]:  # the club's own words are in the app, never in the bot's message (AGENTS.md: templates only)
             return (*texts.bot_message(lang, "round_no_why", org=a["name"]), f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), "clubs")
+    if kind == "usage_week":  # uw:<monday>, to the creator alone: the anonymous counters of the seven days before it
+        return (*texts.bot_message(lang, kind, **logic.stats.fields(con, 7, int(ref[1]))), "")
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
@@ -730,6 +732,7 @@ def _chores(cfg: Config, con) -> None:
     """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
     hold the API worker's event loop, /healthz included."""
     logic.strip_emoji_names(con)  # once (meta): org names from before the no-emoji rule
+    logic.stats.week(con)  # Monday morning: the week's usage numbers to the creator
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going

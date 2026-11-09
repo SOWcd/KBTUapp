@@ -1,7 +1,9 @@
 // Navigation and overlays. One stack for every sheet and full-screen view: Telegram's Back button
 // closes the top one (the prototype had a hand-written chain of 15 ifs for this).
-import type { Component } from 'svelte';
+import { untrack, type Component } from 'svelte';
 import { haptic } from '../tg';
+import { t } from '../i18n/index.svelte';
+import { count, type Screen } from '../stats';
 import { queue } from '../moments';
 import { switching } from './theme.svelte';
 
@@ -54,13 +56,16 @@ export function goTab(tab: Tab): void {
  *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
 export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
-  tint?: string | null }
+  tint?: string | null;
+  /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
+  stat?: Screen }
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
-export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>): number {
+export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen): number {
   const id = ++seq;
-  overlays.push({ id, component: component as Component<any>, props, closing: false });
+  if (stat) count(stat);
+  overlays.push({ id, component: component as Component<any>, props, closing: false, stat });
   return id;
 }
 
@@ -101,6 +106,7 @@ export function say(text: string, emoji = 'sparkles_3d', undo?: () => void): voi
   // a toast born mid-switch came solid and cleared up after (owner, Oct 31): it waits for the switch to end
   const vt = switching();
   if (vt) { vt.then(() => say(text, emoji, undo)); return; }
+  untrack(() => { if (text === t('common.error')) count(`err.${[...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const)}`); });
   toast.text = text; toast.emoji = emoji; toast.undo = undo ?? null; toast.id++;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (toast.text = ''), undo ? 5000 : 2600); // an Undo stays long enough to reach

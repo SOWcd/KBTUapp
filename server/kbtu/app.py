@@ -1569,6 +1569,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def audit(con: Con, v: Me):
         return logic.audit(con, v)
 
+    @app.post("/api/stats", status_code=204)
+    def usage_stats(con: Con, v: Me, body: dict = Body(...)):
+        logic.stats.add(con, v.id, body)
+
     @app.get("/api/admin/stats")
     def admin_stats(con: Con, v: Me):
         return logic.admin_stats(con, v)

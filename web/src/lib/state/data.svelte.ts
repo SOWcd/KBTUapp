@@ -8,6 +8,7 @@ import { asStudent, loadMe, session } from './session.svelte';
 import { sheets } from './sheets';
 import { onTeam } from '../perms';
 import { haptic, requestWriteAccess } from '../tg';
+import { count } from '../stats';
 import { burst } from '../../ui/burst';
 import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
@@ -293,6 +294,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
     taps++;
     try {
       const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers);
+      if (!leaving) count('do.signup');
       if (phone && session.me?.student) session.me.student.phone = phone;
       put(after);
       const st = after.my?.status;
@@ -369,7 +371,7 @@ export function toggleSub(id: Id): void {
     const on = !o.subscribed;
     o.subscribed = on; o.subscribers += on ? 1 : -1;
     haptic.tap();
-    try { await api.subscribe(id, on); data.kept++; say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
+    try { await api.subscribe(id, on); data.kept++; if (on) count('do.follow'); say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
     catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
   }));
 }
