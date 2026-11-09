@@ -1,7 +1,7 @@
 <script lang="ts">
   // A page pushed from the Clubs tab, live from the store. all: every club under its heading, official first, the quiet
-  // ones last, then "Create a club"; schools: schools and offices; an interest: its clubs by the server's rank, the first
-  // as a wide poster, the next three on a shelf, the rest as rows (quiet clubs aren't in an interest).
+  // ones folded into the last row of Initiatives (search opens them up), then "Create a club"; quiet: those; schools:
+  // schools and offices; an interest: its clubs by the server's rank, the first as a wide poster, the next three on a shelf, the rest as rows (quiet clubs aren't in an interest).
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import type { Org, OrgCategory } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';
@@ -21,21 +21,23 @@
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
 
-  let { overlay, view }: { overlay: Overlay; view: 'all' | 'schools' | OrgCategory } = $props();
+  let { overlay, view }: { overlay: Overlay; view: 'all' | 'schools' | 'quiet' | OrgCategory } = $props();
 
-  const title = $derived(view === 'all' ? t('clubs.allClubs') : view === 'schools' ? t('clubs.schoolsOffices') : t(`clubs.cat.${view}`));
+  const title = $derived(view === 'all' ? t('clubs.allClubs') : view === 'schools' ? t('clubs.schoolsOffices') : view === 'quiet' ? t('clubs.quiet') : t(`clubs.cat.${view}`));
   const next = $derived(nextByOrg(data.events));
   const bySize = (a: Org, b: Org) => +!a.gov - +!b.gov || b.members - a.members || b.subscribers - a.subscribers || a.name.localeCompare(b.name, 'ru');
   const SCHOOLISH = new Set(['school', 'office']);
   const clubs = $derived(data.orgs.filter((o) => !SCHOOLISH.has(o.kind)));
 
   let q = $state('');
-  const shown = $derived(q.trim() ? [...clubs, ...data.small.filter((o) => !SCHOOLISH.has(o.kind))].filter((o) => hit(o, q)) : clubs);
+  const searching = $derived(!!q.trim());
+  const quiet = $derived(clubs.filter((o) => o.quiet).sort(bySize));
+  const shown = $derived(searching ? [...clubs, ...data.small.filter((o) => !SCHOOLISH.has(o.kind))].filter((o) => hit(o, q)) : clubs);
+  const folded = $derived(!searching && quiet.length > 0);
   const parts = $derived([
     { key: 'official', title: t('clubs.headOfficial'), orgs: shown.filter((o) => o.official).sort(bySize) },
-    { key: 'initiatives', title: t('clubs.headInitiatives'), orgs: shown.filter((o) => !o.official && !o.quiet).sort((a, b) => +!a.top - +!b.top || bySize(a, b)) },
-    { key: 'quiet', title: t('clubs.quiet'), orgs: shown.filter((o) => o.quiet).sort(bySize) },
-  ].filter((p) => p.orgs.length));
+    { key: 'initiatives', title: t('clubs.headInitiatives'), orgs: shown.filter((o) => !o.official && (searching || !o.quiet)).sort((a, b) => +!a.top - +!b.top || bySize(a, b)) },
+  ].filter((p) => p.orgs.length || (p.key === 'initiatives' && folded)));
 
   const schools = $derived(data.orgs.filter((o) => SCHOOLISH.has(o.kind)).sort((a, b) => a.kind.localeCompare(b.kind) || nameOf(a).localeCompare(nameOf(b), 'ru')));
   const interest = $derived(clubs.filter((o) => o.category === view && !o.quiet).sort((a, b) => b.rank - a.rank));
@@ -50,11 +52,14 @@
     {#each parts as p (p.key)}
       <div class="part"><Section title={p.title} count={p.orgs.length}>
         <Group footnote={p.key === 'initiatives' ? t('clubs.initiativeNote') : undefined}>
-          {#each p.orgs as o (o.id)}<ClubRow org={o} sub={p.key === 'quiet' ? '' : clubSub(o, next)} hot={p.key !== 'quiet' && !waitsDmp(o) && next.has(o.id)} social />{/each}
+          {#each p.orgs as o (o.id)}<ClubRow org={o} sub={clubSub(o, next)} hot={!waitsDmp(o) && next.has(o.id)} social />{/each}
+          {#if p.key === 'initiatives' && folded}<Row title={tn('clubs.quietN', quiet.length)} accessory="chevron" onclick={() => sheets.clubList('quiet')} />{/if}
         </Group>
       </Section></div>
     {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
     <div class="part"><Group><Row tone="add" title={t('create.button')} accessory="chevron" onclick={() => asStudent(() => sheets.createClub(), 'newclub')} /></Group></div>
+  {:else if view === 'quiet'}
+    <Group>{#each quiet as o (o.id)}<ClubRow org={o} social />{/each}</Group>
   {:else if view === 'schools'}
     <Group>
       {#each schools as o (o.id)}<ClubRow org={o} name={nameOf(o)} sub={o.abbr && o.abbr !== nameOf(o) ? o.name : ''}>{#snippet end()}{@render go()}{/snippet}</ClubRow>{/each}

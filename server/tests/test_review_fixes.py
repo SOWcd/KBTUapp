@@ -23,7 +23,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con = db.connect(cfg.db_path)
     keyed = {t for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
              if {r[1] for r in con.execute(f"PRAGMA table_info({t})")} & {"email", "student_id", "tg_id", "author_tg", "phone"}}
-    # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, kept for the right person
+    # handled in delete_me (or the account row itself); roster_pending: a club's one-off sheet, only the row I claimed goes
     assert keyed == {"users", "students", "prefill", "prefill_rest", "qr_expected", "tgc_saved", "tgc_strangers", "tgc_comments",
                      "roster_pending"}, keyed
 
@@ -32,7 +32,33 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     from kbtu import checkin
     s1 = checkin.new(con, "Fair", [{"email": "ALI@kbtu.kz", "name": "Ali T"}, {"email": "x@kbtu.kz", "name": "Ali Testov", "studentId": "24Bali"},
                                    {"email": "y@kbtu.kz", "name": "Bek Omarov", "studentId": "24Bali"}, {"email": "dan@kbtu.kz", "name": "Dan"}])
+    aid = ali["id"]
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    mail = con.execute("SELECT lower(email) FROM students WHERE user_id = ?", (aid,)).fetchone()[0]
+    for key, claimed, rejected, email in (("claimed", aid, None, mail), ("my_word", aid, None, None), ("turned_down", None, aid, None), ("someone", None, None, None)):
+        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, rejected_by, created_at)
+            VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, ?, 0)""", (key, email, claimed, rejected))
+    con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999')", (f"fsearch:{aid}:1", str(aid)))
+    for action, by in (("team_link_join", aid), ("grant_link_used", aid), ("team_link_join", 999)):
+        con.execute("INSERT INTO audit_log (action, target, data, at) VALUES (?, 'x', ?, 0)", (action, f'{{"link": "ab", "by": {by}}}'))
+    bob = login(c, 22, "bob")["id"]
+    mine_ = {"friend_new": f"fn:{aid}:1", "friend_request": f"fq:{aid}:1", "join_request": f"jr:1:{aid}:1", "team_ask": f"ta:1:{aid}:1", "friend_invite": f"fi:1:{aid}",
+             "roster_claim": f"rq:1:{aid}", "tgc_good": f"gr:{aid}"}
+    for kind, ref in mine_.items():  # sent ones too: other people's queues
+        con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, ?, ?, 0, 1)", (bob, kind, ref))
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after, sent_at) VALUES (?, 'join_request', ?, 0, 1)", (bob, f"jr:{aid}:999:1"))  # a club's number, not mine
+    con.execute("UPDATE users SET announce_ok = 1 WHERE id = ?", (aid,))
     delete_now(c, cfg, tma(21, "Ali"))
+    assert con.execute("SELECT announce_ok FROM users WHERE id = ?", (aid,)).fetchone()[0] is None
+    assert [r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE user_id = ?", (bob,))] == [f"jr:{aid}:999:1"]
+    # who made the link leaves the line, the line stays
+    assert [(r[0], r[1]) for r in con.execute("SELECT json_extract(data, '$.link'), json_extract(data, '$.by') FROM audit_log WHERE target = 'x' ORDER BY id")] == [
+        ("ab", None), ("ab", None), ("ab", 999)]
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'fsearch:%' OR key LIKE 'rclaim:%' ORDER BY key")] == ["fsearch:999:1", "rclaim:2"]
+    # the row with my verified mail goes and a reload doesn't bring it back; one I only said was mine, turned down or never claimed is the club's
+    assert [tuple(r) for r in con.execute("SELECT key, claimed_by, rejected_by FROM roster_pending ORDER BY key")] == [
+        ("my_word", None, None), ("someone", None, None), ("turned_down", None, None)]
+    assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'roster_done:%'")] == ["roster_done:claimed"]
     # by mail; by my ID only with my name (Bek's row with a typo of my ID is his)
     assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ? ORDER BY email", (s1,))] == ["dan@kbtu.kz", "y@kbtu.kz"]
 

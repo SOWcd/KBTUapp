@@ -1136,9 +1136,14 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL,
+            skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = CASE WHEN role = 'moderator' THEN 'user' ELSE role END WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))  # PLAN 95: the claim goes with me
+        # PLAN 95: a list row I said was mine goes with me where the list has my verified mail, and a reload skips it (as after
+        # roster.join); a claim is only my word otherwise (a typo'd username), so that row goes back to the club for the right person
+        for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
+                RETURNING key""", v.id, v.id):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
+        con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
@@ -1185,15 +1190,20 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE map_graph SET updated_by = NULL WHERE updated_by = ?", (v.id,))  # no foreign key there
         con.execute("DELETE FROM profile_views WHERE viewer_id = ? OR user_id = ?", (v.id, v.id))  # no foreign keys either
         con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
+        con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key LIKE 'rclaim:%' AND value = ?", (str(v.id),))  # a roster claim that let me in
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
         con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
                     (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
         con.execute("DELETE FROM bot_outbox WHERE kind = 'sid_page_clash' AND ref LIKE ?", (f"sp:{v.id}:%",))  # so does his schedule-page alert
-        # his unsent invites in friends' queues; who he was in the role history
-        con.execute("DELETE FROM bot_outbox WHERE kind = 'friend_invite' AND ref LIKE ? AND sent_at IS NULL", (f"fi:%:{v.id}",))
+        # other people's queues that name me by id, sent or not; who he was in the role history
+        for kind, ref in (("friend_invite", f"fi:%:{v.id}"), ("friend_new", f"fn:{v.id}:%"), ("friend_request", f"fq:{v.id}:%"), ("join_request", f"jr:%:{v.id}:%"),
+                          ("team_ask", f"ta:%:{v.id}:%"), ("roster_claim", f"rq:%:{v.id}"), ("tgc_good", f"gr:{v.id}")):
+            con.execute("DELETE FROM bot_outbox WHERE kind = ? AND ref LIKE ?", (kind, ref))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
+        con.execute("UPDATE audit_log SET data = json_remove(data, '$.by') WHERE action IN ('team_link_join', 'grant_link_used') AND json_extract(data, '$.by') = ?", (v.id,))  # who made the link
         con.execute("UPDATE reports SET note = NULL WHERE (target = 'user' AND target_id = ?) OR reporter_id IS NULL", (v.id,))
         log_action(con, None, "delete_my_data", "user")
     return receipts, photos

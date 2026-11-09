@@ -117,15 +117,19 @@ export function phrase(key: Key, vars?: Record<string, string | number>): string
   return all[Math.floor(Math.random() * all.length)];
 }
 
+let taps = 0; // a write while the lists reload: the older answer must not undo it on screen (bumped when it starts and when it ends)
+/** Runs a write on a list's item; a list asked before it started or finished is older than it. */
+async function writing(f: () => Promise<void>): Promise<void> { taps++; try { await f(); } finally { taps++; } }
 export async function loadAfisha(): Promise<void> {
   loadChats();
   try {
     // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
+    const at = taps;
     const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(undefined, true), api.castings()]);
     if (castings.status === 'fulfilled') data.castings = castings.value;
     if (past.status === 'fulfilled') data.past = past.value;
-    if (events.status === 'fulfilled') data.events = events.value;
-    if (orgs.status === 'fulfilled') { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
+    if (events.status === 'fulfilled' && at === taps) data.events = events.value;
+    if (orgs.status === 'fulfilled' && at === taps) { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
     if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
     if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
     data.error = events.status === 'rejected';
@@ -228,7 +232,7 @@ export function keepPerson(c: PersonCard): void { people.set(c.id, { at: Date.no
 export function forgetPeople(): void { people.clear(); }
 
 export function put(card: EventCard): void {
-  data.kept++;
+  data.kept++; taps++; // a list asked before this card is older than it
   for (const list of [data.events, data.opened]) {
     const i = list.findIndex((e) => e.id === card.id);
     if (i >= 0) list[i] = card;
@@ -286,6 +290,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       before.taken++;
       haptic.tap();
     } else goingBusy.add(id);
+    taps++;
     try {
       const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers);
       if (phone && session.me?.student) session.me.student.phone = phone;
@@ -300,7 +305,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void): void {
       if (sure) { before.my = was.my; before.taken = was.taken; }
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
-    } finally { goingBusy.delete(id); flying.delete(id); }
+    } finally { goingBusy.delete(id); flying.delete(id); taps++; }
   }, 'go_' + id);
 }
 
@@ -324,7 +329,7 @@ export function declineInvite(id: Id, note?: string): void {
 }
 
 export function toggleSaved(id: Id): void {
-  asStudent(async () => {
+  asStudent(() => writing(async () => {
     const e = await cardFor(id); if (!e) return;
     const on = !e.saved;
     e.saved = on; // optimistic
@@ -332,12 +337,12 @@ export function toggleSaved(id: Id): void {
     if (on) burst(false, undefined, e.emoji); // "Save" with a purpose: a moment, and the bot reminds the day before
     try { await api.setSaved(id, on); data.kept++; say(phrase(on ? 'say.save' : 'say.unsave'), on ? 'sparkles_3d' : 'waving_hand_3d_default'); }
     catch { e.saved = !on; say(t('common.error'), 'warning_3d'); }
-  });
+  }));
 }
 
 /** Apply to join, or withdraw a pending application after a question (§4.5). The button answers at once. */
 export function toggleJoin(id: Id): void {
-  asStudent(async () => {
+  asStudent(() => writing(async () => {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
     if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
@@ -355,18 +360,18 @@ export function toggleJoin(id: Id): void {
       if (closed) o.recruiting = false;
       say(t(closed ? 'join.closed' : 'common.error'), 'pleading_face_3d');
     }
-  });
+  }));
 }
 
 export function toggleSub(id: Id): void {
-  asStudent(async () => {
+  asStudent(() => writing(async () => {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = !o.subscribed;
     o.subscribed = on; o.subscribers += on ? 1 : -1;
     haptic.tap();
     try { await api.subscribe(id, on); data.kept++; say(phrase(on ? 'say.sub' : 'say.unsub'), on ? 'raising_hands_3d_default' : 'broken_heart_3d'); }
     catch { o.subscribed = !on; o.subscribers += on ? -1 : 1; say(t('common.error'), 'warning_3d'); }
-  });
+  }));
 }
 
 /** Leaving a club from the Clubs tab, what Team's Leave does: one confirm, then gone at once, back if the server says no. */

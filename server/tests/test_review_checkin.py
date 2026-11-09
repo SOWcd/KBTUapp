@@ -154,6 +154,37 @@ def test_dmp_event_gives_attendance_once(env):
     con.close()
 
 
+def test_dmp_award_waits_for_the_sign_up(env):
+    """A guest's scan, the sign-in done long after the QR's window: the saved scan earns it, under the scan's own day."""
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    eid, sid, p = _phone_event(c, con, "dmp")
+    uid = c.get("/api/me", headers=tma(7, "Gul")).json()["id"]
+    assert not _scan(c, 7, p).json()["done"]
+    scanned = int(time.time()) - 86400
+    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (scanned - 60, eid))
+    con.execute("UPDATE qr_marks SET scanned_at = ? WHERE user_id = ?", (scanned, uid))
+    login(c, 7, "gul")
+    checkin.became_student(con, uid)
+    checkin.became_student(con, uid)  # again: nothing waits any more
+    assert _grants(con, uid) == 1
+    assert con.execute("SELECT batch FROM achievement_grants WHERE user_id = ?", (uid,)).fetchone()[0] == f"q{sid}_{(scanned + 5 * 3600) // 86400}"
+    con.close()
+
+
+def test_a_scan_before_the_door_earns_nothing_however_late_the_sign_up(env):
+    c, cfg = env
+    con = db.connect(cfg.db_path)
+    _, sid, p = _phone_event(c, con, "dmp")
+    uid = c.get("/api/me", headers=tma(7, "Gul")).json()["id"]
+    assert not _scan(c, 7, p).json()["done"]
+    con.execute("UPDATE qr_marks SET scanned_at = ? WHERE user_id = ?", (int(time.time()) - 7 * 86400, uid))
+    login(c, 7, "gul")
+    checkin.became_student(con, uid)
+    assert _grants(con, uid) == 0
+    con.close()
+
+
 def test_another_clubs_event_gives_no_attendance(env):
     c, cfg = env
     con = db.connect(cfg.db_path)

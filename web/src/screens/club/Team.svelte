@@ -46,7 +46,8 @@
   const list = $derived(m ? (data.team[m.org.id] ?? null) : null);
   let setup = $state<TeamSetup | null>(null);
   const loadSetup = (org: number) => api.teamSetup(org).then((x) => { if (m?.org.id === org) setup = x; }).catch(() => {});
-  $effect(() => { const org = m?.org.id; untrack(() => { open = null; filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); } }); });
+  const orgId = $derived(m?.org.id); // the same club with a fresh membership (a return refresh) keeps the filter and the open member
+  $effect(() => { const org = orgId; untrack(() => { open = null; filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); } }); });
   let open = $state<number | null>(null); // whose actions are out
   let linkOpen = $state(false); // the link icon's choice
   async function shareLink(many: boolean) {

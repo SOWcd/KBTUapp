@@ -53,7 +53,7 @@
     const a = root.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translate3d(0,${pull}px,0) scale(0.94)` }], { duration: 220, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
     clearTimeout(timer); // the marks land before the Afisha dot is asked again
-    if (read.size) void api.readPosts([...read]).catch(() => {}).then(loadMe);
+    if (read.size) void api.readPosts([...read]).catch(() => {}).then(() => loadMe());
   }
   $effect(() => { if (overlay.closing) leave(); });
   $effect(() => { overlay.title = g ? nameOf(g.org) : ''; overlay.icon = Newspaper; overlay.theme = 'dark'; }); // the capsule names the club

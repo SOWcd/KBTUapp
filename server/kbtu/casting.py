@@ -65,11 +65,11 @@ def view(con, v: Viewer, oid: int) -> dict | None:
            "questions": [{"id": q["id"], "kind": q["kind"], "text": q["text"], "options": json.loads(q["options"]) if q["options"] else None,
                           "required": bool(q["required"]), "tagId": q["tag_id"]} for q in qs],
            "mine": {"departments": json.loads(mine["departments"]), "answers": json.loads(mine["answers"]), "stage": _seen(mine, r),
-                    "invited": bool(mine["invited_at"]), "slot": _slot(con, mine["slot_id"])}
+                    "invited": bool(mine["invited_at"]) and not told, "slot": _slot(con, mine["slot_id"])}
            if mine and mine["stage"] != "withdrawn" else None}
     if told and mine["stage"] == "no":
         out["declineText"] = r["decline_text"]
-    if told and mine["stage"] == "yes" or team:  # the group's invite: the accepted only, in the app
+    if told and mine["stage"] == "yes" and role_in(con, v, oid) and not banned(con, oid, v.id) or team:  # the group's invite: the accepted still in the club only, in the app
         out["groupLink"] = r["group_link"]
     if team:
         counts = dict(rows(con, "SELECT stage, COUNT(*) FROM round_apps WHERE round_id = ? GROUP BY stage", r["id"]))
@@ -298,11 +298,11 @@ def _app(con, v: Viewer, app_id: int):
 def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
     """A teammate's verdict on an application (no / maybe / next), stars and a note; the latest verdict is its stage
     until someone decides (yes into a department, or no)."""
-    a = _app(con, v, app_id)
-    verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
-    if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
-        raise ApiError("bad_input")
-    with tx(con):
+    with tx(con):  # read and written under the lock: results sent meanwhile stand
+        a = _app(con, v, app_id)
+        verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
+        if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
+            raise ApiError("bad_input")
         con.execute("""INSERT INTO round_votes (app_id, user_id, verdict, stars, note, at) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (app_id, user_id) DO UPDATE SET verdict = excluded.verdict, stars = excluded.stars, note = excluded.note, at = excluded.at""",
                     (app_id, v.id, verdict, stars, note, now()))
@@ -313,15 +313,16 @@ def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
 
 def decide(con, v: Viewer, app_id: int, body: dict) -> dict:
     """Taken into a department (any of the round's: the board may move someone to their second wish or elsewhere), or no."""
-    a = _app(con, v, app_id)
-    stage, tag = body.get("stage"), body.get("tagId")
-    deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", a["round_id"])}
-    if stage == "yes" and (tag in deps or tag is None and not deps):  # no departments: into the club, no tag
-        con.execute("UPDATE round_apps SET stage = 'yes', taken_tag = ?, updated_at = ? WHERE id = ?", (tag, now(), app_id))
-    elif stage in ("no", "next", "maybe", "new"):
-        con.execute("UPDATE round_apps SET stage = ?, taken_tag = NULL, updated_at = ? WHERE id = ?", (stage, now(), app_id))
-    else:
-        raise ApiError("bad_input")
+    with tx(con):  # read and written under the lock: a "no" sent meanwhile never turns into a "yes" with no membership
+        a = _app(con, v, app_id)
+        stage, tag = body.get("stage"), body.get("tagId")
+        deps = {row[0] for row in rows(con, "SELECT tag_id FROM round_departments WHERE round_id = ?", a["round_id"])}
+        if stage == "yes" and (tag in deps or tag is None and not deps):  # no departments: into the club, no tag
+            con.execute("UPDATE round_apps SET stage = 'yes', taken_tag = ?, updated_at = ? WHERE id = ?", (tag, now(), app_id))
+        elif stage in ("no", "next", "maybe", "new"):
+            con.execute("UPDATE round_apps SET stage = ?, taken_tag = NULL, updated_at = ? WHERE id = ?", (stage, now(), app_id))
+        else:
+            raise ApiError("bad_input")
     return {"stage": stage, "takenTag": tag if stage == "yes" else None}
 
 
@@ -340,6 +341,9 @@ def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
             raise ApiError("conflict")
         yes = no = 0
         decided = "" if final else "AND stage IN ('yes', 'no')"
+        # told now: an interview still ahead is off and its seat free (one already past stays: who came); the bot's reminders check sent_at
+        con.execute(f"""UPDATE round_apps SET slot_id = NULL WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}
+            AND slot_id IN (SELECT id FROM round_slots WHERE starts_at > ?)""", (rid, now()))
         for a in rows(con, f"SELECT * FROM round_apps WHERE round_id = ? AND stage != 'withdrawn' AND sent_at IS NULL {decided}", rid):
             if a["stage"] == "yes" and not banned(con, oid, a["user_id"]):
                 con.execute("INSERT OR IGNORE INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)", (oid, a["user_id"], now()))
@@ -451,11 +455,13 @@ def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     r = _get(con, rid)
     if r["status"] == "done":
         raise ApiError("closed")
-    a = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ? AND stage != 'withdrawn'", rid, v.id)
-    if not a or not a["invited_at"]:
-        raise ApiError("forbidden")
     sid = body.get("slotId")
     with tx(con):
+        a = one(con, "SELECT * FROM round_apps WHERE round_id = ? AND user_id = ? AND stage != 'withdrawn'", rid, v.id)
+        if not a or not a["invited_at"]:
+            raise ApiError("forbidden")
+        if a["sent_at"]:  # told: their result stands, the time is for those still waiting
+            raise ApiError("closed")
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_iv_remind' AND ref LIKE ? AND sent_at IS NULL", (f"ivr:{a['id']}:%",))
         if sid is None:
             con.execute("UPDATE round_apps SET slot_id = NULL WHERE id = ?", (a["id"],))
