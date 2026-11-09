@@ -76,11 +76,13 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     quick = {r[0] for r in rows(con, f"""SELECT r.id FROM rounds r WHERE r.id IN ({_qs([x["id"] for x in live.values()])})
         AND NOT EXISTS (SELECT 1 FROM round_questions WHERE round_id = r.id) AND (SELECT COUNT(*) FROM round_departments WHERE round_id = r.id) <= 1""",
         *[x["id"] for x in live.values()])} if live else set()
-    # the last CLUB_QUIET: what makes a club quiet (no event, post or open round) and what Popular's rank counts
+    # the last CLUB_QUIET: what makes a club quiet (no event, post or open round) and what Popular's rank counts.
+    # Sent to every viewer, so public ones only: the numbers must not give away a team's closed meetings or posts
     cut = core.now() - CLUB_QUIET
-    events = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published'
-        AND MAX(created_at, COALESCE(starts_at, 0)) > ? GROUP BY org_id""", *ids, cut))
-    posts = dict(rows(con, f"SELECT org_id, COUNT(*) FROM posts WHERE org_id IN ({q}) AND hidden_at IS NULL AND created_at > ? GROUP BY org_id", *ids, cut))
+    events = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL
+        AND visibility = 'public' AND MAX(created_at, COALESCE(starts_at, 0)) > ? GROUP BY org_id""", *ids, cut))
+    posts = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM posts WHERE org_id IN ({q}) AND hidden_at IS NULL AND audience = 'public'
+        AND created_at > ? GROUP BY org_id""", *ids, cut))
     return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": shown_links(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),

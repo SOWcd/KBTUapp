@@ -19,7 +19,8 @@
     <span class="tx">
       <b class="ellipsis">{t('casting.come')}</b>
       <small class="ellipsis">{nameOf(post.org)}</small>
-      <small class="wh ellipsis">{castingStatus(post.casting)} · {post.casting.place}</small>
+      <small class="wh ellipsis">{castingStatus(post.casting)}</small>
+      <small class="ellipsis">{post.casting.place}</small>
     </span>
     <span class="mk"><ChevronRight size={18} /></span>
   </button>
