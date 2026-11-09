@@ -76,13 +76,14 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
     quick = {r[0] for r in rows(con, f"""SELECT r.id FROM rounds r WHERE r.id IN ({_qs([x["id"] for x in live.values()])})
         AND NOT EXISTS (SELECT 1 FROM round_questions WHERE round_id = r.id) AND (SELECT COUNT(*) FROM round_departments WHERE round_id = r.id) <= 1""",
         *[x["id"] for x in live.values()])} if live else set()
-    # the last CLUB_QUIET: what makes a club quiet (no event, post or open round) and what Popular's rank counts.
+    # the last CLUB_QUIET: what makes a club quiet (no event, post or round) and what Popular's rank counts.
     # Sent to every viewer, so public ones only: the numbers must not give away a team's closed meetings or posts
     cut = core.now() - CLUB_QUIET
     events = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM events WHERE org_id IN ({q}) AND status = 'published' AND hidden_at IS NULL
         AND visibility = 'public' AND MAX(created_at, COALESCE(starts_at, 0)) > ? GROUP BY org_id""", *ids, cut))
     posts = dict(rows(con, f"""SELECT org_id, COUNT(*) FROM posts WHERE org_id IN ({q}) AND hidden_at IS NULL AND audience = 'public'
         AND created_at > ? GROUP BY org_id""", *ids, cut))
+    rounds = {r[0] for r in rows(con, f"SELECT DISTINCT org_id FROM rounds WHERE org_id IN ({q}) AND closes_at > ?", *ids, cut)}  # open now or closed inside it
     return {o["id"]: {
         **org_ref(con, o, files), "description": o["description"], "links": shown_links(o["links"]),
         **({"i18n": json.loads(o["i18n"])} if o["i18n"] else {}),
@@ -95,7 +96,7 @@ def _org_parts(con, found: list[sqlite3.Row]) -> dict[int, dict]:
         "top": bool(o["top_at"]) and not o["official"],  # the Ascent's top: its own block in the clubs list
         "category": o["category"],
         "quiet": o["kind"] == "club" and not o["official"] and o["created_at"] <= cut
-        and not (events.get(o["id"]) or posts.get(o["id"]) or o["id"] in live),
+        and not (events.get(o["id"]) or posts.get(o["id"]) or o["id"] in rounds),
         "rank": members.get(o["id"], 0) + 5 * events.get(o["id"], 0) + 2 * posts.get(o["id"], 0),  # Popular's order
     } for o in found}
 
@@ -119,7 +120,7 @@ def _join_qs(o: sqlite3.Row) -> list[dict]:
 
 
 CLUB_MIN = 5  # owner, Nov 8: a club of fewer isn't in the registry (official ones too)
-CLUB_QUIET = 30 * 86400  # no event, post or open round this long: "quiet" (_org_parts), at the end of All clubs; new clubs get this long too
+CLUB_QUIET = 30 * 86400  # no event, post or round this long: "quiet" (_org_parts), folded at the end of Initiatives; new clubs get this long too
 CATEGORIES = ("it", "art", "sport", "business", "science", "volunteer")  # types.ts OrgCategory; the Clubs tab's tiles
 
 

@@ -1713,6 +1713,7 @@ const kk: Dict = {
   'clubs.allN': "Барлығы {n}",
   'clubs.allClubs': "Барлық клубтар",
   'clubs.quiet': "Әзірге тыныш",
+  'clubs.quietN': { one: "{n} тыныш клуб", other: "{n} тыныш клуб" },
   'clubs.interests': "Қызығушылықтар",
   'clubs.category': "Санат",
   'clubs.noCategory': "Санатсыз",

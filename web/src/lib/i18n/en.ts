@@ -1713,6 +1713,7 @@ const en: Dict = {
   'clubs.allN': "All {n}",
   'clubs.allClubs': "All clubs",
   'clubs.quiet': "Quiet for now",
+  'clubs.quietN': { one: "{n} quiet club", other: "{n} quiet clubs" },
   'clubs.interests': "Interests",
   'clubs.category': "Category",
   'clubs.noCategory': "No category",

@@ -1733,6 +1733,7 @@ const ru = {
   'clubs.allN': "Все {n}",
   'clubs.allClubs': "Все клубы",
   'clubs.quiet': "Пока тихо",
+  'clubs.quietN': { one: "{n} тихий клуб", few: "{n} тихих клуба", many: "{n} тихих клубов", other: "{n} тихих клуба" },
   'clubs.interests': "Интересы",
   'clubs.category': "Категория",
   'clubs.noCategory': "Без категории",
