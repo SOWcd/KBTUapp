@@ -119,7 +119,7 @@
       studioChanged();
       return true;
     } catch (e) {
-      haptic.error(); say(e instanceof ApiErr && e.message === 'president' ? t('team.presLeave') : t('common.error'), 'warning_3d');
+      haptic.error(); say(e instanceof ApiErr && e.message === 'president' ? t('team.presLeave') : e instanceof ApiErr && e.message === 'president_elsewhere' ? t('team.presElsewhere') : t('common.error'), 'warning_3d');
       return false;
     } finally { busy = false; }
   }

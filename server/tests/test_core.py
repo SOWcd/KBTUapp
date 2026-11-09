@@ -48,6 +48,8 @@ def env(tmp_path, monkeypatch):
     cfg = config.Config(bot_token=BOT, token_key=os.urandom(32), db_path=str(tmp_path / "t.db"), web_dist=str(dist), background=False, seed=False)
 
     monkeypatch.setattr(logic.clubs, "CLUB_MIN", 1)  # the registry's size bar stays out of the other tests (test_club_solo sets it)
+
+    monkeypatch.setattr(logic.clubs, "CLUB_QUIET", 1 << 40)  # and its activity bar
     monkeypatch.setattr(logic.profiles, "FIRST_N", 0)  # "First 500" stays out of the other tests' outboxes (test_first_fifty turns it on)
     monkeypatch.setattr(receipt, "read", lambda im: None)  # no OCR: tests don't depend on Tesseract (test_receipt_reading fakes it)
     DB[:] = [cfg.db_path]

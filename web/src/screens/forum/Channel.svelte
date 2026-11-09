@@ -122,7 +122,7 @@
     setTimeout(() => { if (lit === id) lit = null; }, 1800);
   }
 
-  // the comments in Telegram: opened at the bot's first comment (?comment=, Telegram's link into a post's comments);
+  // the comments in Telegram: opened at the newest comment, the bot's first with none yet (?comment=, Telegram's link into a post's comments);
   // an older post without one: the post itself, its Comments bar under it
   const comments = (p: ChannelFeedPost) => `${CHANNEL}/${p.msg}${p.thread ? `?comment=${p.thread}` : ''}`;
   // a reaction as plain text (the heart's label): a custom emoji (only its id comes) and a paid star as their nearest

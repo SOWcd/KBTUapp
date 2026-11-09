@@ -126,7 +126,7 @@
     haptic.tap();
     path = { ...path, request: { id: 0, status: 'pending', reason: null, createdAt: nowTs(), decidedAt: null, againAt: null } }; // at once
     try { const x = await api.askOfficial(org); if (m?.org.id === org) path = x; haptic.ok(); say(t('op.sent'), 'party_popper_3d'); }
-    catch { path = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (e) { path = was; haptic.error(); say(e instanceof ApiErr && e.message === 'president_elsewhere' ? t('op.presElsewhere') : t('common.error'), 'warning_3d'); }
   }
   const coNo = (ev: MouseEvent, x: CohostInvite) => menu(ev.currentTarget as Element, [
     { label: t('co.no'), onselect: () => void coAnswer(x, false) },
