@@ -64,6 +64,7 @@
                                 (Heads and up of every club; Almaty time), published as DMP by the creator, which invites them at once; prints its id
   .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
                                 students), once each, an hour before; --test: to the creator now; no flag: counts
+  .venv/bin/python -m kbtu.admin casting from-event <event id> "<YYYY-MM-DD HH:MM>"   its text, cover and place as the club's offline casting, from now to that time (Almaty); tells nobody
   .venv/bin/python -m kbtu.admin fill-categories               clubs with no category get one from the AI (name and description only)
   .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
                                 who came, once each (ref ph2:<event>); a dry run prints how many
@@ -390,6 +391,22 @@ def main(args: list[str]) -> None:
                                           "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head"})
         publish_event(con, v, e["id"])
         print(f"published event {e['id']}")
+    elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():
+        # a club that made its offline casting an event (owner, Nov 9): the same words, cover and place as a casting post, from now on.
+        # Silent: a club's own casting tells its followers, this one was never asked to
+        import calendar
+        from .logic.newsfeed import _casting_input
+        e = one(con, "SELECT * FROM events WHERE id = ?", int(args[2]))
+        if not e or not e["place"]:
+            sys.exit("no such event, or it has no place")
+        boss = one(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", e["org_id"]) or one(con, "SELECT id FROM users WHERE is_founder = 1")
+        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600, "place": e["place"]})
+        with db.tx(con):
+            if one(con, "SELECT 1 FROM posts WHERE org_id = ? AND hidden_at IS NULL AND casting_cancelled_at IS NULL AND casting_to > ?", e["org_id"], now()):
+                sys.exit("this club already has a casting on")
+            pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, created_at, casting_from, casting_to, casting_place)
+                VALUES (?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)""", (e["org_id"], boss[0], e["title"], e["description"][:2000], e["cover_file_id"], now(), start, end, place)).lastrowid
+        print(f"casting post {pid}")
     elif cmd == "meeting" and len(args) in (3, 4) and args[1] == "call" and args[2].isdigit() and args[3:] in ([], ["--test"], ["--send"]):
         from .logic.organizing import _invited_leaders
         e = one(con, """SELECT e.* FROM events e JOIN orgs o ON o.id = e.org_id AND o.slug = 'dmp'
