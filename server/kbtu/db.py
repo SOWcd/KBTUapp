@@ -1326,6 +1326,9 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX posts_casting ON posts(casting_to) WHERE casting_to IS NOT NULL;"""),
     # a club's interest (the Clubs tab's tiles): it/art/sport/business/science/volunteer, NULL none; checked in clubs.update_org
     (143, "ALTER TABLE orgs ADD COLUMN category TEXT;"),
+    # a check-in QR is good only while something shows it: each poll of a /show screen or an organizer's phone renews this
+    # (checkin.mark). NULL: never shown since this column came, so a session running through the deploy isn't cut off
+    (144, "ALTER TABLE qr_sessions ADD COLUMN lease_until INTEGER;"),
 ]
 
 

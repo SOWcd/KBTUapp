@@ -28,6 +28,7 @@ PAIR_TTL = 120      # a screen's pairing QR turns this often while nobody has bo
 PAIR_MAX = 5000     # unpaired screens at once, all together: junk requests can't fill the table
 PAIR_PER_IP = 10    # ... and from one address (its hash): one machine can't take them all and lock every screen out
 CSV_TTL = 300       # the CSV link the app hands Telegram's download works this long
+LEASE = logic.profiles.QR_LEASE  # each poll of a screen showing the QR renews this: nothing showing it, its code stops this soon after
 
 
 def _sig(key: bytes, msg: str) -> str:
@@ -96,7 +97,12 @@ def screen(con, key: bytes, secret: str) -> dict:
         raise ApiError("forbidden", "screen")
     if r["session_id"] is None:
         return {"code": r["code"], "left": max(0, r["created_at"] + PAIR_TTL - now())}
+    _lease(con, r["session_id"])
     return {"code": r["code"], **_state(con, key, one(con, "SELECT * FROM qr_sessions WHERE id = ?", r["session_id"]))}
+
+
+def _lease(con, sid: int) -> None:
+    con.execute("UPDATE qr_sessions SET lease_until = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now() + LEASE, sid))
 
 
 def _state(con, key: bytes, s) -> dict:
@@ -164,9 +170,11 @@ def bind(con, key: bytes, v: Viewer, code: str, sid: int | None) -> dict:
 
 
 def control(con, key: bytes, v: Viewer, sid: int, act: str) -> dict:
-    s = _mine(con, v, sid, cohost=act == "start")  # a co-host starts it; finishing and unpairing (for good) stay the host's
+    s = _mine(con, v, sid, cohost=act in ("start", "show"))  # a co-host starts and shows it; finishing and unpairing (for good) stay the host's
     if act == "start":  # once: a finished session stays finished (reopened, its CSV and tiers would mix two meetings)
-        con.execute("UPDATE qr_sessions SET started_at = ? WHERE id = ? AND started_at IS NULL", (now(), sid))
+        con.execute("UPDATE qr_sessions SET started_at = ?, lease_until = ? WHERE id = ? AND started_at IS NULL", (now(), now() + LEASE, sid))
+    elif act == "show":  # an organizer's phone showing the QR itself (EventQr.svelte polls this): the same lease as a /show screen's
+        _lease(con, sid)
     elif act == "finish":
         con.execute("UPDATE qr_sessions SET ended_at = ? WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL", (now(), sid))
     elif act == "unpair":  # every screen of it goes back to its pairing QR
@@ -269,7 +277,8 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
     out = s["phase"] == "out" and s["ended_at"] is None
     # the same scan again after the sign-up (the app repeats it): its age doesn't matter, it was taken in time. Leaving
     # always looks at it: an old link in Telegram's history must not mark someone gone home as leaving at the end
-    if (out or not had) and not 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT:
+    fresh = 0 <= time.time() - slot * SLOT <= SCAN_OK + SLOT and (s["lease_until"] is None or s["lease_until"] >= now())
+    if (out or not had) and not fresh:
         raise ApiError("bad_input", "qr_old")
     if out and not had:  # leaving without having come: no mark, or a "leaving" scan alone would count as there (and earn the badge)
         raise ApiError("bad_input", "qr_not_in")
@@ -283,7 +292,28 @@ def mark(con, key: bytes, uid: int, student: bool, p: str) -> dict:
             con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, sid, uid))
             if s["event_id"] and not out:  # an event's own session: that event's check-in too; "done" only if it counted there
                 came = logic.screen_came(con, s["event_id"], uid, t)
-    return {"title": s["title"], "done": came, "left": out}
+                if came and fresh:  # never by that old link repeated on a later day (the "had" pass above)
+                    _attendance(con, s, uid, t)
+    return {"title": _title_for(con, s, uid, student), "done": came, "left": out}
+
+
+def _title_for(con, s, uid: int, student: bool) -> str:
+    """What the scan's toast names: a leaders' meeting keeps its title from who isn't invited (only the club's name)."""
+    e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+    if e and e["visibility"] == "leaders" and not logic._visible(con, Viewer(uid, "user", student), e):
+        return one(con, "SELECT name FROM orgs WHERE id = ?", e["org_id"])[0]
+    return s["title"]
+
+
+def _attendance(con, s, uid: int, t: int) -> None:
+    """A DMP office event's scan is that day's Attendance award; the batch (one session, one Almaty day) undoes it."""
+    e = one(con, "SELECT e.created_by FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.id = ? AND o.slug = 'dmp'", s["event_id"])
+    if e:
+        try:
+            logic._grant(con, e[0], uid, "dmp", f"q{s['id']}_{(t + 5 * 3600) // 86400}", log=False)
+        except ApiError as x:
+            if x.code != "conflict":  # already got one today
+                raise
 
 
 def became_student(con, uid: int) -> None:

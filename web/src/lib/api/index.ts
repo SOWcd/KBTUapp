@@ -218,7 +218,7 @@ export interface Api {
   qrCheckin(p: string): Promise<{ title: string; done: boolean; left?: boolean }>;                    // a scan of the big screen's QR (ci_…): done = counted, else waits for my sign-up
   screens(): Promise<import('./types').ScreenSession[]>;                               // the check-in sessions I run (/show)
   bindScreen(code: string, session?: Id): Promise<import('./types').ScreenSession>;   // a scan of /show's pairing QR (sh_…); conflict/pick: say which session
-  screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving
+  screenAct(id: Id, act: 'start' | 'finish' | 'unpair' | 'out' | 'in' | 'show'): Promise<import('./types').ScreenSession>; // out/in: the QR marks leaving or arriving; show: this phone is showing it (the lease, checkin.py)
   screenGrant(id: Id, code: string): Promise<{ granted: number; batch: string }>;  // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
   eventScreen(event: Id): Promise<import('./types').ScreenSession>;                   // an event's own session, made on first use (organizers)
   screenCsv(id: Id): Promise<{ url: string; name: string }>;                          // a short-lived link for Telegram's download

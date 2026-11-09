@@ -53,6 +53,8 @@ export const sheets = {
   attendees: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
+  /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */
+  eventQr: (_event: Id) => {},
   screens: (_code?: string, _event?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session
   /** Studio → an event: the organizer's screen (money, people, tools) */
   manage: (_id: Id, _staff?: boolean) => {},
