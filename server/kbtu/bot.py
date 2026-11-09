@@ -1021,28 +1021,33 @@ def _page_sid(con, uid: int, sid: str | None) -> None:
     """The student ID on a page whose name matched, written over the account's when it differs, silently, with the
     audit line `kbtu.admin fix sid` leaves (old and new). A saved page is plain HTML anyone can edit, so it is trusted
     no further than a typo: the same year and degree letter only (those decide the perks: a 1st-year bachelor's free
-    seats); another year is left, an audit line says so. One held by another account is left and the founder hears
-    (no ID in the notice or the log). Five a day, like Settings: the profile would tell which IDs are registered."""
-    s = one(con, "SELECT student_id, consent_version, manual FROM students WHERE user_id = ?", uid)
-    if not sid or not s or s["manual"] or s["consent_version"] == "staff" or s["student_id"] == sid:
-        return  # unconfirmed: its name is self-typed, so a page "matching" it proves nothing; staff: a placeholder ID
-    tries = one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_page_taken', 'sid_page_year')
-        OR action = 'identity_fix' AND actor_id IS NULL AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", now() - 86400)[0]
-    if tries >= 5:
+    seats), and only as the account's one correction (My data's `fixed`, which this spends: after it a page is a
+    suggestion for support, an audit line, or an edited one could take a classmate's unclaimed ID). One held by another
+    account is left and the founder hears (no ID in the notice or the log). Tries count with Settings' (sid_tries). All
+    under one write lock: a parallel PATCH /api/me can't change the ID between the year check and the write."""
+    if not sid:
         return
-    if re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", sid):
-        with db.tx(con):
-            logic.log_action(con, None, "sid_page_year", f"user:{uid}")
-        return
-    try:
-        logic.fix_identity(con, uid, "student_id", sid, admin=True)
-    except _Taken:
-        with db.tx(con):
+    with db.tx(con):
+        s = one(con, "SELECT student_id, consent_version, manual, fixed FROM students WHERE user_id = ?", uid)
+        if not s or s["manual"] or s["consent_version"] == "staff" or s["student_id"] == sid:
+            return  # unconfirmed: its name is self-typed, so a page "matching" it proves nothing; staff: a placeholder ID
+        if logic.sid_tries(con, uid) >= 5:
+            return
+        fixed = list(filter(None, s["fixed"].split(",")))
+        left = ("sid_page_year" if re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", sid)
+                else "sid_page_fixed" if "student_id" in fixed else None)
+        if left:
+            logic.log_action(con, None, left, f"user:{uid}")
+            return
+        try:
+            logic.fix_identity(con, uid, "student_id", sid, admin=True)
+            con.execute("UPDATE students SET fixed = ? WHERE user_id = ?", (",".join([*fixed, "student_id"]), uid))
+        except _Taken:
             logic.log_action(con, None, "sid_page_taken", f"user:{uid}")
             for (f,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
                 logic.notify(con, f, "sid_page_clash", f"sp:{uid}:{now() // 86400}")
-    except ApiError:  # an ID the app doesn't take (a course out of range): left
-        pass
+        except ApiError:  # an ID the app doesn't take (a course out of range): left
+            pass
 
 
 def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg: Config | None = None, keys: list | None = None) -> dict:

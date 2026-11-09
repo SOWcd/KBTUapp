@@ -4,6 +4,8 @@
   .venv/bin/python -m kbtu.admin orgs                                   clubs and their teams
   .venv/bin/python -m kbtu.admin rename <slug> "<name>"                 an org's name as is (its slug and lanyard stay)
   .venv/bin/python -m kbtu.admin org <slug> "<name>" <short> <emoji> [--official] [--school]   a school is official, never closes
+  .venv/bin/python -m kbtu.admin org-role <role id> "<ru>" ["<kk>"]     a club role's title corrected: those languages count as typed
+                                by hand, so the AI translator never overwrites them; English, level and rights stay; not Vice or Head
   .venv/bin/python -m kbtu.admin role <@username | telegram id> <slug> <member | head | vice | president | none>
   .venv/bin/python -m kbtu.admin links <slug> [https://… …]                 the club's socials (none = clear), up to 6
   .venv/bin/python -m kbtu.admin founder <@username | telegram id>          the Creator status (one person; card number 00000)
@@ -76,6 +78,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import sys
 import time
 
@@ -165,6 +168,30 @@ def main(args: list[str]) -> None:
         o = one(con, "SELECT id, name FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such club")
         con.execute("UPDATE orgs SET name = ? WHERE id = ?", (args[2].strip(), o["id"]))
         print(f"{args[1]}: {o['name']} -> {args[2].strip()}")
+    elif cmd == "org-role" and len(args) in (3, 4) and args[1].isdigit():
+        from .logic.teams import SLOT, _also, normalize_role, role_tr
+        try:
+            titles = {k: _also({k: x}, k) for k, x in zip(("ru", "kk"), args[2:])}
+        except ApiError:
+            sys.exit("a title is 24 characters at most")
+        if not all(titles.values()):
+            sys.exit("a title can't be empty")
+        rid = int(args[1])
+        with db.tx(con):
+            r = one(con, "SELECT * FROM org_roles WHERE id = ?", rid) or sys.exit(f"{rid}: no such role")
+            if r["fixed"]:
+                sys.exit(f"{rid}: Vice and Head keep their names")
+            if r["src"] is None:
+                normalize_role(con, r)
+                r = one(con, "SELECT * FROM org_roles WHERE id = ?", rid)
+            src, hand = role_tr(r)  # the typed language is never the translator's already (queues.ai_save)
+            try:
+                con.execute(f"UPDATE org_roles SET {', '.join(SLOT[k] + ' = ?' for k in titles)}, hand = ? WHERE id = ?",
+                            (*titles.values(), ",".join(sorted(hand | set(titles) - {src})), rid))
+            except sqlite3.IntegrityError:
+                sys.exit(f"{titles['ru']}: another role of this club has this title")
+            log_action(con, None, "org_role_fix", f"org:{r['org_id']}", json.dumps({"role": rid, "old": {k: r[SLOT[k]] for k in titles}, "new": titles}, ensure_ascii=False))
+        print(f"role {rid}: " + ", ".join(f"{k} {r[SLOT[k]]} -> {x}" for k, x in titles.items()))
     elif cmd == "role" and len(args) == 4:
         u, role = _user(con, args[1]), args[3]
         o = one(con, "SELECT * FROM orgs WHERE slug = ?", args[2]) or sys.exit(f"{args[2]}: no such club")

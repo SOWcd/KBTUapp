@@ -604,6 +604,13 @@ class _Taken(ApiError):
         self.sid, self.holder = sid, holder
 
 
+def sid_tries(con, uid: int) -> int:
+    """Student IDs tried on this account in a day, from Settings or a schedule page (bot._page_sid): one count of 5, or
+    "taken" would tell anyone which IDs are registered (review 6). Read it and add to it under one write lock."""
+    return one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_try', 'sid_page_taken', 'sid_page_year', 'sid_page_fixed')
+        OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", core.now() - 86400)[0]
+
+
 def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> None:
     """Settings → My data: a student corrects their student ID or a name once each (it came in wrong: a classmate's ID
     from the freshmen list, a typo at sign-up, the name in another script); the Latin name the same way, Latin letters
@@ -639,10 +646,7 @@ def fix_identity(con, uid: int, col: str, raw: object, admin: bool = False) -> N
         sid_moves = col == "student_id" and re.sub(r"\d+$", "", s["student_id"]) != re.sub(r"\d+$", "", v)
         if sid_moves and not admin and course == 1 and v[2] == "B" and not (s["course"] == 1 and s["student_id"][2:3] == "B"):
             raise ApiError("bad_input", "sid_year")
-        # every ID tried counts, taken or not: 5 a day, or "taken" would tell anyone which IDs are registered (review 6)
-        if col == "student_id" and not admin and one(con, """SELECT COUNT(*) FROM audit_log WHERE actor_id = ? AND target = ? AND at > ?
-                AND (action = 'sid_try' OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""",
-                uid, f"user:{uid}", core.now() - 86400)[0] >= 5:
+        if col == "student_id" and not admin and sid_tries(con, uid) >= 5:  # every ID tried counts, taken or not
             raise ApiError("rate_limited", "sid_tries")
         if col in ("first_name", "last_name", "first_lat", "last_lat") and not admin:
             # first and last stay KBTU's (Microsoft's) name, in another spelling at most (Latin/Cyrillic, -ayev/-aev):
@@ -691,15 +695,20 @@ def _spend(con, uid: int, s, col: str, val) -> None:
 
 def update_me(con, v: Viewer, patch: dict) -> dict:
     """Settings' save, all or nothing (review once-edit 9): one transaction, so a refused field leaves the others unsaved."""
-    try:
-        with tx(con):
+    taken = None
+    with tx(con):
+        con.execute("SAVEPOINT patch")
+        try:
             _update_me(con, v, patch)
-    except _Taken as e:  # rolled back, yet the try counts (fix_identity: 5 a day) and the admins hear, as at sign-up
-        with tx(con):
+        except _Taken as e:  # undone, yet the try counts under the same lock (sid_tries) and the admins hear, as at sign-up
+            con.execute("ROLLBACK TO patch")
             log_action(con, v.id, "sid_try", f"user:{v.id}")
             if e.holder:
                 id_clash(con, e.sid, v.id, e.holder)
-        raise
+            taken = e
+        con.execute("RELEASE patch")
+    if taken:
+        raise taken
     return me(con, v)
 
 
@@ -1171,6 +1180,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
         con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
                     (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
+        con.execute("DELETE FROM bot_outbox WHERE kind = 'sid_page_clash' AND ref LIKE ?", (f"sp:{v.id}:%",))  # so does his schedule-page alert
         # his unsent invites in friends' queues; who he was in the role history
         con.execute("DELETE FROM bot_outbox WHERE kind = 'friend_invite' AND ref LIKE ? AND sent_at IS NULL", (f"fi:%:{v.id}",))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
