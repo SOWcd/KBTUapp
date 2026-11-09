@@ -50,7 +50,7 @@
   import { floorOf } from '../../lib/map';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, goingBusy, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -245,14 +245,14 @@
       } finally { adding = Math.max(0, adding - 1); }
     }
     adding = 0;
-    if (added) { haptic.ok(); burst(); say(tn('album.added', added), 'camera_with_flash_3d'); }
+    if (added) { haptic.ok(); burst(); say(tn('album.added', added), 'camera_with_flash_3d'); void loadGallery(); }
   }
   async function removePhoto(p: AlbumPhoto): Promise<AlbumPhoto[] | null> {
-    try { detail = await api.removeAlbumPhoto(id, p.id); return detail.photos; }
+    try { detail = await api.removeAlbumPhoto(id, p.id); galleryGone(p); return detail.photos; }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); return null; }
   }
 
-  const hidePhoto = (p: AlbumPhoto) => { if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
+  const hidePhoto = (p: AlbumPhoto) => { galleryGone(p); if (detail) detail = { ...detail, photos: detail.photos.filter((x) => x.id !== p.id) }; }; // reported: gone for me
   // a tile opens its photo, grown out of the tile; the header, "+N" and the bar open all of them, a grid (owner, Nov 8)
   let mosaic = $state<HTMLDivElement>();
   const viewAlbum = (i = 0) => sheets.photos(photos, i, removePhoto, hidePhoto, (p) => mosaic?.querySelector(`[data-id="${p.id}"]`));

@@ -13,9 +13,10 @@
   import Pane from '../../ui/Pane.svelte';
   import Button from '../../ui/Button.svelte';
 
-  let { overlay, list, onremove, ongone, add, adding = () => 0 }: {
+  // title, note: the Afisha's Gallery uses this same grid under its own name, with one line over it
+  let { overlay, list, onremove, ongone, add, adding = () => 0, title, note }: {
     overlay: Overlay; list: () => AlbumPhoto[]; onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>; ongone?: (p: AlbumPhoto) => void;
-    add?: () => void; adding?: () => number;
+    add?: () => void; adding?: () => number; title?: string; note?: string;
   } = $props();
 
   const photos = $derived(list());
@@ -37,7 +38,8 @@
   }
 </script>
 
-<Pane {overlay} icon={Images} title={photos.length ? `${t('album.title')} · ${photos.length}` : t('album.title')}>
+<Pane {overlay} icon={Images} title={photos.length ? `${title ?? t('album.title')} · ${photos.length}` : (title ?? t('album.title'))}>
+  {#if note}<p class="note t-foot">{note}</p>{/if}
   <!-- div[role=button], not button: Pane's swipe from the left edge starts anywhere but on a button -->
   <div class="grid" bind:this={grid}>
     {#each photos as p, i (p.id)}
@@ -67,5 +69,6 @@
   .wait { background: var(--surface-2); animation: g-wait 1.1s ease-in-out infinite; }
   @keyframes g-wait { 50% { opacity: 0.5; } }
   .add { margin-top: var(--s-4); }
+  .note { margin-bottom: var(--s-3); color: var(--text-2); }
   @media (prefers-reduced-motion: reduce) { .c img { transition: none; } .wait { animation: none; } }
 </style>

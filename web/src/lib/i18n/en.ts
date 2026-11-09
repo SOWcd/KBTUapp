@@ -2602,6 +2602,8 @@ const en: Dict = {
   'inv.tooMany': "That's enough invitations for today",
   'inv.closed': "You can't invite people to this event",
   'inv.nudge': "More fun together: invite friends",
+  'gallery.title': "Gallery",
+  'gallery.note': "Add your own photos on an event’s page once you’re checked in",
   'album.title': "Photos",
   'album.add': "Add",
   'album.addMine': "Add photos",

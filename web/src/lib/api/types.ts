@@ -136,7 +136,9 @@ export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgR
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
 
 /** A photo in an event's album: the one who added it or the club's Head+ may take it out. */
-export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean } // by: who added it (nick or "First L.")
+export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent } // by: who added it (nick or "First L."); event: in the Gallery
+export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
+export interface GalleryPage { photos: AlbumPhoto[]; more: boolean }
 
 /** An event's video (server video.py): our own compressed copy, its poster a photo; `error`: too_long | not_a_video. */
 export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'ready' | 'failed'; url: string | null; duration: number | null;

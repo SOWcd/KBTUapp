@@ -529,6 +529,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def list_past(con: Con, v: Me, org: int | None = None, mine: bool = False):
         return logic.past_events(con, v, org, mine)
 
+    @app.get("/api/gallery")
+    def gallery(con: Con, v: Me, before: int | None = Query(None, ge=0, lt=1 << 62), limit: int = Query(logic.GALLERY_PAGE, ge=1, le=logic.GALLERY_PAGE)):
+        return logic.gallery(con, v, before, limit)
+
     @app.post("/api/me/unlocked")
     def seen_unlock(con: Con, v: Me, body: dict = Body(...)):
         logic.seen_unlock(con, v, body.get("code"), body.get("level"))

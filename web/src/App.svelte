@@ -8,7 +8,7 @@
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, loadChannel } from './lib/state/channel.svelte';
-  import { data, loadAfisha, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, friendsChanged, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { nameOf } from './lib/short';
   import { sheets } from './lib/state/sheets';
@@ -68,7 +68,7 @@
   const photoViewer = () => import('./screens/sheets/PhotoViewer.svelte');
   sheets.photos = (photos, start, onremove, ongone, from) => lazy(photoViewer, { photos, start, onremove, ongone, from });
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
-  sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
+  sheets.album = (list, onremove, ongone, add, adding, look) => lazy(albumGrid, { list, onremove, ongone, add, adding, ...look });
   sheets.login = (after, lock) => open(LoginSheet, { after, why: after ? 'go' : 'other', lock });
   const pcSheet = () => import('./screens/sheets/PcSheet.svelte');
   sheets.ask = (q) => new Promise((done) => { open(Ask, { ...q, done }); });
@@ -457,7 +457,7 @@
   // The effect reads only the lists' references and data.kept (a tap's change inside a list): no deep read before the
   // paint; the JSON is made when the app is idle, and again as it goes to the background.
   // ponytail: a change deep inside a list that bumps no data.kept waits for the next reload or the background; bump it there if one matters
-  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
+  const snap = () => ({ me: session.me, events: data.events, orgs: data.orgs, schedule: data.schedule, posts: data.posts, castings: data.castings, gallery: data.gallery.slice(0, 4), friends: data.friends, myCard: data.myCard, news: data.news, studio: data.studio, team: data.team });
   const keepable = () => booted && !data.error && !session.failed && !session.banned;
   let keepTimer: ReturnType<typeof setTimeout> | undefined;
   // no $state.snapshot: a clone through the proxies cost more. A part whose list is the same object as last time (and no
@@ -500,6 +500,7 @@
     if (st !== wasStudent) untrack(() => {
       // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
       void loadFriends(); void loadMyCard(); void loadNews();
+      void loadGallery();
       const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
       if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
       if (session.me?.oversee) void loadRegistry();
@@ -591,6 +592,7 @@
     if (snap) {
       session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
+      data.gallery = snap.gallery ?? [];
       localize(data); localize(session.me); // cached in another language, maybe
     }
     Promise.all([loadMe(), loadAfisha()]).then(() => {
