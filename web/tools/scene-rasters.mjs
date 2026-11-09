@@ -7,7 +7,7 @@
 // Then the picker's minis (SettingsList): every lanyard's whole card art at the swatch's 74 x 48, one small picture each
 // (tools/minis draws them as the picker drew them live: 20+ full scenes mounted at once for the creator, all their
 // layers decoded at full size for a thumbnail). Their sources' hash is the manifest's "minis".
-// usage: node tools/scene-rasters.mjs [--all]   (from web/; Playwright's Chromium, as the QA tools use)
+// usage: node tools/scene-rasters.mjs [--all | --covers]   (from web/; Playwright's Chromium, as the QA tools use)
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -38,7 +38,7 @@ const [quality, less] = [(f) => ENC[f]?.[0] ?? 0.65, (f) => ENC[f]?.[1] ?? 1];
 const scale = (f) => 3 * (OVERSCAN[f] ?? ZS) * less(f);
 const old = (() => { try { return JSON.parse(readFileSync(MANIFEST, 'utf8')); } catch { return {}; } })();
 const sha = (b) => createHash('sha1').update(b).digest('hex').slice(0, 12);
-const b = await chromium.launch();
+const b = await chromium.launch({ executablePath: process.env.CHROME });
 const page = await b.newPage();
 const out = {};
 for (const f of files) {
@@ -65,28 +65,36 @@ const MINI_SRC = ['src/ui/LanyardBand.svelte', 'src/ui/ClubScene.svelte', 'src/u
 const WEB = new URL('../', import.meta.url);
 const svgs = (d) => readdirSync(new URL(d, ROOT), { recursive: true }).filter((f) => f.endsWith('.svg')).map((f) => new URL(d + f, ROOT));
 out.minis = sha(Buffer.concat([...MINI_SRC.map((f) => new URL(f, WEB)), ...svgs('').sort((a, b) => (a.href < b.href ? -1 : 1))].map((u) => readFileSync(u))));
-if (process.argv.includes('--all') || old.minis !== out.minis) {
+const onlyCovers = process.argv.includes('--covers');
+if (onlyCovers || process.argv.includes('--all') || old.minis !== out.minis) {
   const vite = await createServer({ root: WEB.pathname, logLevel: 'error', server: { port: 0 } });
   await vite.listen();
-  const ctx = await b.newContext({ deviceScaleFactor: 3, viewport: { width: 400, height: 2000 } });
-  const p = await ctx.newPage();
-  await p.goto(`${vite.resolvedUrls.local[0]}tools/minis/index.html`);
-  await p.waitForSelector('.cell');
-  await p.evaluate(() => Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]));
-  const dir = new URL('minis/', ROOT);
-  mkdirSync(dir, { recursive: true });
-  for (const cell of await p.$$('.cell')) {
-    const look = await cell.getAttribute('data-look');
-    const png = await cell.screenshot({ omitBackground: true, animations: 'disabled' });
-    const data = await p.evaluate(async (png) => {
-      const img = new Image(); img.src = 'data:image/png;base64,' + png; await img.decode();
-      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
-      const blob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.9));
-      return [...new Uint8Array(await blob.arrayBuffer())];
-    }, png.toString('base64'));
-    writeFileSync(new URL(`${look}.webp`, dir), Buffer.from(data));
-  }
-  console.log('minis:', (await p.$$('.cell')).length);
+  const shoot = async (name, scale, quality, css) => {
+    const ctx = await b.newContext({ deviceScaleFactor: scale, viewport: { width: 400, height: 2000 } });
+    const p = await ctx.newPage();
+    await p.goto(`${vite.resolvedUrls.local[0]}tools/minis/index.html`);
+    await p.waitForSelector('.cell');
+    if (css) await p.addStyleTag({ content: css });
+    await p.evaluate(() => Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]));
+    const dir = new URL(`${name}/`, ROOT);
+    mkdirSync(dir, { recursive: true });
+    for (const cell of await p.$$('.cell')) {
+      const look = await cell.getAttribute('data-look');
+      const png = await cell.screenshot({ omitBackground: true, animations: 'disabled' });
+      const data = await p.evaluate(async ([png, q]) => {
+        const img = new Image(); img.src = 'data:image/png;base64,' + png; await img.decode();
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
+        const blob = await new Promise((r) => c.toBlob(r, 'image/webp', q));
+        return [...new Uint8Array(await blob.arrayBuffer())];
+      }, [png.toString('base64'), quality]);
+      writeFileSync(new URL(`${look}.webp`, dir), Buffer.from(data));
+    }
+    console.log(`${name}:`, (await p.$$('.cell')).length);
+    await ctx.close();
+  };
+  if (!onlyCovers) await shoot('minis', 3, 0.9);
+  // the same art whole, the Clubs tab's cards behind a club's name (lib/covers.ts)
+  await shoot('covers', 2, 0.72, '.cell { width: 340px !important; height: 221px !important; margin: 0 !important; } .mini { transform: none !important; }');
   await vite.close();
 }
 await b.close();

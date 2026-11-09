@@ -259,7 +259,16 @@
 
   // the capsule is always there and always says where you are and what's happening (owner, Oct 30: never an empty pill,
   // it answers every tap): the busy word, else the top overlay's name, else the tab's (the live status wins on a tab)
-  const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live ? null : TAB_LABEL[ui.tab]()) || null);
+  // the live status takes the capsule only once the person rests: a tap or a tab switch brings the tab's name back
+  // (owner, Nov 9: it never answered the tabs)
+  let resting = $state(false), restTimer: ReturnType<typeof setTimeout>;
+  const poke = () => { resting = false; clearTimeout(restTimer); restTimer = setTimeout(() => (resting = true), 5000); };
+  $effect(() => {
+    poke();
+    addEventListener('pointerdown', poke, { capture: true, passive: true });
+    return () => { removeEventListener('pointerdown', poke, { capture: true }); clearTimeout(restTimer); };
+  });
+  const capTitle = $derived(ui.busy || (capOf ? (capOf.mark ? null : capOf.title) : live && resting ? null : TAB_LABEL[ui.tab]()) || null);
   // a spinner while a tap's work runs; a view that forgot its own icon gets the app's mark (Sparkles is the assistant's alone)
   const capIcon = $derived(ui.busy ? LoaderCircle : capOf ? (capOf.icon ?? KbtuMark) : TAB_ICON[ui.tab]);
 

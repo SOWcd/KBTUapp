@@ -28,7 +28,9 @@
     pen.font = getComputedStyle(node).font;
     if (pen.measureText(nameOf(o)).width > 66) tight.add(o.id);
   }
-  const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events, seenEv));
+  // a new event earns a circle only from an official organization or one I'm in or follow (owner, Nov 9), as the posts do (server _REACH)
+  const reach = $derived(new Set(data.orgs.filter((o) => o.official || o.kind !== 'club' || o.top || o.myRole || o.subscribed).map((o) => o.id)));
+  const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv));
 </script>
 
 <div class="row hscroll">
