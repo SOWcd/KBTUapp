@@ -12,7 +12,8 @@
   import { unsent } from './guard';
 
   //   bare: no large title of ours, the page brings its own (Studio's club header) and says when it scrolls away
-  let { overlay, title, icon, bare = false, children }: { overlay: Overlay; title: string; icon?: Component<any>; bare?: boolean; children: Snippet } = $props();
+  //   keeps: its fields write straight into the form under it (a form's sub-page): Back leaves with them, nothing to ask
+  let { overlay, title, icon, bare = false, keeps = false, children }: { overlay: Overlay; title: string; icon?: Component<any>; bare?: boolean; keeps?: boolean; children: Snippet } = $props();
   $effect(() => { overlay.title = title; overlay.icon = icon; });
 
   let el: HTMLDivElement;
@@ -54,7 +55,7 @@
   }
   $effect(() => {
     if (!overlay.closing) return;
-    if (guard.typed()) { overlay.closing = false; el.style.transform = ''; dx = 0; guard.ask(); return; }
+    if (!keeps && guard.typed()) { overlay.closing = false; el.style.transform = ''; dx = 0; guard.ask(); return; }
     leave();
   });
 

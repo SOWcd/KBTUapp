@@ -18,7 +18,8 @@
   import Row from '../../ui/Row.svelte';
   import { menu } from '../../ui/menu';
 
-  let { org }: { org: Id } = $props();
+  // n: how many are linked (the profile's row says it)
+  let { org, n = $bindable() }: { org: Id; n?: number } = $props();
   let chats = $state<StudioChat[]>([]);
   const load = () => api.orgChats(org).then((l) => (chats = keep(l))).catch(() => {});
   $effect(() => { void load(); });
@@ -41,6 +42,7 @@
     const mine = session.me?.memberships.find((x) => x.org.id === org);
     const c = l.find((x) => x.main);
     if (mine && mine.channel !== undefined) mine.channel = c ? { title: c.title, mirror: c.mirror && c.kind === 'channel' && !c.closed } : null;
+    n = l.length;
     return l;
   }
 
@@ -81,7 +83,7 @@
 </script>
 
 <div class="oc">
-  <Group caption={t('oc.studio')} footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '')}>
+  <Group footnote={t('oc.studioNote') + (chats.some((c) => !c.bot) ? ' ' + t('oc.botNote') : '')}>
     {#each chats as c (c.id)}
       <Row dense title={c.title} subtitle={line(c)}>
         {#snippet lead()}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={36} />{/snippet}
@@ -91,6 +93,10 @@
         {/snippet}
       </Row>
     {/each}
+    <!-- Telegram's own picker: our bot is added there as an admin and links the chat (no typing @names, owner Nov 5) -->
+    <Row tone="add" title={t('oc.pickGroup')} disabled={!!picking} onclick={() => pick('group')} />
+    <Row tone="add" title={t('oc.pickChannel')} disabled={!!picking} onclick={() => pick('channel')} />
+    {#if !byLink}<Row tone="add" title={t('oc.byLink')} onclick={() => (byLink = true)} />{/if}
   </Group>
   {#if mainOne}
     <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
@@ -98,12 +104,6 @@
       <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
     </Group>
   {/if}
-  <!-- Telegram's own picker: our bot is added there as an admin and links the chat (no typing @names, owner Nov 5) -->
-  <div class="pick">
-    <Button kind="primary" size="m" full loading={picking === 'group'} onclick={() => pick('group')}>{t('oc.pickGroup')}</Button>
-    <Button kind="secondary" size="m" full loading={picking === 'channel'} onclick={() => pick('channel')}>{t('oc.pickChannel')}</Button>
-    {#if !byLink}<Button kind="plain" size="s" onclick={() => (byLink = true)}>{t('oc.byLink')}</Button>{/if}
-  </div>
   {#if byLink}<form class="add" onsubmit={add}>
     <!-- engine: Field's autocapitalize / spellcheck (a @username is typed as is) -->
     <Field label={t('oc.link')} bind:value={link} maxlength={200} placeholder="@kbtu_club" autocomplete="off" enterkeyhint="done" />
@@ -113,6 +113,5 @@
 
 <style>
   .oc { display: flex; flex-direction: column; gap: var(--gap-group); }
-  .pick { display: flex; flex-direction: column; gap: var(--s-2); align-items: stretch; }
-  .add { display: flex; flex-direction: column; gap: var(--s-2); margin-top: calc(var(--s-3) - var(--gap-group)); }
+  .add { display: flex; flex-direction: column; gap: var(--s-2); }
 </style>

@@ -1,13 +1,17 @@
 <script lang="ts">
-  // A club's links (Oct 5 and Oct 24): a network's button asks for that username (or a pasted link), any site
-  // too; six at most. The caller turns the drafts into links with linkUrl.
+  // A club's links (Oct 5 and Oct 24), Settings' group: a row per link (a network's username or a pasted link, any
+  // site too), "Add" at the end picks the network; six at most. The caller turns the drafts into links with linkUrl.
   import { tick } from 'svelte';
   import X from '@lucide/svelte/icons/x';
   import { social, linkUrl, isHandle, NETS, TG_LINK, type LinkDraft } from '../lib/social';
   import { t } from '../lib/i18n/index.svelte';
   import SocialIcon from './SocialIcon.svelte';
+  import Group from './Group.svelte';
+  import Row from './Row.svelte';
+  import IconButton from './IconButton.svelte';
+  import { menu } from './menu';
 
-  let { links = $bindable() }: { links: LinkDraft[] } = $props();
+  let { links = $bindable(), caption }: { links: LinkDraft[]; caption?: string } = $props();
   const urls = $derived(links.map(linkUrl));
   const tg = $derived(links.some((d) => TG_LINK.test(d.v.trim())));
   let inputs = $state<HTMLInputElement[]>([]);
@@ -16,36 +20,28 @@
     await tick();
     inputs[links.length - 1]?.focus();
   }
+  const pick = (e: MouseEvent) => menu(e.currentTarget as Element, [...NETS, { kind: 'web' as const, label: t('ce.site') }].map((n) => ({ label: n.label, onselect: () => add(n.kind) })), 'start');
 </script>
 
-{#each links as d, i (i)}
-  <div class="link" class:bad={!!d.v.trim() && !urls[i]}>
-    <SocialIcon kind={urls[i] ? social(urls[i]!).kind : d.kind} size={18} />
-    {#if d.kind !== 'web' && (!d.v.trim() || isHandle(d))}<span class="at">@</span>{/if}
-    <input bind:this={inputs[i]} bind:value={d.v} oninput={() => { if (d.kind !== 'web') d.v = d.v.replace(/^@+/, ''); }} maxlength="200"
-      placeholder={d.kind === 'web' ? 'site.kz' : 'username'} autocapitalize="none" autocomplete="off" spellcheck="false" inputmode={d.kind === 'web' ? 'url' : 'text'} />
-    <button class="rm" onclick={() => links.splice(i, 1)} aria-label={t('cm.delete')}><X size={16} /></button>
-  </div>
-{/each}
-{#if tg}<p class="t-foot tg">{t('ce.noTg')}</p>{/if}
-{#if links.length < 6}
-  <div class="nets">
-    {#each [...NETS, { kind: 'web' as const, label: t('ce.site') }] as n (n.kind)}
-      <button class="addl" onclick={() => add(n.kind)}><SocialIcon kind={n.kind} size={16} />{n.label}</button>
-    {/each}
-  </div>
-{/if}
+<Group {caption} footnote={tg ? t('ce.noTg') : undefined}>
+  {#each links as d, i (i)}
+    <div class="link kb-row" class:bad={!!d.v.trim() && !urls[i]}>
+      <span class="ic"><SocialIcon kind={urls[i] ? social(urls[i]!).kind : d.kind} size={20} /></span>
+      {#if d.kind !== 'web' && (!d.v.trim() || isHandle(d))}<span class="at">@</span>{/if}
+      <input bind:this={inputs[i]} bind:value={d.v} oninput={() => { if (d.kind !== 'web') d.v = d.v.replace(/^@+/, ''); }} maxlength="200"
+        placeholder={d.kind === 'web' ? 'site.kz' : 'username'} autocapitalize="none" autocomplete="off" spellcheck="false" inputmode={d.kind === 'web' ? 'url' : 'text'} />
+      <IconButton icon={X} size="s" kind="plain" label={t('cm.delete')} onclick={() => links.splice(i, 1)} />
+    </div>
+  {/each}
+  {#if links.length < 6}<Row tone="add" title={t('ce.addLink')} onclick={pick} />{/if}
+</Group>
 
 <style>
-  .link { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 6px 0 14px; margin-bottom: 8px; border-radius: var(--r-m); background: var(--surface-2); color: var(--text-2); }
-  .link.bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
-  .link input { flex: 1; min-width: 0; font: 550 15px/1.3 var(--font-text); color: var(--text); }
-  .link input::placeholder { color: var(--text-3); }
-  .at { margin-right: -9px; font: 550 15px/1.3 var(--font-text); color: var(--text-3); }
-  .rm { flex: none; width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
-  .rm:active { background: var(--surface); }
-  .tg { margin: -2px 0 8px 4px; color: var(--danger); }
-  .nets { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
-  .addl { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border-radius: var(--r-full);
-    background: var(--accent-soft); color: var(--accent-text); font: 620 13.5px/1 var(--font-text); }
+  .link { position: relative; display: flex; align-items: center; min-height: var(--row-h); padding: 0 var(--s-2) 0 var(--s-4); color: var(--text); font: var(--fw-row) var(--fs-row)/1.25 var(--font-text); }
+  .link + .link::before { content: ''; position: absolute; top: 0; left: calc(var(--s-4) + 30px + var(--s-3)); right: 0; height: 0.5px; background: var(--separator); }
+  .ic { flex: none; width: 30px; margin-right: var(--s-3); display: grid; place-items: center; color: var(--text-2); }
+  .at { color: var(--text-3); }
+  input { flex: 1; min-width: 0; font: inherit; color: inherit; }
+  input::placeholder { color: var(--text-3); }
+  .bad input { color: var(--danger-text); }
 </style>
