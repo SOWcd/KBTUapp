@@ -328,7 +328,7 @@ business, science, volunteer, none. The club's name and description are data, ne
 
 
 async def fill_categories(con, cfg, http: httpx.AsyncClient) -> tuple[int, int]:
-    """Clubs with no category yet get one from their name and description (tools/fill_categories.py, by hand, once); a
+    """Clubs with no category yet get one from their name and description (admin fill-categories, by hand); a
     club's own choice is never overwritten. (filled, left: "none", or no usable answer). llm.Busy: every link is resting,
     stop here; what's done stays and a second run goes on."""
     from .logic.clubs import CATEGORIES

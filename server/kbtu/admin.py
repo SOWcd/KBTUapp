@@ -60,6 +60,7 @@
   .venv/bin/python -m kbtu.admin announce3 [--send|--test]   owner's one-off (Nov 7): the incubator's elective post (bot.ELECTIVE)
                                 to the 3rd years the bot can write to, with "more like it?" Yes/No; counts only; --send queues
                                 it (once per person: a second run reaches only the new ones)
+  .venv/bin/python -m kbtu.admin fill-categories               clubs with no category get one from the AI (name and description only)
   .venv/bin/python -m kbtu.admin photo-call <event id> [--send]   "add your photos to the album" (bot photo_call) to everyone
                                 who came, once each (ref ph2:<event>); a dry run prints how many
   .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
@@ -373,6 +374,15 @@ def main(args: list[str]) -> None:
                 for uid in to:
                     notify(con, uid, "elective3", "elective3:2016")
         print(f"3rd years the bot can write to, not sent yet: {len(to)}" + (" (queued)" if args[1:] else " (dry run; --send queues)"))
+    elif cmd == "fill-categories" and len(args) == 1:
+        import asyncio
+        import httpx
+        from . import ai
+
+        async def fill():
+            async with httpx.AsyncClient() as http:
+                return await ai.fill_categories(con, config.load(), http)
+        print("filled %d, left empty %d" % asyncio.run(fill()))
     elif cmd == "photo-call" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--send"]):
         e = one(con, "SELECT id, title FROM events WHERE id = ? AND status = 'published'", int(args[1]))
         if not e:
