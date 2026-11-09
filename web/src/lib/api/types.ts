@@ -571,14 +571,18 @@ export interface Post {
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
   /** a channel's post in the other languages: the channel's own (folded posts, its comments) or our AI's; applied by api/client.ts */
   i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; body?: string }>>; orig?: Record<string, string>;
+  /** an offline casting: people just come (no sign-up); its state is computed (lib/posts castingState). A club's page may
+   *  hold one its club deleted before the end: no title then, cancelled */
+  casting?: Casting | null;
 }
+export interface Casting { from: Ts; to: Ts; place: string; cancelled: boolean }
 
 /** The composer's chips (the UI names them per language). Older posts may carry a free-text tag. */
 export type PostTag = 'important' | 'recruiting' | 'results' | 'news';
 /** A new post (Head+): `clubs` only for broadcast orgs (DMP, KBTU App); the photo is one of my uploads. */
 /** Editing a post (its club's Head+): only what is sent changes; who sees it stays. */
-export interface PostPatch { title?: string; body?: string; tag?: PostTag | string | null; photoId?: Id | null; pinned?: boolean }
-export interface PostInput { title: string; body: string; tag: PostTag | null; photoId?: Id | null; audience?: 'public' | 'clubs'; pinned?: boolean }
+export interface PostPatch { title?: string; body?: string; tag?: PostTag | string | null; photoId?: Id | null; pinned?: boolean; casting?: Omit<Casting, 'cancelled'> }
+export interface PostInput { title: string; body: string; tag: PostTag | null; photoId?: Id | null; audience?: 'public' | 'clubs'; pinned?: boolean; casting?: Omit<Casting, 'cancelled'> }
 
 export interface AwardLevel { need: number; reached: boolean; rarity: number }
 export interface Achievement {

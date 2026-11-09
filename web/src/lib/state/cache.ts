@@ -4,7 +4,7 @@
 import type { ClassItem, EventCard, Friends, Me, Org, PersonCard, Post, TeamMember } from '../api';
 import { tg } from '../tg';
 
-export interface Snapshot { me: Me | null; events: EventCard[]; orgs: Org[]; schedule: ClassItem[]; posts: Post[]; friends?: Friends | null; myCard?: PersonCard | null; news?: { casts: Post[]; posts: Post[] } | null;
+export interface Snapshot { me: Me | null; events: EventCard[]; orgs: Org[]; schedule: ClassItem[]; posts: Post[]; castings?: Post[]; friends?: Friends | null; myCard?: PersonCard | null; news?: { casts: Post[]; posts: Post[] } | null;
   studio?: Record<number, EventCard[]>; team?: Record<number, TeamMember[]> }
 const VERSION = 3, MAX_AGE = 7 * 86400 * 1000;
 const key = () => (tg.user ? `kb-cache-${tg.user.id}` : null);

@@ -3,18 +3,20 @@
   // title, the text, a label, who sees it (broadcast orgs only: every club member, with a bot message, or every
   // student), and the pin. Publish shows it in News at once; leaving with something written asks first.
   // `post`: editing it (its club's Head+) — the same form, filled; who sees it stays; Save sends only what changed.
+  // "Casting" makes it an offline casting: when and where, nobody signs up (lib/posts); a casting's time stays editable till it's over.
   import ImagePlus from '@lucide/svelte/icons/image-plus';
   import X from '@lucide/svelte/icons/x';
   import { untrack } from 'svelte';
   import { api, ApiErr, type Id, type Media, type Post, type PostPatch, type PostTag } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { data, phrase, loadNews } from '../../lib/state/data.svelte';
+  import { data, phrase, loadNews, loadCastings } from '../../lib/state/data.svelte';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { byRank, may } from '../../lib/perms';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
-  import { POST_TAGS } from '../../lib/posts';
+  import { POST_TAGS, castingOn } from '../../lib/posts';
+  import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
   import { shrink } from '../../lib/photo';
   import { haptic } from '../../lib/tg';
   import { burst } from '../../ui/burst';
@@ -53,6 +55,18 @@
   let toClubs = $state(true);
   let pinned = $state(was?.pinned ?? false);
   let photo = $state<Media | null>(was?.photo ?? null);
+  const wasCast = was?.casting;
+  const castFixed = !!wasCast && !castingOn(wasCast); // over or cancelled: its time stays as it was
+  let isCasting = $state(!!wasCast);
+  let fromDate = $state(wasCast ? dateInput(wasCast.from) : ''), fromTime = $state(wasCast ? time(wasCast.from) : '');
+  let toDate = $state(wasCast ? dateInput(wasCast.to) : ''), toTime = $state(wasCast ? time(wasCast.to) : '');
+  let place = $state(wasCast?.place ?? '');
+  const castFrom = $derived(fromInputs(fromDate, fromTime)), castTo = $derived(fromInputs(toDate, toTime));
+  const castShown = $derived(isCasting && !castFixed);
+  const castErr = $derived(!castShown ? null
+    : Number.isNaN(castFrom) || Number.isNaN(castTo) ? t('casting.needWhen')
+    : castTo <= castFrom ? t('ed.endEarly') : castTo - castFrom > 14 * 86400 || castTo <= nowTs() ? t('casting.badTime') : null);
+  const noPlace = $derived(castShown && place.trim().length < 2);
   const patch = $derived.by(() => {
     const p: PostPatch = {};
     if (!was) return p;
@@ -61,6 +75,7 @@
     if (tag !== was.tag) p.tag = tag;
     if ((photo?.url ?? null) !== (was.photo?.url ?? null)) p.photoId = photo?.id ?? null;
     if (pinned !== was.pinned) p.pinned = pinned;
+    if (wasCast && castShown && (castFrom !== wasCast.from || castTo !== wasCast.to || place.trim() !== wasCast.place)) p.casting = { from: castFrom, to: castTo, place: place.trim() };
     return p;
   });
   const changed = $derived(Object.keys(patch).length > 0);
@@ -73,6 +88,7 @@
   let tried = $state(false);
   const noTitle = $derived(title.trim().length < 2);
   const needTitle = () => { tried = true; haptic.error(); titleBox?.querySelector('input')?.focus(); return noTitle; };
+  const castWrong = () => { if (castErr || noPlace) { tried = true; haptic.error(); return true; } return false; };
 
   async function pickPhoto(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
@@ -86,25 +102,28 @@
   }
 
   async function publish() {
-    if (noTitle && needTitle()) return;
+    if ((noTitle && needTitle()) || castWrong()) return;
     busy = true;
     try {
-      await api.createPost(pick, { title: title.trim(), body: body.trim(), tag: tag as PostTag | null, photoId: photo?.id ?? null, audience: broadcast && toClubs ? 'clubs' : 'public', pinned });
+      await api.createPost(pick, { title: title.trim(), body: body.trim(), tag: tag as PostTag | null, photoId: photo?.id ?? null, audience: broadcast && toClubs ? 'clubs' : 'public', pinned,
+        ...(isCasting ? { casting: { from: castFrom, to: castTo, place: place.trim() } } : {}) });
       leaving = true; // published: nothing left to lose
       haptic.ok(); burst(); say(t('post.published'), 'party_popper_3d');
       void loadNews();
+      if (isCasting) void loadCastings();
       close(overlay.id);
-    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'link_title' ? 'post.linkTitle' : e instanceof ApiErr && e.message === 'ascent' ? 'post.locked' : 'common.error'), 'warning_3d'); }
+    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'link_title' ? 'post.linkTitle' : e instanceof ApiErr && e.message === 'ascent' ? 'post.locked' : e instanceof ApiErr && e.message === 'casting_live' ? 'casting.oneLive' : 'common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
 
   async function save() {
-    if (!was || (noTitle && needTitle())) return;
+    if (!was || (noTitle && needTitle()) || castWrong()) return;
     busy = true;
     try {
       Object.assign(was, await api.updatePost(was.id, patch)); // a story or club page showing it updates in place
       leaving = true; haptic.ok(); say(phrase('post.saved'), 'sparkles_3d');
       void loadNews();
+      if (isCasting) void loadCastings();
       close(overlay.id);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
@@ -112,15 +131,21 @@
 
   // leaving with something written (or changed) asks first (Back, a tap outside, a pull down)
   let leaving = false;
-  const hold = () => !leaving && (was ? changed : !!(title.trim() || body.trim() || photo));
+  const hold = () => !leaving && (was ? changed : !!(title.trim() || body.trim() || photo || place.trim()));
   async function onhold() {
     if (await sheets.ask({ title: t('post.discard'), text: t('post.discardText'), ok: t('post.leave'), cancel: t('common.cancel'), danger: true })) { leaving = true; close(overlay.id); }
   }
 </script>
 
+{#snippet castSwitch()}<Group><Row title={t('casting.mark')} accessory="switch" checked={isCasting} onchange={(on) => (isCasting = on)} /></Group>{/snippet}
+
 <Sheet {overlay} icon={SquarePen} full title={was ? t('post.edit') : t('post.new')} {hold} {onhold}>
-  {#if locked}
-    <EmptyState icon={Lock} title={t('post.locked')} text={t('op.collab')} action={{ label: t('op.title'), onclick: toAscent }} />
+  <!-- before the Ascent's step a club writes no news, but a casting is open to every club -->
+  {#if locked && !isCasting}
+    <div class="stack">
+      {@render castSwitch()}
+      <EmptyState icon={Lock} title={t('post.locked')} text={t('op.collab')} action={{ label: t('op.title'), onclick: toAscent }} />
+    </div>
   {:else}
   <div class="stack">
     <!-- the club chosen in Studio, no picker -->
@@ -142,6 +167,19 @@
     <div bind:this={titleBox}><Field label={t('post.title')} bind:value={title} maxlength={120} error={tried && noTitle ? t('post.needTitle') : undefined} /></div>
     <Field label={t('post.text')} multiline rows={3} bind:value={body} maxlength={2000} placeholder={t('post.body')} />
 
+    {#if !was}{@render castSwitch()}{/if}
+    {#if castShown}
+      <!-- engine: Field has no date/time type: by hand, in Field's look (.fl), as EventEditor -->
+      <div class="when">
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('ed.start')}</span><input type="date" bind:value={fromDate} onchange={() => (toDate ||= fromDate)} /></label>
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('casting.time')}</span><input type="time" bind:value={fromTime} /></label>
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('ed.end')}</span><input type="date" bind:value={toDate} min={fromDate} /></label>
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('casting.time')}</span><input type="time" bind:value={toTime} /></label>
+      </div>
+      {#if tried && castErr}<p class="err">{castErr}</p>{/if}
+      <Field label={t('casting.place')} bind:value={place} maxlength={80} placeholder={t('casting.placeHint')} error={tried && noPlace ? t('casting.needPlace') : undefined} />
+    {/if}
+
     <span class="lbl">{t('post.tag')}</span>
     <div class="wrap">
       <Chip selected={tag === null} onclick={() => (tag = null)}>{t('post.noTag')}</Chip>
@@ -161,7 +199,7 @@
   {/if}
 
   {#snippet footer()}
-    {#if locked}<!-- no button: nothing to write yet -->
+    {#if locked && !isCasting}<!-- no button: nothing to write yet -->
     {:else if was}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !changed} onclick={save}>{t('common.save')}</Button>
     {:else}<Button kind="primary" size="l" full loading={busy} disabled={uploading || !(title.trim() || body.trim() || photo)} onclick={publish}>{t('post.publish')}</Button>{/if}
   {/snippet}
@@ -173,6 +211,13 @@
   .from { display: flex; align-items: center; gap: var(--s-2); font: 600 var(--fs-body)/1 var(--font-text); }
   .lbl { margin: var(--s-2) var(--s-4) -6px; font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
   .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); }
+  .when { display: grid; grid-template-columns: minmax(0, 1fr) 124px; gap: var(--s-3) var(--s-2); }
+  .fl { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl > span { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
+  .fl > input { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text); font: 450 var(--fs-row)/1.35 var(--font-text); }
+  .fl > input[type="time"] { padding: 0 var(--s-2) 0 var(--s-3); }
+  .fl.bad > input { box-shadow: inset 0 0 0 1.5px var(--danger); }
+  .err { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--danger-text); }
   .wrap { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-block: var(--s-1); }
 
   .add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 112px; border-radius: var(--r-group); color: var(--accent-text);

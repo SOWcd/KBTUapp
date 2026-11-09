@@ -16,14 +16,15 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { session, loadMe } from '../../lib/state/session.svelte';
-  import { data, loadNews, phrase } from '../../lib/state/data.svelte';
+  import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import { focusPos } from '../../lib/photo';
-  import { tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
+  import { castingOn, tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import CastingBlock from '../../ui/CastingBlock.svelte';
   import { nameOf } from '../../lib/short';
   import Linked from '../../ui/Linked.svelte';
   import { linkButtons } from '../../lib/social';
@@ -102,6 +103,7 @@
   function drop(q: Post) {
     g.items.splice(g.items.findIndex((s) => s.post === q), 1);
     if (data.news) data.news = { casts: data.news.casts.filter((x) => x.id !== q.id), posts: data.news.posts.filter((x) => x.id !== q.id) };
+    data.castings = data.castings.filter((x) => x.id !== q.id);
     if (!g.items.length) { groups.splice(gi, 1); if (!groups.length) { close(overlay.id); return; } gi = Math.min(gi, groups.length - 1); pi = 0; return; }
     pi = Math.min(pi, g.items.length - 1);
   }
@@ -119,6 +121,7 @@
     menu(e.currentTarget as Element, [
       ...(q.canEdit ? [{ label: t('news.edit'), onselect: () => sheets.composer(q.org.id, q) },
         { label: q.pinned ? t('news.unpin') : t('news.pin'), onselect: () => void pin() }] : []),
+      ...(q.canEdit && q.casting && castingOn(q.casting) ? [{ label: t('casting.cancel'), destructive: true, onselect: () => void cancelCasting(q) }] : []),
       ...(!q.canEdit && session.me?.student ? [{ label: t('cm.report'), onselect: report }] : []),
       ...(q.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown() }] : []),
     ], 'end');
@@ -171,6 +174,7 @@
       {@const lb = linkButtons(p.body)}
       {@const btns = [...lt.buttons, ...lb.buttons.filter((b) => !lt.buttons.some((x) => x.url === b.url))].slice(0, 2)}
       <div class="txt" class:card={(lb.rest || btns.length) && p.photo} class:plain={!p.photo}>
+        {#if p.casting}<CastingBlock casting={p.casting} onphoto />{/if}
         {#if lt.rest}<h2>{lt.rest}</h2>{/if}
         {#if lb.rest}<p class="scroll"><Linked text={lb.rest} /></p>{/if}
         {#if btns.length}<div class="links">{#each btns as b (b.url)}<button class="lk" onclick={() => openLink(b.url)}>{#if b.kind === 'telegram'}<TelegramMark size={17} />{/if}{b.join ? t('story.join') : b.kind === 'telegram' ? t('tg.open') : t('story.link')}</button>{/each}</div>{/if}
